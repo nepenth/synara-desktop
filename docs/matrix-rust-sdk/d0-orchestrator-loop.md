@@ -5,7 +5,7 @@
 | Active             | **Paused between slices** (2026-07-29); resume as a persistent Codex goal     |
 | Interval           | Goal continuation; optional scheduler fires every **4 minutes**               |
 | Integration        | `feature/matrix-rust-sdk-full-replacement` only                               |
-| Orchestrator       | **Codex `gpt-5.6-terra`, high reasoning**                                     |
+| Orchestrator       | **Codex `gpt-5.6-sol`, medium reasoning**                                     |
 | Epic               | [d0-dogfood-epic.md](d0-dogfood-epic.md)                                      |
 | **Policy**         | **[full-vertical-policy.md](full-vertical-policy.md)** — **no dogfood cuts**  |
 | **Residual queue** | [d0-residual-completion.md](d0-residual-completion.md) — **must drain first** |
@@ -14,7 +14,7 @@
 
 | Agent                                      | Role                                                                                                             |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| **Codex** `gpt-5.6-terra` **high**         | Primary orchestrator: fire this loop, own Git/PR state, review and merge green full-vertical PRs, never main/#39 |
+| **Codex** `gpt-5.6-sol` **medium**         | Primary orchestrator: fire this loop, own Git/PR state, review and merge green full-vertical PRs, never main/#39 |
 | **Codex sub-agents**, same model/reasoning | Implement bounded task packets or independent review in parallel when scopes do not conflict                     |
 | **MiniMax-M3**                             | Optional text/research assistance during waits; never sole implementer, reviewer, or acceptance authority        |
 
@@ -50,11 +50,12 @@ authority even when implementation is delegated.
 | Slice         | Status                                             | Branch / PR                                                  |
 | ------------- | -------------------------------------------------- | ------------------------------------------------------------ |
 | D0.1–D0.4     | Merged (partial debt → residual doc)               | tip history                                                  |
-| V-CRYPTO.1–.4 | Product wiring merged #223–#226; **deletion open** | debt = **V-CRYPTO.1-D→.4-D**                                 |
+| V-CRYPTO.1–.2 | **DONE**                                           | Native owners; legacy verification and cross-signing deleted |
+| V-CRYPTO.3–.4 | Product wiring merged #225–#226; **deletion open** | debt = **V-CRYPTO.3-D→.4-D**                                 |
 | V-CRYPTO.5    | **DONE #227**                                      | Rust-only owner; legacy owner/helper deleted; gates green    |
 | V-CRYPTO.6–.7 | Queued                                             | UTD recovery, then device/trust; wire + delete in each slice |
 | D0.6 plateau  | **#221 HOLD — do not merge as complete**           | rework → V-BURN later                                        |
-| **Next**      | **V-CRYPTO.1-D** after the goal resumes            | serial residual drain; no active implementation PR           |
+| **Next**      | **V-CRYPTO.3-D** after the goal resumes            | serial residual drain; no active implementation PR           |
 
 _Orchestrator must rewrite this table when a residual slice merges._
 
@@ -63,7 +64,7 @@ _Orchestrator must rewrite this table when a residual slice merges._
 ### A) Tip-merge active residual PR only
 
 ```text
-codex exec -m gpt-5.6-terra -c model_reasoning_effort="high" --ephemeral -
+codex exec -m gpt-5.6-sol -c model_reasoning_effort="medium" --ephemeral -
 # tip-merge PR N onto origin/feature/matrix-rust-sdk-full-replacement;
 # resolve mod.rs by union; fmt; cargo test --lib <module>; push; do not merge
 ```
@@ -72,7 +73,7 @@ codex exec -m gpt-5.6-terra -c model_reasoning_effort="high" --ephemeral -
 
 Use [d0-residual-completion.md](d0-residual-completion.md) + [full-vertical-policy.md](full-vertical-policy.md).  
 **Full product rewire plus physical deletion** for the ID. For already-wired
-V-CRYPTO.1–.4, use the named `-D` residuals. One capability-bounded branch/PR;
+V-CRYPTO.3–.4, use the named `-D` residuals. One capability-bounded branch/PR;
 record deleted paths/import delta; close the row only when both ownership and
 deletion gates pass.
 
@@ -86,7 +87,7 @@ or a retained `Legacy*` / native-vs-JS branch for the claimed capability.
 - Merge #221 plateau as D0.6 complete
 - Open new media/widgets/registry verticals before residual queue allows
 - Open new notify/call L1 polish PRs
-- Start V-CRYPTO.6 while V-CRYPTO.1-D→.5 deletion residuals remain open
+- Start V-CRYPTO.6 while V-CRYPTO.3-D→.4-D deletion residuals remain open
 - Merge umbrella #39 or `main`
 - Claim phase-gate acceptance for crypto until V-CRYPTO complete
 

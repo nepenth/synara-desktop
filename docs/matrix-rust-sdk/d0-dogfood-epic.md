@@ -37,7 +37,7 @@ Earlier D0 wording allowed “crypto **minimum** / usable enough for dogfood” 
 
 ## Current priority (binding)
 
-1. **Close residual queue** in [d0-residual-completion.md](d0-residual-completion.md) — V-CRYPTO.1 and V-CRYPTO.5 are done; resume with V-CRYPTO.2-D and drain through .4-D.
+1. **Close residual queue** in [d0-residual-completion.md](d0-residual-completion.md) — V-CRYPTO.1, V-CRYPTO.2, and V-CRYPTO.5 are done; resume with V-CRYPTO.3-D and drain through .4-D.
 2. Do **not** merge plateau / dogfood PRs as complete.
 3. Only after native wiring **and superseded JS deletion** are both landed may a vertical be marked done.
 4. New verticals (media, widgets, registry, …) only after residual completion order allows.
@@ -58,8 +58,8 @@ L1-only open PRs (notify polish, call-state, extra media orthogonal, MiniMax hel
 
 | Role                                    | Owner                                                                               |
 | --------------------------------------- | ----------------------------------------------------------------------------------- |
-| Orchestrate, dispatch, and merge        | **Codex** `gpt-5.6-terra` high — **refuse dogfood acceptance**                      |
-| Implement full vertical residual slices | Same-model/high-reasoning Codex sub-agents with bounded task packets                |
+| Orchestrate, dispatch, and merge        | **Codex** `gpt-5.6-sol` medium — **refuse dogfood acceptance**                      |
+| Implement full vertical residual slices | Same-model/medium-reasoning Codex sub-agents with bounded task packets              |
 | Review + tip-merge + focused tests      | Primary Codex orchestrator; independent same-model review may assist                |
 | Optional wait-time assistance           | MiniMax-M3, never sole implementer/reviewer and never acceptance or merge authority |
 

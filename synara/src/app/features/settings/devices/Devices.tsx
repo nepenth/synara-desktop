@@ -10,7 +10,6 @@ import { LocalBackup } from './LocalBackup';
 import { DeviceLogoutBtn, DeviceKeyDetails, DeviceTile, DeviceTilePlaceholder } from './DeviceTile';
 import { OtherDevices } from './OtherDevices';
 import {
-  DeviceVerificationOptions,
   EnableVerification,
   VerificationStatusBadge,
   VerifyCurrentDeviceTile,
@@ -96,7 +95,6 @@ export function Devices({ requestClose }: DevicesProps) {
                               verificationStatus={verificationStatus}
                               otherUnverifiedCount={unverifiedDeviceCount}
                             />
-                            {!nativeSession && <DeviceVerificationOptions />}
                           </Box>
                         )}
                       </>

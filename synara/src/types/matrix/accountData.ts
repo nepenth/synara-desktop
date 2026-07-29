@@ -16,9 +16,6 @@ export enum AccountDataEvent {
 
   SecretStorageDefaultKey = 'm.secret_storage.default_key',
 
-  CrossSigningMaster = 'm.cross_signing.master',
-  CrossSigningSelf = 'm.cross_signing.self',
-  CrossSigningUser = 'm.cross_signing.user',
   MegolmBackupV1 = 'm.megolm_backup.v1',
 }
 
@@ -106,8 +103,4 @@ export type SecretContent = {
   iv: string;
   ciphertext: string;
   mac: string;
-};
-
-export type SecretAccountData = {
-  encrypted: Record<string, SecretContent>;
 };

@@ -25,16 +25,16 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 126,
+          "fileCount": 125,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
         },
         "crypto_verification_recovery": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 13,
+          "fileCount": 12,
           "listenerCandidateOccurrences": 12,
-          "methodCandidateOccurrences": 13,
+          "methodCandidateOccurrences": 8,
           "networkingOccurrences": 0
         },
         "custom_raw_event_sends": {
@@ -144,14 +144,14 @@
         },
         "uia_auth": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 72,
+          "fileCount": 71,
           "listenerCandidateOccurrences": 2,
           "methodCandidateOccurrences": 130,
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 214,
-      "importFileCount": 212,
+      "fileCount": 213,
+      "importFileCount": 211,
       "methodCandidateFrequencies": [
         {
           "count": 79,
@@ -214,7 +214,7 @@
           "name": "refreshToken"
         },
         {
-          "count": 6,
+          "count": 5,
           "name": "getCrypto"
         },
         {
@@ -295,18 +295,6 @@
         },
         {
           "count": 1,
-          "name": "bootstrapCrossSigning"
-        },
-        {
-          "count": 1,
-          "name": "bootstrapSecretStorage"
-        },
-        {
-          "count": 1,
-          "name": "createRecoveryKeyFromPassphrase"
-        },
-        {
-          "count": 1,
           "name": "getActiveSessionBackupVersion"
         },
         {
@@ -371,10 +359,6 @@
         },
         {
           "count": 1,
-          "name": "resetKeyBackup"
-        },
-        {
-          "count": 1,
           "name": "searchUserDirectory"
         },
         {
@@ -424,8 +408,8 @@
           "importOccurrences": 60
         },
         "MatrixError": {
-          "fileCount": 45,
-          "importOccurrences": 45
+          "fileCount": 44,
+          "importOccurrences": 44
         },
         "MatrixEvent": {
           "fileCount": 35,
@@ -458,8 +442,8 @@
       },
       "modules": [
         {
-          "fileCount": 198,
-          "importCount": 198,
+          "fileCount": 197,
+          "importCount": 197,
           "path": "matrix-js-sdk"
         },
         {
@@ -588,11 +572,11 @@
           "valueImports": 54
         },
         {
-          "fileCount": 45,
-          "importCount": 45,
+          "fileCount": 44,
+          "importCount": 44,
           "name": "MatrixError",
           "typeImports": 0,
-          "valueImports": 45
+          "valueImports": 44
         },
         {
           "fileCount": 35,
@@ -646,23 +630,9 @@
         {
           "fileCount": 8,
           "importCount": 8,
-          "name": "IAuthData",
-          "typeImports": 0,
-          "valueImports": 8
-        },
-        {
-          "fileCount": 8,
-          "importCount": 8,
           "name": "RoomEventHandlerMap",
           "typeImports": 0,
           "valueImports": 8
-        },
-        {
-          "fileCount": 7,
-          "importCount": 7,
-          "name": "AuthDict",
-          "typeImports": 0,
-          "valueImports": 7
         },
         {
           "fileCount": 7,
@@ -674,9 +644,23 @@
         {
           "fileCount": 7,
           "importCount": 7,
+          "name": "IAuthData",
+          "typeImports": 0,
+          "valueImports": 7
+        },
+        {
+          "fileCount": 7,
+          "importCount": 7,
           "name": "IContent",
           "typeImports": 2,
           "valueImports": 5
+        },
+        {
+          "fileCount": 6,
+          "importCount": 6,
+          "name": "AuthDict",
+          "typeImports": 0,
+          "valueImports": 6
         },
         {
           "fileCount": 6,
@@ -1438,13 +1422,6 @@
           "fileCount": 1,
           "importCount": 1,
           "name": "TweakName",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "UIAuthCallback",
           "typeImports": 0,
           "valueImports": 1
         },
@@ -3082,90 +3059,6 @@
       "modelCoupling": [],
       "networking": [],
       "path": "synara/src/app/components/CapabilitiesLoader.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "component",
-      "categories": [
-        "client_methods",
-        "crypto_verification_recovery",
-        "uia_auth"
-      ],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 18,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "AuthDict"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IAuthData"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixError"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "UIAuthCallback"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "crypto_verification_recovery",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 139,
-          "name": "getCrypto"
-        },
-        {
-          "category": "crypto_verification_recovery",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 142,
-          "name": "createRecoveryKeyFromPassphrase"
-        },
-        {
-          "category": "crypto_verification_recovery",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 148,
-          "name": "bootstrapSecretStorage"
-        },
-        {
-          "category": "crypto_verification_recovery",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 153,
-          "name": "bootstrapCrossSigning"
-        },
-        {
-          "category": "crypto_verification_recovery",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 158,
-          "name": "resetKeyBackup"
-        }
-      ],
-      "modelCoupling": ["MatrixError"],
-      "networking": [],
-      "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
       "role": "production"
     },
     {
@@ -16497,7 +16390,7 @@
     "desktopRuntimeBaseline": {
       "buckets": {
         "client-lifecycle": 2,
-        "component": 41,
+        "component": 40,
         "feature": 58,
         "hook": 54,
         "media-boundary": 1,
@@ -16513,13 +16406,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 212,
+      "productionImportFiles": 211,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 11,
-      "totalImportFiles": 223
+      "totalImportFiles": 222
     },
     "repositoryWide": {
-      "productionImportFiles": 212,
+      "productionImportFiles": 211,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 11,
@@ -16528,7 +16421,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 226
+      "totalImportFiles": 225
     }
   }
 }

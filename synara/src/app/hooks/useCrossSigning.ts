@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AccountDataEvent, SecretAccountData } from '../../types/matrix/accountData';
-import { useAccountData } from './useAccountData';
 import { isNativeMatrixSession } from '../features/verification/nativeVerification';
 import {
   getNativeCrossSigningStatus,
@@ -18,8 +16,6 @@ export type CrossSigningHook = {
 };
 
 export const useCrossSigning = (): CrossSigningHook => {
-  const masterEvent = useAccountData(AccountDataEvent.CrossSigningMaster);
-  const content = masterEvent?.getContent<SecretAccountData>();
   const nativeSession = isNativeMatrixSession();
   const [nativeStatus, setNativeStatus] = useState<NativeCrossSigningStatus>();
   const [loading, setLoading] = useState(nativeSession);
@@ -58,9 +54,7 @@ export const useCrossSigning = (): CrossSigningHook => {
   }, [nativeSession, refresh]);
 
   return {
-    active: nativeSession
-      ? !!nativeStatus && isNativeCrossSigningPublished(nativeStatus)
-      : !!content,
+    active: !!nativeStatus && isNativeCrossSigningPublished(nativeStatus),
     nativeStatus: nativeSession ? nativeStatus : undefined,
     loading: nativeSession ? loading : false,
     error: nativeSession ? error : undefined,
