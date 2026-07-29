@@ -2,21 +2,21 @@
 
 | Field                     | Value                                                                  |
 | ------------------------- | ---------------------------------------------------------------------- |
-| Status                    | **Active — V-CRYPTO.7 PR #236** (2026-07-29)                           |
+| Status                    | **Between slices — V-AUTH.1 complete SSO removal queued** (2026-07-29) |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                     |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)              |
-| Current integration tip   | `05e3f64` (V-CRYPTO.6 #235 merged)                                     |
-| Active PR                 | [#236](https://github.com/nepenth/synara-desktop/pull/236) — V-CRYPTO.7; reviewed code head `7df8abe` |
+| Current integration tip   | `528a510` (V-CRYPTO.7 #236 merged)                                     |
+| Active PR                 | None — V-CRYPTO.7 reviewed, green product/test head `192be46` merged   |
 
 ## Policy trigger
 
-User directive: **no dogfood cuts**. Anything previously accepted as “minimum / residual / plateau” must be **surfaced and fully re-implemented** before new verticals (media, widgets, registry, etc.) proceed.
+User directive: **no incomplete cuts**. Anything previously accepted as “minimum / residual / plateau” must be **surfaced and fully re-implemented** before new verticals (media, widgets, registry, etc.) proceed.
 
 ## Do not merge as complete
 
 | PR / artifact                                                                          | Why blocked under full-vertical policy                                         |
 | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| **#221** D0.6 “approved residual plateau” (232 files / 292 imports; 0 imports removed) | Explicit dogfood shell + plateau; not full burn-down or full capability rewire |
+| **#221** D0.6 “approved residual plateau” (232 files / 292 imports; 0 imports removed) | Explicit incomplete shell + plateau; not full burn-down or full capability rewire |
 | D0.5 docs claiming “crypto minimum” done                                               | Vertical incomplete until product crypto UX is native                          |
 
 Leave #221 **draft / unmerged** unless reworked into a full vertical with empty residual for its claimed scope (or split into full slices). Do not treat “native shell without js client” alone as D0 complete.
@@ -45,7 +45,7 @@ Status language in this ledger is strict:
 | **V-CRYPTO.4** | **DONE**                   | SSSS bootstrap/unlock                        | Live `matrix/secret_storage/live.rs`, native secret-storage UI/hooks | Native owner plus legacy recovery derivation/checking, account-data path, JS key-cache, dead UI, and JS-only test deletion; 219/276 → 218/275 direct desktop-runtime imports; see [v-crypto-4-secret-storage.md](v-crypto-4-secret-storage.md) |
 | **V-CRYPTO.5** | **DONE #227**              | Room-key export/import retained product path | Single Rust IPC owner; legacy WebView owner/helper deleted           | Reviewed-SHA validation proved parity, retry safety, privacy, deletion, and ledger evidence                                                                                                                                                    |
 | **V-CRYPTO.6** | **DONE #235**              | Automatic UTD/history recovery               | Live managed timeline + P5.10/P8.7 state; safe event readback        | SDK-owned late-key readback, guided native recovery settings, and JS retry/decryption-listener deletion; see [v-crypto-6-utd-recovery.md](v-crypto-6-utd-recovery.md)                                                                          |
-| **V-CRYPTO.7** | **ACTIVE #236**           | Device list/trust presentation and actions   | Live `matrix/devices/live.rs`, SDK-neutral UI, native rename/delete  | Reviewed code head `7df8abe`; Rust-owned snapshots/trust/readback and bounded Password/SSO delete UIAA; JS `CryptoApi`, device model/listener/polling and dead UIA owners deleted; 218/273 → 212/265; live proof unclaimed; see [v-crypto-7-device-list-trust.md](v-crypto-7-device-list-trust.md) |
+| **V-CRYPTO.7** | **DONE #236**             | Device list/trust presentation and actions   | Live `matrix/devices/live.rs`, SDK-neutral UI, native rename/delete  | Merged at `528a510`; reviewed, green product/test head `192be46`; Rust-owned snapshots/trust/readback and bounded Password/SSO delete UIAA; JS `CryptoApi`, device model/listener/polling and dead UIA owners deleted; 218/273 → 212/265; live proof unclaimed; see [v-crypto-7-device-list-trust.md](v-crypto-7-device-list-trust.md) |
 
 **Also required for V-CRYPTO complete:** encrypted timeline decrypt + encrypted send remain (already on tip from D0.5 machine path); extend with recovery so history is restorable when keys exist server-side.
 
@@ -55,7 +55,7 @@ Migration decision already decided: **`D-KEY-RECOVERY`** in [migration-ux-decisi
 
 | ID           | Capability                     | Residual today    | Done when                                                                    |
 | ------------ | ------------------------------ | ----------------- | ---------------------------------------------------------------------------- |
-| **V-AUTH.1** | SSO login                      | Out of D0.1 scope | Desktop SSO happy path via Rust, no js `createClient` for session            |
+| **V-AUTH.1** | Complete desktop SSO removal    | JS login/callback owner and native UIAA SSO continuation | Delete every desktop SSO entry point, browser/callback/token-completion route, JS SSO owner/import, and native device-delete SSO UIAA continuation. Keep no Rust replacement, Matrix-ID prompt, inferred identity, pending-store/adoption route, or fallback. Password-only UIAA remains where server-supported; SSO-only authentication is explicitly unsupported on desktop. |
 | **V-AUTH.2** | Token login                    | Out of D0.1       | Native token login if product retains it                                     |
 | **V-AUTH.3** | UIA flows used by product auth | Largely js        | UIA stages for retained flows native or product-owned without live js client |
 | **V-AUTH.4** | Register / reset-password      | js                | Re-home if product keeps them on desktop                                     |
@@ -105,7 +105,7 @@ have already deleted their implementations.
 
 ## Execution order (binding)
 
-1. Monitor/land **V-CRYPTO.7 #236**, then begin **V-AUTH.1** as the next full wire-plus-delete vertical.
+1. Execute **V-AUTH.1** as complete desktop SSO removal, then continue the remaining native-auth slices.
 2. **V-AUTH** remaining desktop auth surfaces, deleting each superseded JS owner in its slice
 3. **V-ROOMS** / **V-TIMELINE** / **V-SEND** gaps, with physical deletion per completed capability
 4. **V-BURN** final convergence audit + npm dependency removal
@@ -113,7 +113,7 @@ have already deleted their implementations.
 
 L1 modules under `src-tauri/src/matrix/{verification,backup,cross_signing,devices,room_keys,utd_recovery}/` are **inputs**, not done.
 
-## Scoreboard (replace dogfood metrics)
+## Scoreboard (replacement metrics)
 
 | Metric                                                         | Target                                                                               |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
@@ -121,7 +121,7 @@ L1 modules under `src-tauri/src/matrix/{verification,backup,cross_signing,device
 | js importers for a claimed-complete capability                 | **0** production files                                                               |
 | Capability-owner/file deletion delta per completed vertical    | **Negative and recorded**; zero-deletion completion is rejected                      |
 | Repository-wide direct `matrix-js-sdk` import delta            | Recorded and non-increasing; zero is allowed only for an indirectly owned capability |
-| New PRs with “minimum / dogfood / plateau residual” acceptance | **0**                                                                                |
+| New PRs with “minimum / incomplete / plateau residual” acceptance | **0**                                                                             |
 | Phase-gate crypto / cutover claims                             | Only after V-CRYPTO + owning verticals complete                                      |
 
 ## Orchestrator
@@ -131,6 +131,6 @@ Loop must:
 1. **Not** merge #221 as D0.6 complete.
 2. Treat V-CRYPTO.1–.6 as done.
 3. Preserve V-CRYPTO.5 [#227](https://github.com/nepenth/synara-desktop/pull/227) as done; its legacy deletion, retry safety, privacy, and reviewed-SHA evidence passed.
-4. After V-CRYPTO.7 [#236](https://github.com/nepenth/synara-desktop/pull/236) lands, advance to V-AUTH.1.
+4. Execute V-AUTH.1 as complete desktop SSO removal: JS and native SSO ownership must both be deleted, with no replacement route.
 5. Update [PROGRESS.md](PROGRESS.md) with product wiring, deletion deltas, and residual closure.
 6. Refuse new L1-only or new non-residual verticals until this queue is cleared or user reorders explicitly.

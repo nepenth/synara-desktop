@@ -56,7 +56,7 @@ impl SyncReadiness {
         matches!(self, Self::Running)
     }
 
-    /// Whether product "sync ready" criteria for dogfood are met.
+    /// Whether product "sync ready" criteria for the partial path are met.
     ///
     /// First usable connected state = running SyncService (room list may still
     /// be catching up; P4.2 owns list snapshots). Offline/failed are not ready.

@@ -1,6 +1,6 @@
 //! P4.2–P4.4 — Room-list snapshot/delta, membership/unread, tag/recent semantics.
 //!
-//! Deterministic projection of ordered room summaries for the dogfood path:
+//! Deterministic projection of ordered room summaries for the partial path:
 //! - product DTOs only ([`RoomSummary`]) — no SDK Room/VectorDiff on the wire
 //! - ordered delta ops with monotonic sequence + session generation
 //! - gap / stale generation → resync (full snapshot reset)
