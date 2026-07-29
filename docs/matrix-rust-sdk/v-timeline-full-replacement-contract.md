@@ -87,6 +87,27 @@ The required sequence is:
    former operating path. Shared utilities remain until their other consumers
    are re-homed.
 
+### Current action cutover gates
+
+The renderer may show an affordance only after the listed native owner exists.
+The current product command surface has timeline read/pagination and plain-text
+send-with-`reply_to` only; that transport capability is not parity for the
+legacy composer or a rich reply/edit flow.
+
+| Visible timeline capability | Required native owner before final cutover | Current status |
+| --- | --- | --- |
+| Reactions | V-SEND.2 typed toggle/ensure/redact commands | Candidate exists on its own branch; not integration evidence yet |
+| Plain-text reply | Native send plus native reply draft/composer state | Transport input exists; UI owner pending |
+| Rich send, edit, forward | Typed send/edit/forward DTO commands | Pending |
+| Redact, report, pin | Typed room-event action commands | Pending |
+| Mark read/unread, receipts | Native receipt/read-frontier command and readback | Pending |
+| Save/later/notes/reminders | Typed account-data commands and snapshot | Pending |
+| Media/sticker image display | Bounded native media-handle resolver | Pending; invite-avatar handling is not general timeline media |
+| Poll vote and call controls | Typed poll/call commands with capability readback | Pending |
+
+No active desktop timeline presenter may retain these JS action paths as a
+fallback once the native presenter is selected.
+
 The existing focused UTD readback bridge is a V-CRYPTO.6 dependency, not the
 native timeline presenter. It remains only until the full timeline DTO and
 presenter replace the legacy row path; it must be deleted in that cutover and
