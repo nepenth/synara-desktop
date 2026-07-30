@@ -525,8 +525,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     };
 
     const handleSendUpload = async (uploads: UploadSuccess[]) => {
-      const replyTo =
-        typeof replyDraft?.eventId === 'string' ? replyDraft.eventId : undefined;
+      const replyTo = typeof replyDraft?.eventId === 'string' ? replyDraft.eventId : undefined;
       const nativeFiles = await Promise.all(
         uploads.map(async (upload) => {
           const fileItem = selectedFiles.find((f) => f.file === upload.file);
