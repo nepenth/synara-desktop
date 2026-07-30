@@ -140,8 +140,9 @@ pub struct TimelineEventRowBase {
 /// Project the SDK-owned metadata common to every event row.
 ///
 /// The sender ID is the safe fallback display label until the native profile
-/// projection supplies a resolved display name. Every action remains disabled
-/// until its specific typed native command and readback exist.
+/// projection supplies a resolved display name. Affordance gates follow the
+/// typed native command surface: reply/edit/redact/forward open only when
+/// those owners exist; reactions remain closed until V-SEND.2 integrates.
 pub fn project_event_row_base(item_id: &str, event: &EventTimelineItem) -> TimelineEventRowBase {
     let sender_id = event.sender().to_string();
     TimelineEventRowBase {
@@ -150,15 +151,29 @@ pub fn project_event_row_base(item_id: &str, event: &EventTimelineItem) -> Timel
         sender_name: sender_id.clone(),
         sender_id,
         origin_server_ts: event.timestamp().get().into(),
-        capabilities: TimelineRowCapabilities {
-            react: false,
-            reply: false,
-            edit: false,
-            redact: false,
-            report: false,
-            pin: false,
-            forward: false,
-        },
+        capabilities: project_row_action_capabilities(event),
+    }
+}
+
+fn project_row_action_capabilities(event: &EventTimelineItem) -> TimelineRowCapabilities {
+    let has_remote_id = event.event_id().is_some();
+    let forwardable = matches!(
+        event.content(),
+        TimelineItemContent::MsgLike(content)
+            if matches!(
+                content.kind,
+                MsgLikeKind::Message(_) | MsgLikeKind::Sticker(_)
+            )
+    );
+    TimelineRowCapabilities {
+        // Reactions remain on the V-SEND.2 owner until that vertical integrates.
+        react: false,
+        reply: has_remote_id && forwardable,
+        edit: event.is_editable(),
+        redact: has_remote_id,
+        report: false,
+        pin: false,
+        forward: has_remote_id && forwardable,
     }
 }
 

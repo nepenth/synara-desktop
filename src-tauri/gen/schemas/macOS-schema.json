@@ -795,10 +795,22 @@
           "markdownDescription": "Enables the matrix_timeline_close command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_timeline_edit_text command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-timeline-edit-text",
+          "markdownDescription": "Enables the matrix_timeline_edit_text command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_timeline_event_readback command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-timeline-event-readback",
           "markdownDescription": "Enables the matrix_timeline_event_readback command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_timeline_forward_text command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-timeline-forward-text",
+          "markdownDescription": "Enables the matrix_timeline_forward_text command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_timeline_jump_latest command without any pre-configured scope.",
@@ -823,6 +835,12 @@
           "type": "string",
           "const": "allow-matrix-timeline-reaction-toggle",
           "markdownDescription": "Enables the matrix_timeline_reaction_toggle command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_timeline_redact command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-timeline-redact",
+          "markdownDescription": "Enables the matrix_timeline_redact command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_timeline_set_read_state command without any pre-configured scope.",
@@ -1347,10 +1365,22 @@
           "markdownDescription": "Denies the matrix_timeline_close command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_timeline_edit_text command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-timeline-edit-text",
+          "markdownDescription": "Denies the matrix_timeline_edit_text command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_timeline_event_readback command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-timeline-event-readback",
           "markdownDescription": "Denies the matrix_timeline_event_readback command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_timeline_forward_text command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-timeline-forward-text",
+          "markdownDescription": "Denies the matrix_timeline_forward_text command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_timeline_jump_latest command without any pre-configured scope.",
@@ -1375,6 +1405,12 @@
           "type": "string",
           "const": "deny-matrix-timeline-reaction-toggle",
           "markdownDescription": "Denies the matrix_timeline_reaction_toggle command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_timeline_redact command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-timeline-redact",
+          "markdownDescription": "Denies the matrix_timeline_redact command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_timeline_set_read_state command without any pre-configured scope.",
