@@ -17,15 +17,13 @@ import { usePreviousValue } from '../../hooks/usePreviousValue';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { getInboxInvitesPath } from '../pathUtils';
 import {
-  getEventReactions,
-  getReactionContent,
   getMemberDisplayName,
   getNotificationType,
   getThreadRootEventId,
   getUnreadInfo,
   isNotificationEvent,
 } from '../../utils/room';
-import { MessageEvent, NotificationType } from '../../../types/matrix/room';
+import { NotificationType } from '../../../types/matrix/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
@@ -57,7 +55,6 @@ import {
   buildAgentApprovalNativeActionDedupeKey,
   createAgentApprovalNativeActionDedupeStore,
   detectAgentApprovalPrompt,
-  hasLocalAgentApprovalReactionFromSenders,
   planAgentApprovalNativeNotificationAction,
 } from '../../utils/agentApprovals';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
@@ -68,6 +65,7 @@ import {
 } from '../../notifications/notificationCaches';
 import { getLoadedLiveTimelineEvents } from '../../utils/timelineLifecycle';
 import { DesktopUpdaterProvider } from '../../features/desktop-updater/DesktopUpdaterProvider';
+import { ensureReactionWithNativeOwner } from '../../features/room/nativeReactionOwner';
 
 const RECENT_AGENT_APPROVAL_MS = AGENT_APPROVAL_NATIVE_ACTION_TTL_MS;
 
@@ -96,25 +94,6 @@ const resolveAgentApprovalTargetEvent = async (
   }
 };
 
-const userHasLocalApprovalReaction = (
-  room: Room | null,
-  eventId: string,
-  userId: string | null | undefined
-): boolean => {
-  if (!room || !userId) return false;
-  const reactions = getEventReactions(room.getUnfilteredTimelineSet(), eventId);
-  const sorted = reactions?.getSortedAnnotationsByKey();
-  if (!sorted) return false;
-  return hasLocalAgentApprovalReactionFromSenders(
-    sorted.map(([key, events]) => [
-      key,
-      [...events]
-        .map((event) => event.getSender())
-        .filter((sender): sender is string => Boolean(sender)),
-    ]),
-    userId
-  );
-};
 const NATIVE_PASTE_EVENT = 'synara://native-paste';
 const TEXT_INPUT_TYPES = new Set(['', 'email', 'password', 'search', 'tel', 'text', 'url']);
 
@@ -615,9 +594,6 @@ function AgentApprovalNotifications() {
       }
 
       const targetEvent = await resolveAgentApprovalTargetEvent(mx, roomId, eventId);
-      const room = mx.getRoom(roomId);
-      const userId = mx.getUserId();
-      const alreadyReactedLocally = userHasLocalApprovalReaction(room, eventId, userId);
       const isApprovalPrompt = targetEvent
         ? Boolean(detectAgentApprovalPrompt(targetEvent.getContent<Record<string, unknown>>()))
         : false;
@@ -628,7 +604,9 @@ function AgentApprovalNotifications() {
         nowMs: Date.now(),
         eventTsMs: targetEvent?.getTs(),
         alreadyActed: dedupe.has(provisionalDedupeKey),
-        alreadyReactedLocally,
+        // The Rust owner reads its own timeline aggregation and performs an
+        // idempotent ensure. JS does not inspect or write reactions here.
+        alreadyReactedLocally: false,
         eventResolved: Boolean(targetEvent),
         isApprovalPrompt,
       });
@@ -652,11 +630,11 @@ function AgentApprovalNotifications() {
 
       dedupe.add(plan.dedupeKey);
       try {
-        await mx.sendEvent(
-          plan.roomId,
-          MessageEvent.Reaction as any,
-          getReactionContent(plan.eventId, plan.reaction) as any
-        );
+        await ensureReactionWithNativeOwner({
+          roomId: plan.roomId,
+          eventId: plan.eventId,
+          key: plan.reaction,
+        });
       } catch {
         dedupe.remove(plan.dedupeKey);
       }

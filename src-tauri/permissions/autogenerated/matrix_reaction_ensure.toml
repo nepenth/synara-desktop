@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-reaction-ensure"
+description = "Enables the matrix_reaction_ensure command without any pre-configured scope."
+commands.allow = ["matrix_reaction_ensure"]
+
+[[permission]]
+identifier = "deny-matrix-reaction-ensure"
+description = "Denies the matrix_reaction_ensure command without any pre-configured scope."
+commands.deny = ["matrix_reaction_ensure"]
