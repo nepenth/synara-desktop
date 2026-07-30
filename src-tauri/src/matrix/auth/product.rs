@@ -16,7 +16,8 @@ use matrix_sdk::{
         events::{
             relation::Reply,
             room::message::{
-                Relation, RoomMessageEventContent, RoomMessageEventContentWithoutRelation,
+                MessageFormat, MessageType, Relation, RoomMessageEventContent,
+                RoomMessageEventContentWithoutRelation,
             },
             AnySyncMessageLikeEvent, AnySyncTimelineEvent, Mentions,        },
         EventId, OwnedEventId, OwnedRoomId, OwnedTransactionId, OwnedUserId,
@@ -100,6 +101,12 @@ use crate::matrix::timeline::{
     should_attach_formatted_body,
     NativeTimelinePinRequest,
     NativeTimelineReportRequest,
+    reply_draft_readback,
+    ComposerDraftRegistry,
+    NativeComposerReplyDraft,
+    NativeComposerReplyDraftReadback,
+    NativeComposerReplyDraftRoomRequest,
+    NativeComposerSetReplyDraftRequest,
     NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
 };
 use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
@@ -228,6 +235,7 @@ struct ManagedMatrixSession {
     sync: SyncServiceOwner,
     invite_avatars: InviteAvatarHandles,
     timelines: NativeTimelineRegistry,
+    composer_drafts: ComposerDraftRegistry,
     sends: SendQueue,
     attachments: AttachmentSendQueue,
     verification: NativeVerificationOwner,
@@ -355,6 +363,7 @@ pub async fn matrix_login_password(
         sync,
         invite_avatars: InviteAvatarHandles::new(session_generation),
         timelines: NativeTimelineRegistry::new(session_generation),
+        composer_drafts: ComposerDraftRegistry::new(),
         sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
         verification,
@@ -1420,6 +1429,74 @@ pub async fn matrix_timeline_paginate(
 }
 
 #[tauri::command]
+pub async fn matrix_composer_set_reply_draft(
+    state: State<'_, MatrixAuthState>,
+    request: NativeComposerSetReplyDraftRequest,
+) -> Result<NativeComposerReplyDraftReadback, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&request.room_id)?;
+    let event_id =
+        parse_required_event_id(&request.event_id, "v-timeline-reply-draft-invalid-event-id")?;
+
+    let room = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-timeline-reply-draft-room-not-found",
+            )
+        })?
+    };
+
+    let draft = load_reply_draft_preview(&room, &event_id, request.start_thread).await?;
+    let room_id_string = room_id.to_string();
+    {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active
+            .composer_drafts
+            .set(room_id_string.clone(), draft.clone());
+    }
+
+    Ok(reply_draft_readback(room_id_string, "set", Some(draft)))
+}
+
+#[tauri::command]
+pub async fn matrix_composer_clear_reply_draft(
+    state: State<'_, MatrixAuthState>,
+    request: NativeComposerReplyDraftRoomRequest,
+) -> Result<NativeComposerReplyDraftReadback, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&request.room_id)?;
+    let room_id_string = room_id.to_string();
+    {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.composer_drafts.clear(&room_id_string);
+    }
+    Ok(reply_draft_readback(room_id_string, "cleared", None))
+}
+
+#[tauri::command]
+pub async fn matrix_composer_get_reply_draft(
+    state: State<'_, MatrixAuthState>,
+    request: NativeComposerReplyDraftRoomRequest,
+) -> Result<NativeComposerReplyDraftReadback, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&request.room_id)?;
+    let room_id_string = room_id.to_string();
+    let draft = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.composer_drafts.get(&room_id_string).cloned()
+    };
+    Ok(reply_draft_readback(
+        room_id_string,
+        if draft.is_some() { "set" } else { "empty" },
+        draft,
+    ))
+}
+
+#[tauri::command]
 pub async fn matrix_timeline_edit_text(
     state: State<'_, MatrixAuthState>,
     request: NativeTimelineEditTextRequest,
@@ -1994,6 +2071,7 @@ pub async fn matrix_restore_session(
         sync,
         invite_avatars: InviteAvatarHandles::new(session_generation),
         timelines: NativeTimelineRegistry::new(session_generation),
+        composer_drafts: ComposerDraftRegistry::new(),
         sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
         verification,
@@ -2660,6 +2738,57 @@ async fn load_forwardable_text(
         }
         _ => Err(map_timeline_action_error(
             "v-timeline-forward-unsupported-event",
+        )),
+    }
+}
+
+async fn load_reply_draft_preview(
+    room: &Room,
+    event_id: &EventId,
+    start_thread: bool,
+) -> Result<NativeComposerReplyDraft, MatrixAuthCommandError> {
+    let timeline_event = room
+        .load_or_fetch_event(event_id, None)
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-reply-draft-event-unavailable"))?;
+    let sync_event = timeline_event
+        .raw()
+        .deserialize()
+        .map_err(|_| map_timeline_action_error("v-timeline-reply-draft-event-decode-failed"))?;
+    match sync_event {
+        AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomMessage(message)) => {
+            let original = message.as_original().ok_or_else(|| {
+                map_timeline_action_error("v-timeline-reply-draft-event-redacted")
+            })?;
+            let body = original.content.body().to_owned();
+            let formatted_body = match original.content.msgtype {
+                MessageType::Text(ref content) => content.formatted.as_ref(),
+                MessageType::Notice(ref content) => content.formatted.as_ref(),
+                MessageType::Emote(ref content) => content.formatted.as_ref(),
+                _ => None,
+            }
+            .filter(|formatted| formatted.format == MessageFormat::Html)
+            .map(|formatted| formatted.body.trim().to_owned())
+            .filter(|html| !html.is_empty() && html != body.trim());
+            let existing_thread_root = match &original.content.relates_to {
+                Some(Relation::Thread(thread)) => Some(thread.event_id.to_string()),
+                _ => None,
+            };
+            let thread_root_event_id = if start_thread {
+                Some(event_id.to_string())
+            } else {
+                existing_thread_root
+            };
+            Ok(NativeComposerReplyDraft {
+                event_id: event_id.to_string(),
+                sender_id: original.sender.to_string(),
+                body,
+                formatted_body,
+                thread_root_event_id,
+            })
+        }
+        _ => Err(map_timeline_action_error(
+            "v-timeline-reply-draft-unsupported-event",
         )),
     }
 }

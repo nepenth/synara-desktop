@@ -87,9 +87,8 @@ message/relation (including SDK-sanitized `formatted_body` and text/notice/emote
 labels), poll, membership/profile/state summaries, call, redaction, sticker/
 media handles, and UTD row shapes. Reaction ownership is calculated from the
 active native user; its action capability remains closed until V-SEND.2 is
-integrated. Composer draft ownership, media forward, poll/call action
-commands, presenter selection, and live authenticated viewport proof still
-remain. The flat `NativeTimelineSnapshot` remains only for the explicitly
+integrated. Media forward, poll/call action commands, presenter selection, and live
+authenticated viewport proof still remain. Body drafts remain local. The flat `NativeTimelineSnapshot` remains only for the explicitly
 temporary V-CRYPTO.6 bridge until those owners replace it.
 
 The managed SDK timeline now also owns an ordered subscription from the same
@@ -143,7 +142,7 @@ legacy composer or a rich reply/edit flow.
 | Visible timeline capability | Required native owner before final cutover         | Current status                                                                                                                                                                                                                                                                 |
 | --------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Reactions                   | V-SEND.2 typed toggle/ensure/redact commands       | Candidate exists on its own branch; not integration evidence yet                                                                                                                                                                                                               |
-| Plain-text reply            | Native send plus native reply draft/composer state | Transport input exists via `matrix_send_text`/`reply_to`; row capability opens when a remote message id exists; composer draft ownership still pending                                                                                                                         |
+| Plain-text reply            | Native send plus native reply draft/composer state | Transport via `matrix_send_text`/`reply_to`; `matrix_composer_{set,clear,get}_reply_draft` owns the reply target with typed readback; RoomTimeline/RoomInput consume that owner on desktop. Body drafts remain local Slate/localStorage                                        |
 | Rich send, edit, forward    | Typed send/edit/forward DTO commands               | `matrix_send_text` accepts optional `formattedBody`; edit accepts optional HTML; text forward exists; media forward remains pending                                                                                                                                            |
 | Redact, report, pin         | Typed room-event action commands                   | `matrix_timeline_redact`, `matrix_timeline_report`, `matrix_timeline_pin`, and `matrix_timeline_unpin` exist with typed readback                                                                                                                                               |
 | Mark read/unread, receipts  | Native receipt/read-frontier command and readback  | Stream-addressed private `m.read` / unread-flag command and snapshot readback exist; unread opening uses the native `m.fully_read` frontier; normal open restore policy and jump-to-latest are native; live frontier and pagination metadata now emit on the view-delta stream |

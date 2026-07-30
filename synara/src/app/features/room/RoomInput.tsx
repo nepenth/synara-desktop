@@ -148,6 +148,7 @@ import {
 } from './nativeSendAttachment';
 import { sendPollWithNativeDesktopOwner } from './nativePoll';
 import { sendPlainTextWithNativeOwner } from './nativeSendText';
+import { clearNativeComposerReplyDraft } from './nativeComposerDraft';
 
 const NATIVE_PASTE_EVENT = 'synara://native-paste';
 
@@ -183,6 +184,10 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     const [msgDraft, setMsgDraft] = useAtom(roomIdToMsgDraftAtomFamily(roomId));
     const [replyDraft, setReplyDraft] = useAtom(roomIdToReplyDraftAtomFamily(roomId));
+    const clearReplyDraft = useCallback(() => {
+      setReplyDraft(undefined);
+      void clearNativeComposerReplyDraft({ roomId });
+    }, [roomId, setReplyDraft]);
     const replyUserID = replyDraft?.userId;
 
     const powerLevelTags = usePowerLevelTags(room, powerLevels);
@@ -568,7 +573,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         mx.sendMessage(roomId, addReplyRelationToContent(content) as any)
       );
       if (contents.length > 0) {
-        setReplyDraft(undefined);
+        clearReplyDraft();
       }
     };
 
@@ -662,7 +667,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         resetEditor(editor);
         resetEditorHistory(editor);
         clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
-        setReplyDraft(undefined);
+        clearReplyDraft();
         sendTypingStatus(false);
       } catch (err) {
         const reason =
@@ -684,7 +689,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       editor,
       replyDraft,
       sendTypingStatus,
-      setReplyDraft,
+      clearReplyDraft,
       isMarkdown,
       commands,
       getReplyRelation,
@@ -765,10 +770,10 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             setAutocompleteQuery(undefined);
             return;
           }
-          setReplyDraft(undefined);
+          clearReplyDraft();
         }
       },
-      [submit, setReplyDraft, enterForNewline, autocompleteQuery, isComposing]
+      [submit, clearReplyDraft, enterForNewline, autocompleteQuery, isComposing]
     );
 
     const handleKeyUp: KeyboardEventHandler = useCallback(
@@ -819,7 +824,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           info,
         }) as any
       );
-      setReplyDraft(undefined);
+      clearReplyDraft();
     };
 
     const handleGifSelect = async (gif: GifResult) => {
@@ -843,7 +848,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             getGifMsgContent(gif, mxc, blob.size, fileName, encrypted?.encInfo)
           ) as any
         );
-        setReplyDraft(undefined);
+        clearReplyDraft();
         setGifPickerAnchor(undefined);
       } catch (err) {
         setGifSendError(err instanceof Error ? err.message : 'Failed to send GIF.');
@@ -966,7 +971,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                   style={{ padding: `${config.space.S200} ${config.space.S300} 0` }}
                 >
                   <IconButton
-                    onClick={() => setReplyDraft(undefined)}
+                    onClick={() => clearReplyDraft()}
                     variant="SurfaceVariant"
                     size="300"
                     radii="300"

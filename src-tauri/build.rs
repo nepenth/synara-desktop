@@ -81,6 +81,9 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_timeline_report",
     "matrix_timeline_pin",
     "matrix_timeline_unpin",
+    "matrix_composer_set_reply_draft",
+    "matrix_composer_clear_reply_draft",
+    "matrix_composer_get_reply_draft",
 ];
 
 fn git_output(repo: &Path, args: &[&str]) -> Option<String> {
