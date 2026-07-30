@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-space-parents-snapshot"
+description = "Enables the matrix_space_parents_snapshot command without any pre-configured scope."
+commands.allow = ["matrix_space_parents_snapshot"]
+
+[[permission]]
+identifier = "deny-matrix-space-parents-snapshot"
+description = "Denies the matrix_space_parents_snapshot command without any pre-configured scope."
+commands.deny = ["matrix_space_parents_snapshot"]

@@ -59,6 +59,7 @@ use crate::matrix::secret_storage::live::{
     self as live_secret_storage, NativeSecretStorageOperationResult, NativeSecretStorageStatus,
 };
 use crate::matrix::send::SendQueue;
+use crate::matrix::spaces::{snapshot_space_parents, NativeSpaceParentsSnapshot};
 use crate::matrix::store::{
     get_or_create_store_key, AccountIdentity, KeyringStoreKeyVault, StoreKeyId,
 };
@@ -1055,6 +1056,17 @@ pub async fn matrix_invites_snapshot(
 }
 
 #[tauri::command]
+pub async fn matrix_space_parents_snapshot(
+    state: State<'_, MatrixAuthState>,
+) -> Result<NativeSpaceParentsSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    snapshot_space_parents(&active.client, active.sync.session_generation())
+        .await
+        .map_err(map_space_parents_error)
+}
+
+#[tauri::command]
 pub async fn matrix_typing_snapshot(
     state: State<'_, MatrixAuthState>,
 ) -> Result<NativeTypingSnapshot, MatrixAuthCommandError> {
@@ -1716,6 +1728,14 @@ fn map_room_list_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     MatrixAuthCommandError::new(
         "Unknown",
         "The native Matrix room list is unavailable.",
+        diagnostic_id,
+    )
+}
+
+fn map_space_parents_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "Unknown",
+        "The native Matrix space parent map is unavailable.",
         diagnostic_id,
     )
 }

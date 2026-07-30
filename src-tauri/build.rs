@@ -63,6 +63,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_timeline_reaction_toggle",
     "matrix_reaction_ensure",
     "matrix_reaction_redact",
+    "matrix_space_parents_snapshot",
 ];
 
 fn git_output(repo: &Path, args: &[&str]) -> Option<String> {
