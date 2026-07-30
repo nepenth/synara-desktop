@@ -26,6 +26,9 @@ mod projection;
 mod registry;
 mod utd;
 
+#[cfg(test)]
+mod live_synapse_proof;
+
 pub use delta::{TimelineDeltaBatch, TimelineDeltaOp, TimelineSnapshot};
 pub use error::TimelineError;
 pub use focus::{
