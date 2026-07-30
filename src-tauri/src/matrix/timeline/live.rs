@@ -13,11 +13,9 @@ use futures_util::{stream, StreamExt};
 use matrix_sdk::{
     event_cache::PaginationStatus,
     ruma::{
-    ruma::{
         api::client::receipt::create_receipt::v3::ReceiptType,
         events::{reaction::ReactionEventContent, relation::Annotation},
-        OwnedEventId, OwnedRoomId, OwnedUserId,
-    },
+        OwnedEventId, OwnedRoomId, OwnedUserId, UserId,
     },
     Client,
 };
@@ -57,6 +55,7 @@ const FOCUSED_CONTEXT_EVENT_COUNT: u16 = 25;
 /// it is not a claim that the flat legacy snapshot is the final presenter
 /// payload.
 pub const NATIVE_TIMELINE_OPEN_SCHEMA_VERSION: u32 = 1;
+pub const NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS: u64 = 10 * 60 * 1000;
 
 /// Requested initial position for one native timeline view.
 ///
@@ -866,7 +865,9 @@ impl NativeTimelineRegistry {
     }
 
     pub async fn paginate_legacy(
-        &mut self,        room_id: &str,
+        &mut self,
+        client: &Client,
+        room_id: &str,
         direction: NativeTimelineDirection,
     ) -> Result<NativeTimelineSnapshot, &'static str> {
         let room_id = parse_room_id(room_id)?.to_string();
@@ -1285,10 +1286,105 @@ impl NativeTimelineRegistry {
     }
 }
 
-    ruma::{
-        events::{reaction::ReactionEventContent, relation::Annotation},
-        OwnedEventId, OwnedRoomId, OwnedUserId,
-    },
+
+impl Drop for NativeTimelineRegistry {
+    fn drop(&mut self) {
+        for (_, task) in self.view_update_tasks.drain() {
+            task.abort();
+        }
+    }
+}
+
+
+fn unix_time_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+
+fn should_restore_viewport(
+    has_unread: bool,
+    now_ms: u64,
+    current_live_tail_event_id: Option<&str>,
+    viewport: &NativeTimelineViewportHint,
+) -> bool {
+    if has_unread {
+        return viewport.at_bottom
+            && viewport.live_tail_event_id.as_deref().is_some()
+            && current_live_tail_event_id.is_some()
+            && viewport.live_tail_event_id.as_deref() == current_live_tail_event_id;
+    }
+    if viewport.at_bottom {
+        return true;
+    }
+    let Some(updated_at_ms) = viewport.updated_at_ms else {
+        return false;
+    };
+    if now_ms.saturating_sub(updated_at_ms) > NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS {
+        return false;
+    }
+    viewport
+        .restored_anchor_event_id
+        .as_deref()
+        .and_then(|event_id| parse_event_id(event_id).ok())
+        .is_some()
+}
+
+
+fn resolve_normal_open_position(
+    has_unread: bool,
+    fully_read_event_id: Option<String>,
+    current_live_tail_event_id: Option<&str>,
+    now_ms: u64,
+    viewport: &NativeTimelineViewportHint,
+) -> Result<TimelineViewPosition, &'static str> {
+    let can_restore =
+        should_restore_viewport(has_unread, now_ms, current_live_tail_event_id, viewport);
+    if can_restore && viewport.at_bottom {
+        return Ok(TimelineViewPosition::LiveBottom);
+    }
+    if has_unread {
+        let anchor_event_id =
+            fully_read_event_id.ok_or("v-timeline-normal-unread-frontier-unavailable")?;
+        return Ok(TimelineViewPosition::Unread { anchor_event_id });
+    }
+    if can_restore {
+        if let Some(anchor_event_id) = viewport
+            .restored_anchor_event_id
+            .as_deref()
+            .and_then(|event_id| parse_event_id(event_id).ok())
+            .map(|event_id| event_id.to_string())
+        {
+            return Ok(TimelineViewPosition::Restored {
+                anchor_event_id: Some(anchor_event_id),
+            });
+        }
+    }
+    Ok(TimelineViewPosition::LiveBottom)
+}
+
+
+fn view_subscription_key(room_id: &str, position: &TimelineViewPosition) -> String {
+    match position {
+        TimelineViewPosition::LiveBottom => format!("live:{room_id}"),
+        TimelineViewPosition::Unread { .. } => format!("unread:{room_id}"),
+        TimelineViewPosition::Focused { target_event_id } => {
+            format!("focused:{room_id}:{target_event_id}")
+        }
+        TimelineViewPosition::Restored {
+            anchor_event_id: Some(anchor_event_id),
+        } => format!("restored:{room_id}:{anchor_event_id}"),
+        TimelineViewPosition::Restored {
+            anchor_event_id: None,
+        } => format!("restored:{room_id}:none"),
+    }
+}
+
+
+struct ViewUpdateOwnerInput {
+    app: AppHandle,
     session_generation: u64,
     stream_id: String,
     room_id: String,
@@ -1300,7 +1396,6 @@ impl NativeTimelineRegistry {
     position: TimelineViewPosition,
     hit_start: Arc<AtomicBool>,
 }
-
 fn spawn_view_update_owner(
     input: ViewUpdateOwnerInput,
     updates: impl futures_util::Stream<Item = Vec<VectorDiff<Arc<SdkTimelineItem>>>> + Send + 'static,
@@ -1594,6 +1689,17 @@ async fn view_snapshot_from_items(
             paginate_forward: true,
         },
     }}
+
+
+fn reaction_contains_event_id(
+    reaction: &NativeTimelineReaction,
+    reaction_event_id: &OwnedEventId,
+) -> bool {
+    reaction
+        .senders
+        .iter()
+        .any(|sender| sender.reaction_event_id.as_deref() == Some(reaction_event_id.as_str()))
+}
 
 fn parse_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
     OwnedRoomId::try_from(room_id.trim()).map_err(|_| "d0.3-timeline-invalid-room-id")
