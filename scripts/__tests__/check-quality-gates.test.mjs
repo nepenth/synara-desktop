@@ -48,10 +48,23 @@ ${iosBuildStep}
           SYNARA_RECEIPT_MODE: both
       - if: always()
         run: scripts/synapse-integration.sh reset
+  synapse-native-reactions:
+    name: Synapse native reaction proof
+    needs: [changes]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - run: scripts/synapse-integration.sh up
+      - run: >
+          cargo test --locked
+          live_native_reaction_paths_against_disposable_synapse_when_configured
+          -- --nocapture
+      - if: always()
+        run: scripts/synapse-integration.sh reset
   quality-gate:
     name: Quality gate
     if: always()
-    needs: [changes, validate, ios-tests, synapse-integration]
+    needs: [changes, validate, ios-tests, synapse-integration, synapse-native-reactions]
     runs-on: ubuntu-latest
     steps:
       - name: Require every scheduled client validation job
@@ -59,6 +72,7 @@ ${iosBuildStep}
           DESKTOP_RESULT: \${{ needs.validate.result }}
           IOS_RESULT: \${{ needs.ios-tests.result }}
           SYNAPSE_RESULT: \${{ needs.synapse-integration.result }}
+          SYNAPSE_NATIVE_REACTIONS_RESULT: \${{ needs.synapse-native-reactions.result }}
           CHANGES_RESULT: \${{ needs.changes.result }}
         run: |
           set -euo pipefail
@@ -82,6 +96,7 @@ ${iosBuildStep}
           ok "Desktop/runtime validation" "$DESKTOP_RESULT" || fail=1
           ok "iOS simulator tests" "$IOS_RESULT" || fail=1
           ok "Synapse two-client integration" "$SYNAPSE_RESULT" || fail=1
+          ok "Synapse native reaction proof" "$SYNAPSE_NATIVE_REACTIONS_RESULT" || fail=1
           if [[ "$fail" -ne 0 ]]; then
             exit 1
           fi

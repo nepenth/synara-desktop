@@ -8,9 +8,10 @@
 //! - `SYNARA_MATRIX_HOMESERVER_URL=http://127.0.0.1:<port>` (credential-free HTTP loopback)
 //!
 //! Exercises the native owner route end-to-end:
-//! register/login → create room → send target → wait until the event is in the
-//! native timeline → `NativeTimelineRegistry::{toggle,ensure,redact}_reaction`
-//! → aggregation readback.
+//! register/login → create room → open native timeline → send target (so the
+//! live timeline observes local/remote echo) →
+//! `NativeTimelineRegistry::{toggle,ensure,redact}_reaction` → aggregation
+//! readback.
 //!
 //! JS two-client Synapse CI is not this proof. WebView click-through is not required.
 
@@ -27,10 +28,13 @@ use crate::matrix::auth::{login_with_password, LoginOptions};
 use crate::matrix::client_builder::{build_unauthenticated_client, ClientBuildConfig};
 use crate::matrix::store::{AccountIdentity, StoreKeyMaterial};
 use crate::matrix::timeline::live::{
-    NativeReactionMutation, NativeTimelineReaction, NativeTimelineRegistry,
+    NativeReactionMutation, NativeTimelineDirection, NativeTimelineReaction,
+    NativeTimelineRegistry,
 };
 
 type HmacSha1 = Hmac<Sha1>;
+
+const TARGET_BODY: &str = "v-send.2 reaction proof target";
 
 fn live_enabled() -> bool {
     std::env::var("SYNARA_RUN_MATRIX_RUST_REACTION_LIVE")
@@ -161,26 +165,38 @@ async fn sync_briefly(client: &matrix_sdk::Client) {
         .await;
 }
 
-/// Open a fresh registry after sync so TimelineBuilder sees the latest room events.
-async fn wait_for_timeline_event(
+/// Keep one live registry open so send-queue local echo and sync-fed remote
+/// echo can land. Cold reopen after pre-subscribe sync leaves the event cache
+/// empty and `Timeline::toggle_reaction` cannot find the target.
+async fn wait_for_target_in_open_timeline(
+    registry: &mut NativeTimelineRegistry,
     client: &matrix_sdk::Client,
     room_id: &str,
     event_id: &str,
-) -> NativeTimelineRegistry {
-    let deadline = Instant::now() + Duration::from_secs(30);
+) {
+    let deadline = Instant::now() + Duration::from_secs(45);
     loop {
         sync_briefly(client).await;
-        let mut registry = NativeTimelineRegistry::new(1);
+        // Cold event-cache rooms need a /messages page before the target appears.
+        let _ = registry
+            .paginate(client, room_id, NativeTimelineDirection::Backwards)
+            .await;
         let snapshot = registry
-            .open(client, room_id)
+            .snapshot(client, room_id)
             .await
-            .expect("open native timeline");
+            .expect("timeline snapshot");
         if snapshot.items.iter().any(|item| item.event_id == event_id) {
-            return registry;
+            return;
         }
         assert!(
             Instant::now() < deadline,
-            "timed out waiting for target event {event_id} in native timeline"
+            "timed out waiting for target event {event_id} in open native timeline (items={} bodies={:?})",
+            snapshot.items.len(),
+            snapshot
+                .items
+                .iter()
+                .map(|item| item.body.as_str())
+                .collect::<Vec<_>>(),
         );
         tokio::time::sleep(Duration::from_millis(250)).await;
     }
@@ -260,6 +276,12 @@ async fn live_native_reaction_paths_against_disposable_synapse_when_configured()
     .await
     .expect("password login");
 
+    // Subscribe before sync so timeline-linked chunks observe room traffic.
+    client
+        .event_cache()
+        .subscribe()
+        .expect("subscribe event cache for native reaction proof");
+
     client
         .sync_once(SyncSettings::default().timeout(Duration::from_secs(3)))
         .await
@@ -275,15 +297,21 @@ async fn live_native_reaction_paths_against_disposable_synapse_when_configured()
         .await
         .expect("post-create sync");
 
+    // Open the live native timeline *before* sending so toggle_reaction can see
+    // the target via send-queue echo / cache updates (not a cold reopen).
+    let mut registry = NativeTimelineRegistry::new(1);
+    registry
+        .open(&client, &room_id)
+        .await
+        .expect("open native timeline before send");
+
     let sent = room
-        .send(RoomMessageEventContent::text_plain(
-            "v-send.2 reaction proof target",
-        ))
+        .send(RoomMessageEventContent::text_plain(TARGET_BODY))
         .await
         .expect("send target event");
     let target_event_id = sent.response.event_id.to_string();
 
-    let mut registry = wait_for_timeline_event(&client, &room_id, &target_event_id).await;
+    wait_for_target_in_open_timeline(&mut registry, &client, &room_id, &target_event_id).await;
 
     // Path 1: toggle add — requires the target event already present in the timeline.
     let toggled = registry
