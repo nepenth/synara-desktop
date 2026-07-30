@@ -599,6 +599,10 @@ pub enum TimelineViewDeltaOp {
 }
 
 /// A native timeline update emitted only from the managed SDK subscription.
+///
+/// Row mutations travel in `ops`. Live read-frontier and pagination owners may
+/// also attach authoritative metadata; metadata-only batches are valid when
+/// `ops` is empty but at least one of `read_state` / `pagination` is present.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TimelineViewDeltaBatch {
@@ -610,6 +614,10 @@ pub struct TimelineViewDeltaBatch {
     pub room_id: RoomId,
     pub revision: u64,
     pub ops: Vec<TimelineViewDeltaOp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub read_state: Option<TimelineReadState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pagination: Option<TimelinePaginationState>,
 }
 
 /// Project one SDK delta batch while keeping SDK items and diffs in Rust.

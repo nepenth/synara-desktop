@@ -154,6 +154,8 @@ export type NativeTimelineViewDeltaBatch = {
   roomId: string;
   revision: number;
   ops: NativeTimelineViewDeltaOp[];
+  readState?: NativeTimelineViewSnapshot['readState'];
+  pagination?: NativeTimelineViewSnapshot['pagination'];
 };
 
 export type NativeTimelineOpenReadback = {
@@ -192,6 +194,8 @@ const isValidIndex = (index: number, length: number, allowEnd = false): boolean 
 /**
  * Applies one exact native stream update. Invalid operations and revision gaps
  * are rejected rather than guessed at or repaired with a JS timeline fetch.
+ * Metadata-only batches (readState / pagination without row ops) are accepted
+ * when the native owner emits live frontier or pagination signals.
  */
 export const applyNativeTimelineViewDelta = (
   snapshot: NativeTimelineViewSnapshot,
@@ -203,6 +207,11 @@ export const applyNativeTimelineViewDelta = (
     batch.roomId !== snapshot.roomId ||
     batch.revision !== snapshot.revision + 1
   ) {
+    return undefined;
+  }
+
+  const hasMetadata = Boolean(batch.readState || batch.pagination);
+  if (batch.ops.length === 0 && !hasMetadata) {
     return undefined;
   }
 
@@ -253,7 +262,13 @@ export const applyNativeTimelineViewDelta = (
     }
   }
 
-  return { ...snapshot, revision: batch.revision, rows };
+  return {
+    ...snapshot,
+    revision: batch.revision,
+    rows,
+    ...(batch.readState ? { readState: batch.readState } : {}),
+    ...(batch.pagination ? { pagination: batch.pagination } : {}),
+  };
 };
 
 export type NativeTimelineOpenInput = {
