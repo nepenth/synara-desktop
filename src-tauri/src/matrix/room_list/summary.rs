@@ -107,6 +107,7 @@ impl RoomSummaryBuilder {
             avatar_url: None,
             membership: self.membership,
             is_direct: self.is_direct,
+            is_space: false,
             is_favorite: self.is_favorite,
             is_low_priority: self.is_low_priority,
             folder_id: self.folder_id,

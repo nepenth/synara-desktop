@@ -7,11 +7,12 @@ use std::time::Duration;
 
 use eyeball_im::VectorDiff;
 use futures_util::StreamExt;
+use matrix_sdk::notification_settings::RoomNotificationMode;
 use matrix_sdk::{Room, RoomState};
 use matrix_sdk_ui::room_list_service::filters;
 use serde::Serialize;
 
-use crate::matrix::dto::{Membership, RoomSummary};
+use crate::matrix::dto::{Membership, NotificationMode, RoomSummary};
 use crate::matrix::sync::SyncServiceOwner;
 
 const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -70,6 +71,10 @@ async fn project_room(room: &Room) -> RoomSummary {
         .latest_event_timestamp()
         .map(|timestamp| timestamp.get().into())
         .or_else(|| room.recency_stamp().map(Into::into));
+    let notification_mode = match room.cached_user_defined_notification_mode() {
+        Some(mode) => Some(map_notification_mode(mode)),
+        None => room.notification_mode().await.map(map_notification_mode),
+    };
 
     RoomSummary {
         room_id: room.room_id().to_string(),
@@ -78,6 +83,7 @@ async fn project_room(room: &Room) -> RoomSummary {
         avatar_url: room.avatar_url().map(|uri| uri.to_string()),
         membership: membership(room.state()),
         is_direct: room.is_direct().await.unwrap_or(false),
+        is_space: room.is_space(),
         is_favorite: false,
         is_low_priority: false,
         folder_id: None,
@@ -90,10 +96,18 @@ async fn project_room(room: &Room) -> RoomSummary {
         unread_count: bounded_count(counts.notification_count),
         highlight_count: bounded_count(counts.highlight_count),
         marked_unread: room.is_marked_unread(),
-        notification_mode: None,
+        notification_mode,
         last_activity_ts,
         heroes: None,
         tombstone_successor_room_id: None,
+    }
+}
+
+fn map_notification_mode(mode: RoomNotificationMode) -> NotificationMode {
+    match mode {
+        RoomNotificationMode::AllMessages => NotificationMode::All,
+        RoomNotificationMode::MentionsAndKeywordsOnly => NotificationMode::Mentions,
+        RoomNotificationMode::Mute => NotificationMode::Mute,
     }
 }
 
@@ -122,6 +136,22 @@ mod tests {
         assert_eq!(membership(RoomState::Knocked), Membership::Knock);
         assert_eq!(membership(RoomState::Left), Membership::Leave);
         assert_eq!(membership(RoomState::Banned), Membership::Ban);
+    }
+
+    #[test]
+    fn notification_modes_map_to_product_dto() {
+        assert_eq!(
+            map_notification_mode(RoomNotificationMode::AllMessages),
+            NotificationMode::All
+        );
+        assert_eq!(
+            map_notification_mode(RoomNotificationMode::MentionsAndKeywordsOnly),
+            NotificationMode::Mentions
+        );
+        assert_eq!(
+            map_notification_mode(RoomNotificationMode::Mute),
+            NotificationMode::Mute
+        );
     }
 
     #[test]

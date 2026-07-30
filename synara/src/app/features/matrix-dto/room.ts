@@ -8,6 +8,7 @@ import {
   isObject,
   optNumber,
   optString,
+  optBoolean,
   reqBoolean,
   reqNumber,
   reqString,
@@ -41,6 +42,7 @@ export type RoomSummary = {
   avatarUrl?: string;
   membership: Membership;
   isDirect: boolean;
+  isSpace: boolean;
   isEncrypted: boolean;
   joinRule?: string;
   unreadCount: number;
@@ -67,6 +69,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
   const canonicalAlias = optString(value, 'canonicalAlias');
   const avatarUrl = optString(value, 'avatarUrl');
   const isDirect = reqBoolean(value, 'isDirect');
+  const isSpace = optBoolean(value, 'isSpace');
   const isEncrypted = reqBoolean(value, 'isEncrypted');
   const joinRule = optString(value, 'joinRule');
   const unreadCount = reqNumber(value, 'unreadCount');
@@ -80,6 +83,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
     canonicalAlias === null ||
     avatarUrl === null ||
     isDirect === null ||
+    isSpace === null ||
     isEncrypted === null ||
     joinRule === null ||
     unreadCount === null ||
@@ -116,6 +120,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
     avatarUrl,
     membership: value.membership,
     isDirect,
+    isSpace: isSpace ?? false,
     isEncrypted,
     joinRule,
     unreadCount,
