@@ -2,10 +2,10 @@
 
 | Field              | Value                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------ |
-| Active             | **Between product slices** (2026-07-29); V-CRYPTO.7 #236 merged at `528a510`; V-AUTH.1 SSO removal queued |
+| Active             | **V-AUTH.1 #238 merged** at `08a185e`; V-ROOMS.1 #241, V-SEND.2 #239, and V-TIMELINE #240 active (2026-07-30) |
 | Interval           | Goal continuation; optional scheduler fires every **4 minutes**                      |
 | Integration        | `feature/matrix-rust-sdk-full-replacement` only                                      |
-| Orchestrator       | **Codex `gpt-5.6-terra`, high reasoning**                                            |
+| Orchestrator       | **Codex `gpt-5.6-sol`, medium reasoning**                                            |
 | Epic               | [d0-product-replacement-epic.md](d0-product-replacement-epic.md)                     |
 | **Policy**         | **[full-vertical-policy.md](full-vertical-policy.md)** — complete replacement only   |
 | **Residual queue** | [d0-residual-completion.md](d0-residual-completion.md) — **must drain first**        |
@@ -15,12 +15,11 @@
 
 | Agent                                      | Role                                                                                                             |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| **Codex** `gpt-5.6-terra` **high**         | Primary orchestrator: fire this loop, own Git/PR state, review and merge green full-vertical PRs, never main/#39 |
+| **Codex** `gpt-5.6-sol` **medium**         | Primary orchestrator: fire this loop, own Git/PR state, review and merge green full-vertical PRs, never main/#39 |
 | **Codex sub-agents**, same model/reasoning | Implement bounded task packets or independent review in parallel when scopes do not conflict                     |
 
-Grok is not part of the active execution path while its usage allocation is
-unavailable. The primary Codex orchestrator retains acceptance and merge
-authority even when implementation is delegated.
+The primary Codex orchestrator retains acceptance and merge authority even
+when implementation is delegated.
 
 ## Hard policy
 
@@ -41,7 +40,7 @@ authority even when implementation is delegated.
 1. **Do not merge** PRs that leave an incomplete/plateau shell without full vertical acceptance
 2. Merge green **residual-completion / full vertical** product PR if Quality + Desktop package gates success
 3. Merge green **policy/docs** that enforce full-vertical + residual ledger
-4. If no merge: prepare V-AUTH.1 as the complete desktop SSO-removal vertical in [d0-residual-completion.md](d0-residual-completion.md)
+4. If no merge: advance the next dependency-safe active residual candidate in [d0-residual-completion.md](d0-residual-completion.md)
 5. Tip-merge **only** the active residual PR if BEHIND/CONFLICTING
 6. Update PROGRESS after residual lands
 7. Report short status; stop if disk &lt; 5 Gi free
@@ -57,7 +56,8 @@ authority even when implementation is delegated.
 | V-CRYPTO.6    | **DONE #235**                            | Automatic native UTD/history recovery; legacy retry/listener owners deleted  |
 | V-CRYPTO.7    | **DONE #236**                            | Merged at `528a510`; reviewed, green product/test head `192be46`; native device/trust/actions and JS device/dead UIA owner deletion |
 | D0.6 plateau  | **#221 HOLD — do not merge as complete** | rework → V-BURN later                                                        |
-| **Next**      | **V-AUTH.1 SSO removal**                 | Delete desktop SSO entry points, callback/token path, and native SSO UIAA continuation |
+| V-AUTH.1      | **DONE #238**                             | Merged at `08a185e`; desktop SSO deletion and 201→197 production importer delta |
+| **Next**      | **V-ROOMS.1 / V-SEND.2 / V-TIMELINE**     | Validate rebased invite/reaction candidates; complete native timeline owner route before JS deletion |
 
 _Orchestrator must rewrite this table when a residual slice merges._
 
@@ -66,7 +66,7 @@ _Orchestrator must rewrite this table when a residual slice merges._
 ### A) Tip-merge active residual PR only
 
 ```text
-codex exec -m gpt-5.6-terra -c model_reasoning_effort="high" --ephemeral -
+codex exec -m gpt-5.6-sol -c model_reasoning_effort="medium" --ephemeral -
 # tip-merge PR N onto origin/feature/matrix-rust-sdk-full-replacement;
 # resolve mod.rs by union; fmt; cargo test --lib <module>; push; do not merge
 ```
