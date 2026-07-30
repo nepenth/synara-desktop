@@ -14,6 +14,7 @@ use matrix_sdk::{
     room::edit::EditedContent,    ruma::{
         api::client::uiaa,
         events::{
+            poll::unstable_response::UnstablePollResponseEventContent,
             relation::Reply,
             room::message::{
                 MessageFormat, MessageType, Relation, RoomMessageEventContent,
@@ -85,39 +86,18 @@ use crate::matrix::sync::{
     SyncServiceOwner,
 };
 use crate::matrix::timeline::{
-    NativeReactionMutationResult,
-    NativeTimelineDirection,
-    NativeTimelineEventReadback,
-    NativeTimelineRegistry,
-    NativeTimelineSnapshot,
-    NativeTimelineOpenReadback,
-    NativeTimelineOpenRequest,
-    NativeTimelineViewPaginationRequest,
-    NativeTimelineReadStateReadback,
-    NativeTimelineReadStateRequest,
-    NativeTimelineCloseRequest,
-    TimelineMediaSource,
-    NativeTimelineJumpLatestRequest,
-    format_forwarded_plain_body,
-    NativeTimelineActionKind,
-    NativeTimelineActionReadback,
-    NativeTimelineEditTextRequest,
-    NativeTimelineForwardTextRequest,
-    NativeTimelineRedactRequest,
-    should_attach_formatted_body,
-    NativeTimelinePinRequest,
-    NativeTimelineReportRequest,
-    reply_draft_readback,
-    ComposerDraftRegistry,
-    NativeComposerReplyDraft,
-    NativeComposerReplyDraftReadback,
-    NativeComposerReplyDraftRoomRequest,
-    NativeComposerSetReplyDraftRequest,
-    format_forwarded_media_body,
-    NativeTimelineForwardMediaRequest,
-    NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
-    NativeTimelineCallDeclineRequest,
-    NativeTimelinePollVoteRequest,
+    format_forwarded_media_body, format_forwarded_plain_body, reply_draft_readback,
+    should_attach_formatted_body, ComposerDraftRegistry, NativeComposerReplyDraft,
+    NativeComposerReplyDraftReadback, NativeComposerReplyDraftRoomRequest,
+    NativeComposerSetReplyDraftRequest, NativeReactionMutationResult, NativeTimelineActionKind,
+    NativeTimelineActionReadback, NativeTimelineCallDeclineRequest, NativeTimelineCloseRequest,
+    NativeTimelineDirection, NativeTimelineEditTextRequest, NativeTimelineEventReadback,
+    NativeTimelineForwardMediaRequest, NativeTimelineForwardTextRequest,
+    NativeTimelineJumpLatestRequest, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
+    NativeTimelinePinRequest, NativeTimelinePollVoteRequest, NativeTimelineReadStateReadback,
+    NativeTimelineReadStateRequest, NativeTimelineRedactRequest, NativeTimelineRegistry,
+    NativeTimelineReportRequest, NativeTimelineSnapshot, NativeTimelineViewPaginationRequest,
+    TimelineMediaSource, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
 };
 use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
 use crate::matrix::verification::live::{
@@ -1397,45 +1377,78 @@ pub async fn matrix_timeline_paginate(
     let active = require_session_mut(session.as_mut())?;
     active
         .timelines
-        .paginate(&active.client, request)        .await
+        .paginate(&active.client, request)
+        .await
         .map_err(map_timeline_error)
 }
 
 #[tauri::command]
-    pub async fn matrix_timeline_reaction_toggle(     state: State<'_,
-    MatrixAuthState>,
-    room_id: String,
-    event_id: String,
-    key: String,
-    ) -> Result<NativeReactionMutationResult,
-    MatrixAuthCommandError> {,
-    pub async fn matrix_timeline_set_read_state(     state: State<'_,
+pub async fn matrix_timeline_set_read_state(
+    state: State<'_, MatrixAuthState>,
     request: NativeTimelineReadStateRequest,
-    ) -> Result<NativeTimelineReadStateReadback,
+) -> Result<NativeTimelineReadStateReadback, MatrixAuthCommandError> {
     let mut session = state.session.lock().await;
     let active = require_session_mut(session.as_mut())?;
     active
         .timelines
-    .toggle_reaction(&active.client,
-    &room_id,
-    &event_id,
-    &key)         .await         .map_err(map_reaction_error) }  #[tauri::command] pub async fn matrix_reaction_ensure(     state: State<'_,
-    MatrixAuthState>,
+        .set_read_state(&active.client, request)
+        .await
+        .map_err(map_timeline_error)
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_reaction_toggle(
+    state: State<'_, MatrixAuthState>,
     room_id: String,
     event_id: String,
     key: String,
-    ) -> Result<NativeReactionMutationResult,
-    MatrixAuthCommandError> {     let mut session = state.session.lock().await;     let active = require_session_mut(session.as_mut())?;     active         .timelines         .ensure_reaction(&active.client,
-    &key)         .await         .map_err(map_reaction_error) }  #[tauri::command] pub async fn matrix_reaction_redact(     state: State<'_,
+) -> Result<NativeReactionMutationResult, MatrixAuthCommandError> {
+    let mut session = state.session.lock().await;
+    let active = require_session_mut(session.as_mut())?;
+    active
+        .timelines
+        .toggle_reaction(&active.client, &room_id, &event_id, &key)
+        .await
+        .map_err(map_reaction_error)
+}
+
+#[tauri::command]
+pub async fn matrix_reaction_ensure(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    event_id: String,
+    key: String,
+) -> Result<NativeReactionMutationResult, MatrixAuthCommandError> {
+    let mut session = state.session.lock().await;
+    let active = require_session_mut(session.as_mut())?;
+    active
+        .timelines
+        .ensure_reaction(&active.client, &room_id, &event_id, &key)
+        .await
+        .map_err(map_reaction_error)
+}
+
+#[tauri::command]
+pub async fn matrix_reaction_redact(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
     target_event_id: String,
     reaction_event_id: String,
-    MatrixAuthCommandError> {     let mut session = state.session.lock().await;     let active = require_session_mut(session.as_mut())?;     active         .timelines         .redact_reaction(             &active.client,
-    &target_event_id,
-    &reaction_event_id,
-    &key,
-    )         .await         .map_err(map_reaction_error),
-    .set_read_state(&active.client,
-    request)         .await         .map_err(map_timeline_error),
+    key: String,
+) -> Result<NativeReactionMutationResult, MatrixAuthCommandError> {
+    let mut session = state.session.lock().await;
+    let active = require_session_mut(session.as_mut())?;
+    active
+        .timelines
+        .redact_reaction(
+            &active.client,
+            &room_id,
+            &target_event_id,
+            &reaction_event_id,
+            &key,
+        )
+        .await
+        .map_err(map_reaction_error)
 }
 
 #[tauri::command]
@@ -1794,8 +1807,10 @@ pub async fn matrix_timeline_call_decline(
     request: NativeTimelineCallDeclineRequest,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
     let room_id = parse_send_room_id(&request.room_id)?;
-    let event_id =
-        parse_required_event_id(&request.event_id, "v-timeline-call-decline-invalid-event-id")?;
+    let event_id = parse_required_event_id(
+        &request.event_id,
+        "v-timeline-call-decline-invalid-event-id",
+    )?;
 
     let room = {
         let mut session = state.session.lock().await;

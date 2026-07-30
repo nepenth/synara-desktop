@@ -30,30 +30,22 @@ mod registry;
 mod utd;
 mod view;
 
-    #[cfg(test)] mod live_synapse_proof;,
-    pub use actions::{     format_forwarded_plain_body,
-    NativeTimelineActionKind,
-    NativeTimelineActionReadback,
-    NativeTimelineEditTextRequest,
-    NativeTimelineForwardTextRequest,
-    NativeTimelineRedactRequest,
-    should_attach_formatted_body,
-    NativeTimelinePinRequest,
-    NativeTimelineReportRequest,
-    pub use actions::{     format_forwarded_media_body,
-    format_forwarded_plain_body,
-    NativeTimelineForwardMediaRequest,
-    NativeTimelineCallDeclineRequest,
-    NativeTimelinePollVoteRequest,
+#[cfg(test)]
+mod live_synapse_proof;
+
+pub use actions::{
+    format_forwarded_media_body, format_forwarded_plain_body, should_attach_formatted_body,
+    NativeTimelineActionKind, NativeTimelineActionReadback, NativeTimelineCallDeclineRequest,
+    NativeTimelineEditTextRequest, NativeTimelineForwardMediaRequest,
+    NativeTimelineForwardTextRequest, NativeTimelinePinRequest, NativeTimelinePollVoteRequest,
+    NativeTimelineRedactRequest, NativeTimelineReportRequest,
     NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
-    };,
-    }; pub use composer::{     reply_draft_readback,
-    ComposerDraftRegistry,
-    NativeComposerReplyDraft,
-    NativeComposerReplyDraftReadback,
-    NativeComposerReplyDraftRoomRequest,
-    NativeComposerSetReplyDraftRequest,
-    NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION,
+};
+pub use composer::{
+    reply_draft_readback, ComposerDraftRegistry, NativeComposerReplyDraft,
+    NativeComposerReplyDraftReadback, NativeComposerReplyDraftRoomRequest,
+    NativeComposerSetReplyDraftRequest, NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION,
+};
 
 pub use delta::{TimelineDeltaBatch, TimelineDeltaOp, TimelineSnapshot};
 pub use error::TimelineError;
@@ -61,30 +53,14 @@ pub use focus::{
     ContextWindow, FocusOpenOutcome, FocusOpenRequest, NavigationPhase, TimelineFocus, TimelineMode,
 };
 pub use live::{
-    NativeDecryptionState,
-    NativeReactionMutation,
-    NativeReactionMutationResult,
-    NativeTimelineDirection,
-    NativeTimelineEventReadback,
-    NativeTimelineItem,
-    NativeTimelineReaction,
-    NativeTimelineReactionSender,
-    NativeTimelineRegistry,
-    NativeTimelineSnapshot,
-    NativeUtdPhase,
-    NativeUtdStatus,
-    NativeTimelineOpenPosition,
-    NativeTimelineOpenReadback,
-    NativeTimelineOpenRequest,
-    NativeTimelineViewPaginationRequest,
-    NativeTimelineReadAction,
-    NativeTimelineReadStateReadback,
-    NativeTimelineReadStateRequest,
-    NativeTimelineCloseRequest,
-    NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
-    NativeTimelineJumpLatestRequest,
-    NativeTimelineViewportHint,
-    NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
+    NativeDecryptionState, NativeReactionMutation, NativeReactionMutationResult,
+    NativeTimelineCloseRequest, NativeTimelineDirection, NativeTimelineEventReadback,
+    NativeTimelineItem, NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition,
+    NativeTimelineOpenReadback, NativeTimelineOpenRequest, NativeTimelineReaction,
+    NativeTimelineReactionSender, NativeTimelineReadAction, NativeTimelineReadStateReadback,
+    NativeTimelineReadStateRequest, NativeTimelineRegistry, NativeTimelineSnapshot,
+    NativeTimelineViewPaginationRequest, NativeTimelineViewportHint, NativeUtdPhase,
+    NativeUtdStatus, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
 };
 pub use media::{
     is_timeline_media_handle, TimelineMediaRegistry, TimelineMediaSource,
