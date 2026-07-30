@@ -73,6 +73,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_poll_respond",
     "matrix_timeline_set_read_state",
     "matrix_timeline_close",
+    "matrix_timeline_event_readback",
 ];
 
 fn git_output(repo: &Path, args: &[&str]) -> Option<String> {
