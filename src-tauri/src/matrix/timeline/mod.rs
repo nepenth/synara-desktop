@@ -43,6 +43,8 @@ mod view;
     pub use actions::{     format_forwarded_media_body,
     format_forwarded_plain_body,
     NativeTimelineForwardMediaRequest,
+    NativeTimelineCallDeclineRequest,
+    NativeTimelinePollVoteRequest,
     NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
     };,
     }; pub use composer::{     reply_draft_readback,

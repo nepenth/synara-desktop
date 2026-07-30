@@ -82,6 +82,8 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_timeline_report",
     "matrix_timeline_pin",
     "matrix_timeline_unpin",
+    "matrix_timeline_poll_vote",
+    "matrix_timeline_call_decline",
     "matrix_composer_set_reply_draft",
     "matrix_composer_clear_reply_draft",
     "matrix_composer_get_reply_draft",
