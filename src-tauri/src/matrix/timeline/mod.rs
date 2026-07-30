@@ -26,15 +26,19 @@ mod projection;
 mod registry;
 mod utd;
 
+#[cfg(test)]
+mod live_synapse_proof;
+
 pub use delta::{TimelineDeltaBatch, TimelineDeltaOp, TimelineSnapshot};
 pub use error::TimelineError;
 pub use focus::{
     ContextWindow, FocusOpenOutcome, FocusOpenRequest, NavigationPhase, TimelineFocus, TimelineMode,
 };
 pub use live::{
-    NativeDecryptionState, NativeTimelineDirection, NativeTimelineEventReadback,
-    NativeTimelineItem, NativeTimelineRegistry, NativeTimelineSnapshot, NativeUtdPhase,
-    NativeUtdStatus,
+    NativeDecryptionState, NativeReactionMutation, NativeReactionMutationResult,
+    NativeTimelineDirection, NativeTimelineEventReadback, NativeTimelineItem,
+    NativeTimelineReaction, NativeTimelineReactionSender, NativeTimelineRegistry,
+    NativeTimelineSnapshot, NativeUtdPhase, NativeUtdStatus,
 };
 pub use pagination::{
     DirectionStatus, PaginationDirection, PaginationOutcome, PaginationPhase, PaginationRequest,

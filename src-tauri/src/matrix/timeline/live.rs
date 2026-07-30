@@ -8,13 +8,17 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use matrix_sdk::{
-    ruma::{OwnedEventId, OwnedRoomId},
+    ruma::{
+        events::{reaction::ReactionEventContent, relation::Annotation},
+        OwnedEventId, OwnedRoomId,
+    },
     Client,
 };
 use matrix_sdk_crypto::types::events::UtdCause;
 use matrix_sdk_ui::timeline::{
-    EncryptedMessage, Timeline, TimelineBuilder, TimelineEventFocusThreadMode, TimelineFocus,
-    TimelineItem as SdkTimelineItem, TimelineItemContent as SdkTimelineItemContent,
+    EncryptedMessage, ReactionStatus, Timeline, TimelineBuilder, TimelineEventFocusThreadMode,
+    TimelineEventItemId, TimelineFocus, TimelineItem as SdkTimelineItem,
+    TimelineItemContent as SdkTimelineItemContent,
 };
 use serde::{Deserialize, Serialize};
 
@@ -50,6 +54,50 @@ pub struct NativeTimelineItem {
     pub origin_server_ts: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub decryption_state: Option<NativeDecryptionState>,
+    /// Aggregated reactions are projected by the native timeline owner. The
+    /// webview never derives reaction ownership from a Matrix JS timeline.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reactions: Vec<NativeTimelineReaction>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineReaction {
+    pub key: String,
+    pub count: u32,
+    pub me: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub senders: Vec<NativeTimelineReactionSender>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineReactionSender {
+    pub user_id: String,
+    /// Remote reaction annotations can be redacted by their event id. Local
+    /// echoes intentionally have no fabricated event id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reaction_event_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeReactionMutation {
+    Added,
+    Removed,
+    AlreadyPresent,
+    Redacted,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeReactionMutationResult {
+    pub room_id: String,
+    pub target_event_id: String,
+    pub key: String,
+    pub mutation: NativeReactionMutation,
+    /// State reprojected from the same Rust timeline owner after the SDK call.
+    pub readback: Option<NativeTimelineReaction>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -151,11 +199,12 @@ impl NativeTimelineRegistry {
                 },
             );
         }
-        self.snapshot(&room_id_string).await
+        self.snapshot(client, &room_id_string).await
     }
 
     pub async fn snapshot(
         &mut self,
+        client: &Client,
         room_id: &str,
     ) -> Result<NativeTimelineSnapshot, &'static str> {
         let room_id = parse_room_id(room_id)?.to_string();
@@ -166,6 +215,7 @@ impl NativeTimelineRegistry {
             &entry.timeline,
             entry.is_encrypted,
             entry.hit_start,
+            client.user_id(),
         )
         .await?;
         self.reconcile_utd(&mut snapshot, UtdRecoveryKind::RetryDecrypt)?;
@@ -174,6 +224,7 @@ impl NativeTimelineRegistry {
 
     pub async fn paginate(
         &mut self,
+        client: &Client,
         room_id: &str,
         direction: NativeTimelineDirection,
     ) -> Result<NativeTimelineSnapshot, &'static str> {
@@ -203,6 +254,7 @@ impl NativeTimelineRegistry {
             &entry.timeline,
             entry.is_encrypted,
             entry.hit_start,
+            client.user_id(),
         )
         .await?;
         self.reconcile_utd(&mut snapshot, UtdRecoveryKind::EncryptedHistoryRecovery)?;
@@ -247,7 +299,7 @@ impl NativeTimelineRegistry {
         let (items, _updates) = timeline.subscribe().await;
         let item = items
             .iter()
-            .filter_map(|item| project_item(item))
+            .filter_map(|item| project_item(item, client.user_id()))
             .find(|item| item.event_id == event_id.as_str())
             .ok_or("v-crypto.6-event-not-found")?;
         Ok(NativeTimelineEventReadback {
@@ -256,6 +308,196 @@ impl NativeTimelineRegistry {
             event_id: event_id.to_string(),
             item,
         })
+    }
+
+    /// The only self-reaction toggle owner. `matrix-sdk-ui` owns the decision
+    /// to add or redact the current user's annotation and its local echo.
+    pub async fn toggle_reaction(
+        &mut self,
+        client: &Client,
+        room_id: &str,
+        target_event_id: &str,
+        key: &str,
+    ) -> Result<NativeReactionMutationResult, &'static str> {
+        let room_id = parse_room_id(room_id)?.to_string();
+        let target_event_id = parse_event_id(target_event_id)?;
+        validate_reaction_key(key)?;
+        self.open(client, &room_id).await?;
+        let timeline = self
+            .entries
+            .get(&room_id)
+            .ok_or("v-send.2-reaction-timeline-not-open")?
+            .timeline
+            .clone();
+        let added = timeline
+            .toggle_reaction(&TimelineEventItemId::EventId(target_event_id.clone()), key)
+            .await
+            .map_err(|_| "v-send.2-reaction-toggle-failed")?;
+        let readback = self
+            .reaction_readback(client, &room_id, &target_event_id, key)
+            .await?;
+        Ok(NativeReactionMutationResult {
+            room_id,
+            target_event_id: target_event_id.to_string(),
+            key: key.to_owned(),
+            mutation: if added {
+                NativeReactionMutation::Added
+            } else {
+                NativeReactionMutation::Removed
+            },
+            readback,
+        })
+    }
+
+    /// Idempotently ensure an approval annotation exists. This intentionally
+    /// does *not* call `toggle_reaction`: an existing reaction remains present.
+    pub async fn ensure_reaction(
+        &mut self,
+        client: &Client,
+        room_id: &str,
+        target_event_id: &str,
+        key: &str,
+    ) -> Result<NativeReactionMutationResult, &'static str> {
+        let room_id = parse_room_id(room_id)?.to_string();
+        let target_event_id = parse_event_id(target_event_id)?;
+        validate_reaction_key(key)?;
+        let before = self
+            .reaction_readback(client, &room_id, &target_event_id, key)
+            .await?;
+        if before.as_ref().is_some_and(|reaction| reaction.me) {
+            return Ok(NativeReactionMutationResult {
+                room_id,
+                target_event_id: target_event_id.to_string(),
+                key: key.to_owned(),
+                mutation: NativeReactionMutation::AlreadyPresent,
+                readback: before,
+            });
+        }
+
+        let room = client
+            .get_room(parse_room_id(&room_id)?.as_ref())
+            .ok_or("v-send.2-reaction-room-not-found")?;
+        room.send(ReactionEventContent::from(Annotation::new(
+            target_event_id.clone(),
+            key.to_owned(),
+        )))
+        .await
+        .map_err(|_| "v-send.2-reaction-ensure-failed")?;
+
+        let readback = self
+            .reaction_readback(client, &room_id, &target_event_id, key)
+            .await?;
+        Ok(NativeReactionMutationResult {
+            room_id,
+            target_event_id: target_event_id.to_string(),
+            key: key.to_owned(),
+            mutation: NativeReactionMutation::Added,
+            readback,
+        })
+    }
+
+    /// Redact any reaction annotation selected in the viewer. Aggregated
+    /// annotations are not timeline rows, so this correctly uses the native
+    /// room owner rather than `Timeline::redact`.
+    pub async fn redact_reaction(
+        &mut self,
+        client: &Client,
+        room_id: &str,
+        target_event_id: &str,
+        reaction_event_id: &str,
+        key: &str,
+    ) -> Result<NativeReactionMutationResult, &'static str> {
+        let room_id = parse_room_id(room_id)?.to_string();
+        let target_event_id = parse_event_id(target_event_id)?;
+        let reaction_event_id = parse_event_id(reaction_event_id)?;
+        validate_reaction_key(key)?;
+        let selected_reaction = self
+            .reaction_readback(client, &room_id, &target_event_id, key)
+            .await?
+            .ok_or("v-send.2-reaction-redact-annotation-not-found")?;
+        if !reaction_contains_event_id(&selected_reaction, &reaction_event_id) {
+            return Err("v-send.2-reaction-redact-annotation-not-found");
+        }
+        let room = client
+            .get_room(parse_room_id(&room_id)?.as_ref())
+            .ok_or("v-send.2-reaction-room-not-found")?;
+        room.redact(&reaction_event_id, Some("Removed reaction"), None)
+            .await
+            .map_err(|_| "v-send.2-reaction-redact-failed")?;
+        let readback = self
+            .reaction_readback(client, &room_id, &target_event_id, key)
+            .await?;
+        Ok(NativeReactionMutationResult {
+            room_id,
+            target_event_id: target_event_id.to_string(),
+            key: key.to_owned(),
+            mutation: NativeReactionMutation::Redacted,
+            readback,
+        })
+    }
+
+    async fn reaction_readback(
+        &mut self,
+        client: &Client,
+        room_id: &str,
+        target_event_id: &OwnedEventId,
+        key: &str,
+    ) -> Result<Option<NativeTimelineReaction>, &'static str> {
+        self.open(client, room_id).await?;
+        let entry = self
+            .entries
+            .get(room_id)
+            .ok_or("v-send.2-reaction-timeline-not-open")?;
+        let (items, _updates) = entry.timeline.subscribe().await;
+        if let Some(reaction) = items
+            .iter()
+            .filter_map(|item| project_item(item, client.user_id()))
+            .find(|item| item.event_id == target_event_id.as_str())
+            .and_then(|item| {
+                item.reactions
+                    .into_iter()
+                    .find(|reaction| reaction.key == key)
+            })
+        {
+            return Ok(Some(reaction));
+        }
+
+        // Notifications may target a message outside the currently open
+        // viewport. A focused native timeline is the same authoritative owner
+        // used for event readback; no JS relation inspection is involved.
+        let focus_key = (room_id.to_owned(), target_event_id.to_string());
+        if !self.focused_entries.contains_key(&focus_key) {
+            let room = client
+                .get_room(parse_room_id(room_id)?.as_ref())
+                .ok_or("v-send.2-reaction-room-not-found")?;
+            let timeline = TimelineBuilder::new(&room)
+                .with_focus(TimelineFocus::Event {
+                    target: target_event_id.clone(),
+                    num_context_events: 0,
+                    thread_mode: TimelineEventFocusThreadMode::Automatic {
+                        hide_threaded_events: false,
+                    },
+                })
+                .build()
+                .await
+                .map_err(|_| "v-send.2-reaction-readback-open-failed")?;
+            self.focused_entries
+                .insert(focus_key.clone(), Arc::new(timeline));
+        }
+        let timeline = self
+            .focused_entries
+            .get(&focus_key)
+            .ok_or("v-send.2-reaction-readback-open-failed")?;
+        let (items, _updates) = timeline.subscribe().await;
+        Ok(items
+            .iter()
+            .filter_map(|item| project_item(item, client.user_id()))
+            .find(|item| item.event_id == target_event_id.as_str())
+            .and_then(|item| {
+                item.reactions
+                    .into_iter()
+                    .find(|reaction| reaction.key == key)
+            }))
     }
 
     fn reconcile_utd(
@@ -402,6 +644,16 @@ impl NativeTimelineRegistry {
     }
 }
 
+fn reaction_contains_event_id(
+    reaction: &NativeTimelineReaction,
+    reaction_event_id: &OwnedEventId,
+) -> bool {
+    reaction
+        .senders
+        .iter()
+        .any(|sender| sender.reaction_event_id.as_deref() == Some(reaction_event_id.as_str()))
+}
+
 fn parse_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
     OwnedRoomId::try_from(room_id.trim()).map_err(|_| "d0.3-timeline-invalid-room-id")
 }
@@ -410,15 +662,26 @@ fn parse_event_id(event_id: &str) -> Result<OwnedEventId, &'static str> {
     OwnedEventId::try_from(event_id.trim()).map_err(|_| "v-crypto.6-invalid-event-id")
 }
 
+fn validate_reaction_key(key: &str) -> Result<(), &'static str> {
+    if key.trim().is_empty() || key.len() > 255 {
+        return Err("v-send.2-reaction-invalid-key");
+    }
+    Ok(())
+}
+
 async fn snapshot_from_timeline(
     session_generation: u64,
     room_id: String,
     timeline: &Timeline,
     is_encrypted: bool,
     hit_start: bool,
+    local_user: Option<&matrix_sdk::ruma::UserId>,
 ) -> Result<NativeTimelineSnapshot, &'static str> {
     let (items, _updates) = timeline.subscribe().await;
-    let items = items.iter().filter_map(|item| project_item(item)).collect();
+    let items = items
+        .iter()
+        .filter_map(|item| project_item(item, local_user))
+        .collect();
     Ok(NativeTimelineSnapshot {
         session_generation,
         room_id,
@@ -434,7 +697,10 @@ async fn snapshot_from_timeline(
     })
 }
 
-fn project_item(item: &SdkTimelineItem) -> Option<NativeTimelineItem> {
+fn project_item(
+    item: &SdkTimelineItem,
+    local_user: Option<&matrix_sdk::ruma::UserId>,
+) -> Option<NativeTimelineItem> {
     let event = item.as_event()?;
     let event_id = event.event_id()?.to_string();
     let content = event.content();
@@ -446,7 +712,34 @@ fn project_item(item: &SdkTimelineItem) -> Option<NativeTimelineItem> {
         body: safe_body(content),
         origin_server_ts: event.timestamp().get().into(),
         decryption_state: decryption_state(content),
+        reactions: project_reactions(content, local_user),
     })
+}
+
+fn project_reactions(
+    content: &SdkTimelineItemContent,
+    local_user: Option<&matrix_sdk::ruma::UserId>,
+) -> Vec<NativeTimelineReaction> {
+    content
+        .reactions()
+        .into_iter()
+        .flat_map(|reactions| reactions.iter())
+        .map(|(key, by_sender)| NativeTimelineReaction {
+            key: key.clone(),
+            count: by_sender.len().try_into().unwrap_or(u32::MAX),
+            me: local_user.is_some_and(|user_id| by_sender.contains_key(user_id)),
+            senders: by_sender
+                .iter()
+                .map(|(user_id, info)| NativeTimelineReactionSender {
+                    user_id: user_id.to_string(),
+                    reaction_event_id: match &info.status {
+                        ReactionStatus::RemoteToRemote(event_id) => Some(event_id.to_string()),
+                        ReactionStatus::LocalToLocal(_) | ReactionStatus::LocalToRemote(_) => None,
+                    },
+                })
+                .collect(),
+        })
+        .collect()
 }
 
 fn decryption_state(content: &SdkTimelineItemContent) -> Option<NativeDecryptionState> {
@@ -505,6 +798,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn reaction_redaction_requires_the_selected_annotation_event_id() {
+        let reaction = NativeTimelineReaction {
+            key: "✅".into(),
+            count: 1,
+            me: false,
+            senders: vec![NativeTimelineReactionSender {
+                user_id: "@alice:example.org".into(),
+                reaction_event_id: Some("$reaction:example.org".into()),
+            }],
+        };
+        let selected = OwnedEventId::try_from("$reaction:example.org").unwrap();
+        let unrelated = OwnedEventId::try_from("$unrelated:example.org").unwrap();
+
+        assert!(reaction_contains_event_id(&reaction, &selected));
+        assert!(!reaction_contains_event_id(&reaction, &unrelated));
+    }
+
+    #[test]
     fn native_snapshot_schema_has_no_secret_or_ciphertext_fields() {
         let snapshot = NativeTimelineSnapshot {
             session_generation: 7,
@@ -518,6 +829,15 @@ mod tests {
                 body: "hello".into(),
                 origin_server_ts: 42,
                 decryption_state: None,
+                reactions: vec![NativeTimelineReaction {
+                    key: "✅".into(),
+                    count: 1,
+                    me: true,
+                    senders: vec![NativeTimelineReactionSender {
+                        user_id: "@alice:example.org".into(),
+                        reaction_event_id: Some("$reaction".into()),
+                    }],
+                }],
             }],
             hit_start: false,
             utd: NativeUtdStatus {
@@ -541,6 +861,7 @@ mod tests {
         assert!(json.contains("\"type\":\"m.room.message\""));
         assert!(json.contains("\"body\":\"hello\""));
         assert!(json.contains("\"isEncrypted\":true"));
+        assert!(json.contains("\"reactionEventId\":\"$reaction\""));
     }
 
     #[test]
@@ -549,6 +870,71 @@ mod tests {
             parse_room_id("not-a-room").unwrap_err(),
             "d0.3-timeline-invalid-room-id"
         );
+    }
+
+    #[test]
+    fn reaction_keys_are_validated_before_any_sdk_write() {
+        assert_eq!(
+            validate_reaction_key(" ").unwrap_err(),
+            "v-send.2-reaction-invalid-key"
+        );
+        assert!(validate_reaction_key("✅").is_ok());
+    }
+
+    #[test]
+    fn reaction_keys_reject_empty_and_overlong_values() {
+        assert_eq!(
+            validate_reaction_key("").unwrap_err(),
+            "v-send.2-reaction-invalid-key"
+        );
+        assert_eq!(
+            validate_reaction_key(&"x".repeat(256)).unwrap_err(),
+            "v-send.2-reaction-invalid-key"
+        );
+        assert!(validate_reaction_key(&"x".repeat(255)).is_ok());
+    }
+
+    #[test]
+    fn reaction_mutation_readback_schema_has_no_secret_fields() {
+        let result = NativeReactionMutationResult {
+            room_id: "!room:example.org".into(),
+            target_event_id: "$event:example.org".into(),
+            key: "✅".into(),
+            mutation: NativeReactionMutation::AlreadyPresent,
+            readback: Some(NativeTimelineReaction {
+                key: "✅".into(),
+                count: 2,
+                me: true,
+                senders: vec![NativeTimelineReactionSender {
+                    user_id: "@alice:example.org".into(),
+                    reaction_event_id: Some("$reaction:example.org".into()),
+                }],
+            }),
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        for forbidden in [
+            "accessToken",
+            "access_token",
+            "refreshToken",
+            "refresh_token",
+            "sessionKey",
+            "ciphertext",
+            "private_key",
+        ] {
+            assert!(!json.contains(forbidden));
+        }
+        assert!(json.contains("\"mutation\":\"already_present\""));
+        assert!(json.contains("\"reactionEventId\":\"$reaction:example.org\""));
+        assert!(json.contains("\"me\":true"));
+    }
+
+    #[test]
+    fn reaction_event_ids_are_validated_before_sdk_write() {
+        assert_eq!(
+            parse_event_id("not-an-event").unwrap_err(),
+            "v-crypto.6-invalid-event-id"
+        );
+        assert!(parse_event_id("$event:example.org").is_ok());
     }
 
     #[test]
@@ -607,6 +993,7 @@ mod tests {
                 body: UTD_PLACEHOLDER.into(),
                 origin_server_ts: 42,
                 decryption_state: Some(NativeDecryptionState::Pending),
+                reactions: vec![],
             }],
             hit_start: false,
             utd: NativeUtdStatus {
@@ -698,6 +1085,7 @@ mod tests {
                 body: "safe body".into(),
                 origin_server_ts: 42,
                 decryption_state: None,
+                reactions: vec![],
             },
         };
         let json = serde_json::to_string(&readback).unwrap();

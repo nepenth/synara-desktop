@@ -149,7 +149,7 @@ Scope: **production only**. Import files: 190. Files with any finding: 192.
 
 | Category                       | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
 | ------------------------------ | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
-| `client_methods`               |   113 |                 0 |                   0 |                      0 |          0 |
+| `client_methods`               |   111 |                 0 |                   0 |                      0 |          0 |
 | `room_methods`                 |    89 |                 0 |                   0 |                      0 |          0 |
 | `event_emitters_listeners`     |    24 |                 0 |                 126 |                      0 |          0 |
 | `sync_lifecycle`               |    14 |                11 |                   6 |                      0 |          0 |
@@ -158,15 +158,15 @@ Scope: **production only**. Import files: 190. Files with any finding: 192.
 | `authenticated_media`          |     6 |                 7 |                   0 |                      0 |          0 |
 | `matrixrtc_calls`              |     5 |                 0 |                   8 |                      0 |          0 |
 | `account_data`                 |    12 |                22 |                   4 |                      0 |          0 |
-| `room_lists`                   |    45 |                99 |                  12 |                      0 |          0 |
-| `timelines`                    |    32 |                42 |                  50 |                      0 |          0 |
+| `room_lists`                   |    45 |                98 |                  12 |                      0 |          0 |
+| `timelines`                    |    32 |                38 |                  50 |                      0 |          0 |
 | `searches`                     |     3 |                 3 |                   0 |                      0 |          0 |
 | `spaces`                       |    17 |                29 |                   0 |                      0 |          0 |
 | `threads`                      |     1 |                 1 |                   0 |                      0 |          0 |
 | `receipts`                     |     5 |                 4 |                   4 |                      0 |          0 |
 | `notifications_push_rules`     |     8 |                10 |                   0 |                      0 |          0 |
-| `uia_auth`                     |    64 |               119 |                   2 |                      0 |          0 |
-| `custom_raw_event_sends`       |    20 |                34 |                   0 |                      0 |          0 |
+| `uia_auth`                     |    63 |               116 |                   2 |                      0 |          0 |
+| `custom_raw_event_sends`       |    18 |                32 |                   0 |                      0 |          0 |
 | `direct_matrix_networking`     |     2 |                 0 |                   0 |                      0 |          3 |
 | `client_events`                |     7 |                 0 |                  22 |                      0 |          0 |
 
@@ -174,21 +174,20 @@ Scope: **production only**. Import files: 190. Files with any finding: 192.
 
 | Method name                | Candidate occurrences |
 | -------------------------- | --------------------: |
-| `getRoom`                  |                    72 |
+| `getRoom`                  |                    71 |
 | `getSafeUserId`            |                    55 |
-| `getUserId`                |                    47 |
+| `getUserId`                |                    44 |
 | `isSpaceRoom`              |                    27 |
 | `sendStateEvent`           |                    26 |
 | `findEventById`            |                    13 |
 | `getAccountData`           |                    11 |
 | `setAccountData`           |                    10 |
 | `getRooms`                 |                     9 |
-| `getUnfilteredTimelineSet` |                     8 |
-| `sendEvent`                |                     8 |
 | `getLiveTimeline`          |                     7 |
 | `refreshToken`             |                     7 |
+| `getUnfilteredTimelineSet` |                     6 |
 | `joinRoom`                 |                     6 |
-| `redactEvent`              |                     5 |
+| `sendEvent`                |                     6 |
 | `sendMessage`              |                     5 |
 | `getSyncState`             |                     4 |
 | `leave`                    |                     4 |
@@ -198,6 +197,7 @@ Scope: **production only**. Import files: 190. Files with any finding: 192.
 | `createRoom`               |                     3 |
 | `deletePushRule`           |                     3 |
 | `mxcUrlToHttp`             |                     3 |
+| `redactEvent`              |                     3 |
 | `setPushRuleActions`       |                     3 |
 | `getCapabilities`          |                     2 |
 | `getCrypto`                |                     2 |

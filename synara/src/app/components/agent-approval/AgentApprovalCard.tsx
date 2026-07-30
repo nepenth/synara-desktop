@@ -6,9 +6,7 @@ import {
   AGENT_APPROVAL_REACTION_DENY,
   type AgentApprovalPrompt,
 } from '../../utils/agentApprovals';
-import { getReactionContent } from '../../utils/room';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
-import { MessageEvent } from '../../../types/matrix/room';
+import { ensureReactionWithNativeOwner } from '../../features/room/nativeReactionOwner';
 
 export type AgentApprovalTarget = {
   roomId: string;
@@ -61,7 +59,6 @@ const monospacedBlockStyle: React.CSSProperties = {
 };
 
 export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
-  const mx = useMatrixClient();
   const [busyKey, setBusyKey] = useState<string>();
   const [sentKey, setSentKey] = useState<string>();
   const [error, setError] = useState<string>();
@@ -77,11 +74,11 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
       setBusyKey(reactionKey);
       setError(undefined);
       try {
-        await mx.sendEvent(
-          target.roomId,
-          MessageEvent.Reaction as any,
-          getReactionContent(target.eventId, reactionKey) as any
-        );
+        await ensureReactionWithNativeOwner({
+          roomId: target.roomId,
+          eventId: target.eventId,
+          key: reactionKey,
+        });
         setSentKey(reactionKey);
         setConfirmApproveAlways(false);
       } catch {
@@ -90,7 +87,7 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
         setBusyKey(undefined);
       }
     },
-    [mx, target, busyKey, sentKey]
+    [target, busyKey, sentKey]
   );
 
   const handleReact = useCallback(

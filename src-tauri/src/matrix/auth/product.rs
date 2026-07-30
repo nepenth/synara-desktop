@@ -67,8 +67,8 @@ use crate::matrix::sync::{
     SyncServiceOwner,
 };
 use crate::matrix::timeline::{
-    NativeTimelineDirection, NativeTimelineEventReadback, NativeTimelineRegistry,
-    NativeTimelineSnapshot,
+    NativeReactionMutationResult, NativeTimelineDirection, NativeTimelineEventReadback,
+    NativeTimelineRegistry, NativeTimelineSnapshot,
 };
 use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
 use crate::matrix::verification::live::{
@@ -1201,7 +1201,7 @@ pub async fn matrix_timeline_snapshot(
     let active = require_session_mut(session.as_mut())?;
     active
         .timelines
-        .snapshot(&room_id)
+        .snapshot(&active.client, &room_id)
         .await
         .map_err(map_timeline_error)
 }
@@ -1231,9 +1231,64 @@ pub async fn matrix_timeline_paginate(
     let active = require_session_mut(session.as_mut())?;
     active
         .timelines
-        .paginate(&room_id, dir)
+        .paginate(&active.client, &room_id, dir)
         .await
         .map_err(map_timeline_error)
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_reaction_toggle(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    event_id: String,
+    key: String,
+) -> Result<NativeReactionMutationResult, MatrixAuthCommandError> {
+    let mut session = state.session.lock().await;
+    let active = require_session_mut(session.as_mut())?;
+    active
+        .timelines
+        .toggle_reaction(&active.client, &room_id, &event_id, &key)
+        .await
+        .map_err(map_reaction_error)
+}
+
+#[tauri::command]
+pub async fn matrix_reaction_ensure(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    event_id: String,
+    key: String,
+) -> Result<NativeReactionMutationResult, MatrixAuthCommandError> {
+    let mut session = state.session.lock().await;
+    let active = require_session_mut(session.as_mut())?;
+    active
+        .timelines
+        .ensure_reaction(&active.client, &room_id, &event_id, &key)
+        .await
+        .map_err(map_reaction_error)
+}
+
+#[tauri::command]
+pub async fn matrix_reaction_redact(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    target_event_id: String,
+    reaction_event_id: String,
+    key: String,
+) -> Result<NativeReactionMutationResult, MatrixAuthCommandError> {
+    let mut session = state.session.lock().await;
+    let active = require_session_mut(session.as_mut())?;
+    active
+        .timelines
+        .redact_reaction(
+            &active.client,
+            &room_id,
+            &target_event_id,
+            &reaction_event_id,
+            &key,
+        )
+        .await
+        .map_err(map_reaction_error)
 }
 
 #[tauri::command]
@@ -1924,6 +1979,19 @@ fn map_timeline_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
         _ => ("Unknown", "The native Matrix timeline is unavailable."),
     };
     MatrixAuthCommandError::new(code, message, diagnostic_id)
+}
+
+fn map_reaction_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    let code = if diagnostic_id.contains("invalid") {
+        "InvalidRequest"
+    } else {
+        "Unknown"
+    };
+    MatrixAuthCommandError::new(
+        code,
+        "The native Matrix reaction operation could not be completed.",
+        diagnostic_id,
+    )
 }
 
 fn require_send_session_mut(
