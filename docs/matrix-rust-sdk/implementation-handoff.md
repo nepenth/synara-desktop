@@ -1,6 +1,6 @@
 # Matrix Rust SDK Replacement — Execution Handoff
 
-Last updated: 2026-07-29
+Last updated: 2026-07-30
 
 Authoritative program plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md)
 
@@ -24,7 +24,7 @@ Traceability artifacts:
 - [`feature-parity-traceability.json`](feature-parity-traceability.json)
 - [`feature-parity-traceability.md`](feature-parity-traceability.md)
 
-## Live continuation snapshot (2026-07-29)
+## Live continuation snapshot (2026-07-30)
 
 This section is the current handoff. The dated audit and former implementation
 ledger below remain historical evidence and must not override this snapshot,
@@ -32,12 +32,12 @@ the operating model, or the canonical status ledger.
 
 | Field                        | Current value                                                                                                                                 |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `ff05015918e01625c497dfd01a86cb1d9a30be02`; documentation alignment [#237](https://github.com/nepenth/synara-desktop/pull/237) merged after V-CRYPTO.7 [#236](https://github.com/nepenth/synara-desktop/pull/236) |
+| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `08a185ead8155347475f77ab1d3c42c43a83938c`; V-AUTH.1 [#238](https://github.com/nepenth/synara-desktop/pull/238) merged with required CI green |
 | **Policy**                   | [Full vertical replacement](full-vertical-policy.md): no minima/plateau; **physical deletion per vertical**                                   |
-| **Active product work**      | Draft [#238](https://github.com/nepenth/synara-desktop/pull/238) — V-AUTH.1 complete desktop SSO removal; live V-CRYPTO.7 multi-session/UI proof remains unclaimed |
+| **Active product work**      | Draft [#241](https://github.com/nepenth/synara-desktop/pull/241) V-ROOMS.1 invites, [#239](https://github.com/nepenth/synara-desktop/pull/239) V-SEND.2 reactions, and [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE boundary; V-CRYPTO.7 multi-session/UI proof remains unclaimed |
 | **Completed verticals**      | D0 core #214/#216/#218/#219/#220; V-CRYPTO.1–.7 have native owners and per-vertical legacy deletion complete                                  |
 | **Deletion residuals**       | V-CRYPTO.7 JS `CryptoApi`, device model/listener/polling, trust hooks, platform repair helper, and dead delete-UIA owners are deleted         |
-| **Next product work**        | Review/validate V-AUTH.1 #238: desktop SSO ownership is deleted without a native route, identity prompt, or fallback; exact AST inventory is 212/265→208/261 desktop, 201→197 production, 215→211 repository-wide; required CI remains before closure |
+| **Next product work**        | Validate V-ROOMS.1 (candidate production importers 197→194) and V-SEND.2 (whole importer count 197→197, direct JS reaction owner calls reduced); complete V-TIMELINE retained action/media/viewport paths before its JS presenter deletion |
 | **Import baseline**          | 232 files / 292 direct import lines → 212 / 265 in V-CRYPTO.7; production importer files 207→201 and repository-wide 221→215                  |
 | **Held**                     | #221 plateau; L1-only notify/call/media/helper PRs unless they block the active vertical                                                      |
 | **Runtime truth**            | Native product cutover is underway capability-by-capability; relevant JS owners remain until deletion residuals close; **dual_backend false** |
@@ -47,9 +47,9 @@ the operating model, or the canonical status ledger.
 ### Current next-owner procedure
 
 1. Treat V-CRYPTO.7 [#236](https://github.com/nepenth/synara-desktop/pull/236) as merged at `528a510`; its reviewed, green product/test head was `192be46`. Live multi-session/UI proof remains unconfirmed.
-2. Review and validate V-AUTH.1 [#238](https://github.com/nepenth/synara-desktop/pull/238): it deletes JS SSO entry/callback/token-completion ownership and native SSO UIAA continuation without a Rust SSO replacement, identity prompt, inferred identity, pending-store/adoption route, or fallback.
-3. Require each vertical/deletion residual to report deleted paths and importer/file count delta.
-4. Close V-AUTH.1 only after the deletion scope and its negative importer/capability-owner delta are recorded.
+2. Treat V-AUTH.1 [#238](https://github.com/nepenth/synara-desktop/pull/238) as merged at `08a185e`: it deletes JS SSO entry/callback/token-completion ownership and native SSO UIAA continuation with no replacement route; approved production importer delta is 201→197.
+3. Validate the rebased V-ROOMS.1 and V-SEND.2 candidates on their reviewed SHA; require each vertical/deletion residual to report deleted paths and measured importer/file count delta.
+4. Complete V-TIMELINE through its native owner route before selecting its presenter or deleting `RoomTimeline.tsx`.
 5. Update [PROGRESS.md](PROGRESS.md), [d0-residual-completion.md](d0-residual-completion.md), and the short [CONTINUATION.md](CONTINUATION.md) in the same PR whenever the active pointer or residual status changes.
 
 Everything below this live snapshot is dated audit/history. It remains useful

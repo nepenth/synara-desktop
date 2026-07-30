@@ -2,11 +2,11 @@
 
 | Field                     | Value                                                                  |
 | ------------------------- | ---------------------------------------------------------------------- |
-| Status                    | **Active — V-AUTH.1 complete SSO removal** in draft [#238](https://github.com/nepenth/synara-desktop/pull/238) (2026-07-29) |
+| Status                    | **Active — V-AUTH.1 #238 merged; V-ROOMS.1 #241, V-SEND.2 #239, and V-TIMELINE #240 remain draft candidates** (2026-07-30) |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                     |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)              |
-| Current integration tip   | `ff050159` (documentation alignment #237 merged after V-CRYPTO.7)       |
-| Active PR                 | Draft [#238](https://github.com/nepenth/synara-desktop/pull/238) — V-AUTH.1 removal candidate; required CI pending |
+| Current integration tip   | `08a185e` (V-AUTH.1 #238 merged with required CI green)                  |
+| Active PRs                | Draft [#239](https://github.com/nepenth/synara-desktop/pull/239) V-SEND.2; [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE; [#241](https://github.com/nepenth/synara-desktop/pull/241) V-ROOMS.1 |
 
 ## Policy trigger
 
@@ -55,7 +55,7 @@ Migration decision already decided: **`D-KEY-RECOVERY`** in [migration-ux-decisi
 
 | ID           | Capability                     | Residual today    | Done when                                                                    |
 | ------------ | ------------------------------ | ----------------- | ---------------------------------------------------------------------------- |
-| **V-AUTH.1** | Complete desktop SSO removal    | Draft [#238](https://github.com/nepenth/synara-desktop/pull/238) removes JS login/callback owner and native UIAA SSO continuation | Candidate deletes every desktop SSO entry point, browser/callback/token-completion route, JS SSO owner/import, and native device-delete SSO UIAA continuation. No Rust replacement, Matrix-ID prompt, inferred identity, pending-store/adoption route, or fallback. Password-only UIAA remains where server-supported; SSO-only authentication is explicitly unsupported on desktop. Exact AST inventory is 212/265 → 208/261 desktop files/import lines, production importers 201→197, repository-wide 215→211; closure awaits required CI. |
+| **V-AUTH.1** | Complete desktop SSO removal    | **Merged #238** at `08a185e` | Every desktop SSO entry point, browser/callback/token-completion route, JS SSO owner/import, and native device-delete SSO UIAA continuation is deleted. No Rust replacement, Matrix-ID prompt, inferred identity, pending-store/adoption route, or fallback. Required CI green; production importers 201→197 and repository-wide 215→211. |
 | **V-AUTH.2** | Token login                    | Out of D0.1       | Native token login if product retains it                                     |
 | **V-AUTH.3** | UIA flows used by product auth | Largely js        | UIA stages for retained flows native or product-owned without live js client |
 | **V-AUTH.4** | Register / reset-password      | js                | Re-home if product keeps them on desktop                                     |
@@ -64,7 +64,7 @@ Migration decision already decided: **`D-KEY-RECOVERY`** in [migration-ux-decisi
 
 | ID            | Capability                           | Residual today | Done when                            |
 | ------------- | ------------------------------------ | -------------- | ------------------------------------ |
-| **V-ROOMS.1** | Invites list                         | js residual    | Native invites projection + UI       |
+| **V-ROOMS.1** | Invites list                         | Native candidate #241 rebased on V-AUTH; required CI running; production 197→194 | Native invites projection/actions/avatar route plus active JS-owner deletion |
 | **V-ROOMS.2** | Spaces / hierarchy / lobby           | js             | Native space hierarchy ownership     |
 | **V-ROOMS.3** | Unread / notification badges on list | partial        | Native unread map drives list badges |
 | **V-ROOMS.4** | Typing indicators (if list/shell)    | js             | Native if product shows them         |
@@ -73,8 +73,8 @@ Migration decision already decided: **`D-KEY-RECOVERY`** in [migration-ux-decisi
 
 | ID               | Capability                               | Residual today  | Done when                                      |
 | ---------------- | ---------------------------------------- | --------------- | ---------------------------------------------- |
-| **V-TIMELINE.1** | Virtualized timeline on native DTOs      | not virtualized | Restore viewport/virtualization on native rows |
-| **V-TIMELINE.2** | Live ordered updates (not only poll)     | 1s poll         | Streamed/diff updates from host                |
+| **V-TIMELINE.1** | Virtualized timeline on native DTOs      | Unselected native DTO presenter exists; no active cutover | Restore viewport and retained render/action paths |
+| **V-TIMELINE.2** | Live ordered updates (not only poll)     | Native ordered delta stream/strict presenter bridge exists; not active | Bind the active presenter to exact stream deltas |
 | **V-TIMELINE.3** | Reactions, receipts, read markers        | not projected   | Native projections + UI                        |
 | **V-TIMELINE.4** | Rich/media/state event render            | slim text path  | Parity renderers on native DTOs                |
 | **V-TIMELINE.5** | Focused-event open / jump / pins / notes | residual        | Native ownership                               |
@@ -84,7 +84,7 @@ Migration decision already decided: **`D-KEY-RECOVERY`** in [migration-ux-decisi
 | ID           | Capability                              | Residual today  | Done when                                     |
 | ------------ | --------------------------------------- | --------------- | --------------------------------------------- |
 | **V-SEND.1** | Attachments / media upload send         | js              | Native send queue + IPC                       |
-| **V-SEND.2** | Reactions                               | js              | Native                                        |
+| **V-SEND.2** | Reactions                               | Native candidate #239 rebased on V-AUTH; required CI running; direct JS owner calls reduced, importer files 197→197 | Native commands/readback plus active JS writer deletion |
 | **V-SEND.3** | Polls                                   | js              | Native                                        |
 | **V-SEND.4** | Emotes / notices / rich HTML + mentions | plain text only | Product parity for retained composer features |
 | **V-SEND.5** | Threads                                 | residual        | Native thread send/relations                  |
@@ -105,9 +105,9 @@ have already deleted their implementations.
 
 ## Execution order (binding)
 
-1. Execute **V-AUTH.1** as complete desktop SSO removal, then continue the remaining native-auth slices.
-2. **V-AUTH** remaining desktop auth surfaces, deleting each superseded JS owner in its slice
-3. **V-ROOMS** / **V-TIMELINE** / **V-SEND** gaps, with physical deletion per completed capability
+1. Validate V-ROOMS.1 and V-SEND.2 after their V-AUTH rebases; record only their measured deletion deltas.
+2. Continue **V-AUTH** remaining desktop auth surfaces, deleting each superseded JS owner in its slice.
+3. Continue **V-ROOMS** / **V-TIMELINE** / **V-SEND** gaps, with physical deletion per completed capability.
 4. **V-BURN** final convergence audit + npm dependency removal
 5. **Only then** new verticals: media display polish beyond send, widgets, registry, calls, etc. — each as full verticals under [full-vertical-policy.md](full-vertical-policy.md)
 
