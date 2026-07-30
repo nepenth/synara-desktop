@@ -154,16 +154,23 @@ export type NativeTimelineViewDeltaBatch = {
   ops: NativeTimelineViewDeltaOp[];
 };
 
-type NativeTimelineOpenReadback = {
+export type NativeTimelineOpenReadback = {
   schemaVersion: number;
   streamId: string;
-  position: unknown;
+  /** The placement selected by the native owner for this open. */
+  position: NativeTimelinePosition;
   snapshot: NativeTimelineViewSnapshot;
 };
 
 export type NativeTimelineViewState =
   | { status: 'unavailable' | 'loading'; snapshot?: undefined; error?: undefined }
-  | { status: 'ready'; snapshot: NativeTimelineViewSnapshot; error?: undefined }
+  | {
+      status: 'ready';
+      snapshot: NativeTimelineViewSnapshot;
+      /** Read back from `matrix_timeline_open`, never inferred from JS room state. */
+      selectedPosition: NativeTimelinePosition;
+      error?: undefined;
+    }
   | { status: 'error'; snapshot?: undefined; error: Error };
 
 export type NativeTimelineViewController = {
@@ -248,16 +255,25 @@ export const applyNativeTimelineViewDelta = (
 
 export type NativeTimelineOpenInput = {
   roomId: string;
-  position: { kind: 'live_bottom' } | { kind: 'unread' } | { kind: 'focused'; eventId: string };
+  position:
+    | { kind: 'normal'; restoredAnchorEventId?: string }
+    | { kind: 'live_bottom' }
+    | { kind: 'unread' }
+    | { kind: 'focused'; eventId: string };
 };
 
-const toNativeTimelineOpenRequest = (input: NativeTimelineOpenInput) => ({
-  roomId: input.roomId,
-  position:
-    input.position.kind === 'focused'
-      ? { kind: 'focused', event_id: input.position.eventId }
-      : input.position,
-});
+const toNativeTimelineOpenRequest = (input: NativeTimelineOpenInput) => {
+  const { position } = input;
+  return {
+    roomId: input.roomId,
+    position:
+      position.kind === 'focused'
+        ? { kind: 'focused' as const, event_id: position.eventId }
+        : position.kind === 'normal'
+          ? { kind: 'normal' as const, restored_anchor_event_id: position.restoredAnchorEventId }
+          : position,
+  };
+};
 
 /**
  * Opens one native timeline view after registering for its native delta event.
@@ -270,6 +286,7 @@ export const useNativeTimelineView = (
   const [state, setState] = useState<NativeTimelineViewState>({ status: 'unavailable' });
   const streamIdRef = useRef<string | undefined>(undefined);
   const snapshotRef = useRef<NativeTimelineViewSnapshot | undefined>(undefined);
+  const selectedPositionRef = useRef<NativeTimelinePosition | undefined>(undefined);
   const earlyBatchesRef = useRef<NativeTimelineViewDeltaBatch[]>([]);
 
   const acceptSnapshot = useCallback((next: NativeTimelineViewSnapshot): boolean => {
@@ -284,7 +301,11 @@ export const useNativeTimelineView = (
       return false;
     }
     snapshotRef.current = next;
-    setState({ status: 'ready', snapshot: next });
+    setState({
+      status: 'ready',
+      snapshot: next,
+      selectedPosition: selectedPositionRef.current ?? next.position,
+    });
     return true;
   }, []);
 
@@ -328,6 +349,7 @@ export const useNativeTimelineView = (
   useEffect(() => {
     streamIdRef.current = undefined;
     snapshotRef.current = undefined;
+    selectedPositionRef.current = undefined;
     earlyBatchesRef.current = [];
     if (!input || !isSynaraDesktop()) {
       setState({ status: 'unavailable' });
@@ -376,7 +398,8 @@ export const useNativeTimelineView = (
         if (
           readback.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION ||
           readback.snapshot.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION ||
-          readback.snapshot.roomId !== input.roomId
+          readback.snapshot.roomId !== input.roomId ||
+          readback.position.kind !== readback.snapshot.position.kind
         ) {
           setState({ status: 'error', error: new Error('Unsupported native timeline schema.') });
           return;
@@ -394,7 +417,8 @@ export const useNativeTimelineView = (
         }
         earlyBatchesRef.current = [];
         snapshotRef.current = snapshot;
-        setState({ status: 'ready', snapshot });
+        selectedPositionRef.current = readback.position;
+        setState({ status: 'ready', snapshot, selectedPosition: readback.position });
       } catch (error) {
         if (!disposed) {
           setState({
@@ -410,7 +434,12 @@ export const useNativeTimelineView = (
       disposed = true;
       void unlisten?.();
     };
-  }, [input?.position.kind, input?.position.kind === 'focused' ? input.position.eventId : undefined, input?.roomId]);
+  }, [
+    input?.position.kind,
+    input?.position.kind === 'focused' ? input.position.eventId : undefined,
+    input?.position.kind === 'normal' ? input.position.restoredAnchorEventId : undefined,
+    input?.roomId,
+  ]);
 
   return { state, paginate, setReadState };
 };
