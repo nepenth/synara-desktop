@@ -649,6 +649,10 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             ? await sendPlainTextWithNativeOwner({
                 roomId,
                 body,
+                formattedBody:
+                  replyDraft || !customHtmlEqualsPlainText(formattedBody, body)
+                    ? formattedBody
+                    : undefined,
                 replyTo: replyDraft?.eventId,
               })
             : 'legacy';

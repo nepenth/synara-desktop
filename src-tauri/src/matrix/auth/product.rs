@@ -97,6 +97,9 @@ use crate::matrix::timeline::{
     NativeTimelineEditTextRequest,
     NativeTimelineForwardTextRequest,
     NativeTimelineRedactRequest,
+    should_attach_formatted_body,
+    NativeTimelinePinRequest,
+    NativeTimelineReportRequest,
     NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
 };
 use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
@@ -1427,6 +1430,7 @@ pub async fn matrix_timeline_edit_text(
     if body.is_empty() {
         return Err(map_timeline_action_error("v-timeline-edit-empty-body"));
     }
+    let formatted_body = normalize_formatted_body(body, request.formatted_body.as_deref())?;
 
     let room = {
         let mut session = state.session.lock().await;
@@ -1440,7 +1444,10 @@ pub async fn matrix_timeline_edit_text(
         })?
     };
 
-    let new_content = RoomMessageEventContentWithoutRelation::text_plain(body.to_owned());
+    let new_content = match formatted_body {
+        Some(html) => RoomMessageEventContentWithoutRelation::text_html(body.to_owned(), html),
+        None => RoomMessageEventContentWithoutRelation::text_plain(body.to_owned()),
+    };
     let edit_content = room
         .make_edit_event(&event_id, EditedContent::RoomMessage(new_content))
         .await
@@ -1530,7 +1537,7 @@ pub async fn matrix_timeline_forward_text(
 
     let (sender_label, body) = load_forwardable_text(&source_room, &event_id).await?;
     let forwarded_body = format_forwarded_plain_body(&sender_label, &body, request.as_quote);
-    let event_id = send_text_to_room(&target_room, forwarded_body, None, None)
+    let event_id = send_text_to_room(&target_room, forwarded_body, None, None, None)
         .await
         .map_err(|_| map_timeline_action_error("v-timeline-forward-send-failed"))?;
 
@@ -1544,16 +1551,138 @@ pub async fn matrix_timeline_forward_text(
 }
 
 #[tauri::command]
+pub async fn matrix_timeline_report(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelineReportRequest,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&request.room_id)?;
+    let event_id =
+        parse_required_event_id(&request.event_id, "v-timeline-report-invalid-event-id")?;
+    let reason = request
+        .reason
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned);
+
+    let room = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-timeline-report-room-not-found",
+            )
+        })?
+    };
+
+    room.report_content(event_id.clone(), reason)
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-report-failed"))?;
+
+    Ok(NativeTimelineActionReadback {
+        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+        action: NativeTimelineActionKind::Report,
+        room_id: room_id.to_string(),
+        event_id: event_id.to_string(),
+        status: "reported",
+    })
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_pin(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelinePinRequest,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    pin_or_unpin_event(state, request, true).await
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_unpin(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelinePinRequest,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    pin_or_unpin_event(state, request, false).await
+}
+
+async fn pin_or_unpin_event(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelinePinRequest,
+    pin: bool,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&request.room_id)?;
+    let event_id = parse_required_event_id(
+        &request.event_id,
+        if pin {
+            "v-timeline-pin-invalid-event-id"
+        } else {
+            "v-timeline-unpin-invalid-event-id"
+        },
+    )?;
+
+    let room = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                if pin {
+                    "v-timeline-pin-room-not-found"
+                } else {
+                    "v-timeline-unpin-room-not-found"
+                },
+            )
+        })?
+    };
+
+    let changed = if pin {
+        room.pin_event(&event_id)
+            .await
+            .map_err(|_| map_timeline_action_error("v-timeline-pin-failed"))?
+    } else {
+        room.unpin_event(&event_id)
+            .await
+            .map_err(|_| map_timeline_action_error("v-timeline-unpin-failed"))?
+    };
+
+    Ok(NativeTimelineActionReadback {
+        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+        action: if pin {
+            NativeTimelineActionKind::Pin
+        } else {
+            NativeTimelineActionKind::Unpin
+        },
+        room_id: room_id.to_string(),
+        event_id: event_id.to_string(),
+        status: if changed {
+            if pin {
+                "pinned"
+            } else {
+                "unpinned"
+            }
+        } else if pin {
+            "already_pinned"
+        } else {
+            "already_unpinned"
+        },
+    })
+}
+
+#[tauri::command]
 pub async fn matrix_send_text(
     state: State<'_, MatrixAuthState>,
     room_id: String,
     body: String,
     reply_to: Option<String>,
     txn_id: Option<String>,
+    formatted_body: Option<String>,
 ) -> Result<MatrixSendTextResult, MatrixAuthCommandError> {
     let room_id = parse_send_room_id(&room_id)?;
     let reply_to = parse_reply_event_id(reply_to)?;
     let txn_id = parse_transaction_id(txn_id)?;
+    let formatted_body = normalize_formatted_body(body.trim(), formatted_body.as_deref())?;
 
     let (room, session_generation, local_txn_id) = {
         let mut session = state.session.lock().await;
@@ -1573,7 +1702,7 @@ pub async fn matrix_send_text(
         (room, session_generation, item.local_txn_id.clone())
     };
 
-    let send_result = send_text_to_room(&room, body, reply_to, txn_id).await;
+    let send_result = send_text_to_room(&room, body, formatted_body, reply_to, txn_id).await;
 
     let mut session = state.session.lock().await;
     if let Some(active) = session.as_mut() {
@@ -2548,8 +2677,34 @@ fn parse_transaction_id(
         .transpose()
 }
 
-fn text_message_content(body: String, reply_to: Option<OwnedEventId>) -> RoomMessageEventContent {
-    let mut content = RoomMessageEventContent::text_plain(body);
+fn normalize_formatted_body(
+    body: &str,
+    formatted_body: Option<&str>,
+) -> Result<Option<String>, MatrixAuthCommandError> {
+    let Some(html) = formatted_body
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
+    };
+    if html.len() > 65_536 {
+        return Err(map_send_error("d0.4-send-formatted-body-too-large"));
+    }
+    if !should_attach_formatted_body(body, Some(html)) {
+        return Ok(None);
+    }
+    Ok(Some(html.to_owned()))
+}
+
+fn text_message_content(
+    body: String,
+    formatted_body: Option<String>,
+    reply_to: Option<OwnedEventId>,
+) -> RoomMessageEventContent {
+    let mut content = match formatted_body {
+        Some(html) => RoomMessageEventContent::text_html(body, html),
+        None => RoomMessageEventContent::text_plain(body),
+    };
     content.mentions = Some(Mentions::new());
     if let Some(event_id) = reply_to {
         content.relates_to = Some(Relation::Reply(Reply::with_event_id(event_id)));
@@ -2560,10 +2715,11 @@ fn text_message_content(body: String, reply_to: Option<OwnedEventId>) -> RoomMes
 async fn send_text_to_room(
     room: &Room,
     body: String,
+    formatted_body: Option<String>,
     reply_to: Option<OwnedEventId>,
     txn_id: Option<OwnedTransactionId>,
 ) -> matrix_sdk::Result<String> {
-    let send = room.send(text_message_content(body, reply_to));
+    let send = room.send(text_message_content(body, formatted_body, reply_to));
     let result = match txn_id {
         Some(txn_id) => send.with_transaction_id(txn_id).await?,
         None => send.await?,
@@ -2964,15 +3120,24 @@ mod tests {
     }
 
     #[test]
-    fn text_content_sets_empty_mentions_and_optional_reply() {
-        let plain = text_message_content("hello".into(), None);
+    fn text_content_sets_empty_mentions_html_and_optional_reply() {
+        let plain = text_message_content("hello".into(), None, None);
         let plain_json = serde_json::to_value(plain).unwrap();
         assert_eq!(plain_json["body"], "hello");
         assert_eq!(plain_json["msgtype"], "m.text");
         assert_eq!(plain_json["m.mentions"], serde_json::json!({}));
+        assert!(plain_json.get("formatted_body").is_none());
 
-        let reply =
-            text_message_content("reply".into(), Some("$event:example.org".parse().unwrap()));
+        let rich = text_message_content("hello".into(), Some("<p>hello</p>".into()), None);
+        let rich_json = serde_json::to_value(rich).unwrap();
+        assert_eq!(rich_json["formatted_body"], "<p>hello</p>");
+        assert_eq!(rich_json["format"], "org.matrix.custom.html");
+
+        let reply = text_message_content(
+            "reply".into(),
+            None,
+            Some("$event:example.org".parse().unwrap()),
+        );
         let reply_json = serde_json::to_value(reply).unwrap();
         assert_eq!(
             reply_json["m.relates_to"]["m.in_reply_to"]["event_id"],

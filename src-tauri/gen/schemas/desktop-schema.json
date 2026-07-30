@@ -837,10 +837,22 @@
           "markdownDescription": "Enables the matrix_timeline_reaction_toggle command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_timeline_pin command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-timeline-pin",
+          "markdownDescription": "Enables the matrix_timeline_pin command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_timeline_redact command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-timeline-redact",
           "markdownDescription": "Enables the matrix_timeline_redact command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_timeline_report command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-timeline-report",
+          "markdownDescription": "Enables the matrix_timeline_report command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_timeline_set_read_state command without any pre-configured scope.",
@@ -865,6 +877,12 @@
           "type": "string",
           "const": "allow-matrix-typing-snapshot",
           "markdownDescription": "Enables the matrix_typing_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_timeline_unpin command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-timeline-unpin",
+          "markdownDescription": "Enables the matrix_timeline_unpin command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_verification_accept command without any pre-configured scope.",
@@ -1407,10 +1425,22 @@
           "markdownDescription": "Denies the matrix_timeline_reaction_toggle command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_timeline_pin command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-timeline-pin",
+          "markdownDescription": "Denies the matrix_timeline_pin command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_timeline_redact command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-timeline-redact",
           "markdownDescription": "Denies the matrix_timeline_redact command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_timeline_report command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-timeline-report",
+          "markdownDescription": "Denies the matrix_timeline_report command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_timeline_set_read_state command without any pre-configured scope.",
@@ -1435,6 +1465,12 @@
           "type": "string",
           "const": "deny-matrix-typing-snapshot",
           "markdownDescription": "Denies the matrix_typing_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_timeline_unpin command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-timeline-unpin",
+          "markdownDescription": "Denies the matrix_timeline_unpin command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_verification_accept command without any pre-configured scope.",

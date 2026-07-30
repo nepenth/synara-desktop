@@ -7,6 +7,8 @@ type NativeSessionSnapshot = {
 export type NativeSendTextInput = {
   roomId: string;
   body: string;
+  /** Optional Matrix HTML body (`org.matrix.custom.html`). */
+  formattedBody?: string;
   replyTo?: string;
   txnId?: string;
 };
