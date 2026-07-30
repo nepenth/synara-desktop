@@ -2,8 +2,8 @@
  * SDK-neutral owners for retained timeline actions.
  *
  * Reply/rich send use `matrix_send_text` (optional `formattedBody` + `replyTo`).
- * Reactions remain on the V-SEND.2 owner. These helpers do not select
- * NativeTimelinePresenter or delete RoomTimeline.
+ * Reactions use the merged V-SEND.2 owner (`nativeReactionOwner`). These helpers
+ * do not select NativeTimelinePresenter or delete RoomTimeline.
  */
 
 import type { DesktopInvokeResult } from '../../utils/desktop';
