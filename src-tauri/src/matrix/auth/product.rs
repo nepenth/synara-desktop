@@ -11,22 +11,20 @@ use std::sync::Arc;
 use matrix_sdk::{
     attachment::AttachmentConfig,
     encryption::CrossSigningStatus,
-    room::edit::EditedContent,    ruma::{
+    room::edit::EditedContent,
+    room::reply::{EnforceThread, Reply as AttachmentReply},
+    ruma::{
         api::client::uiaa,
         events::{
             poll::unstable_response::UnstablePollResponseEventContent,
             relation::Reply,
             room::message::{
-                MessageFormat, MessageType, Relation, RoomMessageEventContent,
+                AddMentions, MessageFormat, MessageType, Relation, RoomMessageEventContent,
                 RoomMessageEventContentWithoutRelation,
             },
-    AnySyncMessageLikeEvent,
-    AnySyncTimelineEvent,
-    Mentions,
-    },
-    sticker::StickerEventContent,
-    AnyMessageLikeEventContent,
-    poll::unstable_response::UnstablePollResponseEventContent,
+            sticker::StickerEventContent,
+            AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncTimelineEvent, Mentions,
+        },
         EventId, OwnedEventId, OwnedRoomId, OwnedTransactionId, OwnedUserId,
     },
     Client, Room,

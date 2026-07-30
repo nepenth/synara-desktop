@@ -180,7 +180,7 @@ async fn wait_for_event_in_open_timeline(
     loop {
         sync_briefly(client).await;
         let _ = registry
-            .paginate(client, room_id, NativeTimelineDirection::Backwards)
+            .paginate_legacy(client, room_id, NativeTimelineDirection::Backwards)
             .await;
         let snapshot = registry
             .snapshot(client, room_id)
