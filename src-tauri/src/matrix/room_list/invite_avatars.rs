@@ -131,7 +131,7 @@ mod tests {
     use super::*;
 
     fn mxc(value: &str) -> OwnedMxcUri {
-        OwnedMxcUri::try_from(value).expect("valid mxc fixture")
+        OwnedMxcUri::from(value)
     }
 
     #[test]
