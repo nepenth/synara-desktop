@@ -98,6 +98,7 @@
     "allow-matrix-mdirect-add",
     "allow-matrix-mdirect-remove",
     "allow-matrix-timeline-open",
+    "allow-matrix-timeline-close",
     "allow-matrix-timeline-snapshot",
     "allow-matrix-timeline-paginate",
     "allow-matrix-timeline-reaction-toggle",

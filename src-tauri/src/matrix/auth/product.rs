@@ -88,6 +88,8 @@ use crate::matrix::timeline::{
     NativeTimelineViewPaginationRequest,
     NativeTimelineReadStateReadback,
     NativeTimelineReadStateRequest,
+    NativeTimelineCloseRequest,
+    TimelineMediaSource,
 };
 use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
 use crate::matrix::verification::live::{
@@ -251,6 +253,18 @@ impl MatrixAuthState {
         let source = active
             .invite_avatars
             .resolve(active.sync.session_generation(), handle)?;
+        Some((active.client.clone(), source))
+    }
+
+    /// Resolve a stream/session-bound V-TIMELINE media capability. Neither the
+    /// SDK media source nor downloaded bytes cross command IPC.
+    pub async fn resolve_timeline_media(
+        &self,
+        handle: &str,
+    ) -> Option<(Client, TimelineMediaSource)> {
+        let session = self.session.lock().await;
+        let active = session.as_ref()?;
+        let source = active.timelines.resolve_media(handle).await?;
         Some((active.client.clone(), source))
     }
 }
@@ -1288,6 +1302,16 @@ pub async fn matrix_timeline_open(
         .open_at(app, &active.client, request)
         .await
         .map_err(map_timeline_error)
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_close(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelineCloseRequest,
+) -> Result<bool, MatrixAuthCommandError> {
+    let mut session = state.session.lock().await;
+    let active = require_session_mut(session.as_mut())?;
+    Ok(active.timelines.close_view(request))
 }
 
 #[tauri::command]

@@ -56,9 +56,13 @@ pub use live::{
     NativeTimelineReadAction,
     NativeTimelineReadStateReadback,
     NativeTimelineReadStateRequest,
+    NativeTimelineCloseRequest,
     NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
 };
-pub use media::{TimelineMediaRegistry, TimelineMediaSource};
+pub use media::{
+    is_timeline_media_handle, TimelineMediaRegistry, TimelineMediaSource,
+    TIMELINE_MEDIA_HANDLE_PREFIX,
+};
 pub use pagination::{
     DirectionStatus, PaginationDirection, PaginationOutcome, PaginationPhase, PaginationRequest,
     TimelinePagination,
@@ -67,7 +71,8 @@ pub use projection::{reconstruct, TimelineProjection};
 pub use registry::{TimelineEntry, TimelineKey, TimelineLifecycle, TimelineRegistry};
 pub use utd::{UtdEntry, UtdIndex, UtdPhase, UtdReasonCode, UtdUpdate, MAX_UTD_ENTRIES};
 pub use view::{
-    project_event_row, project_event_row_base, project_timeline_diffs, project_timeline_item,
+    project_event_row, project_event_row_base, project_timeline_diffs,
+    project_timeline_diffs_with_media, project_timeline_item, project_timeline_item_with_media,
     TimelineCallRow, TimelineEncryptedUnavailableRow, TimelineEventRowBase, TimelineMediaHandle,
     TimelineMembershipRow, TimelineMessageRow, TimelineOtherRow, TimelinePageState,
     TimelinePaginationState, TimelinePollRow, TimelineReaction, TimelineReadState,
