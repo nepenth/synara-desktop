@@ -53,6 +53,12 @@ native ownership is selected.
   because GIF/avatar/call/forward residuals still reference those APIs; the
   composer UploadBoard path no longer invokes them when a native session is
   live. Direct-import delta is honestly **zero**.
-- Runtime proof: preferred disposable-Synapse image/file send via the managed
-  client on the reviewed SHA. Until that is green, proof remains
-  **Not confirmed**. Keep draft until Confirmed.
+- Runtime proof authority for merge: required CI job
+  **Synapse native attachment proof**
+  (`live_native_attachment_send_against_disposable_synapse_when_configured`)
+  against the disposable Synapse harness. It registers/logs in with the managed
+  Rust client, enqueues on `AttachmentSendQueue`, sends image + file via
+  `Room::send_attachment` (the same SDK owner as `matrix_send_attachment`), and
+  confirms both events in the native timeline. JS two-client Synapse CI is
+  **not** this proof. Until that CI job is green on the reviewed SHA, runtime
+  proof remains **Not confirmed**.

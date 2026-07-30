@@ -289,7 +289,7 @@ function aggregateGateError(jobLines, expectedName, expectedNeeds) {
 }
 
 /**
- * CI quality gate after path filters: needs include `changes` plus the four
+ * CI quality gate after path filters: needs include `changes` plus the five
  * heavy jobs. `changes` must be success; heavy jobs may be success or skipped.
  */
 function pathFilteredCiAggregateError(jobLines) {
@@ -306,6 +306,7 @@ function pathFilteredCiAggregateError(jobLines) {
     "ios-tests",
     "synapse-integration",
     "synapse-native-reactions",
+    "synapse-native-attachments",
   ];
   if (!sameList(getList(jobLines, "needs", 4), expectedNeeds)) {
     return `job needs must be exactly [${expectedNeeds.join(", ")}]`;
@@ -328,12 +329,16 @@ function pathFilteredCiAggregateError(jobLines) {
     const synapseNativeReactionsVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.synapse-native-reactions.result }}"
     )?.[0];
+    const synapseNativeAttachmentsVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.synapse-native-attachments.result }}"
+    )?.[0];
     if (
       !changesVar ||
       !desktopVar ||
       !iosVar ||
       !synapseVar ||
-      !synapseNativeReactionsVar
+      !synapseNativeReactionsVar ||
+      !synapseNativeAttachmentsVar
     ) {
       continue;
     }
@@ -361,7 +366,8 @@ function pathFilteredCiAggregateError(jobLines) {
       !runText.includes(`"$${desktopVar}"`) ||
       !runText.includes(`"$${iosVar}"`) ||
       !runText.includes(`"$${synapseVar}"`) ||
-      !runText.includes(`"$${synapseNativeReactionsVar}"`)
+      !runText.includes(`"$${synapseNativeReactionsVar}"`) ||
+      !runText.includes(`"$${synapseNativeAttachmentsVar}"`)
     ) {
       continue;
     }

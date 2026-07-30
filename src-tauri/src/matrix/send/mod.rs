@@ -39,4 +39,6 @@ pub fn matrix_send_markers() -> &'static str {
 }
 
 #[cfg(test)]
+mod live_synapse_proof;
+#[cfg(test)]
 mod tests;
