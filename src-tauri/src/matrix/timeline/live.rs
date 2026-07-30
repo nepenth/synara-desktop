@@ -411,6 +411,13 @@ impl NativeTimelineRegistry {
         let target_event_id = parse_event_id(target_event_id)?;
         let reaction_event_id = parse_event_id(reaction_event_id)?;
         validate_reaction_key(key)?;
+        let selected_reaction = self
+            .reaction_readback(client, &room_id, &target_event_id, key)
+            .await?
+            .ok_or("v-send.2-reaction-redact-annotation-not-found")?;
+        if !reaction_contains_event_id(&selected_reaction, &reaction_event_id) {
+            return Err("v-send.2-reaction-redact-annotation-not-found");
+        }
         let room = client
             .get_room(parse_room_id(&room_id)?.as_ref())
             .ok_or("v-send.2-reaction-room-not-found")?;
@@ -637,6 +644,16 @@ impl NativeTimelineRegistry {
     }
 }
 
+fn reaction_contains_event_id(
+    reaction: &NativeTimelineReaction,
+    reaction_event_id: &OwnedEventId,
+) -> bool {
+    reaction
+        .senders
+        .iter()
+        .any(|sender| sender.reaction_event_id.as_deref() == Some(reaction_event_id.as_str()))
+}
+
 fn parse_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
     OwnedRoomId::try_from(room_id.trim()).map_err(|_| "d0.3-timeline-invalid-room-id")
 }
@@ -779,6 +796,24 @@ fn safe_body_from_parts(redacted: bool, unable_to_decrypt: bool, body: Option<&s
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reaction_redaction_requires_the_selected_annotation_event_id() {
+        let reaction = NativeTimelineReaction {
+            key: "✅".into(),
+            count: 1,
+            me: false,
+            senders: vec![NativeTimelineReactionSender {
+                user_id: "@alice:example.org".into(),
+                reaction_event_id: Some("$reaction:example.org".into()),
+            }],
+        };
+        let selected = OwnedEventId::try_from("$reaction:example.org").unwrap();
+        let unrelated = OwnedEventId::try_from("$unrelated:example.org").unwrap();
+
+        assert!(reaction_contains_event_id(&reaction, &selected));
+        assert!(!reaction_contains_event_id(&reaction, &unrelated));
+    }
 
     #[test]
     fn native_snapshot_schema_has_no_secret_or_ciphertext_fields() {
