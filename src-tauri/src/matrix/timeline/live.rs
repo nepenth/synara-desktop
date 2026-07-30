@@ -436,20 +436,6 @@ impl NativeTimelineRegistry {
         })
     }
 
-    /// Test-only readback helper used by the disposable-Synapse V-SEND.2 proof.
-    #[cfg(test)]
-    pub(crate) async fn reaction_readback_for_proof(
-        &mut self,
-        client: &Client,
-        room_id: &str,
-        target_event_id: &str,
-        key: &str,
-    ) -> Result<Option<NativeTimelineReaction>, &'static str> {
-        let target_event_id = parse_event_id(target_event_id)?;
-        self.reaction_readback(client, room_id, &target_event_id, key)
-            .await
-    }
-
     async fn reaction_readback(
         &mut self,
         client: &Client,
