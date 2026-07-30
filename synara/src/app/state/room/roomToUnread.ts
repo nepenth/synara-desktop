@@ -161,7 +161,7 @@ export const roomToUnreadAtom = atom<RoomToUnread, [RoomToUnreadAction], undefin
 
 /**
  * Drive list/nav/platform unread badges from the native room-list snapshot.
- * Space parent rollup still reads `roomToParentsAtom` (V-ROOMS.2 residual).
+ * Space parent rollup reads `roomToParentsAtom` (native V-ROOMS.2a owner).
  */
 export const useBindRoomToUnreadAtom = () => {
   const setUnreadAtom = useSetAtom(roomToUnreadAtom);
