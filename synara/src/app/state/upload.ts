@@ -128,10 +128,16 @@ export const useBindUploadAtom = (
     }
   }, [mx, upload]);
 
+  /** Mark a composer file staged for native Rust upload+send (no JS upload). */
+  const markNativeStaged = useCallback(() => {
+    setUpload({ mxc: 'mxc://synara.native/staged' });
+  }, [setUpload]);
+
   return {
     upload,
     startUpload,
     cancelUpload,
+    markNativeStaged,
   };
 };
 
