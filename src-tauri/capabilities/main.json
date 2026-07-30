@@ -105,6 +105,7 @@
     "allow-matrix-reaction-ensure",
     "allow-matrix-reaction-redact",
     "allow-matrix-timeline-set-read-state",
+    "allow-matrix-timeline-event-readback",
     "allow-matrix-send-text",
     "allow-matrix-send-attachment",
     "allow-matrix-send-poll",

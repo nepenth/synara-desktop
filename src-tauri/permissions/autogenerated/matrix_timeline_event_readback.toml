@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-timeline-event-readback"
+description = "Enables the matrix_timeline_event_readback command without any pre-configured scope."
+commands.allow = ["matrix_timeline_event_readback"]
+
+[[permission]]
+identifier = "deny-matrix-timeline-event-readback"
+description = "Denies the matrix_timeline_event_readback command without any pre-configured scope."
+commands.deny = ["matrix_timeline_event_readback"]
