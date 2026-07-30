@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-timeline-unpin"
+description = "Enables the matrix_timeline_unpin command without any pre-configured scope."
+commands.allow = ["matrix_timeline_unpin"]
+
+[[permission]]
+identifier = "deny-matrix-timeline-unpin"
+description = "Denies the matrix_timeline_unpin command without any pre-configured scope."
+commands.deny = ["matrix_timeline_unpin"]

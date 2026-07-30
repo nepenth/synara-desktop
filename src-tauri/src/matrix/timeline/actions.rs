@@ -16,6 +16,9 @@ pub enum NativeTimelineActionKind {
     EditText,
     Redact,
     ForwardText,
+    Report,
+    Pin,
+    Unpin,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -24,6 +27,25 @@ pub struct NativeTimelineEditTextRequest {
     pub room_id: String,
     pub event_id: String,
     pub body: String,
+    /// Optional Matrix HTML body (`org.matrix.custom.html`).
+    #[serde(default)]
+    pub formatted_body: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineReportRequest {
+    pub room_id: String,
+    pub event_id: String,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelinePinRequest {
+    pub room_id: String,
+    pub event_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -54,6 +76,17 @@ pub struct NativeTimelineActionReadback {
     /// For edit/forward: the newly sent event id. For redact: the redacted event id.
     pub event_id: String,
     pub status: &'static str,
+}
+
+/// Choose whether outbound Matrix HTML should be attached beside plain text.
+pub fn should_attach_formatted_body(body: &str, formatted_body: Option<&str>) -> bool {
+    match formatted_body
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        Some(html) => html != body.trim(),
+        None => false,
+    }
 }
 
 /// Build the plain-text body used when forwarding a text-like message.
@@ -90,6 +123,13 @@ fn trim_mx_reply_prefix(body: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn formatted_body_attaches_only_when_it_differs_from_plain_text() {
+        assert!(!should_attach_formatted_body("hello", Some("hello")));
+        assert!(!should_attach_formatted_body("hello", Some("  ")));
+        assert!(should_attach_formatted_body("hello", Some("<p>hello</p>")));
+    }
 
     #[test]
     fn forward_plain_and_quote_bodies_attribute_the_source_sender() {

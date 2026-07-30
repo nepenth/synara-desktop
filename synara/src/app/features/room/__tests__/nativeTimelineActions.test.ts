@@ -4,7 +4,9 @@ import test from 'node:test';
 import {
   editTextWithNativeTimelineOwner,
   forwardTextWithNativeTimelineOwner,
+  pinWithNativeTimelineOwner,
   redactWithNativeTimelineOwner,
+  reportWithNativeTimelineOwner,
   type NativeInvoke,
 } from '../nativeTimelineActions';
 
@@ -77,4 +79,34 @@ test('native timeline action owners stay unavailable off desktop', async () => {
     ),
     'unavailable'
   );
+});
+
+test('report and pin owners accept typed readback statuses', async () => {
+  const reported = await reportWithNativeTimelineOwner(
+    { roomId: '!room:example.org', eventId: '$one:example.org', reason: 'spam' },
+    true,
+    okInvoke('matrix_timeline_report', {
+      schemaVersion: 1,
+      action: 'report',
+      roomId: '!room:example.org',
+      eventId: '$one:example.org',
+      status: 'reported',
+    })
+  );
+  assert.notEqual(reported, 'unavailable');
+  if (reported !== 'unavailable') assert.equal(reported.status, 'reported');
+
+  const pinned = await pinWithNativeTimelineOwner(
+    { roomId: '!room:example.org', eventId: '$one:example.org' },
+    true,
+    okInvoke('matrix_timeline_pin', {
+      schemaVersion: 1,
+      action: 'pin',
+      roomId: '!room:example.org',
+      eventId: '$one:example.org',
+      status: 'already_pinned',
+    })
+  );
+  assert.notEqual(pinned, 'unavailable');
+  if (pinned !== 'unavailable') assert.equal(pinned.status, 'already_pinned');
 });

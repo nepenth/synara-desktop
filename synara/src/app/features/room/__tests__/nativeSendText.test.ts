@@ -9,6 +9,7 @@ test('native logged-in session is the sole plain-text send owner', async () => {
     {
       roomId: '!room:example.org',
       body: 'hello',
+      formattedBody: '<p>hello</p>',
       replyTo: '$event:example.org',
     },
     true,
@@ -37,6 +38,7 @@ test('native logged-in session is the sole plain-text send owner', async () => {
       args: {
         roomId: '!room:example.org',
         body: 'hello',
+        formattedBody: '<p>hello</p>',
         replyTo: '$event:example.org',
       },
     },

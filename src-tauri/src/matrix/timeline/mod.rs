@@ -36,6 +36,9 @@ mod view;
     NativeTimelineEditTextRequest,
     NativeTimelineForwardTextRequest,
     NativeTimelineRedactRequest,
+    should_attach_formatted_body,
+    NativeTimelinePinRequest,
+    NativeTimelineReportRequest,
     NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
     };,
 

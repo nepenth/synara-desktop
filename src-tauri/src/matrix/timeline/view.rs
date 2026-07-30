@@ -171,8 +171,8 @@ fn project_row_action_capabilities(event: &EventTimelineItem) -> TimelineRowCapa
         reply: has_remote_id && forwardable,
         edit: event.is_editable(),
         redact: has_remote_id,
-        report: false,
-        pin: false,
+        report: has_remote_id && !event.is_own(),
+        pin: has_remote_id,
         forward: has_remote_id && forwardable,
     }
 }
