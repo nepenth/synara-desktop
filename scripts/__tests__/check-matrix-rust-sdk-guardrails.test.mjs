@@ -464,6 +464,44 @@ test("doc comments mentioning matrix_sdk do not trip SDK-type rule", () => {
   }
 });
 
+test("allows cfg(test) disposable Synapse proof modules under matrix/", () => {
+  const { root, files } = makeTree({
+    "src-tauri/src/matrix/timeline/live_synapse_proof.rs": `
+async fn proof(c: &matrix_sdk::Client) {
+    let _http = reqwest::Client::new();
+    let _ = c.sync_once(Default::default()).await;
+}
+`,
+    "src-tauri/src/matrix/ipc/version.rs":
+      "pub const MATRIX_IPC_PROTOCOL_VERSION: u32 = 1;\n",
+    "synara/src/app/features/matrix-ipc/version.ts":
+      "export const MATRIX_IPC_PROTOCOL_VERSION = 1 as const;\n",
+  });
+  try {
+    const result = runGuardrails({ root, files });
+    assert.equal(result.ok, true, formatFail(result));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("does not treat reqwest::Client::new as matrix Client construction", () => {
+  const { root, files } = makeTree({
+    "src-tauri/src/matrix/timeline/http_helper.rs":
+      "fn http() { let _ = reqwest::Client::new(); }\n",
+    "src-tauri/src/matrix/ipc/version.rs":
+      "pub const MATRIX_IPC_PROTOCOL_VERSION: u32 = 1;\n",
+    "synara/src/app/features/matrix-ipc/version.ts":
+      "export const MATRIX_IPC_PROTOCOL_VERSION = 1 as const;\n",
+  });
+  try {
+    const result = runGuardrails({ root, files });
+    assert.equal(result.ok, true, formatFail(result));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("repository root currently satisfies guardrails", () => {
   const result = runGuardrails({ root: REPO_ROOT });
   assert.equal(
