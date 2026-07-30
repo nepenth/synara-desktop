@@ -142,6 +142,11 @@ import {
   POLL_START_EVENT_TYPE,
 } from '../../utils/polls';
 import { RoomComposer } from './RoomComposer';
+import {
+  fileToNativeAttachmentBytes,
+  nativeComposerAttachmentReady,
+  sendComposerAttachmentsWithNativeOwner,
+} from './nativeSendAttachment';
 import { sendPlainTextWithNativeOwner } from './nativeSendText';
 
 const NATIVE_PASTE_EVENT = 'synara://native-paste';
@@ -199,11 +204,22 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     const [uploadBoard, setUploadBoard] = useState(true);
     const [selectedFiles, setSelectedFiles] = useAtom(roomIdToUploadItemsAtomFamily(roomId));
+    const [nativeComposerSend, setNativeComposerSend] = useState(false);
     const uploadFamilyObserverAtom = createUploadFamilyObserverAtom(
       roomUploadAtomFamily,
       selectedFiles.map((f) => f.file)
     );
     const uploadBoardHandlers = useRef<UploadBoardImperativeHandlers | undefined>(undefined);
+
+    useEffect(() => {
+      let cancelled = false;
+      void nativeComposerAttachmentReady().then((ready) => {
+        if (!cancelled) setNativeComposerSend(ready);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [roomId]);
 
     const imagePackRooms: Room[] = useImagePackRooms(roomId, roomToParents);
 
@@ -232,8 +248,11 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         setUploadBoard(true);
         const safeFiles = files.map(safeFile);
         const fileItems: TUploadItem[] = [];
+        // Native Rust encrypts in e2e rooms; do not dual-encrypt via JS.
+        const nativeReady = await nativeComposerAttachmentReady();
+        setNativeComposerSend(nativeReady);
 
-        if (room.hasEncryptionStateEvent()) {
+        if (!nativeReady && room.hasEncryptionStateEvent()) {
           const encryptFiles = fulfilledPromiseSettledResult(
             await Promise.allSettled(safeFiles.map((f) => encryptFile(f)))
           );
@@ -506,6 +525,29 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     };
 
     const handleSendUpload = async (uploads: UploadSuccess[]) => {
+      const replyTo =
+        typeof replyDraft?.eventId === 'string' ? replyDraft.eventId : undefined;
+      const nativeFiles = await Promise.all(
+        uploads.map(async (upload) => {
+          const fileItem = selectedFiles.find((f) => f.file === upload.file);
+          if (!fileItem) throw new Error('Broken upload');
+          const source = fileItem.originalFile;
+          return {
+            filename: source.name || 'attachment',
+            mimeType: source.type || 'application/octet-stream',
+            bytes: await fileToNativeAttachmentBytes(source),
+          };
+        })
+      );
+      const owner = await sendComposerAttachmentsWithNativeOwner(roomId, nativeFiles, replyTo);
+      if (owner === 'native') {
+        handleCancelUpload(uploads);
+        if (nativeFiles.length > 0) {
+          setReplyDraft(undefined);
+        }
+        return;
+      }
+
       const contentsPromises = uploads.map(async (upload) => {
         const fileItem = selectedFiles.find((f) => f.file === upload.file);
         if (!fileItem) throw new Error('Broken upload');
@@ -818,6 +860,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                         // eslint-disable-next-line react/no-array-index-key
                         key={index}
                         isEncrypted={!!fileItem.encInfo}
+                        nativeComposerSend={nativeComposerSend}
                         fileItem={fileItem}
                         setMetadata={handleFileMetadata}
                         onRemove={handleRemoveUpload}

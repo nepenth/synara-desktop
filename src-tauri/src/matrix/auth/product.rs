@@ -9,18 +9,21 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use matrix_sdk::{
+    attachment::AttachmentConfig,
     encryption::CrossSigningStatus,
+    room::reply::{EnforceThread, Reply as AttachmentReply},
     ruma::{
         api::client::uiaa,
         events::{
             relation::Reply,
-            room::message::{Relation, RoomMessageEventContent},
+            room::message::{AddMentions, Relation, RoomMessageEventContent},
             Mentions,
         },
         OwnedEventId, OwnedRoomId, OwnedTransactionId, OwnedUserId,
     },
     Client, Room,
 };
+use mime::Mime;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
@@ -58,7 +61,7 @@ use crate::matrix::room_list::{
 use crate::matrix::secret_storage::live::{
     self as live_secret_storage, NativeSecretStorageOperationResult, NativeSecretStorageStatus,
 };
-use crate::matrix::send::SendQueue;
+use crate::matrix::send::{AttachmentEnqueue, AttachmentKind, AttachmentSendQueue, SendQueue};
 use crate::matrix::spaces::{snapshot_space_parents, NativeSpaceParentsSnapshot};
 use crate::matrix::store::{
     get_or_create_store_key, AccountIdentity, KeyringStoreKeyVault, StoreKeyId,
@@ -132,6 +135,18 @@ pub struct MatrixSendTextResult {
     pub status: &'static str,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixSendAttachmentResult {
+    pub room_id: String,
+    pub event_id: String,
+    pub local_txn_id: String,
+    pub status: &'static str,
+}
+
+/// Soft IPC/body cap for one-shot composer attachment transfer (bytes).
+const MAX_ATTACHMENT_IPC_BYTES: usize = 32 * 1024 * 1024;
+
 impl MatrixAuthCommandError {
     pub(crate) fn new(
         code: &'static str,
@@ -169,6 +184,7 @@ struct ManagedMatrixSession {
     invite_avatars: InviteAvatarHandles,
     timelines: NativeTimelineRegistry,
     sends: SendQueue,
+    attachments: AttachmentSendQueue,
     verification: NativeVerificationOwner,
     _devices: NativeDeviceOwner,
     typing: NativeTypingOwner,
@@ -283,6 +299,7 @@ pub async fn matrix_login_password(
         invite_avatars: InviteAvatarHandles::new(session_generation),
         timelines: NativeTimelineRegistry::new(session_generation),
         sends: SendQueue::new(session_generation),
+        attachments: AttachmentSendQueue::new(session_generation),
         verification,
         _devices: devices,
         typing,
@@ -1363,6 +1380,87 @@ pub async fn matrix_send_text(
     })
 }
 
+/// V-SEND.1 sole composer attachment upload+send owner. Bytes cross IPC once;
+/// encrypted rooms are encrypted by the managed SDK (no JS dual-encrypt).
+#[tauri::command]
+pub async fn matrix_send_attachment(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    filename: String,
+    mime_type: String,
+    bytes: Vec<u8>,
+    reply_to: Option<String>,
+) -> Result<MatrixSendAttachmentResult, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&room_id)?;
+    let reply_to = parse_reply_event_id(reply_to)?;
+    let filename = validate_attachment_filename(&filename)?;
+    let mime_type = validate_attachment_mime(&mime_type)?;
+    if bytes.is_empty() {
+        return Err(map_attachment_error("v-send.1-attachment-empty"));
+    }
+    if bytes.len() > MAX_ATTACHMENT_IPC_BYTES {
+        return Err(map_attachment_error("v-send.1-attachment-too-large"));
+    }
+    let size_bytes = bytes.len() as u64;
+    let kind = attachment_kind_for_mime(&mime_type);
+    let media_handle_id = format!("native-staged:{filename}");
+
+    let (room, session_generation, local_txn_id) = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        let room = active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-send.1-attachment-room-not-found",
+            )
+        })?;
+        let session_generation = active.attachments.session_generation();
+        let item = active
+            .attachments
+            .enqueue(AttachmentEnqueue {
+                room_id: room_id.to_string(),
+                kind,
+                media_handle_id,
+                file_name: Some(filename.clone()),
+                caption: None,
+                mime_type: Some(mime_type.to_string()),
+                size_bytes: Some(size_bytes),
+            })
+            .map_err(|error| map_attachment_error(error.diagnostic_id()))?;
+        (room, session_generation, item.local_txn_id.clone())
+    };
+
+    let send_result = send_attachment_to_room(&room, &filename, &mime_type, bytes, reply_to).await;
+
+    let mut session = state.session.lock().await;
+    if let Some(active) = session.as_mut() {
+        if active.attachments.session_generation() == session_generation {
+            if send_result.is_ok() {
+                let _ = active.attachments.mark_sent(&local_txn_id);
+            } else {
+                let _ = active
+                    .attachments
+                    .mark_failed(&local_txn_id, "v-send.1-attachment-sdk-failed");
+            }
+        }
+    }
+
+    let event_id = send_result.map_err(|_| {
+        MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix attachment could not be sent.",
+            "v-send.1-attachment-sdk-failed",
+        )
+    })?;
+    Ok(MatrixSendAttachmentResult {
+        room_id: room_id.to_string(),
+        event_id,
+        local_txn_id,
+        status: "sent",
+    })
+}
+
 #[tauri::command]
 pub async fn matrix_logout(
     app: AppHandle,
@@ -1444,6 +1542,7 @@ pub async fn matrix_restore_session(
         invite_avatars: InviteAvatarHandles::new(session_generation),
         timelines: NativeTimelineRegistry::new(session_generation),
         sends: SendQueue::new(session_generation),
+        attachments: AttachmentSendQueue::new(session_generation),
         verification,
         _devices: devices,
         typing,
@@ -2086,6 +2185,87 @@ async fn send_text_to_room(
         None => send.await?,
     };
     Ok(result.response.event_id.to_string())
+}
+
+fn map_attachment_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    match diagnostic_id {
+        "v-send.1-attachment-empty"
+        | "v-send.1-attachment-invalid-filename"
+        | "v-send.1-attachment-invalid-mime"
+        | "p7.4-invalid-room-id"
+        | "p7.4-empty-media-handle"
+        | "p7.4-file-name-cap"
+        | "p7.4-file-too-large"
+        | "p7.4-forbidden-handle-scheme"
+        | "p7.4-forbidden-handle" => MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "The native Matrix attachment request is invalid.",
+            diagnostic_id,
+        ),
+        "v-send.1-attachment-too-large" | "p7.4-active-attachment-cap" => {
+            MatrixAuthCommandError::new(
+                "InvalidRequest",
+                "The native Matrix attachment exceeds the allowed size or concurrency.",
+                diagnostic_id,
+            )
+        }
+        _ => MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix attachment could not be sent.",
+            diagnostic_id,
+        ),
+    }
+}
+
+fn validate_attachment_filename(filename: &str) -> Result<String, MatrixAuthCommandError> {
+    let filename = filename.trim();
+    if filename.is_empty() || filename.chars().count() > 255 {
+        return Err(map_attachment_error("v-send.1-attachment-invalid-filename"));
+    }
+    if filename.contains('/') || filename.contains('\\') || filename.contains('\0') {
+        return Err(map_attachment_error("v-send.1-attachment-invalid-filename"));
+    }
+    Ok(filename.to_owned())
+}
+
+fn validate_attachment_mime(mime_type: &str) -> Result<Mime, MatrixAuthCommandError> {
+    let mime_type = mime_type.trim();
+    if mime_type.is_empty() || mime_type.len() > 255 {
+        return Err(map_attachment_error("v-send.1-attachment-invalid-mime"));
+    }
+    mime_type
+        .parse::<Mime>()
+        .map_err(|_| map_attachment_error("v-send.1-attachment-invalid-mime"))
+}
+
+fn attachment_kind_for_mime(mime: &Mime) -> AttachmentKind {
+    match mime.type_() {
+        mime::IMAGE => AttachmentKind::Image,
+        mime::VIDEO => AttachmentKind::Video,
+        mime::AUDIO => AttachmentKind::Audio,
+        _ => AttachmentKind::File,
+    }
+}
+
+async fn send_attachment_to_room(
+    room: &Room,
+    filename: &str,
+    mime_type: &Mime,
+    data: Vec<u8>,
+    reply_to: Option<OwnedEventId>,
+) -> matrix_sdk::Result<String> {
+    let mut config = AttachmentConfig::new();
+    if let Some(event_id) = reply_to {
+        config = config.reply(Some(AttachmentReply {
+            event_id,
+            enforce_thread: EnforceThread::MaybeThreaded,
+            add_mentions: AddMentions::Yes,
+        }));
+    }
+    let response = room
+        .send_attachment(filename, mime_type, data, config)
+        .await?;
+    Ok(response.event_id.to_string())
 }
 
 fn snapshot(session: Option<&ManagedMatrixSession>) -> MatrixSessionSnapshot {
