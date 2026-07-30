@@ -70,6 +70,7 @@ use crate::matrix::timeline::{
     NativeTimelineDirection, NativeTimelineEventReadback, NativeTimelineRegistry,
     NativeTimelineSnapshot,
 };
+use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
 use crate::matrix::verification::live::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
 };
@@ -169,6 +170,7 @@ struct ManagedMatrixSession {
     sends: SendQueue,
     verification: NativeVerificationOwner,
     _devices: NativeDeviceOwner,
+    typing: NativeTypingOwner,
     pending_device_deletion: Option<PendingDeviceDeletion>,
     next_device_delete_operation_id: u64,
     pending_cross_signing_auth_session: Option<String>,
@@ -257,6 +259,7 @@ pub async fn matrix_login_password(
     let devices = NativeDeviceOwner::start(&client, app.clone(), session_generation)
         .await
         .map_err(map_device_error)?;
+    let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
     let sync = start_sync_owner(&client, session_generation).await?;
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
@@ -281,6 +284,7 @@ pub async fn matrix_login_password(
         sends: SendQueue::new(session_generation),
         verification,
         _devices: devices,
+        typing,
         pending_device_deletion: None,
         next_device_delete_operation_id: 0,
         pending_cross_signing_auth_session: None,
@@ -1051,6 +1055,28 @@ pub async fn matrix_invites_snapshot(
 }
 
 #[tauri::command]
+pub async fn matrix_typing_snapshot(
+    state: State<'_, MatrixAuthState>,
+) -> Result<NativeTypingSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    Ok(active.typing.snapshot().await)
+}
+
+#[tauri::command]
+pub async fn matrix_typing_set(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    typing: bool,
+) -> Result<(), MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    set_typing_notice(&active.client, &room_id, typing)
+        .await
+        .map_err(map_typing_error)
+}
+
+#[tauri::command]
 pub async fn matrix_invites_accept(
     state: State<'_, MatrixAuthState>,
     room_id: String,
@@ -1342,6 +1368,7 @@ pub async fn matrix_restore_session(
     let devices = NativeDeviceOwner::start(&client, app.clone(), session_generation)
         .await
         .map_err(map_device_error)?;
+    let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
     let sync = start_sync_owner(&client, session_generation).await?;
     *session = Some(ManagedMatrixSession {
         client,
@@ -1352,6 +1379,7 @@ pub async fn matrix_restore_session(
         sends: SendQueue::new(session_generation),
         verification,
         _devices: devices,
+        typing,
         pending_device_deletion: None,
         next_device_delete_operation_id: 0,
         pending_cross_signing_auth_session: None,
@@ -1635,6 +1663,23 @@ fn map_room_list_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
         "The native Matrix room list is unavailable.",
         diagnostic_id,
     )
+}
+
+fn map_typing_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    let (code, message) = match diagnostic_id {
+        "v-rooms.4-typing-invalid-room" => (
+            "InvalidRequest",
+            "The native Matrix typing request is invalid.",
+        ),
+        "v-rooms.4-typing-room-missing" | "v-rooms.4-typing-room-not-joined" => {
+            ("NotFound", "The native Matrix typing room was not found.")
+        }
+        "v-rooms.4-typing-owner-user-missing" => {
+            ("Forbidden", "No native Matrix session is active.")
+        }
+        _ => ("Unknown", "The native Matrix typing notice is unavailable."),
+    };
+    MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
 
 fn map_invite_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {

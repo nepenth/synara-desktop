@@ -225,7 +225,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const gifOnboardingVisible =
       gifProviderAvailable && !gifSearchEnabled && !gifOnboardingDismissed;
 
-    const sendTypingStatus = useTypingStatusUpdater(mx, roomId);
+    const sendTypingStatus = useTypingStatusUpdater(roomId);
 
     const handleFiles = useCallback(
       async (files: File[]) => {

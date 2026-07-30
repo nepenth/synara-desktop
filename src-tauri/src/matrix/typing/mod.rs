@@ -1,18 +1,18 @@
-//! P6.3 — Typing index foundation (harness).
-//!
-//! Pure projection of Synara [`TypingSnapshot`] DTOs. No SDK typing send,
-//! no production Tauri commands, no dual-backend.
+//! P6.3 typing index foundation + V-ROOMS.4 live product ownership.
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p6.3-typing.md`
+//! Product vertical: `docs/matrix-rust-sdk/v-rooms-4-typing.md`
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
 mod error;
 mod index;
+pub mod live;
 
 pub use error::TypingError;
 pub use index::{TypingIndex, MAX_TYPING_USERS_PER_ROOM};
+pub use live::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
 
 /// Static marker for link / schema smoke.
 pub const MATRIX_TYPING_MARKER: &str = "matrix-typing-p6.3";

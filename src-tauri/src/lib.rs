@@ -317,6 +317,8 @@ pub fn run() {
             matrix::auth::product::matrix_invites_decline,
             matrix::auth::product::matrix_invites_report_spam,
             matrix::auth::product::matrix_invites_block_sender,
+            matrix::auth::product::matrix_typing_snapshot,
+            matrix::auth::product::matrix_typing_set,
             matrix::auth::product::matrix_timeline_open,
             matrix::auth::product::matrix_timeline_snapshot,
             matrix::auth::product::matrix_timeline_paginate,

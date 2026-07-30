@@ -1,10 +1,17 @@
-import { MatrixClient } from 'matrix-js-sdk';
 import { useMemo, useRef } from 'react';
 import { TYPING_TIMEOUT_MS } from '../state/typingMembers';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../utils/desktop';
 
 type TypingStatusUpdater = (typing: boolean) => void;
 
-export const useTypingStatusUpdater = (mx: MatrixClient, roomId: string): TypingStatusUpdater => {
+const sendNativeTyping = (roomId: string, typing: boolean) => {
+  if (!isSynaraDesktop()) return;
+  void invokeDesktopWithAvailability('matrix_typing_set', { roomId, typing }).catch(() => {
+    // Native command records a privacy-safe diagnostic.
+  });
+};
+
+export const useTypingStatusUpdater = (roomId: string): TypingStatusUpdater => {
   const statusSentTsRef = useRef<number>(0);
 
   const sendTypingStatus: TypingStatusUpdater = useMemo(() => {
@@ -15,7 +22,7 @@ export const useTypingStatusUpdater = (mx: MatrixClient, roomId: string): Typing
           return;
         }
 
-        mx.sendTyping(roomId, true, TYPING_TIMEOUT_MS);
+        sendNativeTyping(roomId, true);
         const sentTs = Date.now();
         statusSentTsRef.current = sentTs;
 
@@ -23,7 +30,7 @@ export const useTypingStatusUpdater = (mx: MatrixClient, roomId: string): Typing
         // Clear typing status after timeout if already not;
         setTimeout(() => {
           if (statusSentTsRef.current === sentTs) {
-            mx.sendTyping(roomId, false, TYPING_TIMEOUT_MS);
+            sendNativeTyping(roomId, false);
             statusSentTsRef.current = 0;
           }
         }, TYPING_TIMEOUT_MS);
@@ -31,11 +38,11 @@ export const useTypingStatusUpdater = (mx: MatrixClient, roomId: string): Typing
       }
 
       if (Date.now() - statusSentTsRef.current < TYPING_TIMEOUT_MS) {
-        mx.sendTyping(roomId, false, TYPING_TIMEOUT_MS);
+        sendNativeTyping(roomId, false);
       }
       statusSentTsRef.current = 0;
     };
-  }, [mx, roomId]);
+  }, [roomId]);
 
   return sendTypingStatus;
 };

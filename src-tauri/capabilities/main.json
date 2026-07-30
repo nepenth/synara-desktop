@@ -91,6 +91,8 @@
     "allow-matrix-invites-decline",
     "allow-matrix-invites-report-spam",
     "allow-matrix-invites-block-sender",
+    "allow-matrix-typing-snapshot",
+    "allow-matrix-typing-set",
     "allow-matrix-timeline-open",
     "allow-matrix-timeline-snapshot",
     "allow-matrix-timeline-paginate",

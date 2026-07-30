@@ -58,6 +58,8 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_invites_decline",
     "matrix_invites_report_spam",
     "matrix_invites_block_sender",
+    "matrix_typing_snapshot",
+    "matrix_typing_set",
 ];
 
 fn git_output(repo: &Path, args: &[&str]) -> Option<String> {
