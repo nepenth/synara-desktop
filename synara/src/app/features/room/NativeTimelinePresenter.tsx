@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Box, Button, Scroll, Text, config } from 'folds';
+import { sanitizeCustomHtml } from '../../utils/sanitize';
 import {
   nativeTimelineMediaSrc,
   type NativeTimelineViewRow,
@@ -56,6 +57,7 @@ const NativeTimelineRow = ({ row }: { row: NativeTimelineViewRow }) => {
   switch (row.kind) {
     case 'message': {
       const mediaSrc = row.media ? nativeTimelineMediaSrc(row.media) : undefined;
+      const isEmote = row.messageType === 'emote';
       return (
         <Box
           direction="Column"
@@ -63,9 +65,30 @@ const NativeTimelineRow = ({ row }: { row: NativeTimelineViewRow }) => {
           style={{ padding: `${config.space.S200} ${config.space.S400}` }}
         >
           <Text size="L400">{row.senderName}</Text>
-          <Text size="T400" style={{ whiteSpace: 'pre-wrap' }}>
-            {row.body}
-          </Text>
+          {row.formattedBody ? (
+            <div
+              // Defense in depth: re-sanitize Matrix HTML before the unselected shell renders it.
+              // eslint-disable-next-line react/no-danger
+              dangerouslySetInnerHTML={{ __html: sanitizeCustomHtml(row.formattedBody) }}
+              style={{
+                whiteSpace: 'pre-wrap',
+                fontStyle: isEmote ? 'italic' : undefined,
+                fontSize: 'inherit',
+              }}
+            />
+          ) : (
+            <Text
+              size="T400"
+              style={{ whiteSpace: 'pre-wrap', fontStyle: isEmote ? 'italic' : undefined }}
+            >
+              {isEmote ? `* ${row.body}` : row.body}
+            </Text>
+          )}
+          {row.edited ? (
+            <Text size="T200" style={{ opacity: 0.7 }}>
+              Edited
+            </Text>
+          ) : null}
           {mediaSrc && row.messageType === 'image' && (
             <img src={mediaSrc} alt={row.body} style={{ maxWidth: '100%', maxHeight: 480 }} />
           )}

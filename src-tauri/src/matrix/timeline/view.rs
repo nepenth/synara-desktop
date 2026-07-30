@@ -9,10 +9,17 @@
 use std::sync::Arc;
 
 use eyeball_im::VectorDiff;
-use matrix_sdk::ruma::{events::room::message::MessageType, UserId as RumaUserId};
+use matrix_sdk::ruma::{
+    events::{
+        room::message::{MessageFormat, MessageType},
+        StateEventContentChange,
+    },
+    UserId as RumaUserId,
+};
 use matrix_sdk_ui::timeline::{
-    EventTimelineItem, MsgLikeKind, TimelineDetails, TimelineItem as SdkTimelineItem,
-    TimelineItemContent, VirtualTimelineItem,
+    AnyOtherStateEventContentChange, EventTimelineItem, MemberProfileChange, MembershipChange,
+    MsgLikeKind, OtherState, RoomMembershipChange, TimelineDetails,
+    TimelineItem as SdkTimelineItem, TimelineItemContent, VirtualTimelineItem,
 };
 use serde::{Deserialize, Serialize};
 
@@ -191,89 +198,13 @@ fn project_event_row_for_user(
     match event.content() {
         TimelineItemContent::MsgLike(content) => match &content.kind {
             MsgLikeKind::Message(message) => {
-                let (message_type, media) = match message.msgtype() {
-                    MessageType::Image(content) => (
-                        Some("image".to_owned()),
-                        media_registry.as_deref_mut().and_then(|registry| {
-                            registry.register(
-                                item_id,
-                                content.source.clone(),
-                                content.info.as_ref().and_then(|info| info.mimetype.clone()),
-                                content
-                                    .info
-                                    .as_ref()
-                                    .and_then(|info| info.width)
-                                    .and_then(|value| u32::try_from(u64::from(value)).ok()),
-                                content
-                                    .info
-                                    .as_ref()
-                                    .and_then(|info| info.height)
-                                    .and_then(|value| u32::try_from(u64::from(value)).ok()),
-                                None,
-                            )
-                        }),
-                    ),
-                    MessageType::File(content) => (
-                        Some("file".to_owned()),
-                        media_registry.as_deref_mut().and_then(|registry| {
-                            registry.register(
-                                item_id,
-                                content.source.clone(),
-                                content.info.as_ref().and_then(|info| info.mimetype.clone()),
-                                None,
-                                None,
-                                None,
-                            )
-                        }),
-                    ),
-                    MessageType::Audio(content) => (
-                        Some("audio".to_owned()),
-                        media_registry.as_deref_mut().and_then(|registry| {
-                            registry.register(
-                                item_id,
-                                content.source.clone(),
-                                content.info.as_ref().and_then(|info| info.mimetype.clone()),
-                                None,
-                                None,
-                                content
-                                    .info
-                                    .as_ref()
-                                    .and_then(|info| info.duration)
-                                    .and_then(|duration| u64::try_from(duration.as_millis()).ok()),
-                            )
-                        }),
-                    ),
-                    MessageType::Video(content) => (
-                        Some("video".to_owned()),
-                        media_registry.as_deref_mut().and_then(|registry| {
-                            registry.register(
-                                item_id,
-                                content.source.clone(),
-                                content.info.as_ref().and_then(|info| info.mimetype.clone()),
-                                content
-                                    .info
-                                    .as_ref()
-                                    .and_then(|info| info.width)
-                                    .and_then(|value| u32::try_from(u64::from(value)).ok()),
-                                content
-                                    .info
-                                    .as_ref()
-                                    .and_then(|info| info.height)
-                                    .and_then(|value| u32::try_from(u64::from(value)).ok()),
-                                content
-                                    .info
-                                    .as_ref()
-                                    .and_then(|info| info.duration)
-                                    .and_then(|duration| u64::try_from(duration.as_millis()).ok()),
-                            )
-                        }),
-                    ),
-                    _ => (None, None),
-                };
+                let msgtype = message.msgtype();
+                let (message_type, media) =
+                    project_message_type_and_media(item_id, msgtype, media_registry.as_deref_mut());
                 TimelineViewRow::Message(Box::new(TimelineMessageRow {
                     event: base,
                     body: message.body().to_owned(),
-                    formatted_body: None,
+                    formatted_body: project_formatted_body(msgtype),
                     message_type,
                     edited: message.is_edited(),
                     reply: project_reply(content),
@@ -337,18 +268,18 @@ fn project_event_row_for_user(
             TimelineViewRow::Membership(TimelineMembershipRow {
                 event: base,
                 target_user_id: change.user_id().to_string(),
-                summary: "Membership changed".to_owned(),
+                summary: membership_change_summary(change),
             })
         }
         TimelineItemContent::ProfileChange(change) => TimelineViewRow::State(TimelineStateRow {
             event: base,
             state_type: "m.room.member".to_owned(),
-            summary: format!("Profile updated for {}", change.user_id()),
+            summary: profile_change_summary(change),
         }),
         TimelineItemContent::OtherState(change) => TimelineViewRow::State(TimelineStateRow {
             event: base,
             state_type: change.content().event_type().to_string(),
-            summary: "Room state updated".to_owned(),
+            summary: other_state_summary(change),
         }),
         TimelineItemContent::CallInvite => TimelineViewRow::Call(TimelineCallRow {
             event: base,
@@ -361,6 +292,226 @@ fn project_event_row_for_user(
         TimelineItemContent::FailedToParseMessageLike { .. }
         | TimelineItemContent::FailedToParseState { .. } => {
             other_row(item_id, base.event_id, "Unsupported timeline event")
+        }
+    }
+}
+
+/// Project SDK-sanitized Matrix HTML when present and distinct from plain text.
+fn project_formatted_body(msgtype: &MessageType) -> Option<String> {
+    let formatted = match msgtype {
+        MessageType::Text(content) => content.formatted.as_ref(),
+        MessageType::Notice(content) => content.formatted.as_ref(),
+        MessageType::Emote(content) => content.formatted.as_ref(),
+        MessageType::Image(content) => content.formatted_caption(),
+        MessageType::File(content) => content.formatted_caption(),
+        MessageType::Audio(content) => content.formatted_caption(),
+        MessageType::Video(content) => content.formatted_caption(),
+        _ => None,
+    }?;
+    if formatted.format != MessageFormat::Html {
+        return None;
+    }
+    let html = formatted.body.trim();
+    if html.is_empty() || html == msgtype.body().trim() {
+        return None;
+    }
+    Some(html.to_owned())
+}
+
+fn project_message_type_and_media(
+    item_id: &str,
+    msgtype: &MessageType,
+    media_registry: Option<&mut TimelineMediaRegistry>,
+) -> (Option<String>, Option<TimelineMediaHandle>) {
+    match msgtype {
+        MessageType::Text(_) => (Some("text".to_owned()), None),
+        MessageType::Notice(_) => (Some("notice".to_owned()), None),
+        MessageType::Emote(_) => (Some("emote".to_owned()), None),
+        MessageType::Image(content) => (
+            Some("image".to_owned()),
+            media_registry.and_then(|registry| {
+                registry.register(
+                    item_id,
+                    content.source.clone(),
+                    content.info.as_ref().and_then(|info| info.mimetype.clone()),
+                    content
+                        .info
+                        .as_ref()
+                        .and_then(|info| info.width)
+                        .and_then(|value| u32::try_from(u64::from(value)).ok()),
+                    content
+                        .info
+                        .as_ref()
+                        .and_then(|info| info.height)
+                        .and_then(|value| u32::try_from(u64::from(value)).ok()),
+                    None,
+                )
+            }),
+        ),
+        MessageType::File(content) => (
+            Some("file".to_owned()),
+            media_registry.and_then(|registry| {
+                registry.register(
+                    item_id,
+                    content.source.clone(),
+                    content.info.as_ref().and_then(|info| info.mimetype.clone()),
+                    None,
+                    None,
+                    None,
+                )
+            }),
+        ),
+        MessageType::Audio(content) => (
+            Some("audio".to_owned()),
+            media_registry.and_then(|registry| {
+                registry.register(
+                    item_id,
+                    content.source.clone(),
+                    content.info.as_ref().and_then(|info| info.mimetype.clone()),
+                    None,
+                    None,
+                    content
+                        .info
+                        .as_ref()
+                        .and_then(|info| info.duration)
+                        .and_then(|duration| u64::try_from(duration.as_millis()).ok()),
+                )
+            }),
+        ),
+        MessageType::Video(content) => (
+            Some("video".to_owned()),
+            media_registry.and_then(|registry| {
+                registry.register(
+                    item_id,
+                    content.source.clone(),
+                    content.info.as_ref().and_then(|info| info.mimetype.clone()),
+                    content
+                        .info
+                        .as_ref()
+                        .and_then(|info| info.width)
+                        .and_then(|value| u32::try_from(u64::from(value)).ok()),
+                    content
+                        .info
+                        .as_ref()
+                        .and_then(|info| info.height)
+                        .and_then(|value| u32::try_from(u64::from(value)).ok()),
+                    content
+                        .info
+                        .as_ref()
+                        .and_then(|info| info.duration)
+                        .and_then(|duration| u64::try_from(duration.as_millis()).ok()),
+                )
+            }),
+        ),
+        _ => (None, None),
+    }
+}
+
+fn membership_change_summary(change: &RoomMembershipChange) -> String {
+    let target = change
+        .display_name()
+        .unwrap_or_else(|| change.user_id().to_string());
+    match change.change() {
+        Some(MembershipChange::Joined) => format!("{target} joined the room"),
+        Some(MembershipChange::Left) => format!("{target} left the room"),
+        Some(MembershipChange::Banned) => format!("{target} was banned"),
+        Some(MembershipChange::Unbanned) => format!("{target} was unbanned"),
+        Some(MembershipChange::Kicked) => format!("{target} was kicked"),
+        Some(MembershipChange::Invited) => format!("{target} was invited"),
+        Some(MembershipChange::KickedAndBanned) => format!("{target} was kicked and banned"),
+        Some(MembershipChange::InvitationAccepted) => format!("{target} accepted the invite"),
+        Some(MembershipChange::InvitationRejected) => format!("{target} rejected the invite"),
+        Some(MembershipChange::InvitationRevoked) => format!("{target}'s invite was revoked"),
+        Some(MembershipChange::Knocked) => format!("{target} requested to join"),
+        Some(MembershipChange::KnockAccepted) => format!("{target}'s knock was accepted"),
+        Some(MembershipChange::KnockRetracted) => format!("{target} retracted their knock"),
+        Some(MembershipChange::KnockDenied) => format!("{target}'s knock was denied"),
+        Some(MembershipChange::None)
+        | Some(MembershipChange::Error)
+        | Some(MembershipChange::NotImplemented)
+        | None => {
+            format!("{target} membership changed")
+        }
+    }
+}
+
+fn profile_change_summary(change: &MemberProfileChange) -> String {
+    let user = change.user_id();
+    match (
+        change.displayname_change(),
+        change.avatar_url_change().is_some(),
+    ) {
+        (Some(name_change), true) => match (&name_change.old, &name_change.new) {
+            (Some(old), Some(new)) if old != new => {
+                format!("{old} is now {new} (avatar updated)")
+            }
+            (_, Some(new)) => format!("{new} updated their profile"),
+            _ => format!("{user} updated their profile"),
+        },
+        (Some(name_change), false) => match (&name_change.old, &name_change.new) {
+            (Some(old), Some(new)) if old != new => format!("{old} is now {new}"),
+            (_, Some(new)) => format!("{new} set a display name"),
+            (Some(old), None) => format!("{old} cleared their display name"),
+            _ => format!("{user} updated their display name"),
+        },
+        (None, true) => format!("{user} updated their avatar"),
+        (None, false) => format!("Profile updated for {user}"),
+    }
+}
+
+fn other_state_summary(change: &OtherState) -> String {
+    match change.content() {
+        AnyOtherStateEventContentChange::RoomName(content) => match content {
+            StateEventContentChange::Original { content, .. } => {
+                let name = content.name.trim();
+                if name.is_empty() {
+                    "Room name cleared".to_owned()
+                } else {
+                    format!("Room name set to {name}")
+                }
+            }
+            StateEventContentChange::Redacted(_) => "Room name removed".to_owned(),
+        },
+        AnyOtherStateEventContentChange::RoomTopic(content) => match content {
+            StateEventContentChange::Original { content, .. } => {
+                let topic = content.topic.trim();
+                if topic.is_empty() {
+                    "Room topic cleared".to_owned()
+                } else {
+                    format!("Room topic set to {topic}")
+                }
+            }
+            StateEventContentChange::Redacted(_) => "Room topic removed".to_owned(),
+        },
+        AnyOtherStateEventContentChange::RoomAvatar(_) => "Room avatar updated".to_owned(),
+        AnyOtherStateEventContentChange::RoomCanonicalAlias(_) => "Room address updated".to_owned(),
+        AnyOtherStateEventContentChange::RoomCreate(_) => "Room created".to_owned(),
+        AnyOtherStateEventContentChange::RoomEncryption(_) => {
+            "Encryption enabled for this room".to_owned()
+        }
+        AnyOtherStateEventContentChange::RoomGuestAccess(_) => "Guest access updated".to_owned(),
+        AnyOtherStateEventContentChange::RoomHistoryVisibility(_) => {
+            "History visibility updated".to_owned()
+        }
+        AnyOtherStateEventContentChange::RoomJoinRules(_) => "Join rules updated".to_owned(),
+        AnyOtherStateEventContentChange::RoomPinnedEvents(_) => {
+            "Pinned messages updated".to_owned()
+        }
+        AnyOtherStateEventContentChange::RoomPowerLevels(_) => "Power levels updated".to_owned(),
+        AnyOtherStateEventContentChange::RoomTombstone(_) => "Room upgraded".to_owned(),
+        AnyOtherStateEventContentChange::RoomServerAcl(_) => "Server ACL updated".to_owned(),
+        AnyOtherStateEventContentChange::RoomThirdPartyInvite(_) => {
+            "Third-party invite updated".to_owned()
+        }
+        AnyOtherStateEventContentChange::SpaceChild(_)
+        | AnyOtherStateEventContentChange::SpaceParent(_) => "Space relation updated".to_owned(),
+        AnyOtherStateEventContentChange::PolicyRuleRoom(_)
+        | AnyOtherStateEventContentChange::PolicyRuleServer(_)
+        | AnyOtherStateEventContentChange::PolicyRuleUser(_) => {
+            "Moderation policy updated".to_owned()
+        }
+        AnyOtherStateEventContentChange::_Custom { event_type } => {
+            format!("Room state updated ({event_type})")
         }
     }
 }
@@ -719,4 +870,70 @@ pub fn project_timeline_diffs_with_media(
             },
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use matrix_sdk::ruma::events::room::message::{
+        EmoteMessageEventContent, NoticeMessageEventContent, TextMessageEventContent,
+    };
+
+    #[test]
+    fn formatted_body_projects_distinct_html_only() {
+        let rich = MessageType::Text(TextMessageEventContent::html(
+            "hello",
+            "<p><strong>hello</strong></p>",
+        ));
+        assert_eq!(
+            project_formatted_body(&rich).as_deref(),
+            Some("<p><strong>hello</strong></p>")
+        );
+
+        let plain = MessageType::Text(TextMessageEventContent::plain("hello"));
+        assert_eq!(project_formatted_body(&plain), None);
+
+        let same = MessageType::Notice(NoticeMessageEventContent::html("note", "note"));
+        assert_eq!(project_formatted_body(&same), None);
+
+        let emote = MessageType::Emote(EmoteMessageEventContent::html("waves", "<em>waves</em>"));
+        assert_eq!(
+            project_formatted_body(&emote).as_deref(),
+            Some("<em>waves</em>")
+        );
+    }
+
+    #[test]
+    fn message_type_labels_cover_text_notice_and_emote() {
+        assert_eq!(
+            project_message_type_and_media(
+                "item",
+                &MessageType::Text(TextMessageEventContent::plain("hi")),
+                None
+            )
+            .0
+            .as_deref(),
+            Some("text")
+        );
+        assert_eq!(
+            project_message_type_and_media(
+                "item",
+                &MessageType::Notice(NoticeMessageEventContent::plain("hi")),
+                None
+            )
+            .0
+            .as_deref(),
+            Some("notice")
+        );
+        assert_eq!(
+            project_message_type_and_media(
+                "item",
+                &MessageType::Emote(EmoteMessageEventContent::plain("hi")),
+                None
+            )
+            .0
+            .as_deref(),
+            Some("emote")
+        );
+    }
 }
