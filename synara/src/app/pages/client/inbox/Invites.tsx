@@ -17,10 +17,8 @@ import {
   color,
   config,
 } from 'folds';
-import { useAtomValue } from 'jotai';
-import { RoomTopicEventContent } from 'matrix-js-sdk/lib/types';
 import FocusTrap from 'focus-trap-react';
-import { MatrixClient, MatrixError, Room } from 'matrix-js-sdk';
+import { useNavigate } from 'react-router-dom';
 import {
   Page,
   PageContent,
@@ -30,121 +28,32 @@ import {
   PageHeroEmpty,
   PageHeroSection,
 } from '../../../components/page';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { allInvitesAtom } from '../../../state/room-list/inviteList';
-import { SequenceCard } from '../../../components/sequence-card';
 import {
-  bannedInRooms,
-  getCommonRooms,
-  getDirectRoomAvatarUrl,
-  getMemberDisplayName,
-  getRoomAvatarUrl,
-  getStateEvent,
-  isDirectInvite,
-  isSpace,
-} from '../../../utils/room';
+  NativeInvite,
+  useNativeInviteCommand,
+  useNativeInvites,
+} from '../../../state/room-list/inviteList';
+import { SequenceCard } from '../../../components/sequence-card';
 import { nameInitials } from '../../../utils/common';
 import { RoomAvatar } from '../../../components/room-avatar';
-import {
-  addRoomIdToMDirect,
-  getMxIdLocalPart,
-  guessDmRoomUserId,
-  rateLimitedActions,
-} from '../../../utils/matrix';
 import { Time } from '../../../components/message';
 import { useElementSizeObserver } from '../../../hooks/useElementSizeObserver';
 import { onEnterOrSpace, stopPropagation } from '../../../utils/keyboard';
 import { RoomTopicViewer } from '../../../components/room-topic-viewer';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
-import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../../components/BackRouteHandler';
-import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
-import { StateEvent } from '../../../../types/matrix/room';
-import { testBadWords } from '../../../plugins/bad-words';
-import { allRoomsAtom } from '../../../state/room-list/roomList';
-import { useIgnoredUsers } from '../../../hooks/useIgnoredUsers';
-import { useReportRoomSupported } from '../../../hooks/useReportRoomSupported';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
+import { convertDesktopFileSrc } from '../../../utils/desktop';
+import { getDirectRoomPath, getHomeRoomPath, getSpacePath } from '../../pathUtils';
 
 const COMPACT_CARD_WIDTH = 548;
 
-type InviteData = {
-  room: Room;
-  roomId: string;
-  roomName: string;
-  roomAvatar?: string;
-  roomTopic?: string;
-  roomAlias?: string;
-
-  senderId: string;
-  senderName: string;
-  inviteTs?: number;
-  reason?: string;
-
-  isSpace: boolean;
-  isDirect: boolean;
-  isEncrypted: boolean;
-};
-
-const makeInviteData = (mx: MatrixClient, room: Room, useAuthentication: boolean): InviteData => {
-  const userId = mx.getSafeUserId();
-  const direct = isDirectInvite(room, userId);
-
-  const roomAvatar = direct
-    ? getDirectRoomAvatarUrl(mx, room, 96, useAuthentication)
-    : getRoomAvatarUrl(mx, room, 96, useAuthentication);
-  const roomName = room.name || room.getCanonicalAlias() || room.roomId;
-  const roomTopic =
-    getStateEvent(room, StateEvent.RoomTopic)?.getContent<RoomTopicEventContent>()?.topic ??
-    undefined;
-
-  const member = room.getMember(userId);
-  const memberEvent = member?.events.member;
-
-  const content = memberEvent?.getContent();
-  const senderId = memberEvent?.getSender();
-
-  const senderName = senderId
-    ? getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId
-    : undefined;
-  const inviteTs = memberEvent?.getTs();
-  const reason =
-    content && 'reason' in content && typeof content.reason === 'string'
-      ? content.reason
-      : undefined;
-
-  return {
-    room,
-    roomId: room.roomId,
-    roomAvatar,
-    roomName,
-    roomTopic,
-    roomAlias: room.getCanonicalAlias() ?? undefined,
-
-    senderId: senderId ?? 'Unknown',
-    senderName: senderName ?? 'Unknown',
-    inviteTs,
-    reason,
-
-    isSpace: isSpace(room),
-    isDirect: direct,
-    isEncrypted: !!getStateEvent(room, StateEvent.RoomEncryption),
-  };
-};
-
-const hasBadWords = (invite: InviteData): boolean =>
-  testBadWords(invite.roomName) ||
-  testBadWords(invite.roomTopic ?? '') ||
-  testBadWords(invite.senderName) ||
-  testBadWords(invite.senderId) ||
-  testBadWords(invite.reason || '');
-
-type NavigateHandler = (roomId: string, space: boolean) => void;
+type NavigateHandler = (invite: NativeInvite) => void;
 
 type InviteCardProps = {
-  invite: InviteData;
+  invite: NativeInvite;
   compact?: boolean;
   hour24Clock: boolean;
   dateFormatString: string;
@@ -159,28 +68,26 @@ function InviteCard({
   onNavigate,
   hideAvatar,
 }: InviteCardProps) {
-  const mx = useMatrixClient();
-  const userId = mx.getSafeUserId();
+  const nativeInviteCommand = useNativeInviteCommand();
+  const avatarUrl = invite.avatarHandleId
+    ? convertDesktopFileSrc(invite.avatarHandleId, 'synara-media')
+    : undefined;
 
   const [viewTopic, setViewTopic] = useState(false);
   const closeTopic = () => setViewTopic(false);
   const openTopic = () => setViewTopic(true);
 
-  const [joinState, join] = useAsyncCallback<void, MatrixError, []>(
+  const [joinState, join] = useAsyncCallback<void, Error, []>(
     useCallback(async () => {
-      const dmUserId = isDirectInvite(invite.room, userId)
-        ? guessDmRoomUserId(invite.room, userId)
-        : undefined;
-
-      await mx.joinRoom(invite.roomId);
-      if (dmUserId) {
-        await addRoomIdToMDirect(mx, invite.roomId, dmUserId);
-      }
-      onNavigate(invite.roomId, invite.isSpace);
-    }, [mx, invite, userId, onNavigate])
+      await nativeInviteCommand('matrix_invites_accept', invite.roomId);
+      onNavigate(invite);
+    }, [invite, nativeInviteCommand, onNavigate])
   );
-  const [leaveState, leave] = useAsyncCallback<Record<string, never>, MatrixError, []>(
-    useCallback(() => mx.leave(invite.roomId), [mx, invite])
+  const [leaveState, leave] = useAsyncCallback<void, Error, []>(
+    useCallback(
+      () => nativeInviteCommand('matrix_invites_decline', invite.roomId).then(() => undefined),
+      [invite.roomId, nativeInviteCommand]
+    )
   );
 
   const joining =
@@ -224,11 +131,11 @@ function InviteCard({
         <Avatar size="300">
           <RoomAvatar
             roomId={invite.roomId}
-            src={hideAvatar ? undefined : invite.roomAvatar}
+            src={hideAvatar ? undefined : avatarUrl}
             alt={invite.roomName}
             renderFallback={() => (
               <Text as="span" size="H6">
-                {nameInitials(hideAvatar && invite.roomAvatar ? undefined : invite.roomName)}
+                {nameInitials(hideAvatar && avatarUrl ? undefined : invite.roomName)}
               </Text>
             )}
           />
@@ -344,9 +251,9 @@ enum InviteFilter {
 type InviteFiltersProps = {
   filter: InviteFilter;
   onFilter: (filter: InviteFilter) => void;
-  knownInvites: InviteData[];
-  unknownInvites: InviteData[];
-  spamInvites: InviteData[];
+  knownInvites: NativeInvite[];
+  unknownInvites: NativeInvite[];
+  spamInvites: NativeInvite[];
 };
 function InviteFilters({
   filter,
@@ -414,7 +321,7 @@ function InviteFilters({
 }
 
 type KnownInvitesProps = {
-  invites: InviteData[];
+  invites: NativeInvite[];
   handleNavigate: NavigateHandler;
   compact: boolean;
   hour24Clock: boolean;
@@ -460,7 +367,7 @@ function KnownInvites({
 }
 
 type UnknownInvitesProps = {
-  invites: InviteData[];
+  invites: NativeInvite[];
   handleNavigate: NavigateHandler;
   compact: boolean;
   hour24Clock: boolean;
@@ -473,14 +380,17 @@ function UnknownInvites({
   hour24Clock,
   dateFormatString,
 }: UnknownInvitesProps) {
-  const mx = useMatrixClient();
+  const nativeInviteCommand = useNativeInviteCommand();
 
   const [declineAllStatus, declineAll] = useAsyncCallback(
     useCallback(async () => {
-      const roomIds = invites.map((invite) => invite.roomId);
-
-      await rateLimitedActions(roomIds, (roomId) => mx.leave(roomId));
-    }, [mx, invites])
+      for (const invite of invites) {
+        // Preserve the former sequential action pattern without reintroducing a
+        // JS Matrix retry/write owner.
+        // eslint-disable-next-line no-await-in-loop
+        await nativeInviteCommand('matrix_invites_decline', invite.roomId);
+      }
+    }, [invites, nativeInviteCommand])
   );
 
   const declining = declineAllStatus.status === AsyncStatus.Loading;
@@ -533,7 +443,7 @@ function UnknownInvites({
 }
 
 type SpamInvitesProps = {
-  invites: InviteData[];
+  invites: NativeInvite[];
   handleNavigate: NavigateHandler;
   compact: boolean;
   hour24Clock: boolean;
@@ -546,36 +456,42 @@ function SpamInvites({
   hour24Clock,
   dateFormatString,
 }: SpamInvitesProps) {
-  const mx = useMatrixClient();
+  const nativeInviteCommand = useNativeInviteCommand();
   const [showInvites, setShowInvites] = useState(false);
-
-  const reportRoomSupported = useReportRoomSupported();
 
   const [declineAllStatus, declineAll] = useAsyncCallback(
     useCallback(async () => {
-      const roomIds = invites.map((invite) => invite.roomId);
-
-      await rateLimitedActions(roomIds, (roomId) => mx.leave(roomId));
-    }, [mx, invites])
+      for (const invite of invites) {
+        // eslint-disable-next-line no-await-in-loop
+        await nativeInviteCommand('matrix_invites_decline', invite.roomId);
+      }
+    }, [invites, nativeInviteCommand])
   );
 
   const [reportAllStatus, reportAll] = useAsyncCallback(
     useCallback(async () => {
-      const roomIds = invites.map((invite) => invite.roomId);
-
-      await rateLimitedActions(roomIds, (roomId) => mx.reportRoom(roomId, 'Spam Invite'));
-    }, [mx, invites])
+      for (const invite of invites) {
+        // eslint-disable-next-line no-await-in-loop
+        await nativeInviteCommand('matrix_invites_report_spam', invite.roomId);
+      }
+    }, [invites, nativeInviteCommand])
   );
 
-  const ignoredUsers = useIgnoredUsers();
-  const unignoredUsers = Array.from(new Set(invites.map((invite) => invite.senderId))).filter(
-    (user) => !ignoredUsers.includes(user)
-  );
   const [blockAllStatus, blockAll] = useAsyncCallback(
-    useCallback(
-      () => mx.setIgnoredUsers([...ignoredUsers, ...unignoredUsers]),
-      [mx, ignoredUsers, unignoredUsers]
-    )
+    useCallback(async () => {
+      const firstInviteForSender = new Map<string, NativeInvite>();
+      invites.forEach((invite) => {
+        if (!invite.senderIgnored && !firstInviteForSender.has(invite.senderId)) {
+          firstInviteForSender.set(invite.senderId, invite);
+        }
+      });
+      for (const invite of firstInviteForSender.values()) {
+        // `Account::ignore_user` is idempotent; one request per sender keeps
+        // this native operation equivalent to the former bulk account-data write.
+        // eslint-disable-next-line no-await-in-loop
+        await nativeInviteCommand('matrix_invites_block_sender', invite.roomId);
+      }
+    }, [invites, nativeInviteCommand])
   );
 
   const declining = declineAllStatus.status === AsyncStatus.Loading;
@@ -614,7 +530,7 @@ function SpamInvites({
                       Decline All
                     </Text>
                   </Button>
-                  {reportRoomSupported && reportAllStatus.status !== AsyncStatus.Success && (
+                  {reportAllStatus.status !== AsyncStatus.Success && (
                     <Button
                       size="300"
                       variant="Secondary"
@@ -629,7 +545,7 @@ function SpamInvites({
                       </Text>
                     </Button>
                   )}
-                  {unignoredUsers.length > 0 && (
+                  {invites.some((invite) => !invite.senderIgnored) && (
                     <Button
                       size="300"
                       variant="Secondary"
@@ -692,39 +608,23 @@ function SpamInvites({
 }
 
 export function Invites() {
-  const mx = useMatrixClient();
-  const useAuthentication = useMediaAuthentication();
-  const { navigateRoom, navigateSpace } = useRoomNavigate();
-  const allRooms = useAtomValue(allRoomsAtom);
-  const allInviteIds = useAtomValue(allInvitesAtom);
+  const { invites: invitesData } = useNativeInvites();
+  const navigate = useNavigate();
 
   const [filter, setFilter] = useState(InviteFilter.Known);
 
-  const invitesData = allInviteIds
-    .map((inviteId) => mx.getRoom(inviteId))
-    .filter((inviteRoom) => !!inviteRoom)
-    .map((inviteRoom) => makeInviteData(mx, inviteRoom, useAuthentication));
-
   const [knownInvites, unknownInvites, spamInvites] = useMemo(() => {
-    const known: InviteData[] = [];
-    const unknown: InviteData[] = [];
-    const spam: InviteData[] = [];
+    const known: NativeInvite[] = [];
+    const unknown: NativeInvite[] = [];
+    const spam: NativeInvite[] = [];
     invitesData.forEach((invite) => {
-      if (hasBadWords(invite) || bannedInRooms(mx, allRooms, invite.senderId)) {
-        spam.push(invite);
-        return;
-      }
-
-      if (getCommonRooms(mx, allRooms, invite.senderId).length === 0) {
-        unknown.push(invite);
-        return;
-      }
-
-      known.push(invite);
+      if (invite.triage === 'spam') spam.push(invite);
+      else if (invite.triage === 'public') unknown.push(invite);
+      else known.push(invite);
     });
 
     return [known, unknown, spam];
-  }, [mx, allRooms, invitesData]);
+  }, [invitesData]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [compact, setCompact] = useState(document.body.clientWidth <= COMPACT_CARD_WIDTH);
@@ -737,12 +637,15 @@ export function Invites() {
   const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
   const [dateFormatString] = useSetting(settingsAtom, 'dateFormatString');
 
-  const handleNavigate = (roomId: string, space: boolean) => {
-    if (space) {
-      navigateSpace(roomId);
-      return;
+  const handleNavigate = (invite: NativeInvite) => {
+    const roomTarget = invite.roomAlias ?? invite.roomId;
+    if (invite.isSpace) {
+      navigate(getSpacePath(roomTarget));
+    } else if (invite.isDirect) {
+      navigate(getDirectRoomPath(roomTarget));
+    } else {
+      navigate(getHomeRoomPath(roomTarget));
     }
-    navigateRoom(roomId);
   };
 
   return (

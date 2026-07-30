@@ -12,7 +12,7 @@ import InviteSound from '../../../../public/sound/invite.ogg';
 import { notificationPermission, setFavicon } from '../../utils/dom';
 import { useSetting } from '../../state/hooks/settings';
 import { desktopPlatformSettingsAtom, settingsAtom } from '../../state/settings';
-import { allInvitesAtom } from '../../state/room-list/inviteList';
+import { allInvitesAtom, useNativeInviteSyncing } from '../../state/room-list/inviteList';
 import { usePreviousValue } from '../../hooks/usePreviousValue';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { getInboxInvitesPath } from '../pathUtils';
@@ -295,7 +295,7 @@ function InviteNotifications() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const invites = useAtomValue(allInvitesAtom);
   const perviousInviteLen = usePreviousValue(invites.length, 0);
-  const mx = useMatrixClient();
+  const nativeInviteSyncing = useNativeInviteSyncing();
 
   const navigate = useNavigate();
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
@@ -332,7 +332,7 @@ function InviteNotifications() {
   }, []);
 
   useEffect(() => {
-    if (invites.length > perviousInviteLen && mx.getSyncState() === 'SYNCING') {
+    if (invites.length > perviousInviteLen && nativeInviteSyncing) {
       if (
         showNotifications &&
         (supportsPlatformSystemNotifications() || notificationPermission('granted'))
@@ -344,7 +344,15 @@ function InviteNotifications() {
         playSound();
       }
     }
-  }, [mx, invites, perviousInviteLen, showNotifications, notificationSound, notify, playSound]);
+  }, [
+    invites,
+    perviousInviteLen,
+    nativeInviteSyncing,
+    showNotifications,
+    notificationSound,
+    notify,
+    playSound,
+  ]);
 
   return (
     // eslint-disable-next-line jsx-a11y/media-has-caption
