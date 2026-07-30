@@ -53,6 +53,11 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_device_delete_start",
     "matrix_device_delete_password",
     "matrix_device_delete_cancel",
+    "matrix_invites_snapshot",
+    "matrix_invites_accept",
+    "matrix_invites_decline",
+    "matrix_invites_report_spam",
+    "matrix_invites_block_sender",
 ];
 
 fn git_output(repo: &Path, args: &[&str]) -> Option<String> {

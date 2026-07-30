@@ -33,6 +33,126 @@ use tauri::{
 };
 use tauri_plugin_opener::OpenerExt;
 
+const INVITE_AVATAR_PROTOCOL: &str = "synara-media";
+const INVITE_AVATAR_MAX_BYTES: usize = 1_048_576;
+
+fn invite_avatar_response(
+    status: tauri::http::StatusCode,
+    body: Vec<u8>,
+    content_type: Option<&'static str>,
+) -> tauri::http::Response<Vec<u8>> {
+    let mut builder = tauri::http::Response::builder()
+        .status(status)
+        .header(tauri::http::header::CACHE_CONTROL, "no-store")
+        .header(tauri::http::header::X_CONTENT_TYPE_OPTIONS, "nosniff");
+    if let Some(content_type) = content_type {
+        builder = builder.header(tauri::http::header::CONTENT_TYPE, content_type);
+    }
+    builder
+        .body(body)
+        .expect("fixed invite avatar response headers are valid")
+}
+
+fn invite_avatar_content_type(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some("image/png")
+    } else if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
+        Some("image/jpeg")
+    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        Some("image/gif")
+    } else if bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        Some("image/webp")
+    } else if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" && &bytes[8..12] == b"avif" {
+        Some("image/avif")
+    } else {
+        None
+    }
+}
+
+fn register_invite_avatar_protocol<R: tauri::Runtime>(
+    builder: tauri::Builder<R>,
+) -> tauri::Builder<R> {
+    builder.register_asynchronous_uri_scheme_protocol(
+        INVITE_AVATAR_PROTOCOL,
+        |context, request, responder| {
+            if context.webview_label() != desktop::MAIN_WINDOW_LABEL
+                || request.method() != tauri::http::Method::GET
+                || request.uri().query().is_some()
+            {
+                responder.respond(invite_avatar_response(
+                    tauri::http::StatusCode::NOT_FOUND,
+                    Vec::new(),
+                    None,
+                ));
+                return;
+            }
+            let Some(handle) = request.uri().path().strip_prefix('/') else {
+                responder.respond(invite_avatar_response(
+                    tauri::http::StatusCode::NOT_FOUND,
+                    Vec::new(),
+                    None,
+                ));
+                return;
+            };
+            if handle.len() != 64 || !handle.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                responder.respond(invite_avatar_response(
+                    tauri::http::StatusCode::NOT_FOUND,
+                    Vec::new(),
+                    None,
+                ));
+                return;
+            }
+
+            let app = context.app_handle().clone();
+            let handle = handle.to_owned();
+            tauri::async_runtime::spawn(async move {
+                let state = app.state::<matrix::auth::MatrixAuthState>();
+                let Some((client, source)) = state.resolve_invite_avatar(&handle).await else {
+                    responder.respond(invite_avatar_response(
+                        tauri::http::StatusCode::NOT_FOUND,
+                        Vec::new(),
+                        None,
+                    ));
+                    return;
+                };
+                let request = matrix_sdk::media::MediaRequestParameters {
+                    source: matrix_sdk::ruma::events::room::MediaSource::Plain(source.mxc_uri),
+                    format: matrix_sdk::media::MediaFormat::Thumbnail(
+                        matrix_sdk::media::MediaThumbnailSettings::new(
+                            matrix_sdk::ruma::UInt::from(96_u8),
+                            matrix_sdk::ruma::UInt::from(96_u8),
+                        ),
+                    ),
+                };
+                let Ok(bytes) = client.media().get_media_content(&request, false).await else {
+                    responder.respond(invite_avatar_response(
+                        tauri::http::StatusCode::NOT_FOUND,
+                        Vec::new(),
+                        None,
+                    ));
+                    return;
+                };
+                let Some(content_type) = (bytes.len() <= INVITE_AVATAR_MAX_BYTES)
+                    .then(|| invite_avatar_content_type(&bytes))
+                    .flatten()
+                else {
+                    responder.respond(invite_avatar_response(
+                        tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                        Vec::new(),
+                        None,
+                    ));
+                    return;
+                };
+                responder.respond(invite_avatar_response(
+                    tauri::http::StatusCode::OK,
+                    bytes,
+                    Some(content_type),
+                ));
+            });
+        },
+    )
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct NativeFileDropPayload {
@@ -119,7 +239,7 @@ pub fn run() {
     let updater_configured = updater_plugin_configured(&context);
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let updater_configured = false;
-    let mut builder = tauri::Builder::default()
+    let mut builder = register_invite_avatar_protocol(tauri::Builder::default())
         .manage(matrix::auth::MatrixAuthState::new())
         .plugin(tauri_plugin_localhost::Builder::new(port).build())
         .plugin(tauri_plugin_window_state::Builder::default().build())
@@ -192,6 +312,11 @@ pub fn run() {
             matrix::auth::product::matrix_device_delete_password,
             matrix::auth::product::matrix_device_delete_cancel,
             matrix::auth::product::matrix_room_list_snapshot,
+            matrix::auth::product::matrix_invites_snapshot,
+            matrix::auth::product::matrix_invites_accept,
+            matrix::auth::product::matrix_invites_decline,
+            matrix::auth::product::matrix_invites_report_spam,
+            matrix::auth::product::matrix_invites_block_sender,
             matrix::auth::product::matrix_timeline_open,
             matrix::auth::product::matrix_timeline_snapshot,
             matrix::auth::product::matrix_timeline_paginate,
