@@ -50,6 +50,8 @@ const TEST_PATH_MARKERS = [
   "/__tests__/",
   "/tests.rs",
   "contract_tests.rs",
+  // Opt-in disposable-Synapse live proofs are #[cfg(test)] modules only.
+  "_synapse_proof.rs",
   ".test.ts",
   ".test.tsx",
   ".test.js",
@@ -290,7 +292,8 @@ const RAW_MATRIX_HTTP_PATTERNS = [
 /** Construction APIs allowed only under `matrix/client_builder/` (P2.3). */
 const CLIENT_BUILDER_ONLY_PATTERNS = [
   /\bClient\s*::\s*builder\b/,
-  /\bClient\s*::\s*new\b/,
+  // Exclude HTTP helpers such as reqwest::Client::new().
+  /(?<!reqwest::)\bClient\s*::\s*new\b/,
 ];
 
 /**
