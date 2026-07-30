@@ -289,7 +289,7 @@ function aggregateGateError(jobLines, expectedName, expectedNeeds) {
 }
 
 /**
- * CI quality gate after path filters: needs include `changes` plus the three
+ * CI quality gate after path filters: needs include `changes` plus the four
  * heavy jobs. `changes` must be success; heavy jobs may be success or skipped.
  */
 function pathFilteredCiAggregateError(jobLines) {
@@ -305,6 +305,7 @@ function pathFilteredCiAggregateError(jobLines) {
     "validate",
     "ios-tests",
     "synapse-integration",
+    "synapse-native-reactions",
   ];
   if (!sameList(getList(jobLines, "needs", 4), expectedNeeds)) {
     return `job needs must be exactly [${expectedNeeds.join(", ")}]`;
@@ -324,7 +325,18 @@ function pathFilteredCiAggregateError(jobLines) {
     const synapseVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.synapse-integration.result }}"
     )?.[0];
-    if (!changesVar || !desktopVar || !iosVar || !synapseVar) continue;
+    const synapseNativeReactionsVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.synapse-native-reactions.result }}"
+    )?.[0];
+    if (
+      !changesVar ||
+      !desktopVar ||
+      !iosVar ||
+      !synapseVar ||
+      !synapseNativeReactionsVar
+    ) {
+      continue;
+    }
 
     const runLines = executableLines(getStepRun(step));
     const runText = runLines.join("\n");
@@ -348,7 +360,8 @@ function pathFilteredCiAggregateError(jobLines) {
     if (
       !runText.includes(`"$${desktopVar}"`) ||
       !runText.includes(`"$${iosVar}"`) ||
-      !runText.includes(`"$${synapseVar}"`)
+      !runText.includes(`"$${synapseVar}"`) ||
+      !runText.includes(`"$${synapseNativeReactionsVar}"`)
     ) {
       continue;
     }
