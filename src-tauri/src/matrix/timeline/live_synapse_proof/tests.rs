@@ -28,8 +28,7 @@ use crate::matrix::auth::{login_with_password, LoginOptions};
 use crate::matrix::client_builder::{build_unauthenticated_client, ClientBuildConfig};
 use crate::matrix::store::{AccountIdentity, StoreKeyMaterial};
 use crate::matrix::timeline::live::{
-    NativeReactionMutation, NativeTimelineDirection, NativeTimelineReaction,
-    NativeTimelineRegistry,
+    NativeReactionMutation, NativeTimelineDirection, NativeTimelineReaction, NativeTimelineRegistry,
 };
 
 type HmacSha1 = Hmac<Sha1>;
