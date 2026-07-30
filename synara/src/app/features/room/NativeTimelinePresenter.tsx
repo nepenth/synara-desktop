@@ -1,10 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Box, Button, Scroll, Text, config } from 'folds';
-import {
-  type NativeTimelineViewRow,
-  useNativeTimelineView,
-} from './nativeTimelineView';
+import { type NativeTimelineViewRow, useNativeTimelineView } from './nativeTimelineView';
 
 type NativeTimelinePresenterProps = {
   roomId: string;
@@ -47,13 +44,19 @@ const findAnchorIndex = (
   rows: NativeTimelineViewRow[],
   anchor: Pick<NonNullable<NativeTimelineViewport['anchor']>, 'itemId' | 'eventId'>
 ): number =>
-  rows.findIndex((row) => rowKey(row) === anchor.itemId || (anchor.eventId && rowEventId(row) === anchor.eventId));
+  rows.findIndex(
+    (row) => rowKey(row) === anchor.itemId || (anchor.eventId && rowEventId(row) === anchor.eventId)
+  );
 
 const NativeTimelineRow = ({ row }: { row: NativeTimelineViewRow }) => {
   switch (row.kind) {
     case 'message':
       return (
-        <Box direction="Column" gap="100" style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
+        <Box
+          direction="Column"
+          gap="100"
+          style={{ padding: `${config.space.S200} ${config.space.S400}` }}
+        >
           <Text size="L400">{row.senderName}</Text>
           <Text size="T400" style={{ whiteSpace: 'pre-wrap' }}>
             {row.body}
@@ -69,7 +72,11 @@ const NativeTimelineRow = ({ row }: { row: NativeTimelineViewRow }) => {
       );
     case 'poll':
       return (
-        <Box direction="Column" gap="100" style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
+        <Box
+          direction="Column"
+          gap="100"
+          style={{ padding: `${config.space.S200} ${config.space.S400}` }}
+        >
           <Text size="L400">{row.question}</Text>
           <Text size="T300">{row.closed ? 'Poll closed' : 'Poll open'}</Text>
         </Box>
@@ -115,7 +122,9 @@ const NativeTimelineRow = ({ row }: { row: NativeTimelineViewRow }) => {
     case 'sticker':
       return (
         <Box style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
-          <Text size="T300">Sticker media is unavailable until the native media resolver is ready.</Text>
+          <Text size="T300">
+            Sticker media is unavailable until the native media resolver is ready.
+          </Text>
         </Box>
       );
     case 'pagination':
@@ -154,18 +163,26 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     [eventId, openingViewport, roomId]
   );
   const controller = useNativeTimelineView(input);
+  const timelineState = controller.state;
+  const readyState = timelineState.status === 'ready' ? timelineState : undefined;
   const [actionError, setActionError] = useState<string>();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const rows = controller.state.status === 'ready' ? controller.state.snapshot.rows : [];
+  const rows = readyState?.snapshot.rows ?? [];
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: rows.length,
     getScrollElement: useCallback(() => scrollRef.current, []),
-    getItemKey: useCallback((index) => rowKey(rows[index]), [rows]),
+    getItemKey: useCallback(
+      (index: number) => {
+        const row = rows[index];
+        return row ? rowKey(row) : index;
+      },
+      [rows]
+    ),
     estimateSize: useCallback(() => 64, []),
     overscan: 8,
   });
 
-  const initialPlacementRef = useRef<string>();
+  const initialPlacementRef = useRef<string | undefined>(undefined);
   const saveViewport = useCallback(() => {
     const scrollEl = scrollRef.current;
     if (!scrollEl || rows.length === 0) return;
@@ -174,9 +191,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       setNativeTimelineViewport(roomId, { atBottom: true });
       return;
     }
-    const visible = virtualizer
-      .getVirtualItems()
-      .find((item) => item.end > scrollEl.scrollTop);
+    const visible = virtualizer.getVirtualItems().find((item) => item.end > scrollEl.scrollTop);
     const row = visible ? rows[visible.index] : undefined;
     if (!visible || !row) return;
     setNativeTimelineViewport(roomId, {
@@ -190,7 +205,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   }, [roomId, rows, virtualizer]);
 
   useEffect(() => {
-    if (controller.state.status !== 'ready') return undefined;
+    if (!readyState) return undefined;
     const scrollEl = scrollRef.current;
     if (!scrollEl) return undefined;
     const onScroll = () => saveViewport();
@@ -200,20 +215,22 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       scrollEl.removeEventListener('scroll', onScroll);
       saveViewport();
     };
-  }, [controller.state.status, controller.state.status === 'ready' ? controller.state.snapshot.revision : undefined, saveViewport]);
+  }, [readyState, saveViewport]);
 
   useLayoutEffect(() => {
-    if (controller.state.status !== 'ready' || rows.length === 0) return undefined;
-    const { snapshot, selectedPosition } = controller.state;
+    if (!readyState || rows.length === 0) return undefined;
+    const { snapshot, selectedPosition } = readyState;
     const selectedAnchor =
       selectedPosition.kind === 'focused'
         ? { eventId: selectedPosition.target_event_id, itemId: selectedPosition.target_event_id }
         : selectedPosition.kind === 'unread'
-          ? { eventId: selectedPosition.anchor_event_id, itemId: selectedPosition.anchor_event_id }
-          : selectedPosition.kind === 'restored' && selectedPosition.anchor_event_id
-            ? { eventId: selectedPosition.anchor_event_id, itemId: selectedPosition.anchor_event_id }
-            : undefined;
-    const placementKey = `${roomId}:${snapshot.sessionGeneration}:${selectedPosition.kind}:${selectedAnchor?.eventId ?? ''}`;
+        ? { eventId: selectedPosition.anchor_event_id, itemId: selectedPosition.anchor_event_id }
+        : selectedPosition.kind === 'restored' && selectedPosition.anchor_event_id
+        ? { eventId: selectedPosition.anchor_event_id, itemId: selectedPosition.anchor_event_id }
+        : undefined;
+    const placementKey = `${roomId}:${snapshot.sessionGeneration}:${selectedPosition.kind}:${
+      selectedAnchor?.eventId ?? ''
+    }`;
     const initialPlacement = initialPlacementRef.current !== placementKey;
     const savedViewport = nativeTimelineViewports.get(roomId);
     const anchor = initialPlacement && selectedAnchor ? selectedAnchor : savedViewport?.anchor;
@@ -222,7 +239,8 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       virtualizer.scrollToIndex(rows.length - 1, { align: 'end', behavior: 'auto' });
     } else if (anchorIndex >= 0) {
       virtualizer.scrollToIndex(anchorIndex, { align: 'start', behavior: 'auto' });
-      const offsetPx = initialPlacement && selectedAnchor ? 0 : savedViewport?.anchor?.offsetPx ?? 0;
+      const offsetPx =
+        initialPlacement && selectedAnchor ? 0 : savedViewport?.anchor?.offsetPx ?? 0;
       const animationFrame = window.requestAnimationFrame(() => {
         if (scrollRef.current && offsetPx !== 0) scrollRef.current.scrollTop += offsetPx;
       });
@@ -231,22 +249,18 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     }
     initialPlacementRef.current = placementKey;
     return undefined;
-  }, [
-    controller.state,
-    roomId,
-    rows,
-    virtualizer,
-  ]);
+  }, [readyState, roomId, rows, virtualizer]);
 
-  if (controller.state.status === 'unavailable') return null;
-  if (controller.state.status === 'loading') {
+  if (timelineState.status === 'unavailable') return null;
+  if (timelineState.status === 'loading') {
     return <Text size="T300">Opening native timeline…</Text>;
   }
-  if (controller.state.status === 'error') {
-    return <Text size="T300">{controller.state.error.message}</Text>;
+  if (timelineState.status === 'error') {
+    return <Text size="T300">{timelineState.error.message}</Text>;
   }
 
-  const { snapshot } = controller.state;
+  if (!readyState) return null;
+  const { snapshot } = readyState;
   const runAction = (action: () => Promise<void>) => {
     setActionError(undefined);
     void action().catch((error) => {
@@ -263,7 +277,10 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
           </Button>
         )}
         {snapshot.capabilities.markUnread && (
-          <Button size="300" onClick={() => runAction(() => controller.setReadState('mark_unread'))}>
+          <Button
+            size="300"
+            onClick={() => runAction(() => controller.setReadState('mark_unread'))}
+          >
             Mark unread
           </Button>
         )}
