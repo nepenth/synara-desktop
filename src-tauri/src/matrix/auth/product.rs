@@ -74,6 +74,7 @@ use crate::matrix::timeline::{
     NativeReactionMutationResult, NativeTimelineDirection, NativeTimelineEventReadback,
     NativeTimelineRegistry, NativeTimelineSnapshot,
 };
+use crate::matrix::account_data::{snapshot_mdirect, NativeMDirectSnapshot};
 use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
 use crate::matrix::verification::live::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
@@ -1084,6 +1085,17 @@ pub async fn matrix_space_parents_snapshot(
 }
 
 #[tauri::command]
+pub async fn matrix_mdirect_snapshot(
+    state: State<'_, MatrixAuthState>,
+) -> Result<NativeMDirectSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    snapshot_mdirect(&active.client, active.sync.session_generation())
+        .await
+        .map_err(map_mdirect_error)
+}
+
+#[tauri::command]
 pub async fn matrix_typing_snapshot(
     state: State<'_, MatrixAuthState>,
 ) -> Result<NativeTypingSnapshot, MatrixAuthCommandError> {
@@ -1835,6 +1847,14 @@ fn map_space_parents_error(diagnostic_id: &'static str) -> MatrixAuthCommandErro
     MatrixAuthCommandError::new(
         "Unknown",
         "The native Matrix space parent map is unavailable.",
+        diagnostic_id,
+    )
+}
+
+fn map_mdirect_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "Unknown",
+        "The native Matrix direct-room map is unavailable.",
         diagnostic_id,
     )
 }
