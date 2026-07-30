@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Box, Button, Scroll, Text, config } from 'folds';
 import {
@@ -11,6 +11,27 @@ type NativeTimelinePresenterProps = {
   eventId?: string;
 };
 
+type NativeTimelineViewport = {
+  atBottom: boolean;
+  anchor?: {
+    itemId: string;
+    eventId?: string;
+    offsetPx: number;
+  };
+};
+
+const NATIVE_TIMELINE_VIEWPORT_LIMIT = 100;
+const nativeTimelineViewports = new Map<string, NativeTimelineViewport>();
+
+const setNativeTimelineViewport = (roomId: string, viewport: NativeTimelineViewport) => {
+  nativeTimelineViewports.delete(roomId);
+  nativeTimelineViewports.set(roomId, viewport);
+  if (nativeTimelineViewports.size > NATIVE_TIMELINE_VIEWPORT_LIMIT) {
+    const oldestRoomId = nativeTimelineViewports.keys().next().value;
+    if (oldestRoomId) nativeTimelineViewports.delete(oldestRoomId);
+  }
+};
+
 const rowKey = (row: NativeTimelineViewRow): string => {
   if (row.kind === 'sticker') return row.event.itemId;
   return row.itemId;
@@ -21,6 +42,12 @@ const rowEventId = (row: NativeTimelineViewRow): string | undefined => {
   if ('eventId' in row) return row.eventId;
   return undefined;
 };
+
+const findAnchorIndex = (
+  rows: NativeTimelineViewRow[],
+  anchor: Pick<NonNullable<NativeTimelineViewport['anchor']>, 'itemId' | 'eventId'>
+): number =>
+  rows.findIndex((row) => rowKey(row) === anchor.itemId || (anchor.eventId && rowEventId(row) === anchor.eventId));
 
 const NativeTimelineRow = ({ row }: { row: NativeTimelineViewRow }) => {
   switch (row.kind) {
@@ -108,12 +135,23 @@ const NativeTimelineRow = ({ row }: { row: NativeTimelineViewRow }) => {
  * media, and viewport paths are incomplete; it is not a legacy fallback.
  */
 export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePresenterProps) {
+  const openingViewport = useMemo(
+    () => (eventId ? undefined : nativeTimelineViewports.get(roomId)),
+    [eventId, roomId]
+  );
   const input = useMemo(
     () => ({
       roomId,
-      position: eventId ? ({ kind: 'focused', eventId } as const) : ({ kind: 'live_bottom' } as const),
+      position: eventId
+        ? ({ kind: 'focused', eventId } as const)
+        : ({
+            kind: 'normal',
+            restoredAnchorEventId: openingViewport?.atBottom
+              ? undefined
+              : openingViewport?.anchor?.eventId,
+          } as const),
     }),
-    [eventId, roomId]
+    [eventId, openingViewport, roomId]
   );
   const controller = useNativeTimelineView(input);
   const [actionError, setActionError] = useState<string>();
@@ -126,6 +164,79 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     estimateSize: useCallback(() => 64, []),
     overscan: 8,
   });
+
+  const initialPlacementRef = useRef<string>();
+  const saveViewport = useCallback(() => {
+    const scrollEl = scrollRef.current;
+    if (!scrollEl || rows.length === 0) return;
+    const atBottom = scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 8;
+    if (atBottom) {
+      setNativeTimelineViewport(roomId, { atBottom: true });
+      return;
+    }
+    const visible = virtualizer
+      .getVirtualItems()
+      .find((item) => item.end > scrollEl.scrollTop);
+    const row = visible ? rows[visible.index] : undefined;
+    if (!visible || !row) return;
+    setNativeTimelineViewport(roomId, {
+      atBottom: false,
+      anchor: {
+        itemId: rowKey(row),
+        eventId: rowEventId(row),
+        offsetPx: scrollEl.scrollTop - visible.start,
+      },
+    });
+  }, [roomId, rows, virtualizer]);
+
+  useEffect(() => {
+    if (controller.state.status !== 'ready') return undefined;
+    const scrollEl = scrollRef.current;
+    if (!scrollEl) return undefined;
+    const onScroll = () => saveViewport();
+    scrollEl.addEventListener('scroll', onScroll, { passive: true });
+    saveViewport();
+    return () => {
+      scrollEl.removeEventListener('scroll', onScroll);
+      saveViewport();
+    };
+  }, [controller.state.status, controller.state.status === 'ready' ? controller.state.snapshot.revision : undefined, saveViewport]);
+
+  useLayoutEffect(() => {
+    if (controller.state.status !== 'ready' || rows.length === 0) return undefined;
+    const { snapshot, selectedPosition } = controller.state;
+    const selectedAnchor =
+      selectedPosition.kind === 'focused'
+        ? { eventId: selectedPosition.target_event_id, itemId: selectedPosition.target_event_id }
+        : selectedPosition.kind === 'unread'
+          ? { eventId: selectedPosition.anchor_event_id, itemId: selectedPosition.anchor_event_id }
+          : selectedPosition.kind === 'restored' && selectedPosition.anchor_event_id
+            ? { eventId: selectedPosition.anchor_event_id, itemId: selectedPosition.anchor_event_id }
+            : undefined;
+    const placementKey = `${roomId}:${snapshot.sessionGeneration}:${selectedPosition.kind}:${selectedAnchor?.eventId ?? ''}`;
+    const initialPlacement = initialPlacementRef.current !== placementKey;
+    const savedViewport = nativeTimelineViewports.get(roomId);
+    const anchor = initialPlacement && selectedAnchor ? selectedAnchor : savedViewport?.anchor;
+    const anchorIndex = anchor ? findAnchorIndex(rows, anchor) : -1;
+    if (selectedPosition.kind === 'live_bottom' || (initialPlacement && savedViewport?.atBottom)) {
+      virtualizer.scrollToIndex(rows.length - 1, { align: 'end', behavior: 'auto' });
+    } else if (anchorIndex >= 0) {
+      virtualizer.scrollToIndex(anchorIndex, { align: 'start', behavior: 'auto' });
+      const offsetPx = initialPlacement && selectedAnchor ? 0 : savedViewport?.anchor?.offsetPx ?? 0;
+      const animationFrame = window.requestAnimationFrame(() => {
+        if (scrollRef.current && offsetPx !== 0) scrollRef.current.scrollTop += offsetPx;
+      });
+      initialPlacementRef.current = placementKey;
+      return () => window.cancelAnimationFrame(animationFrame);
+    }
+    initialPlacementRef.current = placementKey;
+    return undefined;
+  }, [
+    controller.state,
+    roomId,
+    rows,
+    virtualizer,
+  ]);
 
   if (controller.state.status === 'unavailable') return null;
   if (controller.state.status === 'loading') {

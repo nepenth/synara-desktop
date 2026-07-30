@@ -58,15 +58,21 @@ pub const NATIVE_TIMELINE_OPEN_SCHEMA_VERSION: u32 = 1;
 
 /// Requested initial position for one native timeline view.
 ///
-/// Restored-viewport positions deliberately remain unimplemented until their
-/// native viewport contract is ready. Unread opens resolve the native
-/// fully-read frontier and must not be silently treated as live-bottom.
+/// `Normal` is the native owner route for an ordinary room open. It resolves
+/// shared unread state before considering the optional, UI-held restore hint;
+/// the hint is neither sync state nor a server-side viewport command.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum NativeTimelineOpenPosition {
+    Normal {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        restored_anchor_event_id: Option<String>,
+    },
     LiveBottom,
     Unread,
-    Focused { event_id: String },
+    Focused {
+        event_id: String,
+    },
 }
 
 /// Typed input for the native timeline-open owner.
@@ -86,7 +92,9 @@ pub struct NativeTimelineOpenReadback {
     pub schema_version: u32,
     /// Opaque identifier carried by every delta from this exact opened view.
     pub stream_id: String,
-    pub position: NativeTimelineOpenPosition,
+    /// Native-selected placement after resolving the request. In particular,
+    /// a normal open can select unread, restored, or live-bottom placement.
+    pub position: TimelineViewPosition,
     pub snapshot: TimelineViewSnapshot,
 }
 
@@ -315,8 +323,94 @@ impl NativeTimelineRegistry {
     ) -> Result<NativeTimelineOpenReadback, &'static str> {
         let room_id = parse_room_id(&request.room_id)?;
         let room_id_string = room_id.to_string();
-        let position = request.position;
-        let (timeline, view_position, pagination) = match &position {
+        let requested_position = request.position;
+        let (timeline, view_position, pagination) = match &requested_position {
+            NativeTimelineOpenPosition::Normal {
+                restored_anchor_event_id,
+            } => {
+                let room = client
+                    .get_room(&room_id)
+                    .ok_or("v-timeline-normal-room-not-found")?;
+                let has_unread = room.is_marked_unread()
+                    || room.num_unread_messages() > 0
+                    || room.num_unread_notifications() > 0
+                    || room.num_unread_mentions() > 0;
+                let selected_position = resolve_normal_open_position(
+                    has_unread,
+                    room.fully_read_event_id()
+                        .map(|event_id| event_id.to_string()),
+                    restored_anchor_event_id.as_deref(),
+                )?;
+                match selected_position {
+                    TimelineViewPosition::LiveBottom => {
+                        self.open(client, &room_id_string).await?;
+                        let entry = self
+                            .entries
+                            .get(&room_id_string)
+                            .expect("live timeline inserted by open");
+                        (
+                            entry.timeline.clone(),
+                            TimelineViewPosition::LiveBottom,
+                            TimelinePaginationState {
+                                backward: if entry.hit_start {
+                                    TimelinePageState::Exhausted
+                                } else {
+                                    TimelinePageState::Available
+                                },
+                                forward: TimelinePageState::Available,
+                            },
+                        )
+                    }
+                    TimelineViewPosition::Unread {
+                        ref anchor_event_id,
+                    }
+                    | TimelineViewPosition::Restored {
+                        anchor_event_id: Some(ref anchor_event_id),
+                    } => {
+                        let event_id = parse_event_id(anchor_event_id)
+                            .map_err(|_| "v-timeline-normal-anchor-invalid")?;
+                        let key = (room_id_string.clone(), event_id.to_string());
+                        if !self.focused_entries.contains_key(&key) {
+                            if self.focused_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
+                                if let Some(oldest_key) =
+                                    self.focused_entries.keys().next().cloned()
+                                {
+                                    self.focused_entries.remove(&oldest_key);
+                                }
+                            }
+                            let timeline = TimelineBuilder::new(&room)
+                                .with_focus(TimelineFocus::Event {
+                                    target: event_id.clone(),
+                                    num_context_events: FOCUSED_CONTEXT_EVENT_COUNT,
+                                    thread_mode: TimelineEventFocusThreadMode::Automatic {
+                                        hide_threaded_events: false,
+                                    },
+                                })
+                                .build()
+                                .await
+                                .map_err(|_| "v-timeline-normal-open-failed")?;
+                            self.focused_entries.insert(key.clone(), Arc::new(timeline));
+                        }
+                        let timeline = self
+                            .focused_entries
+                            .get(&key)
+                            .expect("normal focused timeline present")
+                            .clone();
+                        (
+                            timeline,
+                            selected_position,
+                            TimelinePaginationState {
+                                backward: TimelinePageState::Available,
+                                forward: TimelinePageState::Available,
+                            },
+                        )
+                    }
+                    TimelineViewPosition::Focused { .. }
+                    | TimelineViewPosition::Restored {
+                        anchor_event_id: None,
+                    } => unreachable!("normal open only selects live, unread, or anchored restore"),
+                }
+            }
             NativeTimelineOpenPosition::LiveBottom => {
                 self.open(client, &room_id_string).await?;
                 let entry = self
@@ -429,7 +523,7 @@ impl NativeTimelineRegistry {
             }
         };
         let own_user_id = client.user_id().map(ToOwned::to_owned);
-        let subscription_key = view_subscription_key(&room_id_string, &position);
+        let subscription_key = view_subscription_key(&room_id_string, &view_position);
         let revision = self
             .view_revisions
             .entry(subscription_key.clone())
@@ -447,8 +541,8 @@ impl NativeTimelineRegistry {
             view_snapshot_from_timeline(
                 self.session_generation,
                 room_id_string.clone(),
-                view_position,
-                pagination,
+                view_position.clone(),
+                pagination.clone(),
                 &timeline,
                 own_user_id,
                 revision.load(Ordering::Acquire),
@@ -462,7 +556,7 @@ impl NativeTimelineRegistry {
                 TimelineViewSnapshotInput {
                     session_generation: self.session_generation,
                     room_id: room_id_string.clone(),
-                    position: view_position,
+                    position: view_position.clone(),
                     pagination,
                     own_user_id: own_user_id.clone(),
                     revision: revision.load(Ordering::Acquire),
@@ -491,7 +585,7 @@ impl NativeTimelineRegistry {
         Ok(NativeTimelineOpenReadback {
             schema_version: NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
             stream_id: subscription_key,
-            position,
+            position: view_position,
             snapshot,
         })
     }
@@ -1484,11 +1578,67 @@ mod tests {
     }
 
     #[test]
+    fn normal_open_request_keeps_the_ui_restore_hint_typed_at_the_native_boundary() {
+        let request: NativeTimelineOpenRequest = serde_json::from_value(serde_json::json!({
+            "roomId": "!room:example.org",
+            "position": {
+                "kind": "normal",
+                "restored_anchor_event_id": "$restore:example.org"
+            }
+        }))
+        .unwrap();
+        assert_eq!(
+            request.position,
+            NativeTimelineOpenPosition::Normal {
+                restored_anchor_event_id: Some("$restore:example.org".into()),
+            }
+        );
+    }
+
+    #[test]
+    fn normal_open_prefers_native_unread_frontier_over_a_restored_anchor() {
+        let selected = resolve_normal_open_position(
+            true,
+            Some("$fully-read:example.org".into()),
+            Some("$restored:example.org"),
+        )
+        .unwrap();
+        assert_eq!(
+            selected,
+            TimelineViewPosition::Unread {
+                anchor_event_id: "$fully-read:example.org".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn normal_open_uses_a_validated_restored_anchor_only_when_no_unread_frontier_exists() {
+        assert_eq!(
+            resolve_normal_open_position(false, None, Some("$restored:example.org")).unwrap(),
+            TimelineViewPosition::Restored {
+                anchor_event_id: Some("$restored:example.org".into()),
+            }
+        );
+        assert_eq!(
+            resolve_normal_open_position(false, None, Some("not-an-event")).unwrap(),
+            TimelineViewPosition::LiveBottom
+        );
+    }
+
+    #[test]
+    fn normal_open_rejects_unread_without_a_native_frontier() {
+        assert_eq!(
+            resolve_normal_open_position(true, None, Some("$restored:example.org")),
+            Err("v-timeline-normal-unread-frontier-unavailable")
+        );
+    }
+
+    #[test]
     fn typed_open_readback_uses_the_versioned_view_boundary() {
         let readback = NativeTimelineOpenReadback {
             schema_version: NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
             stream_id: "live:!room:example.org".into(),
-            position: NativeTimelineOpenPosition::LiveBottom,
+            position: TimelineViewPosition::LiveBottom,
             snapshot: TimelineViewSnapshot {
                 schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
                 session_generation: 7,
@@ -1520,25 +1670,31 @@ mod tests {
         assert!(snapshot.get("isEncrypted").is_none());
         assert!(snapshot.get("items").is_none());
         assert_eq!(snapshot["readState"]["isMarkedUnread"], false);
+        assert_eq!(json["position"]["kind"], "live_bottom");
     }
 
     #[test]
     fn view_subscription_keys_keep_focuses_isolated_from_live_timeline() {
         assert_eq!(
-            view_subscription_key("!room:example.org", &NativeTimelineOpenPosition::LiveBottom),
+            view_subscription_key("!room:example.org", &TimelineViewPosition::LiveBottom),
             "live:!room:example.org"
         );
         assert_eq!(
             view_subscription_key(
                 "!room:example.org",
-                &NativeTimelineOpenPosition::Focused {
-                    event_id: "$one:example.org".into()
+                &TimelineViewPosition::Focused {
+                    target_event_id: "$one:example.org".into()
                 }
             ),
             "focused:!room:example.org:$one:example.org"
         );
         assert_eq!(
-            view_subscription_key("!room:example.org", &NativeTimelineOpenPosition::Unread),
+            view_subscription_key(
+                "!room:example.org",
+                &TimelineViewPosition::Unread {
+                    anchor_event_id: "$one:example.org".into(),
+                }
+            ),
             "unread:!room:example.org"
         );
     }
