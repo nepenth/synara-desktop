@@ -93,9 +93,11 @@ The managed SDK timeline now also owns an ordered subscription from the same
 pre-snapshot boundary and emits `matrix-timeline-view-updated` batches. Each
 batch contains only the versioned product row operations and a monotonic native
 revision plus the exact opaque stream ID returned by the open readback; it is
-aborted with the session timeline registry. No React listener exists yet, so
-this establishes the live-update owner without activating a partial presenter.
-The initial unread/read-frontier open is native-owned; live read-frontier
+aborted with the session timeline registry. The unselected renderer-side
+bridge registers its event listener before `matrix_timeline_open`, keeps only
+the exact returned stream, and rejects revision gaps or malformed operations
+rather than fetching through the JS timeline. It is not an active presenter or
+a fallback route. The initial unread/read-frontier open is native-owned; live read-frontier
 updates, pagination-state changes, and viewport restoration still need their
 corresponding owner signals before final cutover.
 
