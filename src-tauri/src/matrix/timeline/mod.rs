@@ -58,6 +58,9 @@ pub use live::{
     NativeTimelineReadStateRequest,
     NativeTimelineCloseRequest,
     NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
+    NativeTimelineJumpLatestRequest,
+    NativeTimelineViewportHint,
+    NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
 };
 pub use media::{
     is_timeline_media_handle, TimelineMediaRegistry, TimelineMediaSource,

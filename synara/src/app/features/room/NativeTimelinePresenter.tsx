@@ -312,6 +312,11 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
             Mark unread
           </Button>
         )}
+        {snapshot.position.kind !== 'live_bottom' && (
+          <Button size="300" onClick={() => runAction(() => controller.jumpLatest())}>
+            Jump to latest
+          </Button>
+        )}
       </Box>
       {actionError && <Text size="T300">{actionError}</Text>}
       {snapshot.capabilities.paginateBackward && snapshot.pagination.backward !== 'exhausted' && (

@@ -179,6 +179,7 @@ export type NativeTimelineViewController = {
   state: NativeTimelineViewState;
   paginate: (direction: 'backwards' | 'forwards') => Promise<void>;
   setReadState: (action: 'mark_read' | 'mark_unread') => Promise<void>;
+  jumpLatest: () => Promise<void>;
 };
 
 type NativeTimelineReadStateReadback = {
@@ -258,7 +259,13 @@ export const applyNativeTimelineViewDelta = (
 export type NativeTimelineOpenInput = {
   roomId: string;
   position:
-    | { kind: 'normal'; restoredAnchorEventId?: string }
+    | {
+        kind: 'normal';
+        restoredAnchorEventId?: string;
+        atBottom?: boolean;
+        liveTailEventId?: string;
+        updatedAtMs?: number;
+      }
     | { kind: 'live_bottom' }
     | { kind: 'unread' }
     | { kind: 'focused'; eventId: string };
@@ -272,7 +279,13 @@ const toNativeTimelineOpenRequest = (input: NativeTimelineOpenInput) => {
       position.kind === 'focused'
         ? { kind: 'focused' as const, event_id: position.eventId }
         : position.kind === 'normal'
-        ? { kind: 'normal' as const, restored_anchor_event_id: position.restoredAnchorEventId }
+        ? {
+            kind: 'normal' as const,
+            restored_anchor_event_id: position.restoredAnchorEventId,
+            at_bottom: Boolean(position.atBottom),
+            live_tail_event_id: position.liveTailEventId,
+            updated_at_ms: position.updatedAtMs,
+          }
         : position,
   };
 };
@@ -288,8 +301,7 @@ export const useNativeTimelineView = (
   const roomId = input?.roomId;
   const positionKind = input?.position.kind;
   const focusedEventId = input?.position.kind === 'focused' ? input.position.eventId : undefined;
-  const restoredAnchorEventId =
-    input?.position.kind === 'normal' ? input.position.restoredAnchorEventId : undefined;
+  const normalPosition = input?.position.kind === 'normal' ? input.position : undefined;
   const nativeRequest = useMemo(() => {
     if (!roomId || !positionKind) return undefined;
     return toNativeTimelineOpenRequest({
@@ -298,10 +310,24 @@ export const useNativeTimelineView = (
         positionKind === 'focused' && focusedEventId
           ? { kind: 'focused', eventId: focusedEventId }
           : positionKind === 'normal'
-          ? { kind: 'normal', restoredAnchorEventId }
+          ? {
+              kind: 'normal',
+              restoredAnchorEventId: normalPosition?.restoredAnchorEventId,
+              atBottom: normalPosition?.atBottom,
+              liveTailEventId: normalPosition?.liveTailEventId,
+              updatedAtMs: normalPosition?.updatedAtMs,
+            }
           : { kind: positionKind },
     } as NativeTimelineOpenInput);
-  }, [focusedEventId, positionKind, restoredAnchorEventId, roomId]);
+  }, [
+    focusedEventId,
+    normalPosition?.atBottom,
+    normalPosition?.liveTailEventId,
+    normalPosition?.restoredAnchorEventId,
+    normalPosition?.updatedAtMs,
+    positionKind,
+    roomId,
+  ]);
   const [state, setState] = useState<NativeTimelineViewState>({ status: 'unavailable' });
   const streamIdRef = useRef<string | undefined>(undefined);
   const snapshotRef = useRef<NativeTimelineViewSnapshot | undefined>(undefined);
@@ -379,6 +405,32 @@ export const useNativeTimelineView = (
     },
     [acceptSnapshot]
   );
+
+  const jumpLatest = useCallback(async () => {
+    const streamId = streamIdRef.current;
+    if (!streamId) {
+      throw new Error('Native timeline jump-to-latest is unavailable.');
+    }
+    const result = await invokeDesktopWithAvailability<NativeTimelineOpenReadback>(
+      'matrix_timeline_jump_latest',
+      { request: { streamId } }
+    );
+    if (!result.available || !result.value) {
+      setState({
+        status: 'error',
+        error: new Error('Native timeline jump-to-latest lost synchronization.'),
+      });
+      throw new Error('Native timeline jump-to-latest lost synchronization.');
+    }
+    streamIdRef.current = result.value.streamId;
+    selectedPositionRef.current = result.value.position;
+    snapshotRef.current = result.value.snapshot;
+    setState({
+      status: 'ready',
+      snapshot: result.value.snapshot,
+      selectedPosition: result.value.position,
+    });
+  }, []);
 
   useEffect(() => {
     streamIdRef.current = undefined;
@@ -493,7 +545,7 @@ export const useNativeTimelineView = (
     };
   }, [nativeRequest]);
 
-  return { state, paginate, setReadState };
+  return { state, paginate, setReadState, jumpLatest };
 };
 
 export const nativeTimelineMediaSrc = (handle: NativeTimelineMediaHandle): string | undefined =>

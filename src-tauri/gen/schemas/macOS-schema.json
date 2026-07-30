@@ -801,6 +801,12 @@
           "markdownDescription": "Enables the matrix_timeline_event_readback command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_timeline_jump_latest command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-timeline-jump-latest",
+          "markdownDescription": "Enables the matrix_timeline_jump_latest command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_timeline_open command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-timeline-open",
@@ -1345,6 +1351,12 @@
           "type": "string",
           "const": "deny-matrix-timeline-event-readback",
           "markdownDescription": "Denies the matrix_timeline_event_readback command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_timeline_jump_latest command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-timeline-jump-latest",
+          "markdownDescription": "Denies the matrix_timeline_jump_latest command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_timeline_open command without any pre-configured scope.",

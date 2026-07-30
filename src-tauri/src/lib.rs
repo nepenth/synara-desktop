@@ -402,6 +402,7 @@ pub fn run() {
             matrix::auth::product::matrix_typing_set,
             matrix::auth::product::matrix_timeline_open,
             matrix::auth::product::matrix_timeline_close,
+            matrix::auth::product::matrix_timeline_jump_latest,
             matrix::auth::product::matrix_timeline_snapshot,
             matrix::auth::product::matrix_timeline_paginate,
             matrix::auth::product::matrix_timeline_set_read_state,

@@ -62,12 +62,25 @@ pub const NATIVE_TIMELINE_OPEN_SCHEMA_VERSION: u32 = 1;
 /// `Normal` is the native owner route for an ordinary room open. It resolves
 /// shared unread state before considering the optional, UI-held restore hint;
 /// the hint is neither sync state nor a server-side viewport command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct NativeTimelineViewportHint {
+    #[serde(default)]
+    pub at_bottom: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restored_anchor_event_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub live_tail_event_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at_ms: Option<u64>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum NativeTimelineOpenPosition {
     Normal {
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        restored_anchor_event_id: Option<String>,
+        #[serde(flatten, default)]
+        viewport: NativeTimelineViewportHint,
     },
     LiveBottom,
     Unread,
@@ -118,6 +131,13 @@ pub struct NativeTimelineViewPaginationRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineCloseRequest {
+    pub stream_id: String,
+}
+
+/// Rebind one opened view to the live bottom without a JS timeline fetch.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineJumpLatestRequest {
     pub stream_id: String,
 }
 
@@ -335,9 +355,7 @@ impl NativeTimelineRegistry {
         let room_id_string = room_id.to_string();
         let requested_position = request.position;
         let (timeline, view_position, pagination) = match &requested_position {
-            NativeTimelineOpenPosition::Normal {
-                restored_anchor_event_id,
-            } => {
+            NativeTimelineOpenPosition::Normal { viewport } => {
                 let room = client
                     .get_room(&room_id)
                     .ok_or("v-timeline-normal-room-not-found")?;
@@ -345,11 +363,22 @@ impl NativeTimelineRegistry {
                     || room.num_unread_messages() > 0
                     || room.num_unread_notifications() > 0
                     || room.num_unread_mentions() > 0;
+                // Live-tail matching for unread+at_bottom restore needs the
+                // live timeline's current tip before placement is chosen.
+                let current_live_tail = if viewport.at_bottom && has_unread {
+                    self.open(client, &room_id_string).await?;
+                    self.live_tail_event_id(&room_id_string).await
+                } else {
+                    None
+                };
+                let now_ms = unix_time_ms();
                 let selected_position = resolve_normal_open_position(
                     has_unread,
                     room.fully_read_event_id()
                         .map(|event_id| event_id.to_string()),
-                    restored_anchor_event_id.as_deref(),
+                    current_live_tail.as_deref(),
+                    now_ms,
+                    viewport,
                 )?;
                 match selected_position {
                     TimelineViewPosition::LiveBottom => {
@@ -775,6 +804,44 @@ impl NativeTimelineRegistry {
             task.abort();
         }
         removed
+    }
+
+    /// Rebind an opened stream to the live bottom and return a fresh stream
+    /// ownership packet. The previous stream is closed; the caller must adopt
+    /// the new stream id from readback.
+    pub async fn jump_latest(
+        &mut self,
+        app: AppHandle,
+        client: &Client,
+        request: NativeTimelineJumpLatestRequest,
+    ) -> Result<NativeTimelineOpenReadback, &'static str> {
+        let room_id = self
+            .view_streams
+            .get(&request.stream_id)
+            .ok_or("v-timeline-view-not-open")?
+            .room_id
+            .clone();
+        self.close_view(NativeTimelineCloseRequest {
+            stream_id: request.stream_id,
+        });
+        self.open_at(
+            app,
+            client,
+            NativeTimelineOpenRequest {
+                room_id,
+                position: NativeTimelineOpenPosition::LiveBottom,
+            },
+        )
+        .await
+    }
+
+    async fn live_tail_event_id(&self, room_id: &str) -> Option<String> {
+        let entry = self.entries.get(room_id)?;
+        let items = entry.timeline.items().await;
+        items.iter().rev().find_map(|item| {
+            item.as_event()
+                .and_then(|event| event.event_id().map(|event_id| event_id.to_string()))
+        })
     }
 
     pub async fn resolve_media(&self, handle_id: &str) -> Option<TimelineMediaSource> {
@@ -1692,14 +1759,22 @@ mod tests {
             "roomId": "!room:example.org",
             "position": {
                 "kind": "normal",
-                "restored_anchor_event_id": "$restore:example.org"
+                "restored_anchor_event_id": "$restore:example.org",
+                "at_bottom": false,
+                "live_tail_event_id": "$tail:example.org",
+                "updated_at_ms": 1_700_000_000_000_u64
             }
         }))
         .unwrap();
         assert_eq!(
             request.position,
             NativeTimelineOpenPosition::Normal {
-                restored_anchor_event_id: Some("$restore:example.org".into()),
+                viewport: NativeTimelineViewportHint {
+                    at_bottom: false,
+                    restored_anchor_event_id: Some("$restore:example.org".into()),
+                    live_tail_event_id: Some("$tail:example.org".into()),
+                    updated_at_ms: Some(1_700_000_000_000),
+                },
             }
         );
     }
@@ -1709,7 +1784,13 @@ mod tests {
         let selected = resolve_normal_open_position(
             true,
             Some("$fully-read:example.org".into()),
-            Some("$restored:example.org"),
+            None,
+            1_700_000_000_000,
+            &NativeTimelineViewportHint {
+                restored_anchor_event_id: Some("$restored:example.org".into()),
+                updated_at_ms: Some(1_700_000_000_000),
+                ..NativeTimelineViewportHint::default()
+            },
         )
         .unwrap();
         assert_eq!(
@@ -1723,13 +1804,35 @@ mod tests {
     #[test]
     fn normal_open_uses_a_validated_restored_anchor_only_when_no_unread_frontier_exists() {
         assert_eq!(
-            resolve_normal_open_position(false, None, Some("$restored:example.org")).unwrap(),
+            resolve_normal_open_position(
+                false,
+                None,
+                None,
+                1_700_000_000_000,
+                &NativeTimelineViewportHint {
+                    restored_anchor_event_id: Some("$restored:example.org".into()),
+                    updated_at_ms: Some(1_700_000_000_000),
+                    ..NativeTimelineViewportHint::default()
+                },
+            )
+            .unwrap(),
             TimelineViewPosition::Restored {
                 anchor_event_id: Some("$restored:example.org".into()),
             }
         );
         assert_eq!(
-            resolve_normal_open_position(false, None, Some("not-an-event")).unwrap(),
+            resolve_normal_open_position(
+                false,
+                None,
+                None,
+                1_700_000_000_000,
+                &NativeTimelineViewportHint {
+                    restored_anchor_event_id: Some("not-an-event".into()),
+                    updated_at_ms: Some(1_700_000_000_000),
+                    ..NativeTimelineViewportHint::default()
+                },
+            )
+            .unwrap(),
             TimelineViewPosition::LiveBottom
         );
     }
@@ -1737,9 +1840,67 @@ mod tests {
     #[test]
     fn normal_open_rejects_unread_without_a_native_frontier() {
         assert_eq!(
-            resolve_normal_open_position(true, None, Some("$restored:example.org")),
+            resolve_normal_open_position(
+                true,
+                None,
+                None,
+                1_700_000_000_000,
+                &NativeTimelineViewportHint {
+                    restored_anchor_event_id: Some("$restored:example.org".into()),
+                    updated_at_ms: Some(1_700_000_000_000),
+                    ..NativeTimelineViewportHint::default()
+                },
+            ),
             Err("v-timeline-normal-unread-frontier-unavailable")
         );
+    }
+
+    #[test]
+    fn normal_open_restores_live_bottom_when_unread_tip_still_matches() {
+        assert_eq!(
+            resolve_normal_open_position(
+                true,
+                Some("$fully-read:example.org".into()),
+                Some("$tail:example.org"),
+                1_700_000_000_000,
+                &NativeTimelineViewportHint {
+                    at_bottom: true,
+                    live_tail_event_id: Some("$tail:example.org".into()),
+                    ..NativeTimelineViewportHint::default()
+                },
+            )
+            .unwrap(),
+            TimelineViewPosition::LiveBottom
+        );
+    }
+
+    #[test]
+    fn normal_open_ignores_stale_historical_restore_hints() {
+        let now = 1_700_000_000_000_u64;
+        assert_eq!(
+            resolve_normal_open_position(
+                false,
+                None,
+                None,
+                now,
+                &NativeTimelineViewportHint {
+                    restored_anchor_event_id: Some("$restored:example.org".into()),
+                    updated_at_ms: Some(now - NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS - 1),
+                    ..NativeTimelineViewportHint::default()
+                },
+            )
+            .unwrap(),
+            TimelineViewPosition::LiveBottom
+        );
+    }
+
+    #[test]
+    fn jump_latest_request_addresses_the_exact_opened_stream() {
+        let request: NativeTimelineJumpLatestRequest = serde_json::from_value(serde_json::json!({
+            "streamId": "live:!room:example.org:1"
+        }))
+        .unwrap();
+        assert_eq!(request.stream_id, "live:!room:example.org:1");
     }
 
     #[test]
