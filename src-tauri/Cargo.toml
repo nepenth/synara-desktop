@@ -38,6 +38,7 @@ tauri-plugin-clipboard-manager = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
 url = "2"
+mime = "0.3"
 # P1.2 + P2.3: Matrix Rust SDK exact pin (program: matrix-sdk-0.18.0 @ 1c44fb66…).
 # default-features=false; approved features only (sqlite + bundled-sqlite for desktop stores).
 # matrix-sdk-ui transitively enables matrix-sdk/e2e-encryption via feature unification.
