@@ -1,15 +1,18 @@
 //! Opt-in live V-SEND.2 proof against disposable Synapse.
 //!
+//! Path marker `.../tests.rs` keeps this file outside production matrix
+//! client/sync guardrails while remaining crate-private.
+//!
 //! Gated by:
 //! - `SYNARA_RUN_MATRIX_RUST_REACTION_LIVE=1`
 //! - `SYNARA_MATRIX_HOMESERVER_URL=http://127.0.0.1:<port>` (credential-free HTTP loopback)
 //!
 //! Exercises the native owner route end-to-end:
-//! register/login → create room → send target →
-//! `NativeTimelineRegistry::{toggle,ensure,redact}_reaction` → aggregation readback.
+//! register/login → create room → send target → wait until the event is in the
+//! native timeline → `NativeTimelineRegistry::{toggle,ensure,redact}_reaction`
+//! → aggregation readback.
 //!
-//! This is the authoritative Synapse proof for the Rust owner. It does not click the
-//! Tauri webview; IPC command wiring is covered by frontend owner-route tests.
+//! JS two-client Synapse CI is not this proof. WebView click-through is not required.
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -20,10 +23,12 @@ use matrix_sdk::ruma::api::client::room::create_room::v3::Request as CreateRoomR
 use matrix_sdk::ruma::events::room::message::RoomMessageEventContent;
 use sha1::Sha1;
 
-use super::live::{NativeReactionMutation, NativeTimelineReaction, NativeTimelineRegistry};
 use crate::matrix::auth::{login_with_password, LoginOptions};
 use crate::matrix::client_builder::{build_unauthenticated_client, ClientBuildConfig};
 use crate::matrix::store::{AccountIdentity, StoreKeyMaterial};
+use crate::matrix::timeline::live::{
+    NativeReactionMutation, NativeTimelineReaction, NativeTimelineRegistry,
+};
 
 type HmacSha1 = Hmac<Sha1>;
 
@@ -96,8 +101,8 @@ async fn register_disposable_account(
 ) -> serde_json::Value {
     let secret = registration_secret_from_harness();
     let endpoint = format!("{base_url}/_synapse/admin/v1/register");
-    let client = reqwest::Client::new();
-    let nonce_response = client
+    let http = reqwest::Client::builder().build().expect("http client");
+    let nonce_response = http
         .get(&endpoint)
         .header(reqwest::header::ACCEPT, "application/json")
         .send()
@@ -123,7 +128,7 @@ async fn register_disposable_account(
         "mac": mac,
     })
     .to_string();
-    let register_response = client
+    let register_response = http
         .post(&endpoint)
         .header(reqwest::header::ACCEPT, "application/json")
         .header(reqwest::header::CONTENT_TYPE, "application/json")
@@ -150,6 +155,37 @@ fn temp_store_root() -> PathBuf {
     root
 }
 
+async fn sync_briefly(client: &matrix_sdk::Client) {
+    let _ = client
+        .sync_once(SyncSettings::default().timeout(Duration::from_secs(1)))
+        .await;
+}
+
+/// Open a fresh registry after sync so TimelineBuilder sees the latest room events.
+async fn wait_for_timeline_event(
+    client: &matrix_sdk::Client,
+    room_id: &str,
+    event_id: &str,
+) -> NativeTimelineRegistry {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        sync_briefly(client).await;
+        let mut registry = NativeTimelineRegistry::new(1);
+        let snapshot = registry
+            .open(client, room_id)
+            .await
+            .expect("open native timeline");
+        if snapshot.items.iter().any(|item| item.event_id == event_id) {
+            return registry;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "timed out waiting for target event {event_id} in native timeline"
+        );
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
 async fn poll_me_reaction(
     registry: &mut NativeTimelineRegistry,
     client: &matrix_sdk::Client,
@@ -160,13 +196,20 @@ async fn poll_me_reaction(
 ) -> Option<NativeTimelineReaction> {
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
-        let _ = client
-            .sync_once(SyncSettings::default().timeout(Duration::from_secs(1)))
-            .await;
-        let readback = registry
-            .reaction_readback_for_proof(client, room_id, event_id, key)
+        sync_briefly(client).await;
+        let snapshot = registry
+            .snapshot(client, room_id)
             .await
-            .expect("reaction readback");
+            .expect("timeline snapshot");
+        let readback = snapshot
+            .items
+            .into_iter()
+            .find(|item| item.event_id == event_id)
+            .and_then(|item| {
+                item.reactions
+                    .into_iter()
+                    .find(|reaction| reaction.key == key)
+            });
         if readback.as_ref().is_some_and(|r| r.me == want_me) || (readback.is_none() && !want_me) {
             return readback;
         }
@@ -240,13 +283,9 @@ async fn live_native_reaction_paths_against_disposable_synapse_when_configured()
         .expect("send target event");
     let target_event_id = sent.response.event_id.to_string();
 
-    let mut registry = NativeTimelineRegistry::new(1);
-    registry
-        .open(&client, &room_id)
-        .await
-        .expect("open native timeline");
+    let mut registry = wait_for_timeline_event(&client, &room_id, &target_event_id).await;
 
-    // Path 1: toggle add
+    // Path 1: toggle add — requires the target event already present in the timeline.
     let toggled = registry
         .toggle_reaction(&client, &room_id, &target_event_id, "✅")
         .await
@@ -260,8 +299,8 @@ async fn live_native_reaction_paths_against_disposable_synapse_when_configured()
         "✅",
         true,
     )
-    .await;
-    let after_toggle = after_toggle.expect("toggle aggregation readback");
+    .await
+    .expect("toggle aggregation readback");
     assert!(
         after_toggle.me,
         "toggle must mark me=true in native readback"
@@ -276,8 +315,7 @@ async fn live_native_reaction_paths_against_disposable_synapse_when_configured()
     assert_eq!(ensured.mutation, NativeReactionMutation::AlreadyPresent);
     assert!(ensured.readback.as_ref().is_some_and(|r| r.me));
 
-    // Path 3: redact selected annotation via native room owner once Synapse
-    // assigns a remote annotation event id (local echoes intentionally omit it).
+    // Path 3: redact selected annotation once Synapse assigns a remote event id.
     let reaction_event_id = {
         let deadline = Instant::now() + Duration::from_secs(20);
         let mut found = after_toggle
