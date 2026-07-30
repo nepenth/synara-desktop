@@ -83,14 +83,14 @@ exists in `src-tauri/src/matrix/timeline/view.rs`, including opaque media
 handles and explicit capability gates. `matrix_timeline_open` now returns this
 versioned boundary from the managed SDK timeline, without activating a React
 consumer. Its projection covers SDK virtual date/read/start rows plus safe
-message/relation, poll, membership, profile/state, call, redaction, and UTD
-row shapes. Reaction ownership is calculated from the active native user; its
-action capability remains closed until V-SEND.2 is integrated. It deliberately
-does not claim projection completion: stickers require the native media
-resolver, and native unread, pagination/read-frontier, and presenter
-ownership still remain. The flat
-`NativeTimelineSnapshot` remains only for the explicitly temporary V-CRYPTO.6
-bridge until those owners replace it.
+message/relation (including SDK-sanitized `formatted_body` and text/notice/emote
+labels), poll, membership/profile/state summaries, call, redaction, sticker/
+media handles, and UTD row shapes. Reaction ownership is calculated from the
+active native user; its action capability remains closed until V-SEND.2 is
+integrated. Composer draft ownership, media forward, poll/call action
+commands, presenter selection, and live authenticated viewport proof still
+remain. The flat `NativeTimelineSnapshot` remains only for the explicitly
+temporary V-CRYPTO.6 bridge until those owners replace it.
 
 The managed SDK timeline now also owns an ordered subscription from the same
 pre-snapshot boundary and emits `matrix-timeline-view-updated` batches. Each
