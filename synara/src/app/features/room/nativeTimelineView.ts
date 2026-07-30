@@ -13,9 +13,9 @@ export type NativeTimelinePageState = 'available' | 'exhausted' | 'loading' | 'u
 
 export type NativeTimelinePosition =
   | { kind: 'live_bottom' }
-  | { kind: 'unread'; anchorEventId: string }
-  | { kind: 'focused'; targetEventId: string }
-  | { kind: 'restored'; anchorEventId?: string };
+  | { kind: 'unread'; anchor_event_id: string }
+  | { kind: 'focused'; target_event_id: string }
+  | { kind: 'restored'; anchor_event_id?: string };
 
 export type NativeTimelineRowCapabilities = {
   react: boolean;
@@ -45,11 +45,41 @@ type NativeTimelineMessageRow = NativeTimelineEventRowBase & {
   reactions?: Array<{ key: string; count: number; own?: boolean }>;
 };
 
-type NativeTimelineEventSummaryRow = NativeTimelineEventRowBase & {
-  kind: 'poll' | 'membership' | 'state' | 'call';
-  question?: string;
-  summary?: string;
-  closed?: boolean;
+type NativeTimelineMediaHandle = {
+  handleId: string;
+  mimeType?: string;
+  width?: number;
+  height?: number;
+  durationMs?: number;
+};
+
+type NativeTimelineStickerRow = {
+  kind: 'sticker';
+  event: NativeTimelineEventRowBase;
+  media: NativeTimelineMediaHandle;
+};
+
+type NativeTimelinePollRow = NativeTimelineEventRowBase & {
+  kind: 'poll';
+  question: string;
+  closed: boolean;
+};
+
+type NativeTimelineMembershipRow = NativeTimelineEventRowBase & {
+  kind: 'membership';
+  targetUserId: string;
+  summary: string;
+};
+
+type NativeTimelineStateRow = NativeTimelineEventRowBase & {
+  kind: 'state';
+  stateType: string;
+  summary: string;
+};
+
+type NativeTimelineCallRow = NativeTimelineEventRowBase & {
+  kind: 'call';
+  callKind: string;
 };
 
 type NativeTimelineSimpleRow = {
@@ -61,8 +91,7 @@ type NativeTimelineSimpleRow = {
     | 'read_marker'
     | 'unread_marker'
     | 'timeline_start'
-    | 'pagination'
-    | 'sticker';
+    | 'pagination';
   itemId: string;
   eventId?: string;
   summary?: string;
@@ -74,7 +103,11 @@ type NativeTimelineSimpleRow = {
 /** The SDK-neutral renderer contract. It intentionally has no Matrix SDK types. */
 export type NativeTimelineViewRow =
   | NativeTimelineMessageRow
-  | NativeTimelineEventSummaryRow
+  | NativeTimelineStickerRow
+  | NativeTimelinePollRow
+  | NativeTimelineMembershipRow
+  | NativeTimelineStateRow
+  | NativeTimelineCallRow
   | NativeTimelineSimpleRow;
 
 export type NativeTimelineViewSnapshot = {
