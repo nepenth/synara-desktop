@@ -1319,6 +1319,13 @@ fn spawn_view_update_owner(
         hit_start,
     } = input;
     tokio::spawn(async move {
+        let emitter = ViewDeltaEmitter {
+            app,
+            session_generation,
+            stream_id,
+            room_id,
+            revision,
+        };
         let mut last_read_state =
             project_live_read_state(&timeline, &position, own_user_id.as_deref()).await;
         let mut last_pagination =
@@ -1354,16 +1361,7 @@ fn spawn_view_update_owner(
                     if ops.is_empty() {
                         continue;
                     }
-                    emit_view_delta_batch(
-                        &app,
-                        session_generation,
-                        &stream_id,
-                        &room_id,
-                        &revision,
-                        ops,
-                        None,
-                        None,
-                    );
+                    emitter.emit(ops, None, None);
                 }
                 Some(_) = room_info.next() => {
                     let read_state =
@@ -1372,16 +1370,7 @@ fn spawn_view_update_owner(
                         continue;
                     }
                     last_read_state = read_state.clone();
-                    emit_view_delta_batch(
-                        &app,
-                        session_generation,
-                        &stream_id,
-                        &room_id,
-                        &revision,
-                        Vec::new(),
-                        Some(read_state),
-                        None,
-                    );
+                    emitter.emit(Vec::new(), Some(read_state), None);
                 }
                 Some(()) = read_receipts.next() => {
                     let read_state =
@@ -1390,16 +1379,7 @@ fn spawn_view_update_owner(
                         continue;
                     }
                     last_read_state = read_state.clone();
-                    emit_view_delta_batch(
-                        &app,
-                        session_generation,
-                        &stream_id,
-                        &room_id,
-                        &revision,
-                        Vec::new(),
-                        Some(read_state),
-                        None,
-                    );
+                    emitter.emit(Vec::new(), Some(read_state), None);
                 }
                 Some(status) = pagination_updates.next() => {
                     let pagination = pagination_state_from_status(status, &hit_start);
@@ -1407,16 +1387,7 @@ fn spawn_view_update_owner(
                         continue;
                     }
                     last_pagination = pagination.clone();
-                    emit_view_delta_batch(
-                        &app,
-                        session_generation,
-                        &stream_id,
-                        &room_id,
-                        &revision,
-                        Vec::new(),
-                        None,
-                        Some(pagination),
-                    );
+                    emitter.emit(Vec::new(), None, Some(pagination));
                 }
                 else => break,
             }
@@ -1424,33 +1395,42 @@ fn spawn_view_update_owner(
     })
 }
 
-fn emit_view_delta_batch(
-    app: &AppHandle,
+struct ViewDeltaEmitter {
+    app: AppHandle,
     session_generation: u64,
-    stream_id: &str,
-    room_id: &str,
-    revision: &AtomicU64,
-    ops: Vec<super::TimelineViewDeltaOp>,
-    read_state: Option<TimelineReadState>,
-    pagination: Option<TimelinePaginationState>,
-) {
-    if ops.is_empty() && read_state.is_none() && pagination.is_none() {
-        return;
+    stream_id: String,
+    room_id: String,
+    revision: Arc<AtomicU64>,
+}
+
+impl ViewDeltaEmitter {
+    fn emit(
+        &self,
+        ops: Vec<super::TimelineViewDeltaOp>,
+        read_state: Option<TimelineReadState>,
+        pagination: Option<TimelinePaginationState>,
+    ) {
+        if ops.is_empty() && read_state.is_none() && pagination.is_none() {
+            return;
+        }
+        let next_revision = self
+            .revision
+            .fetch_add(1, Ordering::AcqRel)
+            .saturating_add(1);
+        let _ = self.app.emit(
+            NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
+            TimelineViewDeltaBatch {
+                schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+                session_generation: self.session_generation,
+                stream_id: self.stream_id.clone(),
+                room_id: self.room_id.clone(),
+                revision: next_revision,
+                ops,
+                read_state,
+                pagination,
+            },
+        );
     }
-    let next_revision = revision.fetch_add(1, Ordering::AcqRel).saturating_add(1);
-    let _ = app.emit(
-        NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
-        TimelineViewDeltaBatch {
-            schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
-            session_generation,
-            stream_id: stream_id.to_owned(),
-            room_id: room_id.to_owned(),
-            revision: next_revision,
-            ops,
-            read_state,
-            pagination,
-        },
-    );
 }
 
 fn pagination_state_from_hit_start(hit_start: bool) -> TimelinePaginationState {
