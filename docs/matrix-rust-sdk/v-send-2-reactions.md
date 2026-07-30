@@ -93,12 +93,19 @@ the IPC boundary.
   frontend owner-route tests for toggle/ensure/redact with no JS fallback,
   `cargo check`, `cargo fmt --check`, modernization TypeScript checking, scoped
   ESLint/Prettier, inventory tests, and Matrix Rust guardrails pass.
-- Runtime proof is **Not confirmed**: an authenticated desktop/Synapse run must
-  exercise each path above and read the resulting native aggregation before
-  merge acceptance. Owner-route unit tests and inventory are preservation
-  evidence only; they do not substitute for that live readback.
+- Runtime proof authority for merge: required CI job
+  **Synapse native reaction proof**
+  (`live_native_reaction_paths_against_disposable_synapse_when_configured`)
+  against the disposable Synapse harness. It registers/logs in with the managed
+  Rust client, then exercises `NativeTimelineRegistry` toggle → ensure
+  (idempotent) → redact → ensure re-add and reads native aggregation after each
+  mutation. JS two-client Synapse CI is **not** this proof. WebView click-through
+  is not required once that owner-route Synapse proof is green on the reviewed
+  SHA; IPC command names remain covered by frontend owner-route tests.
+- Until that CI job is green on the reviewed SHA, runtime proof remains
+  **Not confirmed**. Owner-route unit tests and inventory are preservation
+  evidence only.
 
 This ledger was regenerated after rebasing onto integration `2c48fd4` (V-ROOMS.1
-#241 merged). Do not treat the rebase, inventory, or unit-test evidence as a
-substitute for runtime proof. Keep #239 draft until live authenticated proof is
-recorded.
+#241 merged). Keep #239 draft until the Synapse native reaction proof job is
+green on the reviewed SHA.
