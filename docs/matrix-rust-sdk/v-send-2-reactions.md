@@ -81,11 +81,13 @@ the IPC boundary.
 
 - Tauri command registration, capability allow-list, generated permissions, and
   generated ACL schemas agree for all three commands.
-- The inventory generator reports no whole importer-file deletion on this
-  candidate base, while the scoped JS SDK method-candidate counts decrease:
-  `sendEvent` **8 → 6**, `redactEvent` **5 → 3**, and
-  `getUnfilteredTimelineSet` **8 → 6**. The global direct-import delta is
-  therefore honestly **zero** for this capability slice.
+- Post-V-AUTH rebase inventory records the exact candidate delta: desktop
+  runtime production importers **197 → 197** (and repository-wide importers
+  **211 → 211**). This capability slice deletes no whole JS SDK importer file.
+  Its physical owner deletion is instead measured by the scoped JS SDK
+  method-candidate counts: `sendEvent` **8 → 6**, `redactEvent` **5 → 3**, and
+  `getUnfilteredTimelineSet` **8 → 6**. The direct-import delta is therefore
+  honestly **zero**.
 - Focused Rust schema/validation tests, `cargo check`, `cargo fmt --check`,
   modernization TypeScript checking, scoped ESLint/Prettier, inventory tests,
   and Matrix Rust guardrails pass.
@@ -93,7 +95,5 @@ the IPC boundary.
   exercise each path and read the resulting native aggregation before merge
   acceptance. Compile/test success alone is not that proof.
 
-After rebasing onto the then-current integration head, regenerate the inventory
-and replace the candidate-base counts above with the final before/after ledger
-in this document and the continuation status. Do not treat the rebase as a
-substitute for the runtime proof.
+This ledger was regenerated after rebasing onto V-AUTH merge `08a185e`. Do not
+treat the rebase or inventory result as a substitute for runtime proof.
