@@ -96,6 +96,7 @@ fn room_summary_round_trip_and_fixture() {
         avatar_url: None,
         membership: Membership::Join,
         is_direct: false,
+        is_space: false,
         is_favorite: false,
         is_low_priority: false,
         folder_id: None,
