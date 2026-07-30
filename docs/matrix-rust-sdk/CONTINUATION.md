@@ -8,11 +8,11 @@
 
 | Field                    | Current value                                                                   |
 | ------------------------ | ------------------------------------------------------------------------------- |
-| Date                     | 2026-07-29 (America/New_York)                                                   |
+| Date                     | 2026-07-30 (America/New_York)                                                   |
 | Integration branch       | `feature/matrix-rust-sdk-full-replacement`                                      |
-| Execution model          | Primary Codex and every implementation/review sub-agent: `gpt-5.6-terra`, high reasoning |
-| Verified integration tip | `ff050159` — documentation alignment merged (#237) after V-CRYPTO.7              |
-| Active PR                | Draft [#238](https://github.com/nepenth/synara-desktop/pull/238) — V-AUTH.1 complete desktop SSO removal |
+| Execution model          | Primary Codex and every implementation/review sub-agent: `gpt-5.6-sol`, medium reasoning |
+| Verified integration tip | `08a185e` — V-AUTH.1 #238 merged with required CI green                           |
+| Active PRs               | Draft [#239](https://github.com/nepenth/synara-desktop/pull/239) V-SEND.2 reactions; [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE native boundary; [#241](https://github.com/nepenth/synara-desktop/pull/241) V-ROOMS.1 invites |
 | Policy                   | [full-vertical-policy.md](full-vertical-policy.md)                              |
 | Operating path           | [operating-path-contract.md](operating-path-contract.md)                        |
 | Binding queue            | [d0-residual-completion.md](d0-residual-completion.md)                          |
@@ -37,8 +37,9 @@ obsolete tests/types before closure.
 ## Exact continuation point
 
 1. V-CRYPTO.7 [#236](https://github.com/nepenth/synara-desktop/pull/236) is merged at integration `528a510`; its reviewed, green product/test head was `192be46`. Live multi-session/UI proof remains unclaimed.
-2. Review and validate draft [#238](https://github.com/nepenth/synara-desktop/pull/238), V-AUTH.1: it deletes all desktop SSO entry points, browser/callback/token-completion ownership, and native SSO UIAA continuation. Do not replace them with Rust SSO, a Matrix-ID prompt, an inferred identity, or a fallback route. Required CI and the exact AST import inventory are still pending.
-3. Continue with remaining V-AUTH → V-ROOMS → V-TIMELINE → V-SEND, deleting the superseded JS owner inside each capability slice.
+2. V-AUTH.1 [#238](https://github.com/nepenth/synara-desktop/pull/238) is merged: all desktop SSO entry points, callback/token-completion ownership, and native SSO UIAA continuation are deleted without a replacement route. Approved inventory: production importers **201→197**.
+3. Validate the rebased V-ROOMS.1 [#241](https://github.com/nepenth/synara-desktop/pull/241) candidate (measured production **197→194**) and V-SEND.2 [#239](https://github.com/nepenth/synara-desktop/pull/239) reaction candidate (whole-importer count **197→197**, with JS reaction owner calls deleted).
+4. Continue V-TIMELINE [#240](https://github.com/nepenth/synara-desktop/pull/240) only through its full-replacement contract. Its native stream boundary and unselected presenter are not permission to select it or delete `RoomTimeline.tsx`; retained action/media/viewport routes remain required.
 4. Run V-BURN only as the final convergence audit and npm dependency/bootstrap/store cleanup.
 5. Resume new media/widgets/notifications/calls verticals only after the residual queue allows.
 
@@ -67,7 +68,7 @@ obsolete tests/types before closure.
   purpose-specific other-device deletion/UIAA replace the device page's JS SDK
   owners. Direct inventory is **212 files / 265 import lines**, production
   importers **201**, and repository-wide importers **215**.
-- V-AUTH.1 draft [#238](https://github.com/nepenth/synara-desktop/pull/238) deletes the complete desktop SSO surface. Its exact AST inventory is **212 files / 265 import lines → 208 / 261**, production importers **201→197**, and repository-wide importers **215→211**; required CI remains pending before closure.
+- V-AUTH.1 [#238](https://github.com/nepenth/synara-desktop/pull/238) is merged at integration `08a185e` after required CI passed. It deletes the complete desktop SSO surface with exact AST inventory **212 files / 265 import lines → 208 / 261**, production importers **201→197**, and repository-wide importers **215→211**.
 - Repository baseline remains **232 files / 292 direct import lines** referencing
   `matrix-js-sdk`. Each completed vertical must record a negative
   capability-owner/file deletion delta and an honest, non-increasing global
