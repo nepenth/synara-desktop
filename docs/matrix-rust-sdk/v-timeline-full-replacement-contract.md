@@ -41,11 +41,13 @@ restore, jump-to-latest/unread, pagination state, day/unread rows, loading and
 error states.
 
 Implementation foundation: `matrix_timeline_open` now accepts a versioned
-typed native request with either `live_bottom` or `focused(eventId)` position
-and returns that position in authoritative Rust readback. This fixes the first
-owner-boundary loss without activating a new presenter. Native unread and
-restored-viewport positions remain pending with their read-frontier/viewport
-owners; they must not be silently mapped to live bottom.
+typed native request with `live_bottom`, `unread`, or `focused(eventId)`
+position and returns that position in authoritative Rust readback. An unread
+open obtains the native room's unread signal and `m.fully_read` frontier, then
+opens SDK event context at that frontier and returns the anchor for the future
+presenter to place the first-unread row after it. It rejects missing unread or
+frontier state rather than silently mapping to live bottom. Restored-viewport
+position remains pending with its viewport owner.
 
 ## Native boundary
 
@@ -93,8 +95,9 @@ batch contains only the versioned product row operations and a monotonic native
 revision plus the exact opaque stream ID returned by the open readback; it is
 aborted with the session timeline registry. No React listener exists yet, so
 this establishes the live-update owner without activating a partial presenter.
-Native unread/read-frontier, pagination-state changes, and viewport restoration
-still need their corresponding owner signals before final cutover.
+The initial unread/read-frontier open is native-owned; live read-frontier
+updates, pagination-state changes, and viewport restoration still need their
+corresponding owner signals before final cutover.
 
 ## Actions and sequencing
 
@@ -126,7 +129,7 @@ legacy composer or a rich reply/edit flow.
 | Plain-text reply | Native send plus native reply draft/composer state | Transport input exists; UI owner pending |
 | Rich send, edit, forward | Typed send/edit/forward DTO commands | Pending |
 | Redact, report, pin | Typed room-event action commands | Pending |
-| Mark read/unread, receipts | Native receipt/read-frontier command and readback | Stream-addressed private `m.read` / unread-flag command and snapshot readback exist; unread positioning/frontier signals still pending |
+| Mark read/unread, receipts | Native receipt/read-frontier command and readback | Stream-addressed private `m.read` / unread-flag command and snapshot readback exist; unread opening uses the native `m.fully_read` frontier, while live frontier updates and viewport ownership remain pending |
 | Save/later/notes/reminders | Typed account-data commands and snapshot | Pending |
 | Media/sticker image display | Bounded native media-handle resolver | Pending; invite-avatar handling is not general timeline media |
 | Poll vote and call controls | Typed poll/call commands with capability readback | Pending |

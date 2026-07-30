@@ -58,13 +58,14 @@ pub const NATIVE_TIMELINE_OPEN_SCHEMA_VERSION: u32 = 1;
 
 /// Requested initial position for one native timeline view.
 ///
-/// `Unread` and restored-viewport positions deliberately remain unimplemented
-/// until their native read-frontier and viewport contracts are ready. They
-/// must not be silently treated as a live-bottom request.
+/// Restored-viewport positions deliberately remain unimplemented until their
+/// native viewport contract is ready. Unread opens resolve the native
+/// fully-read frontier and must not be silently treated as live-bottom.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum NativeTimelineOpenPosition {
     LiveBottom,
+    Unread,
     Focused { event_id: String },
 }
 
@@ -369,6 +370,56 @@ impl NativeTimelineRegistry {
                     timeline,
                     TimelineViewPosition::Focused {
                         target_event_id: event_id.to_string(),
+                    },
+                    TimelinePaginationState {
+                        backward: TimelinePageState::Available,
+                        forward: TimelinePageState::Available,
+                    },
+                )
+            }
+            NativeTimelineOpenPosition::Unread => {
+                let room = client
+                    .get_room(&room_id)
+                    .ok_or("v-timeline-unread-room-not-found")?;
+                let has_unread = room.is_marked_unread()
+                    || room.num_unread_messages() > 0
+                    || room.num_unread_notifications() > 0
+                    || room.num_unread_mentions() > 0;
+                if !has_unread {
+                    return Err("v-timeline-unread-open-no-unread");
+                }
+                let anchor_event_id = room
+                    .fully_read_event_id()
+                    .ok_or("v-timeline-unread-frontier-unavailable")?;
+                let key = (room_id_string.clone(), anchor_event_id.to_string());
+                if !self.focused_entries.contains_key(&key) {
+                    if self.focused_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
+                        if let Some(oldest_key) = self.focused_entries.keys().next().cloned() {
+                            self.focused_entries.remove(&oldest_key);
+                        }
+                    }
+                    let timeline = TimelineBuilder::new(&room)
+                        .with_focus(TimelineFocus::Event {
+                            target: anchor_event_id.clone(),
+                            num_context_events: FOCUSED_CONTEXT_EVENT_COUNT,
+                            thread_mode: TimelineEventFocusThreadMode::Automatic {
+                                hide_threaded_events: false,
+                            },
+                        })
+                        .build()
+                        .await
+                        .map_err(|_| "v-timeline-unread-open-failed")?;
+                    self.focused_entries.insert(key.clone(), Arc::new(timeline));
+                }
+                let timeline = self
+                    .focused_entries
+                    .get(&key)
+                    .expect("unread frontier timeline present")
+                    .clone();
+                (
+                    timeline,
+                    TimelineViewPosition::Unread {
+                        anchor_event_id: anchor_event_id.to_string(),
                     },
                     TimelinePaginationState {
                         backward: TimelinePageState::Available,
@@ -1009,16 +1060,10 @@ impl NativeTimelineRegistry {
     }
 }
 
-    fn reaction_contains_event_id(     reaction: &NativeTimelineReaction,
-    reaction_event_id: &OwnedEventId,
-    ) -> bool {     reaction         .senders         .iter()         .any(|sender| sender.reaction_event_id.as_deref() == Some(reaction_event_id.as_str())),
-    /// Build the currently available native view snapshot from the SDK owner. /// /// `revision` is zero until the native delta subscriber owns monotonically /// advancing revisions. Treating repeated snapshot reads as deltas would hide /// the missing owner boundary,
-    so this contract makes that absence explicit. async fn view_snapshot_from_timeline(     session_generation: u64,
-    impl Drop for NativeTimelineRegistry {     fn drop(&mut self) {         for (_,
-    task) in self.view_update_tasks.drain() {             task.abort();         }     } }  fn view_subscription_key(room_id: &str,
-    position: &NativeTimelineOpenPosition) -> String {     match position {         NativeTimelineOpenPosition::LiveBottom => format!("live:{room_id}"),
-    NativeTimelineOpenPosition::Focused { event_id } => format!("focused:{room_id}:{event_id}"),
-    } }  fn spawn_view_update_owner(     app: AppHandle,
+    ruma::{
+        events::{reaction::ReactionEventContent, relation::Annotation},
+        OwnedEventId, OwnedRoomId, OwnedUserId,
+    },
     session_generation: u64,
     stream_id: String,
     room_id: String,
@@ -1074,12 +1119,19 @@ impl NativeTimelineRegistry {
     own_user_id: Option<OwnedUserId>,
     rows: Vec<super::TimelineViewRow>,
 ) -> TimelineViewSnapshot {
-    let own_read_event_id = match own_user_id.as_ref() {
-        Some(user_id) => timeline
-            .latest_user_read_receipt_timeline_event_id(&user_id)
-            .await
-            .map(|event_id| event_id.to_string()),
-        None => None,
+    let unread_anchor_event_id = match &position {
+        TimelineViewPosition::Unread { anchor_event_id } => Some(anchor_event_id.clone()),
+        _ => None,
+    };
+    let own_read_event_id = match timeline.room().fully_read_event_id() {
+        Some(event_id) => Some(event_id.to_string()),
+        None => match own_user_id.as_ref() {
+            Some(user_id) => timeline
+                .latest_user_read_receipt_timeline_event_id(user_id)
+                .await
+                .map(|event_id| event_id.to_string()),
+            None => None,
+        },
     };
     TimelineViewSnapshot {
         schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
@@ -1090,7 +1142,7 @@ impl NativeTimelineRegistry {
         pagination,
         read_state: TimelineReadState {
             own_read_event_id,
-            unread_anchor_event_id: None,
+            unread_anchor_event_id,
             is_marked_unread: timeline.room().is_marked_unread(),
         },
         rows,
@@ -1401,6 +1453,16 @@ mod tests {
         );
     }
     #[test]
+    fn unread_open_request_stays_distinct_from_live_bottom() {
+        let request: NativeTimelineOpenRequest = serde_json::from_value(serde_json::json!({
+            "roomId": "!room:example.org",
+            "position": { "kind": "unread" }
+        }))
+        .unwrap();
+        assert_eq!(request.position, NativeTimelineOpenPosition::Unread);
+    }
+
+    #[test]
     fn typed_open_readback_uses_the_versioned_view_boundary() {
         let readback = NativeTimelineOpenReadback {
             schema_version: NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
@@ -1453,6 +1515,10 @@ mod tests {
                 }
             ),
             "focused:!room:example.org:$one:example.org"
+        );
+        assert_eq!(
+            view_subscription_key("!room:example.org", &NativeTimelineOpenPosition::Unread),
+            "unread:!room:example.org"
         );
     }
 
