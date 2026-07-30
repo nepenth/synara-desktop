@@ -114,6 +114,8 @@
     "allow-matrix-timeline-report",
     "allow-matrix-timeline-pin",
     "allow-matrix-timeline-unpin",
+    "allow-matrix-timeline-poll-vote",
+    "allow-matrix-timeline-call-decline",
     "allow-matrix-composer-set-reply-draft",
     "allow-matrix-composer-clear-reply-draft",
     "allow-matrix-composer-get-reply-draft",

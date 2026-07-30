@@ -120,6 +120,8 @@ pub struct TimelineRowCapabilities {
     pub report: bool,
     pub pin: bool,
     pub forward: bool,
+    pub vote: bool,
+    pub decline_call: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -172,6 +174,13 @@ fn project_row_action_capabilities(event: &EventTimelineItem) -> TimelineRowCapa
                 MsgLikeKind::Message(_) | MsgLikeKind::Sticker(_)
             )
     );
+    let voteable = matches!(
+        event.content(),
+        TimelineItemContent::MsgLike(content)
+            if matches!(&content.kind, MsgLikeKind::Poll(poll) if poll.results().end_time.is_none())
+    );
+    let declineable = matches!(event.content(), TimelineItemContent::RtcNotification { .. })
+        && !event.is_own();
     TimelineRowCapabilities {
         // Reactions remain on the V-SEND.2 owner until that vertical integrates.
         react: false,
@@ -181,6 +190,8 @@ fn project_row_action_capabilities(event: &EventTimelineItem) -> TimelineRowCapa
         report: has_remote_id && !event.is_own(),
         pin: has_remote_id,
         forward: has_remote_id && forwardable,
+        vote: has_remote_id && voteable,
+        decline_call: has_remote_id && declineable,
     }
 }
 

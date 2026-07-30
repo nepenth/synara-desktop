@@ -20,6 +20,8 @@ pub enum NativeTimelineActionKind {
     Report,
     Pin,
     Unpin,
+    PollVote,
+    CallDecline,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -74,6 +76,24 @@ pub struct NativeTimelineForwardMediaRequest {
     pub source_room_id: String,
     pub event_id: String,
     pub target_room_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelinePollVoteRequest {
+    pub room_id: String,
+    pub event_id: String,
+    /// Selected answer ids for the poll start event. Empty clears the vote.
+    #[serde(default)]
+    pub answer_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineCallDeclineRequest {
+    pub room_id: String,
+    /// `m.rtc.notification` event id to decline.
+    pub event_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -178,6 +198,21 @@ mod tests {
             format_forwarded_media_body("@alice:example.org", "photo.jpg"),
             "Forwarded from @alice:example.org\n\nphoto.jpg"
         );
+
+        let vote: NativeTimelinePollVoteRequest = serde_json::from_value(serde_json::json!({
+            "roomId": "!room:example.org",
+            "eventId": "$poll:example.org",
+            "answerIds": ["a1", "a2"]
+        }))
+        .unwrap();
+        assert_eq!(vote.answer_ids, vec!["a1", "a2"]);
+
+        let decline: NativeTimelineCallDeclineRequest = serde_json::from_value(serde_json::json!({
+            "roomId": "!room:example.org",
+            "eventId": "$rtc:example.org"
+        }))
+        .unwrap();
+        assert_eq!(decline.event_id, "$rtc:example.org");
 
         let redact: NativeTimelineRedactRequest = serde_json::from_value(serde_json::json!({
             "roomId": "!room:example.org",

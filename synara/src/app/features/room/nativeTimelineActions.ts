@@ -17,7 +17,9 @@ export type NativeTimelineActionKind =
   | 'forward_media'
   | 'report'
   | 'pin'
-  | 'unpin';
+  | 'unpin'
+  | 'poll_vote'
+  | 'call_decline';
 
 export type NativeTimelineActionStatus =
   | 'sent'
@@ -26,7 +28,9 @@ export type NativeTimelineActionStatus =
   | 'pinned'
   | 'unpinned'
   | 'already_pinned'
-  | 'already_unpinned';
+  | 'already_unpinned'
+  | 'voted'
+  | 'declined';
 
 export type NativeTimelineActionReadback = {
   schemaVersion: number;
@@ -73,6 +77,17 @@ export type NativeTimelinePinInput = {
   eventId: string;
 };
 
+export type NativeTimelinePollVoteInput = {
+  roomId: string;
+  eventId: string;
+  answerIds?: string[];
+};
+
+export type NativeTimelineCallDeclineInput = {
+  roomId: string;
+  eventId: string;
+};
+
 export type NativeInvoke = (
   command: string,
   args?: Record<string, unknown>
@@ -86,6 +101,8 @@ const ACTION_STATUSES = new Set<NativeTimelineActionStatus>([
   'unpinned',
   'already_pinned',
   'already_unpinned',
+  'voted',
+  'declined',
 ]);
 
 const acceptActionReadback = (
@@ -181,4 +198,26 @@ export async function unpinWithNativeTimelineOwner(
   const result = await invoke('matrix_timeline_unpin', { request: input });
   if (!result.available) return 'unavailable';
   return acceptActionReadback(result.value, 'unpin') ?? 'unavailable';
+}
+
+export async function pollVoteWithNativeTimelineOwner(
+  input: NativeTimelinePollVoteInput,
+  desktopAvailable: boolean,
+  invoke: NativeInvoke
+): Promise<NativeTimelineActionReadback | 'unavailable'> {
+  if (!desktopAvailable) return 'unavailable';
+  const result = await invoke('matrix_timeline_poll_vote', { request: input });
+  if (!result.available) return 'unavailable';
+  return acceptActionReadback(result.value, 'poll_vote') ?? 'unavailable';
+}
+
+export async function callDeclineWithNativeTimelineOwner(
+  input: NativeTimelineCallDeclineInput,
+  desktopAvailable: boolean,
+  invoke: NativeInvoke
+): Promise<NativeTimelineActionReadback | 'unavailable'> {
+  if (!desktopAvailable) return 'unavailable';
+  const result = await invoke('matrix_timeline_call_decline', { request: input });
+  if (!result.available) return 'unavailable';
+  return acceptActionReadback(result.value, 'call_decline') ?? 'unavailable';
 }

@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  callDeclineWithNativeTimelineOwner,
   editTextWithNativeTimelineOwner,
   forwardMediaWithNativeTimelineOwner,
   forwardTextWithNativeTimelineOwner,
   pinWithNativeTimelineOwner,
+  pollVoteWithNativeTimelineOwner,
   redactWithNativeTimelineOwner,
   reportWithNativeTimelineOwner,
   type NativeInvoke,
@@ -132,4 +134,34 @@ test('report and pin owners accept typed readback statuses', async () => {
   );
   assert.notEqual(pinned, 'unavailable');
   if (pinned !== 'unavailable') assert.equal(pinned.status, 'already_pinned');
+});
+
+test('poll vote and call decline owners accept typed readback', async () => {
+  const voted = await pollVoteWithNativeTimelineOwner(
+    { roomId: '!room:example.org', eventId: '$poll:example.org', answerIds: ['a1'] },
+    true,
+    okInvoke('matrix_timeline_poll_vote', {
+      schemaVersion: 1,
+      action: 'poll_vote',
+      roomId: '!room:example.org',
+      eventId: '$vote:example.org',
+      status: 'voted',
+    })
+  );
+  assert.notEqual(voted, 'unavailable');
+  if (voted !== 'unavailable') assert.equal(voted.status, 'voted');
+
+  const declined = await callDeclineWithNativeTimelineOwner(
+    { roomId: '!room:example.org', eventId: '$rtc:example.org' },
+    true,
+    okInvoke('matrix_timeline_call_decline', {
+      schemaVersion: 1,
+      action: 'call_decline',
+      roomId: '!room:example.org',
+      eventId: '$decline:example.org',
+      status: 'declined',
+    })
+  );
+  assert.notEqual(declined, 'unavailable');
+  if (declined !== 'unavailable') assert.equal(declined.status, 'declined');
 });
