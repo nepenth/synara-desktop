@@ -1,11 +1,11 @@
 # V-SEND.2 — native reaction ownership
 
-| Field | Value |
-| --- | --- |
-| Status | Candidate — not yet merged or runtime-proven |
-| Queue position | `V-SEND.2`; `V-SEND.1` remains attachments/media upload |
-| Owner | Managed Rust `NativeTimelineRegistry` and the active native client |
-| JS fallback | None |
+| Field          | Value                                                              |
+| -------------- | ------------------------------------------------------------------ |
+| Status         | Candidate — not yet merged or runtime-proven                       |
+| Queue position | `V-SEND.2`; `V-SEND.1` remains attachments/media upload            |
+| Owner          | Managed Rust `NativeTimelineRegistry` and the active native client |
+| JS fallback    | None                                                               |
 
 ## Scope and deleted owners
 
@@ -81,20 +81,24 @@ the IPC boundary.
 
 - Tauri command registration, capability allow-list, generated permissions, and
   generated ACL schemas agree for all three commands.
-- Post-V-AUTH rebase inventory records the exact candidate delta: desktop
-  runtime production importers **197 → 197** (and repository-wide importers
-  **211 → 211**). This capability slice deletes no whole JS SDK importer file.
-  Its physical owner deletion is instead measured by the scoped JS SDK
-  method-candidate counts: `sendEvent` **8 → 6**, `redactEvent` **5 → 3**, and
-  `getUnfilteredTimelineSet` **8 → 6**. The direct-import delta is therefore
-  honestly **zero**.
-- Focused Rust schema/validation tests, `cargo check`, `cargo fmt --check`,
-  modernization TypeScript checking, scoped ESLint/Prettier, inventory tests,
-  and Matrix Rust guardrails pass.
+- Post-V-ROOMS.1 rebase inventory on integration tip `2c48fd4` records the exact
+  candidate delta: desktop runtime production importers **194 → 194** (and
+  repository-wide importers **208 → 208**). This capability slice deletes no
+  whole JS SDK importer file. Its physical owner deletion is instead measured by
+  the scoped JS SDK method-candidate counts: `sendEvent` **8 → 6**,
+  `redactEvent` **5 → 3**, and `getUnfilteredTimelineSet` **8 → 6**. The
+  direct-import delta is therefore honestly **zero**.
+- Focused Rust schema/validation tests (reaction key bounds, event-id
+  validation, mutation-readback privacy, annotation binding), injectable
+  frontend owner-route tests for toggle/ensure/redact with no JS fallback,
+  `cargo check`, `cargo fmt --check`, modernization TypeScript checking, scoped
+  ESLint/Prettier, inventory tests, and Matrix Rust guardrails pass.
 - Runtime proof is **Not confirmed**: an authenticated desktop/Synapse run must
-  exercise each path and read the resulting native aggregation before merge
-  acceptance. Compile/test success alone is not that proof.
+  exercise each path above and read the resulting native aggregation before
+  merge acceptance. Owner-route unit tests and inventory are preservation
+  evidence only; they do not substitute for that live readback.
 
-This ledger was regenerated after rebasing onto integration `a084cbc`, which
-includes the accepted V-AUTH merge `08a185e`. Do not treat the rebase or
-inventory result as a substitute for runtime proof.
+This ledger was regenerated after rebasing onto integration `2c48fd4` (V-ROOMS.1
+#241 merged). Do not treat the rebase, inventory, or unit-test evidence as a
+substitute for runtime proof. Keep #239 draft until live authenticated proof is
+recorded.

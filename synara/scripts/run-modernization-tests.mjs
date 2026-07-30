@@ -50,6 +50,7 @@ const tests = [
   'src/app/features/matrix-ipc/__tests__/matrixIpcContract.test.ts',
   'src/app/features/matrix-dto/__tests__/matrixDto.test.ts',
   'src/app/features/room/__tests__/nativeSendText.test.ts',
+  'src/app/features/room/__tests__/nativeReactionOwner.test.ts',
   'src/app/features/verification/__tests__/nativeVerification.test.ts',
   'src/app/features/cross-signing/__tests__/nativeCrossSigning.test.ts',
   'src/app/features/backup/__tests__/nativeBackup.test.ts',

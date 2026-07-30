@@ -882,6 +882,62 @@ mod tests {
     }
 
     #[test]
+    fn reaction_keys_reject_empty_and_overlong_values() {
+        assert_eq!(
+            validate_reaction_key("").unwrap_err(),
+            "v-send.2-reaction-invalid-key"
+        );
+        assert_eq!(
+            validate_reaction_key(&"x".repeat(256)).unwrap_err(),
+            "v-send.2-reaction-invalid-key"
+        );
+        assert!(validate_reaction_key(&"x".repeat(255)).is_ok());
+    }
+
+    #[test]
+    fn reaction_mutation_readback_schema_has_no_secret_fields() {
+        let result = NativeReactionMutationResult {
+            room_id: "!room:example.org".into(),
+            target_event_id: "$event:example.org".into(),
+            key: "✅".into(),
+            mutation: NativeReactionMutation::AlreadyPresent,
+            readback: Some(NativeTimelineReaction {
+                key: "✅".into(),
+                count: 2,
+                me: true,
+                senders: vec![NativeTimelineReactionSender {
+                    user_id: "@alice:example.org".into(),
+                    reaction_event_id: Some("$reaction:example.org".into()),
+                }],
+            }),
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        for forbidden in [
+            "accessToken",
+            "access_token",
+            "refreshToken",
+            "refresh_token",
+            "sessionKey",
+            "ciphertext",
+            "private_key",
+        ] {
+            assert!(!json.contains(forbidden));
+        }
+        assert!(json.contains("\"mutation\":\"already_present\""));
+        assert!(json.contains("\"reactionEventId\":\"$reaction:example.org\""));
+        assert!(json.contains("\"me\":true"));
+    }
+
+    #[test]
+    fn reaction_event_ids_are_validated_before_sdk_write() {
+        assert_eq!(
+            parse_event_id("not-an-event").unwrap_err(),
+            "v-crypto.6-invalid-event-id"
+        );
+        assert!(parse_event_id("$event:example.org").is_ok());
+    }
+
+    #[test]
     fn safe_body_projection_never_exposes_unavailable_event_content() {
         assert_eq!(
             safe_body_from_parts(true, false, Some("ignored")),
