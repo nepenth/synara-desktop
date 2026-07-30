@@ -8,8 +8,8 @@ test('native space parents projection builds child→parent sets', () => {
     { roomId: '!empty:example.org', parentIds: [] },
   ]);
   assert.equal(map.size, 1);
-  assert.deepEqual(
-    [...(map.get('!room:example.org') ?? [])].sort(),
-    ['!other:example.org', '!space:example.org']
-  );
+  assert.deepEqual([...(map.get('!room:example.org') ?? [])].sort(), [
+    '!other:example.org',
+    '!space:example.org',
+  ]);
 });
