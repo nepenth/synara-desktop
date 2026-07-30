@@ -3,9 +3,8 @@
 use std::sync::Arc;
 
 use matrix_sdk::{
-    event_handler::EventHandlerDropGuard,
-    ruma::events::typing::SyncTypingEvent,
-    Client, Room, RoomState,
+    event_handler::EventHandlerDropGuard, ruma::events::typing::SyncTypingEvent, Client, Room,
+    RoomState,
 };
 use serde::Serialize;
 use tokio::sync::Mutex;

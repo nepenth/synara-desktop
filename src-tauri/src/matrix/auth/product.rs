@@ -70,9 +70,7 @@ use crate::matrix::timeline::{
     NativeTimelineDirection, NativeTimelineEventReadback, NativeTimelineRegistry,
     NativeTimelineSnapshot,
 };
-use crate::matrix::typing::{
-    set_typing_notice, NativeTypingOwner, NativeTypingSnapshot,
-};
+use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
 use crate::matrix::verification::live::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
 };
@@ -261,8 +259,7 @@ pub async fn matrix_login_password(
     let devices = NativeDeviceOwner::start(&client, app.clone(), session_generation)
         .await
         .map_err(map_device_error)?;
-    let typing = NativeTypingOwner::start(&client, session_generation)
-        .map_err(map_typing_error)?;
+    let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
     let sync = start_sync_owner(&client, session_generation).await?;
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
@@ -1371,8 +1368,7 @@ pub async fn matrix_restore_session(
     let devices = NativeDeviceOwner::start(&client, app.clone(), session_generation)
         .await
         .map_err(map_device_error)?;
-    let typing = NativeTypingOwner::start(&client, session_generation)
-        .map_err(map_typing_error)?;
+    let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
     let sync = start_sync_owner(&client, session_generation).await?;
     *session = Some(ManagedMatrixSession {
         client,
@@ -1675,18 +1671,13 @@ fn map_typing_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
             "InvalidRequest",
             "The native Matrix typing request is invalid.",
         ),
-        "v-rooms.4-typing-room-missing" | "v-rooms.4-typing-room-not-joined" => (
-            "NotFound",
-            "The native Matrix typing room was not found.",
-        ),
-        "v-rooms.4-typing-owner-user-missing" => (
-            "Forbidden",
-            "No native Matrix session is active.",
-        ),
-        _ => (
-            "Unknown",
-            "The native Matrix typing notice is unavailable.",
-        ),
+        "v-rooms.4-typing-room-missing" | "v-rooms.4-typing-room-not-joined" => {
+            ("NotFound", "The native Matrix typing room was not found.")
+        }
+        "v-rooms.4-typing-owner-user-missing" => {
+            ("Forbidden", "No native Matrix session is active.")
+        }
+        _ => ("Unknown", "The native Matrix typing notice is unavailable."),
     };
     MatrixAuthCommandError::new(code, message, diagnostic_id)
 }

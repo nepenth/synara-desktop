@@ -8,7 +8,6 @@ import { TypingIndicator } from '../../components/typing-indicator';
 import { getMemberDisplayName } from '../../utils/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import * as css from './RoomViewTyping.css';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRoomTypingMember } from '../../hooks/useRoomTypingMembers';
 
 export type RoomViewTypingProps = {
@@ -17,11 +16,10 @@ export type RoomViewTypingProps = {
 export const RoomViewTyping = as<'div', RoomViewTypingProps>(
   ({ className, room, ...props }, ref) => {
     const setTypingMembers = useSetAtom(roomIdToTypingMembersAtom);
-    const mx = useMatrixClient();
     const typingMembers = useRoomTypingMember(room.roomId);
 
+    // Own user is already excluded by the native typing projection.
     const typingNames = typingMembers
-      .filter((receipt) => receipt.userId !== mx.getUserId())
       .map(
         (receipt) => getMemberDisplayName(room, receipt.userId) ?? getMxIdLocalPart(receipt.userId)
       )
