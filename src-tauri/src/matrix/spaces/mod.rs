@@ -1,25 +1,18 @@
-//! P4.5 — Space hierarchy, filters, and parents (harness foundation).
-//!
-//! Pure projection over product [`SpaceSummary`] DTOs:
-//! - catalog install / snapshot replace
-//! - direct children (order-aware)
-//! - descendant walk for room-list filtering
-//! - root space detection via parent_room_ids
-//! - parent-edge cycle rejection
-//!
-//! **No** production Tauri commands, **no** live SpaceService subscription,
-//! **no** dual-backend.
+//! P4.5 space hierarchy foundation + V-ROOMS.2a live parent-map ownership.
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p4.5-spaces.md`
+//! Product vertical: `docs/matrix-rust-sdk/v-rooms-2a-space-parents.md`
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
 mod error;
 mod hierarchy;
+pub mod live;
 
 pub use error::SpaceError;
 pub use hierarchy::{space_child, SpaceHierarchy};
+pub use live::{snapshot_space_parents, NativeSpaceParentEntry, NativeSpaceParentsSnapshot};
 
 /// Static marker for link / schema smoke.
 pub const MATRIX_SPACES_MARKER: &str = "matrix-spaces-hierarchy-p4.5";
