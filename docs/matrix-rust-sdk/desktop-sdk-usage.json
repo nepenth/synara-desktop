@@ -11,9 +11,9 @@
         },
         "authenticated_media": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 7,
+          "fileCount": 6,
           "listenerCandidateOccurrences": 0,
-          "methodCandidateOccurrences": 9,
+          "methodCandidateOccurrences": 7,
           "networkingOccurrences": 0
         },
         "client_events": {
@@ -25,7 +25,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 118,
+          "fileCount": 117,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -102,9 +102,9 @@
         },
         "searches": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 4,
+          "fileCount": 3,
           "listenerCandidateOccurrences": 0,
-          "methodCandidateOccurrences": 4,
+          "methodCandidateOccurrences": 3,
           "networkingOccurrences": 0
         },
         "spaces": {
@@ -118,7 +118,7 @@
           "constructorCandidateOccurrences": 0,
           "fileCount": 16,
           "listenerCandidateOccurrences": 6,
-          "methodCandidateOccurrences": 12,
+          "methodCandidateOccurrences": 11,
           "networkingOccurrences": 0
         },
         "threads": {
@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 200,
-      "importFileCount": 198,
+      "fileCount": 196,
+      "importFileCount": 194,
       "methodCandidateFrequencies": [
         {
           "count": 72,
@@ -211,19 +211,15 @@
         },
         {
           "count": 5,
-          "name": "getSyncState"
-        },
-        {
-          "count": 5,
-          "name": "mxcUrlToHttp"
-        },
-        {
-          "count": 5,
           "name": "redactEvent"
         },
         {
           "count": 5,
           "name": "sendMessage"
+        },
+        {
+          "count": 4,
+          "name": "getSyncState"
         },
         {
           "count": 4,
@@ -251,7 +247,7 @@
         },
         {
           "count": 3,
-          "name": "search"
+          "name": "mxcUrlToHttp"
         },
         {
           "count": 3,
@@ -292,6 +288,10 @@
         {
           "count": 2,
           "name": "retryImmediately"
+        },
+        {
+          "count": 2,
+          "name": "search"
         },
         {
           "count": 1,
@@ -396,8 +396,8 @@
           "importOccurrences": 57
         },
         "MatrixError": {
-          "fileCount": 40,
-          "importOccurrences": 40
+          "fileCount": 39,
+          "importOccurrences": 39
         },
         "MatrixEvent": {
           "fileCount": 35,
@@ -424,14 +424,14 @@
           "importOccurrences": 0
         },
         "createClient": {
-          "fileCount": 6,
-          "importOccurrences": 6
+          "fileCount": 5,
+          "importOccurrences": 5
         }
       },
       "modules": [
         {
-          "fileCount": 189,
-          "importCount": 189,
+          "fileCount": 185,
+          "importCount": 185,
           "path": "matrix-js-sdk"
         },
         {
@@ -555,11 +555,11 @@
           "valueImports": 51
         },
         {
-          "fileCount": 40,
-          "importCount": 40,
+          "fileCount": 39,
+          "importCount": 39,
           "name": "MatrixError",
           "typeImports": 0,
-          "valueImports": 40
+          "valueImports": 39
         },
         {
           "fileCount": 35,
@@ -674,13 +674,6 @@
           "valueImports": 5
         },
         {
-          "fileCount": 6,
-          "importCount": 6,
-          "name": "createClient",
-          "typeImports": 0,
-          "valueImports": 6
-        },
-        {
           "fileCount": 5,
           "importCount": 5,
           "name": "EventTimeline",
@@ -698,6 +691,13 @@
           "fileCount": 5,
           "importCount": 5,
           "name": "RelationType",
+          "typeImports": 0,
+          "valueImports": 5
+        },
+        {
+          "fileCount": 5,
+          "importCount": 5,
+          "name": "createClient",
           "typeImports": 0,
           "valueImports": 5
         },
@@ -803,13 +803,6 @@
           "fileCount": 3,
           "importCount": 3,
           "name": "RuleId",
-          "typeImports": 0,
-          "valueImports": 3
-        },
-        {
-          "fileCount": 3,
-          "importCount": 3,
-          "name": "SSOAction",
           "typeImports": 0,
           "valueImports": 3
         },
@@ -1040,20 +1033,6 @@
         {
           "fileCount": 1,
           "importCount": 1,
-          "name": "IIdentityProvider",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "ILoginFlow",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
           "name": "ILoginFlowsResponse",
           "typeImports": 0,
           "valueImports": 1
@@ -1125,13 +1104,6 @@
           "fileCount": 1,
           "importCount": 1,
           "name": "IRoomTimelineData",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "ISSOFlow",
           "typeImports": 0,
           "valueImports": 1
         },
@@ -8698,17 +8670,7 @@
             {
               "alias": null,
               "isTypeOnly": false,
-              "name": "ILoginFlow"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
               "name": "IPasswordFlow"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "ISSOFlow"
             },
             {
               "alias": null,
@@ -10549,97 +10511,6 @@
     },
     {
       "bucket": "page",
-      "categories": ["client_methods", "authenticated_media"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IIdentityProvider"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "SSOAction"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "createClient"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "authenticated_media",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 22,
-          "name": "mxcUrlToHttp"
-        },
-        {
-          "category": "authenticated_media",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 33,
-          "name": "mxcUrlToHttp"
-        }
-      ],
-      "modelCoupling": ["createClient"],
-      "networking": [],
-      "path": "synara/src/app/pages/auth/SSOLogin.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "page",
-      "categories": ["searches"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 4,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "SSOAction"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "searches",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_reference_candidate",
-          "line": 22,
-          "name": "search"
-        }
-      ],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/pages/auth/login/Login.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "page",
       "categories": [],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -10665,35 +10536,6 @@
       "modelCoupling": ["MatrixError"],
       "networking": [],
       "path": "synara/src/app/pages/auth/login/PasswordLoginForm.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "page",
-      "categories": [],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 14,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixError"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["MatrixError"],
-      "networking": [],
-      "path": "synara/src/app/pages/auth/login/TokenLogin.tsx",
       "role": "production"
     },
     {
@@ -10797,35 +10639,6 @@
       "modelCoupling": ["MatrixError", "createClient"],
       "networking": [],
       "path": "synara/src/app/pages/auth/register/PasswordRegisterForm.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "page",
-      "categories": [],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 4,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "SSOAction"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/pages/auth/register/Register.tsx",
       "role": "production"
     },
     {
@@ -11038,42 +10851,42 @@
           "category": "timelines",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "event": "RoomEvent.Timeline",
-          "line": 475,
+          "line": 483,
           "method": "on"
         },
         {
           "category": "timelines",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "event": "RoomEvent.Timeline",
-          "line": 477,
+          "line": 485,
           "method": "removeListener"
         },
         {
           "category": "timelines",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "event": "RoomEvent.Timeline",
-          "line": 730,
+          "line": 738,
           "method": "on"
         },
         {
           "category": "timelines",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "event": "RoomEvent.Timeline",
-          "line": 732,
+          "line": 740,
           "method": "removeListener"
         },
         {
           "category": "sync_lifecycle",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "event": "ClientEvent.Sync",
-          "line": 752,
+          "line": 760,
           "method": "on"
         },
         {
           "category": "sync_lifecycle",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "event": "ClientEvent.Sync",
-          "line": 755,
+          "line": 763,
           "method": "removeListener"
         }
       ],
@@ -11103,105 +10916,98 @@
           "category": "sync_lifecycle",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 335,
-          "name": "getSyncState"
-        },
-        {
-          "category": "sync_lifecycle",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 425,
+          "line": 433,
           "name": "getSyncState"
         },
         {
           "category": "spaces",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 430,
+          "line": 438,
           "name": "isSpaceRoom"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 439,
+          "line": 447,
           "name": "getUserId"
         },
         {
           "category": "timelines",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 441,
+          "line": 449,
           "name": "findEventById"
         },
         {
           "category": "room_lists",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 610,
+          "line": 618,
           "name": "getRoom"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 611,
+          "line": 619,
           "name": "getUserId"
         },
         {
           "category": "custom_raw_event_sends",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 647,
+          "line": 655,
           "name": "sendEvent"
         },
         {
           "category": "spaces",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 685,
+          "line": 693,
           "name": "isSpaceRoom"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 686,
+          "line": 694,
           "name": "getUserId"
         },
         {
           "category": "timelines",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 696,
+          "line": 704,
           "name": "findEventById"
         },
         {
           "category": "room_lists",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 738,
+          "line": 746,
           "name": "getRooms"
         },
         {
           "category": "spaces",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 739,
+          "line": 747,
           "name": "isSpaceRoom"
         },
         {
           "category": "room_lists",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 822,
+          "line": 830,
           "name": "getRoom"
         },
         {
           "category": "timelines",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 823,
+          "line": 831,
           "name": "findEventById"
         }
       ],
@@ -15433,7 +15239,7 @@
         "feature": 56,
         "hook": 51,
         "media-boundary": 1,
-        "page": 18,
+        "page": 14,
         "plugin": 8,
         "shared-type": 1,
         "state": 11,
@@ -15445,13 +15251,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 198,
+      "productionImportFiles": 194,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 11,
-      "totalImportFiles": 209
+      "totalImportFiles": 205
     },
     "repositoryWide": {
-      "productionImportFiles": 198,
+      "productionImportFiles": 194,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 11,
@@ -15460,7 +15266,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 212
+      "totalImportFiles": 208
     }
   }
 }
