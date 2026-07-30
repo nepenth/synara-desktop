@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   invokeDesktopWithAvailability,
   isSynaraDesktop,
@@ -166,6 +166,16 @@ export type NativeTimelineViewState =
   | { status: 'ready'; snapshot: NativeTimelineViewSnapshot; error?: undefined }
   | { status: 'error'; snapshot?: undefined; error: Error };
 
+export type NativeTimelineViewController = {
+  state: NativeTimelineViewState;
+  paginate: (direction: 'backwards' | 'forwards') => Promise<void>;
+  setReadState: (action: 'mark_read' | 'mark_unread') => Promise<void>;
+};
+
+type NativeTimelineReadStateReadback = {
+  snapshot: NativeTimelineViewSnapshot;
+};
+
 const isValidIndex = (index: number, length: number, allowEnd = false): boolean =>
   Number.isInteger(index) && index >= 0 && index < length + (allowEnd ? 1 : 0);
 
@@ -256,11 +266,64 @@ const toNativeTimelineOpenRequest = (input: NativeTimelineOpenInput) => ({
  */
 export const useNativeTimelineView = (
   input: NativeTimelineOpenInput | undefined
-): NativeTimelineViewState => {
+): NativeTimelineViewController => {
   const [state, setState] = useState<NativeTimelineViewState>({ status: 'unavailable' });
   const streamIdRef = useRef<string | undefined>(undefined);
   const snapshotRef = useRef<NativeTimelineViewSnapshot | undefined>(undefined);
   const earlyBatchesRef = useRef<NativeTimelineViewDeltaBatch[]>([]);
+
+  const acceptSnapshot = useCallback((next: NativeTimelineViewSnapshot): boolean => {
+    const current = snapshotRef.current;
+    if (
+      !current ||
+      next.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION ||
+      next.sessionGeneration !== current.sessionGeneration ||
+      next.roomId !== current.roomId ||
+      next.revision < current.revision
+    ) {
+      return false;
+    }
+    snapshotRef.current = next;
+    setState({ status: 'ready', snapshot: next });
+    return true;
+  }, []);
+
+  const paginate = useCallback(async (direction: 'backwards' | 'forwards') => {
+    const streamId = streamIdRef.current;
+    const snapshot = snapshotRef.current;
+    const permitted =
+      direction === 'backwards'
+        ? snapshot?.capabilities.paginateBackward
+        : snapshot?.capabilities.paginateForward;
+    if (!streamId || !snapshot || !permitted) {
+      throw new Error('Native timeline pagination is unavailable.');
+    }
+    const result = await invokeDesktopWithAvailability<NativeTimelineViewSnapshot>(
+      'matrix_timeline_paginate',
+      { request: { streamId, direction } }
+    );
+    if (!result.available || !result.value || !acceptSnapshot(result.value)) {
+      setState({ status: 'error', error: new Error('Native timeline pagination lost synchronization.') });
+      throw new Error('Native timeline pagination lost synchronization.');
+    }
+  }, [acceptSnapshot]);
+
+  const setReadState = useCallback(async (action: 'mark_read' | 'mark_unread') => {
+    const streamId = streamIdRef.current;
+    const snapshot = snapshotRef.current;
+    const permitted = action === 'mark_read' ? snapshot?.capabilities.markRead : snapshot?.capabilities.markUnread;
+    if (!streamId || !snapshot || !permitted) {
+      throw new Error('Native timeline read action is unavailable.');
+    }
+    const result = await invokeDesktopWithAvailability<NativeTimelineReadStateReadback>(
+      'matrix_timeline_set_read_state',
+      { request: { streamId, action } }
+    );
+    if (!result.available || !result.value || !acceptSnapshot(result.value.snapshot)) {
+      setState({ status: 'error', error: new Error('Native timeline read state lost synchronization.') });
+      throw new Error('Native timeline read state lost synchronization.');
+    }
+  }, [acceptSnapshot]);
 
   useEffect(() => {
     streamIdRef.current = undefined;
@@ -349,5 +412,5 @@ export const useNativeTimelineView = (
     };
   }, [input?.position.kind, input?.position.kind === 'focused' ? input.position.eventId : undefined, input?.roomId]);
 
-  return state;
+  return { state, paginate, setReadState };
 };
