@@ -459,13 +459,15 @@ impl NativeTimelineRegistry {
             // can fall into a snapshot-to-stream gap.
             let (items, updates) = timeline.subscribe().await;
             let snapshot = view_snapshot_from_items(
-                self.session_generation,
-                room_id_string.clone(),
-                view_position,
-                pagination,
+                TimelineViewSnapshotInput {
+                    session_generation: self.session_generation,
+                    room_id: room_id_string.clone(),
+                    position: view_position,
+                    pagination,
+                    own_user_id: own_user_id.clone(),
+                    revision: revision.load(Ordering::Acquire),
+                },
                 &timeline,
-                own_user_id.clone(),
-                revision.load(Ordering::Acquire),
                 items
                     .iter()
                     .map(|item| project_timeline_item(item, own_user_id.as_deref()))
@@ -1105,27 +1107,46 @@ impl NativeTimelineRegistry {
     paginate_backward: true,
     paginate_forward: true,
     revision: u64,
-    _updates) = timeline.subscribe().await;     let rows = items         .iter()         .map(|item| project_timeline_item(item,
-    own_user_id.as_deref()))         .collect();     view_snapshot_from_items(         session_generation,
-    timeline,
-    own_user_id,
-    revision,
-    rows,
-    )     .await }  async fn view_snapshot_from_items(     session_generation: u64,
-    room_id: String,
+) -> TimelineViewSnapshot {
+    let (items, _updates) = timeline.subscribe().await;
+    let rows = items
+        .iter()
+        .map(|item| project_timeline_item(item, own_user_id.as_deref()))
+        .collect();
+    view_snapshot_from_items(
+        TimelineViewSnapshotInput {
+            session_generation,
+            room_id,
+            position,
+            pagination,
+            own_user_id,
+            revision,
+        },
+        timeline,
+        rows,
+    )
+    .await
+}
+
+struct TimelineViewSnapshotInput {
+    session_generation: u64,    room_id: String,
     position: TimelineViewPosition,
     pagination: TimelinePaginationState,
-    timeline: &Timeline,
     own_user_id: Option<OwnedUserId>,
-    rows: Vec<super::TimelineViewRow>,
+    revision: u64,
+}
+
+async fn view_snapshot_from_items(
+    input: TimelineViewSnapshotInput,
+    timeline: &Timeline,    rows: Vec<super::TimelineViewRow>,
 ) -> TimelineViewSnapshot {
-    let unread_anchor_event_id = match &position {
+    let unread_anchor_event_id = match &input.position {
         TimelineViewPosition::Unread { anchor_event_id } => Some(anchor_event_id.clone()),
         _ => None,
     };
     let own_read_event_id = match timeline.room().fully_read_event_id() {
         Some(event_id) => Some(event_id.to_string()),
-        None => match own_user_id.as_ref() {
+        None => match input.own_user_id.as_ref() {
             Some(user_id) => timeline
                 .latest_user_read_receipt_timeline_event_id(user_id)
                 .await
@@ -1135,11 +1156,11 @@ impl NativeTimelineRegistry {
     };
     TimelineViewSnapshot {
         schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
-        session_generation,
-        room_id,
-        revision,
-        position,
-        pagination,
+        session_generation: input.session_generation,
+        room_id: input.room_id,
+        revision: input.revision,
+        position: input.position,
+        pagination: input.pagination,
         read_state: TimelineReadState {
             own_read_event_id,
             unread_anchor_event_id,
