@@ -64,6 +64,8 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_reaction_ensure",
     "matrix_reaction_redact",
     "matrix_space_parents_snapshot",
+    "matrix_send_text",
+    "matrix_send_attachment",
 ];
 
 fn git_output(repo: &Path, args: &[&str]) -> Option<String> {

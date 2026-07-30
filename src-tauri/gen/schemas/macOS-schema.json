@@ -729,6 +729,12 @@
           "markdownDescription": "Enables the matrix_secret_storage_unlock command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_send_attachment command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-send-attachment",
+          "markdownDescription": "Enables the matrix_send_attachment command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_send_text command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-send-text",
@@ -1219,6 +1225,12 @@
           "type": "string",
           "const": "deny-matrix-secret-storage-unlock",
           "markdownDescription": "Denies the matrix_secret_storage_unlock command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_send_attachment command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-send-attachment",
+          "markdownDescription": "Denies the matrix_send_attachment command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_send_text command without any pre-configured scope.",

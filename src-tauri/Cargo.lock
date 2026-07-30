@@ -5799,6 +5799,7 @@ dependencies = [
  "matrix-sdk",
  "matrix-sdk-crypto",
  "matrix-sdk-ui",
+ "mime",
  "notify-rust",
  "objc2",
  "objc2-app-kit",

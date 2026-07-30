@@ -328,6 +328,7 @@ pub fn run() {
             matrix::auth::product::matrix_reaction_ensure,
             matrix::auth::product::matrix_reaction_redact,
             matrix::auth::product::matrix_send_text,
+            matrix::auth::product::matrix_send_attachment,
             matrix::auth::product::matrix_logout,
             matrix::auth::product::matrix_restore_session
         ])
