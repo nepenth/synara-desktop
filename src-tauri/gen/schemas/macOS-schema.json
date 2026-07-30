@@ -753,6 +753,18 @@
           "markdownDescription": "Enables the matrix_timeline_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_typing_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-typing-set",
+          "markdownDescription": "Enables the matrix_typing_set command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_typing_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-typing-snapshot",
+          "markdownDescription": "Enables the matrix_typing_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_verification_accept command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-verification-accept",
@@ -1207,6 +1219,18 @@
           "type": "string",
           "const": "deny-matrix-timeline-snapshot",
           "markdownDescription": "Denies the matrix_timeline_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_typing_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-typing-set",
+          "markdownDescription": "Denies the matrix_typing_set command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_typing_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-typing-snapshot",
+          "markdownDescription": "Denies the matrix_typing_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_verification_accept command without any pre-configured scope.",

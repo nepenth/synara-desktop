@@ -9,6 +9,17 @@ fn marker_stable() {
 }
 
 #[test]
+fn nonempty_snapshots_are_sorted_and_omit_empty_rooms() {
+    let mut idx = TypingIndex::new(2);
+    idx.set_users("!b:example.org", ["@bob:example.org"]).unwrap();
+    idx.set_users("!a:example.org", ["@alice:example.org"]).unwrap();
+    idx.clear_room("!b:example.org").unwrap();
+    let snaps = idx.nonempty_snapshots();
+    assert_eq!(snaps.len(), 1);
+    assert_eq!(snaps[0].room_id, "!a:example.org");
+}
+
+#[test]
 fn set_users_and_snapshot() {
     let mut idx = TypingIndex::new(3);
     let snap = idx
