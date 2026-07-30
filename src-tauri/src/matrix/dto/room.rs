@@ -79,6 +79,9 @@ pub struct RoomSummary {
     pub avatar_url: Option<String>,
     pub membership: Membership,
     pub is_direct: bool,
+    /// True when the room is a Matrix space (`m.space`).
+    #[serde(default)]
+    pub is_space: bool,
     /// Account-data favorite (m.tag `m.favourite`) projection.
     #[serde(default)]
     pub is_favorite: bool,
