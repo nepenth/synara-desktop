@@ -95,5 +95,6 @@ the IPC boundary.
   exercise each path and read the resulting native aggregation before merge
   acceptance. Compile/test success alone is not that proof.
 
-This ledger was regenerated after rebasing onto V-AUTH merge `08a185e`. Do not
-treat the rebase or inventory result as a substitute for runtime proof.
+This ledger was regenerated after rebasing onto integration `a084cbc`, which
+includes the accepted V-AUTH merge `08a185e`. Do not treat the rebase or
+inventory result as a substitute for runtime proof.
