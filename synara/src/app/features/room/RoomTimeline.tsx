@@ -111,6 +111,7 @@ import * as css from './RoomTimeline.css';
 import { timeDayMonthYear, today, yesterday } from '../../utils/time';
 import { createMentionElement, isEmptyEditor, moveCursor } from '../../components/editor';
 import { roomIdToReplyDraftAtomFamily } from '../../state/room/roomInputDrafts';
+import { mapNativeReplyDraftToJs, setNativeComposerReplyDraft } from './nativeComposerDraft';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
 import { GetContentCallback, MessageEvent, StateEvent } from '../../../types/matrix/room';
 import { useKeyDown } from '../../hooks/useKeyDown';
@@ -2682,25 +2683,41 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         console.warn('Button should have "data-event-id" attribute!');
         return;
       }
-      const replyEvt = room.findEventById(replyId);
-      if (!replyEvt) return;
-      const editedReply = getEditedEvent(replyId, replyEvt, room.getUnfilteredTimelineSet());
-      const content: IContent = editedReply?.getContent()['m.new_content'] ?? replyEvt.getContent();
-      const { body, formatted_body: formattedBody } = content;
-      const { 'm.relates_to': relation } = startThread
-        ? { 'm.relates_to': { rel_type: 'm.thread', event_id: replyId } }
-        : replyEvt.getWireContent();
-      const senderId = replyEvt.getSender();
-      if (senderId && typeof body === 'string') {
-        setReplyDraft({
-          userId: senderId,
-          eventId: replyId,
-          body,
-          formattedBody,
-          relation,
-        });
-        setTimeout(() => ReactEditor.focus(editor), 100);
-      }
+      const applyLegacyReplyDraft = () => {
+        const replyEvt = room.findEventById(replyId);
+        if (!replyEvt) return;
+        const editedReply = getEditedEvent(replyId, replyEvt, room.getUnfilteredTimelineSet());
+        const content: IContent =
+          editedReply?.getContent()['m.new_content'] ?? replyEvt.getContent();
+        const { body, formatted_body: formattedBody } = content;
+        const { 'm.relates_to': relation } = startThread
+          ? { 'm.relates_to': { rel_type: 'm.thread', event_id: replyId } }
+          : replyEvt.getWireContent();
+        const senderId = replyEvt.getSender();
+        if (senderId && typeof body === 'string') {
+          setReplyDraft({
+            userId: senderId,
+            eventId: replyId,
+            body,
+            formattedBody,
+            relation,
+          });
+          setTimeout(() => ReactEditor.focus(editor), 100);
+        }
+      };
+
+      void setNativeComposerReplyDraft({
+        roomId: room.roomId,
+        eventId: replyId,
+        startThread,
+      }).then((readback) => {
+        if (readback !== 'unavailable' && readback.status === 'set' && readback.draft) {
+          setReplyDraft(mapNativeReplyDraftToJs(readback.draft));
+          setTimeout(() => ReactEditor.focus(editor), 100);
+          return;
+        }
+        applyLegacyReplyDraft();
+      });
     },
     [room, setReplyDraft, editor]
   );

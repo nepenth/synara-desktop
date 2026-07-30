@@ -18,6 +18,7 @@
 #![allow(unused_imports)]
 
 mod actions;
+mod composer;
 mod delta;
 mod error;
 mod focus;
@@ -41,6 +42,13 @@ mod view;
     NativeTimelineReportRequest,
     NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
     };,
+    }; pub use composer::{     reply_draft_readback,
+    ComposerDraftRegistry,
+    NativeComposerReplyDraft,
+    NativeComposerReplyDraftReadback,
+    NativeComposerReplyDraftRoomRequest,
+    NativeComposerSetReplyDraftRequest,
+    NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION,
 
 pub use delta::{TimelineDeltaBatch, TimelineDeltaOp, TimelineSnapshot};
 pub use error::TimelineError;

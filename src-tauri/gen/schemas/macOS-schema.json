@@ -561,6 +561,24 @@
           "markdownDescription": "Enables the matrix_backup_status command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_composer_clear_reply_draft command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-composer-clear-reply-draft",
+          "markdownDescription": "Enables the matrix_composer_clear_reply_draft command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_composer_get_reply_draft command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-composer-get-reply-draft",
+          "markdownDescription": "Enables the matrix_composer_get_reply_draft command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_composer_set_reply_draft command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-composer-set-reply-draft",
+          "markdownDescription": "Enables the matrix_composer_set_reply_draft command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_cross_signing_setup command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-cross-signing-setup",
@@ -1147,6 +1165,24 @@
           "type": "string",
           "const": "deny-matrix-backup-status",
           "markdownDescription": "Denies the matrix_backup_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_composer_clear_reply_draft command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-composer-clear-reply-draft",
+          "markdownDescription": "Denies the matrix_composer_clear_reply_draft command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_composer_get_reply_draft command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-composer-get-reply-draft",
+          "markdownDescription": "Denies the matrix_composer_get_reply_draft command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_composer_set_reply_draft command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-composer-set-reply-draft",
+          "markdownDescription": "Denies the matrix_composer_set_reply_draft command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_cross_signing_setup command without any pre-configured scope.",
