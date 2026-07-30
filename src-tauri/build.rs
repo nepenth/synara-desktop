@@ -78,6 +78,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_timeline_edit_text",
     "matrix_timeline_redact",
     "matrix_timeline_forward_text",
+    "matrix_timeline_forward_media",
     "matrix_timeline_report",
     "matrix_timeline_pin",
     "matrix_timeline_unpin",

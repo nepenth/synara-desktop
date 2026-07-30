@@ -19,7 +19,12 @@ use matrix_sdk::{
                 MessageFormat, MessageType, Relation, RoomMessageEventContent,
                 RoomMessageEventContentWithoutRelation,
             },
-            AnySyncMessageLikeEvent, AnySyncTimelineEvent, Mentions,        },
+    AnySyncMessageLikeEvent,
+    AnySyncTimelineEvent,
+    Mentions,
+    },
+    sticker::StickerEventContent,
+    AnyMessageLikeEventContent,
         EventId, OwnedEventId, OwnedRoomId, OwnedTransactionId, OwnedUserId,
     },
     Client, Room,
@@ -107,6 +112,8 @@ use crate::matrix::timeline::{
     NativeComposerReplyDraftReadback,
     NativeComposerReplyDraftRoomRequest,
     NativeComposerSetReplyDraftRequest,
+    format_forwarded_media_body,
+    NativeTimelineForwardMediaRequest,
     NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
 };
 use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
@@ -1628,6 +1635,56 @@ pub async fn matrix_timeline_forward_text(
 }
 
 #[tauri::command]
+pub async fn matrix_timeline_forward_media(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelineForwardMediaRequest,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let source_room_id = parse_send_room_id(&request.source_room_id)?;
+    let target_room_id = parse_send_room_id(&request.target_room_id)?;
+    let event_id = parse_required_event_id(
+        &request.event_id,
+        "v-timeline-forward-media-invalid-event-id",
+    )?;
+
+    let (source_room, target_room) = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        let source_room = active.client.get_room(&source_room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix source room is not available.",
+                "v-timeline-forward-media-source-room-not-found",
+            )
+        })?;
+        let target_room = active.client.get_room(&target_room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix target room is not available.",
+                "v-timeline-forward-media-target-room-not-found",
+            )
+        })?;
+        (source_room, target_room)
+    };
+
+    let content = load_forwardable_media(&source_room, &event_id).await?;
+    let event_id = target_room
+        .send(content)
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-forward-media-send-failed"))?
+        .response
+        .event_id
+        .to_string();
+
+    Ok(NativeTimelineActionReadback {
+        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+        action: NativeTimelineActionKind::ForwardMedia,
+        room_id: target_room_id.to_string(),
+        event_id,
+        status: "sent",
+    })
+}
+
+#[tauri::command]
 pub async fn matrix_timeline_report(
     state: State<'_, MatrixAuthState>,
     request: NativeTimelineReportRequest,
@@ -2738,6 +2795,67 @@ async fn load_forwardable_text(
         }
         _ => Err(map_timeline_action_error(
             "v-timeline-forward-unsupported-event",
+        )),
+    }
+}
+
+async fn load_forwardable_media(
+    room: &Room,
+    event_id: &EventId,
+) -> Result<AnyMessageLikeEventContent, MatrixAuthCommandError> {
+    let timeline_event = room
+        .load_or_fetch_event(event_id, None)
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-forward-media-event-unavailable"))?;
+    let sync_event = timeline_event
+        .raw()
+        .deserialize()
+        .map_err(|_| map_timeline_action_error("v-timeline-forward-media-event-decode-failed"))?;
+    match sync_event {
+        AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomMessage(message)) => {
+            let original = message.as_original().ok_or_else(|| {
+                map_timeline_action_error("v-timeline-forward-media-event-redacted")
+            })?;
+            let sender = original.sender.to_string();
+            let mut msgtype = original.content.msgtype.clone();
+            match &mut msgtype {
+                MessageType::Image(content) => {
+                    content.body = format_forwarded_media_body(&sender, &content.body);
+                }
+                MessageType::File(content) => {
+                    content.body = format_forwarded_media_body(&sender, &content.body);
+                }
+                MessageType::Audio(content) => {
+                    content.body = format_forwarded_media_body(&sender, &content.body);
+                }
+                MessageType::Video(content) => {
+                    content.body = format_forwarded_media_body(&sender, &content.body);
+                }
+                _ => {
+                    return Err(map_timeline_action_error(
+                        "v-timeline-forward-media-unsupported-event",
+                    ));
+                }
+            }
+            Ok(AnyMessageLikeEventContent::RoomMessage(
+                RoomMessageEventContent::new(msgtype),
+            ))
+        }
+        AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::Sticker(sticker)) => {
+            let original = sticker.as_original().ok_or_else(|| {
+                map_timeline_action_error("v-timeline-forward-media-event-redacted")
+            })?;
+            let sender = original.sender.to_string();
+            Ok(AnyMessageLikeEventContent::Sticker(
+                StickerEventContent::with_source(
+                    format_forwarded_media_body(&sender, &original.content.body),
+                    original.content.info.clone(),
+                    original.content.source.clone(),
+                ),
+            ))
+        }
+        _ => Err(map_timeline_action_error(
+            "v-timeline-forward-media-unsupported-event",
         )),
     }
 }

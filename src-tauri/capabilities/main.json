@@ -110,6 +110,7 @@
     "allow-matrix-timeline-edit-text",
     "allow-matrix-timeline-redact",
     "allow-matrix-timeline-forward-text",
+    "allow-matrix-timeline-forward-media",
     "allow-matrix-timeline-report",
     "allow-matrix-timeline-pin",
     "allow-matrix-timeline-unpin",

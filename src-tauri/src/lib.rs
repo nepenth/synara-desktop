@@ -419,6 +419,7 @@ pub fn run() {
     matrix::auth::product::matrix_composer_set_reply_draft,
     matrix::auth::product::matrix_composer_clear_reply_draft,
     matrix::auth::product::matrix_composer_get_reply_draft,
+    matrix::auth::product::matrix_timeline_forward_media,
             matrix::auth::product::matrix_send_text,
             matrix::auth::product::matrix_send_attachment,
             matrix::auth::product::matrix_send_poll,
