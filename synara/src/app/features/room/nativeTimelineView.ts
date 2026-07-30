@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  convertDesktopFileSrc,
   invokeDesktopWithAvailability,
   isSynaraDesktop,
   listen,
@@ -43,9 +44,10 @@ type NativeTimelineMessageRow = NativeTimelineEventRowBase & {
   messageType?: string;
   edited: boolean;
   reactions?: Array<{ key: string; count: number; own?: boolean }>;
+  media?: NativeTimelineMediaHandle;
 };
 
-type NativeTimelineMediaHandle = {
+export type NativeTimelineMediaHandle = {
   handleId: string;
   mimeType?: string;
   width?: number;
@@ -283,6 +285,23 @@ const toNativeTimelineOpenRequest = (input: NativeTimelineOpenInput) => {
 export const useNativeTimelineView = (
   input: NativeTimelineOpenInput | undefined
 ): NativeTimelineViewController => {
+  const roomId = input?.roomId;
+  const positionKind = input?.position.kind;
+  const focusedEventId = input?.position.kind === 'focused' ? input.position.eventId : undefined;
+  const restoredAnchorEventId =
+    input?.position.kind === 'normal' ? input.position.restoredAnchorEventId : undefined;
+  const nativeRequest = useMemo(() => {
+    if (!roomId || !positionKind) return undefined;
+    return toNativeTimelineOpenRequest({
+      roomId,
+      position:
+        positionKind === 'focused' && focusedEventId
+          ? { kind: 'focused', eventId: focusedEventId }
+          : positionKind === 'normal'
+          ? { kind: 'normal', restoredAnchorEventId }
+          : { kind: positionKind },
+    } as NativeTimelineOpenInput);
+  }, [focusedEventId, positionKind, restoredAnchorEventId, roomId]);
   const [state, setState] = useState<NativeTimelineViewState>({ status: 'unavailable' });
   const streamIdRef = useRef<string | undefined>(undefined);
   const snapshotRef = useRef<NativeTimelineViewSnapshot | undefined>(undefined);
@@ -366,7 +385,7 @@ export const useNativeTimelineView = (
     snapshotRef.current = undefined;
     selectedPositionRef.current = undefined;
     earlyBatchesRef.current = [];
-    if (!input || !isSynaraDesktop()) {
+    if (!nativeRequest || !isSynaraDesktop()) {
       setState({ status: 'unavailable' });
       return undefined;
     }
@@ -409,9 +428,16 @@ export const useNativeTimelineView = (
         }
         const result = await invokeDesktopWithAvailability<NativeTimelineOpenReadback>(
           'matrix_timeline_open',
-          { request: toNativeTimelineOpenRequest(input) }
+          { request: nativeRequest }
         );
-        if (disposed) return;
+        if (disposed) {
+          if (result.available && result.value?.streamId) {
+            void invokeDesktopWithAvailability('matrix_timeline_close', {
+              request: { streamId: result.value.streamId },
+            });
+          }
+          return;
+        }
         if (!result.available || !result.value) {
           setState({ status: 'unavailable' });
           return;
@@ -420,7 +446,7 @@ export const useNativeTimelineView = (
         if (
           readback.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION ||
           readback.snapshot.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION ||
-          readback.snapshot.roomId !== input.roomId ||
+          readback.snapshot.roomId !== nativeRequest.roomId ||
           readback.position.kind !== readback.snapshot.position.kind
         ) {
           setState({ status: 'error', error: new Error('Unsupported native timeline schema.') });
@@ -457,14 +483,18 @@ export const useNativeTimelineView = (
     void open();
     return () => {
       disposed = true;
+      const streamId = streamIdRef.current;
+      if (streamId) {
+        void invokeDesktopWithAvailability('matrix_timeline_close', {
+          request: { streamId },
+        });
+      }
       void unlisten?.();
     };
-  }, [
-    input?.position.kind,
-    input?.position.kind === 'focused' ? input.position.eventId : undefined,
-    input?.position.kind === 'normal' ? input.position.restoredAnchorEventId : undefined,
-    input?.roomId,
-  ]);
+  }, [nativeRequest]);
 
   return { state, paginate, setReadState };
 };
+
+export const nativeTimelineMediaSrc = (handle: NativeTimelineMediaHandle): string | undefined =>
+  convertDesktopFileSrc(handle.handleId, 'synara-media');

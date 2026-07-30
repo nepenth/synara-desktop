@@ -28,7 +28,7 @@ use matrix_sdk_ui::timeline::{
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
-use tokio::task::JoinHandle;
+use tokio::{sync::Mutex as AsyncMutex, task::JoinHandle};
 
 use crate::matrix::{
     dto::TimelineEncryptedUnavailableItem,
@@ -36,9 +36,10 @@ use crate::matrix::{
 };
 
 use super::{
-    project_timeline_diffs, project_timeline_item, TimelinePageState, TimelinePaginationState,
-    TimelineReadState, TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewPosition,
-    TimelineViewSnapshot, UtdIndex, UtdPhase, UtdReasonCode, NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
+    project_timeline_diffs_with_media, project_timeline_item_with_media, TimelineMediaRegistry,
+    TimelineMediaSource, TimelinePageState, TimelinePaginationState, TimelineReadState,
+    TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewPosition, TimelineViewSnapshot,
+    UtdIndex, UtdPhase, UtdReasonCode, NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
     TIMELINE_VIEW_SCHEMA_VERSION,
 };
 
@@ -112,6 +113,12 @@ pub enum NativeTimelineDirection {
 pub struct NativeTimelineViewPaginationRequest {
     pub stream_id: String,
     pub direction: NativeTimelineDirection,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineCloseRequest {
+    pub stream_id: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -254,6 +261,7 @@ struct ViewStreamEntry {
     timeline: Arc<Timeline>,
     position: TimelineViewPosition,
     hit_start: bool,
+    media: Arc<AsyncMutex<TimelineMediaRegistry>>,
 }
 
 pub struct NativeTimelineRegistry {
@@ -263,6 +271,7 @@ pub struct NativeTimelineRegistry {
     view_streams: HashMap<String, ViewStreamEntry>,
     view_update_tasks: HashMap<String, JoinHandle<()>>,
     view_revisions: HashMap<String, Arc<AtomicU64>>,
+    next_view_stream_id: u64,
     utd_index: UtdIndex,
     utd_recovery: UtdRecoveryCoordinator,
 }
@@ -276,6 +285,7 @@ impl NativeTimelineRegistry {
             view_streams: HashMap::new(),
             view_update_tasks: HashMap::new(),
             view_revisions: HashMap::new(),
+            next_view_stream_id: 0,
             utd_index: UtdIndex::new(session_generation),
             utd_recovery: UtdRecoveryCoordinator::new(session_generation),
         }
@@ -523,65 +533,80 @@ impl NativeTimelineRegistry {
             }
         };
         let own_user_id = client.user_id().map(ToOwned::to_owned);
-        let subscription_key = view_subscription_key(&room_id_string, &view_position);
-        let revision = self
-            .view_revisions
-            .entry(subscription_key.clone())
-            .or_insert_with(|| Arc::new(AtomicU64::new(0)))
-            .clone();
-        self.view_streams
-            .entry(subscription_key.clone())
-            .or_insert_with(|| ViewStreamEntry {
+        self.next_view_stream_id = self.next_view_stream_id.saturating_add(1);
+        let subscription_key = format!(
+            "{}:{}",
+            view_subscription_key(&room_id_string, &view_position),
+            self.next_view_stream_id
+        );
+        let revision = Arc::new(AtomicU64::new(0));
+        self.view_revisions
+            .insert(subscription_key.clone(), revision.clone());
+        self.view_streams.insert(
+            subscription_key.clone(),
+            ViewStreamEntry {
                 room_id: room_id_string.clone(),
                 timeline: timeline.clone(),
                 position: view_position.clone(),
                 hit_start: matches!(pagination.backward, TimelinePageState::Exhausted),
-            });
-        let snapshot = if self.view_update_tasks.contains_key(&subscription_key) {
-            view_snapshot_from_timeline(
-                self.session_generation,
-                room_id_string.clone(),
-                view_position.clone(),
-                pagination.clone(),
-                &timeline,
-                own_user_id,
-                revision.load(Ordering::Acquire),
-            )
-            .await
-        } else {
-            // Subscribe before materializing the initial rows so no SDK update
-            // can fall into a snapshot-to-stream gap.
-            let (items, updates) = timeline.subscribe().await;
-            let snapshot = view_snapshot_from_items(
-                TimelineViewSnapshotInput {
-                    session_generation: self.session_generation,
-                    room_id: room_id_string.clone(),
-                    position: view_position.clone(),
-                    pagination,
-                    own_user_id: own_user_id.clone(),
-                    revision: revision.load(Ordering::Acquire),
-                },
-                &timeline,
-                items
-                    .iter()
-                    .map(|item| project_timeline_item(item, own_user_id.as_deref()))
-                    .collect(),
-            )
-            .await;
-            self.view_update_tasks.insert(
-                subscription_key.clone(),
-                spawn_view_update_owner(
-                    app,
+                media: Arc::new(AsyncMutex::new(TimelineMediaRegistry::new(
                     self.session_generation,
                     subscription_key.clone(),
-                    room_id_string.clone(),
+                ))),
+            },
+        );
+        let media = self
+            .view_streams
+            .get(&subscription_key)
+            .expect("view stream inserted before projection")
+            .media
+            .clone();
+        // Subscribe before materializing the initial rows so no SDK update can
+        // fall into a snapshot-to-stream gap. Every open owns a distinct
+        // stream, revision counter, update task, and media registry.
+        let (items, updates) = timeline.subscribe().await;
+        let item_ids: Vec<String> = items
+            .iter()
+            .map(|item| item.unique_id().0.clone())
+            .collect();
+        let rows = {
+            let mut registry = media.lock().await;
+            items
+                .iter()
+                .map(|item| {
+                    project_timeline_item_with_media(item, own_user_id.as_deref(), &mut registry)
+                })
+                .collect()
+        };
+        let snapshot = view_snapshot_from_items(
+            TimelineViewSnapshotInput {
+                session_generation: self.session_generation,
+                room_id: room_id_string.clone(),
+                position: view_position.clone(),
+                pagination,
+                own_user_id: own_user_id.clone(),
+                revision: revision.load(Ordering::Acquire),
+            },
+            &timeline,
+            rows,
+        )
+        .await;
+        self.view_update_tasks.insert(
+            subscription_key.clone(),
+            spawn_view_update_owner(
+                ViewUpdateOwnerInput {
+                    app,
+                    session_generation: self.session_generation,
+                    stream_id: subscription_key.clone(),
+                    room_id: room_id_string.clone(),
                     own_user_id,
                     revision,
-                    updates,
-                ),
-            );
-            snapshot
-        };
+                    media,
+                    item_ids,
+                },
+                updates,
+            ),
+        );
         Ok(NativeTimelineOpenReadback {
             schema_version: NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
             stream_id: subscription_key,
@@ -615,7 +640,7 @@ impl NativeTimelineRegistry {
         client: &Client,
         request: NativeTimelineViewPaginationRequest,
     ) -> Result<TimelineViewSnapshot, &'static str> {
-        let (room_id, timeline, position, pagination) = {
+        let (room_id, timeline, position, pagination, media) = {
             let stream = self
                 .view_streams
                 .get_mut(&request.stream_id)
@@ -647,6 +672,7 @@ impl NativeTimelineRegistry {
                     },
                     forward: TimelinePageState::Available,
                 },
+                stream.media.clone(),
             )
         };
         let revision = self
@@ -655,13 +681,16 @@ impl NativeTimelineRegistry {
             .ok_or("v-timeline-view-revision-missing")?
             .load(Ordering::Acquire);
         Ok(view_snapshot_from_timeline(
-            self.session_generation,
-            room_id,
-            position,
-            pagination,
+            TimelineViewSnapshotInput {
+                session_generation: self.session_generation,
+                room_id,
+                position,
+                pagination,
+                own_user_id: client.user_id().map(ToOwned::to_owned),
+                revision,
+            },
             &timeline,
-            client.user_id().map(ToOwned::to_owned),
-            revision,
+            media,
         )
         .await)
     }
@@ -718,22 +747,47 @@ impl NativeTimelineRegistry {
             .ok_or("v-timeline-view-revision-missing")?
             .load(Ordering::Acquire);
         Ok(view_snapshot_from_timeline(
-            self.session_generation,
-            stream.room_id.clone(),
-            stream.position.clone(),
-            TimelinePaginationState {
-                backward: if stream.hit_start {
-                    TimelinePageState::Exhausted
-                } else {
-                    TimelinePageState::Available
+            TimelineViewSnapshotInput {
+                session_generation: self.session_generation,
+                room_id: stream.room_id.clone(),
+                position: stream.position.clone(),
+                pagination: TimelinePaginationState {
+                    backward: if stream.hit_start {
+                        TimelinePageState::Exhausted
+                    } else {
+                        TimelinePageState::Available
+                    },
+                    forward: TimelinePageState::Available,
                 },
-                forward: TimelinePageState::Available,
+                own_user_id: client.user_id().map(ToOwned::to_owned),
+                revision,
             },
             &stream.timeline,
-            client.user_id().map(ToOwned::to_owned),
-            revision,
+            stream.media.clone(),
         )
         .await)
+    }
+
+    pub fn close_view(&mut self, request: NativeTimelineCloseRequest) -> bool {
+        let removed = self.view_streams.remove(&request.stream_id).is_some();
+        self.view_revisions.remove(&request.stream_id);
+        if let Some(task) = self.view_update_tasks.remove(&request.stream_id) {
+            task.abort();
+        }
+        removed
+    }
+
+    pub async fn resolve_media(&self, handle_id: &str) -> Option<TimelineMediaSource> {
+        for stream in self.view_streams.values() {
+            let registry = stream.media.lock().await;
+            if registry.session_generation() != self.session_generation {
+                continue;
+            }
+            if let Some(source) = registry.resolve(handle_id) {
+                return Some(source.clone());
+            }
+        }
+        None
     }
 
     pub async fn paginate_legacy(
@@ -1165,61 +1219,116 @@ impl NativeTimelineRegistry {
     room_id: String,
     own_user_id: Option<OwnedUserId>,
     revision: Arc<AtomicU64>,
+    media: Arc<AsyncMutex<TimelineMediaRegistry>>,
+    item_ids: Vec<String>,
+}
+
+fn spawn_view_update_owner(
+    input: ViewUpdateOwnerInput,
     updates: impl futures_util::Stream<Item = Vec<VectorDiff<Arc<SdkTimelineItem>>>> + Send + 'static,
-    ) -> JoinHandle<()> {     tokio::spawn(async move {         futures_util::pin_mut!(updates);         while let Some(diffs) = updates.next().await {             let ops = project_timeline_diffs(&diffs,
-    own_user_id.as_deref());             if ops.is_empty() {                 continue;             }             let next_revision = revision.fetch_add(1,
-    Ordering::AcqRel).saturating_add(1);             let _ = app.emit(                 NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
-    TimelineViewDeltaBatch {                     schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
-    session_generation,
-    stream_id: stream_id.clone(),
-    room_id: room_id.clone(),
-    revision: next_revision,
-    ops,
-    },
-    );         }     }) }  /// Build the currently available native view snapshot from the SDK owner. /// /// `revision` is zero until the native delta subscriber owns monotonically /// advancing revisions. Treating repeated snapshot reads as deltas would hide /// the missing owner boundary,
-    room_id: String,
-    position: TimelineViewPosition,
-    pagination: TimelinePaginationState,
+) -> JoinHandle<()> {
+    let ViewUpdateOwnerInput {
+        app,
+        session_generation,
+        stream_id,
+        room_id,
+        own_user_id,
+        revision,
+        media,
+        mut item_ids,
+    } = input;
+    tokio::spawn(async move {
+        futures_util::pin_mut!(updates);
+        while let Some(diffs) = updates.next().await {
+            apply_item_id_diffs(&mut item_ids, &diffs);
+            let ops = {
+                let mut registry = media.lock().await;
+                registry.retain_items(item_ids.iter().map(String::as_str));
+                project_timeline_diffs_with_media(&diffs, own_user_id.as_deref(), &mut registry)
+            };
+            if ops.is_empty() {
+                continue;
+            }
+            let next_revision = revision.fetch_add(1, Ordering::AcqRel).saturating_add(1);
+            let _ = app.emit(
+                NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
+                TimelineViewDeltaBatch {
+                    schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+                    session_generation,
+                    stream_id: stream_id.clone(),
+                    room_id: room_id.clone(),
+                    revision: next_revision,
+                    ops,
+                },
+            );
+        }
+    })
+}
+
+/// Build the currently available native view snapshot from the SDK owner.
+///
+/// `revision` is zero until the native delta subscriber owns monotonically
+/// advancing revisions. Treating repeated snapshot reads as deltas would hide
+/// the missing owner boundary, so this contract makes that absence explicit.
+async fn view_snapshot_from_timeline(
+    input: TimelineViewSnapshotInput,
     timeline: &Timeline,
-    own_user_id: Option<OwnedUserId>,
-    ) -> TimelineViewSnapshot {     let (items,
-    _updates) = timeline.subscribe().await;     let own_read_event_id = match own_user_id.as_ref() {         Some(user_id) => timeline             .latest_user_read_receipt_timeline_event_id(&user_id)             .await             .map(|event_id| event_id.to_string()),
-    None => None,
-    };     TimelineViewSnapshot {         schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
-    session_generation,
-    room_id,
-    revision: 0,
-    position,
-    pagination,
-    read_state: TimelineReadState {             own_read_event_id,
-    unread_anchor_event_id: None,
-    },
-    rows: items             .iter()             .map(|item| project_timeline_item(item,
-    own_user_id.as_deref()))             .collect(),
-    capabilities: TimelineViewCapabilities {             mark_read: false,
-    mark_unread: false,
-    paginate_backward: true,
-    paginate_forward: true,
-    revision: u64,
-) -> TimelineViewSnapshot {
+    media: Arc<AsyncMutex<TimelineMediaRegistry>>,) -> TimelineViewSnapshot {
     let (items, _updates) = timeline.subscribe().await;
-    let rows = items
-        .iter()
-        .map(|item| project_timeline_item(item, own_user_id.as_deref()))
-        .collect();
-    view_snapshot_from_items(
-        TimelineViewSnapshotInput {
-            session_generation,
-            room_id,
-            position,
-            pagination,
-            own_user_id,
-            revision,
-        },
-        timeline,
-        rows,
-    )
-    .await
+    let rows = {
+        let mut registry = media.lock().await;
+        registry.retain_items(items.iter().map(|item| item.unique_id().0.as_str()));
+        items
+            .iter()
+            .map(|item| {
+                project_timeline_item_with_media(item, input.own_user_id.as_deref(), &mut registry)
+            })
+            .collect()
+    };
+    view_snapshot_from_items(input, timeline, rows).await
+}
+
+fn apply_item_id_diffs(item_ids: &mut Vec<String>, diffs: &[VectorDiff<Arc<SdkTimelineItem>>]) {
+    for diff in diffs {
+        match diff {
+            VectorDiff::Append { values } => {
+                item_ids.extend(values.iter().map(|item| item.unique_id().0.clone()))
+            }
+            VectorDiff::Clear => item_ids.clear(),
+            VectorDiff::PushFront { value } => item_ids.insert(0, value.unique_id().0.clone()),
+            VectorDiff::PushBack { value } => item_ids.push(value.unique_id().0.clone()),
+            VectorDiff::PopFront => {
+                if !item_ids.is_empty() {
+                    item_ids.remove(0);
+                }
+            }
+            VectorDiff::PopBack => {
+                item_ids.pop();
+            }
+            VectorDiff::Insert { index, value } => {
+                if *index <= item_ids.len() {
+                    item_ids.insert(*index, value.unique_id().0.clone());
+                }
+            }
+            VectorDiff::Set { index, value } => {
+                if let Some(item_id) = item_ids.get_mut(*index) {
+                    *item_id = value.unique_id().0.clone();
+                }
+            }
+            VectorDiff::Remove { index } => {
+                if *index < item_ids.len() {
+                    item_ids.remove(*index);
+                }
+            }
+            VectorDiff::Truncate { length } => item_ids.truncate(*length),
+            VectorDiff::Reset { values } => {
+                *item_ids = values
+                    .iter()
+                    .map(|item| item.unique_id().0.clone())
+                    .collect();
+            }
+        }
+    }
 }
 
 struct TimelineViewSnapshotInput {

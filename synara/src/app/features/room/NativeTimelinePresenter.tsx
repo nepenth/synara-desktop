@@ -1,7 +1,11 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Box, Button, Scroll, Text, config } from 'folds';
-import { type NativeTimelineViewRow, useNativeTimelineView } from './nativeTimelineView';
+import {
+  nativeTimelineMediaSrc,
+  type NativeTimelineViewRow,
+  useNativeTimelineView,
+} from './nativeTimelineView';
 
 type NativeTimelinePresenterProps = {
   roomId: string;
@@ -50,7 +54,8 @@ const findAnchorIndex = (
 
 const NativeTimelineRow = ({ row }: { row: NativeTimelineViewRow }) => {
   switch (row.kind) {
-    case 'message':
+    case 'message': {
+      const mediaSrc = row.media ? nativeTimelineMediaSrc(row.media) : undefined;
       return (
         <Box
           direction="Column"
@@ -61,8 +66,27 @@ const NativeTimelineRow = ({ row }: { row: NativeTimelineViewRow }) => {
           <Text size="T400" style={{ whiteSpace: 'pre-wrap' }}>
             {row.body}
           </Text>
+          {mediaSrc && row.messageType === 'image' && (
+            <img src={mediaSrc} alt={row.body} style={{ maxWidth: '100%', maxHeight: 480 }} />
+          )}
+          {mediaSrc && row.messageType === 'audio' && (
+            // Matrix media metadata does not provide a captions track.
+            // eslint-disable-next-line jsx-a11y/media-has-caption
+            <audio src={mediaSrc} controls />
+          )}
+          {mediaSrc && row.messageType === 'video' && (
+            // Matrix media metadata does not provide a captions track.
+            // eslint-disable-next-line jsx-a11y/media-has-caption
+            <video src={mediaSrc} controls style={{ maxWidth: '100%', maxHeight: 480 }} />
+          )}
+          {mediaSrc && row.messageType === 'file' && (
+            <a href={mediaSrc} download>
+              {row.body}
+            </a>
+          )}
         </Box>
       );
+    }
     case 'membership':
     case 'state':
       return (
@@ -119,14 +143,18 @@ const NativeTimelineRow = ({ row }: { row: NativeTimelineViewRow }) => {
           <Text size="T300">{row.summary ?? 'Unsupported timeline event'}</Text>
         </Box>
       );
-    case 'sticker':
+    case 'sticker': {
+      const mediaSrc = nativeTimelineMediaSrc(row.media);
       return (
         <Box style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
-          <Text size="T300">
-            Sticker media is unavailable until the native media resolver is ready.
-          </Text>
+          {mediaSrc ? (
+            <img src={mediaSrc} alt="Sticker" style={{ maxWidth: 256, maxHeight: 256 }} />
+          ) : (
+            <Text size="T300">Sticker media is unavailable.</Text>
+          )}
         </Box>
       );
+    }
     case 'pagination':
       return (
         <Box style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
@@ -167,7 +195,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   const readyState = timelineState.status === 'ready' ? timelineState : undefined;
   const [actionError, setActionError] = useState<string>();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const rows = readyState?.snapshot.rows ?? [];
+  const rows = useMemo(() => readyState?.snapshot.rows ?? [], [readyState?.snapshot.rows]);
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: rows.length,
     getScrollElement: useCallback(() => scrollRef.current, []),

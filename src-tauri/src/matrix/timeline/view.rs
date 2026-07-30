@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use eyeball_im::VectorDiff;
-use matrix_sdk::ruma::UserId as RumaUserId;
+use matrix_sdk::ruma::{events::room::message::MessageType, UserId as RumaUserId};
 use matrix_sdk_ui::timeline::{
     EventTimelineItem, MsgLikeKind, TimelineDetails, TimelineItem as SdkTimelineItem,
     TimelineItemContent, VirtualTimelineItem,
@@ -17,6 +17,8 @@ use matrix_sdk_ui::timeline::{
 use serde::{Deserialize, Serialize};
 
 use crate::matrix::dto::{EventId, RoomId, TimelineItemId, UserId};
+
+use super::TimelineMediaRegistry;
 
 pub const TIMELINE_VIEW_SCHEMA_VERSION: u32 = 1;
 pub const NATIVE_TIMELINE_VIEW_UPDATED_EVENT: &str = "matrix-timeline-view-updated";
@@ -161,28 +163,108 @@ pub fn project_event_row_base(item_id: &str, event: &EventTimelineItem) -> Timel
 }
 
 pub fn project_event_row(item_id: &str, event: &EventTimelineItem) -> TimelineViewRow {
-    project_event_row_for_user(item_id, event, None)
+    project_event_row_for_user(item_id, event, None, None)
 }
 
 fn project_event_row_for_user(
     item_id: &str,
     event: &EventTimelineItem,
     own_user_id: Option<&RumaUserId>,
+    mut media_registry: Option<&mut TimelineMediaRegistry>,
 ) -> TimelineViewRow {
     let base = project_event_row_base(item_id, event);
     match event.content() {
         TimelineItemContent::MsgLike(content) => match &content.kind {
             MsgLikeKind::Message(message) => {
+                let (message_type, media) = match message.msgtype() {
+                    MessageType::Image(content) => (
+                        Some("image".to_owned()),
+                        media_registry.as_deref_mut().and_then(|registry| {
+                            registry.register(
+                                item_id,
+                                content.source.clone(),
+                                content.info.as_ref().and_then(|info| info.mimetype.clone()),
+                                content
+                                    .info
+                                    .as_ref()
+                                    .and_then(|info| info.width)
+                                    .and_then(|value| u32::try_from(u64::from(value)).ok()),
+                                content
+                                    .info
+                                    .as_ref()
+                                    .and_then(|info| info.height)
+                                    .and_then(|value| u32::try_from(u64::from(value)).ok()),
+                                None,
+                            )
+                        }),
+                    ),
+                    MessageType::File(content) => (
+                        Some("file".to_owned()),
+                        media_registry.as_deref_mut().and_then(|registry| {
+                            registry.register(
+                                item_id,
+                                content.source.clone(),
+                                content.info.as_ref().and_then(|info| info.mimetype.clone()),
+                                None,
+                                None,
+                                None,
+                            )
+                        }),
+                    ),
+                    MessageType::Audio(content) => (
+                        Some("audio".to_owned()),
+                        media_registry.as_deref_mut().and_then(|registry| {
+                            registry.register(
+                                item_id,
+                                content.source.clone(),
+                                content.info.as_ref().and_then(|info| info.mimetype.clone()),
+                                None,
+                                None,
+                                content
+                                    .info
+                                    .as_ref()
+                                    .and_then(|info| info.duration)
+                                    .and_then(|duration| u64::try_from(duration.as_millis()).ok()),
+                            )
+                        }),
+                    ),
+                    MessageType::Video(content) => (
+                        Some("video".to_owned()),
+                        media_registry.as_deref_mut().and_then(|registry| {
+                            registry.register(
+                                item_id,
+                                content.source.clone(),
+                                content.info.as_ref().and_then(|info| info.mimetype.clone()),
+                                content
+                                    .info
+                                    .as_ref()
+                                    .and_then(|info| info.width)
+                                    .and_then(|value| u32::try_from(u64::from(value)).ok()),
+                                content
+                                    .info
+                                    .as_ref()
+                                    .and_then(|info| info.height)
+                                    .and_then(|value| u32::try_from(u64::from(value)).ok()),
+                                content
+                                    .info
+                                    .as_ref()
+                                    .and_then(|info| info.duration)
+                                    .and_then(|duration| u64::try_from(duration.as_millis()).ok()),
+                            )
+                        }),
+                    ),
+                    _ => (None, None),
+                };
                 TimelineViewRow::Message(Box::new(TimelineMessageRow {
                     event: base,
                     body: message.body().to_owned(),
                     formatted_body: None,
-                    message_type: None,
+                    message_type,
                     edited: message.is_edited(),
                     reply: project_reply(content),
                     thread: project_thread_summary(content, event),
                     reactions: project_reactions(content, own_user_id),
-                    media: None,
+                    media,
                 }))
             }
             MsgLikeKind::Poll(poll) => {
@@ -211,7 +293,29 @@ fn project_event_row_for_user(
                 }
                 None => other_row(item_id, None, "Encrypted local event"),
             },
-            MsgLikeKind::Sticker(_) => other_row(item_id, base.event_id, "Sticker unavailable"),
+            MsgLikeKind::Sticker(sticker) => {
+                let content = sticker.content();
+                let media = media_registry.and_then(|registry| {
+                    registry.register(
+                        item_id,
+                        content.source.clone().into(),
+                        content.info.mimetype.clone(),
+                        content
+                            .info
+                            .width
+                            .and_then(|value| u32::try_from(u64::from(value)).ok()),
+                        content
+                            .info
+                            .height
+                            .and_then(|value| u32::try_from(u64::from(value)).ok()),
+                        None,
+                    )
+                });
+                match media {
+                    Some(media) => TimelineViewRow::Sticker { event: base, media },
+                    None => other_row(item_id, base.event_id, "Sticker unavailable"),
+                }
+            }
             _ => other_row(item_id, base.event_id, "Unsupported timeline event"),
         },
         TimelineItemContent::MembershipChange(change) => {
@@ -301,7 +405,7 @@ pub fn project_timeline_item(
 ) -> TimelineViewRow {
     let item_id = item.unique_id().0.clone();
     if let Some(event) = item.as_event() {
-        return project_event_row_for_user(&item_id, event, own_user_id);
+        return project_event_row_for_user(&item_id, event, own_user_id, None);
     }
 
     match item.as_virtual() {
@@ -315,6 +419,20 @@ pub fn project_timeline_item(
         Some(VirtualTimelineItem::TimelineStart) => TimelineViewRow::TimelineStart { item_id },
         None => other_row(&item_id, None, "Unsupported timeline item"),
     }
+}
+
+/// Project one SDK item while registering any native media source in the
+/// exact opened stream that owns the resulting row.
+pub fn project_timeline_item_with_media(
+    item: &SdkTimelineItem,
+    own_user_id: Option<&RumaUserId>,
+    media_registry: &mut TimelineMediaRegistry,
+) -> TimelineViewRow {
+    let item_id = item.unique_id().0.clone();
+    if let Some(event) = item.as_event() {
+        return project_event_row_for_user(&item_id, event, own_user_id, Some(media_registry));
+    }
+    project_timeline_item(item, own_user_id)
 }
 
 fn other_row(item_id: &str, event_id: Option<EventId>, summary: &str) -> TimelineViewRow {
@@ -531,6 +649,49 @@ pub fn project_timeline_diffs(
                 rows: values
                     .iter()
                     .map(|item| project_timeline_item(item, own_user_id))
+                    .collect(),
+            },
+        })
+        .collect()
+}
+
+pub fn project_timeline_diffs_with_media(
+    diffs: &[VectorDiff<Arc<SdkTimelineItem>>],
+    own_user_id: Option<&RumaUserId>,
+    media_registry: &mut TimelineMediaRegistry,
+) -> Vec<TimelineViewDeltaOp> {
+    diffs
+        .iter()
+        .map(|diff| match diff {
+            VectorDiff::Append { values } => TimelineViewDeltaOp::Append {
+                rows: values
+                    .iter()
+                    .map(|item| project_timeline_item_with_media(item, own_user_id, media_registry))
+                    .collect(),
+            },
+            VectorDiff::Clear => TimelineViewDeltaOp::Clear,
+            VectorDiff::PushFront { value } => TimelineViewDeltaOp::PushFront {
+                row: project_timeline_item_with_media(value, own_user_id, media_registry),
+            },
+            VectorDiff::PushBack { value } => TimelineViewDeltaOp::PushBack {
+                row: project_timeline_item_with_media(value, own_user_id, media_registry),
+            },
+            VectorDiff::PopFront => TimelineViewDeltaOp::PopFront,
+            VectorDiff::PopBack => TimelineViewDeltaOp::PopBack,
+            VectorDiff::Insert { index, value } => TimelineViewDeltaOp::Insert {
+                index: *index,
+                row: project_timeline_item_with_media(value, own_user_id, media_registry),
+            },
+            VectorDiff::Set { index, value } => TimelineViewDeltaOp::Set {
+                index: *index,
+                row: project_timeline_item_with_media(value, own_user_id, media_registry),
+            },
+            VectorDiff::Remove { index } => TimelineViewDeltaOp::Remove { index: *index },
+            VectorDiff::Truncate { length } => TimelineViewDeltaOp::Truncate { len: *length },
+            VectorDiff::Reset { values } => TimelineViewDeltaOp::Reset {
+                rows: values
+                    .iter()
+                    .map(|item| project_timeline_item_with_media(item, own_user_id, media_registry))
                     .collect(),
             },
         })
