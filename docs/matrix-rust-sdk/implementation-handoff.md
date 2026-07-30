@@ -30,19 +30,19 @@ This section is the current handoff. The dated audit and former implementation
 ledger below remain historical evidence and must not override this snapshot,
 the operating model, or the canonical status ledger.
 
-| Field                        | Current value                                                                                                                                 |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `08a185ead8155347475f77ab1d3c42c43a83938c`; V-AUTH.1 [#238](https://github.com/nepenth/synara-desktop/pull/238) merged with required CI green |
-| **Policy**                   | [Full vertical replacement](full-vertical-policy.md): no minima/plateau; **physical deletion per vertical**                                   |
-| **Active product work**      | Draft [#241](https://github.com/nepenth/synara-desktop/pull/241) V-ROOMS.1 invites, [#239](https://github.com/nepenth/synara-desktop/pull/239) V-SEND.2 reactions, and [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE boundary; V-CRYPTO.7 multi-session/UI proof remains unclaimed |
-| **Completed verticals**      | D0 core #214/#216/#218/#219/#220; V-CRYPTO.1–.7 have native owners and per-vertical legacy deletion complete                                  |
-| **Deletion residuals**       | V-CRYPTO.7 JS `CryptoApi`, device model/listener/polling, trust hooks, platform repair helper, and dead delete-UIA owners are deleted         |
-| **Next product work**        | Validate V-ROOMS.1 (candidate production importers 197→194) and V-SEND.2 (whole importer count 197→197, direct JS reaction owner calls reduced); complete V-TIMELINE retained action/media/viewport paths before its JS presenter deletion |
-| **Import baseline**          | 232 files / 292 direct import lines → 212 / 265 in V-CRYPTO.7; production importer files 207→201 and repository-wide 221→215                  |
-| **Held**                     | #221 plateau; L1-only notify/call/media/helper PRs unless they block the active vertical                                                      |
-| **Runtime truth**            | Native product cutover is underway capability-by-capability; relevant JS owners remain until deletion residuals close; **dual_backend false** |
-| **Strict gates**             | Original-plan inventory ~74/112; 0/15 strict phase gates closed. Inventory is not product completion.                                         |
-| **Main PR**                  | [#39](https://github.com/nepenth/synara-desktop/pull/39) — do not merge without explicit user approval                                        |
+| Field                        | Current value                                                                                                                                                                                                                                     |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `2c48fd45a08200a6e3491f100912f086e8458b3b`; V-ROOMS.1 [#241](https://github.com/nepenth/synara-desktop/pull/241) merged after V-AUTH.1 [#238](https://github.com/nepenth/synara-desktop/pull/238)    |
+| **Policy**                   | [Full vertical replacement](full-vertical-policy.md): no minima/plateau; **physical deletion per vertical**                                                                                                                                       |
+| **Active product work**      | Draft V-ROOMS.3 unread badges; [#239](https://github.com/nepenth/synara-desktop/pull/239) V-SEND.2 reactions; [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE boundary; V-CRYPTO.7 multi-session/UI proof remains unclaimed |
+| **Completed verticals**      | D0 core #214/#216/#218/#219/#220; V-CRYPTO.1–.7 have native owners and per-vertical legacy deletion complete; V-AUTH.1; V-ROOMS.1                                                                                                                 |
+| **Deletion residuals**       | V-CRYPTO.7 JS owners deleted; V-ROOMS.1 invite JS owners deleted; V-ROOMS.3 deletes JS room-list/unread binders on its candidate                                                                                                                  |
+| **Next product work**        | Land V-ROOMS.3 (candidate production **194→192**); keep V-SEND.2/V-TIMELINE ordered without selecting the timeline presenter; continue residual auth/rooms/send gaps                                                                              |
+| **Import baseline**          | 232 files / 292 direct import lines → 212 / 265 in V-CRYPTO.7; production importer files 207→201 and repository-wide 221→215                                                                                                                      |
+| **Held**                     | #221 plateau; L1-only notify/call/media/helper PRs unless they block the active vertical                                                                                                                                                          |
+| **Runtime truth**            | Native product cutover is underway capability-by-capability; relevant JS owners remain until deletion residuals close; **dual_backend false**                                                                                                     |
+| **Strict gates**             | Original-plan inventory ~74/112; 0/15 strict phase gates closed. Inventory is not product completion.                                                                                                                                             |
+| **Main PR**                  | [#39](https://github.com/nepenth/synara-desktop/pull/39) — do not merge without explicit user approval                                                                                                                                            |
 
 ### Current next-owner procedure
 
