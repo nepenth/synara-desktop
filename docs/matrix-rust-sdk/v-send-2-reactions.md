@@ -81,9 +81,9 @@ the IPC boundary.
 
 - Tauri command registration, capability allow-list, generated permissions, and
   generated ACL schemas agree for all three commands.
-- Post-V-ROOMS.1 rebase inventory on integration tip `2c48fd4` records the exact
-  candidate delta: desktop runtime production importers **194 → 194** (and
-  repository-wide importers **208 → 208**). This capability slice deletes no
+- Post-V-ROOMS.3 rebase inventory on integration tip `efc90d5` records the exact
+  candidate delta: desktop runtime production importers **192 → 192** (and
+  repository-wide importers **205 → 205**). This capability slice deletes no
   whole JS SDK importer file. Its physical owner deletion is instead measured by
   the scoped JS SDK method-candidate counts: `sendEvent` **8 → 6**,
   `redactEvent` **5 → 3**, and `getUnfilteredTimelineSet` **8 → 6**. The
@@ -106,6 +106,6 @@ the IPC boundary.
   **Not confirmed**. Owner-route unit tests and inventory are preservation
   evidence only.
 
-This ledger was regenerated after rebasing onto integration `2c48fd4` (V-ROOMS.1
-#241 merged). Keep #239 draft until the Synapse native reaction proof job is
+This ledger was regenerated after rebasing onto integration `efc90d5` (V-ROOMS.3
+#245 merged). Keep #239 draft until the Synapse native reaction proof job is
 green on the reviewed SHA.
