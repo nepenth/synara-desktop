@@ -11,15 +11,15 @@ use std::sync::Arc;
 use matrix_sdk::{
     attachment::AttachmentConfig,
     encryption::CrossSigningStatus,
-    room::reply::{EnforceThread, Reply as AttachmentReply},
-    ruma::{
+    room::edit::EditedContent,    ruma::{
         api::client::uiaa,
         events::{
             relation::Reply,
-            room::message::{AddMentions, Relation, RoomMessageEventContent},
-            Mentions,
-        },
-        OwnedEventId, OwnedRoomId, OwnedTransactionId, OwnedUserId,
+            room::message::{
+                Relation, RoomMessageEventContent, RoomMessageEventContentWithoutRelation,
+            },
+            AnySyncMessageLikeEvent, AnySyncTimelineEvent, Mentions,        },
+        EventId, OwnedEventId, OwnedRoomId, OwnedTransactionId, OwnedUserId,
     },
     Client, Room,
 };
@@ -91,6 +91,13 @@ use crate::matrix::timeline::{
     NativeTimelineCloseRequest,
     TimelineMediaSource,
     NativeTimelineJumpLatestRequest,
+    format_forwarded_plain_body,
+    NativeTimelineActionKind,
+    NativeTimelineActionReadback,
+    NativeTimelineEditTextRequest,
+    NativeTimelineForwardTextRequest,
+    NativeTimelineRedactRequest,
+    NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
 };
 use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
 use crate::matrix::verification::live::{
@@ -1410,6 +1417,133 @@ pub async fn matrix_timeline_paginate(
 }
 
 #[tauri::command]
+pub async fn matrix_timeline_edit_text(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelineEditTextRequest,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&request.room_id)?;
+    let event_id = parse_required_event_id(&request.event_id, "v-timeline-edit-invalid-event-id")?;
+    let body = request.body.trim();
+    if body.is_empty() {
+        return Err(map_timeline_action_error("v-timeline-edit-empty-body"));
+    }
+
+    let room = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-timeline-edit-room-not-found",
+            )
+        })?
+    };
+
+    let new_content = RoomMessageEventContentWithoutRelation::text_plain(body.to_owned());
+    let edit_content = room
+        .make_edit_event(&event_id, EditedContent::RoomMessage(new_content))
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-edit-prepare-failed"))?;
+    let response = room
+        .send(edit_content)
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-edit-send-failed"))?;
+
+    Ok(NativeTimelineActionReadback {
+        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+        action: NativeTimelineActionKind::EditText,
+        room_id: room_id.to_string(),
+        event_id: response.response.event_id.to_string(),
+        status: "sent",
+    })
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_redact(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelineRedactRequest,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&request.room_id)?;
+    let event_id =
+        parse_required_event_id(&request.event_id, "v-timeline-redact-invalid-event-id")?;
+    let reason = request
+        .reason
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    let room = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-timeline-redact-room-not-found",
+            )
+        })?
+    };
+
+    room.redact(&event_id, reason, None)
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-redact-failed"))?;
+
+    Ok(NativeTimelineActionReadback {
+        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+        action: NativeTimelineActionKind::Redact,
+        room_id: room_id.to_string(),
+        event_id: event_id.to_string(),
+        status: "redacted",
+    })
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_forward_text(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelineForwardTextRequest,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let source_room_id = parse_send_room_id(&request.source_room_id)?;
+    let target_room_id = parse_send_room_id(&request.target_room_id)?;
+    let event_id =
+        parse_required_event_id(&request.event_id, "v-timeline-forward-invalid-event-id")?;
+
+    let (source_room, target_room) = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        let source_room = active.client.get_room(&source_room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix source room is not available.",
+                "v-timeline-forward-source-room-not-found",
+            )
+        })?;
+        let target_room = active.client.get_room(&target_room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix target room is not available.",
+                "v-timeline-forward-target-room-not-found",
+            )
+        })?;
+        (source_room, target_room)
+    };
+
+    let (sender_label, body) = load_forwardable_text(&source_room, &event_id).await?;
+    let forwarded_body = format_forwarded_plain_body(&sender_label, &body, request.as_quote);
+    let event_id = send_text_to_room(&target_room, forwarded_body, None, None)
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-forward-send-failed"))?;
+
+    Ok(NativeTimelineActionReadback {
+        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+        action: NativeTimelineActionKind::ForwardText,
+        room_id: target_room_id.to_string(),
+        event_id,
+        status: "sent",
+    })
+}
+
+#[tauri::command]
 pub async fn matrix_send_text(
     state: State<'_, MatrixAuthState>,
     room_id: String,
@@ -2353,6 +2487,52 @@ fn parse_reply_event_id(
                 .map_err(|_| map_send_error("d0.4-send-invalid-reply-event-id"))
         })
         .transpose()
+}
+
+fn parse_required_event_id(
+    event_id: &str,
+    diagnostic_id: &'static str,
+) -> Result<OwnedEventId, MatrixAuthCommandError> {
+    event_id
+        .trim()
+        .parse()
+        .map_err(|_| map_timeline_action_error(diagnostic_id))
+}
+
+fn map_timeline_action_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "InvalidRequest",
+        "The native Matrix timeline action request is invalid.",
+        diagnostic_id,
+    )
+}
+
+async fn load_forwardable_text(
+    room: &Room,
+    event_id: &EventId,
+) -> Result<(String, String), MatrixAuthCommandError> {
+    let timeline_event = room
+        .load_or_fetch_event(event_id, None)
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-forward-event-unavailable"))?;
+    let sync_event = timeline_event
+        .raw()
+        .deserialize()
+        .map_err(|_| map_timeline_action_error("v-timeline-forward-event-decode-failed"))?;
+    match sync_event {
+        AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomMessage(message)) => {
+            let original = message
+                .as_original()
+                .ok_or_else(|| map_timeline_action_error("v-timeline-forward-event-redacted"))?;
+            Ok((
+                original.sender.to_string(),
+                original.content.body().to_owned(),
+            ))
+        }
+        _ => Err(map_timeline_action_error(
+            "v-timeline-forward-unsupported-event",
+        )),
+    }
 }
 
 fn parse_transaction_id(

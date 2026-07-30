@@ -1,0 +1,145 @@
+//! Typed native timeline action commands (edit / redact / forward).
+//!
+//! Reply transport remains `matrix_send_text` with `reply_to`. Reactions stay
+//! on the V-SEND.2 owner. These DTOs are room-addressed so the still-active
+//! legacy presenter can re-home affordances without selecting the native
+//! timeline presenter.
+
+use serde::{Deserialize, Serialize};
+
+/// Version of the bounded timeline-action readback contract.
+pub const NATIVE_TIMELINE_ACTION_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeTimelineActionKind {
+    EditText,
+    Redact,
+    ForwardText,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineEditTextRequest {
+    pub room_id: String,
+    pub event_id: String,
+    pub body: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineRedactRequest {
+    pub room_id: String,
+    pub event_id: String,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineForwardTextRequest {
+    pub source_room_id: String,
+    pub event_id: String,
+    pub target_room_id: String,
+    #[serde(default)]
+    pub as_quote: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineActionReadback {
+    pub schema_version: u32,
+    pub action: NativeTimelineActionKind,
+    pub room_id: String,
+    /// For edit/forward: the newly sent event id. For redact: the redacted event id.
+    pub event_id: String,
+    pub status: &'static str,
+}
+
+/// Build the plain-text body used when forwarding a text-like message.
+pub fn format_forwarded_plain_body(sender_label: &str, body: &str, as_quote: bool) -> String {
+    let trimmed = trim_mx_reply_prefix(body.trim());
+    if as_quote {
+        if trimmed.is_empty() {
+            format!("> <{sender_label}>")
+        } else {
+            let quoted = trimmed
+                .lines()
+                .map(|line| format!("> {line}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!("> <{sender_label}>\n{quoted}")
+        }
+    } else if trimmed.is_empty() {
+        format!("Forwarded from {sender_label}")
+    } else {
+        format!("Forwarded from {sender_label}\n\n{trimmed}")
+    }
+}
+
+fn trim_mx_reply_prefix(body: &str) -> String {
+    const MARKER: &str = "\n\n";
+    if body.starts_with("> <") {
+        if let Some(index) = body.find(MARKER) {
+            return body[index + MARKER.len()..].to_owned();
+        }
+    }
+    body.to_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn forward_plain_and_quote_bodies_attribute_the_source_sender() {
+        assert_eq!(
+            format_forwarded_plain_body("@alice:example.org", "hello", false),
+            "Forwarded from @alice:example.org\n\nhello"
+        );
+        assert_eq!(
+            format_forwarded_plain_body("@alice:example.org", "hello\nthere", true),
+            "> <@alice:example.org>\n> hello\n> there"
+        );
+    }
+
+    #[test]
+    fn action_request_schemas_stay_room_addressed() {
+        let edit: NativeTimelineEditTextRequest = serde_json::from_value(serde_json::json!({
+            "roomId": "!room:example.org",
+            "eventId": "$edit:example.org",
+            "body": "updated"
+        }))
+        .unwrap();
+        assert_eq!(edit.event_id, "$edit:example.org");
+
+        let redact: NativeTimelineRedactRequest = serde_json::from_value(serde_json::json!({
+            "roomId": "!room:example.org",
+            "eventId": "$redact:example.org",
+            "reason": "spam"
+        }))
+        .unwrap();
+        assert_eq!(redact.reason.as_deref(), Some("spam"));
+
+        let forward: NativeTimelineForwardTextRequest = serde_json::from_value(serde_json::json!({
+            "sourceRoomId": "!source:example.org",
+            "eventId": "$fwd:example.org",
+            "targetRoomId": "!target:example.org",
+            "asQuote": true
+        }))
+        .unwrap();
+        assert!(forward.as_quote);
+
+        let readback = NativeTimelineActionReadback {
+            schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+            action: NativeTimelineActionKind::EditText,
+            room_id: "!room:example.org".into(),
+            event_id: "$new:example.org".into(),
+            status: "sent",
+        };
+        let json = serde_json::to_value(readback).unwrap();
+        assert_eq!(json["schemaVersion"], 1);
+        assert_eq!(json["action"], "edit_text");
+        assert_eq!(json["status"], "sent");
+    }
+}

@@ -75,6 +75,9 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_timeline_close",
     "matrix_timeline_event_readback",
     "matrix_timeline_jump_latest",
+    "matrix_timeline_edit_text",
+    "matrix_timeline_redact",
+    "matrix_timeline_forward_text",
 ];
 
 fn git_output(repo: &Path, args: &[&str]) -> Option<String> {

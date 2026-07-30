@@ -17,6 +17,7 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+mod actions;
 mod delta;
 mod error;
 mod focus;
@@ -28,8 +29,15 @@ mod registry;
 mod utd;
 mod view;
 
-#[cfg(test)]
-mod live_synapse_proof;
+    #[cfg(test)] mod live_synapse_proof;,
+    pub use actions::{     format_forwarded_plain_body,
+    NativeTimelineActionKind,
+    NativeTimelineActionReadback,
+    NativeTimelineEditTextRequest,
+    NativeTimelineForwardTextRequest,
+    NativeTimelineRedactRequest,
+    NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+    };,
 
 pub use delta::{TimelineDeltaBatch, TimelineDeltaOp, TimelineSnapshot};
 pub use error::TimelineError;
