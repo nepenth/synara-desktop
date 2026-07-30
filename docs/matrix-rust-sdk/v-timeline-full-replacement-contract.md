@@ -109,10 +109,12 @@ native-owned. Normal opens now also carry a typed local viewport restore hint
 and resolve placement with legacy-compatible precedence: unread beats
 historical restore, while an exact live-tail at-bottom match may keep live
 bottom. Jump-to-latest is a stream-addressed native command that closes the
-prior stream and returns a fresh live-bottom open readback. Live read-frontier
-updates and pagination-state delta metadata still need their corresponding
-owner signals before final cutover. Restored scroll-offset application remains
-presenter-local until the selected virtualized owner lands.
+prior stream and returns a fresh live-bottom open readback. Live read-frontier and pagination-state
+signals now travel on the same `matrix-timeline-view-updated` stream as row
+ops: optional `readState` / `pagination` metadata (including metadata-only
+batches) are projected from room-info, own-receipt, and live back-pagination
+status subscriptions. Restored scroll-offset application remains presenter-
+local until the selected virtualized owner lands.
 
 ## Actions and sequencing
 
@@ -138,16 +140,16 @@ The current product command surface has timeline read/pagination and plain-text
 send-with-`reply_to` only; that transport capability is not parity for the
 legacy composer or a rich reply/edit flow.
 
-| Visible timeline capability | Required native owner before final cutover         | Current status                                                                                                                                                                                                                              |
-| --------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Reactions                   | V-SEND.2 typed toggle/ensure/redact commands       | Candidate exists on its own branch; not integration evidence yet                                                                                                                                                                            |
-| Plain-text reply            | Native send plus native reply draft/composer state | Transport input exists; UI owner pending                                                                                                                                                                                                    |
-| Rich send, edit, forward    | Typed send/edit/forward DTO commands               | Pending                                                                                                                                                                                                                                     |
-| Redact, report, pin         | Typed room-event action commands                   | Pending                                                                                                                                                                                                                                     |
-| Mark read/unread, receipts  | Native receipt/read-frontier command and readback  | Stream-addressed private `m.read` / unread-flag command and snapshot readback exist; unread opening uses the native `m.fully_read` frontier; normal open restore policy and jump-to-latest are native; live frontier updates remain pending |
-| Save/later/notes/reminders  | Typed account-data commands and snapshot           | Pending                                                                                                                                                                                                                                     |
-| Media/sticker image display | Bounded native media-handle resolver               | Wired on the unselected presenter via stream/session-bound opaque handles and the shared `synara-media` protocol; selection still deferred                                                                                                  |
-| Poll vote and call controls | Typed poll/call commands with capability readback  | Pending                                                                                                                                                                                                                                     |
+| Visible timeline capability | Required native owner before final cutover         | Current status                                                                                                                                                                                                                                                                 |
+| --------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Reactions                   | V-SEND.2 typed toggle/ensure/redact commands       | Candidate exists on its own branch; not integration evidence yet                                                                                                                                                                                                               |
+| Plain-text reply            | Native send plus native reply draft/composer state | Transport input exists; UI owner pending                                                                                                                                                                                                                                       |
+| Rich send, edit, forward    | Typed send/edit/forward DTO commands               | Pending                                                                                                                                                                                                                                                                        |
+| Redact, report, pin         | Typed room-event action commands                   | Pending                                                                                                                                                                                                                                                                        |
+| Mark read/unread, receipts  | Native receipt/read-frontier command and readback  | Stream-addressed private `m.read` / unread-flag command and snapshot readback exist; unread opening uses the native `m.fully_read` frontier; normal open restore policy and jump-to-latest are native; live frontier and pagination metadata now emit on the view-delta stream |
+| Save/later/notes/reminders  | Typed account-data commands and snapshot           | Pending                                                                                                                                                                                                                                                                        |
+| Media/sticker image display | Bounded native media-handle resolver               | Wired on the unselected presenter via stream/session-bound opaque handles and the shared `synara-media` protocol; selection still deferred                                                                                                                                     |
+| Poll vote and call controls | Typed poll/call commands with capability readback  | Pending                                                                                                                                                                                                                                                                        |
 
 No active desktop timeline presenter may retain these JS action paths as a
 fallback once the native presenter is selected.

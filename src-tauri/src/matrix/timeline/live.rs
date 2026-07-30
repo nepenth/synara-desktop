@@ -5,12 +5,13 @@
 //! event types, timestamps, and safe display text.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
 use eyeball_im::VectorDiff;
-use futures_util::StreamExt;
+use futures_util::{stream, StreamExt};
 use matrix_sdk::{
+    event_cache::PaginationStatus,
     ruma::{
     ruma::{
         api::client::receipt::create_receipt::v3::ReceiptType,
@@ -280,7 +281,7 @@ struct ViewStreamEntry {
     room_id: String,
     timeline: Arc<Timeline>,
     position: TimelineViewPosition,
-    hit_start: bool,
+    hit_start: Arc<AtomicBool>,
     media: Arc<AsyncMutex<TimelineMediaRegistry>>,
 }
 
@@ -571,13 +572,17 @@ impl NativeTimelineRegistry {
         let revision = Arc::new(AtomicU64::new(0));
         self.view_revisions
             .insert(subscription_key.clone(), revision.clone());
+        let hit_start = Arc::new(AtomicBool::new(matches!(
+            pagination.backward,
+            TimelinePageState::Exhausted
+        )));
         self.view_streams.insert(
             subscription_key.clone(),
             ViewStreamEntry {
                 room_id: room_id_string.clone(),
                 timeline: timeline.clone(),
                 position: view_position.clone(),
-                hit_start: matches!(pagination.backward, TimelinePageState::Exhausted),
+                hit_start: hit_start.clone(),
                 media: Arc::new(AsyncMutex::new(TimelineMediaRegistry::new(
                     self.session_generation,
                     subscription_key.clone(),
@@ -632,6 +637,9 @@ impl NativeTimelineRegistry {
                     revision,
                     media,
                     item_ids,
+                    timeline: timeline.clone(),
+                    position: view_position.clone(),
+                    hit_start,
                 },
                 updates,
             ),
@@ -687,14 +695,14 @@ impl NativeTimelineRegistry {
                     .map_err(|_| "v-timeline-view-paginate-forwards-failed")?,
             };
             if request.direction == NativeTimelineDirection::Backwards {
-                stream.hit_start = reached_end;
+                stream.hit_start.store(reached_end, Ordering::Release);
             }
             (
                 stream.room_id.clone(),
                 stream.timeline.clone(),
                 stream.position.clone(),
                 TimelinePaginationState {
-                    backward: if stream.hit_start {
+                    backward: if stream.hit_start.load(Ordering::Acquire) {
                         TimelinePageState::Exhausted
                     } else {
                         TimelinePageState::Available
@@ -781,7 +789,7 @@ impl NativeTimelineRegistry {
                 room_id: stream.room_id.clone(),
                 position: stream.position.clone(),
                 pagination: TimelinePaginationState {
-                    backward: if stream.hit_start {
+                    backward: if stream.hit_start.load(Ordering::Acquire) {
                         TimelinePageState::Exhausted
                     } else {
                         TimelinePageState::Available
@@ -1288,6 +1296,9 @@ impl NativeTimelineRegistry {
     revision: Arc<AtomicU64>,
     media: Arc<AsyncMutex<TimelineMediaRegistry>>,
     item_ids: Vec<String>,
+    timeline: Arc<Timeline>,
+    position: TimelineViewPosition,
+    hit_start: Arc<AtomicBool>,
 }
 
 fn spawn_view_update_owner(
@@ -1303,33 +1314,208 @@ fn spawn_view_update_owner(
         revision,
         media,
         mut item_ids,
+        timeline,
+        position,
+        hit_start,
     } = input;
     tokio::spawn(async move {
-        futures_util::pin_mut!(updates);
-        while let Some(diffs) = updates.next().await {
-            apply_item_id_diffs(&mut item_ids, &diffs);
-            let ops = {
-                let mut registry = media.lock().await;
-                registry.retain_items(item_ids.iter().map(String::as_str));
-                project_timeline_diffs_with_media(&diffs, own_user_id.as_deref(), &mut registry)
-            };
-            if ops.is_empty() {
-                continue;
+        let mut last_read_state =
+            project_live_read_state(&timeline, &position, own_user_id.as_deref()).await;
+        let mut last_pagination =
+            pagination_state_from_hit_start(hit_start.load(Ordering::Acquire));
+
+        let mut room_info = timeline.room().subscribe_info();
+        let mut read_receipts = timeline.subscribe_own_user_read_receipts_changed().await;
+        let mut pagination_updates: std::pin::Pin<
+            Box<dyn futures_util::Stream<Item = PaginationStatus> + Send>,
+        > = match timeline.live_back_pagination_status().await {
+            Some((current, stream)) => {
+                last_pagination = pagination_state_from_status(current, &hit_start);
+                Box::pin(stream)
             }
-            let next_revision = revision.fetch_add(1, Ordering::AcqRel).saturating_add(1);
-            let _ = app.emit(
-                NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
-                TimelineViewDeltaBatch {
-                    schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
-                    session_generation,
-                    stream_id: stream_id.clone(),
-                    room_id: room_id.clone(),
-                    revision: next_revision,
-                    ops,
-                },
-            );
+            None => Box::pin(stream::pending()),
+        };
+
+        futures_util::pin_mut!(updates);
+
+        loop {
+            tokio::select! {
+                Some(diffs) = updates.next() => {
+                    apply_item_id_diffs(&mut item_ids, &diffs);
+                    let ops = {
+                        let mut registry = media.lock().await;
+                        registry.retain_items(item_ids.iter().map(String::as_str));
+                        project_timeline_diffs_with_media(
+                            &diffs,
+                            own_user_id.as_deref(),
+                            &mut registry,
+                        )
+                    };
+                    if ops.is_empty() {
+                        continue;
+                    }
+                    emit_view_delta_batch(
+                        &app,
+                        session_generation,
+                        &stream_id,
+                        &room_id,
+                        &revision,
+                        ops,
+                        None,
+                        None,
+                    );
+                }
+                Some(_) = room_info.next() => {
+                    let read_state =
+                        project_live_read_state(&timeline, &position, own_user_id.as_deref()).await;
+                    if read_state == last_read_state {
+                        continue;
+                    }
+                    last_read_state = read_state.clone();
+                    emit_view_delta_batch(
+                        &app,
+                        session_generation,
+                        &stream_id,
+                        &room_id,
+                        &revision,
+                        Vec::new(),
+                        Some(read_state),
+                        None,
+                    );
+                }
+                Some(()) = read_receipts.next() => {
+                    let read_state =
+                        project_live_read_state(&timeline, &position, own_user_id.as_deref()).await;
+                    if read_state == last_read_state {
+                        continue;
+                    }
+                    last_read_state = read_state.clone();
+                    emit_view_delta_batch(
+                        &app,
+                        session_generation,
+                        &stream_id,
+                        &room_id,
+                        &revision,
+                        Vec::new(),
+                        Some(read_state),
+                        None,
+                    );
+                }
+                Some(status) = pagination_updates.next() => {
+                    let pagination = pagination_state_from_status(status, &hit_start);
+                    if pagination == last_pagination {
+                        continue;
+                    }
+                    last_pagination = pagination.clone();
+                    emit_view_delta_batch(
+                        &app,
+                        session_generation,
+                        &stream_id,
+                        &room_id,
+                        &revision,
+                        Vec::new(),
+                        None,
+                        Some(pagination),
+                    );
+                }
+                else => break,
+            }
         }
     })
+}
+
+fn emit_view_delta_batch(
+    app: &AppHandle,
+    session_generation: u64,
+    stream_id: &str,
+    room_id: &str,
+    revision: &AtomicU64,
+    ops: Vec<super::TimelineViewDeltaOp>,
+    read_state: Option<TimelineReadState>,
+    pagination: Option<TimelinePaginationState>,
+) {
+    if ops.is_empty() && read_state.is_none() && pagination.is_none() {
+        return;
+    }
+    let next_revision = revision.fetch_add(1, Ordering::AcqRel).saturating_add(1);
+    let _ = app.emit(
+        NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
+        TimelineViewDeltaBatch {
+            schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+            session_generation,
+            stream_id: stream_id.to_owned(),
+            room_id: room_id.to_owned(),
+            revision: next_revision,
+            ops,
+            read_state,
+            pagination,
+        },
+    );
+}
+
+fn pagination_state_from_hit_start(hit_start: bool) -> TimelinePaginationState {
+    TimelinePaginationState {
+        backward: if hit_start {
+            TimelinePageState::Exhausted
+        } else {
+            TimelinePageState::Available
+        },
+        forward: TimelinePageState::Available,
+    }
+}
+
+fn pagination_state_from_status(
+    status: PaginationStatus,
+    hit_start: &AtomicBool,
+) -> TimelinePaginationState {
+    let backward = match status {
+        PaginationStatus::Paginating => TimelinePageState::Loading,
+        PaginationStatus::Idle {
+            hit_timeline_start: true,
+        } => {
+            hit_start.store(true, Ordering::Release);
+            TimelinePageState::Exhausted
+        }
+        PaginationStatus::Idle {
+            hit_timeline_start: false,
+        } => {
+            if hit_start.load(Ordering::Acquire) {
+                TimelinePageState::Exhausted
+            } else {
+                TimelinePageState::Available
+            }
+        }
+    };
+    TimelinePaginationState {
+        backward,
+        forward: TimelinePageState::Available,
+    }
+}
+
+async fn project_live_read_state(
+    timeline: &Timeline,
+    position: &TimelineViewPosition,
+    own_user_id: Option<&UserId>,
+) -> TimelineReadState {
+    let unread_anchor_event_id = match position {
+        TimelineViewPosition::Unread { anchor_event_id } => Some(anchor_event_id.clone()),
+        _ => None,
+    };
+    let own_read_event_id = match timeline.room().fully_read_event_id() {
+        Some(event_id) => Some(event_id.to_string()),
+        None => match own_user_id {
+            Some(user_id) => timeline
+                .latest_user_read_receipt_timeline_event_id(user_id)
+                .await
+                .map(|event_id| event_id.to_string()),
+            None => None,
+        },
+    };
+    TimelineReadState {
+        own_read_event_id,
+        unread_anchor_event_id,
+        is_marked_unread: timeline.room().is_marked_unread(),
+    }
 }
 
 /// Build the currently available native view snapshot from the SDK owner.
@@ -1410,20 +1596,8 @@ async fn view_snapshot_from_items(
     input: TimelineViewSnapshotInput,
     timeline: &Timeline,    rows: Vec<super::TimelineViewRow>,
 ) -> TimelineViewSnapshot {
-    let unread_anchor_event_id = match &input.position {
-        TimelineViewPosition::Unread { anchor_event_id } => Some(anchor_event_id.clone()),
-        _ => None,
-    };
-    let own_read_event_id = match timeline.room().fully_read_event_id() {
-        Some(event_id) => Some(event_id.to_string()),
-        None => match input.own_user_id.as_ref() {
-            Some(user_id) => timeline
-                .latest_user_read_receipt_timeline_event_id(user_id)
-                .await
-                .map(|event_id| event_id.to_string()),
-            None => None,
-        },
-    };
+    let read_state =
+        project_live_read_state(timeline, &input.position, input.own_user_id.as_deref()).await;
     TimelineViewSnapshot {
         schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
         session_generation: input.session_generation,
@@ -1431,11 +1605,7 @@ async fn view_snapshot_from_items(
         revision: input.revision,
         position: input.position,
         pagination: input.pagination,
-        read_state: TimelineReadState {
-            own_read_event_id,
-            unread_anchor_event_id,
-            is_marked_unread: timeline.room().is_marked_unread(),
-        },
+        read_state,
         rows,
         capabilities: TimelineViewCapabilities {
             mark_read: true,
@@ -1941,6 +2111,51 @@ mod tests {
         assert!(snapshot.get("items").is_none());
         assert_eq!(snapshot["readState"]["isMarkedUnread"], false);
         assert_eq!(json["position"]["kind"], "live_bottom");
+    }
+
+    #[test]
+    fn view_delta_batch_can_carry_live_read_and_pagination_metadata() {
+        let batch = TimelineViewDeltaBatch {
+            schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+            session_generation: 3,
+            stream_id: "live:!room:example.org:1".into(),
+            room_id: "!room:example.org".into(),
+            revision: 4,
+            ops: Vec::new(),
+            read_state: Some(TimelineReadState {
+                own_read_event_id: Some("$read:example.org".into()),
+                unread_anchor_event_id: None,
+                is_marked_unread: false,
+            }),
+            pagination: Some(TimelinePaginationState {
+                backward: TimelinePageState::Exhausted,
+                forward: TimelinePageState::Available,
+            }),
+        };
+        let json = serde_json::to_value(&batch).unwrap();
+        assert_eq!(json["revision"], 4);
+        assert!(json["ops"].as_array().unwrap().is_empty());
+        assert_eq!(json["readState"]["ownReadEventId"], "$read:example.org");
+        assert_eq!(json["pagination"]["backward"], "exhausted");
+
+        let hit_start = AtomicBool::new(false);
+        assert_eq!(
+            pagination_state_from_status(
+                PaginationStatus::Idle {
+                    hit_timeline_start: true
+                },
+                &hit_start
+            ),
+            TimelinePaginationState {
+                backward: TimelinePageState::Exhausted,
+                forward: TimelinePageState::Available,
+            }
+        );
+        assert!(hit_start.load(Ordering::Acquire));
+        assert_eq!(
+            pagination_state_from_status(PaginationStatus::Paginating, &hit_start).backward,
+            TimelinePageState::Loading
+        );
     }
 
     #[test]
