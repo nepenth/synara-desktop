@@ -741,6 +741,12 @@
           "markdownDescription": "Enables the matrix_session_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_space_parents_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-space-parents-snapshot",
+          "markdownDescription": "Enables the matrix_space_parents_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_sync_status command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-sync-status",
@@ -1225,6 +1231,12 @@
           "type": "string",
           "const": "deny-matrix-session-snapshot",
           "markdownDescription": "Denies the matrix_session_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_space_parents_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-space-parents-snapshot",
+          "markdownDescription": "Denies the matrix_space_parents_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_sync_status command without any pre-configured scope.",
