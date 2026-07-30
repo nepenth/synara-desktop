@@ -172,17 +172,19 @@ fn project_event_row_for_user(
     let base = project_event_row_base(item_id, event);
     match event.content() {
         TimelineItemContent::MsgLike(content) => match &content.kind {
-            MsgLikeKind::Message(message) => TimelineViewRow::Message(TimelineMessageRow {
-                event: base,
-                body: message.body().to_owned(),
-                formatted_body: None,
-                message_type: None,
-                edited: message.is_edited(),
-                reply: project_reply(content),
-                thread: project_thread_summary(content, event),
-                reactions: project_reactions(content, own_user_id),
-                media: None,
-            }),
+            MsgLikeKind::Message(message) => {
+                TimelineViewRow::Message(Box::new(TimelineMessageRow {
+                    event: base,
+                    body: message.body().to_owned(),
+                    formatted_body: None,
+                    message_type: None,
+                    edited: message.is_edited(),
+                    reply: project_reply(content),
+                    thread: project_thread_summary(content, event),
+                    reactions: project_reactions(content, own_user_id),
+                    media: None,
+                }))
+            }
             MsgLikeKind::Poll(poll) => {
                 let results = poll.results();
                 TimelineViewRow::Poll(TimelinePollRow {
@@ -411,7 +413,7 @@ pub struct TimelineOtherRow {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum TimelineViewRow {
-    Message(TimelineMessageRow),
+    Message(Box<TimelineMessageRow>),
     Sticker {
         event: TimelineEventRowBase,
         media: TimelineMediaHandle,
