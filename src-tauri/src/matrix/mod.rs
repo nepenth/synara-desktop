@@ -10,7 +10,6 @@
 //! P2.6: Destructive lifecycle (logout, local wipe, failed-store recovery).
 //! P3.1: Discovery and login-flow service (harness; no login execution).
 //! P3.2: Password/token login + device naming (harness).
-//! P3.3: SSO / OAuth callback lifecycle foundation (harness; no tokens stored).
 //! P3.4: Interactive auth (UIA) multi-stage foundation (harness; no secrets).
 //! P3.5: Session secret / refresh-token persistence foundation (host vault only).
 //! P3.8: Remote logout flow + recovery UX copy keys (harness).

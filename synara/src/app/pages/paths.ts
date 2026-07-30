@@ -3,7 +3,6 @@ export const ROOT_PATH = '/';
 export type LoginPathSearchParams = {
   username?: string;
   email?: string;
-  loginToken?: string;
 };
 export const LOGIN_PATH = '/login/:server?/';
 

@@ -26,7 +26,7 @@ use serde_json::Value;
 use super::discovery::{DiscoveryTransport, WellKnownClientConfig};
 use super::error::AuthError;
 use super::input::normalize_homeserver_url;
-use super::login_flow::{LoginFlow, LoginFlowTransport, SsoIdentityProvider};
+use super::login_flow::{LoginFlow, LoginFlowTransport};
 use crate::matrix::client_builder::default_user_agent;
 
 /// Default HTTP timeout for discovery / login-types (seconds).
@@ -183,49 +183,10 @@ pub fn parse_login_types_json(raw: &str) -> Result<Vec<LoginFlow>, AuthError> {
                 .ok_or(AuthError::UnsupportedCapability {
                     diagnostic_id: "r0.7-login-types-missing-type",
                 })?;
-        let idps = parse_identity_providers(flow.get("identity_providers"));
         let get_login_token = flow.get("get_login_token").and_then(|v| v.as_bool());
-        // Spec / Element extensions may surface oauth preference under various keys;
-        // only accept boolean product-safe fields when present.
-        let oauth_aware = flow
-            .get("org.matrix.msc3824.oauth_aware_preferred")
-            .or_else(|| flow.get("oauth_aware_preferred"))
-            .and_then(|v| v.as_bool());
-        out.push(LoginFlow::from_matrix_parts(
-            matrix_type,
-            idps,
-            get_login_token,
-            oauth_aware,
-        ));
+        out.push(LoginFlow::from_matrix_parts(matrix_type, get_login_token));
     }
     Ok(out)
-}
-
-fn parse_identity_providers(value: Option<&Value>) -> Vec<SsoIdentityProvider> {
-    let Some(Value::Array(items)) = value else {
-        return Vec::new();
-    };
-    let mut out = Vec::new();
-    for item in items {
-        let Some(id) = item.get("id").and_then(|v| v.as_str()) else {
-            continue;
-        };
-        let name = item
-            .get("name")
-            .and_then(|v| v.as_str())
-            .unwrap_or(id)
-            .to_owned();
-        let brand = item
-            .get("brand")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_owned());
-        out.push(SsoIdentityProvider {
-            id: id.to_owned(),
-            name,
-            brand,
-        });
-    }
-    out
 }
 
 fn map_reqwest_error(err: reqwest::Error) -> AuthError {
@@ -309,30 +270,21 @@ mod tests {
     }
 
     #[test]
-    fn parse_login_types_password_and_sso() {
+    fn parse_login_types_password_token_and_unknown() {
         let raw = r#"{
           "flows": [
             {"type": "m.login.password"},
-            {
-              "type": "m.login.sso",
-              "identity_providers": [
-                {"id": "github", "name": "GitHub", "brand": "github"}
-              ]
-            },
             {"type": "m.login.token", "get_login_token": true},
             {"type": "m.login.custom"}
           ]
         }"#;
         let flows = parse_login_types_json(raw).unwrap();
-        assert_eq!(flows.len(), 4);
+        assert_eq!(flows.len(), 3);
         assert_eq!(flows[0].kind, LoginFlowKind::Password);
-        assert_eq!(flows[1].kind, LoginFlowKind::Sso);
-        assert_eq!(flows[1].identity_providers.len(), 1);
-        assert_eq!(flows[1].identity_providers[0].id, "github");
-        assert_eq!(flows[2].kind, LoginFlowKind::Token);
-        assert_eq!(flows[2].get_login_token, Some(true));
-        assert_eq!(flows[3].kind, LoginFlowKind::Unknown);
-        assert_eq!(flows[3].matrix_type, "m.login.custom");
+        assert_eq!(flows[1].kind, LoginFlowKind::Token);
+        assert_eq!(flows[1].get_login_token, Some(true));
+        assert_eq!(flows[2].kind, LoginFlowKind::Unknown);
+        assert_eq!(flows[2].matrix_type, "m.login.custom");
     }
 
     #[test]

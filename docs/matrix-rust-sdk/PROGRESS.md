@@ -12,11 +12,11 @@
 | Field              | Value                                                                                                                                                       |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-07-29**                                                                                                                                              |
-| Integration tip    | `528a510c2034e438136a04f22362c3a9180d77a9` — V-CRYPTO.7 merged in [#236](https://github.com/nepenth/synara-desktop/pull/236)                                |
-| Active work        | **Between product slices.** V-CRYPTO.7 #236 is merged (reviewed, green product/test head `192be46`); V-AUTH.1 is the complete desktop SSO-removal vertical. |
+| Integration tip    | `ff05015918e01625c497dfd01a86cb1d9a30be02` — documentation alignment [#237](https://github.com/nepenth/synara-desktop/pull/237) merged after V-CRYPTO.7      |
+| Active work        | **V-AUTH.1 active in draft [#238](https://github.com/nepenth/synara-desktop/pull/238).** Complete desktop SSO removal; required CI and exact AST inventory pending. |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                       |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-terra`, high                                                                               |
-| Import accounting  | V-CRYPTO.7 removed six importers and eight declarations: desktop **218/273→212/265**, production **207→201**, repository-wide **221→215**.                  |
+| Import accounting  | V-AUTH.1 #238 candidate removes four importers/four declarations: desktop **212/265→208/261**, production **201→197**, repository-wide **215→211**.           |
 | Dual backend       | **`false`** (forbidden forever)                                                                                                                             |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                                                    |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                                        |
@@ -30,10 +30,10 @@
 
 |               |                                                                                                                                                                        |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**       | **V-CRYPTO.7 [#236](https://github.com/nepenth/synara-desktop/pull/236) is merged** at `528a510` (reviewed, green product/test head `192be46`); live multi-session/UI proof remains unclaimed. V-AUTH.1 next deletes desktop SSO completely. **#221 HOLD**. |
+| **Now**       | **V-AUTH.1 [#238](https://github.com/nepenth/synara-desktop/pull/238) is active.** It physically removes desktop SSO entry/callback/token-completion ownership and native SSO UIAA continuation; SSO-only responses are unsupported. Exact AST inventory: 212/265→208/261 desktop, 201→197 production, 215→211 repository-wide. Required CI remains pending. **#221 HOLD**. |
 | **Policy**    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                     |
-| **Tip**       | `528a510c2034e438136a04f22362c3a9180d77a9` is the V-CRYPTO.7 merge; product/test head `192be46` passed required checks before merge.                                  |
-| **Active PR** | None.                                                                                                                                                                      |
+| **Tip**       | `ff05015918e01625c497dfd01a86cb1d9a30be02` merged documentation alignment [#237](https://github.com/nepenth/synara-desktop/pull/237); V-CRYPTO.7 remains the latest completed product vertical. |
+| **Active PR** | Draft [#238](https://github.com/nepenth/synara-desktop/pull/238) — V-AUTH.1 complete desktop SSO removal.                                                                 |
 | **Blocked**   | Merging plateau D0.6 (#221); declaring later wired crypto rows done before JS deletion; starting new media/widgets/etc before the residual queue.                      |
 
 ---
@@ -63,8 +63,8 @@ Update rules:
 
 | When (UTC) | Item                          | Result                                                                | Notes                                                                                                                                           |
 | ---------- | ----------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-AUTH.1 SSO removal**      | **Draft [#238](https://github.com/nepenth/synara-desktop/pull/238)** | Candidate deletes browser SSO entry/callback/token-completion ownership, Rust SSO flow/UIAA/callback support, and the device-delete SSO command/ACL. Password login and password-only delete UIAA remain; generic token foundation awaits V-AUTH.2; external OIDC account-management remains. Focused Rust tests pass; AST inventory is 212/265→208/261 desktop, 201→197 production, 215→211 repository-wide; required CI pending. |
 | current    | **V-CRYPTO.7 devices/trust**  | **Merged** [#236](https://github.com/nepenth/synara-desktop/pull/236)  | Integration `528a510`; reviewed, green product/test head `192be46`; native list/trust/rename/delete/UIAA owns the device page; JS owners deleted; inventory 218/273→212/265; live proof unclaimed. |
-| current    | **V-AUTH.1 SSO removal**      | **Product direction set**                                               | Delete all desktop SSO entry points, callback/token-completion ownership, and native SSO UIAA continuation. No Rust SSO replacement, identity prompt, inferred identity, or fallback route. |
 | earlier    | **V-CRYPTO.6 UTD recovery**   | **Merged** [#235](https://github.com/nepenth/synara-desktop/pull/235) | Integration tip `05e3f64`; native late-key readback and JS retry/listener deletion landed.                                                      |
 | ~14:20     | **V-CRYPTO.4 secret storage** | **Merged** [#234](https://github.com/nepenth/synara-desktop/pull/234) | Tip `c2a002d`; legacy secret-storage owner deleted; direct imports 219/276 → 218/275.                                                           |
 | ~13:13     | **V-CRYPTO.3 key backup**     | **Merged** [#233](https://github.com/nepenth/synara-desktop/pull/233) | Tip `38f0994`; legacy UI/listeners/progress/auto-restore deleted; native owner retained; direct imports 222/279 → 219/276.                      |

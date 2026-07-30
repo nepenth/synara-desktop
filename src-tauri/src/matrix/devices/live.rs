@@ -1,15 +1,11 @@
 //! Live V-CRYPTO.7 device projection and session-scoped update signal.
 
-use std::{borrow::Cow, collections::BTreeSet};
+use std::collections::BTreeSet;
 
 use futures_util::StreamExt;
 use matrix_sdk::{
     ruma::{
-        api::{
-            auth_scheme::SendAccessToken,
-            client::uiaa::{get_uiaa_fallback_page, AuthType, UiaaInfo},
-            OutgoingRequest,
-        },
+        api::client::uiaa::{AuthType, UiaaInfo},
         OwnedDeviceId,
     },
     Client,
@@ -58,7 +54,6 @@ impl NativeDeviceSnapshot {
 #[serde(rename_all = "snake_case")]
 pub enum NativeDeviceDeleteAuthentication {
     Password,
-    SsoFallback,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -67,7 +62,6 @@ pub struct NativeDeviceDeleteChallenge {
     pub operation_id: u64,
     pub session_generation: u64,
     pub authentication: NativeDeviceDeleteAuthentication,
-    pub sso_fallback_url: Option<String>,
     pub authentication_failed: bool,
 }
 
@@ -212,40 +206,12 @@ pub fn supported_delete_authentication(
             .iter()
             .filter(|stage| !info.completed.contains(stage))
             .collect::<Vec<_>>();
-        if remaining.is_empty()
-            || !remaining
-                .iter()
-                .all(|stage| **stage == AuthType::Password || **stage == AuthType::Sso)
-        {
+        if remaining.is_empty() || !remaining.iter().all(|stage| **stage == AuthType::Password) {
             continue;
         }
-        match remaining[0] {
-            AuthType::Password => {
-                supported.insert(NativeDeviceDeleteAuthentication::Password);
-            }
-            AuthType::Sso => {
-                supported.insert(NativeDeviceDeleteAuthentication::SsoFallback);
-            }
-            _ => unreachable!("remaining stages were restricted above"),
-        }
+        supported.insert(NativeDeviceDeleteAuthentication::Password);
     }
     supported
-}
-
-pub async fn sso_fallback_url(client: &Client, auth_session: &str) -> Result<String, &'static str> {
-    let request = get_uiaa_fallback_page::v3::Request::new(AuthType::Sso, auth_session.to_owned());
-    let supported = client
-        .supported_versions()
-        .await
-        .map_err(|_| "v-crypto.7-device-delete-fallback-versions-failed")?;
-    let request = request
-        .try_into_http_request::<Vec<u8>>(
-            client.homeserver().as_str(),
-            SendAccessToken::None,
-            Cow::Owned(supported),
-        )
-        .map_err(|_| "v-crypto.7-device-delete-fallback-url-failed")?;
-    Ok(request.uri().to_string())
 }
 
 #[cfg(test)]
@@ -258,32 +224,21 @@ mod tests {
     };
 
     #[test]
-    fn deletion_auth_projection_is_bounded_to_password_and_sso() {
+    fn deletion_auth_projection_supports_password_only_flows() {
         let info = UiaaInfo::new(vec![
             AuthFlow::new(vec![AuthType::Password]),
             AuthFlow::new(vec![AuthType::Sso]),
             AuthFlow::new(vec![AuthType::ReCaptcha]),
         ]);
         let methods = supported_delete_authentication(&info);
-        assert_eq!(methods.len(), 2);
+        assert_eq!(methods.len(), 1);
         assert!(methods.contains(&NativeDeviceDeleteAuthentication::Password));
-        assert!(methods.contains(&NativeDeviceDeleteAuthentication::SsoFallback));
 
-        let mut staged =
-            UiaaInfo::new(vec![AuthFlow::new(vec![AuthType::Password, AuthType::Sso])]);
-        assert_eq!(
-            supported_delete_authentication(&staged)
-                .into_iter()
-                .collect::<Vec<_>>(),
-            vec![NativeDeviceDeleteAuthentication::Password]
-        );
-        staged.completed.push(AuthType::Password);
-        assert_eq!(
-            supported_delete_authentication(&staged)
-                .into_iter()
-                .collect::<Vec<_>>(),
-            vec![NativeDeviceDeleteAuthentication::SsoFallback]
-        );
+        let mixed = UiaaInfo::new(vec![AuthFlow::new(vec![AuthType::Password, AuthType::Sso])]);
+        assert!(supported_delete_authentication(&mixed).is_empty());
+
+        let sso_only = UiaaInfo::new(vec![AuthFlow::new(vec![AuthType::Sso])]);
+        assert!(supported_delete_authentication(&sso_only).is_empty());
     }
 
     #[test]
@@ -319,7 +274,6 @@ mod tests {
             operation_id: 3,
             session_generation: 7,
             authentication: NativeDeviceDeleteAuthentication::Password,
-            sso_fallback_url: None,
             authentication_failed: false,
         };
         let challenge_json = serde_json::to_string(&challenge).unwrap();
