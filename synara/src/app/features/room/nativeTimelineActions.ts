@@ -14,6 +14,7 @@ export type NativeTimelineActionKind =
   | 'edit_text'
   | 'redact'
   | 'forward_text'
+  | 'forward_media'
   | 'report'
   | 'pin'
   | 'unpin';
@@ -53,6 +54,12 @@ export type NativeTimelineForwardTextInput = {
   eventId: string;
   targetRoomId: string;
   asQuote?: boolean;
+};
+
+export type NativeTimelineForwardMediaInput = {
+  sourceRoomId: string;
+  eventId: string;
+  targetRoomId: string;
 };
 
 export type NativeTimelineReportInput = {
@@ -130,6 +137,17 @@ export async function forwardTextWithNativeTimelineOwner(
   const result = await invoke('matrix_timeline_forward_text', { request: input });
   if (!result.available) return 'unavailable';
   return acceptActionReadback(result.value, 'forward_text') ?? 'unavailable';
+}
+
+export async function forwardMediaWithNativeTimelineOwner(
+  input: NativeTimelineForwardMediaInput,
+  desktopAvailable: boolean,
+  invoke: NativeInvoke
+): Promise<NativeTimelineActionReadback | 'unavailable'> {
+  if (!desktopAvailable) return 'unavailable';
+  const result = await invoke('matrix_timeline_forward_media', { request: input });
+  if (!result.available) return 'unavailable';
+  return acceptActionReadback(result.value, 'forward_media') ?? 'unavailable';
 }
 
 export async function reportWithNativeTimelineOwner(

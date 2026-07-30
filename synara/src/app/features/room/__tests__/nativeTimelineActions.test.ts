@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   editTextWithNativeTimelineOwner,
+  forwardMediaWithNativeTimelineOwner,
   forwardTextWithNativeTimelineOwner,
   pinWithNativeTimelineOwner,
   redactWithNativeTimelineOwner,
@@ -65,6 +66,28 @@ test('redact and forward owners reject mismatched action kinds', async () => {
     })
   );
   assert.notEqual(forward, 'unavailable');
+});
+
+test('forwardMediaWithNativeTimelineOwner accepts typed media forward readback', async () => {
+  const forward = await forwardMediaWithNativeTimelineOwner(
+    {
+      sourceRoomId: '!source:example.org',
+      eventId: '$media:example.org',
+      targetRoomId: '!target:example.org',
+    },
+    true,
+    okInvoke('matrix_timeline_forward_media', {
+      schemaVersion: 1,
+      action: 'forward_media',
+      roomId: '!target:example.org',
+      eventId: '$fwd:example.org',
+      status: 'sent',
+    })
+  );
+  assert.notEqual(forward, 'unavailable');
+  if (forward === 'unavailable') return;
+  assert.equal(forward.action, 'forward_media');
+  assert.equal(forward.eventId, '$fwd:example.org');
 });
 
 test('native timeline action owners stay unavailable off desktop', async () => {

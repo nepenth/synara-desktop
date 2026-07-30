@@ -16,6 +16,7 @@ pub enum NativeTimelineActionKind {
     EditText,
     Redact,
     ForwardText,
+    ForwardMedia,
     Report,
     Pin,
     Unpin,
@@ -67,6 +68,14 @@ pub struct NativeTimelineForwardTextRequest {
     pub as_quote: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineForwardMediaRequest {
+    pub source_room_id: String,
+    pub event_id: String,
+    pub target_room_id: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineActionReadback {
@@ -108,6 +117,11 @@ pub fn format_forwarded_plain_body(sender_label: &str, body: &str, as_quote: boo
     } else {
         format!("Forwarded from {sender_label}\n\n{trimmed}")
     }
+}
+
+/// Attribute a media/sticker body when forwarding without rewriting media sources.
+pub fn format_forwarded_media_body(sender_label: &str, body: &str) -> String {
+    format_forwarded_plain_body(sender_label, body, false)
 }
 
 fn trim_mx_reply_prefix(body: &str) -> String {
@@ -152,6 +166,18 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(edit.event_id, "$edit:example.org");
+
+        let media: NativeTimelineForwardMediaRequest = serde_json::from_value(serde_json::json!({
+            "sourceRoomId": "!source:example.org",
+            "eventId": "$media:example.org",
+            "targetRoomId": "!target:example.org"
+        }))
+        .unwrap();
+        assert_eq!(media.event_id, "$media:example.org");
+        assert_eq!(
+            format_forwarded_media_body("@alice:example.org", "photo.jpg"),
+            "Forwarded from @alice:example.org\n\nphoto.jpg"
+        );
 
         let redact: NativeTimelineRedactRequest = serde_json::from_value(serde_json::json!({
             "roomId": "!room:example.org",
