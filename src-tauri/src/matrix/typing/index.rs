@@ -154,6 +154,17 @@ impl TypingIndex {
             .unwrap_or(false)
     }
 
+    /// All rooms currently reporting at least one typer.
+    pub fn nonempty_snapshots(&self) -> Vec<TypingSnapshot> {
+        let mut rooms: Vec<TypingSnapshot> = self
+            .by_room
+            .keys()
+            .map(|room_id| self.snapshot(room_id))
+            .collect();
+        rooms.sort_by(|a, b| a.room_id.cmp(&b.room_id));
+        rooms
+    }
+
     /// Bump generation and wipe (logout / account switch).
     pub fn retire_generation(&mut self, new_generation: u64) {
         self.session_generation = new_generation;

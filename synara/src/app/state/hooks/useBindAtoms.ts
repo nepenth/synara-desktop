@@ -4,7 +4,7 @@ import { useBindAllRoomsAtom } from '../room-list/roomList';
 import { mDirectAtom, useBindMDirectAtom } from '../mDirectList';
 import { useBindRoomToUnreadAtom } from '../room/roomToUnread';
 import { roomToParentsAtom, useBindRoomToParentsAtom } from '../room/roomToParents';
-import { roomIdToTypingMembersAtom, useBindRoomIdToTypingMembersAtom } from '../typingMembers';
+import { useBindRoomIdToTypingMembersAtom } from '../typingMembers';
 
 export const useBindAtoms = (mx: MatrixClient) => {
   useBindMDirectAtom(mx, mDirectAtom);
@@ -13,5 +13,5 @@ export const useBindAtoms = (mx: MatrixClient) => {
   useBindRoomToParentsAtom(mx, roomToParentsAtom);
   useBindRoomToUnreadAtom();
 
-  useBindRoomIdToTypingMembersAtom(mx, roomIdToTypingMembersAtom);
+  useBindRoomIdToTypingMembersAtom();
 };
