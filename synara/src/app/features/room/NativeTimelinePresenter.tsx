@@ -2,11 +2,15 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Box, Button, Scroll, Text, config } from 'folds';
 import { sanitizeCustomHtml } from '../../utils/sanitize';
+import { toggleReactionWithNativeOwner } from './nativeReactionOwner';
+import { callDeclineWithNativeTimelineOwner } from './nativeTimelineActions';
 import {
   nativeTimelineMediaSrc,
+  type NativeTimelineRowCapabilities,
   type NativeTimelineViewRow,
   useNativeTimelineView,
 } from './nativeTimelineView';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 
 type NativeTimelinePresenterProps = {
   roomId: string;
@@ -53,7 +57,42 @@ const findAnchorIndex = (
     (row) => rowKey(row) === anchor.itemId || (anchor.eventId && rowEventId(row) === anchor.eventId)
   );
 
-const NativeTimelineRow = ({ row }: { row: NativeTimelineViewRow }) => {
+const rowCapabilities = (row: NativeTimelineViewRow): NativeTimelineRowCapabilities | undefined => {
+  if (row.kind === 'sticker') return row.event.capabilities;
+  if ('capabilities' in row) return row.capabilities;
+  return undefined;
+};
+
+type NativeTimelineRowProps = {
+  row: NativeTimelineViewRow;
+  roomId: string;
+  onActionError: (message: string) => void;
+};
+
+const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProps) => {
+  const capabilities = rowCapabilities(row);
+  const eventId = rowEventId(row);
+  const runReaction = (key: string) => {
+    if (!eventId || !capabilities?.react) return;
+    void toggleReactionWithNativeOwner({ roomId, eventId, key }).catch((error) => {
+      onActionError(error instanceof Error ? error.message : 'Native reaction failed.');
+    });
+  };
+  const runDecline = () => {
+    if (!eventId || !capabilities?.declineCall) return;
+    void callDeclineWithNativeTimelineOwner(
+      { roomId, eventId },
+      isSynaraDesktop(),
+      invokeDesktopWithAvailability
+    )
+      .then((result) => {
+        if (result === 'unavailable') onActionError('Native call decline is unavailable.');
+      })
+      .catch((error) => {
+        onActionError(error instanceof Error ? error.message : 'Native call decline failed.');
+      });
+  };
+
   switch (row.kind) {
     case 'message': {
       const mediaSrc = row.media ? nativeTimelineMediaSrc(row.media) : undefined;
@@ -107,6 +146,27 @@ const NativeTimelineRow = ({ row }: { row: NativeTimelineViewRow }) => {
               {row.body}
             </a>
           )}
+          {(row.reactions?.length || capabilities?.react) && (
+            <Box gap="100" wrap="Wrap">
+              {row.reactions?.map((reaction) => (
+                <Button
+                  key={reaction.key}
+                  size="300"
+                  variant={reaction.own ? 'Primary' : 'Secondary'}
+                  fill="Soft"
+                  disabled={!capabilities?.react}
+                  onClick={() => runReaction(reaction.key)}
+                >
+                  {reaction.key} {reaction.count}
+                </Button>
+              ))}
+              {capabilities?.react && (
+                <Button size="300" fill="Soft" onClick={() => runReaction('👍')}>
+                  React
+                </Button>
+              )}
+            </Box>
+          )}
         </Box>
       );
     }
@@ -126,12 +186,26 @@ const NativeTimelineRow = ({ row }: { row: NativeTimelineViewRow }) => {
         >
           <Text size="L400">{row.question}</Text>
           <Text size="T300">{row.closed ? 'Poll closed' : 'Poll open'}</Text>
+          {capabilities?.react && (
+            <Button size="300" fill="Soft" onClick={() => runReaction('👍')}>
+              React
+            </Button>
+          )}
         </Box>
       );
     case 'call':
       return (
-        <Box style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
+        <Box
+          direction="Column"
+          gap="100"
+          style={{ padding: `${config.space.S200} ${config.space.S400}` }}
+        >
           <Text size="T300">{row.callKind}</Text>
+          {capabilities?.declineCall && (
+            <Button size="300" fill="Soft" onClick={runDecline}>
+              Decline call
+            </Button>
+          )}
         </Box>
       );
     case 'date_separator':
@@ -169,11 +243,20 @@ const NativeTimelineRow = ({ row }: { row: NativeTimelineViewRow }) => {
     case 'sticker': {
       const mediaSrc = nativeTimelineMediaSrc(row.media);
       return (
-        <Box style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
+        <Box
+          direction="Column"
+          gap="100"
+          style={{ padding: `${config.space.S200} ${config.space.S400}` }}
+        >
           {mediaSrc ? (
             <img src={mediaSrc} alt="Sticker" style={{ maxWidth: 256, maxHeight: 256 }} />
           ) : (
             <Text size="T300">Sticker media is unavailable.</Text>
+          )}
+          {capabilities?.react && (
+            <Button size="300" fill="Soft" onClick={() => runReaction('👍')}>
+              React
+            </Button>
           )}
         </Box>
       );
@@ -367,7 +450,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
                   width: '100%',
                 }}
               >
-                <NativeTimelineRow row={row} />
+                <NativeTimelineRow row={row} roomId={roomId} onActionError={setActionError} />
               </div>
             );
           })}

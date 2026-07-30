@@ -86,8 +86,9 @@ consumer. Its projection covers SDK virtual date/read/start rows plus safe
 message/relation (including SDK-sanitized `formatted_body` and text/notice/emote
 labels), poll, membership/profile/state summaries, call, redaction, sticker/
 media handles, and UTD row shapes. Reaction ownership is calculated from the
-active native user; its action capability remains closed until V-SEND.2 is
-integrated. Poll/call action commands, presenter selection, and live authenticated
+active native user; row `react` opens when V-SEND.2 commands are on tip and the
+unselected presenter/RoomTimeline consume `matrix_timeline_reaction_toggle`.
+Poll/call action commands exist; presenter selection and live authenticated
 viewport proof still remain. Body drafts remain local. The flat `NativeTimelineSnapshot` remains only for the explicitly
 temporary V-CRYPTO.6 bridge until those owners replace it.
 
@@ -141,7 +142,7 @@ legacy composer or a rich reply/edit flow.
 
 | Visible timeline capability | Required native owner before final cutover         | Current status                                                                                                                                                                                                                                                                 |
 | --------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Reactions                   | V-SEND.2 typed toggle/ensure/redact commands       | Candidate exists on its own branch; not integration evidence yet                                                                                                                                                                                                               |
+| Reactions                   | V-SEND.2 typed toggle/ensure/redact commands       | Merged on tip via [#239](https://github.com/nepenth/synara-desktop/pull/239); row `react` capability open for remote message/sticker/poll; RoomTimeline + unselected presenter invoke `nativeReactionOwner`                                                                                                                                  |
 | Plain-text reply            | Native send plus native reply draft/composer state | Transport via `matrix_send_text`/`reply_to`; `matrix_composer_{set,clear,get}_reply_draft` owns the reply target with typed readback; RoomTimeline/RoomInput consume that owner on desktop. Body drafts remain local Slate/localStorage                                        |
 | Rich send, edit, forward    | Typed send/edit/forward DTO commands               | `matrix_send_text` accepts optional `formattedBody`; edit accepts optional HTML; text forward and media/sticker forward (`matrix_timeline_forward_media`) exist with typed readback                                                                                            |
 | Redact, report, pin         | Typed room-event action commands                   | `matrix_timeline_redact`, `matrix_timeline_report`, `matrix_timeline_pin`, and `matrix_timeline_unpin` exist with typed readback                                                                                                                                               |

@@ -150,8 +150,8 @@ pub struct TimelineEventRowBase {
 ///
 /// The sender ID is the safe fallback display label until the native profile
 /// projection supplies a resolved display name. Affordance gates follow the
-/// typed native command surface: reply/edit/redact/forward open only when
-/// those owners exist; reactions remain closed until V-SEND.2 integrates.
+/// typed native command surface: reply/edit/redact/forward/react open only when
+/// those owners exist. Reactions consume the merged V-SEND.2 commands.
 pub fn project_event_row_base(item_id: &str, event: &EventTimelineItem) -> TimelineEventRowBase {
     let sender_id = event.sender().to_string();
     TimelineEventRowBase {
@@ -174,6 +174,14 @@ fn project_row_action_capabilities(event: &EventTimelineItem) -> TimelineRowCapa
                 MsgLikeKind::Message(_) | MsgLikeKind::Sticker(_)
             )
     );
+    let reactable = matches!(
+        event.content(),
+        TimelineItemContent::MsgLike(content)
+            if matches!(
+                content.kind,
+                MsgLikeKind::Message(_) | MsgLikeKind::Sticker(_) | MsgLikeKind::Poll(_)
+            )
+    );
     let voteable = matches!(
         event.content(),
         TimelineItemContent::MsgLike(content)
@@ -182,8 +190,8 @@ fn project_row_action_capabilities(event: &EventTimelineItem) -> TimelineRowCapa
     let declineable = matches!(event.content(), TimelineItemContent::RtcNotification { .. })
         && !event.is_own();
     TimelineRowCapabilities {
-        // Reactions remain on the V-SEND.2 owner until that vertical integrates.
-        react: false,
+        // V-SEND.2 reaction toggle/ensure/redact is on the integration tip.
+        react: has_remote_id && reactable,
         reply: has_remote_id && forwardable,
         edit: event.is_editable(),
         redact: has_remote_id,
