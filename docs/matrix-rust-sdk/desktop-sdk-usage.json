@@ -25,7 +25,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 115,
+          "fileCount": 113,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -53,8 +53,8 @@
         },
         "event_emitters_listeners": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 25,
-          "listenerCandidateOccurrences": 128,
+          "fileCount": 24,
+          "listenerCandidateOccurrences": 126,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
         },
@@ -88,8 +88,8 @@
         },
         "room_lists": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 46,
-          "listenerCandidateOccurrences": 14,
+          "fileCount": 45,
+          "listenerCandidateOccurrences": 12,
           "methodCandidateOccurrences": 99,
           "networkingOccurrences": 0
         },
@@ -137,9 +137,9 @@
         },
         "typing": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 1,
+          "fileCount": 0,
           "listenerCandidateOccurrences": 0,
-          "methodCandidateOccurrences": 3,
+          "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
         },
         "uia_auth": {
@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 194,
-      "importFileCount": 192,
+      "fileCount": 192,
+      "importFileCount": 190,
       "methodCandidateFrequencies": [
         {
           "count": 72,
@@ -248,10 +248,6 @@
         {
           "count": 3,
           "name": "mxcUrlToHttp"
-        },
-        {
-          "count": 3,
-          "name": "sendTyping"
         },
         {
           "count": 3,
@@ -392,8 +388,8 @@
           "importOccurrences": 1
         },
         "MatrixClient": {
-          "fileCount": 55,
-          "importOccurrences": 55
+          "fileCount": 53,
+          "importOccurrences": 53
         },
         "MatrixError": {
           "fileCount": 39,
@@ -430,8 +426,8 @@
       },
       "modules": [
         {
-          "fileCount": 183,
-          "importCount": 183,
+          "fileCount": 181,
+          "importCount": 181,
           "path": "matrix-js-sdk"
         },
         {
@@ -548,11 +544,11 @@
           "valueImports": 81
         },
         {
-          "fileCount": 55,
-          "importCount": 55,
+          "fileCount": 53,
+          "importCount": 53,
           "name": "MatrixClient",
           "typeImports": 6,
-          "valueImports": 49
+          "valueImports": 47
         },
         {
           "fileCount": 39,
@@ -781,13 +777,6 @@
         {
           "fileCount": 3,
           "importCount": 3,
-          "name": "RoomMemberEvent",
-          "typeImports": 0,
-          "valueImports": 3
-        },
-        {
-          "fileCount": 3,
-          "importCount": 3,
           "name": "RoomPinnedEventsEventContent",
           "typeImports": 0,
           "valueImports": 3
@@ -900,7 +889,7 @@
         {
           "fileCount": 2,
           "importCount": 2,
-          "name": "RoomMemberEventHandlerMap",
+          "name": "RoomMemberEvent",
           "typeImports": 0,
           "valueImports": 2
         },
@@ -1230,6 +1219,13 @@
           "fileCount": 1,
           "importCount": 1,
           "name": "RoomHistoryVisibilityEventContent",
+          "typeImports": 0,
+          "valueImports": 1
+        },
+        {
+          "fileCount": 1,
+          "importCount": 1,
+          "name": "RoomMemberEventHandlerMap",
           "typeImports": 0,
           "valueImports": 1
         },
@@ -10190,57 +10186,6 @@
     },
     {
       "bucket": "hook",
-      "categories": ["client_methods", "typing"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixClient"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "typing",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 18,
-          "name": "sendTyping"
-        },
-        {
-          "category": "typing",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 26,
-          "name": "sendTyping"
-        },
-        {
-          "category": "typing",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 34,
-          "name": "sendTyping"
-        }
-      ],
-      "modelCoupling": ["MatrixClient"],
-      "networking": [],
-      "path": "synara/src/app/hooks/useTypingStatusUpdater.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "hook",
       "categories": ["uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -12952,64 +12897,6 @@
     },
     {
       "bucket": "state",
-      "categories": [
-        "client_methods",
-        "event_emitters_listeners",
-        "room_lists"
-      ],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixClient"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "RoomMemberEvent"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "RoomMemberEventHandlerMap"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "RoomMemberEvent.Typing",
-          "line": 150,
-          "method": "on"
-        },
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "RoomMemberEvent.Typing",
-          "line": 152,
-          "method": "removeListener"
-        }
-      ],
-      "methodCandidates": [],
-      "modelCoupling": ["MatrixClient"],
-      "networking": [],
-      "path": "synara/src/app/state/typingMembers.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "state",
       "categories": ["client_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -14871,12 +14758,12 @@
         "client-lifecycle": 2,
         "component": 36,
         "feature": 56,
-        "hook": 51,
+        "hook": 50,
         "media-boundary": 1,
         "page": 14,
         "plugin": 8,
         "shared-type": 1,
-        "state": 9,
+        "state": 8,
         "utility": 14
       },
       "planComparison": {
@@ -14885,13 +14772,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 192,
+      "productionImportFiles": 190,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 202
+      "totalImportFiles": 200
     },
     "repositoryWide": {
-      "productionImportFiles": 192,
+      "productionImportFiles": 190,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -14900,7 +14787,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 205
+      "totalImportFiles": 203
     }
   }
 }

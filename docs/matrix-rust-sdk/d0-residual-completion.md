@@ -2,11 +2,11 @@
 
 | Field                     | Value                                                                                                                                                                     |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status                    | **Active — V-ROOMS.1 #241 merged; V-SEND.2 #239 remains draft/ordered; V-TIMELINE #240 has a fresh native-media candidate awaiting full CI** (2026-07-30)                 |
+| Status                    | **Active — V-ROOMS.3 #245 merged; V-ROOMS.4 typing draft; V-SEND.2 #239 remains draft/ordered; V-TIMELINE #240 awaits full CI** (2026-07-30)                 |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                        |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)                                                                                                                 |
-| Current integration tip   | `2c48fd45a08200a6e3491f100912f086e8458b3b` (V-ROOMS.1 #241 merge from green candidate `7ac2c48`)                                                                          |
-| Active PRs                | Draft [#239](https://github.com/nepenth/synara-desktop/pull/239) V-SEND.2; [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE; V-ROOMS.3 unread badges |
+| Current integration tip   | `efc90d59e6009f45589ce42a29a6f7ebafcf7624` (V-ROOMS.3 #245 merge from green candidate `a81e026`)                                                                          |
+| Active PRs                | Draft [#239](https://github.com/nepenth/synara-desktop/pull/239) V-SEND.2; [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE; V-ROOMS.4 typing |
 
 ## Policy trigger
 
@@ -66,8 +66,8 @@ Migration decision already decided: **`D-KEY-RECOVERY`** in [migration-ux-decisi
 | ------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | **V-ROOMS.1** | Invites list                         | **DONE #241** at integration `2c48fd45a08200a6e3491f100912f086e8458b3b`; candidate `7ac2c48` passed required scope, Synapse, desktop/runtime, and quality CI; production 197→194, repository-wide 211→208 | Native invites projection/actions/avatar route plus active JS-owner deletion landed |
 | **V-ROOMS.2** | Spaces / hierarchy / lobby           | js                                                                                                                                                                                                        | Native space hierarchy ownership                                                    |
-| **V-ROOMS.3** | Unread / notification badges on list | **Draft candidate** — native room-list unread map owns badges; JS roomList/roomToUnread binders deleted; production **194→192**, repository-wide **208→205**; live proof unclaimed                        | Native unread map drives list badges; JS unread owner deleted                       |
-| **V-ROOMS.4** | Typing indicators (if list/shell)    | js                                                                                                                                                                                                        | Native if product shows them                                                        |
+| **V-ROOMS.3** | Unread / notification badges on list | **DONE #245** at integration `efc90d59e6009f45589ce42a29a6f7ebafcf7624`; candidate `a81e026`; production **194→192**, repository-wide **208→205**; live badge proof Not confirmed (not a reopen blocker) | Native unread map drives list badges; JS unread owner deleted                       |
+| **V-ROOMS.4** | Typing indicators (if list/shell)    | **Draft candidate** — native typing snapshot/set owns receive/send; JS typingMembers/`sendTyping` deleted; production **192→190**, repository-wide **205→203**; live proof unclaimed                     | Native typing projection + send; JS typing owners deleted                           |
 
 ### V-TIMELINE — full timeline read vertical (D0.3 gaps)
 
