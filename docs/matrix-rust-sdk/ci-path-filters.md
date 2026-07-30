@@ -68,3 +68,11 @@ integration. Run a full package smoke manually before release-candidate builds /
 
 A `src-tauri`-only integration PR still runs **Validate** (~15–20m). Package
 smoke no longer doubles that by default.
+
+## Validate Rust cache
+
+The **Validate desktop and runtime** job restores/saves `src-tauri` Cargo
+artifacts via `Swatinem/rust-cache` (`shared-key: validate-desktop-runtime`).
+This does not change which checks run or what success means; it only shortens
+cold `cargo fmt` / `clippy` / `check` / `test` wall time on successive matrix
+integration PRs (including V-SEND.2 / V-TIMELINE candidates waiting on CI).
