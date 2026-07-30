@@ -1,9 +1,9 @@
 # V-TIMELINE — full native replacement contract
 
-| Field | Value |
-| --- | --- |
-| Status | Design gate; no cutover or acceptance claimed |
-| Owner | Managed Rust `matrix-sdk-ui::Timeline` plus an SDK-neutral presenter |
+| Field  | Value                                                                      |
+| ------ | -------------------------------------------------------------------------- |
+| Status | Design gate; no cutover or acceptance claimed                              |
+| Owner  | Managed Rust `matrix-sdk-ui::Timeline` plus an SDK-neutral presenter       |
 | Policy | Physical JS deletion follows a complete operating path, never a shell swap |
 
 ## Decision
@@ -41,13 +41,16 @@ restore, jump-to-latest/unread, pagination state, day/unread rows, loading and
 error states.
 
 Implementation foundation: `matrix_timeline_open` now accepts a versioned
-typed native request with `live_bottom`, `unread`, or `focused(eventId)`
-position and returns that position in authoritative Rust readback. An unread
-open obtains the native room's unread signal and `m.fully_read` frontier, then
-opens SDK event context at that frontier and returns the anchor for the future
-presenter to place the first-unread row after it. It rejects missing unread or
-frontier state rather than silently mapping to live bottom. Restored-viewport
-position remains pending with its viewport owner.
+typed native request with `live_bottom`, `unread`, `focused(eventId)`, or
+`normal` (optional viewport restore hint) position and returns that position
+in authoritative Rust readback. An unread open obtains the native room's
+unread signal and `m.fully_read` frontier, then opens SDK event context at
+that frontier and returns the anchor for the future presenter to place the
+first-unread row after it. It rejects missing unread or frontier state rather
+than silently mapping to live bottom. Normal open restore uses the typed
+hint plus TTL / live-tail matching; jump-to-latest rebinds through
+`matrix_timeline_jump_latest`. Presenter-local scroll-offset application for
+restored anchors remains pending with the selected virtualized owner.
 
 ## Native boundary
 
@@ -84,7 +87,7 @@ message/relation, poll, membership, profile/state, call, redaction, and UTD
 row shapes. Reaction ownership is calculated from the active native user; its
 action capability remains closed until V-SEND.2 is integrated. It deliberately
 does not claim projection completion: stickers require the native media
-resolver, and native unread, pagination/read-frontier, viewport, and presenter
+resolver, and native unread, pagination/read-frontier, and presenter
 ownership still remain. The flat
 `NativeTimelineSnapshot` remains only for the explicitly temporary V-CRYPTO.6
 bridge until those owners replace it.
@@ -98,11 +101,18 @@ bridge registers its event listener before `matrix_timeline_open`, keeps only
 the exact returned stream, and rejects revision gaps or malformed operations
 instead of fetching through the JS timeline. The unselected virtualized
 presenter consumes only that product DTO and invokes only capability-gated
-native pagination/read commands. It is not an active presenter or a fallback
-route: complete retained action, media, and viewport ownership remain absent.
-The initial unread/read-frontier open is native-owned; live read-frontier
-updates, pagination-state changes, and viewport restoration still need their
-corresponding owner signals before final cutover.
+native pagination/read/jump-latest commands. It is not an active presenter or a
+fallback route: complete retained action ownership and live authenticated
+viewport proof remain absent. The initial unread/read-frontier open is
+native-owned. Normal opens now also carry a typed local viewport restore hint
+(`at_bottom`, `live_tail_event_id`, `updated_at_ms`, `restored_anchor_event_id`)
+and resolve placement with legacy-compatible precedence: unread beats
+historical restore, while an exact live-tail at-bottom match may keep live
+bottom. Jump-to-latest is a stream-addressed native command that closes the
+prior stream and returns a fresh live-bottom open readback. Live read-frontier
+updates and pagination-state delta metadata still need their corresponding
+owner signals before final cutover. Restored scroll-offset application remains
+presenter-local until the selected virtualized owner lands.
 
 ## Actions and sequencing
 
@@ -128,16 +138,16 @@ The current product command surface has timeline read/pagination and plain-text
 send-with-`reply_to` only; that transport capability is not parity for the
 legacy composer or a rich reply/edit flow.
 
-| Visible timeline capability | Required native owner before final cutover | Current status |
-| --- | --- | --- |
-| Reactions | V-SEND.2 typed toggle/ensure/redact commands | Candidate exists on its own branch; not integration evidence yet |
-| Plain-text reply | Native send plus native reply draft/composer state | Transport input exists; UI owner pending |
-| Rich send, edit, forward | Typed send/edit/forward DTO commands | Pending |
-| Redact, report, pin | Typed room-event action commands | Pending |
-| Mark read/unread, receipts | Native receipt/read-frontier command and readback | Stream-addressed private `m.read` / unread-flag command and snapshot readback exist; unread opening uses the native `m.fully_read` frontier, while live frontier updates and viewport ownership remain pending |
-| Save/later/notes/reminders | Typed account-data commands and snapshot | Pending |
-| Media/sticker image display | Bounded native media-handle resolver | Pending; invite-avatar handling is not general timeline media |
-| Poll vote and call controls | Typed poll/call commands with capability readback | Pending |
+| Visible timeline capability | Required native owner before final cutover         | Current status                                                                                                                                                                                                                              |
+| --------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reactions                   | V-SEND.2 typed toggle/ensure/redact commands       | Candidate exists on its own branch; not integration evidence yet                                                                                                                                                                            |
+| Plain-text reply            | Native send plus native reply draft/composer state | Transport input exists; UI owner pending                                                                                                                                                                                                    |
+| Rich send, edit, forward    | Typed send/edit/forward DTO commands               | Pending                                                                                                                                                                                                                                     |
+| Redact, report, pin         | Typed room-event action commands                   | Pending                                                                                                                                                                                                                                     |
+| Mark read/unread, receipts  | Native receipt/read-frontier command and readback  | Stream-addressed private `m.read` / unread-flag command and snapshot readback exist; unread opening uses the native `m.fully_read` frontier; normal open restore policy and jump-to-latest are native; live frontier updates remain pending |
+| Save/later/notes/reminders  | Typed account-data commands and snapshot           | Pending                                                                                                                                                                                                                                     |
+| Media/sticker image display | Bounded native media-handle resolver               | Wired on the unselected presenter via stream/session-bound opaque handles and the shared `synara-media` protocol; selection still deferred                                                                                                  |
+| Poll vote and call controls | Typed poll/call commands with capability readback  | Pending                                                                                                                                                                                                                                     |
 
 No active desktop timeline presenter may retain these JS action paths as a
 fallback once the native presenter is selected.

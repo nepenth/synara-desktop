@@ -90,6 +90,7 @@ use crate::matrix::timeline::{
     NativeTimelineReadStateRequest,
     NativeTimelineCloseRequest,
     TimelineMediaSource,
+    NativeTimelineJumpLatestRequest,
 };
 use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
 use crate::matrix::verification::live::{
@@ -1312,6 +1313,21 @@ pub async fn matrix_timeline_close(
     let mut session = state.session.lock().await;
     let active = require_session_mut(session.as_mut())?;
     Ok(active.timelines.close_view(request))
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_jump_latest(
+    app: AppHandle,
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelineJumpLatestRequest,
+) -> Result<NativeTimelineOpenReadback, MatrixAuthCommandError> {
+    let mut session = state.session.lock().await;
+    let active = require_session_mut(session.as_mut())?;
+    active
+        .timelines
+        .jump_latest(app, &active.client, request)
+        .await
+        .map_err(map_timeline_error)
 }
 
 #[tauri::command]
