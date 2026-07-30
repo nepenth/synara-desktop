@@ -36,7 +36,7 @@ use crate::matrix::cross_signing::live::{
     NativeCrossSigningSetupResult, NativeCrossSigningStatus, SupportedBootstrapAuthentication,
 };
 use crate::matrix::devices::{
-    live::{snapshot as live_device_snapshot, sso_fallback_url, supported_delete_authentication},
+    live::{snapshot as live_device_snapshot, supported_delete_authentication},
     NativeDeviceDeleteChallenge, NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot,
     PendingDeviceDeletion,
 };
@@ -986,29 +986,6 @@ pub async fn matrix_device_delete_password(
 }
 
 #[tauri::command]
-pub async fn matrix_device_delete_sso_acknowledge(
-    state: State<'_, MatrixAuthState>,
-    operation_id: u64,
-    session_generation: u64,
-) -> Result<NativeDeviceDeleteResult, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
-    let active = require_device_session_mut(session.as_mut())?;
-    let pending = validate_pending_device_deletion(active, operation_id, session_generation)?;
-    let device_ids = pending.device_ids.clone();
-    let auth = uiaa::AuthData::fallback_acknowledgement(pending.auth_session.clone());
-    match active.client.delete_devices(&device_ids, Some(auth)).await {
-        Ok(_) => complete_device_deletion(active, &device_ids).await,
-        Err(error) => {
-            let info = error
-                .as_uiaa_response()
-                .ok_or_else(|| map_device_error("v-crypto.7-device-delete-sso-failed"))?;
-            let authentication_failed = !info.completed.contains(&uiaa::AuthType::Sso);
-            refresh_device_delete_challenge(active, info, authentication_failed).await
-        }
-    }
-}
-
-#[tauri::command]
 pub async fn matrix_device_delete_cancel(
     state: State<'_, MatrixAuthState>,
     operation_id: u64,
@@ -1442,27 +1419,10 @@ async fn install_device_delete_challenge(
         .contains(&crate::matrix::devices::NativeDeviceDeleteAuthentication::Password)
     {
         crate::matrix::devices::NativeDeviceDeleteAuthentication::Password
-    } else if available
-        .contains(&crate::matrix::devices::NativeDeviceDeleteAuthentication::SsoFallback)
-    {
-        crate::matrix::devices::NativeDeviceDeleteAuthentication::SsoFallback
     } else {
         return Err(map_device_error(
             "v-crypto.7-device-delete-auth-unsupported",
         ));
-    };
-    let sso_fallback_url = if authentication
-        == crate::matrix::devices::NativeDeviceDeleteAuthentication::SsoFallback
-    {
-        // This Ruma-generated browser URL necessarily embeds the opaque UIAA
-        // session. The session is never returned as a separate field or logged.
-        Some(
-            sso_fallback_url(&active.client, &auth_session)
-                .await
-                .map_err(map_device_error)?,
-        )
-    } else {
-        None
     };
     active.pending_device_deletion = Some(PendingDeviceDeletion {
         operation_id,
@@ -1475,7 +1435,6 @@ async fn install_device_delete_challenge(
             operation_id,
             session_generation: active.sync.session_generation(),
             authentication,
-            sso_fallback_url,
             authentication_failed,
         },
     })

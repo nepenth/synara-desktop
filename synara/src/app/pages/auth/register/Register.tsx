@@ -1,16 +1,11 @@
 import React, { useMemo } from 'react';
 import { Box, Text, color } from 'folds';
 import { Link, useSearchParams } from 'react-router-dom';
-import { SSOAction } from 'matrix-js-sdk';
 import { useAuthServer } from '../../../hooks/useAuthServer';
 import { RegisterFlowStatus, useAuthFlows } from '../../../hooks/useAuthFlows';
-import { useParsedLoginFlows } from '../../../hooks/useParsedLoginFlows';
 import { PasswordRegisterForm, SUPPORTED_REGISTER_STAGES } from '../register/PasswordRegisterForm';
-import { OrDivider } from '../OrDivider';
-import { SSOLogin } from '../SSOLogin';
 import { SupportedUIAFlowsLoader } from '../../../components/SupportedUIAFlowsLoader';
 import { getLoginPath } from '../../pathUtils';
-import { usePathWithOrigin } from '../../../hooks/usePathWithOrigin';
 import { RegisterPathSearchParams } from '../../paths';
 
 const useRegisterSearchParams = (searchParams: URLSearchParams): RegisterPathSearchParams =>
@@ -25,30 +20,26 @@ const useRegisterSearchParams = (searchParams: URLSearchParams): RegisterPathSea
 
 export function Register() {
   const server = useAuthServer();
-  const { loginFlows, registerFlows } = useAuthFlows();
+  const { registerFlows } = useAuthFlows();
   const [searchParams] = useSearchParams();
   const registerSearchParams = useRegisterSearchParams(searchParams);
-  const { sso } = useParsedLoginFlows(loginFlows.flows);
-
-  // redirect to /login because only that path handle m.login.token
-  const ssoRedirectUrl = usePathWithOrigin(getLoginPath(server));
 
   return (
     <Box direction="Column" gap="500">
       <Text size="H2" priority="400">
         Register
       </Text>
-      {registerFlows.status === RegisterFlowStatus.RegistrationDisabled && !sso && (
+      {registerFlows.status === RegisterFlowStatus.RegistrationDisabled && (
         <Text style={{ color: color.Critical.Main }} size="T300">
           Registration has been disabled on this homeserver.
         </Text>
       )}
-      {registerFlows.status === RegisterFlowStatus.RateLimited && !sso && (
+      {registerFlows.status === RegisterFlowStatus.RateLimited && (
         <Text style={{ color: color.Critical.Main }} size="T300">
           You have been rate-limited! Please try after some time.
         </Text>
       )}
-      {registerFlows.status === RegisterFlowStatus.InvalidRequest && !sso && (
+      {registerFlows.status === RegisterFlowStatus.InvalidRequest && (
         <Text style={{ color: color.Critical.Main }} size="T300">
           Invalid Request! Failed to get any registration options.
         </Text>
@@ -75,18 +66,6 @@ export function Register() {
               )
             }
           </SupportedUIAFlowsLoader>
-          <span data-spacing-node />
-          {sso && <OrDivider />}
-        </>
-      )}
-      {sso && (
-        <>
-          <SSOLogin
-            providers={sso.identity_providers}
-            redirectUrl={ssoRedirectUrl}
-            action={SSOAction.REGISTER}
-            saveScreenSpace={registerFlows.status === RegisterFlowStatus.FlowRequired}
-          />
           <span data-spacing-node />
         </>
       )}

@@ -17,7 +17,7 @@ use super::state::SupervisorState;
 pub enum SupervisorCommand {
     /// Begin opening stores / session bootstrap (Empty | LoggedOut | Failed).
     BeginOpen,
-    /// Password / SSO / token login path after open.
+    /// Password / token login path after open.
     BeginAuthenticate,
     /// Restore persisted native session after open.
     BeginRestore,

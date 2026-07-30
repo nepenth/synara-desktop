@@ -111,7 +111,7 @@ pub async fn login_with_password(
     })
 }
 
-/// Log in with a one-time login token (typically after SSO; not an access token).
+/// Log in with a one-time login token (not an access token).
 ///
 /// Tokens must never be logged or placed on IPC error paths. This function only
 /// passes the token into the SDK login builder.

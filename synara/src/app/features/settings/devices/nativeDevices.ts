@@ -17,13 +17,12 @@ export type NativeDeviceSnapshot = {
   devices: NativeDevice[];
 };
 
-export type NativeDeviceDeleteAuthentication = 'password' | 'sso_fallback';
+export type NativeDeviceDeleteAuthentication = 'password';
 
 export type NativeDeviceDeleteChallenge = {
   operationId: number;
   sessionGeneration: number;
   authentication: NativeDeviceDeleteAuthentication;
-  ssoFallbackUrl?: string;
   authenticationFailed: boolean;
 };
 
@@ -63,15 +62,6 @@ export const authenticateNativeDeviceDeletePassword = (
     operationId,
     sessionGeneration,
     password,
-  });
-
-export const acknowledgeNativeDeviceDeleteSso = (
-  operationId: number,
-  sessionGeneration: number
-): Promise<NativeDeviceDeleteResult> =>
-  invokeNativeDevices('matrix_device_delete_sso_acknowledge', {
-    operationId,
-    sessionGeneration,
   });
 
 export const cancelNativeDeviceDelete = (

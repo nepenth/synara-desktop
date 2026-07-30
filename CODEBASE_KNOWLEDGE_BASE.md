@@ -153,7 +153,7 @@ Status labels: **Full** · **Partial** · **Stub** · **Planned**
 
 | Feature | Status | Location |
 |---------|--------|----------|
-| Password login, SSO, registration, reset | Full | `synara/src/app/pages/auth/` |
+| Password login, registration, reset; desktop SSO unsupported | Full | `synara/src/app/pages/auth/` |
 | Matrix UIA stages (email, reCAPTCHA, terms) | Full | `synara/src/app/components/uia-stages/` |
 | Token refresh + proactive scheduling | Full | `initMatrix.ts`, `sessionPersistence.ts` |
 | Native session store (macOS Keychain, Linux Secret Service) | Full | `platform/sessions.ts`, `desktop.rs`, `desktop_secret_store.rs`, `desktop_session.rs`, `desktop_session_store.rs` |

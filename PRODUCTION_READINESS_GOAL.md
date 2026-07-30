@@ -195,7 +195,7 @@ Shared contract update, 2026-06-29:
 
 Initial task backlog:
 
-1. Inventory all anchor/link rendering paths. **Status:** First pass complete; remaining direct `window.open` production path is SSO popup handoff, intentionally exempt because it relies on `postMessage`.
+1. Inventory all anchor/link rendering paths. **Status:** First pass complete; no direct `window.open` production exception remains after the desktop SSO popup handoff was removed.
 2. Centralize link activation through platform link helpers. **Status:** Desktop helper now routes normal external opens through `desktop_open_external_url`; non-desktop fallback remains browser-native.
 3. Cover rich text, Matrix HTML, Hermes cards, room topics, and attachment/link previews. **Status:** Global anchor interceptor remains active for rendered anchors; Hermes cards, profile/server actions, OIDC account-management actions, registration terms, and feature-check anchors were wired explicitly.
 4. Add tests for desktop bridge invocation and fallback. **Status:** Added regression tests for desktop bridge use, unsafe desktop no-fallback behavior, modified-click preservation, relative-link preservation, and agent-action no-fallback behavior.

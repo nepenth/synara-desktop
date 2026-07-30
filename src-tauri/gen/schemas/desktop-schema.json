@@ -597,12 +597,6 @@
           "markdownDescription": "Enables the matrix_device_delete_password command without any pre-configured scope."
         },
         {
-          "description": "Enables the matrix_device_delete_sso_acknowledge command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-device-delete-sso-acknowledge",
-          "markdownDescription": "Enables the matrix_device_delete_sso_acknowledge command without any pre-configured scope."
-        },
-        {
           "description": "Enables the matrix_device_delete_start command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-device-delete-start",
@@ -1027,12 +1021,6 @@
           "type": "string",
           "const": "deny-matrix-device-delete-password",
           "markdownDescription": "Denies the matrix_device_delete_password command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_device_delete_sso_acknowledge command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-device-delete-sso-acknowledge",
-          "markdownDescription": "Denies the matrix_device_delete_sso_acknowledge command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_device_delete_start command without any pre-configured scope.",
