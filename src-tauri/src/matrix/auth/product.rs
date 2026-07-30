@@ -30,6 +30,7 @@ use tokio::sync::Mutex;
 use zeroize::Zeroize;
 
 use super::{login_with_password, normalize_homeserver_url, AuthError, LoginOptions};
+use crate::matrix::account_data::{snapshot_mdirect, NativeMDirectSnapshot};
 use crate::matrix::backup::live::{
     self as live_backup, NativeBackupOperationResult, NativeBackupStatus,
 };
@@ -74,7 +75,6 @@ use crate::matrix::timeline::{
     NativeReactionMutationResult, NativeTimelineDirection, NativeTimelineEventReadback,
     NativeTimelineRegistry, NativeTimelineSnapshot,
 };
-use crate::matrix::account_data::{snapshot_mdirect, NativeMDirectSnapshot};
 use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
 use crate::matrix::verification::live::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
