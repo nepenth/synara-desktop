@@ -109,8 +109,8 @@ executes all actions, and reads the native snapshot after each side effect.
   list binding, and obsolete invite-list hooks have no `matrix-js-sdk` import
   or JS room/action listener. The notification gate likewise reads the native
   `matrix_sync_status` projection, rather than consulting legacy JS sync state.
-- The generated inventory measures **201 → 198** desktop-runtime production
-  import files on this pre-V-AUTH.1 base. This is intentionally a branch-local
-  measurement, not an assertion update: after V-AUTH.1 merges, this candidate
-  must rebase and regenerate the final combined delta before its CI baseline is
-  changed.
+- Rebased on accepted V-AUTH.1, the generated inventory measures **197 → 194**
+  desktop-runtime production import files for this vertical (**201 → 194** from
+  the pre-V-AUTH.1 integration baseline). The repository-wide count is 208;
+  desktop runtime remains 194 production plus 11 test import files. The
+  repository assertion now records that accepted combined state.
