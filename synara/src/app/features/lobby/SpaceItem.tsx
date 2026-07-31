@@ -19,8 +19,7 @@ import {
 import FocusTrap from 'focus-trap-react';
 import classNames from 'classnames';
 import { MatrixError, Room } from 'matrix-js-sdk';
-import { IHierarchyRoom } from 'matrix-js-sdk/lib/@types/spaces';
-import { HierarchyItem } from '../../hooks/useSpaceHierarchy';
+import { HierarchyItem, SpaceHierarchyRoom } from '../../hooks/useSpaceHierarchy';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { RoomAvatar } from '../../components/room-avatar';
 import { nameInitials } from '../../utils/common';
@@ -388,7 +387,7 @@ function AddSpaceButton({ item }: { item: HierarchyItem }) {
 }
 
 type SpaceItemCardProps = {
-  summary: IHierarchyRoom | undefined;
+  summary: SpaceHierarchyRoom | undefined;
   loading?: boolean;
   item: HierarchyItem;
   joined?: boolean;

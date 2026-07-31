@@ -49,6 +49,7 @@ const tests = [
   'src/app/features/matrix-ipc/__tests__/matrixIpc.test.ts',
   'src/app/features/matrix-ipc/__tests__/matrixIpcContract.test.ts',
   'src/app/features/matrix-dto/__tests__/matrixDto.test.ts',
+  'src/app/features/lobby/__tests__/nativeSpaceHierarchyOwner.test.ts',
   'src/app/features/room/__tests__/nativeSendText.test.ts',
   'src/app/features/room/__tests__/nativeSendAttachmentOwner.test.ts',
   'src/app/features/room/__tests__/nativeMDirectOwner.test.ts',
