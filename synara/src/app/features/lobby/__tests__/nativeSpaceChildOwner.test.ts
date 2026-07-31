@@ -86,7 +86,7 @@ test('set/remove/reparent invoke sole Rust owners', async () => {
     '!room:example.org',
     { via: ['example.org'], suggested: true, order: 'b' },
     true,
-    invoke,
+    invoke
   );
   await removeSpaceChildWithNativeOwner('!space:example.org', '!room:example.org', true, invoke);
   await reparentRestrictedJoinWithNativeOwner(
@@ -94,7 +94,7 @@ test('set/remove/reparent invoke sole Rust owners', async () => {
     '!old:example.org',
     '!new:example.org',
     true,
-    invoke,
+    invoke
   );
   assert.deepEqual(
     calls.filter(([command]) => command !== 'matrix_session_snapshot'),
@@ -121,6 +121,6 @@ test('set/remove/reparent invoke sole Rust owners', async () => {
           addParentId: '!new:example.org',
         },
       ],
-    ],
+    ]
   );
 });

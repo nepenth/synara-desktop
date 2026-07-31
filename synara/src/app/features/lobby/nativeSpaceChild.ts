@@ -13,7 +13,7 @@ const desktopInvoke: NativeInvoke = async (command, args) =>
 export async function setSpaceChild(
   parentId: string,
   childId: string,
-  content: MSpaceChildContent,
+  content: MSpaceChildContent
 ) {
   await setSpaceChildWithNativeOwner(parentId, childId, content, isSynaraDesktop(), desktopInvoke);
 }
@@ -25,13 +25,13 @@ export async function removeSpaceChild(parentId: string, childId: string) {
 export async function reparentRestrictedJoin(
   roomId: string,
   removeParentId: string | undefined,
-  addParentId: string,
+  addParentId: string
 ) {
   await reparentRestrictedJoinWithNativeOwner(
     roomId,
     removeParentId,
     addParentId,
     isSynaraDesktop(),
-    desktopInvoke,
+    desktopInvoke
   );
 }
