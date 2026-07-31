@@ -3,8 +3,7 @@ import { Box, Chip, Icon, IconButton, Icons, Line, Scroll, Spinner, Text, config
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAtom, useAtomValue } from 'jotai';
 import { useNavigate } from 'react-router-dom';
-import { JoinRule, RestrictedAllowType, Room } from 'matrix-js-sdk';
-import { RoomJoinRulesEventContent } from 'matrix-js-sdk/lib/types';
+import { JoinRule, Room } from 'matrix-js-sdk';
 import produce from 'immer';
 import { useSpace } from '../../hooks/useSpace';
 import { Page, PageContent, PageContentCenter, PageHeroSection } from '../../components/page';
@@ -40,7 +39,7 @@ import { getSpaceRoomPath } from '../../pages/pathUtils';
 import { StateEvent } from '../../../types/matrix/room';
 import { CanDropCallback, useDnDMonitor } from './DnD';
 import { ASCIILexicalTable, orderKeys } from '../../utils/ASCIILexicalTable';
-import { getStateEvent } from '../../utils/room';
+import { reparentRestrictedJoin, removeSpaceChild, setSpaceChild } from './nativeSpaceChild';
 import { useClosedLobbyCategoriesAtom } from '../../state/hooks/closedLobbyCategories';
 import {
   makeSynaraSpacesContent,
@@ -271,12 +270,10 @@ export function Lobby() {
         if (reorders) {
           await rateLimitedActions(reorders, async (reorder) => {
             if (!reorder.item.parentId) return;
-            await mx.sendStateEvent(
-              reorder.item.parentId,
-              StateEvent.SpaceChild as any,
-              { ...reorder.item.content, order: reorder.orderKey },
-              reorder.item.roomId
-            );
+            await setSpaceChild(reorder.item.parentId, reorder.item.roomId, {
+              ...reorder.item.content,
+              order: reorder.orderKey,
+            });
           });
         }
       },
@@ -298,7 +295,7 @@ export function Lobby() {
 
         // remove from current space
         if (item.parentId !== containerParentId) {
-          mx.sendStateEvent(item.parentId, StateEvent.SpaceChild as any, {}, item.roomId);
+          await removeSpaceChild(item.parentId, item.roomId);
         }
 
         if (
@@ -308,21 +305,7 @@ export function Lobby() {
         ) {
           // change join rule allow parameter when dragging
           // restricted room from one space to another
-          const joinRuleContent = getStateEvent(
-            itemRoom,
-            StateEvent.RoomJoinRules
-          )?.getContent<RoomJoinRulesEventContent>();
-
-          if (joinRuleContent) {
-            const allow =
-              joinRuleContent.allow?.filter((allowRule) => allowRule.room_id !== item.parentId) ??
-              [];
-            allow.push({ type: RestrictedAllowType.RoomMembership, room_id: containerParentId });
-            mx.sendStateEvent(itemRoom.roomId, StateEvent.RoomJoinRules as any, {
-              ...joinRuleContent,
-              allow,
-            });
-          }
+          await reparentRestrictedJoin(item.roomId, item.parentId, containerParentId);
         }
 
         const itemSpaces = Array.from(
@@ -358,12 +341,10 @@ export function Lobby() {
 
         if (reorders) {
           await rateLimitedActions(reorders, async (reorder) => {
-            await mx.sendStateEvent(
-              containerParentId,
-              StateEvent.SpaceChild as any,
-              { ...reorder.item.content, order: reorder.orderKey },
-              reorder.item.roomId
-            );
+            await setSpaceChild(containerParentId, reorder.item.roomId, {
+              ...reorder.item.content,
+              order: reorder.orderKey,
+            });
           });
         }
       },
