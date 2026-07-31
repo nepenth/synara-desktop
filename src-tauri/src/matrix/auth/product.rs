@@ -16,8 +16,8 @@ use matrix_sdk::{
     ruma::{
         api::client::uiaa,
         events::{
-            relation::Reply,
-            room::message::{AddMentions, Relation, RoomMessageEventContent},
+            relation::{Reply, Thread},
+            room::message::{AddMentions, Relation, ReplyWithinThread, RoomMessageEventContent},
             Mentions,
         },
         OwnedEventId, OwnedRoomId, OwnedTransactionId, OwnedUserId,
@@ -1456,10 +1456,13 @@ pub async fn matrix_send_text(
     mention_user_ids: Option<Vec<String>>,
     mention_room: Option<bool>,
     reply_to: Option<String>,
+    // Thread root (`m.thread`). With reply_to → Thread::reply (is_falling_back false).
+    thread_root: Option<String>,
     txn_id: Option<String>,
 ) -> Result<MatrixSendTextResult, MatrixAuthCommandError> {
     let room_id = parse_send_room_id(&room_id)?;
     let reply_to = parse_reply_event_id(reply_to)?;
+    let thread_root = parse_thread_root_event_id(thread_root)?;
     let txn_id = parse_transaction_id(txn_id)?;
     let content = message_content(
         body.clone(),
@@ -1468,6 +1471,7 @@ pub async fn matrix_send_text(
         mention_user_ids,
         mention_room.unwrap_or(false),
         reply_to,
+        thread_root,
     )?;
 
     let (room, session_generation, local_txn_id) = {
@@ -1520,6 +1524,8 @@ pub async fn matrix_send_text(
 
 /// V-SEND.1 sole composer attachment upload+send owner. Bytes cross IPC once;
 /// encrypted rooms are encrypted by the managed SDK (no JS dual-encrypt).
+/// V-SEND.5 extends the same command with optional `thread_root` so native
+/// sessions can start / continue threads without JS relation ownership.
 #[tauri::command]
 pub async fn matrix_send_attachment(
     state: State<'_, MatrixAuthState>,
@@ -1528,9 +1534,11 @@ pub async fn matrix_send_attachment(
     mime_type: String,
     bytes: Vec<u8>,
     reply_to: Option<String>,
+    thread_root: Option<String>,
 ) -> Result<MatrixSendAttachmentResult, MatrixAuthCommandError> {
     let room_id = parse_send_room_id(&room_id)?;
     let reply_to = parse_reply_event_id(reply_to)?;
+    let thread_root = parse_thread_root_event_id(thread_root)?;
     let filename = validate_attachment_filename(&filename)?;
     let mime_type = validate_attachment_mime(&mime_type)?;
     if bytes.is_empty() {
@@ -1569,7 +1577,8 @@ pub async fn matrix_send_attachment(
         (room, session_generation, item.local_txn_id.clone())
     };
 
-    let send_result = send_attachment_to_room(&room, &filename, &mime_type, bytes, reply_to).await;
+    let send_result =
+        send_attachment_to_room(&room, &filename, &mime_type, bytes, reply_to, thread_root).await;
 
     let mut session = state.session.lock().await;
     if let Some(active) = session.as_mut() {
@@ -2412,6 +2421,18 @@ fn parse_reply_event_id(
         .transpose()
 }
 
+fn parse_thread_root_event_id(
+    thread_root: Option<String>,
+) -> Result<Option<OwnedEventId>, MatrixAuthCommandError> {
+    thread_root
+        .map(|event_id| {
+            event_id
+                .parse()
+                .map_err(|_| map_send_error("v-send.5-invalid-thread-root-event-id"))
+        })
+        .transpose()
+}
+
 fn parse_transaction_id(
     txn_id: Option<String>,
 ) -> Result<Option<OwnedTransactionId>, MatrixAuthCommandError> {
@@ -2425,6 +2446,14 @@ fn parse_transaction_id(
         .transpose()
 }
 
+/// Build validated room-message content for the native composer owner.
+///
+/// Relation rules (V-SEND.4 + V-SEND.5):
+/// - `thread_root` + `reply_to` → `m.thread` with genuine in-thread reply
+///   (`is_falling_back: false`); root and reply ids may be equal when starting
+///   a thread from the root event.
+/// - `thread_root` only → `m.thread` without in-reply fallback.
+/// - `reply_to` only → classic `m.in_reply_to` reply (no thread).
 pub(crate) fn message_content(
     body: String,
     msg_type: Option<String>,
@@ -2432,6 +2461,7 @@ pub(crate) fn message_content(
     mention_user_ids: Option<Vec<String>>,
     mention_room: bool,
     reply_to: Option<OwnedEventId>,
+    thread_root: Option<OwnedEventId>,
 ) -> Result<RoomMessageEventContent, MatrixAuthCommandError> {
     let mut content = match (msg_type.as_deref().unwrap_or("m.text"), formatted_body) {
         ("m.text", Some(html)) => RoomMessageEventContent::text_html(body, html),
@@ -2465,9 +2495,12 @@ pub(crate) fn message_content(
     mentions.user_ids = user_ids;
     mentions.room = mention_room;
     content.mentions = Some(mentions);
-    if let Some(event_id) = reply_to {
-        content.relates_to = Some(Relation::Reply(Reply::with_event_id(event_id)));
-    }
+    content.relates_to = match (thread_root, reply_to) {
+        (Some(root), Some(reply)) => Some(Relation::Thread(Thread::reply(root, reply))),
+        (Some(root), None) => Some(Relation::Thread(Thread::without_fallback(root))),
+        (None, Some(reply)) => Some(Relation::Reply(Reply::with_event_id(reply))),
+        (None, None) => None,
+    };
     Ok(content)
 }
 
@@ -2550,12 +2583,21 @@ async fn send_attachment_to_room(
     mime_type: &Mime,
     data: Vec<u8>,
     reply_to: Option<OwnedEventId>,
+    thread_root: Option<OwnedEventId>,
 ) -> matrix_sdk::Result<String> {
     let mut config = AttachmentConfig::new();
     if let Some(event_id) = reply_to {
+        // Explicit thread root from the product draft forces a thread relation
+        // (start thread / reply in thread). Otherwise preserve the prior
+        // MaybeThreaded behavior so existing non-thread replies keep working.
+        let enforce_thread = if thread_root.is_some() {
+            EnforceThread::Threaded(ReplyWithinThread::Yes)
+        } else {
+            EnforceThread::MaybeThreaded
+        };
         config = config.reply(Some(AttachmentReply {
             event_id,
-            enforce_thread: EnforceThread::MaybeThreaded,
+            enforce_thread,
             add_mentions: AddMentions::Yes,
         }));
     }
@@ -2931,7 +2973,7 @@ mod tests {
 
     #[test]
     fn message_content_preserves_type_html_mentions_and_reply() {
-        let plain = message_content("hello".into(), None, None, None, false, None).unwrap();
+        let plain = message_content("hello".into(), None, None, None, false, None, None).unwrap();
         let plain_json = serde_json::to_value(plain).unwrap();
         assert_eq!(plain_json["body"], "hello");
         assert_eq!(plain_json["msgtype"], "m.text");
@@ -2944,6 +2986,7 @@ mod tests {
             Some(vec!["@alice:example.org".into()]),
             true,
             Some("$event:example.org".parse().unwrap()),
+            None,
         )
         .unwrap();
         let reply_json = serde_json::to_value(reply).unwrap();
@@ -2961,6 +3004,7 @@ mod tests {
             reply_json["m.relates_to"]["m.in_reply_to"]["event_id"],
             "$event:example.org"
         );
+        assert!(reply_json["m.relates_to"].get("rel_type").is_none());
 
         let notice = message_content(
             "notice".into(),
@@ -2969,9 +3013,57 @@ mod tests {
             None,
             false,
             None,
+            None,
         )
         .unwrap();
         assert_eq!(serde_json::to_value(notice).unwrap()["msgtype"], "m.notice");
+    }
+
+    #[test]
+    fn message_content_emits_thread_relation_for_in_thread_reply() {
+        let threaded = message_content(
+            "in thread".into(),
+            Some("m.text".into()),
+            None,
+            None,
+            false,
+            Some("$child:example.org".parse().unwrap()),
+            Some("$root:example.org".parse().unwrap()),
+        )
+        .unwrap();
+        let json = serde_json::to_value(threaded).unwrap();
+        assert_eq!(json["m.relates_to"]["rel_type"], "m.thread");
+        assert_eq!(json["m.relates_to"]["event_id"], "$root:example.org");
+        assert_eq!(
+            json["m.relates_to"]["m.in_reply_to"]["event_id"],
+            "$child:example.org"
+        );
+        // Genuine reply in thread — is_falling_back omitted/false (serde skip default).
+        assert!(
+            json["m.relates_to"]
+                .get("is_falling_back")
+                .map(|v| v == false)
+                .unwrap_or(true),
+            "is_falling_back must be false/absent for Thread::reply"
+        );
+    }
+
+    #[test]
+    fn message_content_emits_thread_without_fallback_when_only_root() {
+        let root_only = message_content(
+            "start".into(),
+            None,
+            None,
+            None,
+            false,
+            None,
+            Some("$root:example.org".parse().unwrap()),
+        )
+        .unwrap();
+        let json = serde_json::to_value(root_only).unwrap();
+        assert_eq!(json["m.relates_to"]["rel_type"], "m.thread");
+        assert_eq!(json["m.relates_to"]["event_id"], "$root:example.org");
+        assert!(json["m.relates_to"].get("m.in_reply_to").is_none());
     }
 
     #[test]
@@ -2983,6 +3075,7 @@ mod tests {
             None,
             false,
             None,
+            None,
         )
         .unwrap_err();
         assert_eq!(invalid_type.diagnostic_id, "v-send.4-invalid-message-type");
@@ -2993,6 +3086,7 @@ mod tests {
             None,
             Some(vec!["not-a-user".into()]),
             false,
+            None,
             None,
         )
         .unwrap_err();
@@ -3013,6 +3107,12 @@ mod tests {
                 .unwrap_err()
                 .diagnostic_id,
             "d0.4-send-invalid-reply-event-id"
+        );
+        assert_eq!(
+            parse_thread_root_event_id(Some("not-an-event".into()))
+                .unwrap_err()
+                .diagnostic_id,
+            "v-send.5-invalid-thread-root-event-id"
         );
         assert_eq!(
             parse_transaction_id(Some(String::new()))
