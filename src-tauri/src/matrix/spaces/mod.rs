@@ -13,7 +13,7 @@ pub mod live;
 pub use error::SpaceError;
 pub use hierarchy::{space_child, SpaceHierarchy};
 pub use live::{
-    reparent_restricted_join_allow, remove_space_child, set_space_child, snapshot_space_children,
+    remove_space_child, reparent_restricted_join_allow, set_space_child, snapshot_space_children,
     snapshot_space_hierarchy, snapshot_space_parents, NativeRestrictedJoinReparentResult,
     NativeSpaceChildEdge, NativeSpaceChildMutationResult, NativeSpaceChildrenSnapshot,
     NativeSpaceHierarchyRoom, NativeSpaceHierarchySnapshot, NativeSpaceParentEntry,
