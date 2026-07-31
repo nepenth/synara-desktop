@@ -3731,7 +3731,8 @@ mod tests {
 
     #[test]
     fn message_content_preserves_type_html_mentions_and_reply() {
-        let plain = message_content("hello".into(), None, None, None, false, None).unwrap();        let plain_json = serde_json::to_value(plain).unwrap();
+        let plain = message_content("hello".into(), None, None, None, false, None).unwrap();
+        let plain_json = serde_json::to_value(plain).unwrap();
         assert_eq!(plain_json["body"], "hello");
         assert_eq!(plain_json["msgtype"], "m.text");
         assert_eq!(plain_json["m.mentions"], serde_json::json!({}));

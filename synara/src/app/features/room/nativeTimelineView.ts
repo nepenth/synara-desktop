@@ -63,10 +63,21 @@ type NativeTimelineStickerRow = {
   media: NativeTimelineMediaHandle;
 };
 
+export type NativeTimelinePollAnswer = {
+  id: string;
+  text: string;
+  voteCount: number;
+  own?: boolean;
+};
+
 type NativeTimelinePollRow = NativeTimelineEventRowBase & {
   kind: 'poll';
   question: string;
   closed: boolean;
+  /** Maximum simultaneous selections; absent on older snapshots. */
+  maxSelections?: number;
+  /** Answer options with counts only (no voter IDs). */
+  answers?: NativeTimelinePollAnswer[];
 };
 
 type NativeTimelineMembershipRow = NativeTimelineEventRowBase & {

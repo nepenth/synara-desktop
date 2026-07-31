@@ -6,6 +6,7 @@
 //! subscription are deliberately separate follow-up work; this module fixes
 //! the stable shape that those owners must produce.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use eyeball_im::VectorDiff;
@@ -238,6 +239,15 @@ fn project_event_row_for_user(
                     event: base,
                     question: results.question,
                     closed: results.end_time.is_some(),
+                    max_selections: u32::try_from(results.max_selections).unwrap_or(u32::MAX),
+                    answers: project_poll_answers(
+                        results
+                            .answers
+                            .into_iter()
+                            .map(|answer| (answer.id, answer.text)),
+                        &results.votes,
+                        own_user_id.map(RumaUserId::as_str),
+                    ),
                 })
             }
             MsgLikeKind::Redacted => match base.event_id.clone() {
@@ -316,6 +326,29 @@ fn project_event_row_for_user(
 }
 
 /// Project SDK-sanitized Matrix HTML when present and distinct from plain text.
+/// Project poll answer options with counts only (no voter user IDs over IPC).
+fn project_poll_answers(
+    answers: impl IntoIterator<Item = (String, String)>,
+    votes: &HashMap<String, Vec<String>>,
+    own_user_id: Option<&str>,
+) -> Vec<TimelinePollAnswer> {
+    answers
+        .into_iter()
+        .map(|(id, text)| {
+            let voters = votes.get(&id).map(Vec::as_slice).unwrap_or(&[]);
+            let vote_count = u32::try_from(voters.len()).unwrap_or(u32::MAX);
+            let own =
+                own_user_id.is_some_and(|user_id| voters.iter().any(|voter| voter == user_id));
+            TimelinePollAnswer {
+                id,
+                text,
+                vote_count,
+                own,
+            }
+        })
+        .collect()
+}
+
 fn project_formatted_body(msgtype: &MessageType) -> Option<String> {
     let formatted = match msgtype {
         MessageType::Text(content) => content.formatted.as_ref(),
@@ -651,6 +684,18 @@ pub struct TimelineMessageRow {
     pub media: Option<TimelineMediaHandle>,
 }
 
+/// One poll answer option. Vote tallies are counts only — never voter user IDs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimelinePollAnswer {
+    pub id: String,
+    pub text: String,
+    pub vote_count: u32,
+    /// Whether the active native session has selected this answer.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub own: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TimelinePollRow {
@@ -658,6 +703,9 @@ pub struct TimelinePollRow {
     pub event: TimelineEventRowBase,
     pub question: String,
     pub closed: bool,
+    /// Maximum simultaneous selections the poll allows (MSC3381).
+    pub max_selections: u32,
+    pub answers: Vec<TimelinePollAnswer>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -954,5 +1002,81 @@ mod tests {
             .as_deref(),
             Some("emote")
         );
+    }
+
+    #[test]
+    fn poll_answers_project_counts_and_own_without_voter_ids() {
+        let mut votes = HashMap::new();
+        votes.insert(
+            "a1".into(),
+            vec!["@alice:example.org".into(), "@bob:example.org".into()],
+        );
+        votes.insert("a2".into(), vec!["@carol:example.org".into()]);
+
+        let answers = project_poll_answers(
+            [
+                ("a1".into(), "Yes".into()),
+                ("a2".into(), "No".into()),
+                ("a3".into(), "Maybe".into()),
+            ],
+            &votes,
+            Some("@alice:example.org"),
+        );
+
+        assert_eq!(
+            answers,
+            vec![
+                TimelinePollAnswer {
+                    id: "a1".into(),
+                    text: "Yes".into(),
+                    vote_count: 2,
+                    own: true,
+                },
+                TimelinePollAnswer {
+                    id: "a2".into(),
+                    text: "No".into(),
+                    vote_count: 1,
+                    own: false,
+                },
+                TimelinePollAnswer {
+                    id: "a3".into(),
+                    text: "Maybe".into(),
+                    vote_count: 0,
+                    own: false,
+                },
+            ]
+        );
+
+        let row = TimelinePollRow {
+            event: TimelineEventRowBase {
+                item_id: "poll-item".into(),
+                event_id: Some("$poll:example.org".into()),
+                sender_id: "@alice:example.org".into(),
+                sender_name: "@alice:example.org".into(),
+                origin_server_ts: 1,
+                capabilities: TimelineRowCapabilities {
+                    react: true,
+                    reply: false,
+                    edit: false,
+                    redact: true,
+                    report: false,
+                    pin: true,
+                    forward: false,
+                    vote: true,
+                    decline_call: false,
+                },
+            },
+            question: "Lunch?".into(),
+            closed: false,
+            max_selections: 1,
+            answers,
+        };
+        let json = serde_json::to_string(&row).unwrap();
+        assert!(json.contains("\"voteCount\":2"));
+        assert!(json.contains("\"own\":true"));
+        assert!(!json.contains("@bob:example.org"));
+        assert!(!json.contains("@carol:example.org"));
+        assert!(!json.contains("token"));
+        assert!(!json.contains("ciphertext"));
     }
 }
