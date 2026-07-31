@@ -4,11 +4,11 @@
 
 | Field                     | Value                                                                                                                                                                                         |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status                    | **Active — tip `42ef9127` after #282 poll-thread; this PR password loginUtil #279; #280 UIA; #283 edit; #240 HOLD** (2026-07-31) |
+| Status                    | **Active — tip `f4addd6f` after #280; this PR password loginUtil residual #279; #283 edit; #240 HOLD** (2026-07-31) |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                            |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)                                                                                                                                     |
-| Current integration tip   | `e6db76c7` (after [#278](https://github.com/nepenth/synara-desktop/pull/278) / [#277](https://github.com/nepenth/synara-desktop/pull/277) / [#276](https://github.com/nepenth/synara-desktop/pull/276)) |
-| Active PRs                | **This PR** password `loginUtil` [#279](https://github.com/nepenth/synara-desktop/pull/279); [#280](https://github.com/nepenth/synara-desktop/pull/280); [#283](https://github.com/nepenth/synara-desktop/pull/283); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD |
+| Current integration tip   | `f4addd6f` (after [#280](https://github.com/nepenth/synara-desktop/pull/280) / [#282](https://github.com/nepenth/synara-desktop/pull/282)) |
+| Active PRs                | **This PR** [#279](https://github.com/nepenth/synara-desktop/pull/279) password `loginUtil`; [#283](https://github.com/nepenth/synara-desktop/pull/283); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD |
 
 ## Policy trigger
 
@@ -59,8 +59,9 @@ Migration decision already decided: **`D-KEY-RECOVERY`** in [migration-ux-decisi
 | ------------ | ------------------------------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **V-AUTH.1** | Complete desktop SSO removal   | **Merged #238** at `08a185e` | Every desktop SSO entry point, browser/callback/token-completion route, JS SSO owner/import, and native device-delete SSO UIAA continuation is deleted. No Rust replacement, Matrix-ID prompt, inferred identity, pending-store/adoption route, or fallback. Required CI green; production importers 201→197 and repository-wide 215→211. |
 | **V-AUTH.2** | Token login                    | **DONE #262** at `56d1544` — product **non-retention** close; unused Rust token-login foundation removed | Explicit product decision: desktop does not retain `m.login.token` |
-| **V-AUTH.3** | UIA / login-flow discovery for product auth | **DONE #276** at `4d33227f` — native `matrix_login_flows`; AuthFlowsLoader live js client deleted; allowlist **175→171**; production **172→169**. **Residual:** UIA **stage execution** for login remains open. | Discovery re-homed fail-closed; stage execution residual until native multi-stage submit |
-| **V-AUTH.3p** | Password login desktop fail-closed (`loginUtil`) | **Active this PR** — delete js `createClient`/`loginRequest` fallback; desktop only `matrix_login_password`; production **169→167** / allowlist **171→169** | Native password login only; no desktop js client fallback; SDK-neutral owners |
+| **V-AUTH.3** | UIA / login-flow discovery for product auth | **DONE #276** at `4d33227f` — native `matrix_login_flows`; AuthFlowsLoader live js client deleted; allowlist **175→171**; production **172→169** | Discovery re-homed fail-closed |
+| **V-AUTH.3b** | Login multi-stage UIA stage execution | **DONE #280** at `f4addd6f` — product non-retention; login password-only single-shot; no invented `matrix_uia_*` IPC | See [v-auth-3b-uia-login-stage.md](v-auth-3b-uia-login-stage.md) |
+| **V-AUTH.3p** | Password login desktop fail-closed (`loginUtil`) | **Active this PR** [#279](https://github.com/nepenth/synara-desktop/pull/279) — delete js `createClient`/`loginRequest` fallback; desktop only `matrix_login_password`; production **169→167** / allowlist **171→169** | Native password login only; no desktop js client fallback; SDK-neutral owners |
 | **V-AUTH.4** | Register / reset-password      | Split: **4a DONE #263**; **4b DONE #266** (allowlist **191→175**; production import files **172**); tip after docs #274 is `48991e77` | 4a+4b native re-home complete; live Synapse registration e2e unclaimed |
 
 ### V-ROOMS — room list / membership vertical (D0.2 gaps)
@@ -115,9 +116,9 @@ have already deleted their implementations.
 ## Execution order (binding)
 
 1. Treat V-ROOMS.1 as integrated at `2c48fd45a08200a6e3491f100912f086e8458b3b`; retain its measured production 197→194 and repository-wide 211→208 deletion deltas.
-2. Serial after tip `e6db76c7`: V-AUTH.3 **DONE #276** (allowlist 175→171). **This PR:** password `loginUtil` fail-closed residual. V-TIMELINE [#240] HOLD-cutover only.
-3. Keep V-TIMELINE [#240] **HOLD-cutover**: implement and tip-merge are OK; **do not** select `NativeTimelinePresenter`, delete `RoomTimeline.tsx`, or claim cutover until full contract + runtime proof.
-4. After this password residual: remaining auth residual is UIA **stage execution** for login (`matrix_uia_*`); delete each superseded JS owner in its slice.
+| **V-AUTH.3** | UIA / login-flow discovery for product auth | **DONE #276** at `4d33227f` — native `matrix_login_flows`; AuthFlowsLoader live js client deleted; allowlist **175→171**; production **172→169** | Discovery re-homed fail-closed |
+| **V-AUTH.3b** | Login multi-stage UIA stage execution | **DONE #280** at `f4addd6f` — product non-retention; login password-only single-shot; no invented `matrix_uia_*` IPC | See [v-auth-3b-uia-login-stage.md](v-auth-3b-uia-login-stage.md) |
+| **V-AUTH.3p** | Password login desktop fail-closed (`loginUtil`) | **Active this PR** [#279](https://github.com/nepenth/synara-desktop/pull/279) — delete js `createClient`/`loginRequest` fallback; desktop only `matrix_login_password`; production **169→167** / allowlist **171→169** | Native password login only; no desktop js client fallback; SDK-neutral owners |
 5. **V-BURN** final convergence audit + npm dependency removal
 6. **Only then** new verticals: media display polish beyond send, widgets, registry, calls, etc. — each as full verticals under [full-vertical-policy.md](full-vertical-policy.md)
 
