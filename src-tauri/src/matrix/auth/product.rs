@@ -3512,7 +3512,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn v_auth_3b_product_has_no_matrix_uia_login_stage_commands() {
         // Desktop product does not retain multi-stage UIA on the login route
