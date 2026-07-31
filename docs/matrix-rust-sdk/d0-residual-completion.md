@@ -7,7 +7,7 @@
 | Status                    | **Active — tip `5c6e6e8` after #258 V-SEND.5; open #262 V-AUTH.2 / #263 V-AUTH.4a; #240 HOLD** (2026-07-31)                                                                                       |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                            |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)                                                                                                                                     |
-| Current integration tip   | `d080156e30b28901959853e46b766deb56185619` ([#261](https://github.com/nepenth/synara-desktop/pull/261) docs after #254 V-ROOMS.2b)                                                                                                              |
+| Current integration tip   | `5c6e6e87eb5520e1a5953f06a03d9c4b26fbb7bf` ([#258](https://github.com/nepenth/synara-desktop/pull/258) V-SEND.5 after #261 docs)                                                                                                              |
 | Active PRs                | Draft [#262](https://github.com/nepenth/synara-desktop/pull/262) V-AUTH.2; [#263](https://github.com/nepenth/synara-desktop/pull/263) V-AUTH.4a; [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE HOLD |
 
 ## Policy trigger
