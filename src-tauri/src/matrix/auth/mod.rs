@@ -1,14 +1,18 @@
-//! P3.1 / P3.2 / P3.4 / R0.7 — Discovery, login-flow, password/token, UIA.
+//! P3.1 / P3.2 / P3.4 / R0.7 / V-AUTH.2 — Discovery, login-flow, password login, UIA.
 //!
 //! - homeserver URL + server-name input normalization
 //! - well-known discovery behind [`DiscoveryTransport`] (mock + live HTTP)
 //! - login-flow discovery behind [`LoginFlowTransport`] (mock + live HTTP)
-//! - password + token login against an unauthenticated P2.3 SDK client
+//! - password login against an unauthenticated P2.3 SDK client
 //! - interactive auth (UIA) multi-stage coordinator (no secrets stored)
 //! - platform device display names (`Synara macOS` / `Synara Linux` / …)
 //! - stable Synara domain types (not raw SDK / Ruma on the boundary)
 //! - optional thin bridge into P2.3 client-builder identity/homeserver URL
 //! - D0.1 production Tauri password-login/session ownership
+//!
+//! Desktop product login is **password-only** after **V-AUTH.2** (no `m.login.token`
+//! product path; SSO token-completion was removed with V-AUTH.1). Login-flow
+//! discovery may still report `m.login.token` when a homeserver advertises it.
 //!
 //! **Out of scope:** dual-backend, dual sync, rooms, timelines.
 //! Session secret persist/restore lives in [`crate::matrix::lifecycle`].
@@ -16,6 +20,7 @@
 //! Authoritative design notes:
 //! - `docs/matrix-rust-sdk/p3.1-discovery-login-flow.md`
 //! - `docs/matrix-rust-sdk/p3.2-password-token-login.md`
+//! - `docs/matrix-rust-sdk/v-auth-2-token-login.md`
 //! - `docs/matrix-rust-sdk/p3.4-uia.md`
 
 #![allow(dead_code)]
@@ -51,9 +56,7 @@ pub use input::{
     normalize_homeserver_url, normalize_server_name, parse_discovery_input, DiscoveryInput,
     DiscoveryInputKind, NormalizedHomeserverUrl, NormalizedServerName,
 };
-pub use login::{
-    login_with_password, login_with_token, LoginMethodKind, LoginOptions, LoginResult,
-};
+pub use login::{login_with_password, LoginMethodKind, LoginOptions, LoginResult};
 pub use login_flow::{
     discover_login_flows, map_matrix_login_types, LoginFlow, LoginFlowDiscoveryResult,
     LoginFlowKind, LoginFlowTransport, MockLoginFlowTransport,

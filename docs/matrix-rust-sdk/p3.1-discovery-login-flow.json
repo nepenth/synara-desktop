@@ -85,7 +85,8 @@
     "mock_transports_for_unit_tests",
     "no_desktop_sso_or_sso_uia_support",
     "sso_only_login_response_is_unsupported",
-    "generic_token_foundation_is_not_a_desktop_login_route"
+    "generic_token_foundation_is_not_a_desktop_login_route",
+    "v_auth_2_desktop_m_login_token_not_retained"
   ],
   "residuals": [
     {
@@ -94,7 +95,8 @@
     },
     {
       "id": "generic-token-foundation-desktop-exposure",
-      "waitsFor": "explicit V-AUTH.2 product decision"
+      "state": "closed_by_V-AUTH.2_not_retained",
+      "note": "Desktop does not retain m.login.token product login."
     },
     {
       "id": "desktop-sso-oauth-callback",
