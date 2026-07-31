@@ -83,6 +83,7 @@ const tests = [
   'src/app/pages/auth/register/__tests__/nativeRegister.test.ts',
   'src/app/pages/auth/login/__tests__/tokenLoginAbsence.test.ts',
   'src/app/pages/auth/login/__tests__/loginUiaStageAbsence.test.ts',
+  'src/app/pages/auth/login/__tests__/desktopPasswordLoginNativeOnly.test.ts',
   'src/app/state/__tests__/sw-session.test.ts',
 ];
 
