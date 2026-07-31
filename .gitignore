@@ -11,9 +11,74 @@ AuthKey_*.p8
 *.p8
 .env.macos-signing.local
 .env
+.env.*
+!.env.example
 DerivedData/
 *.xcuserstate
 xcuserdata/
 synara-ios/.build/
 src-tauri/capabilities/release-hardening.json
 src-tauri/gen/schemas/capabilities.json
+
+# ---------------------------------------------------------------------------
+# Local AI / agent operator tooling — NOT product source.
+# This repository is public; keep playbooks, skills, MCP secrets, and
+# harness-local agent config out of history.
+#
+# DO NOT ignore:
+#   .github/workflows/     — GitHub Actions CI (product)
+#   synara/src/app/agents/ — product desktop agent features
+#   scripts/*workflow*     — CI policy checkers for GitHub Actions
+# ---------------------------------------------------------------------------
+
+# Grok Build
+.grok/
+
+# Codex / OpenAI agent harness
+.codex/
+.agents/
+
+# Claude Code
+.claude/
+CLAUDE.md
+
+# Cursor
+.cursor/
+.cursorrules
+.cursorignore
+
+# Other common agent / assistant harnesses
+.continue/
+.aider/
+.aider*
+.windsurf/
+.gemini/
+.firecrawl/
+.repomix/
+.swarm/
+.opencode/
+.pi/
+
+# Project-root agent instruction dumps (use ~/.config / user skills instead)
+/AGENTS.md
+/AGENT.md
+/.agent/
+/.ai/
+
+# Local MCP / tool server config (often contains tokens or private URLs)
+.mcp.json
+.mcp.*.json
+mcp.json
+**/mcp.local.json
+
+# Local session / scratch notes (if dropped in tree)
+.session/
+.sessions/
+*.local.md
+!**/README.local.md
+
+# Editor / IDE noise beyond above
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
