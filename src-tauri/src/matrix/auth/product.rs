@@ -1846,7 +1846,7 @@ pub async fn matrix_timeline_forward_text(
 
     let (sender_label, body) = load_forwardable_text(&source_room, &event_id).await?;
     let forwarded_body = format_forwarded_plain_body(&sender_label, &body, request.as_quote);
-    let content = message_content(forwarded_body, None, None, None, false, None)?;
+    let content = message_content(forwarded_body, None, None, None, false, None, None)?;
     let event_id = send_message_to_room(&target_room, content, None)
         .await
         .map_err(|_| map_timeline_action_error("v-timeline-forward-send-failed"))?;
