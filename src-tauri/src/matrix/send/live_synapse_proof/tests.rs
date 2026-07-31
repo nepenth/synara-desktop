@@ -338,3 +338,104 @@ async fn live_native_attachment_send_against_disposable_synapse_when_configured(
 
     let _ = std::fs::remove_dir_all(&store_root);
 }
+
+fn poll_live_enabled() -> bool {
+    std::env::var("SYNARA_RUN_MATRIX_RUST_POLL_LIVE")
+        .ok()
+        .as_deref()
+        == Some("1")
+}
+
+#[tokio::test]
+async fn live_native_poll_send_and_respond_against_disposable_synapse_when_configured() {
+    if !poll_live_enabled() {
+        return;
+    }
+    let base = loopback_homeserver_url()
+        .expect("SYNARA_MATRIX_HOMESERVER_URL must be credential-free HTTP loopback");
+
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let localpart = format!("vs3_{stamp:x}");
+    let password = format!("S-{stamp:x}");
+    let registration = register_disposable_account(&base, &localpart, &password).await;
+    let user_id = registration["user_id"]
+        .as_str()
+        .expect("registration user_id")
+        .to_owned();
+
+    let store_root = temp_store_root();
+    let identity = AccountIdentity::new(&user_id, &base).expect("account identity");
+    let key = StoreKeyMaterial::generate().expect("store key");
+    let config = ClientBuildConfig::product_default(&store_root, identity, Some(key))
+        .expect("client config");
+    let client = build_unauthenticated_client(&config)
+        .await
+        .expect("unauthenticated client");
+    login_with_password(
+        &client,
+        &localpart,
+        &password,
+        &LoginOptions {
+            device_display_name: Some("V-SEND.3 poll proof".into()),
+            request_refresh_token: false,
+        },
+    )
+    .await
+    .expect("password login");
+
+    client
+        .event_cache()
+        .subscribe()
+        .expect("subscribe event cache for native poll proof");
+
+    client
+        .sync_once(SyncSettings::default().timeout(Duration::from_secs(3)))
+        .await
+        .expect("initial sync");
+
+    let room = client
+        .create_room(CreateRoomRequest::new())
+        .await
+        .expect("create room");
+    let room_id = room.room_id().to_string();
+    client
+        .sync_once(SyncSettings::default().timeout(Duration::from_secs(3)))
+        .await
+        .expect("post-create sync");
+
+    let mut registry = NativeTimelineRegistry::new(1);
+    registry
+        .open(&client, &room_id)
+        .await
+        .expect("open native timeline before poll send");
+
+    let normalized = crate::matrix::send::normalize_poll(
+        "V-SEND.3 proof?",
+        &["Alpha".to_owned(), "Beta".to_owned()],
+        1,
+    )
+    .expect("normalize poll");
+    let start = crate::matrix::send::poll_start_content(&normalized).expect("poll start content");
+    let start_response = room
+        .send(start)
+        .await
+        .expect("send poll start via managed client");
+    let poll_event_id = start_response.response.event_id.to_string();
+    wait_for_event_in_open_timeline(&mut registry, &client, &room_id, &poll_event_id).await;
+
+    let answer_id = normalized.answers[0].0.clone();
+    let response_content =
+        crate::matrix::send::poll_response_content(&poll_event_id, &[answer_id])
+            .expect("poll response content");
+    let vote_response = room
+        .send(response_content)
+        .await
+        .expect("send poll response via managed client");
+    let vote_event_id = vote_response.response.event_id.to_string();
+    wait_for_event_in_open_timeline(&mut registry, &client, &room_id, &vote_event_id).await;
+
+    let _ = std::fs::remove_dir_all(&store_root);
+}

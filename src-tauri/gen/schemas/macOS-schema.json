@@ -752,6 +752,18 @@
           "const": "allow-matrix-send-attachment",
           "markdownDescription": "Enables the matrix_send_attachment command without any pre-configured scope."
         },
+{
+          "description": "Enables the matrix_poll_respond command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-poll-respond",
+          "markdownDescription": "Enables the matrix_poll_respond command without any pre-configured scope."
+        },
+{
+          "description": "Enables the matrix_send_poll command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-send-poll",
+          "markdownDescription": "Enables the matrix_send_poll command without any pre-configured scope."
+        },
         {
           "description": "Enables the matrix_send_text command without any pre-configured scope.",
           "type": "string",
@@ -1267,6 +1279,18 @@
           "type": "string",
           "const": "deny-matrix-send-attachment",
           "markdownDescription": "Denies the matrix_send_attachment command without any pre-configured scope."
+        },
+{
+          "description": "Denies the matrix_poll_respond command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-poll-respond",
+          "markdownDescription": "Denies the matrix_poll_respond command without any pre-configured scope."
+        },
+{
+          "description": "Denies the matrix_send_poll command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-send-poll",
+          "markdownDescription": "Denies the matrix_send_poll command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_send_text command without any pre-configured scope.",

@@ -1,0 +1,111 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { respondPollWithNativeOwner, sendPollWithNativeOwner } from '../nativePollOwner';
+
+test('native logged-in session is the sole poll-start owner', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const owner = await sendPollWithNativeOwner(
+    {
+      roomId: '!room:example.org',
+      question: 'Deploy now?',
+      answers: ['Yes', 'No'],
+      maxSelections: 1,
+    },
+    true,
+    async (command, args) => {
+      calls.push({ command, args });
+      if (command === 'matrix_session_snapshot') {
+        return { available: true, value: { status: 'logged_in' } };
+      }
+      return {
+        available: true,
+        value: {
+          roomId: '!room:example.org',
+          eventId: '$poll:example.org',
+          status: 'sent',
+        },
+      };
+    },
+  );
+
+  assert.equal(owner, 'native');
+  assert.deepEqual(calls, [
+    { command: 'matrix_session_snapshot', args: undefined },
+    {
+      command: 'matrix_send_poll',
+      args: {
+        roomId: '!room:example.org',
+        question: 'Deploy now?',
+        answers: ['Yes', 'No'],
+        maxSelections: 1,
+      },
+    },
+  ]);
+});
+
+test('native logged-in session is the sole poll-response owner', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const owner = await respondPollWithNativeOwner(
+    {
+      roomId: '!room:example.org',
+      pollEventId: '$poll:example.org',
+      answerIds: ['a1_x'],
+    },
+    true,
+    async (command, args) => {
+      calls.push({ command, args });
+      if (command === 'matrix_session_snapshot') {
+        return { available: true, value: { status: 'logged_in' } };
+      }
+      return {
+        available: true,
+        value: {
+          roomId: '!room:example.org',
+          eventId: '$vote:example.org',
+          status: 'sent',
+        },
+      };
+    },
+  );
+
+  assert.equal(owner, 'native');
+  assert.equal(calls[1]?.command, 'matrix_poll_respond');
+});
+
+test('web and native logged-out sessions retain the legacy poll owner', async () => {
+  assert.equal(
+    await sendPollWithNativeOwner(
+      {
+        roomId: '!room:example.org',
+        question: 'Q?',
+        answers: ['A', 'B'],
+        maxSelections: 1,
+      },
+      false,
+      async () => {
+        throw new Error('invoke should not be called');
+      },
+    ),
+    'legacy',
+  );
+});
+
+test('native poll command failure never falls through to legacy sendEvent', async () => {
+  await assert.rejects(
+    sendPollWithNativeOwner(
+      {
+        roomId: '!room:example.org',
+        question: 'Q?',
+        answers: ['A', 'B'],
+        maxSelections: 1,
+      },
+      true,
+      async (command) =>
+        command === 'matrix_session_snapshot'
+          ? { available: true, value: { status: 'logged_in' } }
+          : { available: false },
+    ),
+    /Native Matrix poll send is unavailable/,
+  );
+});
