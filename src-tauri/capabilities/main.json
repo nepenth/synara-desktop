@@ -94,6 +94,7 @@
     "allow-matrix-typing-snapshot",
     "allow-matrix-typing-set",
     "allow-matrix-space-parents-snapshot",
+    "allow-matrix-mdirect-snapshot",
     "allow-matrix-timeline-open",
     "allow-matrix-timeline-snapshot",
     "allow-matrix-timeline-paginate",
