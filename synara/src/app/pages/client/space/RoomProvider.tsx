@@ -1,12 +1,12 @@
 import React, { ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
-import { useAtom, useAtomValue } from 'jotai';
+import { useAtomValue } from 'jotai';
 import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
 import { IsDirectRoomProvider, RoomProvider } from '../../../hooks/useRoom';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { JoinBeforeNavigate } from '../../../features/join-before-navigate';
 import { useSpace } from '../../../hooks/useSpace';
-import { getAllParents, getSpaceChildren } from '../../../utils/room';
+import { getAllParents } from '../../../utils/room';
 import { roomToParentsAtom } from '../../../state/room/roomToParents';
 import { allRoomsAtom } from '../../../state/room-list/roomList';
 import { useSearchParamsViaServers } from '../../../hooks/router/useSearchParamsViaServers';
@@ -18,7 +18,7 @@ export function SpaceRouteRoomProvider({ children }: { children: ReactNode }) {
   const mx = useMatrixClient();
   const space = useSpace();
   const [developerTools] = useSetting(settingsAtom, 'developerTools');
-  const [roomToParents, setRoomToParents] = useAtom(roomToParentsAtom);
+  const roomToParents = useAtomValue(roomToParentsAtom);
   const mDirects = useAtomValue(mDirectAtom);
   const allRooms = useAtomValue(allRoomsAtom);
 
@@ -47,16 +47,9 @@ export function SpaceRouteRoomProvider({ children }: { children: ReactNode }) {
     );
   }
 
+  // Parent map is native-owned (V-ROOMS.2a); membership in the selected space is
+  // derived solely from that projection — no JS room-state child walk.
   if (!getAllParents(roomToParents, room.roomId).has(space.roomId)) {
-    if (getSpaceChildren(space).includes(room.roomId)) {
-      // fill missing roomToParent mapping
-      setRoomToParents({
-        type: 'PUT',
-        parent: space.roomId,
-        children: [room.roomId],
-      });
-    }
-
     return (
       <JoinBeforeNavigate
         roomIdOrAlias={roomIdOrAlias!}

@@ -50,8 +50,8 @@ import {
 } from '../../hooks/useAsyncSearch';
 import { highlightText, makeHighlightRegex } from '../../plugins/react-custom-html-parser';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
-import { StateEvent } from '../../../types/matrix/room';
 import { getViaServers } from '../../plugins/via-servers';
+import { setSpaceChild } from '../lobby/nativeSpaceChild';
 import { rateLimitedActions } from '../../utils/matrix';
 import { useAlive } from '../../hooks/useAlive';
 
@@ -133,20 +133,13 @@ export function AddExistingModal({ parentId, space, requestClose }: AddExistingM
       async (selectedRooms) => {
         await rateLimitedActions(selectedRooms, async (room) => {
           const via = getViaServers(room);
-
-          await mx.sendStateEvent(
-            parentId,
-            StateEvent.SpaceChild as any,
-            {
-              auto_join: false,
-              suggested: false,
-              via,
-            },
-            room.roomId
-          );
+          await setSpaceChild(parentId, room.roomId, {
+            suggested: false,
+            via,
+          });
         });
       },
-      [mx, parentId]
+      [parentId]
     )
   );
   const applyingChanges = applyState.status === AsyncStatus.Loading;

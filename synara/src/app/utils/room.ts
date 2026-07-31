@@ -92,13 +92,6 @@ export const isUnsupportedRoom = (room: Room | null): boolean => {
   return event.getContent().type !== undefined && event.getContent().type !== RoomType.Space;
 };
 
-export function isValidChild(mEvent: MatrixEvent): boolean {
-  return (
-    mEvent.getType() === StateEvent.SpaceChild &&
-    Array.isArray(mEvent.getContent<{ via: string[] }>().via)
-  );
-}
-
 export const getAllParents = (roomToParents: RoomToParents, roomId: string): Set<string> => {
   const allParents = new Set<string>();
 
@@ -113,15 +106,6 @@ export const getAllParents = (roomToParents: RoomToParents, roomId: string): Set
   allParents.delete(roomId);
   return allParents;
 };
-
-export const getSpaceChildren = (room: Room) =>
-  getStateEvents(room, StateEvent.SpaceChild).reduce<string[]>((filtered, mEvent) => {
-    const stateKey = mEvent.getStateKey();
-    if (isValidChild(mEvent) && stateKey) {
-      filtered.push(stateKey);
-    }
-    return filtered;
-  }, []);
 
 export const mapParentWithChildren = (
   roomToParents: RoomToParents,
@@ -138,15 +122,6 @@ export const mapParentWithChildren = (
     parents.add(roomId);
     roomToParents.set(childId, parents);
   });
-};
-
-export const getRoomToParents = (mx: MatrixClient): RoomToParents => {
-  const map: RoomToParents = new Map();
-  mx.getRooms()
-    .filter((room) => isSpace(room))
-    .forEach((room) => mapParentWithChildren(map, room.roomId, getSpaceChildren(room)));
-
-  return map;
 };
 
 export const getOrphanParents = (roomToParents: RoomToParents, roomId: string): string[] => {
