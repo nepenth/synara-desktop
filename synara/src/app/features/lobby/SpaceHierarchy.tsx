@@ -1,11 +1,11 @@
 import React, { forwardRef, MouseEventHandler, useEffect, useMemo } from 'react';
-import { MatrixError, Room } from 'matrix-js-sdk';
-import { IHierarchyRoom } from 'matrix-js-sdk/lib/@types/spaces';
+import { Room } from 'matrix-js-sdk';
 import { Box, config, Text } from 'folds';
 import {
   HierarchyItem,
   HierarchyItemRoom,
   HierarchyItemSpace,
+  SpaceHierarchyRoom,
   useFetchSpaceHierarchyLevel,
 } from '../../hooks/useSpaceHierarchy';
 import { IPowerLevels } from '../../hooks/usePowerLevels';
@@ -20,7 +20,7 @@ import { getRoomCreatorsForRoomId } from '../../hooks/useRoomCreators';
 import { getRoomPermissionsAPI } from '../../hooks/useRoomPermissions';
 
 type SpaceHierarchyProps = {
-  summary: IHierarchyRoom | undefined;
+  summary: SpaceHierarchyRoom | undefined;
   spaceItem: HierarchyItemSpace;
   roomItems?: HierarchyItemRoom[];
   allJoinedRooms: Set<string>;
@@ -37,7 +37,7 @@ type SpaceHierarchyProps = {
   getRoom: (roomId: string) => Room | undefined;
   pinned: boolean;
   togglePinToSidebar: (roomId: string) => void;
-  onSpacesFound: (spaceItems: IHierarchyRoom[]) => void;
+  onSpacesFound: (spaceItems: SpaceHierarchyRoom[]) => void;
   onOpenRoom: MouseEventHandler<HTMLButtonElement>;
 };
 export const SpaceHierarchy = forwardRef<HTMLDivElement, SpaceHierarchyProps>(
@@ -70,7 +70,7 @@ export const SpaceHierarchy = forwardRef<HTMLDivElement, SpaceHierarchyProps>(
     const { fetching, error, rooms } = useFetchSpaceHierarchyLevel(spaceItem.roomId, true);
 
     const subspaces = useMemo(() => {
-      const s: Map<string, IHierarchyRoom> = new Map();
+      const s: Map<string, SpaceHierarchyRoom> = new Map();
       rooms.forEach((r) => {
         if (r.room_type === RoomType.Space) {
           s.set(r.room_id, r);
@@ -103,8 +103,7 @@ export const SpaceHierarchy = forwardRef<HTMLDivElement, SpaceHierarchyProps>(
     if (!spacePermissions?.stateEvent(StateEvent.SpaceChild, mx.getSafeUserId())) {
       // hide unknown rooms for normal user
       childItems = childItems?.filter((i) => {
-        const forbidden = error instanceof MatrixError ? error.errcode === 'M_FORBIDDEN' : false;
-        const inaccessibleRoom = !rooms.get(i.roomId) && !fetching && (error ? forbidden : true);
+        const inaccessibleRoom = !rooms.get(i.roomId) && !fetching && !error;
         return !inaccessibleRoom;
       });
     }
