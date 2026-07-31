@@ -1,5 +1,7 @@
 # Matrix Rust SDK replacement — live progress log
 
+<!-- matrix-rust-program-status-link -->
+
 > **Remote-monitor file.** Open this on GitHub on the integration branch and refresh
 > to see what the orchestrator has completed and what is next.
 >
@@ -20,8 +22,8 @@
 | Dual backend       | **`false`** (forbidden forever)                                                                                                                                                                                                                                       |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                                                                                                                                                              |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                                                                                                                                                  |
-| Short continuation | [CONTINUATION.md](CONTINUATION.md)                                                                                                                                                                                                                                    |
-| Full handoff       | [implementation-handoff.md](implementation-handoff.md)                                                                                                                                                                                                                |
+| Program index | [README.md](README.md)                                                                                                                                                                                                                                    |
+| Residual queue     | [d0-residual-completion.md](d0-residual-completion.md)                                                                                                                                                                                                                |
 | Umbrella → main    | [PR #39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without explicit user approval**                                                                                                                                                         |
 
 ---
@@ -59,13 +61,20 @@ Update rules:
 
 ## Work log (newest first)
 
+### 2026-07-31 — public hygiene
+
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| — | Remove agent/session handoff docs | **This PR** | SESSION-HANDOFF, CONTINUATION, implementation-handoff, orchestrator-loop, r0.2-e1-handoff removed; program index README.md |
+
+
+
 ### 2026-07-31 (Grok resume)
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
 | — | **V-SEND.4** rich messages | **Merged** [#253](https://github.com/nepenth/synara-desktop/pull/253) | tip `b558344` |
 | — | **V-ROOMS.2b** hierarchy | **Rebased** [#254](https://github.com/nepenth/synara-desktop/pull/254) | head `e3a0b3d` onto tip; CI pending |
-| — | **SESSION-HANDOFF** | **This PR** | Grok-only resume packet; Cursor/Codex credits exhausted |
 
 
 
