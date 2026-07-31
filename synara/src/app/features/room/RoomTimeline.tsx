@@ -2606,11 +2606,11 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const handleSaveLater = useCallback(
     (targetEventId: string) => {
       const targetEvent = room.findEventById(targetEventId);
-      const eventId = targetEvent?.getId();
-      if (!eventId) return;
-      void upsertLaterWithNativeOwner(createLaterItemFromIds(room.roomId, eventId, 'saved')).catch(
-        () => undefined
-      );
+      const resolvedEventId = targetEvent?.getId();
+      if (!resolvedEventId) return;
+      void upsertLaterWithNativeOwner(
+        createLaterItemFromIds(room.roomId, resolvedEventId, 'saved')
+      ).catch(() => undefined);
     },
     [room]
   );
@@ -2618,13 +2618,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const handleAddToNotes = useCallback(
     (targetEventId: string) => {
       const targetEvent = room.findEventById(targetEventId);
-      const eventId = targetEvent?.getId();
-      if (!eventId) return;
+      const resolvedEventId = targetEvent?.getId();
+      if (!resolvedEventId) return;
       const content = targetEvent?.getContent() as { body?: unknown } | undefined;
       void upsertRoomNoteWithNativeOwner(
         createMessageRoomNoteItemFromIds({
           roomId: room.roomId,
-          eventId,
+          eventId: resolvedEventId,
           body: typeof content?.body === 'string' ? content.body : undefined,
           eventTs: targetEvent?.getTs(),
           sender: targetEvent?.getSender() ?? undefined,
@@ -2637,10 +2637,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const handleRemindLater = useCallback(
     (targetEventId: string, dueTs: number) => {
       const targetEvent = room.findEventById(targetEventId);
-      const eventId = targetEvent?.getId();
-      if (!eventId) return;
+      const resolvedEventId = targetEvent?.getId();
+      if (!resolvedEventId) return;
       void upsertLaterWithNativeOwner(
-        createLaterItemFromIds(room.roomId, eventId, 'reminder', dueTs)
+        createLaterItemFromIds(room.roomId, resolvedEventId, 'reminder', dueTs)
       ).catch(() => undefined);
     },
     [room]
