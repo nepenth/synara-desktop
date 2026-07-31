@@ -30,21 +30,19 @@ pub struct NormalizedPoll {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PollSendError {
-    InvalidQuestion,
-    InvalidAnswers,
-    InvalidMaxSelections,
-    InvalidPollEventId,
-    InvalidAnswerIds,
+    Question,
+    Answers,
+    PollEventId,
+    AnswerIds,
 }
 
 impl PollSendError {
     pub fn diagnostic_id(self) -> &'static str {
         match self {
-            Self::InvalidQuestion => "v-send.3-poll-invalid-question",
-            Self::InvalidAnswers => "v-send.3-poll-invalid-answers",
-            Self::InvalidMaxSelections => "v-send.3-poll-invalid-max-selections",
-            Self::InvalidPollEventId => "v-send.3-poll-invalid-event-id",
-            Self::InvalidAnswerIds => "v-send.3-poll-invalid-answer-ids",
+            Self::Question => "v-send.3-poll-invalid-question",
+            Self::Answers => "v-send.3-poll-invalid-answers",
+            Self::PollEventId => "v-send.3-poll-invalid-event-id",
+            Self::AnswerIds => "v-send.3-poll-invalid-answer-ids",
         }
     }
 }
@@ -83,7 +81,7 @@ pub fn normalize_poll(
 ) -> Result<NormalizedPoll, PollSendError> {
     let question = trim_poll_text(question);
     if question.is_empty() {
-        return Err(PollSendError::InvalidQuestion);
+        return Err(PollSendError::Question);
     }
 
     let clean_answers: Vec<String> = answers
@@ -93,10 +91,10 @@ pub fn normalize_poll(
         .take(MAX_POLL_ANSWERS)
         .collect();
     if clean_answers.len() < MIN_POLL_ANSWERS {
-        return Err(PollSendError::InvalidAnswers);
+        return Err(PollSendError::Answers);
     }
 
-    let max_allowed = clean_answers.len().min(MAX_POLL_SELECTIONS).max(1) as u32;
+    let max_allowed = clean_answers.len().clamp(1, MAX_POLL_SELECTIONS) as u32;
     // Clamp like JS `normalizePollParts` (composer / slash-command).
     let max_selections = max_selections.clamp(1, max_allowed);
 
@@ -135,7 +133,7 @@ pub fn poll_start_content(
             .map(|(id, text)| UnstablePollAnswer::new(id.clone(), text.clone()))
             .collect::<Vec<_>>(),
     )
-    .map_err(|_| PollSendError::InvalidAnswers)?;
+    .map_err(|_| PollSendError::Answers)?;
 
     let mut block = UnstablePollStartContentBlock::new(normalized.question.clone(), answers);
     block.kind = PollKind::Disclosed;
@@ -153,19 +151,19 @@ pub fn poll_response_content(
 ) -> Result<UnstablePollResponseEventContent, PollSendError> {
     let poll_event_id: OwnedEventId = poll_event_id
         .parse()
-        .map_err(|_| PollSendError::InvalidPollEventId)?;
+        .map_err(|_| PollSendError::PollEventId)?;
 
     let mut seen = std::collections::BTreeSet::new();
     let mut answers = Vec::new();
     for answer_id in answer_ids {
         let answer_id = answer_id.trim();
         if answer_id.is_empty() || answer_id.len() > 64 || !seen.insert(answer_id.to_owned()) {
-            return Err(PollSendError::InvalidAnswerIds);
+            return Err(PollSendError::AnswerIds);
         }
         answers.push(answer_id.to_owned());
     }
     if answers.len() > MAX_POLL_SELECTIONS {
-        return Err(PollSendError::InvalidAnswerIds);
+        return Err(PollSendError::AnswerIds);
     }
 
     Ok(UnstablePollResponseEventContent::new(
