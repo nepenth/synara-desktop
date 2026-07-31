@@ -13,7 +13,7 @@
 use matrix_sdk::ruma::{
     api::client::{
         account::{change_password, request_password_change_token_via_email},
-        uiaa::{AuthData, AuthType, Password as UiaaPassword, UserIdentifier, UiaaInfo},
+        uiaa::{AuthData, AuthType, Password as UiaaPassword, UiaaInfo, UserIdentifier},
     },
     assign,
     thirdparty::Medium,
@@ -67,8 +67,7 @@ pub async fn request_password_email_token(
     let secret = parse_client_secret(client_secret)?;
     let attempt = UInt::from(send_attempt);
 
-    let request =
-        request_password_change_token_via_email::v3::Request::new(secret, email, attempt);
+    let request = request_password_change_token_via_email::v3::Request::new(secret, email, attempt);
 
     let response = client
         .send(request)
