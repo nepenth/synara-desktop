@@ -1,5 +1,7 @@
 # Full vertical replacement policy
 
+<!-- matrix-rust-program-status-link -->
+
 | Field           | Value                                                                                          |
 | --------------- | ---------------------------------------------------------------------------------------------- |
 | Status          | **Active** (user directive 2026-07-28)                                                         |
@@ -76,6 +78,8 @@ A slice is **done only when** all of the following hold for its capability set:
 
 - Residual inventory: [d0-residual-completion.md](d0-residual-completion.md)
 - Epic (reoriented): [d0-product-replacement-epic.md](d0-product-replacement-epic.md)
-- Loop: [d0-orchestrator-loop.md](d0-orchestrator-loop.md)
+- Loop: [README.md](README.md)
 - Operating path and evidence budget: [operating-path-contract.md](operating-path-contract.md)
 - Migration crypto decisions: [migration-ux-decision.md](migration-ux-decision.md) (`D-KEY-RECOVERY`, etc.)
+
+See [program-status.md](program-status.md).
