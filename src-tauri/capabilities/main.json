@@ -111,6 +111,7 @@
     "allow-matrix-reaction-redact",
     "allow-matrix-send-text",
     "allow-matrix-send-attachment",
+    "allow-matrix-send-sticker",
     "allow-matrix-send-poll",
     "allow-matrix-poll-respond",
     "allow-matrix-logout",

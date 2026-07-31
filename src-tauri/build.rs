@@ -75,6 +75,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_mdirect_remove",
     "matrix_send_text",
     "matrix_send_attachment",
+    "matrix_send_sticker",
     "matrix_send_poll",
     "matrix_poll_respond",
 ];
