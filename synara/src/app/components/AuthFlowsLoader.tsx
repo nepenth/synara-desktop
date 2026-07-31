@@ -1,13 +1,12 @@
 import { ReactNode, useCallback, useEffect, useMemo } from 'react';
-import { MatrixError, createClient } from 'matrix-js-sdk';
+import { createClient } from 'matrix-js-sdk';
 import { AsyncStatus, useAsyncCallback } from '../hooks/useAsyncCallback';
 import { useAutoDiscoveryInfo } from '../hooks/useAutoDiscoveryInfo';
-import { promiseFulfilledResult, promiseRejectedResult } from '../utils/common';
+import { promiseFulfilledResult } from '../utils/common';
 import {
   AuthFlows,
   RegisterFlowStatus,
-  RegisterFlowsResponse,
-  parseRegisterErrResp,
+  type RegisterFlowsResponse,
 } from '../hooks/useAuthFlows';
 
 type AuthFlowsLoaderProps = {
@@ -15,6 +14,15 @@ type AuthFlowsLoaderProps = {
   error?: (err: unknown) => ReactNode;
   children: (authFlows: AuthFlows) => ReactNode;
 };
+
+/**
+ * Loads login-flow discovery for auth layout.
+ *
+ * Registration flow probe is owned natively by V-AUTH.4b (`Register.tsx` /
+ * `matrix_register_flows`) and is no longer loaded via matrix-js-sdk here.
+ * A stub registerFlows value is retained for the shared AuthFlows context shape
+ * used by login until login-flow discovery is re-homed.
+ */
 export function AuthFlowsLoader({ fallback, error, children }: AuthFlowsLoaderProps) {
   const autoDiscoveryInfo = useAutoDiscoveryInfo();
   const baseUrl = autoDiscoveryInfo['m.homeserver'].base_url;
@@ -23,14 +31,8 @@ export function AuthFlowsLoader({ fallback, error, children }: AuthFlowsLoaderPr
 
   const [state, load] = useAsyncCallback(
     useCallback(async () => {
-      const result = await Promise.allSettled([mx.loginFlows(), mx.registerRequest({})]);
+      const result = await Promise.allSettled([mx.loginFlows()]);
       const loginFlows = promiseFulfilledResult(result[0]);
-      const registerResp = promiseRejectedResult(result[1]) as MatrixError | undefined;
-      let registerFlows: RegisterFlowsResponse = { status: RegisterFlowStatus.InvalidRequest };
-
-      if (typeof registerResp === 'object' && registerResp.httpStatus) {
-        registerFlows = parseRegisterErrResp(registerResp);
-      }
 
       if (!loginFlows) {
         throw new Error('Missing auth flow!');
@@ -38,6 +40,11 @@ export function AuthFlowsLoader({ fallback, error, children }: AuthFlowsLoaderPr
       if ('errcode' in loginFlows) {
         throw new Error('Failed to load auth flow!');
       }
+
+      // Register discovery is native-owned (V-AUTH.4b). Stub keeps AuthFlows type stable for login.
+      const registerFlows: RegisterFlowsResponse = {
+        status: RegisterFlowStatus.InvalidRequest,
+      };
 
       const authFlows: AuthFlows = {
         loginFlows,

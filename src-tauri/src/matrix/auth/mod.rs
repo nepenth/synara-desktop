@@ -35,6 +35,7 @@ mod input;
 mod login;
 mod login_flow;
 pub(crate) mod product;
+mod register;
 mod reset_password;
 mod uia;
 
@@ -64,6 +65,11 @@ pub use login_flow::{
 };
 pub use product::{
     MatrixAuthCommandError, MatrixAuthState, MatrixLoginIdentity, MatrixSessionSnapshot,
+};
+pub use register::{
+    probe_register_flows, register_ephemeral_user_id, register_submit,
+    request_register_email_token, RegisterAuthStage, RegisterFlowsProbe, RegisterSubmitOutcome,
+    RegisterUiaChallenge, RegisterUiaFlow, SUPPORTED_REGISTER_STAGES,
 };
 pub use reset_password::{
     complete_password_reset, password_reset_ephemeral_user_id, request_password_email_token,

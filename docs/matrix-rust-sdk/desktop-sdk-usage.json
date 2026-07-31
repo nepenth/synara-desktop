@@ -25,7 +25,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 104,
+          "fileCount": 101,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -144,14 +144,14 @@
         },
         "uia_auth": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 60,
+          "fileCount": 49,
           "listenerCandidateOccurrences": 2,
-          "methodCandidateOccurrences": 114,
+          "methodCandidateOccurrences": 112,
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 186,
-      "importFileCount": 184,
+      "fileCount": 174,
+      "importFileCount": 172,
       "methodCandidateFrequencies": [
         {
           "count": 71,
@@ -275,10 +275,6 @@
         },
         {
           "count": 2,
-          "name": "registerRequest"
-        },
-        {
-          "count": 2,
           "name": "retryImmediately"
         },
         {
@@ -376,12 +372,12 @@
           "importOccurrences": 1
         },
         "MatrixClient": {
-          "fileCount": 48,
-          "importOccurrences": 48
+          "fileCount": 46,
+          "importOccurrences": 46
         },
         "MatrixError": {
-          "fileCount": 34,
-          "importOccurrences": 34
+          "fileCount": 29,
+          "importOccurrences": 29
         },
         "MatrixEvent": {
           "fileCount": 32,
@@ -408,14 +404,14 @@
           "importOccurrences": 0
         },
         "createClient": {
-          "fileCount": 4,
-          "importOccurrences": 4
+          "fileCount": 3,
+          "importOccurrences": 3
         }
       },
       "modules": [
         {
-          "fileCount": 174,
-          "importCount": 174,
+          "fileCount": 162,
+          "importCount": 162,
           "path": "matrix-js-sdk"
         },
         {
@@ -527,18 +523,11 @@
           "valueImports": 80
         },
         {
-          "fileCount": 48,
-          "importCount": 48,
+          "fileCount": 46,
+          "importCount": 46,
           "name": "MatrixClient",
           "typeImports": 6,
-          "valueImports": 42
-        },
-        {
-          "fileCount": 34,
-          "importCount": 34,
-          "name": "MatrixError",
-          "typeImports": 0,
-          "valueImports": 34
+          "valueImports": 40
         },
         {
           "fileCount": 32,
@@ -546,6 +535,13 @@
           "name": "MatrixEvent",
           "typeImports": 7,
           "valueImports": 25
+        },
+        {
+          "fileCount": 29,
+          "importCount": 29,
+          "name": "MatrixError",
+          "typeImports": 0,
+          "valueImports": 29
         },
         {
           "fileCount": 18,
@@ -567,13 +563,6 @@
           "name": "RoomEvent",
           "typeImports": 0,
           "valueImports": 9
-        },
-        {
-          "fileCount": 8,
-          "importCount": 8,
-          "name": "AuthType",
-          "typeImports": 0,
-          "valueImports": 8
         },
         {
           "fileCount": 8,
@@ -641,13 +630,6 @@
         {
           "fileCount": 5,
           "importCount": 5,
-          "name": "IAuthData",
-          "typeImports": 0,
-          "valueImports": 5
-        },
-        {
-          "fileCount": 5,
-          "importCount": 5,
           "name": "PushRuleKind",
           "typeImports": 0,
           "valueImports": 5
@@ -693,20 +675,6 @@
           "name": "Relations",
           "typeImports": 2,
           "valueImports": 2
-        },
-        {
-          "fileCount": 4,
-          "importCount": 4,
-          "name": "UIAFlow",
-          "typeImports": 0,
-          "valueImports": 4
-        },
-        {
-          "fileCount": 4,
-          "importCount": 4,
-          "name": "createClient",
-          "typeImports": 0,
-          "valueImports": 4
         },
         {
           "fileCount": 3,
@@ -772,11 +740,11 @@
           "valueImports": 3
         },
         {
-          "fileCount": 2,
-          "importCount": 2,
-          "name": "AuthDict",
+          "fileCount": 3,
+          "importCount": 3,
+          "name": "createClient",
           "typeImports": 0,
-          "valueImports": 2
+          "valueImports": 3
         },
         {
           "fileCount": 2,
@@ -852,13 +820,6 @@
           "fileCount": 2,
           "importCount": 2,
           "name": "ReceiptType",
-          "typeImports": 0,
-          "valueImports": 2
-        },
-        {
-          "fileCount": 2,
-          "importCount": 2,
-          "name": "RegisterRequest",
           "typeImports": 0,
           "valueImports": 2
         },
@@ -950,6 +911,13 @@
           "fileCount": 1,
           "importCount": 1,
           "name": "HttpApiEventHandlerMap",
+          "typeImports": 0,
+          "valueImports": 1
+        },
+        {
+          "fileCount": 1,
+          "importCount": 1,
+          "name": "IAuthData",
           "typeImports": 0,
           "valueImports": 1
         },
@@ -1162,13 +1130,6 @@
           "name": "ReceiptContent",
           "typeImports": 1,
           "valueImports": 0
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "RegisterResponse",
-          "typeImports": 0,
-          "valueImports": 1
         },
         {
           "fileCount": 1,
@@ -2734,11 +2695,6 @@
             {
               "alias": null,
               "isTypeOnly": false,
-              "name": "MatrixError"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
               "name": "createClient"
             }
           ],
@@ -2751,18 +2707,11 @@
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 26,
+          "line": 34,
           "name": "loginFlows"
-        },
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 26,
-          "name": "registerRequest"
         }
       ],
-      "modelCoupling": ["MatrixError", "createClient"],
+      "modelCoupling": ["createClient"],
       "networking": [],
       "path": "synara/src/app/components/AuthFlowsLoader.tsx",
       "role": "production"
@@ -2936,35 +2885,6 @@
       "modelCoupling": [],
       "networking": [],
       "path": "synara/src/app/components/ServerConfigsLoader.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "component",
-      "categories": ["uia_auth"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "UIAFlow"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/components/SupportedUIAFlowsLoader.tsx",
       "role": "production"
     },
     {
@@ -3901,185 +3821,6 @@
       "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/components/room-intro/RoomIntro.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "component",
-      "categories": ["uia_auth"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "AuthType"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/components/uia-stages/DummyStage.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "component",
-      "categories": ["uia_auth"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "AuthType"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixError"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["MatrixError"],
-      "networking": [],
-      "path": "synara/src/app/components/uia-stages/EmailStage.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "component",
-      "categories": ["uia_auth"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "AuthType"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/components/uia-stages/ReCaptchaStage.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "component",
-      "categories": ["uia_auth"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "AuthType"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/components/uia-stages/RegistrationTokenStage.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "component",
-      "categories": ["uia_auth"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "AuthType"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/components/uia-stages/TermsStage.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "component",
-      "categories": ["uia_auth"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "AuthDict"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/components/uia-stages/types.ts",
       "role": "production"
     },
     {
@@ -5942,49 +5683,49 @@
           "category": "timelines",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 568,
+          "line": 578,
           "name": "sendMessage"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 629,
+          "line": 639,
           "name": "getUserId"
         },
         {
           "category": "timelines",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 657,
+          "line": 675,
           "name": "sendMessage"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 661,
+          "line": 679,
           "name": "getSafeUserId"
         },
         {
           "category": "custom_raw_event_sends",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 810,
+          "line": 828,
           "name": "sendEvent"
         },
         {
           "category": "authenticated_media",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 830,
+          "line": 848,
           "name": "uploadContent"
         },
         {
           "category": "timelines",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 837,
+          "line": 855,
           "name": "sendMessage"
         }
       ],
@@ -8656,40 +8397,6 @@
     },
     {
       "bucket": "hook",
-      "categories": ["client_methods"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixClient"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixError"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["MatrixClient", "MatrixError"],
-      "networking": [],
-      "path": "synara/src/app/hooks/useRegisterEmail.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "hook",
       "categories": ["event_emitters_listeners", "timelines"],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -9923,45 +9630,6 @@
     },
     {
       "bucket": "hook",
-      "categories": ["uia_auth"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "AuthType"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IAuthData"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "UIAFlow"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/hooks/useUIAFlows.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "hook",
       "categories": ["event_emitters_listeners"],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -10255,122 +9923,6 @@
       "modelCoupling": ["MatrixError", "createClient"],
       "networking": [],
       "path": "synara/src/app/pages/auth/login/loginUtil.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "page",
-      "categories": ["client_methods", "uia_auth"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 14,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "AuthDict"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "AuthType"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IAuthData"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixError"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "RegisterRequest"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "UIAFlow"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "createClient"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["MatrixError", "createClient"],
-      "networking": [],
-      "path": "synara/src/app/pages/auth/register/PasswordRegisterForm.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "page",
-      "categories": ["client_methods", "uia_auth"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IAuthData"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixClient"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixError"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "RegisterRequest"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "RegisterResponse"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 43,
-          "name": "registerRequest"
-        }
-      ],
-      "modelCoupling": ["MatrixClient", "MatrixError"],
-      "networking": [],
-      "path": "synara/src/app/pages/auth/register/registerUtil.ts",
       "role": "production"
     },
     {
@@ -12728,45 +12280,6 @@
     },
     {
       "bucket": "utility",
-      "categories": ["uia_auth"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "AuthType"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IAuthData"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "UIAFlow"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/utils/matrix-uia.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "utility",
       "categories": [
         "client_methods",
         "room_methods",
@@ -14132,15 +13645,15 @@
     "desktopRuntimeBaseline": {
       "buckets": {
         "client-lifecycle": 2,
-        "component": 36,
+        "component": 29,
         "feature": 56,
-        "hook": 49,
+        "hook": 47,
         "media-boundary": 1,
-        "page": 12,
+        "page": 10,
         "plugin": 8,
         "shared-type": 1,
         "state": 5,
-        "utility": 14
+        "utility": 13
       },
       "planComparison": {
         "expectedProductionImportFiles": 220,
@@ -14148,13 +13661,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 184,
+      "productionImportFiles": 172,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 194
+      "totalImportFiles": 182
     },
     "repositoryWide": {
-      "productionImportFiles": 184,
+      "productionImportFiles": 172,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -14163,7 +13676,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 197
+      "totalImportFiles": 185
     }
   }
 }
