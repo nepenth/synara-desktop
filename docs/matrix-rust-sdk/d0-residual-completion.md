@@ -1,5 +1,7 @@
 # D0 residual completion — finish partial verticals before new work
 
+<!-- matrix-rust-program-status-link -->
+
 | Field                     | Value                                                                                                                                                                                         |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Status                    | **Active — tip `31b4a30`; V-ROOMS.5r users draft; V-SEND.3 #250 / V-TIMELINE #240 parallel** (2026-07-31)                                                                                       |
@@ -141,3 +143,5 @@ Loop must:
 4. Execute V-AUTH.1 as complete desktop SSO removal: JS and native SSO ownership must both be deleted, with no replacement route.
 5. Update [PROGRESS.md](PROGRESS.md) with product wiring, deletion deltas, and residual closure.
 6. Refuse new L1-only or new non-residual verticals until this queue is cleared or user reorders explicitly.
+
+See [program-status.md](program-status.md).

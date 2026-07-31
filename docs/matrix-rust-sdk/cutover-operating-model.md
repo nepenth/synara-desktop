@@ -6,7 +6,7 @@
 | Date               | 2026-07-27                                                                                                                                                 |
 | Integration branch | `feature/matrix-rust-sdk-full-replacement`                                                                                                                 |
 | Authoritative plan | [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md) §3, Phase 11                                                  |
-| Related            | [`migration-ux-decision.md`](migration-ux-decision.md), [`implementation-handoff.md`](implementation-handoff.md), [`program-status.md`](program-status.md) |
+| Related            | [`migration-ux-decision.md`](migration-ux-decision.md), [`README.md`](README.md), [`program-status.md`](program-status.md) |
 
 This document is the **single short canonical statement** of _how_ we execute the
 replacement. Task inventories and phase lists still live in the full plan; live
