@@ -4,10 +4,10 @@
 
 | Field                     | Value                                                                                                                                                                                         |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status                    | **Active — tip `706bf608` after #264; this PR #268 V-ROOMS.2c; also #266 V-AUTH.4b; #240 HOLD** (2026-07-31) |
+| Status                    | **Active — tip `00fb7788` after #270/#264; this PR #268 V-ROOMS.2c; also #266 V-AUTH.4b; #240 HOLD** (2026-07-31) |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                            |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)                                                                                                                                     |
-| Current integration tip   | `706bf608` ([#264](https://github.com/nepenth/synara-desktop/pull/264) sticker/GIF after #269) |
+| Current integration tip   | `00fb7788` ([#270](https://github.com/nepenth/synara-desktop/pull/270) docs after [#264](https://github.com/nepenth/synara-desktop/pull/264) sticker/GIF) |
 | Active PRs                | **This PR** [#268](https://github.com/nepenth/synara-desktop/pull/268) V-ROOMS.2c; [#266](https://github.com/nepenth/synara-desktop/pull/266) V-AUTH.4b; [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD |
 
 ## Policy trigger
