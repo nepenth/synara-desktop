@@ -138,11 +138,14 @@ import { useAccessiblePowerTagColors, useGetMemberPowerTag } from '../../hooks/u
 import { useTheme } from '../../hooks/useTheme';
 import { useRoomCreatorsTag } from '../../hooks/useRoomCreatorsTag';
 import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
-import { createLaterItem, setLaterItem } from '../../utils/later';
 import { useAccountData } from '../../hooks/useAccountData';
 import { AccountDataEvent, SynaraUnreadAnchorContent } from '../../../types/matrix/accountData';
 import { parsePollStartContent } from '../../utils/polls';
-import { addRoomNoteItemAccountData, createMessageRoomNoteItem } from '../../utils/roomNotes';
+import { createLaterItemFromIds, upsertLaterWithNativeOwner } from './nativeLaterOwner';
+import {
+  createMessageRoomNoteItemFromIds,
+  upsertRoomNoteWithNativeOwner,
+} from './nativeRoomNotesOwner';
 import { isPerformanceDebugEnabled, perfLog } from '../../utils/performance';
 import { recordFoundationDiagnostic } from '../../utils/foundationDiagnostics';
 import { isClientDiagnosticEnabled, recordClientDiagnostic } from '../../utils/clientDiagnostics';
@@ -2603,28 +2606,44 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const handleSaveLater = useCallback(
     (targetEventId: string) => {
       const targetEvent = room.findEventById(targetEventId);
-      const item = targetEvent && createLaterItem(room, targetEvent, 'saved');
-      if (item) setLaterItem(mx, item);
+      const eventId = targetEvent?.getId();
+      if (!eventId) return;
+      void upsertLaterWithNativeOwner(createLaterItemFromIds(room.roomId, eventId, 'saved')).catch(
+        () => undefined
+      );
     },
-    [mx, room]
+    [room]
   );
 
   const handleAddToNotes = useCallback(
     (targetEventId: string) => {
       const targetEvent = room.findEventById(targetEventId);
-      const item = targetEvent && createMessageRoomNoteItem(room, targetEvent);
-      if (item) addRoomNoteItemAccountData(mx, item);
+      const eventId = targetEvent?.getId();
+      if (!eventId) return;
+      const content = targetEvent?.getContent() as { body?: unknown } | undefined;
+      void upsertRoomNoteWithNativeOwner(
+        createMessageRoomNoteItemFromIds({
+          roomId: room.roomId,
+          eventId,
+          body: typeof content?.body === 'string' ? content.body : undefined,
+          eventTs: targetEvent?.getTs(),
+          sender: targetEvent?.getSender() ?? undefined,
+        })
+      ).catch(() => undefined);
     },
-    [mx, room]
+    [room]
   );
 
   const handleRemindLater = useCallback(
     (targetEventId: string, dueTs: number) => {
       const targetEvent = room.findEventById(targetEventId);
-      const item = targetEvent && createLaterItem(room, targetEvent, 'reminder', dueTs);
-      if (item) setLaterItem(mx, item);
+      const eventId = targetEvent?.getId();
+      if (!eventId) return;
+      void upsertLaterWithNativeOwner(
+        createLaterItemFromIds(room.roomId, eventId, 'reminder', dueTs)
+      ).catch(() => undefined);
     },
-    [mx, room]
+    [room]
   );
 
   const handleOpenReply: MouseEventHandler = useCallback(
