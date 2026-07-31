@@ -39,10 +39,10 @@ The product auth surface still drives login-flow discovery and UIA through
 | `synara/src/app/pages/auth/login/PasswordLoginForm.tsx` | Password login form; imports `MatrixError` type | Password login is already native (`matrix_login_password`); js-sdk here is type-only for error mapping. |
 | `synara/src/app/pages/auth/login/loginUtil.ts` | `login()` non-native fallback (`createClient` + `loginRequest`); `loginPassword` native path | Non-desktop fallback path retained; V-AUTH.3 does not remove it (password vertical, not UIA). |
 | `synara/src/app/components/SupportedUIAFlowsLoader.tsx` | Filters `UIAFlow[]` by supported stages | Type-only `UIAFlow` import; used by register. SDK-neutralize. |
-| `synara/src/app/hooks/useUIAFlows.ts` | UIA helpers over `IAuthData`/`UIAFlow`; `SUPPORTED_FLOW_TYPES` | Type-only; used by register + login UIA. SDK-neutralize. |
+| `synara/src/app/hooks/useUIAFlows.ts` | UIA helpers over `IAuthData`/`UIAFlow`; `SUPPORTED_FLOW_TYPES` | Type-only; product consumers are **register** (multi-stage) — not login. SDK-neutralize. |
 | `synara/src/app/utils/matrix-uia.ts` | Pure UIA helpers (`getSupportedUIAFlows`, `getUIAFlowForStages`, terms URL, …) | Type-only `AuthType`/`IAuthData`/`UIAFlow`. SDK-neutralize. |
 | `synara/src/app/components/uia-stages/types.ts` | `StageComponentProps` uses `AuthDict` | Type-only; SDK-neutralize. |
-| `synara/src/app/components/uia-stages/{Dummy,Email,ReCaptcha,RegistrationToken,Terms}Stage.tsx` | Stage UI components | Type-only; SDK-neutralize (register scope, but shared with login UIA). |
+| `synara/src/app/components/uia-stages/{Dummy,Email,ReCaptcha,RegistrationToken,Terms}Stage.tsx` | Stage UI components | Type-only; **register** multi-stage product UI (not login). SDK-neutralize. |
 | `synara/src/app/hooks/useAuthMetadata.ts` | `ValidatedAuthMetadata` context | Type-only; not loginFlows/UIA — listed for completeness (auth-adjacent). |
 
 **Register-specific owners** (`registerUtil.ts`, `PasswordRegisterForm.tsx`,
@@ -133,9 +133,9 @@ not UIA).
 
 | Item | Status |
 |------|--------|
-| UIA **stage execution** for login (multi-stage password/recaptcha/terms submit over IPC) | **Residual** — V-AUTH.3 re-homes discovery only; stage execution needs a `matrix_uia_*` command family (follow-on, named V-AUTH.3b or folded into a later auth slice). |
-| Register (V-AUTH.4b) | #266, separate |
-| Password login non-native fallback (`loginUtil.login`) | Password vertical, separate |
+| UIA **stage execution** for login (multi-stage password/recaptcha/terms submit over IPC) | **DONE non-retention** — [v-auth-3b-uia-login-stage.md](v-auth-3b-uia-login-stage.md). Login is password-only single-shot; no product multi-stage login owner; do not invent unused `matrix_uia_*` IPC. |
+| Register (V-AUTH.4b) | **DONE #266** — multi-stage stages already native |
+| Password login non-native fallback (`loginUtil.login`) | **Open residual** [#279](https://github.com/nepenth/synara-desktop/pull/279) — independent of 3b |
 | `useAuthMetadata.ts` | Auth-adjacent, not UIA |
 | Live Synapse e2e for login-flow discovery | Required PR CI, not claimed here |
 | Cutover / dual-backend removal | #240 HOLD; no cutover |
