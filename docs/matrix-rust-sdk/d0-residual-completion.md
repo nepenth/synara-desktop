@@ -4,11 +4,11 @@
 
 | Field                     | Value                                                                                                                                                                                         |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status                    | **Active — tip `56d1544` after #262; open #263 V-AUTH.4a; #240 HOLD** (2026-07-31) |
+| Status                    | **Active — tip `5ae9da2` after #263 V-AUTH.4a; #240 HOLD; residual V-AUTH.4b / V-ROOMS.2c** (2026-07-31) |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                            |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)                                                                                                                                     |
-| Current integration tip   | `56d1544e5473764f9aaed64e98e074c15aa3b105` ([#262](https://github.com/nepenth/synara-desktop/pull/262) V-AUTH.2 after #258) |
-| Active PRs                | Draft [#263](https://github.com/nepenth/synara-desktop/pull/263) V-AUTH.4a; [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE HOLD |
+| Current integration tip   | `5ae9da2f2cdc9fc9767f65f8e2a4cf48e5f13653` ([#263](https://github.com/nepenth/synara-desktop/pull/263) V-AUTH.4a after #262) |
+| Active PRs                | Draft [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE HOLD |
 
 ## Policy trigger
 
@@ -60,7 +60,7 @@ Migration decision already decided: **`D-KEY-RECOVERY`** in [migration-ux-decisi
 | **V-AUTH.1** | Complete desktop SSO removal   | **Merged #238** at `08a185e` | Every desktop SSO entry point, browser/callback/token-completion route, JS SSO owner/import, and native device-delete SSO UIAA continuation is deleted. No Rust replacement, Matrix-ID prompt, inferred identity, pending-store/adoption route, or fallback. Required CI green; production importers 201→197 and repository-wide 215→211. |
 | **V-AUTH.2** | Token login                    | **DONE #262** at `56d1544` — product **non-retention** close; unused Rust token-login foundation removed | Explicit product decision: desktop does not retain `m.login.token` |
 | **V-AUTH.3** | UIA flows used by product auth | Largely js                   | UIA stages for retained flows native or product-owned without live js client                                                                                                                                                                                                                                                              |
-| **V-AUTH.4** | Register / reset-password      | Split: **4a active** [#263](https://github.com/nepenth/synara-desktop/pull/263) password reset; **4b residual** registration still js | Re-home retained desktop auth surfaces; 4a owns password-reset email token + UIAA complete; 4b register remains residual                                                                                                                                                  |
+| **V-AUTH.4** | Register / reset-password      | Split: **4a DONE #263** at `5ae9da2` native password reset; **4b residual** registration still js | 4a owns password-reset email token + UIAA complete; 4b register remains residual |
 
 ### V-ROOMS — room list / membership vertical (D0.2 gaps)
 
@@ -114,7 +114,7 @@ have already deleted their implementations.
 ## Execution order (binding)
 
 1. Treat V-ROOMS.1 as integrated at `2c48fd45a08200a6e3491f100912f086e8458b3b`; retain its measured production 197→194 and repository-wide 211→208 deletion deltas.
-2. Serial after tip `9c0b51e`: **V-SEND.5** [#258] (tip-merged after #254; re-CI) → docs [#261] when green → auth closes **V-AUTH.2** [#262] / **V-AUTH.4a** [#263] as CI allows. V-ROOMS.2b #254 merged.
+2. Serial after tip `5ae9da2`: V-AUTH.2 #262 + V-AUTH.4a #263 merged. Next residual **V-AUTH.4b** registration and **V-ROOMS.2c** writers; V-TIMELINE [#240] HOLD-cutover only.
 3. Keep V-TIMELINE [#240] **HOLD-cutover**: implement and tip-merge are OK; **do not** select `NativeTimelinePresenter`, delete `RoomTimeline.tsx`, or claim cutover until full contract + runtime proof.
 4. Continue remaining **V-AUTH** (4b register, UIA), **V-ROOMS.2c** writers, and other residual gaps, deleting each superseded JS owner in its slice.
 5. **V-BURN** final convergence audit + npm dependency removal
