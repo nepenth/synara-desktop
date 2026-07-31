@@ -4,7 +4,8 @@ import { ICreateRoomStateEvent, MatrixError, Preset, Visibility } from 'matrix-j
 import { useNavigate } from 'react-router-dom';
 import { SettingTile } from '../../components/setting-tile';
 import { SequenceCard } from '../../components/sequence-card';
-import { addRoomIdToMDirect, isUserId } from '../../utils/matrix';
+import { isUserId } from '../../utils/matrix';
+import { addRoomIdToMDirect } from '../room/nativeMDirect';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { ErrorCode } from '../../cs-errorcode';
@@ -39,7 +40,7 @@ export function CreateChat({ defaultUserId }: CreateChatProps) {
           initial_state: initialState,
         });
 
-        addRoomIdToMDirect(mx, result.room_id, userId);
+        await addRoomIdToMDirect(result.room_id, userId);
 
         return result.room_id;
       },

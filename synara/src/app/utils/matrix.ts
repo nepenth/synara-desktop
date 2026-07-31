@@ -14,7 +14,6 @@ import {
 } from 'matrix-js-sdk';
 import to from 'await-to-js';
 import { IImageInfo, IThumbnailContent, IVideoInfo } from '../../types/matrix/common';
-import { AccountDataEvent } from '../../types/matrix/accountData';
 import { getStateEvent } from './room';
 import { Membership, StateEvent } from '../../types/matrix/room';
 import { getRoomCurrentState } from './timelineLifecycle';
@@ -222,57 +221,6 @@ export const guessDmRoomUserId = (room: Room, myUserId: string): string => {
   // if there are no joined members other than us, use the oldest member
   const member1 = getOldestMember(getRoomCurrentState(room)?.getMembers() ?? []);
   return member1?.userId ?? myUserId;
-};
-
-export const addRoomIdToMDirect = async (
-  mx: MatrixClient,
-  roomId: string,
-  userId: string
-): Promise<void> => {
-  const mDirectsEvent = mx.getAccountData(AccountDataEvent.Direct as any);
-  let userIdToRoomIds: Record<string, string[]> = {};
-
-  if (typeof mDirectsEvent !== 'undefined')
-    userIdToRoomIds = structuredClone(mDirectsEvent.getContent());
-
-  // remove it from the lists of any others users
-  // (it can only be a DM room for one person)
-  Object.keys(userIdToRoomIds).forEach((targetUserId) => {
-    const roomIds = userIdToRoomIds[targetUserId];
-
-    if (targetUserId !== userId) {
-      const indexOfRoomId = roomIds.indexOf(roomId);
-      if (indexOfRoomId > -1) {
-        roomIds.splice(indexOfRoomId, 1);
-      }
-    }
-  });
-
-  const roomIds = userIdToRoomIds[userId] || [];
-  if (roomIds.indexOf(roomId) === -1) {
-    roomIds.push(roomId);
-  }
-  userIdToRoomIds[userId] = roomIds;
-
-  await mx.setAccountData(AccountDataEvent.Direct as any, userIdToRoomIds as any);
-};
-
-export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string): Promise<void> => {
-  const mDirectsEvent = mx.getAccountData(AccountDataEvent.Direct as any);
-  let userIdToRoomIds: Record<string, string[]> = {};
-
-  if (typeof mDirectsEvent !== 'undefined')
-    userIdToRoomIds = structuredClone(mDirectsEvent.getContent());
-
-  Object.keys(userIdToRoomIds).forEach((targetUserId) => {
-    const roomIds = userIdToRoomIds[targetUserId];
-    const indexOfRoomId = roomIds.indexOf(roomId);
-    if (indexOfRoomId > -1) {
-      roomIds.splice(indexOfRoomId, 1);
-    }
-  });
-
-  await mx.setAccountData(AccountDataEvent.Direct as any, userIdToRoomIds as any);
 };
 
 export const mxcUrlToHttp = (
