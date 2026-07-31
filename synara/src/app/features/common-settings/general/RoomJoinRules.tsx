@@ -31,6 +31,7 @@ import {
   restrictedSupported,
 } from '../../../utils/matrix';
 import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
+import { setRoomJoinRules } from '../../lobby/nativeSpaceChild';
 
 type RestrictedRoomAllowContent = {
   room_id: string;
@@ -107,13 +108,16 @@ export function RoomJoinRules({ permissions }: RoomJoinRulesProps) {
           });
         }
 
-        const c: RoomJoinRulesEventContent = {
-          join_rule: joinRule as JoinRule,
-        };
-        if (allow.length > 0) c.allow = allow;
-        await mx.sendStateEvent(room.roomId, StateEvent.RoomJoinRules as any, c);
+        await setRoomJoinRules({
+          roomId: room.roomId,
+          joinRule: String(joinRule),
+          allow: allow.map((entry) => ({
+            type: String(entry.type),
+            roomId: entry.room_id,
+          })),
+        });
       },
-      [mx, room, space, subspaces, roomIdToParents]
+      [room, space, subspaces, roomIdToParents]
     )
   );
 

@@ -9,12 +9,17 @@
 mod error;
 mod hierarchy;
 pub mod live;
+pub mod mutations;
 
 pub use error::SpaceError;
 pub use hierarchy::{space_child, SpaceHierarchy};
 pub use live::{
     snapshot_space_hierarchy, snapshot_space_parents, NativeSpaceHierarchyRoom,
     NativeSpaceHierarchySnapshot, NativeSpaceParentEntry, NativeSpaceParentsSnapshot,
+};
+pub use mutations::{
+    remove_space_child, set_room_join_rules, set_space_child, JoinRuleAllowArg, JoinRulesSetArgs,
+    NativeJoinRulesMutationResult, NativeSpaceChildMutationResult, SpaceChildSetArgs,
 };
 
 /// Static marker for link / schema smoke.

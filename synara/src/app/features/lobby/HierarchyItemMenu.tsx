@@ -17,7 +17,6 @@ import {
 } from 'folds';
 import { HierarchyItem } from '../../hooks/useSpaceHierarchy';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
-import { MSpaceChildContent, StateEvent } from '../../../types/matrix/room';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { LeaveSpacePrompt } from '../../components/leave-space-prompt';
@@ -30,6 +29,7 @@ import { IPowerLevels } from '../../hooks/usePowerLevels';
 import { getRoomCreatorsForRoomId } from '../../hooks/useRoomCreators';
 import { getRoomPermissionsAPI } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
+import { removeSpaceChild, setSpaceChild } from './nativeSpaceChild';
 
 type HierarchyItemWithParent = HierarchyItem & {
   parentId: string;
@@ -42,14 +42,20 @@ function SuggestMenuItem({
   item: HierarchyItemWithParent;
   requestClose: () => void;
 }) {
-  const mx = useMatrixClient();
   const { roomId, parentId, content } = item;
 
   const [toggleState, handleToggleSuggested] = useAsyncCallback(
-    useCallback(() => {
-      const newContent: MSpaceChildContent = { ...content, suggested: !content.suggested };
-      return mx.sendStateEvent(parentId, StateEvent.SpaceChild as any, newContent, roomId);
-    }, [mx, parentId, roomId, content])
+    useCallback(
+      () =>
+        setSpaceChild({
+          parentId,
+          childId: roomId,
+          via: content.via ?? [],
+          order: content.order,
+          suggested: !content.suggested,
+        }),
+      [parentId, roomId, content]
+    )
   );
 
   useEffect(() => {
@@ -80,14 +86,10 @@ function RemoveMenuItem({
   item: HierarchyItemWithParent;
   requestClose: () => void;
 }) {
-  const mx = useMatrixClient();
   const { roomId, parentId } = item;
 
   const [removeState, handleRemove] = useAsyncCallback(
-    useCallback(
-      () => mx.sendStateEvent(parentId, StateEvent.SpaceChild as any, {}, roomId),
-      [mx, parentId, roomId]
-    )
+    useCallback(() => removeSpaceChild(parentId, roomId), [parentId, roomId])
   );
 
   useEffect(() => {

@@ -10,6 +10,7 @@ import { RoomJoinRulesEventContent } from 'matrix-js-sdk/lib/types';
 import { RoomType, StateEvent } from '../../../types/matrix/room';
 import { getViaServers } from '../../plugins/via-servers';
 import { getMxIdServer } from '../../utils/matrix';
+import { setSpaceChild } from '../../features/lobby/nativeSpaceChild';
 import { CreateRoomAccess } from './types';
 
 export const createRoomCreationContent = (
@@ -150,16 +151,12 @@ export const createRoom = async (mx: MatrixClient, data: CreateRoomData): Promis
   const result = await mx.createRoom(options);
 
   if (data.parent) {
-    await mx.sendStateEvent(
-      data.parent.roomId,
-      StateEvent.SpaceChild as any,
-      {
-        auto_join: false,
-        suggested: false,
-        via: [getMxIdServer(mx.getUserId() ?? '') ?? ''],
-      },
-      result.room_id
-    );
+    await setSpaceChild({
+      parentId: data.parent.roomId,
+      childId: result.room_id,
+      via: [getMxIdServer(mx.getUserId() ?? '') ?? ''],
+      suggested: false,
+    });
   }
 
   return result.room_id;

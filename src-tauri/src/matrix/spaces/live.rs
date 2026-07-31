@@ -2,7 +2,8 @@
 //!
 //! Builds the child→parents map used by nav/unread rollup from joined spaces'
 //! `m.space.child` state. Lobby summary reads use the managed client's typed
-//! hierarchy request; local graph ownership and mutations remain residual.
+//! hierarchy request. Mutations live in [`super::mutations`]; local graph
+//! listeners in the WebView remain residual under V-ROOMS.2c.
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 

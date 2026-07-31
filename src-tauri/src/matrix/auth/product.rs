@@ -75,8 +75,10 @@ use crate::matrix::send::{
     AttachmentSendQueue, SendQueue,
 };
 use crate::matrix::spaces::{
-    snapshot_space_hierarchy, snapshot_space_parents, NativeSpaceHierarchySnapshot,
-    NativeSpaceParentsSnapshot,
+    remove_space_child, set_room_join_rules, set_space_child, snapshot_space_hierarchy,
+    snapshot_space_parents, JoinRulesSetArgs, NativeJoinRulesMutationResult,
+    NativeSpaceChildMutationResult, NativeSpaceHierarchySnapshot, NativeSpaceParentsSnapshot,
+    SpaceChildSetArgs,
 };
 use crate::matrix::store::{
     get_or_create_store_key, AccountIdentity, KeyringStoreKeyVault, StoreKeyId, StoreKeyMaterial,
@@ -1173,6 +1175,61 @@ pub async fn matrix_space_hierarchy_snapshot(
 }
 
 #[tauri::command]
+pub async fn matrix_space_child_set(
+    state: State<'_, MatrixAuthState>,
+    parent_id: String,
+    child_id: String,
+    via: Vec<String>,
+    order: Option<String>,
+    suggested: Option<bool>,
+) -> Result<NativeSpaceChildMutationResult, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    let args = SpaceChildSetArgs {
+        parent_id,
+        child_id,
+        via,
+        order,
+        suggested: suggested.unwrap_or(false),
+    };
+    set_space_child(&active.client, &args)
+        .await
+        .map_err(map_space_child_error)
+}
+
+#[tauri::command]
+pub async fn matrix_space_child_remove(
+    state: State<'_, MatrixAuthState>,
+    parent_id: String,
+    child_id: String,
+) -> Result<NativeSpaceChildMutationResult, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    remove_space_child(&active.client, &parent_id, &child_id)
+        .await
+        .map_err(map_space_child_error)
+}
+
+#[tauri::command]
+pub async fn matrix_room_join_rules_set(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    join_rule: String,
+    allow: Option<Vec<crate::matrix::spaces::JoinRuleAllowArg>>,
+) -> Result<NativeJoinRulesMutationResult, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    let args = JoinRulesSetArgs {
+        room_id,
+        join_rule,
+        allow: allow.unwrap_or_default(),
+    };
+    set_room_join_rules(&active.client, &args)
+        .await
+        .map_err(map_space_child_error)
+}
+
+#[tauri::command]
 pub async fn matrix_mdirect_snapshot(
     state: State<'_, MatrixAuthState>,
 ) -> Result<NativeMDirectSnapshot, MatrixAuthCommandError> {
@@ -2093,6 +2150,32 @@ fn map_space_hierarchy_error(diagnostic_id: &'static str) -> MatrixAuthCommandEr
         "The native Matrix space hierarchy is unavailable.",
         diagnostic_id,
     )
+}
+
+fn map_space_child_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    let (code, message) = match diagnostic_id {
+        "v-rooms.2c-space-child-invalid-parent"
+        | "v-rooms.2c-space-child-invalid-child"
+        | "v-rooms.2c-space-child-invalid-via"
+        | "v-rooms.2c-space-child-invalid-order"
+        | "v-rooms.2c-space-child-self-parent"
+        | "v-rooms.2c-join-rules-invalid-room"
+        | "v-rooms.2c-join-rules-invalid-rule"
+        | "v-rooms.2c-join-rules-invalid-allow-type"
+        | "v-rooms.2c-join-rules-invalid-allow-room" => (
+            "InvalidRequest",
+            "The native Matrix space mutation request is invalid.",
+        ),
+        "v-rooms.2c-space-child-room-missing" | "v-rooms.2c-space-child-room-not-joined" => (
+            "NotFound",
+            "The native Matrix space mutation room was not found.",
+        ),
+        _ => (
+            "Unknown",
+            "The native Matrix space mutation is unavailable.",
+        ),
+    };
+    MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
 
 fn map_mdirect_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {

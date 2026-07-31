@@ -14,11 +14,11 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-07-31**                                                                                                                                                                                                                                                        |
-| Integration tip    | `5ae9da2f2cdc9fc9767f65f8e2a4cf48e5f13653` — V-AUTH.4a native password reset [#263](https://github.com/nepenth/synara-desktop/pull/263) after #262 V-AUTH.2 |
-| Active work        | [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE **HOLD** (tip-merge OK, no cutover). Residual free: V-AUTH.4b register, V-ROOMS.2c. |
+| Integration tip    | `a677a80b832cbb79879da1b3dab1b9dd257df4d2` — docs after V-AUTH.4a [#263](https://github.com/nepenth/synara-desktop/pull/263) |
+| Active work        | [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE **HOLD**. **V-ROOMS.2c** space writers PR (mutations partial). Residual: V-AUTH.4b register, V-ROOMS.2c local graph. |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
-| Import accounting  | V-AUTH.1: **201→197** / **215→211**. V-ROOMS.1: **197→194** / **211→208**. V-ROOMS.3: **194→192** / **208→205**. V-ROOMS.4: **192→190** / **205→203**. V-ROOMS.2a: **190→189** / **203→202**. V-ROOMS.5 read: **189→187** / **202→200**. V-ROOMS.5w/5r: **187→187**. Tip inventory after V-AUTH.4a **184** / **197** (187→184 production files; allowlist 194→191). |
+| Import accounting  | V-AUTH.1: **201→197** / **215→211**. V-ROOMS.1: **197→194** / **211→208**. V-ROOMS.3: **194→192** / **208→205**. V-ROOMS.4: **192→190** / **205→203**. V-ROOMS.2a: **190→189** / **203→202**. V-ROOMS.5 read: **189→187** / **202→200**. V-ROOMS.5w/5r: **187→187**. Tip inventory after V-AUTH.4a **184** / **197** (187→184 production files; allowlist 194→191). V-ROOMS.2c mutations: importer delta **0** (rewire, not delete). |
 | Dual backend       | **`false`** (forbidden forever)                                                                                                                                                                                                                                       |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                                                                                                                                                              |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                                                                                                                                                  |
@@ -32,11 +32,11 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Integration tip `5ae9da2f2cdc9fc9767f65f8e2a4cf48e5f13653`** after V-AUTH.4a [#263](https://github.com/nepenth/synara-desktop/pull/263). Active: [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE **HOLD**. Next residual: V-AUTH.4b register / V-ROOMS.2c writers. **#221 HOLD**. |
+| **Now**        | **V-ROOMS.2c writers (this PR)** — native space-child + join-rules mutations; local graph residual. Tip base `a677a80`. Active also: [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE **HOLD**. Next residual: V-AUTH.4b register / V-ROOMS.2c graph. **#221 HOLD**. |
 | **Policy**     | [full-vertical-policy.md](full-vertical-policy.md) |
-| **Tip**        | `5ae9da2f2cdc9fc9767f65f8e2a4cf48e5f13653` merged [#263](https://github.com/nepenth/synara-desktop/pull/263) V-AUTH.4a password reset (after #262). |
-| **Active PRs** | Draft [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE HOLD. |
-| **Blocked**    | Merging plateau D0.6 (#221); claiming V-TIMELINE cutover (#240 HOLD); starting new media/widgets/etc before residual queue; merging L1 foundations; umbrella #39. |
+| **Tip**        | `a677a80b832cbb79879da1b3dab1b9dd257df4d2` docs after [#263](https://github.com/nepenth/synara-desktop/pull/263) V-AUTH.4a. |
+| **Active PRs** | Draft [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE HOLD; V-ROOMS.2c writers. |
+| **Blocked**    | Merging plateau D0.6 (#221); claiming V-TIMELINE cutover (#240 HOLD); claiming full V-ROOMS.2c done while graph/listeners remain JS; starting new media/widgets/etc before residual queue; merging L1 foundations; umbrella #39. |
 
 ---
 
@@ -60,6 +60,13 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-07-31 — V-ROOMS.2c space writers (mutations partial)
+
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-ROOMS.2c writers** | **This PR** | Native `matrix_space_child_set` / `remove` / `matrix_room_join_rules_set`; fail-closed lobby/add-existing/create-room/join-rules owners. **Not full DONE:** JS `useSpaceHierarchy` local graph/listeners residual. Live proof unclaimed. See [v-rooms-2c-space-writers.md](v-rooms-2c-space-writers.md). |
+| current | **V-TIMELINE** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | Tip-merge OK; no presenter cutover / RoomTimeline deletion. |
 
 ### 2026-07-31 — tip after #263
 

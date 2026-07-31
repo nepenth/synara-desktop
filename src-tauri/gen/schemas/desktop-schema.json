@@ -711,6 +711,12 @@
           "markdownDescription": "Enables the matrix_restore_session command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_room_join_rules_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-join-rules-set",
+          "markdownDescription": "Enables the matrix_room_join_rules_set command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_room_key_export command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-room-key-export",
@@ -787,6 +793,18 @@
           "type": "string",
           "const": "allow-matrix-session-snapshot",
           "markdownDescription": "Enables the matrix_session_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_space_child_remove command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-space-child-remove",
+          "markdownDescription": "Enables the matrix_space_child_remove command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_space_child_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-space-child-set",
+          "markdownDescription": "Enables the matrix_space_child_set command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_space_hierarchy_snapshot command without any pre-configured scope.",
@@ -1257,6 +1275,12 @@
           "markdownDescription": "Denies the matrix_restore_session command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_room_join_rules_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-join-rules-set",
+          "markdownDescription": "Denies the matrix_room_join_rules_set command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_room_key_export command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-room-key-export",
@@ -1333,6 +1357,18 @@
           "type": "string",
           "const": "deny-matrix-session-snapshot",
           "markdownDescription": "Denies the matrix_session_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_space_child_remove command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-space-child-remove",
+          "markdownDescription": "Denies the matrix_space_child_remove command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_space_child_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-space-child-set",
+          "markdownDescription": "Denies the matrix_space_child_set command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_space_hierarchy_snapshot command without any pre-configured scope.",

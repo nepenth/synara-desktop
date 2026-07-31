@@ -56,6 +56,7 @@ import { useGetRoom } from '../../hooks/useGetRoom';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { getRoomPermissionsAPI } from '../../hooks/useRoomPermissions';
 import { getRoomCreatorsForRoomId } from '../../hooks/useRoomCreators';
+import { removeSpaceChild, setRoomJoinRules, setSpaceChild } from './nativeSpaceChild';
 
 const useCanDropLobbyItem = (
   space: Room,
@@ -271,12 +272,13 @@ export function Lobby() {
         if (reorders) {
           await rateLimitedActions(reorders, async (reorder) => {
             if (!reorder.item.parentId) return;
-            await mx.sendStateEvent(
-              reorder.item.parentId,
-              StateEvent.SpaceChild as any,
-              { ...reorder.item.content, order: reorder.orderKey },
-              reorder.item.roomId
-            );
+            await setSpaceChild({
+              parentId: reorder.item.parentId,
+              childId: reorder.item.roomId,
+              via: reorder.item.content.via ?? [],
+              order: reorder.orderKey,
+              suggested: reorder.item.content.suggested,
+            });
           });
         }
       },
@@ -298,7 +300,7 @@ export function Lobby() {
 
         // remove from current space
         if (item.parentId !== containerParentId) {
-          mx.sendStateEvent(item.parentId, StateEvent.SpaceChild as any, {}, item.roomId);
+          await removeSpaceChild(item.parentId, item.roomId);
         }
 
         if (
@@ -318,9 +320,15 @@ export function Lobby() {
               joinRuleContent.allow?.filter((allowRule) => allowRule.room_id !== item.parentId) ??
               [];
             allow.push({ type: RestrictedAllowType.RoomMembership, room_id: containerParentId });
-            mx.sendStateEvent(itemRoom.roomId, StateEvent.RoomJoinRules as any, {
-              ...joinRuleContent,
-              allow,
+            await setRoomJoinRules({
+              roomId: itemRoom.roomId,
+              joinRule: String(joinRuleContent.join_rule ?? JoinRule.Restricted),
+              allow: allow
+                .filter((rule): rule is typeof rule & { room_id: string } => !!rule.room_id)
+                .map((rule) => ({
+                  type: String(rule.type ?? RestrictedAllowType.RoomMembership),
+                  roomId: rule.room_id,
+                })),
             });
           }
         }
@@ -358,12 +366,13 @@ export function Lobby() {
 
         if (reorders) {
           await rateLimitedActions(reorders, async (reorder) => {
-            await mx.sendStateEvent(
-              containerParentId,
-              StateEvent.SpaceChild as any,
-              { ...reorder.item.content, order: reorder.orderKey },
-              reorder.item.roomId
-            );
+            await setSpaceChild({
+              parentId: containerParentId,
+              childId: reorder.item.roomId,
+              via: reorder.item.content.via ?? [],
+              order: reorder.orderKey,
+              suggested: reorder.item.content.suggested,
+            });
           });
         }
       },
