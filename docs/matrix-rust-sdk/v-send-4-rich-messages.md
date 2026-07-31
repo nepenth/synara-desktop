@@ -2,7 +2,7 @@
 
 | Field          | Value                                                    |
 | -------------- | -------------------------------------------------------- |
-| Status         | Candidate — not yet merged or runtime-proven             |
+| Status         | Draft [#253](https://github.com/nepenth/synara-desktop/pull/253) — runtime proof pending |
 | Queue position | After V-SEND.3 polls                                     |
 | Owner          | Managed Rust client via extended `matrix_send_text`      |
 | JS fallback    | None for composer messages on a desktop native session   |
