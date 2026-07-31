@@ -4,11 +4,11 @@
 
 | Field                     | Value                                                                                                                                                                                         |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status                    | **Active — tip `706bf608` after #264 sticker/GIF; open #268 V-ROOMS.2c, #266 V-AUTH.4b, #240 HOLD** (2026-07-31) |
+| Status                    | **Active — tip `706bf608` after #264; open #268 V-ROOMS.2c, #266 V-AUTH.4b, #240 HOLD** (2026-07-31) |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                            |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)                                                                                                                                     |
-| Current integration tip   | `706bf60844910b5f5e16596746b5502d0bab093a` ([#264](https://github.com/nepenth/synara-desktop/pull/264) sticker/GIF) |
-| Active PRs                | [#266](https://github.com/nepenth/synara-desktop/pull/266) V-AUTH.4b; [#268](https://github.com/nepenth/synara-desktop/pull/268) V-ROOMS.2c; [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD |
+| Current integration tip   | `706bf608` ([#264](https://github.com/nepenth/synara-desktop/pull/264) sticker/GIF after #269) |
+| Active PRs                | [#268](https://github.com/nepenth/synara-desktop/pull/268) V-ROOMS.2c; [#266](https://github.com/nepenth/synara-desktop/pull/266) V-AUTH.4b; [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD |
 
 ## Policy trigger
 
@@ -91,7 +91,7 @@ Migration decision already decided: **`D-KEY-RECOVERY`** in [migration-ux-decisi
 
 | ID           | Capability                              | Residual today                                                                                                                                                                                                                                                                         | Done when                                               |
 | ------------ | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| **V-SEND.1** | Attachments / media upload send         | **DONE #248** at integration `90be0f4`; Synapse native attachment proof Confirmed; avatar/call/forward residual remain elsewhere; GIF via #264                                                                                      | Native send queue + IPC + JS owner deletion             |
+| **V-SEND.1** | Attachments / media upload send         | **DONE #248** at integration `90be0f4`; Synapse native attachment proof Confirmed; GIF/avatar/call/forward residual remain elsewhere                                                                                      | Native send queue + IPC + JS owner deletion             |
 | **V-SEND.2** | Reactions                               | **Merged** [#239](https://github.com/nepenth/synara-desktop/pull/239) at `988cdc2`; Synapse native reaction proof Confirmed on reviewed head                                                                                                                                           | Native commands/readback plus active JS writer deletion |
 | **V-SEND.3** | Polls                                   | **Merged** [#250](https://github.com/nepenth/synara-desktop/pull/250) at `88ed143`; Synapse native poll proof Confirmed on reviewed head `761d2ef`; relation read residual remains in V-TIMELINE                                                                                  | Native                                                  |
 | **V-SEND.4** | Emotes / notices / rich HTML + mentions | **DONE #253** at `b558344`; native `matrix_send_text` owns emote/notice/HTML/mentions/reply; composer JS fallback removed for retained types; Synapse rich-message proof gated in CI                                                                                                  | Product parity for retained composer features           |
