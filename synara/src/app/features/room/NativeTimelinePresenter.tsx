@@ -2,7 +2,14 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Box, Button, Scroll, Text, config } from 'folds';
 import { sanitizeCustomHtml } from '../../utils/sanitize';
+import { setNativeComposerReplyDraft } from './nativeComposerDraft';
 import { toggleReactionWithNativeOwner } from './nativeReactionOwner';
+import {
+  pinWithNativeTimelineAction,
+  pollVoteWithNativeTimelineAction,
+  redactWithNativeTimelineAction,
+  reportWithNativeTimelineAction,
+} from './nativeTimelineAction';
 import { callDeclineWithNativeTimelineOwner } from './nativeTimelineActions';
 import {
   nativeTimelineMediaSrc,
@@ -69,6 +76,114 @@ type NativeTimelineRowProps = {
   onActionError: (message: string) => void;
 };
 
+const runNativeRowAction = (
+  action: () => Promise<unknown>,
+  onActionError: (message: string) => void,
+  failureLabel: string
+) => {
+  void action().catch((error) => {
+    onActionError(error instanceof Error ? error.message : failureLabel);
+  });
+};
+
+const NativeTimelineRowActions = ({
+  roomId,
+  eventId,
+  capabilities,
+  onActionError,
+}: {
+  roomId: string;
+  eventId?: string;
+  capabilities?: NativeTimelineRowCapabilities;
+  onActionError: (message: string) => void;
+}) => {
+  if (!eventId || !capabilities) return null;
+  const buttons: React.ReactNode[] = [];
+  if (capabilities.reply) {
+    buttons.push(
+      <Button
+        key="reply"
+        size="300"
+        fill="Soft"
+        onClick={() =>
+          runNativeRowAction(
+            async () => {
+              const result = await setNativeComposerReplyDraft({ roomId, eventId });
+              if (result === 'unavailable') {
+                throw new Error('Native reply draft is unavailable.');
+              }
+            },
+            onActionError,
+            'Native reply draft failed.'
+          )
+        }
+      >
+        Reply
+      </Button>
+    );
+  }
+  if (capabilities.redact) {
+    buttons.push(
+      <Button
+        key="redact"
+        size="300"
+        fill="Soft"
+        onClick={() =>
+          runNativeRowAction(
+            () => redactWithNativeTimelineAction({ roomId, eventId }),
+            onActionError,
+            'Native redact failed.'
+          )
+        }
+      >
+        Redact
+      </Button>
+    );
+  }
+  if (capabilities.report) {
+    buttons.push(
+      <Button
+        key="report"
+        size="300"
+        fill="Soft"
+        onClick={() =>
+          runNativeRowAction(
+            () => reportWithNativeTimelineAction({ roomId, eventId }),
+            onActionError,
+            'Native report failed.'
+          )
+        }
+      >
+        Report
+      </Button>
+    );
+  }
+  if (capabilities.pin) {
+    buttons.push(
+      <Button
+        key="pin"
+        size="300"
+        fill="Soft"
+        onClick={() =>
+          runNativeRowAction(
+            () => pinWithNativeTimelineAction({ roomId, eventId }),
+            onActionError,
+            'Native pin failed.'
+          )
+        }
+      >
+        Pin
+      </Button>
+    );
+  }
+  if (buttons.length === 0) return null;
+  return (
+    <Box gap="100" wrap="Wrap">
+      {buttons}
+    </Box>
+  );
+};
+
 const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProps) => {
   const capabilities = rowCapabilities(row);
   const eventId = rowEventId(row);
@@ -91,6 +206,19 @@ const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProp
       .catch((error) => {
         onActionError(error instanceof Error ? error.message : 'Native call decline failed.');
       });
+  };
+  const runPollVote = (answerId: string) => {
+    if (!eventId || !capabilities?.vote) return;
+    runNativeRowAction(
+      () =>
+        pollVoteWithNativeTimelineAction({
+          roomId,
+          eventId,
+          answerIds: [answerId],
+        }),
+      onActionError,
+      'Native poll vote failed.'
+    );
   };
 
   switch (row.kind) {
@@ -167,6 +295,12 @@ const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProp
               )}
             </Box>
           )}
+          <NativeTimelineRowActions
+            roomId={roomId}
+            eventId={eventId}
+            capabilities={capabilities}
+            onActionError={onActionError}
+          />
         </Box>
       );
     }
@@ -186,11 +320,29 @@ const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProp
         >
           <Text size="L400">{row.question}</Text>
           <Text size="T300">{row.closed ? 'Poll closed' : 'Poll open'}</Text>
+          {(row.answers ?? []).map((answer) => (
+            <Button
+              key={answer.id}
+              size="300"
+              variant={answer.own ? 'Primary' : 'Secondary'}
+              fill="Soft"
+              disabled={row.closed || !capabilities?.vote}
+              onClick={() => runPollVote(answer.id)}
+            >
+              {answer.text} ({answer.voteCount})
+            </Button>
+          ))}
           {capabilities?.react && (
             <Button size="300" fill="Soft" onClick={() => runReaction('👍')}>
               React
             </Button>
           )}
+          <NativeTimelineRowActions
+            roomId={roomId}
+            eventId={eventId}
+            capabilities={capabilities}
+            onActionError={onActionError}
+          />
         </Box>
       );
     case 'call':
@@ -258,6 +410,12 @@ const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProp
               React
             </Button>
           )}
+          <NativeTimelineRowActions
+            roomId={roomId}
+            eventId={eventId}
+            capabilities={capabilities}
+            onActionError={onActionError}
+          />
         </Box>
       );
     }

@@ -5,16 +5,20 @@
 
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import {
+  editTextWithNativeTimelineOwner,
   forwardMediaWithNativeTimelineOwner,
   forwardTextWithNativeTimelineOwner,
   pinWithNativeTimelineOwner,
+  pollVoteWithNativeTimelineOwner,
   redactWithNativeTimelineOwner,
   reportWithNativeTimelineOwner,
   unpinWithNativeTimelineOwner,
   type NativeTimelineActionReadback,
+  type NativeTimelineEditTextInput,
   type NativeTimelineForwardMediaInput,
   type NativeTimelineForwardTextInput,
   type NativeTimelinePinInput,
+  type NativeTimelinePollVoteInput,
   type NativeTimelineRedactInput,
   type NativeTimelineReportInput,
 } from './nativeTimelineActions';
@@ -29,6 +33,11 @@ const requireNative = async <T>(result: Promise<T | 'unavailable'>): Promise<T> 
   }
   return value;
 };
+
+export const editTextWithNativeTimelineAction = (
+  input: NativeTimelineEditTextInput
+): Promise<NativeTimelineActionReadback> =>
+  requireNative(editTextWithNativeTimelineOwner(input, isSynaraDesktop(), invoke));
 
 export const redactWithNativeTimelineAction = (
   input: NativeTimelineRedactInput
@@ -59,3 +68,8 @@ export const forwardMediaWithNativeTimelineAction = (
   input: NativeTimelineForwardMediaInput
 ): Promise<NativeTimelineActionReadback> =>
   requireNative(forwardMediaWithNativeTimelineOwner(input, isSynaraDesktop(), invoke));
+
+export const pollVoteWithNativeTimelineAction = (
+  input: NativeTimelinePollVoteInput
+): Promise<NativeTimelineActionReadback> =>
+  requireNative(pollVoteWithNativeTimelineOwner(input, isSynaraDesktop(), invoke));

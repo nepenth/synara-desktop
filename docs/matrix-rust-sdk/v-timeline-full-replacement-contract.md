@@ -101,9 +101,11 @@ bridge registers its event listener before `matrix_timeline_open`, keeps only
 the exact returned stream, and rejects revision gaps or malformed operations
 instead of fetching through the JS timeline. The unselected virtualized
 presenter consumes only that product DTO and invokes only capability-gated
-native pagination/read/jump-latest commands. It is not an active presenter or a
-fallback route: complete retained action ownership and live authenticated
-viewport proof remain absent. The initial unread/read-frontier open is
+native pagination/read/jump-latest commands plus capability-gated row actions
+(react, reply-draft, redact, report, pin, poll vote, call decline). It is not an
+active presenter or a fallback route: product selection, complete retained
+composer/message-menu parity, and live authenticated viewport proof remain
+absent. The initial unread/read-frontier open is
 native-owned. Normal opens now also carry a typed local viewport restore hint
 (`at_bottom`, `live_tail_event_id`, `updated_at_ms`, `restored_anchor_event_id`)
 and resolve placement with legacy-compatible precedence: unread beats
@@ -149,7 +151,7 @@ legacy composer or a rich reply/edit flow.
 | Mark read/unread, receipts  | Native receipt/read-frontier command and readback  | Stream-addressed private `m.read` / unread-flag command and snapshot readback exist; unread opening uses the native `m.fully_read` frontier; normal open restore policy and jump-to-latest are native; live frontier and pagination metadata now emit on the view-delta stream               |
 | Save/later/notes/reminders  | Typed account-data commands and snapshot           | Typed `matrix_later_*` / `matrix_room_notes_*` snapshot+mutate with content readback; RoomTimeline / RoomNotesPanel / Later / badge prefer native owners on desktop; JS `setAccountData` writers deleted; pure codecs retained; **NativeTimelinePresenter unselected**; live proof unclaimed |
 | Media/sticker image display | Bounded native media-handle resolver               | Wired on the unselected presenter via stream/session-bound opaque handles and the shared `synara-media` protocol; selection still deferred                                                                                                                                                   |
-| Poll vote and call controls | Typed poll/call commands with capability readback  | Tip-owned `matrix_send_poll` / `matrix_poll_respond` drive the active composer and PollContent without a JS write fallback; `matrix_timeline_poll_vote` and `matrix_timeline_call_decline` remain capability-gated typed actions for timeline rows                                           |
+| Poll vote and call controls | Typed poll/call commands with capability readback  | Tip-owned `matrix_send_poll` / `matrix_poll_respond` drive the active composer and PollContent without a JS write fallback; poll rows now project answer id/text/counts/own (no voter IDs); unselected presenter votes via `matrix_timeline_poll_vote` and declines calls via `matrix_timeline_call_decline` when capability-gated                                           |
 
 No active desktop timeline presenter may retain these JS action paths as a
 fallback once the native presenter is selected.
