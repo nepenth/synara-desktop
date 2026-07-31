@@ -4,11 +4,11 @@
 
 | Field                     | Value                                                                                                                                                                                         |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status                    | **Active — tip `9c0b51e` after #254; open #258 V-SEND.5 / #262 V-AUTH.2 / #263 V-AUTH.4a; #240 HOLD; #261 docs** (2026-07-31)                                                                                       |
+| Status                    | **Active — tip after #261 docs; open #258 V-SEND.5 / #262 V-AUTH.2 / #263 V-AUTH.4a; #240 HOLD** (2026-07-31)                                                                                       |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                            |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)                                                                                                                                     |
-| Current integration tip   | `9c0b51e4d0706e7ad6cafe82172e3c9e8406fcea` ([#254](https://github.com/nepenth/synara-desktop/pull/254) V-ROOMS.2b after #260/#256/#253)                                                                                                              |
-| Active PRs                | Draft [#258](https://github.com/nepenth/synara-desktop/pull/258) V-SEND.5; [#262](https://github.com/nepenth/synara-desktop/pull/262) V-AUTH.2; [#263](https://github.com/nepenth/synara-desktop/pull/263) V-AUTH.4a; [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE HOLD; ready [#261](https://github.com/nepenth/synara-desktop/pull/261) docs |
+| Current integration tip   | `d080156e30b28901959853e46b766deb56185619` ([#261](https://github.com/nepenth/synara-desktop/pull/261) docs after #254 V-ROOMS.2b)                                                                                                              |
+| Active PRs                | Draft [#258](https://github.com/nepenth/synara-desktop/pull/258) V-SEND.5; [#262](https://github.com/nepenth/synara-desktop/pull/262) V-AUTH.2; [#263](https://github.com/nepenth/synara-desktop/pull/263) V-AUTH.4a; [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE HOLD |
 
 ## Policy trigger
 
@@ -101,7 +101,7 @@ silently drops any retained timeline operating path.
 | **V-SEND.2** | Reactions                               | **Merged** [#239](https://github.com/nepenth/synara-desktop/pull/239) at `988cdc2`; Synapse native reaction proof Confirmed on reviewed head                                                                                                                                           | Native commands/readback plus active JS writer deletion |
 | **V-SEND.3** | Polls                                   | **Merged** [#250](https://github.com/nepenth/synara-desktop/pull/250) at `88ed143`; Synapse native poll proof Confirmed on reviewed head `761d2ef`; relation read residual remains in V-TIMELINE                                                                                  | Native                                                  |
 | **V-SEND.4** | Emotes / notices / rich HTML + mentions | **DONE #253** at `b558344`; native `matrix_send_text` owns emote/notice/HTML/mentions/reply; composer JS fallback removed for retained types; Synapse rich-message proof gated in CI                                                                                                  | Product parity for retained composer features           |
-| **V-SEND.5** | Threads                                 | **Active draft** [#258](https://github.com/nepenth/synara-desktop/pull/258) — tip-merged after #254; re-CI then merge when green; stickers/GIF/poll-in-thread/thread UI remain residual                                                                                     | Native thread send/relations                            |
+| **V-SEND.5** | Threads                                 | **Active** [#258](https://github.com/nepenth/synara-desktop/pull/258) — native composer text/attachment `m.thread` via `threadRoot`; tip-merged after #261; sticker/GIF/poll-in-thread + thread list/timeline remain residual | Native thread send/relations                            |
 
 ### V-BURN — final convergence audit (real D0.6)
 
