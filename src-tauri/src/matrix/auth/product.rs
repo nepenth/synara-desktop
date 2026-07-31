@@ -4049,7 +4049,7 @@ mod tests {
         // replacement metadata carries the same mentions, none remain in the fallback.
         assert!(json["m.mentions"]
             .get("user_ids")
-            .map(|v| v.as_array().map_or(true, |a| a.is_empty()))
+            .map(|v| v.as_array().is_none_or(|a| a.is_empty()))
             .unwrap_or(true));
     }
 
