@@ -1,4 +1,29 @@
-import { AuthType, IAuthData, UIAFlow } from 'matrix-js-sdk';
+/**
+ * SDK-neutral UIA helpers for desktop auth surfaces.
+ * Stage type strings match Matrix CS API (`m.login.*`).
+ */
+
+export type UIAFlow = {
+  stages: string[];
+};
+
+export type UIAAuthData = {
+  session?: string;
+  flows?: UIAFlow[];
+  completed?: string[];
+  params?: Record<string, Record<string, unknown>>;
+  errcode?: string;
+  error?: string;
+};
+
+export const AuthStageType = {
+  Password: 'm.login.password',
+  Recaptcha: 'm.login.recaptcha',
+  Email: 'm.login.email.identity',
+  Terms: 'm.login.terms',
+  Dummy: 'm.login.dummy',
+  RegistrationToken: 'm.login.registration_token',
+} as const;
 
 export const getSupportedUIAFlows = (uiaFlows: UIAFlow[], supportedStages: string[]): UIAFlow[] => {
   const supportedUIAFlows = uiaFlows.filter((flow) =>
@@ -8,34 +33,34 @@ export const getSupportedUIAFlows = (uiaFlows: UIAFlow[], supportedStages: strin
   return supportedUIAFlows;
 };
 
-export const getUIACompleted = (authData: IAuthData): string[] => {
+export const getUIACompleted = (authData: UIAAuthData): string[] => {
   const completed = authData.completed ?? [];
   return completed;
 };
 
 export type UIAParams = Record<string, Record<string, unknown>>;
-export const getUIAParams = (authData: IAuthData): UIAParams => {
+export const getUIAParams = (authData: UIAAuthData): UIAParams => {
   const params = authData.params ?? {};
   return params;
 };
 
-export const getUIASession = (authData: IAuthData): string | undefined => {
+export const getUIASession = (authData: UIAAuthData): string | undefined => {
   const session = authData.session ?? undefined;
   return session;
 };
 
-export const getUIAErrorCode = (authData: IAuthData): string | undefined => {
+export const getUIAErrorCode = (authData: UIAAuthData): string | undefined => {
   const errorCode =
     'errcode' in authData && typeof authData.errcode === 'string' ? authData.errcode : undefined;
 
   return errorCode;
 };
 
-export const getUIAError = (authData: IAuthData): string | undefined => {
-  const errorCode =
+export const getUIAError = (authData: UIAAuthData): string | undefined => {
+  const error =
     'error' in authData && typeof authData.error === 'string' ? authData.error : undefined;
 
-  return errorCode;
+  return error;
 };
 
 export const getUIAFlowForStages = (uiaFlows: UIAFlow[], stages: string[]): UIAFlow | undefined => {
@@ -46,8 +71,8 @@ export const getUIAFlowForStages = (uiaFlows: UIAFlow[], stages: string[]): UIAF
         // As a valid flow can also have m.login.dummy type,
         // we will pick one extra length flow only if it has dummy
         if (flow.stages.length > stages.length + 1) return false;
-        if (stages.includes(AuthType.Dummy)) return false;
-        if (flow.stages.includes(AuthType.Dummy)) return true;
+        if (stages.includes(AuthStageType.Dummy)) return false;
+        if (flow.stages.includes(AuthStageType.Dummy)) return true;
         return false;
       }
       return true;
@@ -67,12 +92,12 @@ export const requiredStageInFlows = (uiaFlows: UIAFlow[], stage: string) =>
   uiaFlows.every((flow) => flow.stages.includes(stage));
 
 export const getLoginTermUrl = (params: UIAParams): string | undefined => {
-  const terms = params[AuthType.Terms];
+  const terms = params[AuthStageType.Terms];
   if (terms && 'policies' in terms && typeof terms.policies === 'object') {
     if (terms.policies === null) return undefined;
     if ('privacy_policy' in terms.policies && typeof terms.policies.privacy_policy === 'object') {
       if (terms.policies.privacy_policy === null) return undefined;
-      const langToPolicy = terms.policies.privacy_policy as Record<string, any>;
+      const langToPolicy = terms.policies.privacy_policy as Record<string, { url?: string }>;
       const url = langToPolicy.en?.url;
       if (typeof url === 'string') return url;
 

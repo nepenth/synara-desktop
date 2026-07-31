@@ -759,6 +759,24 @@
           "markdownDescription": "Enables the matrix_reaction_redact command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_register command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-register",
+          "markdownDescription": "Enables the matrix_register command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_register_flows command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-register-flows",
+          "markdownDescription": "Enables the matrix_register_flows command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_register_request_email_token command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-register-request-email-token",
+          "markdownDescription": "Enables the matrix_register_request_email_token command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_restore_session command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-restore-session",
@@ -1495,6 +1513,24 @@
           "type": "string",
           "const": "deny-matrix-reaction-redact",
           "markdownDescription": "Denies the matrix_reaction_redact command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_register command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-register",
+          "markdownDescription": "Denies the matrix_register command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_register_flows command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-register-flows",
+          "markdownDescription": "Denies the matrix_register_flows command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_register_request_email_token command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-register-request-email-token",
+          "markdownDescription": "Denies the matrix_register_request_email_token command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_restore_session command without any pre-configured scope.",
