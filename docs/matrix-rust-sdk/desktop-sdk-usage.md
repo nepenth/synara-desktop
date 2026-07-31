@@ -65,7 +65,7 @@ Scope: **production only**. Import files: 187. Files with any finding: 189.
 
 | Module path                                           | Import sites | Files |
 | ----------------------------------------------------- | -----------: | ----: |
-| `matrix-js-sdk`                                       |          178 |   178 |
+| `matrix-js-sdk`                                       |          177 |   177 |
 | `matrix-js-sdk/lib/types`                             |           13 |    13 |
 | `matrix-js-sdk/lib/@types/spaces`                     |            6 |     6 |
 | `matrix-js-sdk/lib/models/event`                      |            6 |     6 |
@@ -166,7 +166,7 @@ Scope: **production only**. Import files: 187. Files with any finding: 189.
 | `receipts`                     |     5 |                 4 |                   4 |                      0 |          0 |
 | `notifications_push_rules`     |     8 |                10 |                   0 |                      0 |          0 |
 | `uia_auth`                     |    63 |               116 |                   2 |                      0 |          0 |
-| `custom_raw_event_sends`       |    18 |                32 |                   0 |                      0 |          0 |
+| `custom_raw_event_sends`       |    17 |                29 |                   0 |                      0 |          0 |
 | `direct_matrix_networking`     |     2 |                 0 |                   0 |                      0 |          3 |
 | `client_events`                |     5 |                 0 |                  16 |                      0 |          0 |
 
@@ -187,7 +187,6 @@ Scope: **production only**. Import files: 187. Files with any finding: 189.
 | `refreshToken`             |                     7 |
 | `getUnfilteredTimelineSet` |                     6 |
 | `joinRoom`                 |                     6 |
-| `sendEvent`                |                     6 |
 | `sendMessage`              |                     5 |
 | `getSyncState`             |                     4 |
 | `leave`                    |                     4 |
@@ -198,6 +197,7 @@ Scope: **production only**. Import files: 187. Files with any finding: 189.
 | `deletePushRule`           |                     3 |
 | `mxcUrlToHttp`             |                     3 |
 | `redactEvent`              |                     3 |
+| `sendEvent`                |                     3 |
 | `setPushRuleActions`       |                     3 |
 | `getCapabilities`          |                     2 |
 | `getCrypto`                |                     2 |
@@ -432,7 +432,7 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `synara/src/app/components/message/MsgTypeRenderers.tsx`                                                                      | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/message/Reaction.tsx`                                                                              | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/message/Reply.tsx`                                                                                 | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/components/message/content/PollContent.tsx`                                                                   | production | yes     | component        | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/models/event`                                                                                                                         |
+| `synara/src/app/components/message/content/PollContent.tsx`                                                                   | production | yes     | component        | static       | `matrix-js-sdk/lib/models/event`                                                                                                                                          |
 | `synara/src/app/components/room-avatar/RoomAvatar.tsx`                                                                        | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/room-card/RoomCard.tsx`                                                                            | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/room-intro/RoomIntro.tsx`                                                                          | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |

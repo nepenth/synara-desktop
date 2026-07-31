@@ -338,3 +338,131 @@ async fn live_native_attachment_send_against_disposable_synapse_when_configured(
 
     let _ = std::fs::remove_dir_all(&store_root);
 }
+
+fn poll_live_enabled() -> bool {
+    std::env::var("SYNARA_RUN_MATRIX_RUST_POLL_LIVE")
+        .ok()
+        .as_deref()
+        == Some("1")
+}
+
+#[tokio::test]
+async fn live_native_poll_send_and_respond_against_disposable_synapse_when_configured() {
+    if !poll_live_enabled() {
+        return;
+    }
+    let base = loopback_homeserver_url()
+        .expect("SYNARA_MATRIX_HOMESERVER_URL must be credential-free HTTP loopback");
+
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let localpart = format!("vs3_{stamp:x}");
+    let password = format!("S-{stamp:x}");
+    let registration = register_disposable_account(&base, &localpart, &password).await;
+    let user_id = registration["user_id"]
+        .as_str()
+        .expect("registration user_id")
+        .to_owned();
+
+    let store_root = temp_store_root();
+    let identity = AccountIdentity::new(&user_id, &base).expect("account identity");
+    let key = StoreKeyMaterial::generate().expect("store key");
+    let config = ClientBuildConfig::product_default(&store_root, identity, Some(key))
+        .expect("client config");
+    let client = build_unauthenticated_client(&config)
+        .await
+        .expect("unauthenticated client");
+    login_with_password(
+        &client,
+        &localpart,
+        &password,
+        &LoginOptions {
+            device_display_name: Some("V-SEND.3 poll proof".into()),
+            request_refresh_token: false,
+        },
+    )
+    .await
+    .expect("password login");
+
+    client
+        .event_cache()
+        .subscribe()
+        .expect("subscribe event cache for native poll proof");
+
+    client
+        .sync_once(SyncSettings::default().timeout(Duration::from_secs(3)))
+        .await
+        .expect("initial sync");
+
+    let room = client
+        .create_room(CreateRoomRequest::new())
+        .await
+        .expect("create room");
+    client
+        .sync_once(SyncSettings::default().timeout(Duration::from_secs(3)))
+        .await
+        .expect("post-create sync");
+
+    // Send-path proof: native timeline DTO projection of poll kinds is a later
+    // V-TIMELINE residual. Authoritative V-SEND.3 evidence is Room::send plus
+    // managed-client fetch of the resulting events from Synapse.
+    let normalized = crate::matrix::send::normalize_poll(
+        "V-SEND.3 proof?",
+        &["Alpha".to_owned(), "Beta".to_owned()],
+        1,
+    )
+    .expect("normalize poll");
+    let start = crate::matrix::send::poll_start_content(&normalized).expect("poll start content");
+    let start_response = room
+        .send(start)
+        .await
+        .expect("send poll start via managed client");
+    let poll_event_id = start_response.response.event_id.clone();
+    wait_for_room_event(&client, &room, &poll_event_id).await;
+
+    let answer_id = normalized.answers[0].0.clone();
+    let response_content =
+        crate::matrix::send::poll_response_content(poll_event_id.as_str(), &[answer_id])
+            .expect("poll response content");
+    let vote_response = room
+        .send(response_content)
+        .await
+        .expect("send poll response via managed client");
+    let vote_event_id = vote_response.response.event_id.clone();
+    wait_for_room_event(&client, &room, &vote_event_id).await;
+
+    let _ = std::fs::remove_dir_all(&store_root);
+}
+
+async fn wait_for_room_event(
+    client: &matrix_sdk::Client,
+    room: &matrix_sdk::Room,
+    event_id: &matrix_sdk::ruma::EventId,
+) {
+    let deadline = Instant::now() + Duration::from_secs(45);
+    loop {
+        sync_briefly(client).await;
+        match room.load_or_fetch_event(event_id, None).await {
+            Ok(ev) => {
+                let raw = ev.into_raw();
+                let value: serde_json::Value =
+                    serde_json::from_str(raw.json().get()).expect("event json");
+                let event_type = value.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                assert!(
+                    event_type.contains("poll"),
+                    "expected poll event type, got {event_type:?}"
+                );
+                return;
+            }
+            Err(_) => {
+                assert!(
+                    Instant::now() < deadline,
+                    "timed out waiting to fetch poll event {event_id} from managed room"
+                );
+                tokio::time::sleep(Duration::from_millis(250)).await;
+            }
+        }
+    }
+}

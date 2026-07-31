@@ -14,6 +14,7 @@
 
 mod attachment_queue;
 mod error;
+mod poll;
 mod queue;
 
 pub use attachment_queue::{
@@ -21,6 +22,9 @@ pub use attachment_queue::{
     MAX_ACTIVE_ATTACHMENTS, MAX_CAPTION_CHARS, MAX_HANDLE_CHARS,
 };
 pub use error::SendError;
+pub use poll::{
+    normalize_poll, poll_response_content, poll_start_content, NormalizedPoll, PollSendError,
+};
 pub use queue::{LocalTxnId, OutboundTextMessage, SendQueue};
 
 /// Static marker for link / schema smoke (text + attachment queues).

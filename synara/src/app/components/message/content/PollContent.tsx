@@ -1,16 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge, Box, Button, Icon, Icons, ProgressBar, Text, config } from 'folds';
-import type { TimelineEvents } from 'matrix-js-sdk';
 import type { MatrixEvent } from 'matrix-js-sdk/lib/models/event';
 import { useTranslation } from 'react-i18next';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import {
-  ParsedPoll,
-  POLL_RESPONSE_EVENT_TYPE,
-  makePollResponseContent,
-  parsePollResponseContent,
-  summarizePollResponses,
-} from '../../../utils/polls';
+import { respondPollWithNativeDesktopOwner } from '../../../features/room/nativePoll';
+import { ParsedPoll, parsePollResponseContent, summarizePollResponses } from '../../../utils/polls';
 
 export type PollContentProps = {
   roomId: string;
@@ -101,11 +95,20 @@ export function PollContent({ roomId, eventId, poll }: PollContentProps) {
     setIsSending(true);
     setError(undefined);
     try {
-      const responseContent = makePollResponseContent(
-        eventId,
-        orderedAnswers
-      ) as TimelineEvents[keyof TimelineEvents];
-      await mx.sendEvent(roomId, POLL_RESPONSE_EVENT_TYPE as keyof TimelineEvents, responseContent);
+      const owner = await respondPollWithNativeDesktopOwner({
+        roomId,
+        pollEventId: eventId,
+        answerIds: orderedAnswers,
+      });
+      if (owner === 'legacy') {
+        setError(
+          t(
+            'modernization.poll.native_required',
+            'Native Matrix session is required to vote on desktop.'
+          )
+        );
+        return;
+      }
       setResponses((current) => [
         ...current,
         {

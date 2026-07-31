@@ -26,7 +26,8 @@ import { Membership, StateEvent } from '../../types/matrix/room';
 import { getStateEvent } from '../utils/room';
 import { splitWithSpace } from '../utils/common';
 import { createRoomEncryptionState } from '../components/create-room';
-import { makePollStartContentFromCommand, POLL_START_EVENT_TYPE } from '../utils/polls';
+import { sendPollWithNativeDesktopOwner } from '../features/room/nativePoll';
+import { parsePollCommand } from '../utils/polls';
 import { getRoomCurrentState } from '../utils/timelineLifecycle';
 
 export const SHRUG = '¯\\_(ツ)_/¯';
@@ -541,9 +542,17 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           'Create a poll. Example: /poll Deploy now? | Yes | No | max=2'
         ),
         exe: async (payload) => {
-          const content = makePollStartContentFromCommand(payload);
-          if (!content) return;
-          await mx.sendEvent(room.roomId, POLL_START_EVENT_TYPE as any, content as any);
+          const poll = parsePollCommand(payload);
+          if (!poll) return;
+          const owner = await sendPollWithNativeDesktopOwner({
+            roomId: room.roomId,
+            question: poll.question,
+            answers: poll.answers.map((answer) => answer.text),
+            maxSelections: poll.maxSelections,
+          });
+          if (owner === 'legacy') {
+            throw new Error('Native Matrix session is required to send polls on desktop.');
+          }
         },
       },
     }),

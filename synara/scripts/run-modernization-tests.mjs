@@ -52,6 +52,7 @@ const tests = [
   'src/app/features/room/__tests__/nativeSendText.test.ts',
   'src/app/features/room/__tests__/nativeSendAttachmentOwner.test.ts',
   'src/app/features/room/__tests__/nativeMDirectOwner.test.ts',
+  'src/app/features/room/__tests__/nativePollOwner.test.ts',
   'src/app/features/room/__tests__/nativeReactionOwner.test.ts',
   'src/app/features/verification/__tests__/nativeVerification.test.ts',
   'src/app/features/cross-signing/__tests__/nativeCrossSigning.test.ts',
