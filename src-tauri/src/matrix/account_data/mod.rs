@@ -16,7 +16,10 @@ pub use index::{
     MAX_ROOMS_WITH_ACCOUNT_DATA, MAX_ROOM_TYPES, MAX_VALUE_LEN, TYPE_DIRECT, TYPE_FULLY_READ,
     TYPE_IGNORED_USER_LIST, TYPE_PUSH_RULES, TYPE_TAG,
 };
-pub use live::{snapshot_mdirect, NativeMDirectSnapshot};
+pub use live::{
+    add_room_to_mdirect, remove_room_from_mdirect, snapshot_mdirect, NativeMDirectMutationResult,
+    NativeMDirectSnapshot,
+};
 
 /// Static marker for link / schema smoke.
 pub const MATRIX_ACCOUNT_DATA_MARKER: &str = "matrix-account-data-p6.7";

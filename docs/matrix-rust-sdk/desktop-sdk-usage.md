@@ -157,7 +157,7 @@ Scope: **production only**. Import files: 187. Files with any finding: 189.
 | `indexeddb_matrix_stores`      |     1 |                 0 |                   0 |                      2 |          0 |
 | `authenticated_media`          |     6 |                 7 |                   0 |                      0 |          0 |
 | `matrixrtc_calls`              |     5 |                 0 |                   8 |                      0 |          0 |
-| `account_data`                 |    12 |                22 |                   4 |                      0 |          0 |
+| `account_data`                 |    11 |                18 |                   4 |                      0 |          0 |
 | `room_lists`                   |    44 |                98 |                  10 |                      0 |          0 |
 | `timelines`                    |    31 |                38 |                  48 |                      0 |          0 |
 | `searches`                     |     3 |                 3 |                   0 |                      0 |          0 |
@@ -180,9 +180,9 @@ Scope: **production only**. Import files: 187. Files with any finding: 189.
 | `isSpaceRoom`              |                    27 |
 | `sendStateEvent`           |                    26 |
 | `findEventById`            |                    13 |
-| `getAccountData`           |                    11 |
-| `setAccountData`           |                    10 |
+| `getAccountData`           |                     9 |
 | `getRooms`                 |                     9 |
+| `setAccountData`           |                     8 |
 | `getLiveTimeline`          |                     7 |
 | `refreshToken`             |                     7 |
 | `getUnfilteredTimelineSet` |                     6 |
