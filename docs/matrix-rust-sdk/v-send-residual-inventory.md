@@ -134,7 +134,7 @@ methods that remain reachable on a native session are the residuals in §3.3–�
 
 | Path | Current owner | Native gap | Proposed residual ID |
 |------|---------------|------------|----------------------|
-| `synara/src/app/features/room/message/MessageEditor.tsx` | `mx.sendMessage(roomId, content)` for message **edit/replace** (`m.relates_to` `m.replace`) | No native message-edit/replace owner | **V-SEND.R-EDIT** |
+| `synara/src/app/features/room/message/MessageEditor.tsx` | `mx.sendMessage(roomId, content)` for message **edit/replace** (`m.relates_to` `m.replace`) | Native `matrix_edit_message` (`m.replace` + `m.new_content`) owner added; JS path only when no native session | **V-SEND.R-EDIT** (in-PR) |
 | `synara/src/app/features/common-settings/developer-tools/SendRoomEvent.tsx` | `mx.sendEvent` / `mx.sendStateEvent` (developer tool) | Developer-tool raw event send; not a product path | **V-SEND.R-DEVTOOL** (low priority) |
 
 ---
@@ -152,7 +152,7 @@ methods that remain reachable on a native session are the residuals in §3.3–�
 | **V-SEND.R-CALL-UPLOAD** | Call widget media upload/download | `CallWidgetDriver.ts` | No native widget media upload |
 | **V-SEND.R-FORWARD** | Message forward to another room | `Message.tsx` | No native forward/send-to-room owner |
 | **V-SEND.R-POLL-THREAD** | Poll start/response in a thread | `RoomInput.tsx` `handleSendPoll`, `nativePoll.ts` | Native poll owner lacks `threadRoot`/`replyTo` |
-| **V-SEND.R-EDIT** | Message edit/replace | `MessageEditor.tsx` | No native edit/replace owner |
+| **V-SEND.R-EDIT** | Message edit/replace | `MessageEditor.tsx` | Native `matrix_edit_message` owner (in-PR); JS path only when no native session |
 | **V-SEND.R-DEVTOOL** | Developer-tool raw event send | `SendRoomEvent.tsx` | Developer tool; not a product path |
 
 ---
