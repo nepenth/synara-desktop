@@ -147,14 +147,10 @@ pub fn normalize_room_note_item(item: &serde_json::Value) -> Option<SynaraRoomNo
 
     match next.kind {
         SynaraRoomNoteItemKind::Note | SynaraRoomNoteItemKind::Todo => {
-            if next.body.is_none() {
-                return None;
-            }
+            next.body.as_ref()?;
         }
         SynaraRoomNoteItemKind::Message => {
-            if next.event_id.is_none() {
-                return None;
-            }
+            next.event_id.as_ref()?;
         }
     }
     Some(next)
