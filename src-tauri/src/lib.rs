@@ -396,6 +396,8 @@ pub fn run() {
             matrix::auth::product::matrix_invites_block_sender,
             matrix::auth::product::matrix_space_parents_snapshot,
             matrix::auth::product::matrix_mdirect_snapshot,
+            matrix::auth::product::matrix_mdirect_add,
+            matrix::auth::product::matrix_mdirect_remove,
             matrix::auth::product::matrix_later_snapshot,
             matrix::auth::product::matrix_later_upsert,
             matrix::auth::product::matrix_later_complete,
