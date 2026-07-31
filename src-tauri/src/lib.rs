@@ -438,6 +438,7 @@ pub fn run() {
             matrix::auth::product::matrix_timeline_call_decline,
             matrix::auth::product::matrix_send_text,
             matrix::auth::product::matrix_send_attachment,
+            matrix::auth::product::matrix_send_sticker,
             matrix::auth::product::matrix_send_poll,
             matrix::auth::product::matrix_poll_respond,
             matrix::auth::product::matrix_logout,
