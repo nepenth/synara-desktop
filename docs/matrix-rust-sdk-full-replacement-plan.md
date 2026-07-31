@@ -7,7 +7,7 @@ recorded only in the canonical status ledger below
 
 Integration branch: `feature/matrix-rust-sdk-full-replacement`
 
-Current execution record: [`docs/matrix-rust-sdk/implementation-handoff.md`](matrix-rust-sdk/implementation-handoff.md)
+Current execution record: [`docs/matrix-rust-sdk/README.md`](matrix-rust-sdk/README.md)
 
 <!-- matrix-rust-program-status-link -->
 
@@ -30,7 +30,7 @@ handoff claims that Phases 0–2 and P3.1 were complete.
 
 This table is the immutable audit baseline, not a live PR ledger. For progress
 after `edfefee`, use the canonical status ledger and the current live snapshot in
-[`implementation-handoff.md`](matrix-rust-sdk/implementation-handoff.md).
+[`README.md`](matrix-rust-sdk/README.md).
 
 | Band        | Artifact inventory                 | Acceptance state                                                                                                                     |
 | ----------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
