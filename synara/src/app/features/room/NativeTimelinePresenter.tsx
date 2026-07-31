@@ -51,10 +51,11 @@ const rowEventId = (row: NativeTimelineViewRow): string | undefined => {
 
 const findAnchorIndex = (
   rows: NativeTimelineViewRow[],
-  anchor: Pick<NonNullable<NativeTimelineViewport['anchor']>, 'itemId' | 'eventId'>
+  anchor: Pick<NonNullable<NativeTimelineViewport['anchor']>, 'itemId' | 'eventId'>,
 ): number =>
   rows.findIndex(
-    (row) => rowKey(row) === anchor.itemId || (anchor.eventId && rowEventId(row) === anchor.eventId)
+    (row) =>
+      rowKey(row) === anchor.itemId || (anchor.eventId && rowEventId(row) === anchor.eventId),
   );
 
 const rowCapabilities = (row: NativeTimelineViewRow): NativeTimelineRowCapabilities | undefined => {
@@ -83,7 +84,7 @@ const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProp
     void callDeclineWithNativeTimelineOwner(
       { roomId, eventId },
       isSynaraDesktop(),
-      invokeDesktopWithAvailability
+      invokeDesktopWithAvailability,
     )
       .then((result) => {
         if (result === 'unavailable') onActionError('Native call decline is unavailable.');
@@ -280,7 +281,7 @@ const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProp
 export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePresenterProps) {
   const openingViewport = useMemo(
     () => (eventId ? undefined : nativeTimelineViewports.get(roomId)),
-    [eventId, roomId]
+    [eventId, roomId],
   );
   const input = useMemo(
     () => ({
@@ -294,7 +295,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
               : openingViewport?.anchor?.eventId,
           } as const),
     }),
-    [eventId, openingViewport, roomId]
+    [eventId, openingViewport, roomId],
   );
   const controller = useNativeTimelineView(input);
   const timelineState = controller.state;
@@ -310,7 +311,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
         const row = rows[index];
         return row ? rowKey(row) : index;
       },
-      [rows]
+      [rows],
     ),
     estimateSize: useCallback(() => 64, []),
     overscan: 8,
@@ -358,10 +359,13 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       selectedPosition.kind === 'focused'
         ? { eventId: selectedPosition.target_event_id, itemId: selectedPosition.target_event_id }
         : selectedPosition.kind === 'unread'
-        ? { eventId: selectedPosition.anchor_event_id, itemId: selectedPosition.anchor_event_id }
-        : selectedPosition.kind === 'restored' && selectedPosition.anchor_event_id
-        ? { eventId: selectedPosition.anchor_event_id, itemId: selectedPosition.anchor_event_id }
-        : undefined;
+          ? { eventId: selectedPosition.anchor_event_id, itemId: selectedPosition.anchor_event_id }
+          : selectedPosition.kind === 'restored' && selectedPosition.anchor_event_id
+            ? {
+                eventId: selectedPosition.anchor_event_id,
+                itemId: selectedPosition.anchor_event_id,
+              }
+            : undefined;
     const placementKey = `${roomId}:${snapshot.sessionGeneration}:${selectedPosition.kind}:${
       selectedAnchor?.eventId ?? ''
     }`;
@@ -374,7 +378,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     } else if (anchorIndex >= 0) {
       virtualizer.scrollToIndex(anchorIndex, { align: 'start', behavior: 'auto' });
       const offsetPx =
-        initialPlacement && selectedAnchor ? 0 : savedViewport?.anchor?.offsetPx ?? 0;
+        initialPlacement && selectedAnchor ? 0 : (savedViewport?.anchor?.offsetPx ?? 0);
       const animationFrame = window.requestAnimationFrame(() => {
         if (scrollRef.current && offsetPx !== 0) scrollRef.current.scrollTop += offsetPx;
       });
