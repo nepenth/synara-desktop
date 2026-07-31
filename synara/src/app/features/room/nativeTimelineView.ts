@@ -28,7 +28,7 @@ export type NativeTimelineRowCapabilities = {
   forward: boolean;
   vote: boolean;
   declineCall: boolean;
-}
+};
 
 type NativeTimelineEventRowBase = {
   itemId: string;
