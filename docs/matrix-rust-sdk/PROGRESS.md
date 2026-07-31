@@ -14,11 +14,11 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-07-31**                                                                                                                                                                                                                                                        |
-| Integration tip    | `60674486` — docs [#277](https://github.com/nepenth/synara-desktop/pull/277) after product [#276](https://github.com/nepenth/synara-desktop/pull/276) V-AUTH.3 |
-| Active work        | Next free residual: password `loginUtil` non-native fallback / UIA login stage IPC; [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD |
+| Integration tip    | `e6db76c7` — after [#278](https://github.com/nepenth/synara-desktop/pull/278) docs pin / [#277](https://github.com/nepenth/synara-desktop/pull/277) / [#276](https://github.com/nepenth/synara-desktop/pull/276) V-AUTH.3 |
+| Active work        | **This PR** V-AUTH.3b login multi-stage UIA **non-retention**; parallel password `loginUtil` residual [#279](https://github.com/nepenth/synara-desktop/pull/279); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
-| Import accounting  | V-AUTH.1: **201→197** / **215→211**. … [#266](https://github.com/nepenth/synara-desktop/pull/266) V-AUTH.4b production **172** / allowlist **191→175**. **V-AUTH.3 (this PR):** production import files **172→169** / allowlist **175→171**. |
+| Import accounting  | … [#276](https://github.com/nepenth/synara-desktop/pull/276) V-AUTH.3 production **172→169** / allowlist **175→171**. **This PR (V-AUTH.3b):** import delta **0** (docs + absence evidence; no live login multi-stage js owner). [#279] targets **169→167** / **171→169**. |
 | Dual backend       | **`false`** (forbidden forever)                                                                                                                                                                                                                                       |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                                                                                                                                                              |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                                                                                                                                                  |
@@ -32,10 +32,10 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `60674486`** — V-AUTH.3 **merged** [#276](https://github.com/nepenth/synara-desktop/pull/276); V-SEND residual inventory [#277](https://github.com/nepenth/synara-desktop/pull/277). Next: password `loginUtil` / UIA stage. #240 HOLD. |
+| **Now**        | **Tip `e6db76c7`** — **This PR** V-AUTH.3b login multi-stage UIA **non-retention** (no `matrix_uia_*`); parallel password `loginUtil` [#279](https://github.com/nepenth/synara-desktop/pull/279). #240 HOLD. |
 | **Policy**     | [full-vertical-policy.md](full-vertical-policy.md) |
-| **Tip**        | `4d33227f` merge [#276](https://github.com/nepenth/synara-desktop/pull/276) `matrix_login_flows` (allowlist **175→171**, production files **172→169**). |
-| **Active PRs** | [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. |
+| **Tip**        | `e6db76c7` after [#278](https://github.com/nepenth/synara-desktop/pull/278) / [#277](https://github.com/nepenth/synara-desktop/pull/277) / [#276](https://github.com/nepenth/synara-desktop/pull/276). |
+| **Active PRs** | **This PR** V-AUTH.3b UIA login-stage non-retention; password `loginUtil` [#279](https://github.com/nepenth/synara-desktop/pull/279); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. |
 | **Blocked**    | Merging plateau D0.6 (#221); claiming V-TIMELINE cutover (#240 HOLD); starting new media/widgets/etc before residual queue; merging L1 foundations; umbrella #39. |
 
 ---
@@ -61,13 +61,22 @@ Update rules:
 
 ## Work log (newest first)
 
+### 2026-07-31 — V-AUTH.3b login multi-stage UIA non-retention (this PR)
+
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-AUTH.3b login UIA stages** | **DONE — product non-retention (this PR)** | Inventory at tip `e6db76c7`: login route is password-only single-shot (`matrix_login_password`); no multi-stage login UI/js client; homeserver UIAA on login fails closed (`InteractiveAuthRequired`). Register/reset/device-delete multi-stage/UIAA already native. **No** invented `matrix_uia_*` IPC. Absence tests + Rust product guard. See [v-auth-3b-uia-login-stage.md](v-auth-3b-uia-login-stage.md). |
+| current | **Password loginUtil residual** | **Parallel** [#279](https://github.com/nepenth/synara-desktop/pull/279) | Fail-closed native-only `loginUtil` — independent of this non-retention close. |
+| current | **V-AUTH.3 loginFlows** | **DONE #276** at `4d33227f` | Discovery only; stage residual closed as non-retention here. |
+| current | **V-TIMELINE** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | No cutover. |
+
 ### 2026-07-31 — tip after #276 V-AUTH.3
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| current | **V-AUTH.3 loginFlows** | **DONE #276** at `4d33227f` | Native `matrix_login_flows` + `HttpLoginFlowTransport`; AuthFlowsLoader live `createClient`/`loginFlows()` deleted; allowlist **175→171**; production import files **172→169**. Residual: UIA stage execution for login; password `loginUtil` non-native fallback. |
-| current | **V-TIMELINE** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | No cutover. |
-| current | **Next free slot** | **password loginUtil / UIA stage** | Per residual execution order after discovery. |
+| prior | **V-AUTH.3 loginFlows** | **DONE #276** at `4d33227f` | Native `matrix_login_flows` + `HttpLoginFlowTransport`; AuthFlowsLoader live `createClient`/`loginFlows()` deleted; allowlist **175→171**; production import files **172→169**. Residual: UIA stage execution for login; password `loginUtil` non-native fallback. |
+| prior | **V-TIMELINE** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | No cutover. |
+| prior | **Next free slot** | **password loginUtil / UIA stage** | Per residual execution order after discovery. |
 
 ### 2026-07-31 — tip after #274 docs
 
