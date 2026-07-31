@@ -14,7 +14,7 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-07-31**                                                                                                                                                                                                                                                        |
-| Integration tip    | `bc9aa283` — merge [#266](https://github.com/nepenth/synara-desktop/pull/266) V-AUTH.4b native registration |
+| Integration tip    | `48991e77` — docs [#274](https://github.com/nepenth/synara-desktop/pull/274) after product [#266](https://github.com/nepenth/synara-desktop/pull/266) V-AUTH.4b |
 | Active work        | Free-slot residual **V-AUTH.3** implementation (inventory [#273](https://github.com/nepenth/synara-desktop/pull/273)); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `bc9aa283`** after product [#266](https://github.com/nepenth/synara-desktop/pull/266) V-AUTH.4b. Free slot → **V-AUTH.3** implementation. #240 HOLD. |
+| **Now**        | **Tip `48991e77`** after docs [#274](https://github.com/nepenth/synara-desktop/pull/274) / product [#266](https://github.com/nepenth/synara-desktop/pull/266). Free slot → **V-AUTH.3** implementation (in flight). #240 HOLD. |
 | **Policy**     | [full-vertical-policy.md](full-vertical-policy.md) |
-| **Tip**        | `bc9aa283` merge [#266](https://github.com/nepenth/synara-desktop/pull/266) native desktop registration (allowlist **191→175**). |
+| **Tip**        | `48991e77` docs after [#266](https://github.com/nepenth/synara-desktop/pull/266) native desktop registration (allowlist **191→175**). |
 | **Active PRs** | [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. Next product residual: **V-AUTH.3**. |
 | **Blocked**    | Merging plateau D0.6 (#221); claiming V-TIMELINE cutover (#240 HOLD); starting new media/widgets/etc before residual queue; merging L1 foundations; umbrella #39. |
 
@@ -60,6 +60,13 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-07-31 — tip after #274 docs
+
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **Docs progress** | **Merged** [#274](https://github.com/nepenth/synara-desktop/pull/274) | Tip `48991e77` tracking after #266; free slot **V-AUTH.3**; #240 HOLD. |
+| current | **V-AUTH.4b register** | **DONE #266** at `bc9aa283` | Native registration; allowlist **191→175**. |
 
 ### 2026-07-31 — tip after #266 V-AUTH.4b
 
