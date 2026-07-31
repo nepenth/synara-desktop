@@ -1,8 +1,9 @@
 //! V-AUTH.4a — native password-reset (forgot password) via Matrix CS API.
 //!
-//! Owns the unauthenticated desktop happy path:
-//! 1. `POST /_matrix/client/v3/account/password/email/requestToken`
-//! 2. `POST /_matrix/client/v3/account/password` with UIAA email identity
+//! Owns the unauthenticated desktop happy path through the managed
+//! `matrix_sdk` client + Ruma request types (no raw REST strings):
+//! 1. email token request for password change (`request_password_change_token_via_email`)
+//! 2. password change with UIAA email identity (`change_password`)
 //! 3. Optional auto-completion of the `m.login.password` stage when the
 //!    homeserver still requires it after email verification
 //!
