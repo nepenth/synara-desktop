@@ -25,7 +25,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 99,
+          "fileCount": 98,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 171,
-      "importFileCount": 169,
+      "fileCount": 169,
+      "importFileCount": 167,
       "methodCandidateFrequencies": [
         {
           "count": 71,
@@ -372,8 +372,8 @@
           "importOccurrences": 46
         },
         "MatrixError": {
-          "fileCount": 28,
-          "importOccurrences": 28
+          "fileCount": 26,
+          "importOccurrences": 26
         },
         "MatrixEvent": {
           "fileCount": 32,
@@ -400,14 +400,14 @@
           "importOccurrences": 0
         },
         "createClient": {
-          "fileCount": 2,
-          "importOccurrences": 2
+          "fileCount": 1,
+          "importOccurrences": 1
         }
       },
       "modules": [
         {
-          "fileCount": 160,
-          "importCount": 160,
+          "fileCount": 158,
+          "importCount": 158,
           "path": "matrix-js-sdk"
         },
         {
@@ -528,11 +528,11 @@
           "valueImports": 25
         },
         {
-          "fileCount": 28,
-          "importCount": 28,
+          "fileCount": 26,
+          "importCount": 26,
           "name": "MatrixError",
           "typeImports": 0,
-          "valueImports": 28
+          "valueImports": 26
         },
         {
           "fileCount": 18,
@@ -857,13 +857,6 @@
           "valueImports": 2
         },
         {
-          "fileCount": 2,
-          "importCount": 2,
-          "name": "createClient",
-          "typeImports": 0,
-          "valueImports": 2
-        },
-        {
           "fileCount": 1,
           "importCount": 1,
           "name": "AccessTokens",
@@ -1034,20 +1027,6 @@
         {
           "fileCount": 1,
           "importCount": 1,
-          "name": "LoginRequest",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "LoginResponse",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
           "name": "MatrixRTCSession",
           "typeImports": 0,
           "valueImports": 1
@@ -1205,6 +1184,13 @@
           "name": "WrappedReceipt",
           "typeImports": 1,
           "valueImports": 0
+        },
+        {
+          "fileCount": 1,
+          "importCount": 1,
+          "name": "createClient",
+          "typeImports": 0,
+          "valueImports": 1
         }
       ]
     },
@@ -9628,79 +9614,6 @@
     },
     {
       "bucket": "page",
-      "categories": [],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 22,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixError"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["MatrixError"],
-      "networking": [],
-      "path": "synara/src/app/pages/auth/login/PasswordLoginForm.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "page",
-      "categories": ["client_methods"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "LoginRequest"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "LoginResponse"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixError"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "createClient"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["MatrixError", "createClient"],
-      "networking": [],
-      "path": "synara/src/app/pages/auth/login/loginUtil.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "page",
       "categories": [
         "client_methods",
         "room_methods",
@@ -13416,7 +13329,7 @@
         "feature": 56,
         "hook": 45,
         "media-boundary": 1,
-        "page": 10,
+        "page": 8,
         "plugin": 8,
         "shared-type": 1,
         "state": 5,
@@ -13428,13 +13341,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 169,
+      "productionImportFiles": 167,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 179
+      "totalImportFiles": 177
     },
     "repositoryWide": {
-      "productionImportFiles": 169,
+      "productionImportFiles": 167,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -13443,7 +13356,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 182
+      "totalImportFiles": 180
     }
   }
 }
