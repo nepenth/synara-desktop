@@ -7,6 +7,10 @@ type NativeSessionSnapshot = {
 export type NativeSendTextInput = {
   roomId: string;
   body: string;
+  msgType?: string;
+  formattedBody?: string;
+  mentionUserIds?: string[];
+  mentionRoom?: boolean;
   replyTo?: string;
   txnId?: string;
 };
