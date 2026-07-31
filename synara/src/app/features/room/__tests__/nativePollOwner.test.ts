@@ -39,9 +39,50 @@ test('native logged-in session is the sole poll-start owner', async () => {
         question: 'Deploy now?',
         answers: ['Yes', 'No'],
         maxSelections: 1,
+        threadRoot: undefined,
+        replyTo: undefined,
       },
     },
   ]);
+});
+
+test('poll-start owner forwards threadRoot and replyTo to the native command', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const owner = await sendPollWithNativeOwner(
+    {
+      roomId: '!room:example.org',
+      question: 'Deploy now?',
+      answers: ['Yes', 'No'],
+      maxSelections: 1,
+      threadRoot: '$root:example.org',
+      replyTo: '$root:example.org',
+    },
+    true,
+    async (command, args) => {
+      calls.push({ command, args });
+      if (command === 'matrix_session_snapshot') {
+        return { available: true, value: { status: 'logged_in' } };
+      }
+      return {
+        available: true,
+        value: {
+          roomId: '!room:example.org',
+          eventId: '$poll:example.org',
+          status: 'sent',
+        },
+      };
+    }
+  );
+
+  assert.equal(owner, 'native');
+  assert.deepEqual(calls[1]?.args, {
+    roomId: '!room:example.org',
+    question: 'Deploy now?',
+    answers: ['Yes', 'No'],
+    maxSelections: 1,
+    threadRoot: '$root:example.org',
+    replyTo: '$root:example.org',
+  });
 });
 
 test('native logged-in session is the sole poll-response owner', async () => {

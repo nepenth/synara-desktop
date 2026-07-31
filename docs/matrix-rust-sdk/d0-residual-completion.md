@@ -4,11 +4,11 @@
 
 | Field                     | Value                                                                                                                                                                                         |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status                    | **Active — tip `e6db76c7`; this PR desktop password loginUtil residual; #240 HOLD** (2026-07-31) |
+| Status                    | **Active — tip `42ef9127` after #282 poll-thread; this PR password loginUtil #279; #280 UIA; #283 edit; #240 HOLD** (2026-07-31) |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                            |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)                                                                                                                                     |
 | Current integration tip   | `e6db76c7` (after [#278](https://github.com/nepenth/synara-desktop/pull/278) / [#277](https://github.com/nepenth/synara-desktop/pull/277) / [#276](https://github.com/nepenth/synara-desktop/pull/276)) |
-| Active PRs                | **This PR** password `loginUtil` fail-closed native-only; [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD |
+| Active PRs                | **This PR** password `loginUtil` [#279](https://github.com/nepenth/synara-desktop/pull/279); [#280](https://github.com/nepenth/synara-desktop/pull/280); [#283](https://github.com/nepenth/synara-desktop/pull/283); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD |
 
 ## Policy trigger
 
