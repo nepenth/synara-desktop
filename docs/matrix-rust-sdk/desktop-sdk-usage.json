@@ -6082,56 +6082,56 @@
           "category": "timelines",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 569,
+          "line": 568,
           "name": "sendMessage"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 630,
+          "line": 629,
           "name": "getUserId"
         },
         {
           "category": "timelines",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 657,
+          "line": 656,
           "name": "sendMessage"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 661,
+          "line": 660,
           "name": "getSafeUserId"
         },
         {
           "category": "custom_raw_event_sends",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 726,
+          "line": 725,
           "name": "sendEvent"
         },
         {
           "category": "custom_raw_event_sends",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 796,
+          "line": 795,
           "name": "sendEvent"
         },
         {
           "category": "authenticated_media",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 816,
+          "line": 815,
           "name": "uploadContent"
         },
         {
           "category": "timelines",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 823,
+          "line": 822,
           "name": "sendMessage"
         }
       ],
