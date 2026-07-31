@@ -15,7 +15,7 @@
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-07-31**                                                                                                                                                                                                                                                        |
 | Integration tip    | `a677a80b832cbb79879da1b3dab1b9dd257df4d2` — docs after V-AUTH.4a [#263](https://github.com/nepenth/synara-desktop/pull/263) |
-| Active work        | [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE **HOLD**. **V-ROOMS.2c** space writers PR (mutations partial). Residual: V-AUTH.4b register, V-ROOMS.2c local graph. |
+| Active work        | [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE **HOLD**. **V-ROOMS.2c** space writers [#267](https://github.com/nepenth/synara-desktop/pull/267) (mutations partial). Residual: V-AUTH.4b register, V-ROOMS.2c local graph. |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | V-AUTH.1: **201→197** / **215→211**. V-ROOMS.1: **197→194** / **211→208**. V-ROOMS.3: **194→192** / **208→205**. V-ROOMS.4: **192→190** / **205→203**. V-ROOMS.2a: **190→189** / **203→202**. V-ROOMS.5 read: **189→187** / **202→200**. V-ROOMS.5w/5r: **187→187**. Tip inventory after V-AUTH.4a **184** / **197** (187→184 production files; allowlist 194→191). V-ROOMS.2c mutations: importer delta **0** (rewire, not delete). |
@@ -32,10 +32,10 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **V-ROOMS.2c writers (this PR)** — native space-child + join-rules mutations; local graph residual. Tip base `a677a80`. Active also: [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE **HOLD**. Next residual: V-AUTH.4b register / V-ROOMS.2c graph. **#221 HOLD**. |
+| **Now**        | **V-ROOMS.2c writers [#267](https://github.com/nepenth/synara-desktop/pull/267)** — native space-child + join-rules mutations; local graph residual. Tip base `a677a80`. Active also: [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE **HOLD**. Next residual: V-AUTH.4b register / V-ROOMS.2c graph. **#221 HOLD**. |
 | **Policy**     | [full-vertical-policy.md](full-vertical-policy.md) |
 | **Tip**        | `a677a80b832cbb79879da1b3dab1b9dd257df4d2` docs after [#263](https://github.com/nepenth/synara-desktop/pull/263) V-AUTH.4a. |
-| **Active PRs** | Draft [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE HOLD; V-ROOMS.2c writers. |
+| **Active PRs** | Draft [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE HOLD; draft [#267](https://github.com/nepenth/synara-desktop/pull/267) V-ROOMS.2c writers. |
 | **Blocked**    | Merging plateau D0.6 (#221); claiming V-TIMELINE cutover (#240 HOLD); claiming full V-ROOMS.2c done while graph/listeners remain JS; starting new media/widgets/etc before residual queue; merging L1 foundations; umbrella #39. |
 
 ---
@@ -65,7 +65,7 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| current | **V-ROOMS.2c writers** | **This PR** | Native `matrix_space_child_set` / `remove` / `matrix_room_join_rules_set`; fail-closed lobby/add-existing/create-room/join-rules owners. **Not full DONE:** JS `useSpaceHierarchy` local graph/listeners residual. Live proof unclaimed. See [v-rooms-2c-space-writers.md](v-rooms-2c-space-writers.md). |
+| current | **V-ROOMS.2c writers** | **Draft** [#267](https://github.com/nepenth/synara-desktop/pull/267) | Native `matrix_space_child_set` / `remove` / `matrix_room_join_rules_set`; fail-closed lobby/add-existing/create-room/join-rules owners. **Not full DONE:** JS `useSpaceHierarchy` local graph/listeners residual. Live proof unclaimed. See [v-rooms-2c-space-writers.md](v-rooms-2c-space-writers.md). |
 | current | **V-TIMELINE** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | Tip-merge OK; no presenter cutover / RoomTimeline deletion. |
 
 ### 2026-07-31 — tip after #263
