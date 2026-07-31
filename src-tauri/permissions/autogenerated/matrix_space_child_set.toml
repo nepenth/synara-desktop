@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-space-child-set"
+description = "Enables the matrix_space_child_set command without any pre-configured scope."
+commands.allow = ["matrix_space_child_set"]
+
+[[permission]]
+identifier = "deny-matrix-space-child-set"
+description = "Denies the matrix_space_child_set command without any pre-configured scope."
+commands.deny = ["matrix_space_child_set"]

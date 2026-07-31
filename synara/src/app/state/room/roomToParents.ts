@@ -43,7 +43,7 @@ export const roomToParentsAtom = atom<RoomToParents, [RoomToParentsAction], unde
         baseRoomToParents,
         produce(get(baseRoomToParents), (draftRoomToParents) => {
           mapParentWithChildren(draftRoomToParents, action.parent, action.children);
-        })
+        }),
       );
       return;
     }
@@ -58,15 +58,15 @@ export const roomToParentsAtom = atom<RoomToParents, [RoomToParentsAction], unde
             if (parents.size === 0) noParentRooms.push(child);
           });
           noParentRooms.forEach((room) => draftRoomToParents.delete(room));
-        })
+        }),
       );
     }
-  }
+  },
 );
 
 /** Invert native child→parents entries into the product RoomToParents map. */
 export const roomToParentsFromNativeSnapshot = (
-  entries: NativeSpaceParentEntry[]
+  entries: NativeSpaceParentEntry[],
 ): RoomToParents => {
   const map: RoomToParents = new Map();
   for (const entry of entries) {
@@ -78,10 +78,10 @@ export const roomToParentsFromNativeSnapshot = (
 
 /**
  * Drive space parent map from the native Rust projection.
- * Lobby hierarchy mutations remain a V-ROOMS.2b residual.
+ * Lobby hierarchy mutations are owned by V-ROOMS.2c native commands.
  */
 export const useBindRoomToParentsAtom = (
-  roomToParents: typeof roomToParentsAtom = roomToParentsAtom
+  roomToParents: typeof roomToParentsAtom = roomToParentsAtom,
 ) => {
   const setRoomToParents = useSetAtom(roomToParents);
 
@@ -106,7 +106,7 @@ export const useBindRoomToParentsAtom = (
           return;
         }
         const result = await invokeDesktopWithAvailability<NativeSpaceParentsSnapshot>(
-          'matrix_space_parents_snapshot'
+          'matrix_space_parents_snapshot',
         );
         if (!disposed && result.available && result.value) {
           setRoomToParents({

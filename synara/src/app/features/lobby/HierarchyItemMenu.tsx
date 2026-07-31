@@ -17,8 +17,9 @@ import {
 } from 'folds';
 import { HierarchyItem } from '../../hooks/useSpaceHierarchy';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
-import { MSpaceChildContent, StateEvent } from '../../../types/matrix/room';
+import { MSpaceChildContent } from '../../../types/matrix/room';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
+import { removeSpaceChild, setSpaceChild } from './nativeSpaceChild';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { LeaveSpacePrompt } from '../../components/leave-space-prompt';
 import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
@@ -42,14 +43,13 @@ function SuggestMenuItem({
   item: HierarchyItemWithParent;
   requestClose: () => void;
 }) {
-  const mx = useMatrixClient();
   const { roomId, parentId, content } = item;
 
   const [toggleState, handleToggleSuggested] = useAsyncCallback(
     useCallback(() => {
       const newContent: MSpaceChildContent = { ...content, suggested: !content.suggested };
-      return mx.sendStateEvent(parentId, StateEvent.SpaceChild as any, newContent, roomId);
-    }, [mx, parentId, roomId, content])
+      return setSpaceChild(parentId, roomId, newContent);
+    }, [parentId, roomId, content]),
   );
 
   useEffect(() => {
@@ -80,14 +80,10 @@ function RemoveMenuItem({
   item: HierarchyItemWithParent;
   requestClose: () => void;
 }) {
-  const mx = useMatrixClient();
   const { roomId, parentId } = item;
 
   const [removeState, handleRemove] = useAsyncCallback(
-    useCallback(
-      () => mx.sendStateEvent(parentId, StateEvent.SpaceChild as any, {}, roomId),
-      [mx, parentId, roomId]
-    )
+    useCallback(() => removeSpaceChild(parentId, roomId), [parentId, roomId]),
   );
 
   useEffect(() => {

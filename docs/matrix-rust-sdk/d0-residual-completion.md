@@ -4,10 +4,10 @@
 
 | Field                     | Value                                                                                                                                                                                         |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status                    | **Active — tip `5ae9da2` after #263 V-AUTH.4a; #240 HOLD; residual V-AUTH.4b / V-ROOMS.2c** (2026-07-31) |
+| Status                    | **Active — tip `a677a80` after #265; #240 HOLD; V-ROOMS.2c draft (this PR); residual V-AUTH.4b** (2026-07-31) |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                            |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)                                                                                                                                     |
-| Current integration tip   | `5ae9da2f2cdc9fc9767f65f8e2a4cf48e5f13653` ([#263](https://github.com/nepenth/synara-desktop/pull/263) V-AUTH.4a after #262) |
+| Current integration tip   | `a677a80` (docs progress after #263) |
 | Active PRs                | Draft [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE HOLD |
 
 ## Policy trigger
@@ -67,10 +67,10 @@ Migration decision already decided: **`D-KEY-RECOVERY`** in [migration-ux-decisi
 | ID            | Capability                           | Residual today                                                                                                                                                                                            | Done when                                                                           |
 | ------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | **V-ROOMS.1** | Invites list                         | **DONE #241** at integration `2c48fd45a08200a6e3491f100912f086e8458b3b`; candidate `7ac2c48` passed required scope, Synapse, desktop/runtime, and quality CI; production 197→194, repository-wide 211→208 | Native invites projection/actions/avatar route plus active JS-owner deletion landed |
-| **V-ROOMS.2** | Spaces / hierarchy / lobby           | **2a DONE**; **2b DONE #254** hierarchy summaries; **2c** local graph/writers residual                                                                 | Native space hierarchy ownership (2a parent map + 2b lobby + 2c writers)            |
+| **V-ROOMS.2** | Spaces / hierarchy / lobby           | **2a DONE**; **2b DONE #254**; **2c active** local graph/mutations (this PR)                                                                 | Native space hierarchy ownership (2a parent map + 2b lobby + 2c writers)            |
 | **V-ROOMS.2a** | Space parent map (nav/unread)       | **DONE #247** at integration `a9196894edff24bddb76279aaf010fa8f56ffe47`; production **190→189**, repository-wide **203→202**; live proof Not confirmed (not a reopen blocker)                               | Native parent map; JS roomToParents binder deleted                                  |
 | **V-ROOMS.2b** | Lobby hierarchy-summary reads      | **DONE #254** at `9c0b51e`; native typed hierarchy pagination; JS `getRoomHierarchy` / `IHierarchyRoom` deleted; files **187 / 200**, direct lines **249→244**; live proof unclaimed                                     | Native hierarchy summaries; JS hierarchy request/types deleted                      |
-| **V-ROOMS.2c** | Local graph + mutations/reordering | JS room-state graph/listener, `sendStateEvent(m.space.child)`, and restricted join-rule updates remain                                                                                                     | Native graph/readback and mutation commands; delete superseded JS owners             |
+| **V-ROOMS.2c** | Local graph + mutations/reordering | **ACTIVE** this PR — native `matrix_space_children_snapshot` + set/remove/reparent; JS SpaceChild sendStateEvent owners deleted                                                                                                     | Native graph/readback and mutation commands; delete superseded JS owners             |
 | **V-ROOMS.3** | Unread / notification badges on list | **DONE #245** at integration `efc90d59e6009f45589ce42a29a6f7ebafcf7624`; candidate `a81e026`; production **194→192**, repository-wide **208→205**; live badge proof Not confirmed (not a reopen blocker) | Native unread map drives list badges; JS unread owner deleted                       |
 | **V-ROOMS.4** | Typing indicators (if list/shell)    | **DONE #246** at integration `151948c8c2329ee6f0b37b8757607b3ac8bb44e7`; candidate `c4df9ed`; production **192→190**, repository-wide **205→203**; live typing proof Not confirmed (not a reopen blocker) | Native typing projection + send; JS typing owners deleted                           |
 | **V-ROOMS.5** | `m.direct` DM room-id map            | **DONE #249** at `d17ab2c` (candidate `708aef7`); production **189→187** / **202→200**; live proof Not confirmed                                                                                                                                   | Native DM map read; JS mDirect binder deleted                                       |
@@ -114,7 +114,7 @@ have already deleted their implementations.
 ## Execution order (binding)
 
 1. Treat V-ROOMS.1 as integrated at `2c48fd45a08200a6e3491f100912f086e8458b3b`; retain its measured production 197→194 and repository-wide 211→208 deletion deltas.
-2. Serial after tip `5ae9da2`: V-AUTH.2 #262 + V-AUTH.4a #263 merged. Next residual **V-AUTH.4b** registration and **V-ROOMS.2c** writers; V-TIMELINE [#240] HOLD-cutover only.
+2. Serial after tip `a677a80`: V-AUTH.2 #262 + V-AUTH.4a #263 merged. **V-ROOMS.2c** active (this PR). Next residual **V-AUTH.4b** registration; V-TIMELINE [#240] HOLD-cutover only.
 3. Keep V-TIMELINE [#240] **HOLD-cutover**: implement and tip-merge are OK; **do not** select `NativeTimelinePresenter`, delete `RoomTimeline.tsx`, or claim cutover until full contract + runtime proof.
 4. Continue remaining **V-AUTH** (4b register, UIA), **V-ROOMS.2c** writers, and other residual gaps, deleting each superseded JS owner in its slice.
 5. **V-BURN** final convergence audit + npm dependency removal

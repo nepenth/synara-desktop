@@ -10,12 +10,13 @@ import { RoomJoinRulesEventContent } from 'matrix-js-sdk/lib/types';
 import { RoomType, StateEvent } from '../../../types/matrix/room';
 import { getViaServers } from '../../plugins/via-servers';
 import { getMxIdServer } from '../../utils/matrix';
+import { setSpaceChild } from '../../features/lobby/nativeSpaceChild';
 import { CreateRoomAccess } from './types';
 
 export const createRoomCreationContent = (
   type: RoomType | undefined,
   allowFederation: boolean,
-  additionalCreators: string[] | undefined
+  additionalCreators: string[] | undefined,
 ): object => {
   const content: Record<string, any> = {};
   if (typeof type === 'string') {
@@ -34,7 +35,7 @@ export const createRoomCreationContent = (
 export const createRoomJoinRulesState = (
   access: CreateRoomAccess,
   parent: Room | undefined,
-  knock: boolean
+  knock: boolean,
 ) => {
   let content: RoomJoinRulesEventContent = {
     join_rule: knock ? JoinRule.Knock : JoinRule.Invite,
@@ -136,7 +137,7 @@ export const createRoom = async (mx: MatrixClient, data: CreateRoomData): Promis
     creation_content: createRoomCreationContent(
       data.type,
       data.allowFederation,
-      data.additionalCreators
+      data.additionalCreators,
     ),
     power_level_content_override:
       data.type === RoomType.Call ? createVoiceRoomPowerLevelsOverride() : undefined,
@@ -150,16 +151,10 @@ export const createRoom = async (mx: MatrixClient, data: CreateRoomData): Promis
   const result = await mx.createRoom(options);
 
   if (data.parent) {
-    await mx.sendStateEvent(
-      data.parent.roomId,
-      StateEvent.SpaceChild as any,
-      {
-        auto_join: false,
-        suggested: false,
-        via: [getMxIdServer(mx.getUserId() ?? '') ?? ''],
-      },
-      result.room_id
-    );
+    await setSpaceChild(data.parent.roomId, result.room_id, {
+      suggested: false,
+      via: [getMxIdServer(mx.getUserId() ?? '') ?? ''],
+    });
   }
 
   return result.room_id;
