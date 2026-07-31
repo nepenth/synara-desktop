@@ -37,11 +37,12 @@ use zeroize::Zeroize;
 
 use super::{login_with_password, normalize_homeserver_url, AuthError, LoginOptions};
 use crate::matrix::account_data::{
-    clear_completed_later_live, complete_later_item_live, complete_room_todo_item_live,
-    delete_room_note_item_live, mark_later_reminded_live, move_room_todo_item_live, snapshot_later,
-    snapshot_mdirect, snapshot_room_notes, snooze_later_item_live, upsert_later_item,
-    upsert_room_note_item, NativeLaterSnapshot, NativeMDirectSnapshot, NativeRoomNotesSnapshot,
-    RoomNoteMoveDirection, SynaraLaterItem, SynaraRoomNoteItem,
+    add_room_to_mdirect, clear_completed_later_live, complete_later_item_live,
+    complete_room_todo_item_live, delete_room_note_item_live, mark_later_reminded_live,
+    move_room_todo_item_live, remove_room_from_mdirect, snapshot_later, snapshot_mdirect,
+    snapshot_room_notes, snooze_later_item_live, upsert_later_item, upsert_room_note_item,
+    NativeLaterSnapshot, NativeMDirectMutationResult, NativeMDirectSnapshot,
+    NativeRoomNotesSnapshot, RoomNoteMoveDirection, SynaraLaterItem, SynaraRoomNoteItem,
 };
 use crate::matrix::backup::live::{
     self as live_backup, NativeBackupOperationResult, NativeBackupStatus,
@@ -1147,6 +1148,31 @@ pub async fn matrix_mdirect_snapshot(
     let session = state.session.lock().await;
     let active = require_session(session.as_ref())?;
     snapshot_mdirect(&active.client, active.sync.session_generation())
+        .await
+        .map_err(map_mdirect_error)
+}
+
+#[tauri::command]
+pub async fn matrix_mdirect_add(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    user_id: String,
+) -> Result<NativeMDirectMutationResult, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    add_room_to_mdirect(&active.client, &room_id, &user_id)
+        .await
+        .map_err(map_mdirect_error)
+}
+
+#[tauri::command]
+pub async fn matrix_mdirect_remove(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+) -> Result<NativeMDirectMutationResult, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    remove_room_from_mdirect(&active.client, &room_id)
         .await
         .map_err(map_mdirect_error)
 }
@@ -2712,11 +2738,17 @@ fn map_space_parents_error(diagnostic_id: &'static str) -> MatrixAuthCommandErro
 }
 
 fn map_mdirect_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "Unknown",
-        "The native Matrix direct-room map is unavailable.",
-        diagnostic_id,
-    )
+    let (code, message) = match diagnostic_id {
+        "v-rooms.5-mdirect-invalid-room" | "v-rooms.5-mdirect-invalid-user" => (
+            "InvalidRequest",
+            "The native Matrix direct-room request is invalid.",
+        ),
+        _ => (
+            "Unknown",
+            "The native Matrix direct-room map is unavailable.",
+        ),
+    };
+    MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
 
 fn map_later_notes_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {

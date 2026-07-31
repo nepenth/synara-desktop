@@ -24,7 +24,10 @@ pub use later::{
     snooze_later_item_live, upsert_later_item, NativeLaterSnapshot, SynaraLaterContent,
     SynaraLaterItem, SynaraLaterItemKind,
 };
-pub use live::{snapshot_mdirect, NativeMDirectSnapshot};
+pub use live::{
+    add_room_to_mdirect, remove_room_from_mdirect, snapshot_mdirect, NativeMDirectMutationResult,
+    NativeMDirectSnapshot,
+};
 pub use room_notes::{
     complete_room_todo_item_live, delete_room_note_item_live, move_room_todo_item_live,
     snapshot_room_notes, upsert_room_note_item, NativeRoomNotesSnapshot, RoomNoteMoveDirection,
