@@ -169,7 +169,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const [gifSearchEnabled, setGifSearchEnabled] = useSetting(settingsAtom, 'gifSearchEnabled');
     const [gifOnboardingDismissed, setGifOnboardingDismissed] = useSetting(
       settingsAtom,
-      'gifOnboardingDismissed',
+      'gifOnboardingDismissed'
     );
     const { t } = useTranslation();
     const direct = useIsDirectRoom();
@@ -192,7 +192,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const accessibleTagColors = useAccessiblePowerTagColors(
       theme.kind,
       creatorsTag,
-      powerLevelTags,
+      powerLevelTags
     );
 
     const replyPowerTag = replyUserID ? getMemberPowerTag(replyUserID) : undefined;
@@ -207,7 +207,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const [nativeComposerSend, setNativeComposerSend] = useState(false);
     const uploadFamilyObserverAtom = createUploadFamilyObserverAtom(
       roomUploadAtomFamily,
-      selectedFiles.map((f) => f.file),
+      selectedFiles.map((f) => f.file)
     );
     const uploadBoardHandlers = useRef<UploadBoardImperativeHandlers | undefined>(undefined);
 
@@ -254,7 +254,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
         if (!nativeReady && room.hasEncryptionStateEvent()) {
           const encryptFiles = fulfilledPromiseSettledResult(
-            await Promise.allSettled(safeFiles.map((f) => encryptFile(f))),
+            await Promise.allSettled(safeFiles.map((f) => encryptFile(f)))
           );
           encryptFiles.forEach((ef) =>
             fileItems.push({
@@ -262,7 +262,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
               metadata: {
                 markedAsSpoiler: false,
               },
-            }),
+            })
           );
         } else {
           safeFiles.forEach((f) =>
@@ -273,7 +273,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
               metadata: {
                 markedAsSpoiler: false,
               },
-            }),
+            })
           );
         }
         setSelectedFiles({
@@ -281,7 +281,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           item: fileItems,
         });
       },
-      [setSelectedFiles, room],
+      [setSelectedFiles, room]
     );
     const pickFile = useFilePicker(handleFiles, true);
     const handleNativeClipboardImage = useCallback(async () => {
@@ -329,7 +329,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         {
           getData: (format) => (format === 'text/plain' ? text : ''),
         },
-        isMarkdown,
+        isMarkdown
       );
     }, [
       editor,
@@ -362,7 +362,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           evt.preventDefault();
         }
       },
-      [editor, handleFiles, handleNativeClipboardImage, isMarkdown],
+      [editor, handleFiles, handleNativeClipboardImage, isMarkdown]
     );
     useEffect(() => {
       const handleWindowPaste = (evt: ClipboardEvent) => {
@@ -449,12 +449,12 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
         return relatedContent;
       },
-      [mx, replyDraft, getReplyRelation],
+      [mx, replyDraft, getReplyRelation]
     );
 
     useElementSizeObserver(
       useCallback(() => fileDropContainerRef.current, [fileDropContainerRef]),
-      useCallback((width) => setHideStickerBtn(width < 500), []),
+      useCallback((width) => setHideStickerBtn(width < 500), [])
     );
 
     useEffect(() => {
@@ -478,7 +478,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         resetEditor(editor);
         resetEditorHistory(editor);
       },
-      [mx, roomId, editor, setMsgDraft],
+      [mx, roomId, editor, setMsgDraft]
     );
 
     const handleEditorChange = useCallback(
@@ -489,7 +489,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         }
         saveRoomDraft(window.localStorage, mx.getSafeUserId(), roomId, value);
       },
-      [mx, roomId, editor],
+      [mx, roomId, editor]
     );
 
     const handleFileMetadata = useCallback(
@@ -500,7 +500,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           replacement: { ...fileItem, metadata },
         });
       },
-      [setSelectedFiles],
+      [setSelectedFiles]
     );
 
     const handleRemoveUpload = useCallback(
@@ -512,7 +512,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         });
         uploads.forEach((u) => roomUploadAtomFamily.remove(u));
       },
-      [setSelectedFiles, selectedFiles],
+      [setSelectedFiles, selectedFiles]
     );
 
     const handleCancelUpload = (uploads: Upload[]) => {
@@ -536,7 +536,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             mimeType: source.type || 'application/octet-stream',
             bytes: await fileToNativeAttachmentBytes(source),
           };
-        }),
+        })
       );
       const owner = await sendComposerAttachmentsWithNativeOwner(roomId, nativeFiles, replyTo);
       if (owner === 'native') {
@@ -565,7 +565,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       handleCancelUpload(uploads);
       const contents = fulfilledPromiseSettledResult(await Promise.allSettled(contentsPromises));
       contents.forEach((content) =>
-        mx.sendMessage(roomId, addReplyRelationToContent(content) as any),
+        mx.sendMessage(roomId, addReplyRelationToContent(content) as any)
       );
       if (contents.length > 0) {
         setReplyDraft(undefined);
@@ -583,7 +583,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           allowTextFormatting: true,
           allowBlockMarkdown: isMarkdown,
           allowInlineMarkdown: isMarkdown,
-        }),
+        })
       );
       let msgType = MsgType.Text;
 
@@ -669,7 +669,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           t('composer.send_failed_with_reason', {
             reason,
             defaultValue: 'Could not send message: {{reason}}',
-          }),
+          })
         );
       } finally {
         setSendingMessage(false);
@@ -692,7 +692,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       const index = Number(evt.currentTarget.getAttribute('data-answer-index'));
       const { value } = evt.currentTarget;
       setPollAnswers((current) =>
-        current.map((answer, answerIndex) => (answerIndex === index ? value : answer)),
+        current.map((answer, answerIndex) => (answerIndex === index ? value : answer))
       );
     };
 
@@ -701,14 +701,14 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       const safeValue = Number.isFinite(parsed) ? parsed : DEFAULT_POLL_SELECTIONS;
       const maxSelectable = Math.max(
         1,
-        Math.min(MAX_POLL_SELECTIONS, pollAnswers.length, safeValue),
+        Math.min(MAX_POLL_SELECTIONS, pollAnswers.length, safeValue)
       );
       setPollMaxSelections(maxSelectable);
     };
 
     useEffect(() => {
       setPollMaxSelections((current) =>
-        Math.max(1, Math.min(current, pollAnswers.length, MAX_POLL_SELECTIONS)),
+        Math.max(1, Math.min(current, pollAnswers.length, MAX_POLL_SELECTIONS))
       );
     }, [pollAnswers]);
 
@@ -717,7 +717,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       const poll = normalizePollParts(pollQuestion, pollAnswers, pollMaxSelections);
       if (!poll) {
         setPollError(
-          t('modernization.poll.invalid', 'Add a question and at least two answer options.'),
+          t('modernization.poll.invalid', 'Add a question and at least two answer options.')
         );
         return;
       }
@@ -732,8 +732,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           setPollError(
             t(
               'modernization.poll.native_required',
-              'Native Matrix session is required to send polls on desktop.',
-            ),
+              'Native Matrix session is required to send polls on desktop.'
+            )
           );
           return;
         }
@@ -764,7 +764,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           setReplyDraft(undefined);
         }
       },
-      [submit, setReplyDraft, enterForNewline, autocompleteQuery, isComposing],
+      [submit, setReplyDraft, enterForNewline, autocompleteQuery, isComposing]
     );
 
     const handleKeyUp: KeyboardEventHandler = useCallback(
@@ -784,7 +784,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           : undefined;
         setAutocompleteQuery(query);
       },
-      [editor, sendTypingStatus, hideActivity],
+      [editor, sendTypingStatus, hideActivity]
     );
 
     const handleCloseAutocomplete = useCallback(() => {
@@ -803,7 +803,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
       const info = await getImageInfo(
         await loadImageElement(stickerUrl),
-        await getImageUrlBlob(stickerUrl),
+        await getImageUrlBlob(stickerUrl)
       );
 
       mx.sendEvent(
@@ -813,7 +813,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           body: label,
           url: mxc,
           info,
-        }) as any,
+        }) as any
       );
       setReplyDraft(undefined);
     };
@@ -836,8 +836,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         await mx.sendMessage(
           roomId,
           addReplyRelationToContent(
-            getGifMsgContent(gif, mxc, blob.size, fileName, encrypted?.encInfo),
-          ) as any,
+            getGifMsgContent(gif, mxc, blob.size, fileName, encrypted?.encInfo)
+          ) as any
         );
         setReplyDraft(undefined);
         setGifPickerAnchor(undefined);
@@ -1031,7 +1031,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                     anchor={
                       emojiBoardTab === undefined
                         ? undefined
-                        : (emojiBtnRef.current?.getBoundingClientRect() ?? undefined)
+                        : emojiBtnRef.current?.getBoundingClientRect() ?? undefined
                     }
                     content={
                       <EmojiBoard
@@ -1117,7 +1117,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                         <Text size="T300" priority="300">
                           {t(
                             'modernization.gif.onboarding.description',
-                            'GIF search downloads your selected GIF privately, uploads it to Matrix media, then sends an mxc:// attachment.',
+                            'GIF search downloads your selected GIF privately, uploads it to Matrix media, then sends an mxc:// attachment.'
                           )}
                         </Text>
                         <Box justifyContent="End" gap="200">
@@ -1161,7 +1161,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                     aria-pressed={!!gifPickerAnchor}
                     onClick={() =>
                       setGifPickerAnchor(
-                        gifPickerAnchor ? undefined : gifBtnRef.current?.getBoundingClientRect(),
+                        gifPickerAnchor ? undefined : gifBtnRef.current?.getBoundingClientRect()
                       )
                     }
                   >
@@ -1283,7 +1283,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                   aria-pressed={!!pollAnchor}
                   onClick={() =>
                     setPollAnchor(
-                      pollAnchor ? undefined : pollBtnRef.current?.getBoundingClientRect(),
+                      pollAnchor ? undefined : pollBtnRef.current?.getBoundingClientRect()
                     )
                   }
                 >
@@ -1308,5 +1308,5 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         />
       </div>
     );
-  },
+  }
 );

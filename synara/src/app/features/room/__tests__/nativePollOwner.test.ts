@@ -26,7 +26,7 @@ test('native logged-in session is the sole poll-start owner', async () => {
           status: 'sent',
         },
       };
-    },
+    }
   );
 
   assert.equal(owner, 'native');
@@ -66,7 +66,7 @@ test('native logged-in session is the sole poll-response owner', async () => {
           status: 'sent',
         },
       };
-    },
+    }
   );
 
   assert.equal(owner, 'native');
@@ -85,9 +85,9 @@ test('web and native logged-out sessions retain the legacy poll owner', async ()
       false,
       async () => {
         throw new Error('invoke should not be called');
-      },
+      }
     ),
-    'legacy',
+    'legacy'
   );
 });
 
@@ -104,8 +104,8 @@ test('native poll command failure never falls through to legacy sendEvent', asyn
       async (command) =>
         command === 'matrix_session_snapshot'
           ? { available: true, value: { status: 'logged_in' } }
-          : { available: false },
+          : { available: false }
     ),
-    /Native Matrix poll send is unavailable/,
+    /Native Matrix poll send is unavailable/
   );
 });
