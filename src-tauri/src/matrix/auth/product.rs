@@ -26,7 +26,6 @@ use matrix_sdk::{
             Mentions,
         },
         MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedTransactionId, OwnedUserId, UInt,
-        UserId,
     },
     Client, Room, SessionMeta, SessionTokens,
 };
