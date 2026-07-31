@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-07-31**                                                                                                                                                                                                                                                        |
-| Integration tip    | `7709507a` — tip after [#281](https://github.com/nepenth/synara-desktop/pull/281); **this PR** V-AUTH.3b UIA non-retention |
-| Active work        | **This PR** V-AUTH.3b login multi-stage UIA **non-retention**; parallel password `loginUtil` residual [#279](https://github.com/nepenth/synara-desktop/pull/279); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD |
+| Integration tip    | `42ef9127` — after [#282](https://github.com/nepenth/synara-desktop/pull/282); **this PR** V-AUTH.3b UIA non-retention |
+| Active work        | **This PR** V-AUTH.3b UIA non-retention [#280](https://github.com/nepenth/synara-desktop/pull/280); [#279](https://github.com/nepenth/synara-desktop/pull/279) password; [#283](https://github.com/nepenth/synara-desktop/pull/283) edit; [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | … [#276](https://github.com/nepenth/synara-desktop/pull/276) V-AUTH.3 production **172→169** / allowlist **175→171**. **This PR (V-AUTH.3b):** import delta **0** (docs + absence evidence; no live login multi-stage js owner). [#279] targets **169→167** / **171→169**. |
@@ -32,10 +32,10 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `e6db76c7`** — **This PR** V-AUTH.3b login multi-stage UIA **non-retention** (no `matrix_uia_*`); parallel password `loginUtil` [#279](https://github.com/nepenth/synara-desktop/pull/279). #240 HOLD. |
+| **Now**        | **Tip `42ef9127`** after [#282](https://github.com/nepenth/synara-desktop/pull/282) V-SEND.R-POLL-THREAD. **This PR** V-AUTH.3b UIA non-retention; parallel [#279](https://github.com/nepenth/synara-desktop/pull/279) password loginUtil; [#283](https://github.com/nepenth/synara-desktop/pull/283) edit; #240 HOLD. |
 | **Policy**     | [full-vertical-policy.md](full-vertical-policy.md) |
-| **Tip**        | `e6db76c7` after [#278](https://github.com/nepenth/synara-desktop/pull/278) / [#277](https://github.com/nepenth/synara-desktop/pull/277) / [#276](https://github.com/nepenth/synara-desktop/pull/276). |
-| **Active PRs** | **This PR** V-AUTH.3b UIA login-stage non-retention; password `loginUtil` [#279](https://github.com/nepenth/synara-desktop/pull/279); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. |
+| **Tip**        | `42ef9127` merge [#282](https://github.com/nepenth/synara-desktop/pull/282) V-SEND.R-POLL-THREAD. |
+| **Active PRs** | **This PR** [#280](https://github.com/nepenth/synara-desktop/pull/280); [#279](https://github.com/nepenth/synara-desktop/pull/279); [#283](https://github.com/nepenth/synara-desktop/pull/283); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. |
 | **Blocked**    | Merging plateau D0.6 (#221); claiming V-TIMELINE cutover (#240 HOLD); starting new media/widgets/etc before residual queue; merging L1 foundations; umbrella #39. |
 
 ---
@@ -60,6 +60,15 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-07-31 — tip after #282 V-SEND.R-POLL-THREAD
+
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.R-POLL-THREAD** | **DONE #282** at `42ef9127` | Native poll `threadRoot`/`replyTo`. |
+| current | **V-AUTH.3b UIA non-retention** | **Active this PR** [#280](https://github.com/nepenth/synara-desktop/pull/280) | Login multi-stage UIA not retained; no invented `matrix_uia_*`. |
+| current | **V-TIMELINE** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | No cutover. |
+
 
 ### 2026-07-31 — V-AUTH.3b login multi-stage UIA non-retention (this PR)
 

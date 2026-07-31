@@ -9,6 +9,10 @@ export type NativeSendPollInput = {
   question: string;
   answers: string[];
   maxSelections: number;
+  /** Thread root event id (`m.thread`). With replyTo → in-thread reply. */
+  threadRoot?: string;
+  /** Reply target event id (classic reply when no threadRoot). */
+  replyTo?: string;
 };
 
 export type NativePollRespondInput = {
@@ -57,6 +61,8 @@ export async function sendPollWithNativeOwner(
     question: input.question,
     answers: input.answers,
     maxSelections: input.maxSelections,
+    threadRoot: input.threadRoot,
+    replyTo: input.replyTo,
   });
   if (!send.available) {
     throw new Error('Native Matrix poll send is unavailable.');
