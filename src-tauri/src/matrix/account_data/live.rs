@@ -122,7 +122,7 @@ fn parse_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
 
 fn parse_direct_user(user_id: &str) -> Result<OwnedDirectUserIdentifier, &'static str> {
     let user = UserId::parse(user_id.trim()).map_err(|_| "v-rooms.5-mdirect-invalid-user")?;
-    Ok(OwnedUserId::from(user).into())
+    Ok(user.into())
 }
 
 /// Product parity with legacy JS: a room is a DM for at most one user key.
