@@ -16,7 +16,7 @@ Authoritative program plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../m
 
 Related:
 
-- Handoff: [`implementation-handoff.md`](implementation-handoff.md)
+- Handoff: [`README.md`](README.md)
 - Secure credentials: [`../desktop-secure-secret-storage-plan.md`](../desktop-secure-secret-storage-plan.md)
 - Optional short ADR pointer: [`../adr/0003-matrix-rust-sdk-migration-ux.md`](../adr/0003-matrix-rust-sdk-migration-ux.md)
 

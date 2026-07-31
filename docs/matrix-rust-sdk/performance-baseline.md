@@ -423,4 +423,4 @@ Reviewer should verify:
 - [`../../scripts/matrix-rust-p0.6-baseline-harness.mjs`](../../scripts/matrix-rust-p0.6-baseline-harness.mjs) — multi-iteration aggregator
 - [`../timeline-diagnostics.md`](../timeline-diagnostics.md) — privacy-safe timeline records
 - [`../production-smoke-checklist.md`](../production-smoke-checklist.md) — human smoke surface
-- [`implementation-handoff.md`](implementation-handoff.md) — execution handoff
+- [`README.md`](README.md) — execution handoff
