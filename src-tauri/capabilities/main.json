@@ -105,6 +105,8 @@
     "allow-matrix-reaction-redact",
     "allow-matrix-send-text",
     "allow-matrix-send-attachment",
+    "allow-matrix-send-poll",
+    "allow-matrix-poll-respond",
     "allow-matrix-logout",
     "allow-matrix-restore-session"
   ]

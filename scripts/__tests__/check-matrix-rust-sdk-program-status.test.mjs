@@ -130,16 +130,27 @@ test("renderer is deterministic and distinguishes delivery from acceptance", () 
 
 test("tracks full-vertical execution and requires per-vertical deletion policy", () => {
   const rendered = renderProgramStatus(status);
+  const currentInventory =
+    status.vertical_execution.matrix_js_sdk_import_inventory.current;
   assert.match(rendered, /Current full-vertical product execution/);
   assert.match(rendered, /full-vertical-delete-per-vertical/);
   assert.match(rendered, /Wired \/ deletion open/);
-  assert.match(rendered, /200 files \/ 249 import lines current/);
+  assert.match(
+    rendered,
+    new RegExp(
+      `${currentInventory.files} files / ${currentInventory.import_lines} import lines current`
+    )
+  );
   assert.match(rendered, /negative capability-owner\/file deletion delta/);
   assert.match(
     rendered,
     /Integration product state: `capability-cutover-in-progress`/
   );
-  assert.match(rendered, /Active slice: \*\*V-SEND\.3\*\* \(PR #250\)/);
+  assert.ok(
+    rendered.includes(
+      `Active slice: **${status.vertical_execution.active_slice}** (PR #${status.vertical_execution.active_pr})`
+    )
+  );
   assert.match(
     rendered,
     /Completed under full policy: .*`V-AUTH\.1`.*`V-ROOMS\.5`/

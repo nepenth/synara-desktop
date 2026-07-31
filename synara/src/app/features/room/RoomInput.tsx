@@ -138,8 +138,7 @@ import { clearRoomDraft, loadRoomDraft, saveRoomDraft } from '../../utils/drafts
 import {
   DEFAULT_POLL_SELECTIONS,
   MAX_POLL_SELECTIONS,
-  makePollStartContent,
-  POLL_START_EVENT_TYPE,
+  normalizePollParts,
 } from '../../utils/polls';
 import { RoomComposer } from './RoomComposer';
 import {
@@ -147,6 +146,7 @@ import {
   nativeComposerAttachmentReady,
   sendComposerAttachmentsWithNativeOwner,
 } from './nativeSendAttachment';
+import { sendPollWithNativeDesktopOwner } from './nativePoll';
 import { sendPlainTextWithNativeOwner } from './nativeSendText';
 
 const NATIVE_PASTE_EVENT = 'synara://native-paste';
@@ -714,15 +714,29 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     const handleSendPoll = async () => {
       setPollError(undefined);
-      const content = makePollStartContent(pollQuestion, pollAnswers, pollMaxSelections);
-      if (!content) {
+      const poll = normalizePollParts(pollQuestion, pollAnswers, pollMaxSelections);
+      if (!poll) {
         setPollError(
           t('modernization.poll.invalid', 'Add a question and at least two answer options.')
         );
         return;
       }
       try {
-        await mx.sendEvent(roomId, POLL_START_EVENT_TYPE as any, content as any);
+        const owner = await sendPollWithNativeDesktopOwner({
+          roomId,
+          question: poll.question,
+          answers: poll.answers.map((answer) => answer.text),
+          maxSelections: poll.maxSelections,
+        });
+        if (owner === 'legacy') {
+          setPollError(
+            t(
+              'modernization.poll.native_required',
+              'Native Matrix session is required to send polls on desktop.'
+            )
+          );
+          return;
+        }
         setPollQuestion('');
         setPollAnswers(['', '']);
         setPollMaxSelections(DEFAULT_POLL_SELECTIONS);
