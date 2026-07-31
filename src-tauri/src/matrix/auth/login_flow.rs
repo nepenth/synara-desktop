@@ -3,7 +3,7 @@
 //! Given a resolved homeserver base URL, list available login mechanisms as
 //! stable Synara domain types. Network I/O is behind [`LoginFlowTransport`].
 //!
-//! **No** password/token login execution (P3.2).
+//! **No** password login execution (P3.2 / product owns that path).
 
 use super::error::AuthError;
 use super::input::normalize_homeserver_url;

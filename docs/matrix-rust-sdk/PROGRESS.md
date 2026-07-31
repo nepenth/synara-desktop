@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-07-31**                                                                                                                                                                                                                                                        |
-| Integration tip    | `d080156e30b28901959853e46b766deb56185619` — docs remove handoffs [#261](https://github.com/nepenth/synara-desktop/pull/261) after V-ROOMS.2b [#254](https://github.com/nepenth/synara-desktop/pull/254) |
-| Active work        | **This PR** [#258](https://github.com/nepenth/synara-desktop/pull/258) V-SEND.5; [#262](https://github.com/nepenth/synara-desktop/pull/262) V-AUTH.2; [#263](https://github.com/nepenth/synara-desktop/pull/263) V-AUTH.4a; [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE **HOLD**. |
+| Integration tip    | `5c6e6e87eb5520e1a5953f06a03d9c4b26fbb7bf` — V-SEND.5 threads [#258](https://github.com/nepenth/synara-desktop/pull/258) merged (after #261 docs) |
+| Active work        | [#262](https://github.com/nepenth/synara-desktop/pull/262) V-AUTH.2; [#263](https://github.com/nepenth/synara-desktop/pull/263) V-AUTH.4a; [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE **HOLD**. |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | V-AUTH.1: **201→197** / **215→211**. V-ROOMS.1: **197→194** / **211→208**. V-ROOMS.3: **194→192** / **208→205**. V-ROOMS.4: **192→190** / **205→203**. V-ROOMS.2a: **190→189** / **203→202**. V-ROOMS.5 read: **189→187** / **202→200**. V-ROOMS.5w/5r: **187→187**. Tip inventory **187** / **200**. |
@@ -32,10 +32,10 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Integration tip `d080156e30b28901959853e46b766deb56185619`** after docs [#261](https://github.com/nepenth/synara-desktop/pull/261). Serial next: V-SEND.5 **this PR** [#258](https://github.com/nepenth/synara-desktop/pull/258). Active: [#262](https://github.com/nepenth/synara-desktop/pull/262) V-AUTH.2; [#263](https://github.com/nepenth/synara-desktop/pull/263) V-AUTH.4a. V-TIMELINE/#240 **HOLD**. **#221 HOLD**. |
+| **Now**        | **Integration tip `5c6e6e87eb5520e1a5953f06a03d9c4b26fbb7bf`** after V-SEND.5 [#258](https://github.com/nepenth/synara-desktop/pull/258). Active: [#262](https://github.com/nepenth/synara-desktop/pull/262) V-AUTH.2; [#263](https://github.com/nepenth/synara-desktop/pull/263) V-AUTH.4a. V-TIMELINE/#240 **HOLD**. **#221 HOLD**. |
 | **Policy**     | [full-vertical-policy.md](full-vertical-policy.md) |
-| **Tip**        | `d080156e30b28901959853e46b766deb56185619` merged [#261](https://github.com/nepenth/synara-desktop/pull/261) docs remove handoffs (after #254 V-ROOMS.2b). |
-| **Active PRs** | Draft [#258](https://github.com/nepenth/synara-desktop/pull/258) V-SEND.5 (this); draft [#262](https://github.com/nepenth/synara-desktop/pull/262) V-AUTH.2; draft [#263](https://github.com/nepenth/synara-desktop/pull/263) V-AUTH.4a; [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE HOLD. |
+| **Tip**        | `5c6e6e87eb5520e1a5953f06a03d9c4b26fbb7bf` merged [#258](https://github.com/nepenth/synara-desktop/pull/258) V-SEND.5 (after #261 docs). |
+| **Active PRs** | Draft [#262](https://github.com/nepenth/synara-desktop/pull/262) V-AUTH.2; draft [#263](https://github.com/nepenth/synara-desktop/pull/263) V-AUTH.4a; [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE HOLD. |
 | **Blocked**    | Merging plateau D0.6 (#221); claiming V-TIMELINE cutover (#240 HOLD); starting new media/widgets/etc before residual queue; merging L1 foundations; umbrella #39. |
 
 ---
@@ -60,6 +60,13 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-07-31 — tip after #258
+
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.5 threads** | **Merged** [#258](https://github.com/nepenth/synara-desktop/pull/258) | Integration `5c6e6e87eb5520e1a5953f06a03d9c4b26fbb7bf`; native composer thread send; Synapse thread-send proof Confirmed. |
+| current | **Docs remove handoffs** | **Merged** [#261](https://github.com/nepenth/synara-desktop/pull/261) | Public handoff docs removed. |
 
 ### 2026-07-31 — tip after #261
 
