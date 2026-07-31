@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-mdirect-remove"
+description = "Enables the matrix_mdirect_remove command without any pre-configured scope."
+commands.allow = ["matrix_mdirect_remove"]
+
+[[permission]]
+identifier = "deny-matrix-mdirect-remove"
+description = "Denies the matrix_mdirect_remove command without any pre-configured scope."
+commands.deny = ["matrix_mdirect_remove"]

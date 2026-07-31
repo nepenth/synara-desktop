@@ -12,7 +12,6 @@ import { RoomServerAclEventContent } from 'matrix-js-sdk/lib/types';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  addRoomIdToMDirect,
   getDMRoomFor,
   guessDmRoomUserId,
   isRoomAlias,
@@ -20,8 +19,8 @@ import {
   isServerName,
   isUserId,
   rateLimitedActions,
-  removeRoomIdFromMDirect,
 } from '../utils/matrix';
+import { addRoomIdToMDirect, removeRoomIdFromMDirect } from '../features/room/nativeMDirect';
 import { useRoomNavigate } from './useRoomNavigate';
 import { Membership, StateEvent } from '../../types/matrix/room';
 import { getStateEvent } from '../utils/room';
@@ -224,7 +223,7 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
             preset: Preset.TrustedPrivateChat,
             initial_state: [createRoomEncryptionState()],
           });
-          addRoomIdToMDirect(mx, result.room_id, userIds[0]);
+          await addRoomIdToMDirect(result.room_id, userIds[0]);
           navigateRoom(result.room_id);
         },
       },
@@ -407,14 +406,14 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         description: 'Convert room to direct message',
         exe: async () => {
           const dmUserId = guessDmRoomUserId(room, mx.getSafeUserId());
-          await addRoomIdToMDirect(mx, room.roomId, dmUserId);
+          await addRoomIdToMDirect(room.roomId, dmUserId);
         },
       },
       [Command.ConvertToRoom]: {
         name: Command.ConvertToRoom,
         description: 'Convert direct message to room',
         exe: async () => {
-          await removeRoomIdFromMDirect(mx, room.roomId);
+          await removeRoomIdFromMDirect(room.roomId);
         },
       },
       [Command.Delete]: {

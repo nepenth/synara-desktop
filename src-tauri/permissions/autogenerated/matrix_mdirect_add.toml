@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-mdirect-add"
+description = "Enables the matrix_mdirect_add command without any pre-configured scope."
+commands.allow = ["matrix_mdirect_add"]
+
+[[permission]]
+identifier = "deny-matrix-mdirect-add"
+description = "Denies the matrix_mdirect_add command without any pre-configured scope."
+commands.deny = ["matrix_mdirect_add"]
