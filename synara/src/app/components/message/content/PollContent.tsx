@@ -24,7 +24,7 @@ export function PollContent({ roomId, eventId, poll }: PollContentProps) {
   const answerIds = useMemo(() => poll.answers.map((answer) => answer.id), [poll.answers]);
   const counts = useMemo(
     () => summarizePollResponses(responses, answerIds),
-    [responses, answerIds],
+    [responses, answerIds]
   );
   const totalVotes = Object.values(counts).reduce((total, count) => total + count, 0);
   const myUserId = mx.getUserId() ?? undefined;
@@ -61,8 +61,8 @@ export function PollContent({ roomId, eventId, poll }: PollContentProps) {
       setResponses(
         nextResponses.filter(
           (response): response is { sender?: string; ts?: number; answers: string[] } =>
-            Boolean(response),
-        ),
+            Boolean(response)
+        )
       );
     } catch {
       setError(t('modernization.poll.load_failed', 'Could not load poll responses.'));
@@ -84,7 +84,7 @@ export function PollContent({ roomId, eventId, poll }: PollContentProps) {
         setError(
           t('modernization.poll.selection_limit', {
             count: poll.maxSelections,
-          }),
+          })
         );
         return;
       }
@@ -104,8 +104,8 @@ export function PollContent({ roomId, eventId, poll }: PollContentProps) {
         setError(
           t(
             'modernization.poll.native_required',
-            'Native Matrix session is required to vote on desktop.',
-          ),
+            'Native Matrix session is required to vote on desktop.'
+          )
         );
         return;
       }

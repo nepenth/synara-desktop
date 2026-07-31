@@ -25,12 +25,12 @@ export type NativePollSendResult = {
 
 export type NativeInvoke = (
   command: string,
-  args?: Record<string, unknown>,
+  args?: Record<string, unknown>
 ) => Promise<DesktopInvokeResult<unknown>>;
 
 async function isNativeMatrixLoggedIn(
   desktopAvailable: boolean,
-  invoke: NativeInvoke,
+  invoke: NativeInvoke
 ): Promise<boolean> {
   if (!desktopAvailable) return false;
   const session = await invoke('matrix_session_snapshot');
@@ -46,7 +46,7 @@ async function isNativeMatrixLoggedIn(
 export async function sendPollWithNativeOwner(
   input: NativeSendPollInput,
   desktopAvailable: boolean,
-  invoke: NativeInvoke,
+  invoke: NativeInvoke
 ): Promise<'native' | 'legacy'> {
   if (!(await isNativeMatrixLoggedIn(desktopAvailable, invoke))) {
     return 'legacy';
@@ -75,7 +75,7 @@ export async function sendPollWithNativeOwner(
 export async function respondPollWithNativeOwner(
   input: NativePollRespondInput,
   desktopAvailable: boolean,
-  invoke: NativeInvoke,
+  invoke: NativeInvoke
 ): Promise<'native' | 'legacy'> {
   if (!(await isNativeMatrixLoggedIn(desktopAvailable, invoke))) {
     return 'legacy';

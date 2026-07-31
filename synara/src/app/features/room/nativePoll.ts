@@ -7,17 +7,17 @@ import {
 } from './nativePollOwner';
 
 export async function sendPollWithNativeDesktopOwner(
-  input: NativeSendPollInput,
+  input: NativeSendPollInput
 ): Promise<'native' | 'legacy'> {
   return sendPollWithNativeOwner(input, isSynaraDesktop(), (command, args) =>
-    invokeDesktopWithAvailability(command, args),
+    invokeDesktopWithAvailability(command, args)
   );
 }
 
 export async function respondPollWithNativeDesktopOwner(
-  input: NativePollRespondInput,
+  input: NativePollRespondInput
 ): Promise<'native' | 'legacy'> {
   return respondPollWithNativeOwner(input, isSynaraDesktop(), (command, args) =>
-    invokeDesktopWithAvailability(command, args),
+    invokeDesktopWithAvailability(command, args)
   );
 }
