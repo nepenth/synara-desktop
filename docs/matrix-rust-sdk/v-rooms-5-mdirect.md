@@ -35,15 +35,17 @@ falling back to `mx.getAccountData(AccountDataEvent.Direct)`.
 ## Deletion
 
 - Removed `matrix-js-sdk` binder from `synara/src/app/state/mDirectList.ts`.
-- Dropped that path from `p1.6-js-sdk-import-allowlist.json`.
+- Removed residual `MatrixClient` param/import from
+  `synara/src/app/state/hooks/useBindAtoms.ts`.
+- Dropped both paths from `p1.6-js-sdk-import-allowlist.json`.
 
 ## Inventory
 
-From tip after V-ROOMS.2a (`a919689`, production **189** / repository-wide **202**):
+From tip after V-SEND.1 (`90be0f4`, production **189** / repository-wide **202**):
 
-- desktop-runtime production import files **189 → 188**
-- repository-wide import files **202 → 201**
-- allowlist **196 → 195**
+- desktop-runtime production import files **189 → 187**
+- repository-wide import files **202 → 200**
+- allowlist **196 → 194**
 
 ## Evidence
 
