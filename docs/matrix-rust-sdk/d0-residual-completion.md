@@ -4,11 +4,11 @@
 
 | Field                     | Value                                                                                                                                                                                         |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status                    | **Active — tip `9b97eb10`; this PR [#276](https://github.com/nepenth/synara-desktop/pull/276) V-AUTH.3; #240 HOLD** (2026-07-31) |
+| Status                    | **Active — tip `4d33227f` after #276 V-AUTH.3 DONE; next password loginUtil / UIA stage; #240 HOLD** (2026-07-31) |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                            |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)                                                                                                                                     |
-| Current integration tip   | `9b97eb10` ([#275](https://github.com/nepenth/synara-desktop/pull/275) docs tip pin) |
-| Active PRs                | **This PR** [#276](https://github.com/nepenth/synara-desktop/pull/276) V-AUTH.3; [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD |
+| Current integration tip   | `4d33227f` ([#276](https://github.com/nepenth/synara-desktop/pull/276) V-AUTH.3 login-flow discovery) |
+| Active PRs                | [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD; [#277](https://github.com/nepenth/synara-desktop/pull/277) V-SEND residual inventory docs |
 
 ## Policy trigger
 
@@ -59,7 +59,7 @@ Migration decision already decided: **`D-KEY-RECOVERY`** in [migration-ux-decisi
 | ------------ | ------------------------------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **V-AUTH.1** | Complete desktop SSO removal   | **Merged #238** at `08a185e` | Every desktop SSO entry point, browser/callback/token-completion route, JS SSO owner/import, and native device-delete SSO UIAA continuation is deleted. No Rust replacement, Matrix-ID prompt, inferred identity, pending-store/adoption route, or fallback. Required CI green; production importers 201→197 and repository-wide 215→211. |
 | **V-AUTH.2** | Token login                    | **DONE #262** at `56d1544` — product **non-retention** close; unused Rust token-login foundation removed | Explicit product decision: desktop does not retain `m.login.token` |
-| **V-AUTH.3** | UIA / login-flow discovery for product auth | **Active** [#276](https://github.com/nepenth/synara-desktop/pull/276) — native `matrix_login_flows`; AuthFlowsLoader live js client deleted; allowlist **175→171**  Discovery re-homed fail-closed; stage execution residual remains until `matrix_uia_*` (or equivalent) owns login multi-stage submit |
+| **V-AUTH.3** | UIA / login-flow discovery for product auth | **DONE #276** at `4d33227f` — native `matrix_login_flows`; AuthFlowsLoader live js client deleted; allowlist **175→171**; production **172→169**. Residual: login UIA stage execution (`matrix_uia_*`) + password `loginUtil` non-native fallback | Discovery done; stage exec + password fallback remain |
 | **V-AUTH.4** | Register / reset-password      | Split: **4a DONE #263**; **4b DONE #266** (allowlist **191→175**; production import files **172**); tip after docs #274 is `48991e77` | 4a+4b native re-home complete; live Synapse registration e2e unclaimed |
 
 ### V-ROOMS — room list / membership vertical (D0.2 gaps)
@@ -114,7 +114,7 @@ have already deleted their implementations.
 ## Execution order (binding)
 
 1. Treat V-ROOMS.1 as integrated at `2c48fd45a08200a6e3491f100912f086e8458b3b`; retain its measured production 197→194 and repository-wide 211→208 deletion deltas.
-2. Serial after tip `48991e77`: V-AUTH.4b **DONE #266** (allowlist 191→175). Next residual free-slot **V-AUTH.3** implementation (inventory #273); V-TIMELINE [#240] HOLD-cutover only.
+2. Serial after tip `4d33227f`: V-AUTH.3 **DONE #276** (allowlist 175→171). Next: password `loginUtil` non-native fallback and/or UIA login stage IPC; V-TIMELINE [#240] HOLD-cutover only.
 3. Keep V-TIMELINE [#240] **HOLD-cutover**: implement and tip-merge are OK; **do not** select `NativeTimelinePresenter`, delete `RoomTimeline.tsx`, or claim cutover until full contract + runtime proof.
 4. After V-AUTH.3 discovery: remaining auth residual is UIA stage execution for login + password `loginUtil` non-native fallback; delete each superseded JS owner in its slice.
 5. **V-BURN** final convergence audit + npm dependency removal
