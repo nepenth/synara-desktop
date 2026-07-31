@@ -37,8 +37,8 @@ If `matrix_login_flows` is unavailable or errors, AuthFlowsLoader shows the exis
 
 | Item | Status |
 |------|--------|
-| UIA stage execution for login (`matrix_uia_*`) | **DONE non-retention** — [v-auth-3b-uia-login-stage.md](v-auth-3b-uia-login-stage.md) |
-| `loginUtil.ts` non-native password fallback | Password vertical residual — open [#279](https://github.com/nepenth/synara-desktop/pull/279) |
+| UIA stage execution for login (`matrix_uia_*`) | **DONE non-retention #280** — [v-auth-3b-uia-login-stage.md](v-auth-3b-uia-login-stage.md) |
+| `loginUtil.ts` non-native password fallback | **Active residual this PR** (password fail-closed) — [#279](https://github.com/nepenth/synara-desktop/pull/279) |
 | Register product owners | DONE #266 V-AUTH.4b — not rewritten here |
 | Live Synapse e2e for login-flow discovery | Not claimed |
 | V-TIMELINE cutover / #240 | HOLD |
