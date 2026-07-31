@@ -1,13 +1,14 @@
 import { useMemo } from 'react';
-import { IPasswordFlow, LoginFlow } from 'matrix-js-sdk/lib/@types/auth';
+import { getPasswordFlow, type LoginFlowDto } from '../pages/auth/login/nativeLoginFlows';
 
-export const getPasswordFlow = (loginFlows: LoginFlow[]): IPasswordFlow | undefined =>
-  loginFlows.find((flow) => flow.type === 'm.login.password') as IPasswordFlow;
+export type { LoginFlowDto };
+export { getPasswordFlow };
 
 export type ParsedLoginFlows = {
-  password?: LoginFlow;
+  password?: LoginFlowDto;
 };
-export const useParsedLoginFlows = (loginFlows: LoginFlow[]) => {
+
+export const useParsedLoginFlows = (loginFlows: LoginFlowDto[]) => {
   const parsedFlow: ParsedLoginFlows = useMemo<ParsedLoginFlows>(
     () => ({
       password: getPasswordFlow(loginFlows),

@@ -645,6 +645,12 @@
           "markdownDescription": "Enables the matrix_invites_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_login_flows command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-login-flows",
+          "markdownDescription": "Enables the matrix_login_flows command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_login_password command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-login-password",
@@ -1237,6 +1243,12 @@
           "type": "string",
           "const": "deny-matrix-invites-snapshot",
           "markdownDescription": "Denies the matrix_invites_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_login_flows command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-login-flows",
+          "markdownDescription": "Denies the matrix_login_flows command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_login_password command without any pre-configured scope.",
