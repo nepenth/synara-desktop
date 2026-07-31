@@ -4,11 +4,11 @@
 
 | Field                     | Value                                                                                                                                                                                         |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status                    | **Active — tip `4d33227f` after #276 V-AUTH.3 DONE; next password loginUtil / UIA stage; #240 HOLD** (2026-07-31) |
+| Status                    | **Active — tip `60674486` after #277/#276 V-AUTH.3 DONE; next password loginUtil / UIA stage; #240 HOLD** (2026-07-31) |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                            |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)                                                                                                                                     |
-| Current integration tip   | `4d33227f` ([#276](https://github.com/nepenth/synara-desktop/pull/276) V-AUTH.3 login-flow discovery) |
-| Active PRs                | [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD; [#277](https://github.com/nepenth/synara-desktop/pull/277) V-SEND residual inventory docs |
+| Current integration tip   | `60674486` ([#277](https://github.com/nepenth/synara-desktop/pull/277) docs after [#276](https://github.com/nepenth/synara-desktop/pull/276) V-AUTH.3) |
+| Active PRs                | [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD |
 
 ## Policy trigger
 
