@@ -50,11 +50,7 @@ impl PollSendError {
 }
 
 fn trim_poll_text(value: &str) -> String {
-    value
-        .trim()
-        .chars()
-        .take(MAX_POLL_TEXT_CHARS)
-        .collect()
+    value.trim().chars().take(MAX_POLL_TEXT_CHARS).collect()
 }
 
 /// Same algorithm as `synara/src/app/utils/polls.ts` `pollAnswerId`.
@@ -100,10 +96,7 @@ pub fn normalize_poll(
         return Err(PollSendError::InvalidAnswers);
     }
 
-    let max_allowed = clean_answers
-        .len()
-        .min(MAX_POLL_SELECTIONS)
-        .max(1) as u32;
+    let max_allowed = clean_answers.len().min(MAX_POLL_SELECTIONS).max(1) as u32;
     // Clamp like JS `normalizePollParts` (composer / slash-command).
     let max_selections = max_selections.clamp(1, max_allowed);
 
@@ -175,7 +168,10 @@ pub fn poll_response_content(
         return Err(PollSendError::InvalidAnswerIds);
     }
 
-    Ok(UnstablePollResponseEventContent::new(answers, poll_event_id))
+    Ok(UnstablePollResponseEventContent::new(
+        answers,
+        poll_event_id,
+    ))
 }
 
 #[cfg(test)]
@@ -201,8 +197,8 @@ mod tests {
     fn response_dedupes_and_rejects_blank() {
         assert!(poll_response_content("$x:example.org", &["a1".into(), "a1".into()]).is_err());
         assert!(poll_response_content("$x:example.org", &["".into()]).is_err());
-        let content = poll_response_content("$x:example.org", &["a1".into(), "a2".into()])
-            .expect("response");
+        let content =
+            poll_response_content("$x:example.org", &["a1".into(), "a2".into()]).expect("response");
         assert_eq!(content.poll_response.answers, vec!["a1", "a2"]);
     }
 }
