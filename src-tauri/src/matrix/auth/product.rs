@@ -17,10 +17,14 @@ use matrix_sdk::{
         api::client::uiaa,
         events::{
             relation::{Reply, Thread},
-            room::message::{AddMentions, Relation, ReplyWithinThread, RoomMessageEventContent},
+            room::{
+                message::{AddMentions, Relation, ReplyWithinThread, RoomMessageEventContent},
+                ImageInfo,
+            },
+            sticker::StickerEventContent,
             Mentions,
         },
-        OwnedEventId, OwnedRoomId, OwnedTransactionId, OwnedUserId,
+        MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedTransactionId, OwnedUserId, UInt,
     },
     Client, Room,
 };
@@ -156,6 +160,14 @@ pub struct MatrixSendAttachmentResult {
     pub room_id: String,
     pub event_id: String,
     pub local_txn_id: String,
+    pub status: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixSendStickerResult {
+    pub room_id: String,
+    pub event_id: String,
     pub status: &'static str,
 }
 
@@ -1608,6 +1620,64 @@ pub async fn matrix_send_attachment(
     })
 }
 
+/// V-SEND sticker residual — sole `m.sticker` owner for native sessions.
+/// Media is already on the homeserver as an MXC (image-pack sticker); this
+/// command does not re-upload bytes. Optional info fields preserve dimensions
+/// when the product already knows them; empty info is valid.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
+pub async fn matrix_send_sticker(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    body: String,
+    mxc: String,
+    width: Option<u64>,
+    height: Option<u64>,
+    mimetype: Option<String>,
+    size: Option<u64>,
+    reply_to: Option<String>,
+    thread_root: Option<String>,
+) -> Result<MatrixSendStickerResult, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&room_id)?;
+    let reply_to = parse_reply_event_id(reply_to)?;
+    let thread_root = parse_thread_root_event_id(thread_root)?;
+    let content = sticker_content(
+        body,
+        mxc,
+        width,
+        height,
+        mimetype,
+        size,
+        reply_to,
+        thread_root,
+    )?;
+
+    let room = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-send-sticker-room-not-found",
+            )
+        })?
+    };
+
+    let response = room.send(content).await.map_err(|_| {
+        MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix sticker could not be sent.",
+            "v-send-sticker-sdk-failed",
+        )
+    })?;
+    Ok(MatrixSendStickerResult {
+        room_id: room_id.to_string(),
+        event_id: response.response.event_id.to_string(),
+        status: "sent",
+    })
+}
+
 /// V-SEND.3 sole poll-start owner (composer board + `/poll` command).
 #[tauri::command]
 pub async fn matrix_send_poll(
@@ -2446,6 +2516,61 @@ fn parse_transaction_id(
         .transpose()
 }
 
+/// Build validated `m.sticker` content for the native sticker owner.
+///
+/// Relation rules match text/attachment (V-SEND.5):
+/// - `thread_root` + `reply_to` → `m.thread` with genuine in-thread reply
+/// - `thread_root` only → `m.thread` without in-reply fallback
+/// - `reply_to` only → classic `m.in_reply_to` reply
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn sticker_content(
+    body: String,
+    mxc: String,
+    width: Option<u64>,
+    height: Option<u64>,
+    mimetype: Option<String>,
+    size: Option<u64>,
+    reply_to: Option<OwnedEventId>,
+    thread_root: Option<OwnedEventId>,
+) -> Result<StickerEventContent, MatrixAuthCommandError> {
+    let body = body.trim();
+    if body.is_empty() || body.len() > 1024 {
+        return Err(map_send_error("v-send-sticker-invalid-body"));
+    }
+    let mxc = mxc.trim();
+    if mxc.is_empty() || mxc.len() > 1024 {
+        return Err(map_send_error("v-send-sticker-invalid-mxc"));
+    }
+    let mxc_ref: &MxcUri = mxc.into();
+    if !mxc_ref.is_valid() {
+        return Err(map_send_error("v-send-sticker-invalid-mxc"));
+    }
+    let url: OwnedMxcUri = mxc_ref.to_owned();
+
+    let mut info = ImageInfo::new();
+    info.width = width.and_then(UInt::new);
+    info.height = height.and_then(UInt::new);
+    info.size = size.and_then(UInt::new);
+    if let Some(mimetype) = mimetype {
+        let mime = mimetype.trim();
+        if !mime.is_empty() {
+            if mime.len() > 255 || !mime.chars().all(|c| c.is_ascii_graphic()) {
+                return Err(map_send_error("v-send-sticker-invalid-mimetype"));
+            }
+            info.mimetype = Some(mime.to_owned());
+        }
+    }
+
+    let mut content = StickerEventContent::new(body.to_owned(), info, url);
+    content.relates_to = match (thread_root, reply_to) {
+        (Some(root), Some(reply)) => Some(Relation::Thread(Thread::reply(root, reply))),
+        (Some(root), None) => Some(Relation::Thread(Thread::without_fallback(root))),
+        (None, Some(reply)) => Some(Relation::Reply(Reply::with_event_id(reply))),
+        (None, None) => None,
+    };
+    Ok(content)
+}
+
 /// Build validated room-message content for the native composer owner.
 ///
 /// Relation rules (V-SEND.4 + V-SEND.5):
@@ -3038,6 +3163,85 @@ mod tests {
         );
         assert!(!json.contains("token"));
         assert!(!json.contains("ciphertext"));
+    }
+
+    #[test]
+    fn sticker_content_preserves_mxc_info_and_reply() {
+        let content = sticker_content(
+            "cat".into(),
+            "mxc://example.org/sticker1".into(),
+            Some(128),
+            Some(128),
+            Some("image/png".into()),
+            Some(2048),
+            Some("$event:example.org".parse().unwrap()),
+            None,
+        )
+        .unwrap();
+        let json = serde_json::to_value(&content).unwrap();
+        assert_eq!(json["body"], "cat");
+        assert_eq!(json["url"], "mxc://example.org/sticker1");
+        assert_eq!(json["info"]["w"], 128);
+        assert_eq!(json["info"]["h"], 128);
+        assert_eq!(json["info"]["mimetype"], "image/png");
+        assert_eq!(json["info"]["size"], 2048);
+        assert_eq!(
+            json["m.relates_to"]["m.in_reply_to"]["event_id"],
+            "$event:example.org"
+        );
+        assert!(json.get("msgtype").is_none());
+        assert!(!json.to_string().contains("token"));
+    }
+
+    #[test]
+    fn sticker_content_emits_thread_relation() {
+        let threaded = sticker_content(
+            "thread sticker".into(),
+            "mxc://example.org/s".into(),
+            None,
+            None,
+            None,
+            None,
+            Some("$child:example.org".parse().unwrap()),
+            Some("$root:example.org".parse().unwrap()),
+        )
+        .unwrap();
+        let json = serde_json::to_value(&threaded).unwrap();
+        assert_eq!(json["m.relates_to"]["rel_type"], "m.thread");
+        assert_eq!(json["m.relates_to"]["event_id"], "$root:example.org");
+        assert_eq!(
+            json["m.relates_to"]["m.in_reply_to"]["event_id"],
+            "$child:example.org"
+        );
+    }
+
+    #[test]
+    fn sticker_content_rejects_invalid_body_and_mxc() {
+        let empty = sticker_content(
+            "  ".into(),
+            "mxc://example.org/s".into(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap_err();
+        assert_eq!(empty.diagnostic_id, "v-send-sticker-invalid-body");
+
+        let bad_mxc = sticker_content(
+            "ok".into(),
+            "https://evil.example/img.png".into(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap_err();
+        assert_eq!(bad_mxc.diagnostic_id, "v-send-sticker-invalid-mxc");
     }
 
     #[test]
