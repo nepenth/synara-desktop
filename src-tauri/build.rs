@@ -66,6 +66,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_reaction_ensure",
     "matrix_reaction_redact",
     "matrix_space_parents_snapshot",
+    "matrix_space_hierarchy_snapshot",
     "matrix_mdirect_snapshot",
     "matrix_mdirect_add",
     "matrix_mdirect_remove",
