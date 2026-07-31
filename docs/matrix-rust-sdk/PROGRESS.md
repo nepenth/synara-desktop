@@ -14,11 +14,11 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-07-31**                                                                                                                                                                                                                                                        |
-| Integration tip    | `48991e77` — docs [#274](https://github.com/nepenth/synara-desktop/pull/274) after product [#266](https://github.com/nepenth/synara-desktop/pull/266) V-AUTH.4b |
-| Active work        | Free-slot residual **V-AUTH.3** implementation (inventory [#273](https://github.com/nepenth/synara-desktop/pull/273)); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. |
+| Integration tip    | `9b97eb10` — docs [#275](https://github.com/nepenth/synara-desktop/pull/275) after #274/#266 |
+| Active work        | **This PR** [#276](https://github.com/nepenth/synara-desktop/pull/276) V-AUTH.3 login-flow discovery; [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
-| Import accounting  | V-AUTH.1: **201→197** / **215→211**. V-ROOMS.1: **197→194** / **211→208**. V-ROOMS.3: **194→192** / **208→205**. V-ROOMS.4: **192→190** / **205→203**. V-ROOMS.2a: **190→189** / **203→202**. V-ROOMS.5 read: **189→187** / **202→200**. V-ROOMS.5w/5r: **187→187**. Tip after V-AUTH.4a **184** / allowlist **191**. [#268](https://github.com/nepenth/synara-desktop/pull/268) V-ROOMS.2c inventory **flat 184/197**. [#266](https://github.com/nepenth/synara-desktop/pull/266) V-AUTH.4b production import files **172** / allowlist **191→175**. |
+| Import accounting  | V-AUTH.1: **201→197** / **215→211**. … [#266](https://github.com/nepenth/synara-desktop/pull/266) V-AUTH.4b production **172** / allowlist **191→175**. **V-AUTH.3 (this PR):** production import files **172→169** / allowlist **175→171**. |
 | Dual backend       | **`false`** (forbidden forever)                                                                                                                                                                                                                                       |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                                                                                                                                                              |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                                                                                                                                                  |
@@ -32,10 +32,10 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `48991e77`** after docs [#274](https://github.com/nepenth/synara-desktop/pull/274) / product [#266](https://github.com/nepenth/synara-desktop/pull/266). Free slot → **V-AUTH.3** implementation (in flight). #240 HOLD. |
+| **Now**        | **Tip `9b97eb10`** — **This PR** V-AUTH.3 [#276](https://github.com/nepenth/synara-desktop/pull/276) native login-flow discovery; [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. |
 | **Policy**     | [full-vertical-policy.md](full-vertical-policy.md) |
-| **Tip**        | `48991e77` docs after [#266](https://github.com/nepenth/synara-desktop/pull/266) native desktop registration (allowlist **191→175**). |
-| **Active PRs** | [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. Next product residual: **V-AUTH.3**. |
+| **Tip**        | `9b97eb10` docs [#275](https://github.com/nepenth/synara-desktop/pull/275) after #274/#266. |
+| **Active PRs** | **This PR** [#276](https://github.com/nepenth/synara-desktop/pull/276) V-AUTH.3; [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. |
 | **Blocked**    | Merging plateau D0.6 (#221); claiming V-TIMELINE cutover (#240 HOLD); starting new media/widgets/etc before residual queue; merging L1 foundations; umbrella #39. |
 
 ---
@@ -72,9 +72,17 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| current | **V-AUTH.4b register** | **DONE #266** at `bc9aa283` | Native `matrix_register` / `matrix_register_flows` / `matrix_register_request_email_token`; JS `registerUtil` / `useRegisterEmail` deleted; allowlist **191→175**; production import files **172**; required CI green; live Synapse registration e2e unclaimed. |
-| current | **Next free slot** | **V-AUTH.3** | loginFlows / AuthFlowsLoader still js; inventory [#273](https://github.com/nepenth/synara-desktop/pull/273) at `04e63444`. |
+| current | **V-AUTH.3 loginFlows** | **Active this PR** | Native `matrix_login_flows` + `HttpLoginFlowTransport`; `AuthFlowsLoader` deletes live `createClient`/`loginFlows()`; SDK-neutral login DTOs; allowlist **175→171**; production import files **172→169**. Residual: UIA stage execution for login (follow-on). See [v-auth-3-login-flows.md](v-auth-3-login-flows.md). |
+| current | Integration tip base | `48991e77` | After [#274](https://github.com/nepenth/synara-desktop/pull/274) docs; product tip after #266 was lagging in older progress rows. |
 | current | **V-TIMELINE** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | No cutover. |
+
+### 2026-07-31 — tip after #266 V-AUTH.4b / #274 docs
+
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| prior | **V-AUTH.4b register** | **DONE #266** | Native `matrix_register` / `matrix_register_flows` / `matrix_register_request_email_token`; allowlist **191→175**; production import files **172**. Docs tip-fix [#274](https://github.com/nepenth/synara-desktop/pull/274) → `48991e77`. |
+| prior | **V-AUTH.3** | Was free-slot residual | inventory [#273](https://github.com/nepenth/synara-desktop/pull/273); now active implementation. |
+| prior | **V-TIMELINE** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | No cutover. |
 
 ### 2026-07-31 — tip after #273 V-AUTH.3 inventory
 
