@@ -11,8 +11,9 @@ const STATUS_MD_REL = "docs/matrix-rust-sdk/program-status.md";
 const PLAN_REL = "docs/matrix-rust-sdk-full-replacement-plan.md";
 const CURRENT_DOCS = [
   PLAN_REL,
-  "docs/matrix-rust-sdk/CONTINUATION.md",
-  "docs/matrix-rust-sdk/implementation-handoff.md",
+  "docs/matrix-rust-sdk/README.md",
+  "docs/matrix-rust-sdk/PROGRESS.md",
+  "docs/matrix-rust-sdk/d0-residual-completion.md",
 ];
 const CURRENT_DOC_MARKER = "<!-- matrix-rust-program-status-link -->";
 const REMEDIATION_IDS = [
