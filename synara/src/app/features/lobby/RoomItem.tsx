@@ -20,11 +20,10 @@ import {
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
 import { JoinRule, MatrixError, Room } from 'matrix-js-sdk';
-import { IHierarchyRoom } from 'matrix-js-sdk/lib/@types/spaces';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
 import { SequenceCard } from '../../components/sequence-card';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
-import { HierarchyItem } from '../../hooks/useSpaceHierarchy';
+import { HierarchyItem, SpaceHierarchyRoom } from '../../hooks/useSpaceHierarchy';
 import { millify } from '../../plugins/millify';
 import { LocalRoomSummaryLoader } from '../../components/RoomSummaryLoader';
 import { UseStateProvider } from '../../components/UseStateProvider';
@@ -280,7 +279,7 @@ type RoomItemCardProps = {
   item: HierarchyItem;
   loading: boolean;
   error: Error | null;
-  summary: IHierarchyRoom | undefined;
+  summary: SpaceHierarchyRoom | undefined;
   dm?: boolean;
   firstChild?: boolean;
   lastChild?: boolean;
