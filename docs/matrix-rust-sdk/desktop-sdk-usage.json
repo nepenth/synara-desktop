@@ -25,7 +25,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 100,
+          "fileCount": 99,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -144,14 +144,14 @@
         },
         "uia_auth": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 49,
+          "fileCount": 46,
           "listenerCandidateOccurrences": 2,
-          "methodCandidateOccurrences": 112,
+          "methodCandidateOccurrences": 111,
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 174,
-      "importFileCount": 172,
+      "fileCount": 171,
+      "importFileCount": 169,
       "methodCandidateFrequencies": [
         {
           "count": 71,
@@ -319,10 +319,6 @@
         },
         {
           "count": 1,
-          "name": "loginFlows"
-        },
-        {
-          "count": 1,
           "name": "logout"
         },
         {
@@ -376,8 +372,8 @@
           "importOccurrences": 46
         },
         "MatrixError": {
-          "fileCount": 29,
-          "importOccurrences": 29
+          "fileCount": 28,
+          "importOccurrences": 28
         },
         "MatrixEvent": {
           "fileCount": 32,
@@ -404,14 +400,14 @@
           "importOccurrences": 0
         },
         "createClient": {
-          "fileCount": 3,
-          "importOccurrences": 3
+          "fileCount": 2,
+          "importOccurrences": 2
         }
       },
       "modules": [
         {
-          "fileCount": 162,
-          "importCount": 162,
+          "fileCount": 160,
+          "importCount": 160,
           "path": "matrix-js-sdk"
         },
         {
@@ -448,11 +444,6 @@
           "fileCount": 4,
           "importCount": 4,
           "path": "matrix-js-sdk/lib/models/room"
-        },
-        {
-          "fileCount": 2,
-          "importCount": 2,
-          "path": "matrix-js-sdk/lib/@types/auth"
         },
         {
           "fileCount": 2,
@@ -537,11 +528,11 @@
           "valueImports": 25
         },
         {
-          "fileCount": 29,
-          "importCount": 29,
+          "fileCount": 28,
+          "importCount": 28,
           "name": "MatrixError",
           "typeImports": 0,
-          "valueImports": 29
+          "valueImports": 28
         },
         {
           "fileCount": 18,
@@ -733,13 +724,6 @@
           "valueImports": 3
         },
         {
-          "fileCount": 3,
-          "importCount": 3,
-          "name": "createClient",
-          "typeImports": 0,
-          "valueImports": 3
-        },
-        {
           "fileCount": 2,
           "importCount": 2,
           "name": "ClientEventHandlerMap",
@@ -873,6 +857,13 @@
           "valueImports": 2
         },
         {
+          "fileCount": 2,
+          "importCount": 2,
+          "name": "createClient",
+          "typeImports": 0,
+          "valueImports": 2
+        },
+        {
           "fileCount": 1,
           "importCount": 1,
           "name": "AccessTokens",
@@ -917,13 +908,6 @@
         {
           "fileCount": 1,
           "importCount": 1,
-          "name": "IAuthData",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
           "name": "IContextResponse",
           "typeImports": 0,
           "valueImports": 1
@@ -952,13 +936,6 @@
         {
           "fileCount": 1,
           "importCount": 1,
-          "name": "ILoginFlowsResponse",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
           "name": "INotification",
           "typeImports": 0,
           "valueImports": 1
@@ -967,13 +944,6 @@
           "fileCount": 1,
           "importCount": 1,
           "name": "INotificationsResponse",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "IPasswordFlow",
           "typeImports": 0,
           "valueImports": 1
         },
@@ -1058,13 +1028,6 @@
           "fileCount": 1,
           "importCount": 1,
           "name": "KnownMembership",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "LoginFlow",
           "typeImports": 0,
           "valueImports": 1
         },
@@ -2677,43 +2640,6 @@
       "modelCoupling": ["MatrixError"],
       "networking": [],
       "path": "synara/src/app/components/AccountDataEditor.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "component",
-      "categories": ["client_methods", "uia_auth"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "createClient"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 30,
-          "name": "loginFlows"
-        }
-      ],
-      "modelCoupling": ["createClient"],
-      "networking": [],
-      "path": "synara/src/app/components/AuthFlowsLoader.tsx",
       "role": "production"
     },
     {
@@ -7250,55 +7176,6 @@
     },
     {
       "bucket": "hook",
-      "categories": ["uia_auth"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IAuthData"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixError"
-            }
-          ],
-          "namespaceImport": null
-        },
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk/lib/@types/auth",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "ILoginFlowsResponse"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["MatrixError"],
-      "networking": [],
-      "path": "synara/src/app/hooks/useAuthFlows.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "hook",
       "categories": [],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -8114,40 +7991,6 @@
       "modelCoupling": [],
       "networking": [],
       "path": "synara/src/app/hooks/useNotificationMode.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "hook",
-      "categories": ["uia_auth"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk/lib/@types/auth",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IPasswordFlow"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "LoginFlow"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/hooks/useParsedLoginFlows.ts",
       "role": "production"
     },
     {
@@ -13569,9 +13412,9 @@
     "desktopRuntimeBaseline": {
       "buckets": {
         "client-lifecycle": 2,
-        "component": 29,
+        "component": 28,
         "feature": 56,
-        "hook": 47,
+        "hook": 45,
         "media-boundary": 1,
         "page": 10,
         "plugin": 8,
@@ -13585,13 +13428,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 172,
+      "productionImportFiles": 169,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 182
+      "totalImportFiles": 179
     },
     "repositoryWide": {
-      "productionImportFiles": 172,
+      "productionImportFiles": 169,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -13600,7 +13443,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 185
+      "totalImportFiles": 182
     }
   }
 }

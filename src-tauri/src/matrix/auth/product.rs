@@ -36,11 +36,12 @@ use tokio::sync::Mutex;
 use zeroize::Zeroize;
 
 use super::{
-    complete_password_reset, login_with_password, normalize_homeserver_url,
+    complete_password_reset, discover_login_flows, login_with_password, normalize_homeserver_url,
     password_reset_ephemeral_user_id, probe_register_flows, register_ephemeral_user_id,
     register_submit, request_password_email_token, request_register_email_token, AuthError,
-    LoginOptions, PasswordEmailTokenResult, PasswordResetOutcome, RegisterAuthStage,
-    RegisterFlowsProbe, RegisterSubmitOutcome, RegisterUiaFlow,
+    HttpLoginFlowTransport, LoginFlow, LoginOptions, PasswordEmailTokenResult,
+    PasswordResetOutcome, RegisterAuthStage, RegisterFlowsProbe, RegisterSubmitOutcome,
+    RegisterUiaFlow,
 };
 use crate::matrix::account_data::{
     add_room_to_mdirect, remove_room_from_mdirect, snapshot_mdirect, NativeMDirectMutationResult,
@@ -270,6 +271,57 @@ impl MatrixAuthState {
             .resolve(active.sync.session_generation(), handle)?;
         Some((active.client.clone(), source))
     }
+}
+
+/// V-AUTH.3 — privacy-safe login-flow DTO (no secrets; discovery only).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixLoginFlowDto {
+    /// Synara kind discriminator (`password`, `token`, `application_service`, `unknown`).
+    pub kind: String,
+    /// Original Matrix type string (`m.login.password`, custom types, …).
+    pub matrix_type: String,
+    /// Token flow: homeserver supports `get_login_token` (when known).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub get_login_token: Option<bool>,
+}
+
+impl MatrixLoginFlowDto {
+    fn from_domain(flow: LoginFlow) -> Self {
+        Self {
+            kind: flow.kind.as_str().to_owned(),
+            matrix_type: flow.matrix_type,
+            get_login_token: flow.get_login_token,
+        }
+    }
+}
+
+/// V-AUTH.3 — login-flow discovery response for the product UI.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixLoginFlowsResponse {
+    pub flows: Vec<MatrixLoginFlowDto>,
+}
+
+/// V-AUTH.3 — discover homeserver login flows (unauthenticated CS `GET /login`).
+///
+/// Fail-closed: transport/parse errors surface as privacy-safe command errors.
+/// No credentials are submitted; DTO never contains tokens or passwords.
+#[tauri::command]
+pub async fn matrix_login_flows(
+    homeserver_url: String,
+) -> Result<MatrixLoginFlowsResponse, MatrixAuthCommandError> {
+    let transport = HttpLoginFlowTransport::new().map_err(map_login_flows_auth_error)?;
+    let result = discover_login_flows(&homeserver_url, &transport)
+        .await
+        .map_err(map_login_flows_auth_error)?;
+    Ok(MatrixLoginFlowsResponse {
+        flows: result
+            .flows
+            .into_iter()
+            .map(MatrixLoginFlowDto::from_domain)
+            .collect(),
+    })
 }
 
 #[tauri::command]
@@ -3244,6 +3296,27 @@ fn map_auth_error(error: AuthError) -> MatrixAuthCommandError {
     MatrixAuthCommandError::new(code, message, error.diagnostic_id())
 }
 
+/// Map login-flow discovery errors (V-AUTH.3). Privacy-safe; no secrets in message.
+fn map_login_flows_auth_error(error: AuthError) -> MatrixAuthCommandError {
+    let code = match error {
+        AuthError::InvalidInput { .. } => "InvalidRequest",
+        AuthError::RateLimited { .. } => "RateLimited",
+        AuthError::Connectivity { .. }
+        | AuthError::HomeserverUnavailable { .. }
+        | AuthError::WellKnownNotFound { .. } => "InvalidServer",
+        AuthError::UnsupportedCapability { .. } => "Unsupported",
+        _ => "Unknown",
+    };
+    let message = match code {
+        "InvalidRequest" => "The login-flow discovery request is invalid.",
+        "RateLimited" => "Login-flow discovery was rate limited.",
+        "InvalidServer" => "The Matrix homeserver is unavailable.",
+        "Unsupported" => "The homeserver returned unsupported login-flow data.",
+        _ => "Native login-flow discovery failed.",
+    };
+    MatrixAuthCommandError::new(code, message, error.diagnostic_id())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3321,6 +3394,99 @@ mod tests {
         let invalid = reserve_room_key_import_selection(&mut slot, 99, "passphrase").unwrap_err();
         assert_eq!(invalid.diagnostic_id, "v-crypto.5-import-selection-invalid");
         assert_eq!(slot.as_ref().unwrap().selection_id, 4);
+    }
+
+    #[test]
+    fn matrix_login_flows_dto_is_privacy_safe_and_maps_domain_flows() {
+        let flows = vec![
+            LoginFlow::password(),
+            LoginFlow::token(true),
+            LoginFlow::from_matrix_parts("m.login.sso", None),
+        ];
+        let response = MatrixLoginFlowsResponse {
+            flows: flows
+                .into_iter()
+                .map(MatrixLoginFlowDto::from_domain)
+                .collect(),
+        };
+        assert_eq!(response.flows[0].kind, "password");
+        assert_eq!(response.flows[0].matrix_type, "m.login.password");
+        assert_eq!(response.flows[0].get_login_token, None);
+        assert_eq!(response.flows[1].kind, "token");
+        assert_eq!(response.flows[1].get_login_token, Some(true));
+        assert_eq!(response.flows[2].kind, "unknown");
+        assert_eq!(response.flows[2].matrix_type, "m.login.sso");
+
+        let json = serde_json::to_value(&response).expect("serialize");
+        let flows_json = json.get("flows").and_then(|v| v.as_array()).expect("flows");
+        assert_eq!(flows_json.len(), 3);
+        assert_eq!(flows_json[0]["kind"], "password");
+        assert_eq!(flows_json[0]["matrixType"], "m.login.password");
+        assert!(flows_json[0].get("getLoginToken").is_none());
+        assert_eq!(flows_json[1]["getLoginToken"], true);
+
+        let raw = serde_json::to_string(&response).expect("string");
+        for forbidden in [
+            "accessToken",
+            "access_token",
+            "refreshToken",
+            "refresh_token",
+            "password\":",
+            "secret",
+        ] {
+            assert!(
+                !raw.contains(forbidden),
+                "login flows DTO must not contain secret field {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn map_login_flows_auth_error_is_privacy_safe() {
+        let err = map_login_flows_auth_error(AuthError::HomeserverUnavailable {
+            diagnostic_id: "v-auth.3-login-flows-hs",
+        });
+        assert_eq!(err.code, "InvalidServer");
+        assert_eq!(err.diagnostic_id, "v-auth.3-login-flows-hs");
+        assert!(!err.message.contains("token"));
+        assert!(!err.message.contains("password"));
+
+        let unsupported = map_login_flows_auth_error(AuthError::UnsupportedCapability {
+            diagnostic_id: "r0.7-login-types-json",
+        });
+        assert_eq!(unsupported.code, "Unsupported");
+
+        let invalid = map_login_flows_auth_error(AuthError::InvalidInput {
+            diagnostic_id: "p3.1-empty-url",
+            reason: "empty",
+        });
+        assert_eq!(invalid.code, "InvalidRequest");
+    }
+
+    #[test]
+    fn v_auth_3_product_registers_login_flows_command() {
+        let product_src = include_str!("product.rs");
+        let product_prod = product_src
+            .split("#[cfg(test)]")
+            .next()
+            .expect("product production section");
+        let lib_src = include_str!("../../lib.rs");
+        assert!(
+            product_prod.contains("pub async fn matrix_login_flows"),
+            "V-AUTH.3 login-flow discovery command must exist"
+        );
+        assert!(
+            lib_src.contains("matrix_login_flows"),
+            "matrix_login_flows must be registered in the invoke handler"
+        );
+        assert!(
+            product_prod.contains("HttpLoginFlowTransport"),
+            "product path must use live HTTP login-flow transport"
+        );
+        assert!(
+            product_prod.contains("discover_login_flows"),
+            "product path must call discover_login_flows"
+        );
     }
 
     #[test]
