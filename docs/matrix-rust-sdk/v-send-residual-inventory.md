@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Status | **Inventory (docs only)** — no product code in this PR |
-| Tip measured | `9b97eb10` (docs-pin after #275; integration `48991e77` after #274 docs / #266 V-AUTH.4b) |
+| Tip measured | `4d33227f` (docs-pin after #275; integration `48991e77` after #274 docs / #266 V-AUTH.4b) |
 | Base | `feature/matrix-rust-sdk-full-replacement` |
 | Policy | [full-vertical-policy.md](full-vertical-policy.md) — physical deletion inside each owning slice |
 | Related | V-SEND.1 #248 (attach), V-SEND.2 #239 (reactions), V-SEND.3 #250 (polls), V-SEND.4 #253 (rich), V-SEND.5 #258 (threads), V-SEND sticker/GIF #264 |
@@ -18,7 +18,7 @@
 ## 1. Tip measured
 
 - Branch: `matrix-rust/v-send-residual-inventory-ds`
-- Tip SHA: **`9b97eb10`** (docs-pin after #275; integration `48991e77` after #274 docs / #266 V-AUTH.4b register DONE)
+- Tip SHA: **`4d33227f`** (docs-pin after #275; integration `48991e77` after #274 docs / #266 V-AUTH.4b register DONE)
 - Working tree clean at measurement time.
 - Base integration branch: `feature/matrix-rust-sdk-full-replacement`.
 - Import accounting at tip: production import files **172**; allowlist **191→175** (per #266).
