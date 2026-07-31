@@ -400,18 +400,14 @@ async fn live_native_poll_send_and_respond_against_disposable_synapse_when_confi
         .create_room(CreateRoomRequest::new())
         .await
         .expect("create room");
-    let room_id = room.room_id().to_string();
     client
         .sync_once(SyncSettings::default().timeout(Duration::from_secs(3)))
         .await
         .expect("post-create sync");
 
-    let mut registry = NativeTimelineRegistry::new(1);
-    registry
-        .open(&client, &room_id)
-        .await
-        .expect("open native timeline before poll send");
-
+    // Send-path proof: native timeline DTO projection of poll kinds is a later
+    // V-TIMELINE residual. Authoritative V-SEND.3 evidence is Room::send plus
+    // managed-client fetch of the resulting events from Synapse.
     let normalized = crate::matrix::send::normalize_poll(
         "V-SEND.3 proof?",
         &["Alpha".to_owned(), "Beta".to_owned()],
@@ -423,19 +419,53 @@ async fn live_native_poll_send_and_respond_against_disposable_synapse_when_confi
         .send(start)
         .await
         .expect("send poll start via managed client");
-    let poll_event_id = start_response.response.event_id.to_string();
-    wait_for_event_in_open_timeline(&mut registry, &client, &room_id, &poll_event_id).await;
+    let poll_event_id = start_response.response.event_id.clone();
+    wait_for_room_event(&client, &room, &poll_event_id).await;
 
     let answer_id = normalized.answers[0].0.clone();
     let response_content =
-        crate::matrix::send::poll_response_content(&poll_event_id, &[answer_id])
+        crate::matrix::send::poll_response_content(poll_event_id.as_str(), &[answer_id])
             .expect("poll response content");
     let vote_response = room
         .send(response_content)
         .await
         .expect("send poll response via managed client");
-    let vote_event_id = vote_response.response.event_id.to_string();
-    wait_for_event_in_open_timeline(&mut registry, &client, &room_id, &vote_event_id).await;
+    let vote_event_id = vote_response.response.event_id.clone();
+    wait_for_room_event(&client, &room, &vote_event_id).await;
 
     let _ = std::fs::remove_dir_all(&store_root);
+}
+
+async fn wait_for_room_event(
+    client: &matrix_sdk::Client,
+    room: &matrix_sdk::Room,
+    event_id: &matrix_sdk::ruma::EventId,
+) {
+    let deadline = Instant::now() + Duration::from_secs(45);
+    loop {
+        sync_briefly(client).await;
+        match room.load_or_fetch_event(event_id, None).await {
+            Ok(ev) => {
+                let raw = ev.into_raw();
+                let value: serde_json::Value =
+                    serde_json::from_str(raw.json().get()).expect("event json");
+                let event_type = value
+                    .get("type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                assert!(
+                    event_type.contains("poll"),
+                    "expected poll event type, got {event_type:?}"
+                );
+                return;
+            }
+            Err(_) => {
+                assert!(
+                    Instant::now() < deadline,
+                    "timed out waiting to fetch poll event {event_id} from managed room"
+                );
+                tokio::time::sleep(Duration::from_millis(250)).await;
+            }
+        }
+    }
 }
