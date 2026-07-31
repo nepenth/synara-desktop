@@ -32,7 +32,7 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `f4addd6f`** after [#280](https://github.com/nepenth/synara-desktop/pull/280)/[#282](https://github.com/nepenth/synara-desktop/pull/282). **This PR** [#279](https://github.com/nepenth/synara-desktop/pull/279) password loginUtil fail-closed native-only; [#283](https://github.com/nepenth/synara-desktop/pull/283) edit; #240 HOLD. |
+| **Now**        | **Tip after #279** loginUtil fail-closed. **This PR** V-SEND.R-EDIT. V-TIMELINE cutover approved; #240 tip-merge; #284 CI parallel Validate. |
 | **Policy**     | [full-vertical-policy.md](full-vertical-policy.md) |
 | **Tip**        | `f4addd6f` merge [#280](https://github.com/nepenth/synara-desktop/pull/280) V-AUTH.3b UIA non-retention. |
 | **Active PRs** | **This PR** [#279](https://github.com/nepenth/synara-desktop/pull/279); [#283](https://github.com/nepenth/synara-desktop/pull/283); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. |
