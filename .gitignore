@@ -82,3 +82,7 @@ mcp.json
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.example.json
+
+# Local agent session notes (if recreated in-tree)
+docs/**/SESSION-HANDOFF.md
+docs/**/*-session-handoff.md
