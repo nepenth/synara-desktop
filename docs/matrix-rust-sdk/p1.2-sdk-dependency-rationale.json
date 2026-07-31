@@ -266,7 +266,7 @@
     "src-tauri/src/lib.rs",
     "docs/matrix-rust-sdk/p1.2-sdk-dependency-rationale.md",
     "docs/matrix-rust-sdk/p1.2-sdk-dependency-rationale.json",
-    "docs/matrix-rust-sdk/implementation-handoff.md"
+    "docs/matrix-rust-sdk/README.md"
   ],
   "confirmations": {
     "no_dual_backend": true,
