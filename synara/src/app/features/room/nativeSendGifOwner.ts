@@ -1,4 +1,3 @@
-import type { DesktopInvokeResult } from '../../utils/desktop';
 import type { GifResult } from '../../utils/gifProvider';
 import { fetchGifForUpload } from '../../utils/gifProvider';
 import {
@@ -52,5 +51,3 @@ export async function sendGifWithNativeOwner(
   }
   return 'native';
 }
-
-export type { DesktopInvokeResult };

@@ -1,4 +1,3 @@
-import type { DesktopInvokeResult } from '../../utils/desktop';
 import { isNativeMatrixLoggedIn, type NativeInvoke } from './nativeSendAttachmentOwner';
 
 export type NativeSendStickerInfo = {
