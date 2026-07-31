@@ -25,10 +25,10 @@ export type NativePasswordResetCommandError = {
   diagnosticId?: string;
 };
 
-export type NativePasswordResetInvoke = <T>(
+export type NativePasswordResetInvoke = (
   command: string,
   args?: Record<string, unknown>
-) => Promise<{ available: false } | { available: true; value: T | undefined }>;
+) => Promise<{ available: false } | { available: true; value?: unknown }>;
 
 const defaultInvoke: NativePasswordResetInvoke = (command, args) =>
   invokeDesktopWithAvailability(command, args);
@@ -54,11 +54,11 @@ const invokeNative = async <T>(
   invoke: NativePasswordResetInvoke = defaultInvoke
 ): Promise<T> => {
   try {
-    const result = await invoke<T>(command, args);
+    const result = await invoke(command, args);
     if (!result.available || result.value === undefined) {
       throw new Error('Native password reset is unavailable.');
     }
-    return result.value;
+    return result.value as T;
   } catch (error) {
     if (error instanceof Error && error.message.includes('unavailable')) {
       throw error;
