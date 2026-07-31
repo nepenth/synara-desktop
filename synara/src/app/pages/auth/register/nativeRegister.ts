@@ -108,9 +108,7 @@ const mapNativeError = (error: unknown): NativeRegisterError => {
     const e = error as NativeRegisterCommandError;
     const code = typeof e.code === 'string' ? e.code : RegisterErrorCode.Unknown;
     const message =
-      typeof e.message === 'string' && e.message.trim()
-        ? e.message
-        : 'Native registration failed.';
+      typeof e.message === 'string' && e.message.trim() ? e.message : 'Native registration failed.';
     return new NativeRegisterError(code, message);
   }
   if (error instanceof Error) {
