@@ -64,4 +64,4 @@ L1-only open PRs (notify polish, call-state, extra media orthogonal, MiniMax hel
 
 ## Orchestration
 
-Recurring loop contract: [d0-orchestrator-loop.md](d0-orchestrator-loop.md).
+Recurring loop contract: [full-vertical-policy.md](full-vertical-policy.md).
