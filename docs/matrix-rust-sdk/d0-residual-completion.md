@@ -4,11 +4,11 @@
 
 | Field                     | Value                                                                                                                                                                                         |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status                    | **Active — tip `6689ba8d` after #269; #240 HOLD; V-ROOMS.2c this PR [#268](https://github.com/nepenth/synara-desktop/pull/268); also #266/#264** (2026-07-31) |
+| Status                    | **Active — tip `706bf608` after #264; this PR #268 V-ROOMS.2c; also #266 V-AUTH.4b; #240 HOLD** (2026-07-31) |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                            |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)                                                                                                                                     |
-| Current integration tip   | `6689ba8d` ([#269](https://github.com/nepenth/synara-desktop/pull/269) docs after #265) |
-| Active PRs                | **This PR** [#268](https://github.com/nepenth/synara-desktop/pull/268) V-ROOMS.2c; [#266](https://github.com/nepenth/synara-desktop/pull/266) V-AUTH.4b; [#264](https://github.com/nepenth/synara-desktop/pull/264) sticker/GIF; [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD; supersede [#267](https://github.com/nepenth/synara-desktop/pull/267) |
+| Current integration tip   | `706bf608` ([#264](https://github.com/nepenth/synara-desktop/pull/264) sticker/GIF after #269) |
+| Active PRs                | **This PR** [#268](https://github.com/nepenth/synara-desktop/pull/268) V-ROOMS.2c; [#266](https://github.com/nepenth/synara-desktop/pull/266) V-AUTH.4b; [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD |
 
 ## Policy trigger
 
