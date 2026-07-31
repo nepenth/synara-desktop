@@ -20,8 +20,7 @@ export const mDirectAtom = atom<Set<string>, [MDirectAction], undefined>(
   }
 );
 
-export const mDirectRoomsFromNativeSnapshot = (roomIds: string[]): Set<string> =>
-  new Set(roomIds);
+export const mDirectRoomsFromNativeSnapshot = (roomIds: string[]): Set<string> => new Set(roomIds);
 
 /**
  * Drive DM room-id set from the native Rust `m.direct` projection.
