@@ -649,18 +649,15 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       try {
         setSendingMessage(true);
         setSendError(undefined);
-        const nativeOwner =
-          msgType === MsgType.Text
-            ? await sendPlainTextWithNativeOwner({
-                roomId,
-                body,
-                formattedBody:
-                  replyDraft || !customHtmlEqualsPlainText(formattedBody, body)
-                    ? formattedBody
-                    : undefined,
-                replyTo: replyDraft?.eventId,
-              })
-            : 'legacy';
+        const nativeOwner = await sendPlainTextWithNativeOwner({
+          roomId,
+          body,
+          msgType,
+          formattedBody: content.formatted_body,
+          mentionUserIds: Array.from(mentionData.users),
+          mentionRoom: mentionData.room,
+          replyTo: replyDraft?.eventId,
+        });
         if (nativeOwner === 'legacy') {
           await mx.sendMessage(roomId, content as any);
         }
