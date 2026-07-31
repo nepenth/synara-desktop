@@ -17,9 +17,8 @@ flow that still requires SSO) is unsupported. The OIDC account-management
 dashboard and its session-management actions remain unchanged as external
 account-management routes, not as desktop authentication.
 
-The generic token foundation remains in the auth core without a desktop route.
-Whether it becomes a product capability is reserved for an explicit V-AUTH.2
-decision.
+Desktop `m.login.token` product login is not retained (**V-AUTH.2**). Password
+login remains the desktop product authentication path.
 
 ## Historical V-CRYPTO.7 retained operating path
 
