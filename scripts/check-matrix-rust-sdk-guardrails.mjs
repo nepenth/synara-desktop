@@ -356,7 +356,9 @@ const CLIENT_BUILDER_ONLY_PATTERNS = [
 ];
 
 /**
- * Password/token login APIs allowed only under `matrix/auth/` (P3.2).
+ * Password login APIs allowed only under `matrix/auth/` (P3.2 / V-AUTH.2).
+ * `.login_token` remains banned outside auth/ to prevent reintroduction of a
+ * desktop token-login product path; V-AUTH.2 does not retain m.login.token UI.
  * Still banned under client_builder/ and every other matrix/ module.
  */
 const AUTH_LOGIN_ONLY_PATTERNS = [

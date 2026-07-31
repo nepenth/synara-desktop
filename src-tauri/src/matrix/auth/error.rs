@@ -8,7 +8,7 @@ use std::fmt;
 use crate::matrix::ipc::MatrixIpcErrorCategory;
 
 /// Failure while validating input, discovering a homeserver, listing login
-/// flows, or performing password/token login.
+/// flows, or performing password login.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AuthError {
     /// User-supplied homeserver URL, server name, user id, or device name is empty/malformed.
@@ -27,9 +27,9 @@ pub enum AuthError {
     WellKnownNotFound { diagnostic_id: &'static str },
     /// Well-known missing, invalid, or homeserver lacks a required capability.
     UnsupportedCapability { diagnostic_id: &'static str },
-    /// Password/token login rejected (wrong credentials, forbidden, unknown token).
+    /// Password login rejected (wrong credentials, forbidden, unknown token).
     ///
-    /// Never includes the password, login token, or access token.
+    /// Never includes the password, one-time login token, or access token.
     AuthenticationRejected { diagnostic_id: &'static str },
     /// Homeserver reports the account is deactivated.
     UserDeactivated { diagnostic_id: &'static str },

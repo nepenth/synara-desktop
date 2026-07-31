@@ -1,16 +1,17 @@
-//! Password and token login against an unauthenticated Matrix Rust SDK client (P3.2).
+//! Password login against an unauthenticated Matrix Rust SDK client (P3.2 / V-AUTH.2).
 //!
 //! Uses SDK APIs only under this module:
-//! `client.matrix_auth().login_username(...).initial_device_display_name(...).await`
-//! and `login_token(...)`.
+//! `client.matrix_auth().login_username(...).initial_device_display_name(...).await`.
 //!
 //! D0.1 composes password login into the production Tauri command in
-//! [`super::product`]. Token login remains foundation-only. There is no
-//! dual-backend.
+//! [`super::product`]. **V-AUTH.2** closed desktop `m.login.token` product login as
+//! not retained (SSO token-completion UI was removed with V-AUTH.1; no standalone
+//! token-login product surface remains). There is no dual-backend and no one-time
+//! token product login path.
 //!
-//! Tokens remain on the SDK `Client` after success. [`LoginResult`] never carries
-//! access/refresh tokens — only privacy-safe identity fields for harness/status.
-//! Optional host-side persistence after login is
+//! Access/refresh tokens remain on the SDK `Client` after success. [`LoginResult`]
+//! never carries access/refresh tokens or password — only privacy-safe identity
+//! fields for harness/status. Optional host-side persistence after login is
 //! [`crate::matrix::lifecycle::persist_session_after_login`] (P3.5).
 
 use matrix_sdk::Client;
@@ -19,24 +20,24 @@ use super::device_name::{platform_device_display_name, DevicePlatform};
 use super::error::AuthError;
 
 /// How the caller authenticated (privacy-safe discriminator; no secrets).
+///
+/// Desktop product login is password-only after V-AUTH.2.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LoginMethodKind {
     Password,
-    Token,
 }
 
 impl LoginMethodKind {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Password => "password",
-            Self::Token => "token",
         }
     }
 }
 
-/// Privacy-safe outcome of a successful password or token login.
+/// Privacy-safe outcome of a successful password login.
 ///
-/// **Never** includes access_token, refresh_token, password, or login token.
+/// **Never** includes access_token, refresh_token, password, or one-time login token.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoginResult {
     pub user_id: String,
@@ -47,7 +48,7 @@ pub struct LoginResult {
     pub method: LoginMethodKind,
 }
 
-/// Options for password / token login (P3.2).
+/// Options for password login (P3.2).
 #[derive(Debug, Clone, Default)]
 pub struct LoginOptions {
     /// Initial device display name. Defaults to [`platform_device_display_name`].
@@ -111,39 +112,6 @@ pub async fn login_with_password(
     })
 }
 
-/// Log in with a one-time login token (not an access token).
-///
-/// Tokens must never be logged or placed on IPC error paths. This function only
-/// passes the token into the SDK login builder.
-pub async fn login_with_token(
-    client: &Client,
-    login_token: &str,
-    options: &LoginOptions,
-) -> Result<LoginResult, AuthError> {
-    validate_login_token_present(login_token)?;
-    let device_display_name = options.resolved_device_display_name();
-    validate_device_display_name(&device_display_name)?;
-
-    let mut builder = client
-        .matrix_auth()
-        .login_token(login_token)
-        .initial_device_display_name(&device_display_name);
-
-    if options.request_refresh_token {
-        builder = builder.request_refresh_token();
-    }
-
-    let response = builder.send().await.map_err(map_login_sdk_error)?;
-
-    Ok(LoginResult {
-        user_id: response.user_id.to_string(),
-        device_id: response.device_id.to_string(),
-        homeserver_url: client.homeserver().to_string(),
-        device_display_name,
-        method: LoginMethodKind::Token,
-    })
-}
-
 fn validate_user_id_or_localpart(raw: &str) -> Result<String, AuthError> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -174,16 +142,6 @@ fn validate_password_present(password: &str) -> Result<(), AuthError> {
         return Err(AuthError::InvalidInput {
             diagnostic_id: "p3.2-empty-password",
             reason: "password is empty",
-        });
-    }
-    Ok(())
-}
-
-fn validate_login_token_present(token: &str) -> Result<(), AuthError> {
-    if token.is_empty() {
-        return Err(AuthError::InvalidInput {
-            diagnostic_id: "p3.2-empty-login-token",
-            reason: "login token is empty",
         });
     }
     Ok(())
@@ -356,12 +314,14 @@ mod tests {
             validate_password_present("").unwrap_err().diagnostic_id(),
             "p3.2-empty-password"
         );
-        assert_eq!(
-            validate_login_token_present("")
-                .unwrap_err()
-                .diagnostic_id(),
-            "p3.2-empty-login-token"
-        );
+    }
+
+    #[test]
+    fn desktop_login_method_is_password_only() {
+        // V-AUTH.2: product does not retain m.login.token; only password remains.
+        assert_eq!(LoginMethodKind::Password.as_str(), "password");
+        let debug = format!("{:?}", LoginMethodKind::Password);
+        assert!(!debug.to_ascii_lowercase().contains("token"));
     }
 
     #[test]
