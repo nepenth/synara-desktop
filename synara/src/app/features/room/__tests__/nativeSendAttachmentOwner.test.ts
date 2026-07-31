@@ -18,6 +18,7 @@ test('native logged-in session is the sole composer attachment send owner', asyn
         bytes: [1, 2, 3],
       },
       replyTo: '$event:example.org',
+      threadRoot: '$root:example.org',
     },
     true,
     async (command, args) => {
@@ -48,6 +49,7 @@ test('native logged-in session is the sole composer attachment send owner', asyn
         mimeType: 'image/png',
         bytes: [1, 2, 3],
         replyTo: '$event:example.org',
+        threadRoot: '$root:example.org',
       },
     },
   ]);
@@ -72,6 +74,7 @@ test('web and native logged-out sessions retain the legacy owner', async () => {
     await sendAttachmentsWithNativeOwner(
       '!room:example.org',
       [{ filename: 'a.txt', mimeType: 'text/plain', bytes: [97] }],
+      undefined,
       undefined,
       true,
       async () => ({ available: true, value: { status: 'logged_out' } })

@@ -100,10 +100,23 @@ ${iosBuildStep}
           -- --nocapture
       - if: always()
         run: scripts/synapse-integration.sh reset
+  synapse-native-threads:
+    name: Synapse native thread-send proof
+    needs: [changes]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - run: scripts/synapse-integration.sh up
+      - run: >
+          cargo test --locked
+          live_native_thread_send_against_disposable_synapse_when_configured
+          -- --nocapture
+      - if: always()
+        run: scripts/synapse-integration.sh reset
   quality-gate:
     name: Quality gate
     if: always()
-    needs: [changes, validate, ios-tests, synapse-integration, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages]
+    needs: [changes, validate, ios-tests, synapse-integration, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads]
     runs-on: ubuntu-latest
     steps:
       - name: Require every scheduled client validation job
@@ -115,6 +128,7 @@ ${iosBuildStep}
           SYNAPSE_NATIVE_ATTACHMENTS_RESULT: \${{ needs.synapse-native-attachments.result }}
           SYNAPSE_NATIVE_POLLS_RESULT: \${{ needs.synapse-native-polls.result }}
           SYNAPSE_NATIVE_RICH_MESSAGES_RESULT: \${{ needs.synapse-native-rich-messages.result }}
+          SYNAPSE_NATIVE_THREADS_RESULT: \${{ needs.synapse-native-threads.result }}
           CHANGES_RESULT: \${{ needs.changes.result }}
         run: |
           set -euo pipefail
@@ -142,6 +156,7 @@ ${iosBuildStep}
           ok "Synapse native attachment proof" "$SYNAPSE_NATIVE_ATTACHMENTS_RESULT" || fail=1
           ok "Synapse native poll proof" "$SYNAPSE_NATIVE_POLLS_RESULT" || fail=1
           ok "Synapse native rich-message proof" "$SYNAPSE_NATIVE_RICH_MESSAGES_RESULT" || fail=1
+          ok "Synapse native thread-send proof" "$SYNAPSE_NATIVE_THREADS_RESULT" || fail=1
           if [[ "$fail" -ne 0 ]]; then
             exit 1
           fi
