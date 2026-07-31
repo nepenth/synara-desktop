@@ -449,10 +449,7 @@ async fn wait_for_room_event(
                 let raw = ev.into_raw();
                 let value: serde_json::Value =
                     serde_json::from_str(raw.json().get()).expect("event json");
-                let event_type = value
-                    .get("type")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
+                let event_type = value.get("type").and_then(|v| v.as_str()).unwrap_or("");
                 assert!(
                     event_type.contains("poll"),
                     "expected poll event type, got {event_type:?}"
