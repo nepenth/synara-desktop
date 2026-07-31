@@ -133,16 +133,16 @@ test("tracks full-vertical execution and requires per-vertical deletion policy",
   assert.match(rendered, /Current full-vertical product execution/);
   assert.match(rendered, /full-vertical-delete-per-vertical/);
   assert.match(rendered, /Wired \/ deletion open/);
-  assert.match(rendered, /208 files \/ 261 import lines current/);
+  assert.match(rendered, /200 files \/ 249 import lines current/);
   assert.match(rendered, /negative capability-owner\/file deletion delta/);
   assert.match(
     rendered,
     /Integration product state: `capability-cutover-in-progress`/
   );
-  assert.match(rendered, /Active slice: \*\*V-AUTH\.1\*\* \(PR #238\)/);
+  assert.match(rendered, /Active slice: \*\*V-SEND\.3\*\* \(PR #250\)/);
   assert.match(
     rendered,
-    /Completed under full policy: `V-CRYPTO\.1`, `V-CRYPTO\.2`, `V-CRYPTO\.3`, `V-CRYPTO\.4`, `V-CRYPTO\.5`, `V-CRYPTO\.6`, `V-CRYPTO\.7`/
+    /Completed under full policy: .*`V-AUTH\.1`.*`V-ROOMS\.5`/
   );
 
   const wrongPolicy = clone(status);
