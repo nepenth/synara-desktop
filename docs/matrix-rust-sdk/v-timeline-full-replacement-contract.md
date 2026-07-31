@@ -102,10 +102,11 @@ the exact returned stream, and rejects revision gaps or malformed operations
 instead of fetching through the JS timeline. The unselected virtualized
 presenter consumes only that product DTO and invokes only capability-gated
 native pagination/read/jump-latest commands plus capability-gated row actions
-(react, reply-draft, redact, report, pin, poll vote, call decline). It is not an
-active presenter or a fallback route: product selection, complete retained
-composer/message-menu parity, and live authenticated viewport proof remain
-absent. The initial unread/read-frontier open is
+(react, reply-draft, edit, forward target-room form, redact, report, pin/unpin,
+later save, poll vote, call decline) and surfaces reply/thread product fields.
+It is not an active presenter or a fallback route: product selection, full
+Message-menu/composer/room-picker parity, and live authenticated viewport proof
+remain absent. The initial unread/read-frontier open is
 native-owned. Normal opens now also carry a typed local viewport restore hint
 (`at_bottom`, `live_tail_event_id`, `updated_at_ms`, `restored_anchor_event_id`)
 and resolve placement with legacy-compatible precedence: unread beats

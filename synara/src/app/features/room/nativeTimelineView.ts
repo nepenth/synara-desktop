@@ -39,12 +39,28 @@ type NativeTimelineEventRowBase = {
   capabilities: NativeTimelineRowCapabilities;
 };
 
+export type NativeTimelineReplyPreview = {
+  eventId: string;
+  senderName: string;
+  body: string;
+};
+
+export type NativeTimelineThreadSummary = {
+  rootEventId: string;
+  replyCount: number;
+  latestEventId?: string;
+};
+
 type NativeTimelineMessageRow = NativeTimelineEventRowBase & {
   kind: 'message';
   body: string;
   formattedBody?: string;
   messageType?: string;
   edited: boolean;
+  /** Parent preview when this row is an in-reply message. */
+  reply?: NativeTimelineReplyPreview;
+  /** Thread root summary when this row owns a thread. */
+  thread?: NativeTimelineThreadSummary;
   reactions?: Array<{ key: string; count: number; own?: boolean }>;
   media?: NativeTimelineMediaHandle;
 };
