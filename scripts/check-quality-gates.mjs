@@ -289,7 +289,7 @@ function aggregateGateError(jobLines, expectedName, expectedNeeds) {
 }
 
 /**
- * CI quality gate after path filters: needs include `changes` plus the seven
+ * CI quality gate after path filters: needs include `changes` plus the eight
  * heavy jobs. `changes` must be success; heavy jobs may be success or skipped.
  */
 function pathFilteredCiAggregateError(jobLines) {
@@ -309,6 +309,7 @@ function pathFilteredCiAggregateError(jobLines) {
     "synapse-native-attachments",
     "synapse-native-polls",
     "synapse-native-rich-messages",
+    "synapse-native-threads",
   ];
   if (!sameList(getList(jobLines, "needs", 4), expectedNeeds)) {
     return `job needs must be exactly [${expectedNeeds.join(", ")}]`;
@@ -340,6 +341,9 @@ function pathFilteredCiAggregateError(jobLines) {
     const synapseNativeRichMessagesVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.synapse-native-rich-messages.result }}"
     )?.[0];
+    const synapseNativeThreadsVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.synapse-native-threads.result }}"
+    )?.[0];
     if (
       !changesVar ||
       !desktopVar ||
@@ -348,7 +352,8 @@ function pathFilteredCiAggregateError(jobLines) {
       !synapseNativeReactionsVar ||
       !synapseNativeAttachmentsVar ||
       !synapseNativePollsVar ||
-      !synapseNativeRichMessagesVar
+      !synapseNativeRichMessagesVar ||
+      !synapseNativeThreadsVar
     ) {
       continue;
     }
@@ -379,7 +384,8 @@ function pathFilteredCiAggregateError(jobLines) {
       !runText.includes(`"$${synapseNativeReactionsVar}"`) ||
       !runText.includes(`"$${synapseNativeAttachmentsVar}"`) ||
       !runText.includes(`"$${synapseNativePollsVar}"`) ||
-      !runText.includes(`"$${synapseNativeRichMessagesVar}"`)
+      !runText.includes(`"$${synapseNativeRichMessagesVar}"`) ||
+      !runText.includes(`"$${synapseNativeThreadsVar}"`)
     ) {
       continue;
     }
