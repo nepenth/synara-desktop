@@ -74,7 +74,10 @@ use crate::matrix::send::{
     normalize_poll, poll_response_content, poll_start_content, AttachmentEnqueue, AttachmentKind,
     AttachmentSendQueue, SendQueue,
 };
-use crate::matrix::spaces::{snapshot_space_parents, NativeSpaceParentsSnapshot};
+use crate::matrix::spaces::{
+    snapshot_space_hierarchy, snapshot_space_parents, NativeSpaceHierarchySnapshot,
+    NativeSpaceParentsSnapshot,
+};
 use crate::matrix::store::{
     get_or_create_store_key, AccountIdentity, KeyringStoreKeyVault, StoreKeyId, StoreKeyMaterial,
 };
@@ -1158,6 +1161,18 @@ pub async fn matrix_space_parents_snapshot(
 }
 
 #[tauri::command]
+pub async fn matrix_space_hierarchy_snapshot(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+) -> Result<NativeSpaceHierarchySnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    snapshot_space_hierarchy(&active.client, active.sync.session_generation(), &room_id)
+        .await
+        .map_err(map_space_hierarchy_error)
+}
+
+#[tauri::command]
 pub async fn matrix_mdirect_snapshot(
     state: State<'_, MatrixAuthState>,
 ) -> Result<NativeMDirectSnapshot, MatrixAuthCommandError> {
@@ -2059,6 +2074,14 @@ fn map_space_parents_error(diagnostic_id: &'static str) -> MatrixAuthCommandErro
     MatrixAuthCommandError::new(
         "Unknown",
         "The native Matrix space parent map is unavailable.",
+        diagnostic_id,
+    )
+}
+
+fn map_space_hierarchy_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "Unknown",
+        "The native Matrix space hierarchy is unavailable.",
         diagnostic_id,
     )
 }

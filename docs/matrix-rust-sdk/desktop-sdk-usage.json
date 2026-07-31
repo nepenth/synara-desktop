@@ -25,7 +25,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 105,
+          "fileCount": 104,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -109,9 +109,9 @@
         },
         "spaces": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 17,
+          "fileCount": 12,
           "listenerCandidateOccurrences": 0,
-          "methodCandidateOccurrences": 29,
+          "methodCandidateOccurrences": 27,
           "networkingOccurrences": 0
         },
         "sync_lifecycle": {
@@ -271,10 +271,6 @@
         },
         {
           "count": 2,
-          "name": "getRoomHierarchy"
-        },
-        {
-          "count": 2,
           "name": "invite"
         },
         {
@@ -384,8 +380,8 @@
           "importOccurrences": 48
         },
         "MatrixError": {
-          "fileCount": 36,
-          "importOccurrences": 36
+          "fileCount": 34,
+          "importOccurrences": 34
         },
         "MatrixEvent": {
           "fileCount": 32,
@@ -426,11 +422,6 @@
           "fileCount": 13,
           "importCount": 13,
           "path": "matrix-js-sdk/lib/types"
-        },
-        {
-          "fileCount": 6,
-          "importCount": 6,
-          "path": "matrix-js-sdk/lib/@types/spaces"
         },
         {
           "fileCount": 6,
@@ -543,11 +534,11 @@
           "valueImports": 42
         },
         {
-          "fileCount": 36,
-          "importCount": 36,
+          "fileCount": 34,
+          "importCount": 34,
           "name": "MatrixError",
           "typeImports": 0,
-          "valueImports": 36
+          "valueImports": 34
         },
         {
           "fileCount": 32,
@@ -557,11 +548,11 @@
           "valueImports": 25
         },
         {
-          "fileCount": 17,
-          "importCount": 17,
+          "fileCount": 18,
+          "importCount": 18,
           "name": "JoinRule",
           "typeImports": 0,
-          "valueImports": 17
+          "valueImports": 18
         },
         {
           "fileCount": 12,
@@ -618,13 +609,6 @@
           "name": "RoomEventHandlerMap",
           "typeImports": 0,
           "valueImports": 7
-        },
-        {
-          "fileCount": 6,
-          "importCount": 6,
-          "name": "IHierarchyRoom",
-          "typeImports": 0,
-          "valueImports": 6
         },
         {
           "fileCount": 6,
@@ -2880,7 +2864,7 @@
     },
     {
       "bucket": "component",
-      "categories": ["client_methods", "room_methods", "spaces"],
+      "categories": ["client_methods", "room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -2903,33 +2887,10 @@
             }
           ],
           "namespaceImport": null
-        },
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 4,
-          "module": "matrix-js-sdk/lib/@types/spaces",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IHierarchyRoom"
-            }
-          ],
-          "namespaceImport": null
         }
       ],
       "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "spaces",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 50,
-          "name": "getRoomHierarchy"
-        }
-      ],
+      "methodCandidates": [],
       "modelCoupling": ["MatrixClient", "Room"],
       "networking": [],
       "path": "synara/src/app/components/RoomSummaryLoader.tsx",
@@ -5232,7 +5193,6 @@
         "room_methods",
         "account_data",
         "room_lists",
-        "spaces",
         "uia_auth",
         "custom_raw_event_sends"
       ],
@@ -5275,21 +5235,6 @@
               "alias": null,
               "isTypeOnly": false,
               "name": "RoomJoinRulesEventContent"
-            }
-          ],
-          "namespaceImport": null
-        },
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 8,
-          "module": "matrix-js-sdk/lib/@types/spaces",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IHierarchyRoom"
             }
           ],
           "namespaceImport": null
@@ -5382,7 +5327,7 @@
     },
     {
       "bucket": "feature",
-      "categories": ["client_methods", "room_methods", "room_lists", "spaces"],
+      "categories": ["client_methods", "room_methods", "room_lists"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -5410,21 +5355,6 @@
             }
           ],
           "namespaceImport": null
-        },
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 23,
-          "module": "matrix-js-sdk/lib/@types/spaces",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IHierarchyRoom"
-            }
-          ],
-          "namespaceImport": null
         }
       ],
       "listenerCandidates": [],
@@ -5433,7 +5363,7 @@
           "category": "room_lists",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 50,
+          "line": 49,
           "name": "joinRoom"
         }
       ],
@@ -5444,7 +5374,7 @@
     },
     {
       "bucket": "feature",
-      "categories": ["client_methods", "room_methods", "spaces", "uia_auth"],
+      "categories": ["client_methods", "room_methods", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -5458,27 +5388,7 @@
             {
               "alias": null,
               "isTypeOnly": false,
-              "name": "MatrixError"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
               "name": "Room"
-            }
-          ],
-          "namespaceImport": null
-        },
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk/lib/@types/spaces",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IHierarchyRoom"
             }
           ],
           "namespaceImport": null
@@ -5497,46 +5407,46 @@
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 123,
+          "line": 122,
           "name": "getSafeUserId"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 126,
+          "line": 125,
           "name": "getSafeUserId"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 137,
+          "line": 136,
           "name": "getSafeUserId"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 180,
+          "line": 179,
           "name": "getSafeUserId"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 189,
+          "line": 188,
           "name": "getSafeUserId"
         }
       ],
-      "modelCoupling": ["MatrixError", "Room"],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/features/lobby/SpaceHierarchy.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": ["client_methods", "room_methods", "room_lists", "spaces"],
+      "categories": ["client_methods", "room_methods", "room_lists"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -5559,21 +5469,6 @@
             }
           ],
           "namespaceImport": null
-        },
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 22,
-          "module": "matrix-js-sdk/lib/@types/spaces",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IHierarchyRoom"
-            }
-          ],
-          "namespaceImport": null
         }
       ],
       "listenerCandidates": [],
@@ -5582,7 +5477,7 @@
           "category": "room_lists",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 116,
+          "line": 115,
           "name": "joinRoom"
         }
       ],
@@ -9818,7 +9713,7 @@
     },
     {
       "bucket": "hook",
-      "categories": ["client_methods", "room_methods", "spaces"],
+      "categories": ["room_methods", "spaces"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -9832,27 +9727,12 @@
             {
               "alias": null,
               "isTypeOnly": false,
-              "name": "MatrixError"
+              "name": "JoinRule"
             },
             {
               "alias": null,
               "isTypeOnly": false,
               "name": "Room"
-            }
-          ],
-          "namespaceImport": null
-        },
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 4,
-          "module": "matrix-js-sdk/lib/@types/spaces",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IHierarchyRoom"
             }
           ],
           "namespaceImport": null
@@ -9864,32 +9744,25 @@
           "category": "spaces",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 67,
+          "line": 70,
           "name": "isSpaceRoom"
         },
         {
           "category": "spaces",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 117,
+          "line": 120,
           "name": "isSpaceRoom"
         },
         {
           "category": "spaces",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 192,
+          "line": 195,
           "name": "isSpaceRoom"
-        },
-        {
-          "category": "spaces",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 289,
-          "name": "getRoomHierarchy"
         }
       ],
-      "modelCoupling": ["MatrixError", "Room"],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useSpaceHierarchy.ts",
       "role": "production"
