@@ -116,9 +116,6 @@ have already deleted their implementations.
 ## Execution order (binding)
 
 1. Treat V-ROOMS.1 as integrated at `2c48fd45a08200a6e3491f100912f086e8458b3b`; retain its measured production 197→194 and repository-wide 211→208 deletion deltas.
-| **V-AUTH.3** | UIA / login-flow discovery for product auth | **DONE #276** at `4d33227f` — native `matrix_login_flows`; AuthFlowsLoader live js client deleted; allowlist **175→171**; production **172→169** | Discovery re-homed fail-closed |
-| **V-AUTH.3b** | Login multi-stage UIA stage execution | **DONE #280** at `f4addd6f` — product non-retention; login password-only single-shot; no invented `matrix_uia_*` IPC | See [v-auth-3b-uia-login-stage.md](v-auth-3b-uia-login-stage.md) |
-| **V-AUTH.3p** | Password login desktop fail-closed (`loginUtil`) | **Active this PR** [#279](https://github.com/nepenth/synara-desktop/pull/279) — delete js `createClient`/`loginRequest` fallback; desktop only `matrix_login_password`; production **169→167** / allowlist **171→169** | Native password login only; no desktop js client fallback; SDK-neutral owners |
 5. **V-BURN** final convergence audit + npm dependency removal
 6. **Only then** new verticals: media display polish beyond send, widgets, registry, calls, etc. — each as full verticals under [full-vertical-policy.md](full-vertical-policy.md)
 

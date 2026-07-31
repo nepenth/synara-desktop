@@ -61,10 +61,6 @@ Update rules:
 
 ## Work log (newest first)
 
-### 2026-07-31 — tip after #282 V-SEND.R-POLL-THREAD
-
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
 ### 2026-07-31 — desktop password login fail-closed (this PR)
 
 | When (UTC) | Item | Result | Notes |
@@ -74,16 +70,6 @@ Update rules:
 | current | **V-SEND.R-POLL-THREAD** | **DONE #282** at `42ef9127` | Native poll `threadRoot`/`replyTo`. |
 | current | **V-AUTH.3 loginFlows** | **DONE #276** at `4d33227f` | Native discovery; allowlist **175→171**. Stage residual closed as non-retention in #280. |
 | current | **V-TIMELINE** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | No cutover. |
-| current | **V-TIMELINE** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | No cutover. |
-
-
-### 2026-07-31 — desktop password login fail-closed (this PR)
-
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **Password loginUtil residual** | **Active this PR** | Desktop password login is **only** `matrix_login_password`; delete js `createClient`/`loginRequest` fallback from `loginUtil.ts`; SDK-neutralize `PasswordLoginForm`/`loginUtil`; allowlist **171→169**; production import files **169→167**. Tip base `e6db76c7` after #278/#277/#276. [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. See [v-auth-password-loginutil.md](v-auth-password-loginutil.md). |
-| current | **V-AUTH.3 loginFlows** | **DONE #276** at `4d33227f` | Native discovery; allowlist **175→171**. UIA stage execution residual remains. |
-| current | **Docs after #276** | **DONE #278** at `e6db76c7` | Progress/residual tip alignment. |
 
 ### 2026-07-31 — tip after #276 V-AUTH.3
 
