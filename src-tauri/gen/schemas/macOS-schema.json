@@ -561,24 +561,6 @@
           "markdownDescription": "Enables the matrix_backup_status command without any pre-configured scope."
         },
         {
-          "description": "Enables the matrix_composer_clear_reply_draft command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-composer-clear-reply-draft",
-          "markdownDescription": "Enables the matrix_composer_clear_reply_draft command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_composer_get_reply_draft command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-composer-get-reply-draft",
-          "markdownDescription": "Enables the matrix_composer_get_reply_draft command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_composer_set_reply_draft command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-composer-set-reply-draft",
-          "markdownDescription": "Enables the matrix_composer_set_reply_draft command without any pre-configured scope."
-        },
-        {
           "description": "Enables the matrix_cross_signing_setup command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-cross-signing-setup",
@@ -663,40 +645,10 @@
           "markdownDescription": "Enables the matrix_invites_snapshot command without any pre-configured scope."
         },
         {
-          "description": "Enables the matrix_later_clear_completed command without any pre-configured scope.",
+          "description": "Enables the matrix_login_flows command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-matrix-later-clear-completed",
-          "markdownDescription": "Enables the matrix_later_clear_completed command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_later_complete command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-later-complete",
-          "markdownDescription": "Enables the matrix_later_complete command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_later_mark_reminded command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-later-mark-reminded",
-          "markdownDescription": "Enables the matrix_later_mark_reminded command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_later_snapshot command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-later-snapshot",
-          "markdownDescription": "Enables the matrix_later_snapshot command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_later_snooze command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-later-snooze",
-          "markdownDescription": "Enables the matrix_later_snooze command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_later_upsert command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-later-upsert",
-          "markdownDescription": "Enables the matrix_later_upsert command without any pre-configured scope."
+          "const": "allow-matrix-login-flows",
+          "markdownDescription": "Enables the matrix_login_flows command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_login_password command without any pre-configured scope.",
@@ -819,36 +771,6 @@
           "markdownDescription": "Enables the matrix_room_list_snapshot command without any pre-configured scope."
         },
         {
-          "description": "Enables the matrix_room_notes_complete_todo command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-room-notes-complete-todo",
-          "markdownDescription": "Enables the matrix_room_notes_complete_todo command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_room_notes_delete command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-room-notes-delete",
-          "markdownDescription": "Enables the matrix_room_notes_delete command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_room_notes_move_todo command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-room-notes-move-todo",
-          "markdownDescription": "Enables the matrix_room_notes_move_todo command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_room_notes_snapshot command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-room-notes-snapshot",
-          "markdownDescription": "Enables the matrix_room_notes_snapshot command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_room_notes_upsert command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-room-notes-upsert",
-          "markdownDescription": "Enables the matrix_room_notes_upsert command without any pre-configured scope."
-        },
-        {
           "description": "Enables the matrix_secret_storage_bootstrap command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-secret-storage-bootstrap",
@@ -939,48 +861,6 @@
           "markdownDescription": "Enables the matrix_sync_status command without any pre-configured scope."
         },
         {
-          "description": "Enables the matrix_timeline_call_decline command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-timeline-call-decline",
-          "markdownDescription": "Enables the matrix_timeline_call_decline command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_timeline_close command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-timeline-close",
-          "markdownDescription": "Enables the matrix_timeline_close command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_timeline_edit_text command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-timeline-edit-text",
-          "markdownDescription": "Enables the matrix_timeline_edit_text command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_timeline_event_readback command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-timeline-event-readback",
-          "markdownDescription": "Enables the matrix_timeline_event_readback command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_timeline_forward_media command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-timeline-forward-media",
-          "markdownDescription": "Enables the matrix_timeline_forward_media command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_timeline_forward_text command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-timeline-forward-text",
-          "markdownDescription": "Enables the matrix_timeline_forward_text command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_timeline_jump_latest command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-timeline-jump-latest",
-          "markdownDescription": "Enables the matrix_timeline_jump_latest command without any pre-configured scope."
-        },
-        {
           "description": "Enables the matrix_timeline_open command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-timeline-open",
@@ -993,52 +873,16 @@
           "markdownDescription": "Enables the matrix_timeline_paginate command without any pre-configured scope."
         },
         {
-          "description": "Enables the matrix_timeline_pin command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-timeline-pin",
-          "markdownDescription": "Enables the matrix_timeline_pin command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_timeline_poll_vote command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-timeline-poll-vote",
-          "markdownDescription": "Enables the matrix_timeline_poll_vote command without any pre-configured scope."
-        },
-        {
           "description": "Enables the matrix_timeline_reaction_toggle command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-timeline-reaction-toggle",
           "markdownDescription": "Enables the matrix_timeline_reaction_toggle command without any pre-configured scope."
         },
         {
-          "description": "Enables the matrix_timeline_redact command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-timeline-redact",
-          "markdownDescription": "Enables the matrix_timeline_redact command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_timeline_report command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-timeline-report",
-          "markdownDescription": "Enables the matrix_timeline_report command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_timeline_set_read_state command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-timeline-set-read-state",
-          "markdownDescription": "Enables the matrix_timeline_set_read_state command without any pre-configured scope."
-        },
-        {
           "description": "Enables the matrix_timeline_snapshot command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-timeline-snapshot",
           "markdownDescription": "Enables the matrix_timeline_snapshot command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_timeline_unpin command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-timeline-unpin",
-          "markdownDescription": "Enables the matrix_timeline_unpin command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_typing_set command without any pre-configured scope.",
@@ -1317,24 +1161,6 @@
           "markdownDescription": "Denies the matrix_backup_status command without any pre-configured scope."
         },
         {
-          "description": "Denies the matrix_composer_clear_reply_draft command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-composer-clear-reply-draft",
-          "markdownDescription": "Denies the matrix_composer_clear_reply_draft command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_composer_get_reply_draft command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-composer-get-reply-draft",
-          "markdownDescription": "Denies the matrix_composer_get_reply_draft command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_composer_set_reply_draft command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-composer-set-reply-draft",
-          "markdownDescription": "Denies the matrix_composer_set_reply_draft command without any pre-configured scope."
-        },
-        {
           "description": "Denies the matrix_cross_signing_setup command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-cross-signing-setup",
@@ -1419,40 +1245,10 @@
           "markdownDescription": "Denies the matrix_invites_snapshot command without any pre-configured scope."
         },
         {
-          "description": "Denies the matrix_later_clear_completed command without any pre-configured scope.",
+          "description": "Denies the matrix_login_flows command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-matrix-later-clear-completed",
-          "markdownDescription": "Denies the matrix_later_clear_completed command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_later_complete command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-later-complete",
-          "markdownDescription": "Denies the matrix_later_complete command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_later_mark_reminded command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-later-mark-reminded",
-          "markdownDescription": "Denies the matrix_later_mark_reminded command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_later_snapshot command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-later-snapshot",
-          "markdownDescription": "Denies the matrix_later_snapshot command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_later_snooze command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-later-snooze",
-          "markdownDescription": "Denies the matrix_later_snooze command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_later_upsert command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-later-upsert",
-          "markdownDescription": "Denies the matrix_later_upsert command without any pre-configured scope."
+          "const": "deny-matrix-login-flows",
+          "markdownDescription": "Denies the matrix_login_flows command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_login_password command without any pre-configured scope.",
@@ -1575,36 +1371,6 @@
           "markdownDescription": "Denies the matrix_room_list_snapshot command without any pre-configured scope."
         },
         {
-          "description": "Denies the matrix_room_notes_complete_todo command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-room-notes-complete-todo",
-          "markdownDescription": "Denies the matrix_room_notes_complete_todo command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_room_notes_delete command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-room-notes-delete",
-          "markdownDescription": "Denies the matrix_room_notes_delete command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_room_notes_move_todo command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-room-notes-move-todo",
-          "markdownDescription": "Denies the matrix_room_notes_move_todo command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_room_notes_snapshot command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-room-notes-snapshot",
-          "markdownDescription": "Denies the matrix_room_notes_snapshot command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_room_notes_upsert command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-room-notes-upsert",
-          "markdownDescription": "Denies the matrix_room_notes_upsert command without any pre-configured scope."
-        },
-        {
           "description": "Denies the matrix_secret_storage_bootstrap command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-secret-storage-bootstrap",
@@ -1695,48 +1461,6 @@
           "markdownDescription": "Denies the matrix_sync_status command without any pre-configured scope."
         },
         {
-          "description": "Denies the matrix_timeline_call_decline command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-timeline-call-decline",
-          "markdownDescription": "Denies the matrix_timeline_call_decline command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_timeline_close command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-timeline-close",
-          "markdownDescription": "Denies the matrix_timeline_close command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_timeline_edit_text command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-timeline-edit-text",
-          "markdownDescription": "Denies the matrix_timeline_edit_text command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_timeline_event_readback command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-timeline-event-readback",
-          "markdownDescription": "Denies the matrix_timeline_event_readback command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_timeline_forward_media command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-timeline-forward-media",
-          "markdownDescription": "Denies the matrix_timeline_forward_media command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_timeline_forward_text command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-timeline-forward-text",
-          "markdownDescription": "Denies the matrix_timeline_forward_text command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_timeline_jump_latest command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-timeline-jump-latest",
-          "markdownDescription": "Denies the matrix_timeline_jump_latest command without any pre-configured scope."
-        },
-        {
           "description": "Denies the matrix_timeline_open command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-timeline-open",
@@ -1749,52 +1473,16 @@
           "markdownDescription": "Denies the matrix_timeline_paginate command without any pre-configured scope."
         },
         {
-          "description": "Denies the matrix_timeline_pin command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-timeline-pin",
-          "markdownDescription": "Denies the matrix_timeline_pin command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_timeline_poll_vote command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-timeline-poll-vote",
-          "markdownDescription": "Denies the matrix_timeline_poll_vote command without any pre-configured scope."
-        },
-        {
           "description": "Denies the matrix_timeline_reaction_toggle command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-timeline-reaction-toggle",
           "markdownDescription": "Denies the matrix_timeline_reaction_toggle command without any pre-configured scope."
         },
         {
-          "description": "Denies the matrix_timeline_redact command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-timeline-redact",
-          "markdownDescription": "Denies the matrix_timeline_redact command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_timeline_report command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-timeline-report",
-          "markdownDescription": "Denies the matrix_timeline_report command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_timeline_set_read_state command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-timeline-set-read-state",
-          "markdownDescription": "Denies the matrix_timeline_set_read_state command without any pre-configured scope."
-        },
-        {
           "description": "Denies the matrix_timeline_snapshot command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-timeline-snapshot",
           "markdownDescription": "Denies the matrix_timeline_snapshot command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_timeline_unpin command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-timeline-unpin",
-          "markdownDescription": "Denies the matrix_timeline_unpin command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_typing_set command without any pre-configured scope.",
