@@ -7,7 +7,7 @@ use matrix_sdk::{
         events::direct::{DirectEventContent, OwnedDirectUserIdentifier},
         OwnedRoomId, UserId,
     },
-    Client,
+    Client, RoomState,
 };
 use serde::Serialize;
 
@@ -16,6 +16,8 @@ use serde::Serialize;
 pub struct NativeMDirectSnapshot {
     pub session_generation: u64,
     pub room_ids: Vec<String>,
+    /// User keys in `m.direct` that still have at least one joined DM room.
+    pub user_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -30,7 +32,12 @@ pub async fn snapshot_mdirect(
     session_generation: u64,
 ) -> Result<NativeMDirectSnapshot, &'static str> {
     let content = load_mdirect_content(client).await?;
-    Ok(snapshot_from_content(content, session_generation))
+    let joined_rooms = joined_room_ids(client);
+    Ok(snapshot_from_content(
+        content,
+        &joined_rooms,
+        session_generation,
+    ))
 }
 
 pub async fn add_room_to_mdirect(
@@ -100,19 +107,38 @@ async fn fetch_mdirect_content(client: &Client) -> Result<DirectEventContent, &'
     })
 }
 
+fn joined_room_ids(client: &Client) -> BTreeSet<OwnedRoomId> {
+    client
+        .joined_rooms()
+        .into_iter()
+        .filter(|room| room.state() == RoomState::Joined)
+        .map(|room| room.room_id().to_owned())
+        .collect()
+}
+
 fn snapshot_from_content(
     content: DirectEventContent,
+    joined_rooms: &BTreeSet<OwnedRoomId>,
     session_generation: u64,
 ) -> NativeMDirectSnapshot {
     let mut room_ids = BTreeSet::new();
-    for rooms in content.values() {
+    let mut user_ids = BTreeSet::new();
+    for (user, rooms) in content.iter() {
+        let mut has_joined = false;
         for room_id in rooms {
             room_ids.insert(room_id.to_string());
+            if joined_rooms.contains(room_id) {
+                has_joined = true;
+            }
+        }
+        if has_joined {
+            user_ids.insert(user.to_string());
         }
     }
     NativeMDirectSnapshot {
         session_generation,
         room_ids: room_ids.into_iter().collect(),
+        user_ids: user_ids.into_iter().collect(),
     }
 }
 
@@ -160,10 +186,28 @@ mod tests {
         let snap = NativeMDirectSnapshot {
             session_generation: 4,
             room_ids: vec!["!dm:example.org".into()],
+            user_ids: vec!["@bob:example.org".into()],
         };
         let value = serde_json::to_value(&snap).expect("serialize");
         assert_eq!(value["sessionGeneration"], 4);
         assert_eq!(value["roomIds"][0], "!dm:example.org");
+        assert_eq!(value["userIds"][0], "@bob:example.org");
+    }
+
+    #[test]
+    fn snapshot_user_ids_require_joined_room() {
+        let alice: OwnedDirectUserIdentifier = user_id!("@alice:example.org").into();
+        let bob: OwnedDirectUserIdentifier = user_id!("@bob:example.org").into();
+        let joined = owned_room_id!("!joined:example.org");
+        let left = owned_room_id!("!left:example.org");
+        let mut content = DirectEventContent::default();
+        content.insert(alice.clone(), vec![joined.clone()]);
+        content.insert(bob, vec![left]);
+        let mut joined_rooms = BTreeSet::new();
+        joined_rooms.insert(joined);
+        let snap = snapshot_from_content(content, &joined_rooms, 1);
+        assert_eq!(snap.user_ids, vec!["@alice:example.org".to_string()]);
+        assert_eq!(snap.room_ids.len(), 2);
     }
 
     #[test]

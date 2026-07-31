@@ -11,8 +11,8 @@
 | Date                    | 2026-07-31 (America/New_York)                                                                                                                                                                         |
 | Integration branch      | `feature/matrix-rust-sdk-full-replacement`                                                                                                                                                            |
 | Execution model         | Primary Codex and every implementation/review sub-agent: `gpt-5.6-sol`, medium reasoning                                                                                                              |
-| Current integration tip | `0fb0fe425ae932e27445b8054f3a14d628e5a869` — V-ROOMS.5w [#251](https://github.com/nepenth/synara-desktop/pull/251) merged (after V-ROOMS.5 read [#249](https://github.com/nepenth/synara-desktop/pull/249) at `d17ab2c`) |
-| Active PRs              | Draft V-SEND.3 polls [#250](https://github.com/nepenth/synara-desktop/pull/250) (CI→merge in flight; rebase after #251); [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE **HOLD** |
+| Current integration tip | `31b4a30b6fbbf0c6304821dd42eafd783aaea84e` — docs [#243](https://github.com/nepenth/synara-desktop/pull/243) merged after V-ROOMS.5w [#251](https://github.com/nepenth/synara-desktop/pull/251) at `0fb0fe4` |
+| Active PRs              | Draft V-ROOMS.5r m.direct users; V-SEND.3 [#250](https://github.com/nepenth/synara-desktop/pull/250); [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE **HOLD** |
 | Policy                  | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                                    |
 | Operating path          | [operating-path-contract.md](operating-path-contract.md)                                                                                                                                              |
 | Binding queue           | [d0-residual-completion.md](d0-residual-completion.md)                                                                                                                                                |
@@ -47,9 +47,10 @@ obsolete tests/types before closure.
 9. V-SEND.1 [#248](https://github.com/nepenth/synara-desktop/pull/248) is merged at `90be0f4`.
 10. V-ROOMS.5 read [#249](https://github.com/nepenth/synara-desktop/pull/249) is merged at `d17ab2c` (candidate `708aef7`); production **189→187**, repository-wide **202→200**, allowlist **196→194**.
 11. V-ROOMS.5w writers [#251](https://github.com/nepenth/synara-desktop/pull/251) is merged at `0fb0fe4` (candidate `e4e2639`); native `matrix_mdirect_add` / `matrix_mdirect_remove`; JS writer helpers deleted; importers **187→187**.
-12. Finish **V-SEND.3** [#250](https://github.com/nepenth/synara-desktop/pull/250) (another agent owns CI→merge): Synapse native poll proof Confirmed on `501242c`; rebase onto tip `0fb0fe4` after #251, then undraft/merge when Validate/Quality green. Keep V-TIMELINE [#240](https://github.com/nepenth/synara-desktop/pull/240) as parallel **HOLD** — do not select the presenter or delete `RoomTimeline.tsx` until the full action/media route and runtime proof are complete.
-13. Run V-BURN only as the final convergence audit and npm dependency/bootstrap/store cleanup.
-14. Resume new media/widgets/notifications/calls verticals only after the residual queue allows.
+12. Continue **V-ROOMS.5r** native `m.direct` user list: extend `matrix_mdirect_snapshot.userIds` (joined-filtered) → `mDirectUsersAtom`; delete JS AccountData ownership from `useDirectUsers`.
+13. Finish **V-SEND.3** [#250](https://github.com/nepenth/synara-desktop/pull/250) (parallel ownership). Keep V-TIMELINE [#240](https://github.com/nepenth/synara-desktop/pull/240) as parallel **HOLD** — do not select the presenter or delete `RoomTimeline.tsx` until the full action/media route and runtime proof are complete.
+14. Run V-BURN only as the final convergence audit and npm dependency/bootstrap/store cleanup.
+15. Resume new media/widgets/notifications/calls verticals only after the residual queue allows.
 
 ## Current accounting
 
