@@ -57,7 +57,7 @@ use crate::matrix::devices::{
 };
 use crate::matrix::lifecycle::{
     clear_session_material, persist_session_after_login, restore_session_from_vault,
-    KeyringSessionMaterialVault,
+    restore_session_onto_client, KeyringSessionMaterialVault, SessionMaterial,
 };
 use crate::matrix::room_keys::{
     live::{
@@ -509,28 +509,25 @@ async fn install_session_from_register_secrets(
     let app_data_root = app_data_root(app)?;
     let client = build_client(&app_data_root, live_identity.clone()).await?;
 
-    let user_id = UserId::parse(secrets.user_id.as_str())
-        .map_err(|_| MatrixAuthCommandError::invalid_input("v-auth.4b-register-user-id-parse"))?;
-    let matrix_session = MatrixSession {
-        meta: SessionMeta {
-            user_id,
-            device_id: secrets.device_id.as_str().into(),
-        },
-        tokens: SessionTokens {
-            access_token: secrets.access_token.to_string(),
-            refresh_token: secrets
-                .refresh_token
-                .as_ref()
-                .map(|token| token.to_string()),
-        },
-    };
-    client.restore_session(matrix_session).await.map_err(|_| {
-        MatrixAuthCommandError::new(
-            "Unknown",
-            "Failed to restore the native Matrix session after registration.",
-            "v-auth.4b-register-restore-failed",
-        )
+    // Session install must go through lifecycle (guardrail: no Client::restore_session under matrix/auth/).
+    let material = SessionMaterial::from_matrix_tokens(
+        &live_identity,
+        secrets.device_id.as_str(),
+        secrets.access_token.as_str(),
+        secrets.refresh_token.as_deref(),
+    )
+    .map_err(|_| {
+        MatrixAuthCommandError::invalid_input("v-auth.4b-register-session-material-invalid")
     })?;
+    restore_session_onto_client(&client, &live_identity, &material)
+        .await
+        .map_err(|_| {
+            MatrixAuthCommandError::new(
+                "Unknown",
+                "Failed to restore the native Matrix session after registration.",
+                "v-auth.4b-register-restore-failed",
+            )
+        })?;
 
     ensure_crypto_ready(&client).await?;
     let session_generation = state.next_generation();
