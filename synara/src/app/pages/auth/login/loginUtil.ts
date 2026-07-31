@@ -170,8 +170,7 @@ export const loginPassword = async (
 ): Promise<PasswordLoginResponse> => {
   const isDesktop = options.isDesktop ?? isSynaraDesktop;
   const invoke: PasswordLoginInvoke =
-    options.invoke ??
-    ((command, args) => invokeDesktopWithAvailability(command, args));
+    options.invoke ?? ((command, args) => invokeDesktopWithAvailability(command, args));
 
   if (!isDesktop()) {
     throw new PasswordLoginError(
@@ -194,10 +193,7 @@ export const loginPassword = async (
       password,
     });
     if (!result.available || !result.value) {
-      throw new PasswordLoginError(
-        LoginError.Unknown,
-        'Native password login is unavailable.'
-      );
+      throw new PasswordLoginError(LoginError.Unknown, 'Native password login is unavailable.');
     }
     return {
       native: true,
