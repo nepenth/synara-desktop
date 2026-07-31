@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-later-mark-reminded"
+description = "Enables the matrix_later_mark_reminded command without any pre-configured scope."
+commands.allow = ["matrix_later_mark_reminded"]
+
+[[permission]]
+identifier = "deny-matrix-later-mark-reminded"
+description = "Denies the matrix_later_mark_reminded command without any pre-configured scope."
+commands.deny = ["matrix_later_mark_reminded"]

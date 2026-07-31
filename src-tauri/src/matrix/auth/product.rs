@@ -37,8 +37,11 @@ use zeroize::Zeroize;
 
 use super::{login_with_password, normalize_homeserver_url, AuthError, LoginOptions};
 use crate::matrix::account_data::{
-    add_room_to_mdirect, remove_room_from_mdirect, snapshot_mdirect, NativeMDirectMutationResult,
-    NativeMDirectSnapshot,
+    clear_completed_later_live, complete_later_item_live, complete_room_todo_item_live,
+    delete_room_note_item_live, mark_later_reminded_live, move_room_todo_item_live, snapshot_later,
+    snapshot_mdirect, snapshot_room_notes, snooze_later_item_live, upsert_later_item,
+    upsert_room_note_item, NativeLaterSnapshot, NativeMDirectSnapshot, NativeRoomNotesSnapshot,
+    RoomNoteMoveDirection, SynaraLaterItem, SynaraRoomNoteItem,
 };
 use crate::matrix::backup::live::{
     self as live_backup, NativeBackupOperationResult, NativeBackupStatus,
@@ -1149,28 +1152,194 @@ pub async fn matrix_mdirect_snapshot(
 }
 
 #[tauri::command]
-pub async fn matrix_mdirect_add(
+pub async fn matrix_later_snapshot(
     state: State<'_, MatrixAuthState>,
-    room_id: String,
-    user_id: String,
-) -> Result<NativeMDirectMutationResult, MatrixAuthCommandError> {
+) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
     let session = state.session.lock().await;
     let active = require_session(session.as_ref())?;
-    add_room_to_mdirect(&active.client, &room_id, &user_id)
+    snapshot_later(&active.client, active.sync.session_generation())
         .await
-        .map_err(map_mdirect_error)
+        .map_err(map_later_notes_error)
 }
 
 #[tauri::command]
-pub async fn matrix_mdirect_remove(
+pub async fn matrix_later_upsert(
     state: State<'_, MatrixAuthState>,
-    room_id: String,
-) -> Result<NativeMDirectMutationResult, MatrixAuthCommandError> {
+    item: SynaraLaterItem,
+) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
     let session = state.session.lock().await;
     let active = require_session(session.as_ref())?;
-    remove_room_from_mdirect(&active.client, &room_id)
+    upsert_later_item(&active.client, active.sync.session_generation(), item)
         .await
-        .map_err(map_mdirect_error)
+        .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
+pub async fn matrix_later_complete(
+    state: State<'_, MatrixAuthState>,
+    item_id: String,
+    completed_at: Option<f64>,
+) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    let completed_at = completed_at.unwrap_or_else(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as f64)
+            .unwrap_or(0.0)
+    });
+    complete_later_item_live(
+        &active.client,
+        active.sync.session_generation(),
+        item_id,
+        completed_at,
+    )
+    .await
+    .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
+pub async fn matrix_later_snooze(
+    state: State<'_, MatrixAuthState>,
+    item_id: String,
+    due_ts: f64,
+) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    snooze_later_item_live(
+        &active.client,
+        active.sync.session_generation(),
+        item_id,
+        due_ts,
+    )
+    .await
+    .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
+pub async fn matrix_later_clear_completed(
+    state: State<'_, MatrixAuthState>,
+) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    clear_completed_later_live(&active.client, active.sync.session_generation())
+        .await
+        .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
+pub async fn matrix_later_mark_reminded(
+    state: State<'_, MatrixAuthState>,
+    item_id: String,
+    reminded_at: Option<f64>,
+) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    let reminded_at = reminded_at.unwrap_or_else(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as f64)
+            .unwrap_or(0.0)
+    });
+    mark_later_reminded_live(
+        &active.client,
+        active.sync.session_generation(),
+        item_id,
+        reminded_at,
+    )
+    .await
+    .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
+pub async fn matrix_room_notes_snapshot(
+    state: State<'_, MatrixAuthState>,
+) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    snapshot_room_notes(&active.client, active.sync.session_generation())
+        .await
+        .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
+pub async fn matrix_room_notes_upsert(
+    state: State<'_, MatrixAuthState>,
+    item: SynaraRoomNoteItem,
+) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    upsert_room_note_item(&active.client, active.sync.session_generation(), item)
+        .await
+        .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
+pub async fn matrix_room_notes_delete(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    item_id: String,
+) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    delete_room_note_item_live(
+        &active.client,
+        active.sync.session_generation(),
+        room_id,
+        item_id,
+    )
+    .await
+    .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
+pub async fn matrix_room_notes_complete_todo(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    item_id: String,
+    completed: bool,
+) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as f64)
+        .unwrap_or(0.0);
+    complete_room_todo_item_live(
+        &active.client,
+        active.sync.session_generation(),
+        room_id,
+        item_id,
+        completed,
+        now,
+    )
+    .await
+    .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
+pub async fn matrix_room_notes_move_todo(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    item_id: String,
+    direction: RoomNoteMoveDirection,
+) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as f64)
+        .unwrap_or(0.0);
+    move_room_todo_item_live(
+        &active.client,
+        active.sync.session_generation(),
+        room_id,
+        item_id,
+        direction,
+        now,
+    )
+    .await
+    .map_err(map_later_notes_error)
 }
 
 #[tauri::command]
@@ -2543,14 +2712,22 @@ fn map_space_parents_error(diagnostic_id: &'static str) -> MatrixAuthCommandErro
 }
 
 fn map_mdirect_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "Unknown",
+        "The native Matrix direct-room map is unavailable.",
+        diagnostic_id,
+    )
+}
+
+fn map_later_notes_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     let (code, message) = match diagnostic_id {
-        "v-rooms.5-mdirect-invalid-room" | "v-rooms.5-mdirect-invalid-user" => (
+        "v-timeline-later-invalid-item" | "v-timeline-room-notes-invalid-item" => (
             "InvalidRequest",
-            "The native Matrix direct-room request is invalid.",
+            "The native Matrix later/notes request is invalid.",
         ),
         _ => (
             "Unknown",
-            "The native Matrix direct-room map is unavailable.",
+            "The native Matrix later/notes account data is unavailable.",
         ),
     };
     MatrixAuthCommandError::new(code, message, diagnostic_id)
