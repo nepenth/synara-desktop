@@ -3,14 +3,22 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { Box, Button, Scroll, Text, config } from 'folds';
 import { sanitizeCustomHtml } from '../../utils/sanitize';
 import { setNativeComposerReplyDraft } from './nativeComposerDraft';
+import { createLaterItemFromIds, upsertLaterWithNativeOwner } from './nativeLaterOwner';
 import { toggleReactionWithNativeOwner } from './nativeReactionOwner';
 import {
+  editTextWithNativeTimelineAction,
+  forwardMediaWithNativeTimelineAction,
+  forwardTextWithNativeTimelineAction,
   pinWithNativeTimelineAction,
   pollVoteWithNativeTimelineAction,
   redactWithNativeTimelineAction,
   reportWithNativeTimelineAction,
+  unpinWithNativeTimelineAction,
 } from './nativeTimelineAction';
-import { callDeclineWithNativeTimelineOwner } from './nativeTimelineActions';
+import {
+  callDeclineWithNativeTimelineOwner,
+  isNativeTimelineForwardMedia,
+} from './nativeTimelineActions';
 import {
   nativeTimelineMediaSrc,
   type NativeTimelineRowCapabilities,
@@ -89,14 +97,32 @@ const runNativeRowAction = (
 const NativeTimelineRowActions = ({
   roomId,
   eventId,
+  body,
+  rowKind,
+  messageType,
+  hasMedia,
   capabilities,
   onActionError,
 }: {
   roomId: string;
   eventId?: string;
+  body?: string;
+  rowKind?: NativeTimelineViewRow['kind'];
+  messageType?: string;
+  hasMedia?: boolean;
   capabilities?: NativeTimelineRowCapabilities;
   onActionError: (message: string) => void;
 }) => {
+  const [editing, setEditing] = useState(false);
+  const [editBody, setEditBody] = useState(body ?? '');
+  const [forwarding, setForwarding] = useState(false);
+  const [forwardTargetRoomId, setForwardTargetRoomId] = useState('');
+  const [forwardAsQuote, setForwardAsQuote] = useState(false);
+
+  useEffect(() => {
+    if (!editing) setEditBody(body ?? '');
+  }, [body, editing]);
+
   if (!eventId || !capabilities) return null;
   const buttons: React.ReactNode[] = [];
   if (capabilities.reply) {
@@ -119,6 +145,37 @@ const NativeTimelineRowActions = ({
         }
       >
         Reply
+      </Button>
+    );
+  }
+  if (capabilities.edit) {
+    buttons.push(
+      <Button
+        key="edit"
+        size="300"
+        fill="Soft"
+        onClick={() => {
+          setForwarding(false);
+          setEditing((open) => !open);
+          setEditBody(body ?? '');
+        }}
+      >
+        {editing ? 'Cancel edit' : 'Edit'}
+      </Button>
+    );
+  }
+  if (capabilities.forward) {
+    buttons.push(
+      <Button
+        key="forward"
+        size="300"
+        fill="Soft"
+        onClick={() => {
+          setEditing(false);
+          setForwarding((open) => !open);
+        }}
+      >
+        {forwarding ? 'Cancel forward' : 'Forward'}
       </Button>
     );
   }
@@ -175,11 +232,141 @@ const NativeTimelineRowActions = ({
         Pin
       </Button>
     );
+    buttons.push(
+      <Button
+        key="unpin"
+        size="300"
+        fill="Soft"
+        onClick={() =>
+          runNativeRowAction(
+            () => unpinWithNativeTimelineAction({ roomId, eventId }),
+            onActionError,
+            'Native unpin failed.'
+          )
+        }
+      >
+        Unpin
+      </Button>
+    );
   }
+  // Later is a room-event affordance for any remote timeline item with an id.
+  buttons.push(
+    <Button
+      key="later"
+      size="300"
+      fill="Soft"
+      onClick={() =>
+        runNativeRowAction(
+          () => upsertLaterWithNativeOwner(createLaterItemFromIds(roomId, eventId, 'saved')),
+          onActionError,
+          'Native later save failed.'
+        )
+      }
+    >
+      Save for later
+    </Button>
+  );
   if (buttons.length === 0) return null;
+
+  const submitEdit = () => {
+    const nextBody = editBody.trim();
+    if (!nextBody) {
+      onActionError('Edited body cannot be empty.');
+      return;
+    }
+    runNativeRowAction(
+      async () => {
+        await editTextWithNativeTimelineAction({ roomId, eventId, body: nextBody });
+        setEditing(false);
+      },
+      onActionError,
+      'Native edit failed.'
+    );
+  };
+
+  const submitForward = () => {
+    const targetRoomId = forwardTargetRoomId.trim();
+    if (!targetRoomId) {
+      onActionError('Target room id is required to forward.');
+      return;
+    }
+    const useMedia =
+      !forwardAsQuote &&
+      isNativeTimelineForwardMedia({
+        kind: rowKind,
+        messageType,
+        hasMedia,
+      });
+    runNativeRowAction(
+      async () => {
+        if (useMedia) {
+          await forwardMediaWithNativeTimelineAction({
+            sourceRoomId: roomId,
+            eventId,
+            targetRoomId,
+          });
+        } else {
+          await forwardTextWithNativeTimelineAction({
+            sourceRoomId: roomId,
+            eventId,
+            targetRoomId,
+            asQuote: forwardAsQuote,
+          });
+        }
+        setForwarding(false);
+        setForwardTargetRoomId('');
+        setForwardAsQuote(false);
+      },
+      onActionError,
+      'Native forward failed.'
+    );
+  };
+
   return (
-    <Box gap="100" wrap="Wrap">
-      {buttons}
+    <Box direction="Column" gap="100">
+      <Box gap="100" wrap="Wrap">
+        {buttons}
+      </Box>
+      {editing && (
+        <Box direction="Column" gap="100">
+          <textarea
+            value={editBody}
+            onChange={(event) => setEditBody(event.target.value)}
+            rows={3}
+            style={{ width: '100%', resize: 'vertical' }}
+            aria-label="Edit message body"
+          />
+          <Box gap="100">
+            <Button size="300" onClick={submitEdit}>
+              Save edit
+            </Button>
+          </Box>
+        </Box>
+      )}
+      {forwarding && (
+        <Box direction="Column" gap="100">
+          <input
+            value={forwardTargetRoomId}
+            onChange={(event) => setForwardTargetRoomId(event.target.value)}
+            placeholder="!target:example.org"
+            style={{ width: '100%' }}
+            aria-label="Forward target room id"
+          />
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              checked={forwardAsQuote}
+              onChange={(event) => setForwardAsQuote(event.target.checked)}
+            />
+            <Text size="T200">Forward as quote</Text>
+          </label>
+          <Box gap="100">
+            <Button size="300" onClick={submitForward}>
+              Send forward
+            </Button>
+          </Box>
+        </Box>
+      )}
     </Box>
   );
 };
@@ -232,6 +419,22 @@ const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProp
           style={{ padding: `${config.space.S200} ${config.space.S400}` }}
         >
           <Text size="L400">{row.senderName}</Text>
+          {row.reply && (
+            <Box
+              direction="Column"
+              gap="100"
+              style={{
+                opacity: 0.8,
+                borderLeft: '2px solid currentColor',
+                paddingLeft: config.space.S200,
+              }}
+            >
+              <Text size="T200">{row.reply.senderName}</Text>
+              <Text size="T200" style={{ whiteSpace: 'pre-wrap' }}>
+                {row.reply.body}
+              </Text>
+            </Box>
+          )}
           {row.formattedBody ? (
             <div
               // Defense in depth: re-sanitize Matrix HTML before the unselected shell renders it.
@@ -256,6 +459,12 @@ const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProp
               Edited
             </Text>
           ) : null}
+          {row.thread && (
+            <Text size="T200" style={{ opacity: 0.8 }}>
+              Thread · {row.thread.replyCount} {row.thread.replyCount === 1 ? 'reply' : 'replies'}
+              {row.thread.latestEventId ? ` · latest ${row.thread.latestEventId}` : ''}
+            </Text>
+          )}
           {mediaSrc && row.messageType === 'image' && (
             <img src={mediaSrc} alt={row.body} style={{ maxWidth: '100%', maxHeight: 480 }} />
           )}
@@ -298,6 +507,10 @@ const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProp
           <NativeTimelineRowActions
             roomId={roomId}
             eventId={eventId}
+            body={row.body}
+            rowKind={row.kind}
+            messageType={row.messageType}
+            hasMedia={Boolean(row.media)}
             capabilities={capabilities}
             onActionError={onActionError}
           />
@@ -340,6 +553,7 @@ const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProp
           <NativeTimelineRowActions
             roomId={roomId}
             eventId={eventId}
+            rowKind={row.kind}
             capabilities={capabilities}
             onActionError={onActionError}
           />
@@ -413,6 +627,8 @@ const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProp
           <NativeTimelineRowActions
             roomId={roomId}
             eventId={eventId}
+            rowKind={row.kind}
+            hasMedia={Boolean(row.media)}
             capabilities={capabilities}
             onActionError={onActionError}
           />

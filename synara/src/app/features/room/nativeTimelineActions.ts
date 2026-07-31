@@ -8,6 +8,25 @@
 
 import type { DesktopInvokeResult } from '../../utils/desktop';
 
+/**
+ * Choose the native forward owner for a product timeline row.
+ * Media/sticker rows use `matrix_timeline_forward_media`; everything else uses text/quote.
+ */
+export function isNativeTimelineForwardMedia(input: {
+  kind?: string;
+  messageType?: string;
+  hasMedia?: boolean;
+}): boolean {
+  if (input.kind === 'sticker') return true;
+  if (!input.hasMedia) return false;
+  return (
+    input.messageType === 'image' ||
+    input.messageType === 'file' ||
+    input.messageType === 'audio' ||
+    input.messageType === 'video'
+  );
+}
+
 export const NATIVE_TIMELINE_ACTION_SCHEMA_VERSION = 1;
 
 export type NativeTimelineActionKind =

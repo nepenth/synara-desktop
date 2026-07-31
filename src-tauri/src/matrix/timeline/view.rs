@@ -19,7 +19,7 @@ use matrix_sdk::ruma::{
 };
 use matrix_sdk_ui::timeline::{
     AnyOtherStateEventContentChange, EventTimelineItem, MemberProfileChange, MembershipChange,
-    MsgLikeKind, OtherState, RoomMembershipChange, TimelineDetails,
+    MsgLikeKind, OtherState, RoomMembershipChange, TimelineDetails, TimelineEventItemId,
     TimelineItem as SdkTimelineItem, TimelineItemContent, VirtualTimelineItem,
 };
 use serde::{Deserialize, Serialize};
@@ -604,12 +604,19 @@ fn project_thread_summary(
 ) -> Option<TimelineThreadSummary> {
     let summary = content.thread_summary.as_ref()?;
     let root_event_id = event.event_id()?.to_string();
+    // Project a remote event id only. Local-echo transaction ids and pending
+    // embeds stay absent rather than inventing a JS-side id.
+    let latest_event_id = match &summary.latest_event {
+        TimelineDetails::Ready(embedded) => match &embedded.identifier {
+            TimelineEventItemId::EventId(event_id) => Some(event_id.to_string()),
+            TimelineEventItemId::TransactionId(_) => None,
+        },
+        TimelineDetails::Unavailable | TimelineDetails::Pending | TimelineDetails::Error(_) => None,
+    };
     Some(TimelineThreadSummary {
         root_event_id,
         reply_count: summary.num_replies,
-        // The latest embedded event may still be pending. It becomes a
-        // readback only after the native detail owner can provide it safely.
-        latest_event_id: None,
+        latest_event_id,
     })
 }
 
@@ -1078,5 +1085,55 @@ mod tests {
         assert!(!json.contains("@carol:example.org"));
         assert!(!json.contains("token"));
         assert!(!json.contains("ciphertext"));
+    }
+
+    #[test]
+    fn reply_and_thread_summary_serialize_product_shape_without_secrets() {
+        let reply = TimelineReplyPreview {
+            event_id: "$parent:example.org".into(),
+            sender_name: "@alice:example.org".into(),
+            body: "Earlier message".into(),
+        };
+        let thread = TimelineThreadSummary {
+            root_event_id: "$root:example.org".into(),
+            reply_count: 3,
+            latest_event_id: Some("$latest:example.org".into()),
+        };
+        let message = TimelineMessageRow {
+            event: TimelineEventRowBase {
+                item_id: "msg-item".into(),
+                event_id: Some("$msg:example.org".into()),
+                sender_id: "@bob:example.org".into(),
+                sender_name: "@bob:example.org".into(),
+                origin_server_ts: 1,
+                capabilities: TimelineRowCapabilities {
+                    react: true,
+                    reply: true,
+                    edit: true,
+                    redact: true,
+                    report: false,
+                    pin: true,
+                    forward: true,
+                    vote: false,
+                    decline_call: false,
+                },
+            },
+            body: "Reply body".into(),
+            formatted_body: None,
+            message_type: Some("text".into()),
+            edited: false,
+            reply: Some(reply),
+            thread: Some(thread),
+            reactions: Vec::new(),
+            media: None,
+        };
+        let json = serde_json::to_string(&message).unwrap();
+        assert!(json.contains("\"eventId\":\"$parent:example.org\""));
+        assert!(json.contains("\"rootEventId\":\"$root:example.org\""));
+        assert!(json.contains("\"replyCount\":3"));
+        assert!(json.contains("\"latestEventId\":\"$latest:example.org\""));
+        assert!(!json.contains("ciphertext"));
+        assert!(!json.contains("access_token"));
+        assert!(!json.contains("mxc://"));
     }
 }

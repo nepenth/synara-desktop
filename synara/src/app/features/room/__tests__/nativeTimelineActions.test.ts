@@ -6,10 +6,12 @@ import {
   editTextWithNativeTimelineOwner,
   forwardMediaWithNativeTimelineOwner,
   forwardTextWithNativeTimelineOwner,
+  isNativeTimelineForwardMedia,
   pinWithNativeTimelineOwner,
   pollVoteWithNativeTimelineOwner,
   redactWithNativeTimelineOwner,
   reportWithNativeTimelineOwner,
+  unpinWithNativeTimelineOwner,
   type NativeInvoke,
 } from '../nativeTimelineActions';
 
@@ -164,4 +166,40 @@ test('poll vote and call decline owners accept typed readback', async () => {
   );
   assert.notEqual(declined, 'unavailable');
   if (declined !== 'unavailable') assert.equal(declined.status, 'declined');
+});
+
+test('unpinWithNativeTimelineOwner accepts already_unpinned status', async () => {
+  const unpinned = await unpinWithNativeTimelineOwner(
+    { roomId: '!room:example.org', eventId: '$one:example.org' },
+    true,
+    okInvoke('matrix_timeline_unpin', {
+      schemaVersion: 1,
+      action: 'unpin',
+      roomId: '!room:example.org',
+      eventId: '$one:example.org',
+      status: 'already_unpinned',
+    })
+  );
+  assert.notEqual(unpinned, 'unavailable');
+  if (unpinned !== 'unavailable') assert.equal(unpinned.status, 'already_unpinned');
+});
+
+test('isNativeTimelineForwardMedia routes sticker and media rows only', () => {
+  assert.equal(isNativeTimelineForwardMedia({ kind: 'sticker' }), true);
+  assert.equal(
+    isNativeTimelineForwardMedia({ kind: 'message', messageType: 'image', hasMedia: true }),
+    true
+  );
+  assert.equal(
+    isNativeTimelineForwardMedia({ kind: 'message', messageType: 'text', hasMedia: false }),
+    false
+  );
+  assert.equal(
+    isNativeTimelineForwardMedia({ kind: 'message', messageType: 'image', hasMedia: false }),
+    false
+  );
+  assert.equal(
+    isNativeTimelineForwardMedia({ kind: 'message', messageType: 'notice', hasMedia: true }),
+    false
+  );
 });
