@@ -3276,6 +3276,7 @@ async fn load_reply_draft_preview(
             "v-timeline-reply-draft-unsupported-event",
         )),
     }
+}
 
 fn parse_thread_root_event_id(
     thread_root: Option<String>,
@@ -3320,7 +3321,6 @@ fn normalize_formatted_body(
     }
     Ok(Some(html.to_owned()))
 }
-
 
 /// Build validated room-message content for the native composer owner.
 ///
