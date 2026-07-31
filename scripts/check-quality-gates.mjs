@@ -307,6 +307,7 @@ function pathFilteredCiAggregateError(jobLines) {
     "synapse-integration",
     "synapse-native-reactions",
     "synapse-native-attachments",
+    "synapse-native-polls",
   ];
   if (!sameList(getList(jobLines, "needs", 4), expectedNeeds)) {
     return `job needs must be exactly [${expectedNeeds.join(", ")}]`;
@@ -332,13 +333,17 @@ function pathFilteredCiAggregateError(jobLines) {
     const synapseNativeAttachmentsVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.synapse-native-attachments.result }}"
     )?.[0];
+    const synapseNativePollsVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.synapse-native-polls.result }}"
+    )?.[0];
     if (
       !changesVar ||
       !desktopVar ||
       !iosVar ||
       !synapseVar ||
       !synapseNativeReactionsVar ||
-      !synapseNativeAttachmentsVar
+      !synapseNativeAttachmentsVar ||
+      !synapseNativePollsVar
     ) {
       continue;
     }
@@ -367,7 +372,8 @@ function pathFilteredCiAggregateError(jobLines) {
       !runText.includes(`"$${iosVar}"`) ||
       !runText.includes(`"$${synapseVar}"`) ||
       !runText.includes(`"$${synapseNativeReactionsVar}"`) ||
-      !runText.includes(`"$${synapseNativeAttachmentsVar}"`)
+      !runText.includes(`"$${synapseNativeAttachmentsVar}"`) ||
+      !runText.includes(`"$${synapseNativePollsVar}"`)
     ) {
       continue;
     }

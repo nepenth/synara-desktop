@@ -26,7 +26,8 @@ import { Membership, StateEvent } from '../../types/matrix/room';
 import { getStateEvent } from '../utils/room';
 import { splitWithSpace } from '../utils/common';
 import { createRoomEncryptionState } from '../components/create-room';
-import { makePollStartContentFromCommand, POLL_START_EVENT_TYPE } from '../utils/polls';
+import { sendPollWithNativeDesktopOwner } from '../features/room/nativePoll';
+import { parsePollCommand } from '../utils/polls';
 import { getRoomCurrentState } from '../utils/timelineLifecycle';
 
 export const SHRUG = '¯\\_(ツ)_/¯';
@@ -233,7 +234,7 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         exe: async (payload) => {
           const rawIds = splitWithSpace(payload);
           const roomIdOrAliases = rawIds.filter(
-            (idOrAlias) => isRoomId(idOrAlias) || isRoomAlias(idOrAlias)
+            (idOrAlias) => isRoomId(idOrAlias) || isRoomAlias(idOrAlias),
           );
           roomIdOrAliases.forEach(async (idOrAlias) => {
             await mx.joinRoom(idOrAlias);
@@ -363,7 +364,7 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           if (nick === '') return;
           const mEvent = getRoomCurrentState(room)?.getStateEvents(
             StateEvent.RoomMember,
-            mx.getSafeUserId()
+            mx.getSafeUserId(),
           );
           const content = mEvent?.getContent();
           if (!content) return;
@@ -374,7 +375,7 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
               ...content,
               displayname: nick,
             },
-            mx.getSafeUserId()
+            mx.getSafeUserId(),
           );
         },
       },
@@ -385,7 +386,7 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           if (payload.match(/^mxc:\/\/\S+$/)) {
             const mEvent = getRoomCurrentState(room)?.getStateEvents(
               StateEvent.RoomMember,
-              mx.getSafeUserId()
+              mx.getSafeUserId(),
             );
             const content = mEvent?.getContent();
             if (!content) return;
@@ -396,7 +397,7 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
                 ...content,
                 avatar_url: payload,
               },
-              mx.getSafeUserId()
+              mx.getSafeUserId(),
             );
           }
         },
@@ -447,7 +448,7 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           const startEventId = result.event_id;
 
           const path = `/rooms/${encodeURIComponent(room.roomId)}/context/${encodeURIComponent(
-            startEventId
+            startEventId,
           )}`;
           const eventContext = await mx.http.authedRequest<IContextResponse>(Method.Get, path, {
             limit: 0,
@@ -461,7 +462,7 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
               token,
               20,
               Direction.Forward,
-              undefined
+              undefined,
             );
             const { end, chunk } = response;
             // remove until the latest event;
@@ -471,14 +472,14 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
               (roomEvent) =>
                 (messageTypes.length > 0 ? messageTypes.includes(roomEvent.type) : true) &&
                 users.includes(roomEvent.sender) &&
-                roomEvent.unsigned?.redacted_because === undefined
+                roomEvent.unsigned?.redacted_because === undefined,
             );
 
             const eventIds = eventsToDelete.map((roomEvent) => roomEvent.event_id);
 
             // eslint-disable-next-line no-await-in-loop
             await rateLimitedActions(eventIds, (eventId) =>
-              mx.redactEvent(room.roomId, eventId, undefined, { reason })
+              mx.redactEvent(room.roomId, eventId, undefined, { reason }),
             );
           }
         },
@@ -503,7 +504,7 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
 
           const serverAcl = getStateEvent(
             room,
-            StateEvent.RoomServerAcl
+            StateEvent.RoomServerAcl,
           )?.getContent<RoomServerAclEventContent>();
 
           const aclContent: RoomServerAclEventContent = {
@@ -522,10 +523,10 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           });
 
           aclContent.allow = aclContent.allow?.filter(
-            (servername) => !removeAllowList.includes(servername)
+            (servername) => !removeAllowList.includes(servername),
           );
           aclContent.deny = aclContent.deny?.filter(
-            (servername) => !removeDenyList.includes(servername)
+            (servername) => !removeDenyList.includes(servername),
           );
 
           aclContent.allow?.sort();
@@ -538,16 +539,24 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         name: Command.Poll,
         description: t(
           'modernization.poll.command_description',
-          'Create a poll. Example: /poll Deploy now? | Yes | No | max=2'
+          'Create a poll. Example: /poll Deploy now? | Yes | No | max=2',
         ),
         exe: async (payload) => {
-          const content = makePollStartContentFromCommand(payload);
-          if (!content) return;
-          await mx.sendEvent(room.roomId, POLL_START_EVENT_TYPE as any, content as any);
+          const poll = parsePollCommand(payload);
+          if (!poll) return;
+          const owner = await sendPollWithNativeDesktopOwner({
+            roomId: room.roomId,
+            question: poll.question,
+            answers: poll.answers.map((answer) => answer.text),
+            maxSelections: poll.maxSelections,
+          });
+          if (owner === 'legacy') {
+            throw new Error('Native Matrix session is required to send polls on desktop.');
+          }
         },
       },
     }),
-    [mx, room, navigateRoom, t]
+    [mx, room, navigateRoom, t],
   );
 
   return commands;

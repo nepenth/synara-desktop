@@ -65,7 +65,10 @@ use crate::matrix::room_list::{
 use crate::matrix::secret_storage::live::{
     self as live_secret_storage, NativeSecretStorageOperationResult, NativeSecretStorageStatus,
 };
-use crate::matrix::send::{AttachmentEnqueue, AttachmentKind, AttachmentSendQueue, SendQueue};
+use crate::matrix::send::{
+    normalize_poll, poll_response_content, poll_start_content, AttachmentEnqueue, AttachmentKind,
+    AttachmentSendQueue, SendQueue,
+};
 use crate::matrix::spaces::{snapshot_space_parents, NativeSpaceParentsSnapshot};
 use crate::matrix::store::{
     get_or_create_store_key, AccountIdentity, KeyringStoreKeyVault, StoreKeyId,
@@ -145,6 +148,23 @@ pub struct MatrixSendAttachmentResult {
     pub room_id: String,
     pub event_id: String,
     pub local_txn_id: String,
+    pub status: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixSendPollResult {
+    pub room_id: String,
+    pub event_id: String,
+    pub status: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixPollRespondResult {
+    pub room_id: String,
+    pub poll_event_id: String,
+    pub event_id: String,
     pub status: &'static str,
 }
 
@@ -1499,6 +1519,107 @@ pub async fn matrix_send_attachment(
         local_txn_id,
         status: "sent",
     })
+}
+
+/// V-SEND.3 sole poll-start owner (composer board + `/poll` command).
+#[tauri::command]
+pub async fn matrix_send_poll(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    question: String,
+    answers: Vec<String>,
+    max_selections: u32,
+) -> Result<MatrixSendPollResult, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&room_id)?;
+    let normalized = normalize_poll(&question, &answers, max_selections)
+        .map_err(|error| map_poll_error(error.diagnostic_id()))?;
+    let content =
+        poll_start_content(&normalized).map_err(|error| map_poll_error(error.diagnostic_id()))?;
+
+    let room = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-send.3-poll-room-not-found",
+            )
+        })?
+    };
+
+    let response = room.send(content).await.map_err(|_| {
+        MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix poll could not be sent.",
+            "v-send.3-poll-sdk-failed",
+        )
+    })?;
+
+    Ok(MatrixSendPollResult {
+        room_id: room_id.to_string(),
+        event_id: response.response.event_id.to_string(),
+        status: "sent",
+    })
+}
+
+/// V-SEND.3 sole poll-response (vote) owner.
+#[tauri::command]
+pub async fn matrix_poll_respond(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    poll_event_id: String,
+    answer_ids: Vec<String>,
+) -> Result<MatrixPollRespondResult, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&room_id)?;
+    let content = poll_response_content(&poll_event_id, &answer_ids)
+        .map_err(|error| map_poll_error(error.diagnostic_id()))?;
+
+    let room = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-send.3-poll-room-not-found",
+            )
+        })?
+    };
+
+    let response = room.send(content).await.map_err(|_| {
+        MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix poll response could not be sent.",
+            "v-send.3-poll-response-sdk-failed",
+        )
+    })?;
+
+    Ok(MatrixPollRespondResult {
+        room_id: room_id.to_string(),
+        poll_event_id,
+        event_id: response.response.event_id.to_string(),
+        status: "sent",
+    })
+}
+
+fn map_poll_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    match diagnostic_id {
+        "v-send.3-poll-invalid-question"
+        | "v-send.3-poll-invalid-answers"
+        | "v-send.3-poll-invalid-max-selections"
+        | "v-send.3-poll-invalid-event-id"
+        | "v-send.3-poll-invalid-answer-ids" => MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "The native Matrix poll request is invalid.",
+            diagnostic_id,
+        ),
+        _ => MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix poll operation failed.",
+            diagnostic_id,
+        ),
+    }
 }
 
 #[tauri::command]
