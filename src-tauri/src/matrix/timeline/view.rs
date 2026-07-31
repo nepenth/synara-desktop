@@ -187,8 +187,8 @@ fn project_row_action_capabilities(event: &EventTimelineItem) -> TimelineRowCapa
         TimelineItemContent::MsgLike(content)
             if matches!(&content.kind, MsgLikeKind::Poll(poll) if poll.results().end_time.is_none())
     );
-    let declineable = matches!(event.content(), TimelineItemContent::RtcNotification { .. })
-        && !event.is_own();
+    let declineable =
+        matches!(event.content(), TimelineItemContent::RtcNotification { .. }) && !event.is_own();
     TimelineRowCapabilities {
         // V-SEND.2 reaction toggle/ensure/redact is on the integration tip.
         react: has_remote_id && reactable,

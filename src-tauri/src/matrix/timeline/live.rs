@@ -1286,7 +1286,6 @@ impl NativeTimelineRegistry {
     }
 }
 
-
 impl Drop for NativeTimelineRegistry {
     fn drop(&mut self) {
         for (_, task) in self.view_update_tasks.drain() {
@@ -1295,14 +1294,12 @@ impl Drop for NativeTimelineRegistry {
     }
 }
 
-
 fn unix_time_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_millis() as u64)
         .unwrap_or(0)
 }
-
 
 fn should_restore_viewport(
     has_unread: bool,
@@ -1331,7 +1328,6 @@ fn should_restore_viewport(
         .and_then(|event_id| parse_event_id(event_id).ok())
         .is_some()
 }
-
 
 fn resolve_normal_open_position(
     has_unread: bool,
@@ -1365,7 +1361,6 @@ fn resolve_normal_open_position(
     Ok(TimelineViewPosition::LiveBottom)
 }
 
-
 fn view_subscription_key(room_id: &str, position: &TimelineViewPosition) -> String {
     match position {
         TimelineViewPosition::LiveBottom => format!("live:{room_id}"),
@@ -1381,7 +1376,6 @@ fn view_subscription_key(room_id: &str, position: &TimelineViewPosition) -> Stri
         } => format!("restored:{room_id}:none"),
     }
 }
-
 
 struct ViewUpdateOwnerInput {
     app: AppHandle,
@@ -1601,7 +1595,8 @@ async fn project_live_read_state(
 async fn view_snapshot_from_timeline(
     input: TimelineViewSnapshotInput,
     timeline: &Timeline,
-    media: Arc<AsyncMutex<TimelineMediaRegistry>>,) -> TimelineViewSnapshot {
+    media: Arc<AsyncMutex<TimelineMediaRegistry>>,
+) -> TimelineViewSnapshot {
     let (items, _updates) = timeline.subscribe().await;
     let rows = {
         let mut registry = media.lock().await;
@@ -1660,7 +1655,8 @@ fn apply_item_id_diffs(item_ids: &mut Vec<String>, diffs: &[VectorDiff<Arc<SdkTi
 }
 
 struct TimelineViewSnapshotInput {
-    session_generation: u64,    room_id: String,
+    session_generation: u64,
+    room_id: String,
     position: TimelineViewPosition,
     pagination: TimelinePaginationState,
     own_user_id: Option<OwnedUserId>,
@@ -1669,7 +1665,8 @@ struct TimelineViewSnapshotInput {
 
 async fn view_snapshot_from_items(
     input: TimelineViewSnapshotInput,
-    timeline: &Timeline,    rows: Vec<super::TimelineViewRow>,
+    timeline: &Timeline,
+    rows: Vec<super::TimelineViewRow>,
 ) -> TimelineViewSnapshot {
     let read_state =
         project_live_read_state(timeline, &input.position, input.own_user_id.as_deref()).await;
@@ -1688,8 +1685,8 @@ async fn view_snapshot_from_items(
             paginate_backward: true,
             paginate_forward: true,
         },
-    }}
-
+    }
+}
 
 fn reaction_contains_event_id(
     reaction: &NativeTimelineReaction,
