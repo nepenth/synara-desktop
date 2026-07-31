@@ -1,7 +1,7 @@
 import React from 'react';
 import { Dialog, Text, Box, Button, config } from 'folds';
-import { AuthType } from 'matrix-js-sdk';
 import ReCAPTCHA from 'react-google-recaptcha';
+import { AuthStageType } from '../../utils/matrix-uia';
 import { StageComponentProps } from './types';
 
 function ReCaptchaErrorDialog({
@@ -36,8 +36,9 @@ export function ReCaptchaStageDialog({ stageData, submitAuthDict, onCancel }: St
   const publicKey = info?.public_key;
 
   const handleChange = (token: string | null) => {
+    if (!token) return;
     submitAuthDict({
-      type: AuthType.Recaptcha,
+      type: AuthStageType.Recaptcha,
       response: token,
       session,
     });
