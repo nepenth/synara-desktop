@@ -38,7 +38,7 @@ If `matrix_login_flows` is unavailable or errors, AuthFlowsLoader shows the exis
 | Item | Status |
 |------|--------|
 | UIA stage execution for login (`matrix_uia_*`) | **Residual** |
-| `loginUtil.ts` non-native password fallback | Password vertical residual (not this slice) |
+| `loginUtil.ts` non-native password fallback | **Active residual this PR** (password fail-closed) |
 | Register product owners | DONE #266 V-AUTH.4b — not rewritten here |
 | Live Synapse e2e for login-flow discovery | Not claimed |
 | V-TIMELINE cutover / #240 | HOLD |

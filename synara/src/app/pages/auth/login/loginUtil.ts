@@ -1,10 +1,15 @@
+/**
+ * Desktop password login owner.
+ *
+ * Product path is native-only via `matrix_login_password` (fail-closed).
+ * No matrix-js-sdk client construction and no JS password-login fallback.
+ */
+
 import to from 'await-to-js';
-import { LoginRequest, LoginResponse, MatrixError, createClient } from 'matrix-js-sdk';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ClientConfig, clientAllowedServer } from '../../../hooks/useClientConfig';
 import { autoDiscovery, specVersions } from '../../../cs-api';
-import { ErrorCode } from '../../../cs-errorcode';
 import {
   deleteAfterLoginRedirectPath,
   getAfterLoginRedirectPath,
@@ -56,9 +61,29 @@ export enum LoginError {
   Unknown = 'Unknown',
 }
 
+/** SDK-neutral login error with product errcode (replaces matrix-js-sdk MatrixError). */
+export class PasswordLoginError extends Error {
+  readonly errcode: LoginError;
+
+  constructor(errcode: LoginError, message?: string) {
+    super(message ?? errcode);
+    this.name = 'PasswordLoginError';
+    this.errcode = errcode;
+  }
+}
+
+/** Local session fields used by completeAuthenticatedLogin (no matrix-js-sdk types). */
+export type SessionLoginResponse = {
+  access_token: string;
+  device_id: string;
+  user_id: string;
+  refresh_token?: string;
+  expires_in_ms?: number;
+};
+
 export type CustomLoginResponse = {
   baseUrl: string;
-  response: LoginResponse;
+  response: SessionLoginResponse;
 };
 
 export type NativeLoginIdentity = {
@@ -72,7 +97,31 @@ export type NativeLoginResponse = {
   identity: NativeLoginIdentity;
 };
 
-export type PasswordLoginResponse = CustomLoginResponse | NativeLoginResponse;
+/** Desktop password login always returns a native identity outcome. */
+export type PasswordLoginResponse = NativeLoginResponse;
+
+/** Minimal password login request shape (UI → native IPC). */
+export type PasswordLoginRequest = {
+  type?: string;
+  password?: string;
+  identifier?: {
+    type?: string;
+    user?: string;
+    address?: string;
+    medium?: string;
+  };
+  initial_device_display_name?: string;
+};
+
+export type PasswordLoginInvoke = (
+  command: string,
+  args?: Record<string, unknown>
+) => Promise<{ available: false } | { available: true; value?: unknown }>;
+
+export type LoginPasswordOptions = {
+  isDesktop?: () => boolean;
+  invoke?: PasswordLoginInvoke;
+};
 
 const resolveLoginBaseUrl = async (
   serverBaseUrl: string | (() => Promise<string>)
@@ -81,118 +130,81 @@ const resolveLoginBaseUrl = async (
 
   const [urlError, url] = await to(serverBaseUrl());
   if (urlError) {
-    throw new MatrixError({
-      errcode:
-        urlError.message === GetBaseUrlError.NotAllow
-          ? LoginError.ServerNotAllowed
-          : LoginError.InvalidServer,
-    });
+    throw new PasswordLoginError(
+      urlError.message === GetBaseUrlError.NotAllow
+        ? LoginError.ServerNotAllowed
+        : LoginError.InvalidServer
+    );
   }
   if (!url) {
-    throw new MatrixError({ errcode: LoginError.InvalidServer });
+    throw new PasswordLoginError(LoginError.InvalidServer);
   }
   return url;
-};
-
-export const login = async (
-  serverBaseUrl: string | (() => Promise<string>),
-  data: LoginRequest
-): Promise<CustomLoginResponse> => {
-  const url = await resolveLoginBaseUrl(serverBaseUrl);
-
-  const mx = createClient({ baseUrl: url });
-  const [err, res] = await to<LoginResponse, MatrixError>(mx.loginRequest(data));
-
-  if (err) {
-    if (err.httpStatus === 400) {
-      throw new MatrixError({
-        errcode: LoginError.InvalidRequest,
-      });
-    }
-    if (err.httpStatus === 429) {
-      throw new MatrixError({
-        errcode: LoginError.RateLimited,
-      });
-    }
-    if (err.errcode === ErrorCode.M_USER_DEACTIVATED) {
-      throw new MatrixError({
-        errcode: LoginError.UserDeactivated,
-      });
-    }
-
-    if (err.httpStatus === 403) {
-      throw new MatrixError({
-        errcode: LoginError.Forbidden,
-      });
-    }
-
-    throw new MatrixError({
-      errcode: LoginError.Unknown,
-    });
-  }
-  return {
-    baseUrl: url,
-    response: res,
-  };
 };
 
 type NativeCommandError = {
   code?: string;
 };
 
-const mapNativeLoginError = (error: unknown): MatrixError => {
+const mapNativeLoginError = (error: unknown): PasswordLoginError => {
   const code =
     typeof error === 'object' && error !== null ? (error as NativeCommandError).code : undefined;
   const errcode = Object.values(LoginError).includes(code as LoginError)
     ? (code as LoginError)
     : LoginError.Unknown;
-  return new MatrixError({ errcode });
+  return new PasswordLoginError(errcode);
 };
 
-const passwordLoginUser = (data: LoginRequest): string | undefined => {
-  const request = data as LoginRequest & {
-    password?: string;
-    identifier?: {
-      user?: string;
-      address?: string;
-    };
-  };
-  return request.identifier?.user ?? request.identifier?.address;
-};
+const passwordLoginUser = (data: PasswordLoginRequest): string | undefined =>
+  data.identifier?.user ?? data.identifier?.address;
 
+/**
+ * Desktop product password login — native `matrix_login_password` only.
+ * Fail-closed when not on Synara desktop or when the native command is unavailable.
+ * No matrix-js-sdk password-login path.
+ */
 export const loginPassword = async (
   serverBaseUrl: string | (() => Promise<string>),
-  data: LoginRequest
+  data: PasswordLoginRequest,
+  options: LoginPasswordOptions = {}
 ): Promise<PasswordLoginResponse> => {
-  if (!isSynaraDesktop()) {
-    return login(serverBaseUrl, data);
+  const isDesktop = options.isDesktop ?? isSynaraDesktop;
+  const invoke: PasswordLoginInvoke =
+    options.invoke ??
+    ((command, args) => invokeDesktopWithAvailability(command, args));
+
+  if (!isDesktop()) {
+    throw new PasswordLoginError(
+      LoginError.Unknown,
+      'Password login requires the native desktop Matrix runtime.'
+    );
   }
 
   const url = await resolveLoginBaseUrl(serverBaseUrl);
   const user = passwordLoginUser(data);
-  const password = (data as LoginRequest & { password?: string }).password;
+  const password = data.password;
   if (!user || !password) {
-    throw new MatrixError({ errcode: LoginError.InvalidRequest });
+    throw new PasswordLoginError(LoginError.InvalidRequest);
   }
 
   try {
-    const result = await invokeDesktopWithAvailability<NativeLoginIdentity>(
-      'matrix_login_password',
-      {
-        homeserverUrl: url,
-        user,
-        password,
-      }
-    );
+    const result = await invoke('matrix_login_password', {
+      homeserverUrl: url,
+      user,
+      password,
+    });
     if (!result.available || !result.value) {
-      throw new MatrixError({ errcode: LoginError.Unknown });
+      throw new PasswordLoginError(
+        LoginError.Unknown,
+        'Native password login is unavailable.'
+      );
     }
     return {
       native: true,
-      identity: result.value,
+      identity: result.value as NativeLoginIdentity,
     };
   } catch (error) {
-    if (error instanceof MatrixError) throw error;
+    if (error instanceof PasswordLoginError) throw error;
     throw mapNativeLoginError(error);
   }
 };
@@ -237,6 +249,7 @@ export const useLoginComplete = (data?: CustomLoginResponse | NativeLoginRespons
 
     let active = true;
     const persistAndNavigate = async () => {
+      // Native password login already persists the session host-side.
       if (!('native' in data)) {
         await completeAuthenticatedLogin(data);
       }
