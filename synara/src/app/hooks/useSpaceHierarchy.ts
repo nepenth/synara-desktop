@@ -1,19 +1,21 @@
-import { atom, useAtom, useAtomValue } from 'jotai';
+import { atom, useAtom } from 'jotai';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { JoinRule, Room } from 'matrix-js-sdk';
 import { useQuery } from '@tanstack/react-query';
 import { useMatrixClient } from './useMatrixClient';
-import { roomToParentsAtom } from '../state/room/roomToParents';
-import { MSpaceChildContent, StateEvent } from '../../types/matrix/room';
-import { getAllParents, getStateEvents, isValidChild } from '../utils/room';
+import { MSpaceChildContent } from '../../types/matrix/room';
 import { isRoomId } from '../utils/matrix';
 import { SortFunc, byOrderKey, byTsOldToNew, factoryRoomIdByActivity } from '../utils/sort';
-import { useStateEventCallback } from './useStateEventCallback';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../utils/desktop';
 import {
   NativeSpaceHierarchyRoom,
   readSpaceHierarchyWithNativeOwner,
 } from '../features/lobby/nativeSpaceHierarchyOwner';
+import {
+  NativeSpaceChildEdge,
+  readSpaceChildrenWithNativeOwner,
+  spaceChildContentFromEdge,
+} from '../features/lobby/nativeSpaceChildOwner';
 
 export type HierarchyItemSpace = {
   roomId: string;
@@ -34,14 +36,44 @@ export type HierarchyItem = HierarchyItemSpace | HierarchyItemRoom;
 
 type GetRoomCallback = (roomId: string) => Room | undefined;
 
+type ChildEdge = {
+  childId: string;
+  content: MSpaceChildContent;
+  ts: number;
+};
+
+/** parentId → valid child edges from the native local graph. */
+export type SpaceChildEdgeMap = Map<string, ChildEdge[]>;
+
 const hierarchyItemTs: SortFunc<HierarchyItem> = (a, b) => byTsOldToNew(a.ts, b.ts);
 const hierarchyItemByOrder: SortFunc<HierarchyItem> = (a, b) =>
   byOrderKey(a.content.order, b.content.order);
 
+export const spaceChildEdgeMapFromNative = (edges: NativeSpaceChildEdge[]): SpaceChildEdgeMap => {
+  const map: SpaceChildEdgeMap = new Map();
+  for (const edge of edges) {
+    if (!isRoomId(edge.childId) || !isRoomId(edge.parentId)) continue;
+    // Match legacy isValidChild: content must expose a via array.
+    if (!Array.isArray(edge.via)) continue;
+    const list = map.get(edge.parentId) ?? [];
+    list.push({
+      childId: edge.childId,
+      content: spaceChildContentFromEdge(edge),
+      ts: edge.originServerTs,
+    });
+    map.set(edge.parentId, list);
+  }
+  return map;
+};
+
+const edgesForParent = (edgeMap: SpaceChildEdgeMap, parentId: string): ChildEdge[] =>
+  edgeMap.get(parentId) ?? [];
+
 const getHierarchySpaces = (
   rootSpaceId: string,
   getRoom: GetRoomCallback,
-  spaceRooms: Set<string>
+  spaceRooms: Set<string>,
+  edgeMap: SpaceChildEdgeMap
 ): HierarchyItemSpace[] => {
   const rootSpaceItem: HierarchyItemSpace = {
     roomId: rootSpaceId,
@@ -57,21 +89,16 @@ const getHierarchySpaces = (
     spaceItems.push(spaceItem);
 
     if (!space) return;
-    const childEvents = getStateEvents(space, StateEvent.SpaceChild);
-
-    childEvents.forEach((childEvent) => {
-      if (!isValidChild(childEvent)) return;
-      const childId = childEvent.getStateKey();
-      if (!childId || !isRoomId(childId)) return;
-
+    edgesForParent(edgeMap, spaceItem.roomId).forEach((edge) => {
+      const childId = edge.childId;
       // because we can not find if a childId is space without joining
       // or requesting room summary, we will look it into spaceRooms local
       // cache which we maintain as we load summary in UI.
       if (getRoom(childId)?.isSpaceRoom() || spaceRooms.has(childId)) {
         const childItem: HierarchyItemSpace = {
           roomId: childId,
-          content: childEvent.getContent<MSpaceChildContent>(),
-          ts: childEvent.getTs(),
+          content: edge.content,
+          ts: edge.ts,
           space: true,
           parentId: spaceItem.roomId,
         };
@@ -96,13 +123,20 @@ export type SpaceHierarchy = {
   space: HierarchyItemSpace;
   rooms?: HierarchyItemRoom[];
 };
+
 const getSpaceHierarchy = (
   rootSpaceId: string,
   spaceRooms: Set<string>,
   getRoom: (roomId: string) => Room | undefined,
-  closedCategory: (spaceId: string) => boolean
+  closedCategory: (spaceId: string) => boolean,
+  edgeMap: SpaceChildEdgeMap
 ): SpaceHierarchy[] => {
-  const spaceItems: HierarchyItemSpace[] = getHierarchySpaces(rootSpaceId, getRoom, spaceRooms);
+  const spaceItems: HierarchyItemSpace[] = getHierarchySpaces(
+    rootSpaceId,
+    getRoom,
+    spaceRooms,
+    edgeMap
+  );
 
   const hierarchy: SpaceHierarchy[] = spaceItems.map((spaceItem) => {
     const space = getRoom(spaceItem.roomId);
@@ -111,21 +145,17 @@ const getSpaceHierarchy = (
         space: spaceItem,
       };
     }
-    const childEvents = getStateEvents(space, StateEvent.SpaceChild);
     const childItems: HierarchyItemRoom[] = [];
-    childEvents.forEach((childEvent) => {
-      if (!isValidChild(childEvent)) return;
-      const childId = childEvent.getStateKey();
-      if (!childId || !isRoomId(childId)) return;
+    edgesForParent(edgeMap, spaceItem.roomId).forEach((edge) => {
+      const childId = edge.childId;
       if (getRoom(childId)?.isSpaceRoom() || spaceRooms.has(childId)) return;
 
-      const childItem: HierarchyItemRoom = {
+      childItems.push({
         roomId: childId,
-        content: childEvent.getContent<MSpaceChildContent>(),
-        ts: childEvent.getTs(),
+        content: edge.content,
+        ts: edge.ts,
         parentId: spaceItem.roomId,
-      };
-      childItems.push(childItem);
+      });
     });
 
     return {
@@ -137,39 +167,61 @@ const getSpaceHierarchy = (
   return hierarchy;
 };
 
+const useNativeSpaceChildEdgeMap = (): SpaceChildEdgeMap => {
+  const [edgeMap, setEdgeMap] = useState<SpaceChildEdgeMap>(() => new Map());
+
+  useEffect(() => {
+    let disposed = false;
+    let inFlight = false;
+
+    const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        if (!isSynaraDesktop()) {
+          if (!disposed) setEdgeMap(new Map());
+          return;
+        }
+        const snapshot = await readSpaceChildrenWithNativeOwner(true, (command, args) =>
+          invokeDesktopWithAvailability(command, args)
+        );
+        if (!disposed) {
+          setEdgeMap(spaceChildEdgeMapFromNative(snapshot.edges));
+        }
+      } catch {
+        // Keep the last known graph during transient failures.
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    void refresh();
+    const pollId = window.setInterval(() => void refresh(), 1_000);
+    return () => {
+      disposed = true;
+      window.clearInterval(pollId);
+    };
+  }, []);
+
+  return edgeMap;
+};
+
 export const useSpaceHierarchy = (
   spaceId: string,
   spaceRooms: Set<string>,
   getRoom: (roomId: string) => Room | undefined,
   closedCategory: (spaceId: string) => boolean
 ): SpaceHierarchy[] => {
-  const mx = useMatrixClient();
-  const roomToParents = useAtomValue(roomToParentsAtom);
+  const edgeMap = useNativeSpaceChildEdgeMap();
 
   const [hierarchyAtom] = useState(() =>
-    atom(getSpaceHierarchy(spaceId, spaceRooms, getRoom, closedCategory))
+    atom(getSpaceHierarchy(spaceId, spaceRooms, getRoom, closedCategory, edgeMap))
   );
   const [hierarchy, setHierarchy] = useAtom(hierarchyAtom);
 
   useEffect(() => {
-    setHierarchy(getSpaceHierarchy(spaceId, spaceRooms, getRoom, closedCategory));
-  }, [mx, spaceId, spaceRooms, setHierarchy, getRoom, closedCategory]);
-
-  useStateEventCallback(
-    mx,
-    useCallback(
-      (mEvent) => {
-        if (mEvent.getType() !== StateEvent.SpaceChild) return;
-        const eventRoomId = mEvent.getRoomId();
-        if (!eventRoomId) return;
-
-        if (spaceId === eventRoomId || getAllParents(roomToParents, eventRoomId).has(spaceId)) {
-          setHierarchy(getSpaceHierarchy(spaceId, spaceRooms, getRoom, closedCategory));
-        }
-      },
-      [spaceId, roomToParents, setHierarchy, spaceRooms, getRoom, closedCategory]
-    )
-  );
+    setHierarchy(getSpaceHierarchy(spaceId, spaceRooms, getRoom, closedCategory, edgeMap));
+  }, [spaceId, spaceRooms, setHierarchy, getRoom, closedCategory, edgeMap]);
 
   return hierarchy;
 };
@@ -178,41 +230,38 @@ const getSpaceJoinedHierarchy = (
   rootSpaceId: string,
   getRoom: GetRoomCallback,
   excludeRoom: (parentId: string, roomId: string) => boolean,
-  sortRoomItems: (parentId: string, items: HierarchyItem[]) => HierarchyItem[]
+  sortRoomItems: (parentId: string, items: HierarchyItem[]) => HierarchyItem[],
+  edgeMap: SpaceChildEdgeMap
 ): HierarchyItem[] => {
-  const spaceItems: HierarchyItemSpace[] = getHierarchySpaces(rootSpaceId, getRoom, new Set());
+  const spaceItems: HierarchyItemSpace[] = getHierarchySpaces(
+    rootSpaceId,
+    getRoom,
+    new Set(),
+    edgeMap
+  );
 
   const hierarchy: HierarchyItem[] = spaceItems.flatMap((spaceItem) => {
     const space = getRoom(spaceItem.roomId);
     if (!space) {
       return [];
     }
-    const joinedRoomEvents = getStateEvents(space, StateEvent.SpaceChild).filter((childEvent) => {
-      if (!isValidChild(childEvent)) return false;
-      const childId = childEvent.getStateKey();
-      if (!childId || !isRoomId(childId)) return false;
-      const room = getRoom(childId);
+    const joinedRoomEdges = edgesForParent(edgeMap, spaceItem.roomId).filter((edge) => {
+      const room = getRoom(edge.childId);
       if (!room || room.isSpaceRoom()) return false;
-
       return true;
     });
 
-    if (joinedRoomEvents.length === 0) return [];
+    if (joinedRoomEdges.length === 0) return [];
 
     const childItems: HierarchyItemRoom[] = [];
-    joinedRoomEvents.forEach((childEvent) => {
-      const childId = childEvent.getStateKey();
-      if (!childId) return;
-
-      if (excludeRoom(space.roomId, childId)) return;
-
-      const childItem: HierarchyItemRoom = {
-        roomId: childId,
-        content: childEvent.getContent<MSpaceChildContent>(),
-        ts: childEvent.getTs(),
+    joinedRoomEdges.forEach((edge) => {
+      if (excludeRoom(space.roomId, edge.childId)) return;
+      childItems.push({
+        roomId: edge.childId,
+        content: edge.content,
+        ts: edge.ts,
         parentId: spaceItem.roomId,
-      };
-      childItems.push(childItem);
+      });
     });
     return [spaceItem, ...sortRoomItems(spaceItem.roomId, childItems)];
   });
@@ -227,7 +276,7 @@ export const useSpaceJoinedHierarchy = (
   sortByActivity: (spaceId: string) => boolean
 ): HierarchyItem[] => {
   const mx = useMatrixClient();
-  const roomToParents = useAtomValue(roomToParentsAtom);
+  const edgeMap = useNativeSpaceChildEdgeMap();
 
   const sortRoomItems = useCallback(
     (sId: string, items: HierarchyItem[]) => {
@@ -242,29 +291,13 @@ export const useSpaceJoinedHierarchy = (
   );
 
   const [hierarchyAtom] = useState(() =>
-    atom(getSpaceJoinedHierarchy(spaceId, getRoom, excludeRoom, sortRoomItems))
+    atom(getSpaceJoinedHierarchy(spaceId, getRoom, excludeRoom, sortRoomItems, edgeMap))
   );
   const [hierarchy, setHierarchy] = useAtom(hierarchyAtom);
 
   useEffect(() => {
-    setHierarchy(getSpaceJoinedHierarchy(spaceId, getRoom, excludeRoom, sortRoomItems));
-  }, [mx, spaceId, setHierarchy, getRoom, excludeRoom, sortRoomItems]);
-
-  useStateEventCallback(
-    mx,
-    useCallback(
-      (mEvent) => {
-        if (mEvent.getType() !== StateEvent.SpaceChild) return;
-        const eventRoomId = mEvent.getRoomId();
-        if (!eventRoomId) return;
-
-        if (spaceId === eventRoomId || getAllParents(roomToParents, eventRoomId).has(spaceId)) {
-          setHierarchy(getSpaceJoinedHierarchy(spaceId, getRoom, excludeRoom, sortRoomItems));
-        }
-      },
-      [spaceId, roomToParents, setHierarchy, getRoom, excludeRoom, sortRoomItems]
-    )
-  );
+    setHierarchy(getSpaceJoinedHierarchy(spaceId, getRoom, excludeRoom, sortRoomItems, edgeMap));
+  }, [spaceId, setHierarchy, getRoom, excludeRoom, sortRoomItems, edgeMap]);
 
   return hierarchy;
 };
