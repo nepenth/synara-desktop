@@ -434,7 +434,7 @@ fn parse_room_id(room_id: &str, diagnostic: &'static str) -> Result<OwnedRoomId,
     OwnedRoomId::try_from(room_id.trim()).map_err(|_| diagnostic)
 }
 
-fn joined_room<'a>(client: &'a Client, room_id: &OwnedRoomId) -> Result<Room, &'static str> {
+fn joined_room(client: &Client, room_id: &OwnedRoomId) -> Result<Room, &'static str> {
     let room = client.get_room(room_id).ok_or("v-rooms.2c-room-missing")?;
     if room.state() != RoomState::Joined {
         return Err("v-rooms.2c-room-not-joined");
