@@ -2,11 +2,11 @@
 
 | Field                     | Value                                                                                                                                                                                         |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status                    | **Active — tip `0fb0fe4` (#251 writers); V-SEND.3 #250 in flight; V-TIMELINE #240 HOLD** (2026-07-31)                                                                                          |
+| Status                    | **Active — tip `31b4a30`; V-ROOMS.5r users draft; V-SEND.3 #250 / V-TIMELINE #240 parallel** (2026-07-31)                                                                                       |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                            |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)                                                                                                                                     |
-| Current integration tip   | `0fb0fe425ae932e27445b8054f3a14d628e5a869` (V-ROOMS.5w #251 merge)                                                                                                                             |
-| Active PRs                | Draft [#250](https://github.com/nepenth/synara-desktop/pull/250) V-SEND.3 (rebase+CI→merge); [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE HOLD                       |
+| Current integration tip   | `31b4a30b6fbbf0c6304821dd42eafd783aaea84e` (docs #243 merge after V-ROOMS.5w #251)                                                                                                              |
+| Active PRs                | Draft V-ROOMS.5r m.direct users; [#250](https://github.com/nepenth/synara-desktop/pull/250) V-SEND.3; [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE HOLD                |
 
 ## Policy trigger
 
@@ -70,7 +70,8 @@ Migration decision already decided: **`D-KEY-RECOVERY`** in [migration-ux-decisi
 | **V-ROOMS.3** | Unread / notification badges on list | **DONE #245** at integration `efc90d59e6009f45589ce42a29a6f7ebafcf7624`; candidate `a81e026`; production **194→192**, repository-wide **208→205**; live badge proof Not confirmed (not a reopen blocker) | Native unread map drives list badges; JS unread owner deleted                       |
 | **V-ROOMS.4** | Typing indicators (if list/shell)    | **DONE #246** at integration `151948c8c2329ee6f0b37b8757607b3ac8bb44e7`; candidate `c4df9ed`; production **192→190**, repository-wide **205→203**; live typing proof Not confirmed (not a reopen blocker) | Native typing projection + send; JS typing owners deleted                           |
 | **V-ROOMS.5** | `m.direct` DM room-id map            | **DONE #249** at `d17ab2c` (candidate `708aef7`); production **189→187** / **202→200**; live proof Not confirmed                                                                                                                                   | Native DM map read; JS mDirect binder deleted                                       |
-| **V-ROOMS.5w** | `m.direct` DM writers               | **DONE #251** at `0fb0fe4` (candidate `e4e2639`); native add/remove; JS writer helpers deleted; importers **187→187**; `useDirectUsers` reader residual may remain                                                                                 | Native write IPC; JS writer helpers deleted                                         |
+| **V-ROOMS.5w** | `m.direct` DM writers               | **DONE #251** at `0fb0fe4` (candidate `e4e2639`); native add/remove; JS writer helpers deleted; importers **187→187**                                                                                                                                 | Native write IPC; JS writer helpers deleted                                         |
+| **V-ROOMS.5r** | `m.direct` DM user list             | **Draft candidate** — `matrix_mdirect_snapshot.userIds` (joined-filtered) owns `mDirectUsersAtom` / `useDirectUsers`; JS AccountData reader deleted; importers **187→187**                                                                          | Native user-list projection; JS useDirectUsers AccountData owner deleted            |
 
 ### V-TIMELINE — full timeline read vertical (D0.3 gaps)
 
