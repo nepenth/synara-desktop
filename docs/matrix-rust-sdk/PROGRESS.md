@@ -14,7 +14,7 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-07-31**                                                                                                                                                                                                                                                        |
-| Integration tip    | `706bf608` — product [#264](https://github.com/nepenth/synara-desktop/pull/264) sticker/GIF after docs [#269](https://github.com/nepenth/synara-desktop/pull/269) |
+| Integration tip    | `00fb7788` — docs [#270](https://github.com/nepenth/synara-desktop/pull/270) after product [#264](https://github.com/nepenth/synara-desktop/pull/264) sticker/GIF |
 | Active work        | [#268](https://github.com/nepenth/synara-desktop/pull/268) V-ROOMS.2c; [#266](https://github.com/nepenth/synara-desktop/pull/266) V-AUTH.4b; [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. Next free-slot residual: **V-AUTH.3** loginFlows/AuthFlowsLoader. |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `706bf608`** merged sticker/GIF [#264](https://github.com/nepenth/synara-desktop/pull/264). Active: V-ROOMS.2c [#268](https://github.com/nepenth/synara-desktop/pull/268); V-AUTH.4b [#266](https://github.com/nepenth/synara-desktop/pull/266). V-TIMELINE/#240 **HOLD**. Free slot → **V-AUTH.3**. |
+| **Now**        | **Tip `00fb7788`** merged docs [#270](https://github.com/nepenth/synara-desktop/pull/270) after sticker/GIF [#264](https://github.com/nepenth/synara-desktop/pull/264). Active: V-ROOMS.2c [#268](https://github.com/nepenth/synara-desktop/pull/268); V-AUTH.4b [#266](https://github.com/nepenth/synara-desktop/pull/266). V-TIMELINE/#240 **HOLD**. Free slot → **V-AUTH.3**. |
 | **Policy**     | [full-vertical-policy.md](full-vertical-policy.md) |
-| **Tip**        | `706bf608` merged [#264](https://github.com/nepenth/synara-desktop/pull/264) native sticker + GIF send. |
+| **Tip**        | `00fb7788` merged [#270](https://github.com/nepenth/synara-desktop/pull/270) docs after [#264](https://github.com/nepenth/synara-desktop/pull/264) native sticker + GIF send. |
 | **Active PRs** | Draft [#268](https://github.com/nepenth/synara-desktop/pull/268) V-ROOMS.2c; [#266](https://github.com/nepenth/synara-desktop/pull/266) V-AUTH.4b; [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. |
 | **Blocked**    | Merging plateau D0.6 (#221); claiming V-TIMELINE cutover (#240 HOLD); starting new media/widgets/etc before residual queue; merging L1 foundations; umbrella #39. |
 
@@ -60,6 +60,14 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-07-31 — docs truth-up after #270
+
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **Docs after #264** | **Merged** [#270](https://github.com/nepenth/synara-desktop/pull/270) | Tip `00fb7788`; progress/residual recorded after sticker/GIF #264. |
+| current | **Open product** | **Active** | [#268](https://github.com/nepenth/synara-desktop/pull/268) V-ROOMS.2c; [#266](https://github.com/nepenth/synara-desktop/pull/266) V-AUTH.4b draft; #240 HOLD. #267 closed (superseded by #268). |
+| current | **Next free slot** | **V-AUTH.3** | loginFlows / AuthFlowsLoader still js. |
 
 ### 2026-07-31 — after #264 sticker/GIF
 
