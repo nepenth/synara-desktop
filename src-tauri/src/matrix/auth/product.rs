@@ -514,7 +514,7 @@ async fn install_session_from_register_secrets(
         &live_identity,
         secrets.device_id.as_str(),
         secrets.access_token.as_str(),
-        secrets.refresh_token.as_deref(),
+        secrets.refresh_token.as_ref().map(|t| t.as_str()),
     )
     .map_err(|_| {
         MatrixAuthCommandError::invalid_input("v-auth.4b-register-session-material-invalid")
