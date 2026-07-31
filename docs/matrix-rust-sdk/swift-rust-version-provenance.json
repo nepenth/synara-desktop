@@ -233,7 +233,7 @@
   "related_artifacts": [
     "docs/matrix-rust-sdk/0.18.0-source-provenance.md",
     "docs/matrix-rust-sdk/0.18.0-source-provenance.json",
-    "docs/matrix-rust-sdk/implementation-handoff.md",
+    "docs/matrix-rust-sdk/README.md",
     "docs/matrix-rust-sdk-full-replacement-plan.md",
     "docs/desktop-foundation-reference-audit.md"
   ]
