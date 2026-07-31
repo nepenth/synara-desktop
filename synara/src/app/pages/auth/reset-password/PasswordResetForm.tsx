@@ -1,4 +1,4 @@
-import React, { FormEventHandler, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { FormEventHandler, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -14,20 +14,22 @@ import {
 } from 'folds';
 import { useNavigate } from 'react-router-dom';
 import FocusTrap from 'focus-trap-react';
-import { AuthDict, AuthType, MatrixError, createClient } from 'matrix-js-sdk';
 import { useAutoDiscoveryInfo } from '../../../hooks/useAutoDiscoveryInfo';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useAuthServer } from '../../../hooks/useAuthServer';
-import { usePasswordEmail } from '../../../hooks/usePasswordEmail';
 import { PasswordInput } from '../../../components/password-input';
 import { ConfirmPasswordMatch } from '../../../components/ConfirmPasswordMatch';
 import { FieldError } from '../FiledError';
 import { UIAFlowOverlay } from '../../../components/UIAFlowOverlay';
-import { EmailStageDialog } from '../../../components/uia-stages';
-import { ResetPasswordResult, resetPassword } from './resetPasswordUtil';
 import { getLoginPath, withSearchParam } from '../../pathUtils';
 import { LoginPathSearchParams } from '../../paths';
-import { getUIAError, getUIAErrorCode } from '../../../utils/matrix-uia';
+import {
+  completePasswordReset,
+  generatePasswordResetClientSecret,
+  requestPasswordResetEmailToken,
+  type NativePasswordEmailTokenResult,
+  type NativePasswordResetOutcome,
+} from './nativePasswordReset';
 
 type FormData = {
   email: string;
@@ -37,7 +39,6 @@ type FormData = {
 
 function ResetPasswordComplete({ email }: { email?: string }) {
   const server = useAuthServer();
-
   const navigate = useNavigate();
 
   const handleClick = () => {
@@ -71,59 +72,122 @@ function ResetPasswordComplete({ email }: { email?: string }) {
   );
 }
 
+function EmailVerifyDialog({
+  email,
+  errorCode,
+  errorMessage,
+  onContinue,
+  onResend,
+  onCancel,
+  busy,
+}: {
+  email: string;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  onContinue: () => void;
+  onResend: () => void;
+  onCancel: () => void;
+  busy: boolean;
+}) {
+  return (
+    <Dialog>
+      <Box style={{ padding: config.space.S400 }} direction="Column" gap="400">
+        <Box direction="Column" gap="100">
+          <Text size="H4">Verification Request Sent</Text>
+          <Text>
+            {`Please check your email "${email}" and validate before continuing further.`}
+          </Text>
+          {(errorCode || errorMessage) && (
+            <Text style={{ color: color.Critical.Main }}>
+              {errorCode ? `${errorCode}: ` : ''}
+              {errorMessage ?? 'Email has not been verified yet.'}
+            </Text>
+          )}
+        </Box>
+        <Button variant="Primary" onClick={onContinue} disabled={busy}>
+          <Text as="span" size="B400">
+            Continue
+          </Text>
+        </Button>
+        <Button variant="Secondary" fill="Soft" onClick={onResend} disabled={busy}>
+          <Text as="span" size="B400">
+            Resend Email
+          </Text>
+        </Button>
+        <Button variant="Critical" fill="None" outlined type="button" onClick={onCancel}>
+          <Text as="span" size="B400">
+            Cancel
+          </Text>
+        </Button>
+      </Box>
+    </Dialog>
+  );
+}
+
 type PasswordResetFormProps = {
   defaultEmail?: string;
 };
+
 export function PasswordResetForm({ defaultEmail }: PasswordResetFormProps) {
   const server = useAuthServer();
-
   const serverDiscovery = useAutoDiscoveryInfo();
   const baseUrl = serverDiscovery['m.homeserver'].base_url;
-  const mx = useMemo(() => createClient({ baseUrl }), [baseUrl]);
 
   const [formData, setFormData] = useState<FormData>();
+  const [verifyError, setVerifyError] = useState<{
+    errorCode?: string | null;
+    errorMessage?: string | null;
+  }>();
+  const sendAttemptRef = useRef(1);
 
-  const [passwordEmailState, passwordEmail] = usePasswordEmail(mx);
+  const [passwordEmailState, requestEmail] = useAsyncCallback<
+    NativePasswordEmailTokenResult,
+    Error,
+    [string, string]
+  >(
+    useCallback(
+      async (email, clientSecret) => {
+        const sendAttempt = sendAttemptRef.current;
+        sendAttemptRef.current += 1;
+        return requestPasswordResetEmailToken(baseUrl, email, clientSecret, sendAttempt);
+      },
+      [baseUrl]
+    )
+  );
 
   const [resetPasswordState, handleResetPassword] = useAsyncCallback<
-    ResetPasswordResult,
-    MatrixError,
-    [AuthDict, string]
-  >(useCallback(async (authDict, newPassword) => resetPassword(mx, authDict, newPassword), [mx]));
+    NativePasswordResetOutcome,
+    Error,
+    [FormData, string]
+  >(
+    useCallback(
+      async (data, sid) =>
+        completePasswordReset(baseUrl, data.email, data.password, data.clientSecret, sid),
+      [baseUrl]
+    )
+  );
 
-  const [ongoingAuthData, resetPasswordResult] =
-    resetPasswordState.status === AsyncStatus.Success ? resetPasswordState.data : [];
+  useEffect(() => {
+    if (
+      resetPasswordState.status === AsyncStatus.Success &&
+      resetPasswordState.data.status === 'email_not_verified'
+    ) {
+      setVerifyError({
+        errorCode: resetPasswordState.data.errorCode,
+        errorMessage: resetPasswordState.data.errorMessage,
+      });
+    }
+  }, [resetPasswordState]);
+
+  const resetComplete =
+    resetPasswordState.status === AsyncStatus.Success &&
+    resetPasswordState.data.status === 'complete';
+
   const resetPasswordError =
     resetPasswordState.status === AsyncStatus.Error ? resetPasswordState.error : undefined;
 
-  const flowErrorCode = ongoingAuthData && getUIAErrorCode(ongoingAuthData);
-  const flowError = ongoingAuthData && getUIAError(ongoingAuthData);
-
-  let waitingToVerifyEmail = true;
-  if (resetPasswordResult) waitingToVerifyEmail = false;
-  if (ongoingAuthData && flowErrorCode === undefined) waitingToVerifyEmail = false;
-  if (resetPasswordError) waitingToVerifyEmail = false;
-  if (resetPasswordState.status === AsyncStatus.Loading) waitingToVerifyEmail = false;
-
-  // We only support UIA m.login.password stage for reset password
-  // So we will assume to process it as soon as
-  // we have 401 with no error on initial request.
-  useEffect(() => {
-    if (formData && ongoingAuthData && !flowErrorCode) {
-      handleResetPassword(
-        {
-          type: AuthType.Password,
-          identifier: {
-            type: 'm.id.thirdparty',
-            medium: 'email',
-            address: formData.email,
-          },
-          password: formData.password,
-        },
-        formData.password
-      );
-    }
-  }, [ongoingAuthData, flowErrorCode, formData, handleResetPassword]);
+  const emailToken =
+    passwordEmailState.status === AsyncStatus.Success ? passwordEmailState.data : undefined;
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = (evt) => {
     evt.preventDefault();
@@ -142,27 +206,37 @@ export function PasswordResetForm({ defaultEmail }: PasswordResetFormProps) {
     }
     if (password !== confirmPassword) return;
 
-    const clientSecret = mx.generateClientSecret();
-    passwordEmail(email, clientSecret);
-    setFormData({
-      email,
-      password,
-      clientSecret,
-    });
+    const clientSecret = generatePasswordResetClientSecret();
+    setFormData({ email, password, clientSecret });
+    setVerifyError(undefined);
+    requestEmail(email, clientSecret);
   };
 
   const handleCancel = () => {
     window.location.reload();
   };
 
-  const handleSubmitRequest = useCallback(
-    (authDict: AuthDict) => {
-      if (!formData) return;
-      const { password } = formData;
-      handleResetPassword(authDict, password);
-    },
-    [formData, handleResetPassword]
-  );
+  const handleContinue = () => {
+    if (!formData || !emailToken) return;
+    setVerifyError(undefined);
+    handleResetPassword(formData, emailToken.sid);
+  };
+
+  const handleResend = () => {
+    if (!formData) return;
+    setVerifyError(undefined);
+    requestEmail(formData.email, formData.clientSecret);
+  };
+
+  const showEmailOverlay =
+    Boolean(formData) &&
+    Boolean(emailToken) &&
+    !resetComplete &&
+    passwordEmailState.status !== AsyncStatus.Loading;
+
+  const busy =
+    passwordEmailState.status === AsyncStatus.Loading ||
+    resetPasswordState.status === AsyncStatus.Loading;
 
   return (
     <Box as="form" onSubmit={handleSubmit} direction="Inherit" gap="400">
@@ -183,9 +257,7 @@ export function PasswordResetForm({ defaultEmail }: PasswordResetFormProps) {
           outlined
         />
         {passwordEmailState.status === AsyncStatus.Error && (
-          <FieldError
-            message={`${passwordEmailState.error.errcode}: ${passwordEmailState.error.data?.error}`}
-          />
+          <FieldError message={passwordEmailState.error.message || 'Failed to send reset email.'} />
         )}
       </Box>
       <ConfirmPasswordMatch initialValue>
@@ -224,11 +296,7 @@ export function PasswordResetForm({ defaultEmail }: PasswordResetFormProps) {
         )}
       </ConfirmPasswordMatch>
       {resetPasswordError && (
-        <FieldError
-          message={`${resetPasswordError.errcode}: ${
-            resetPasswordError.data?.error ?? 'Failed to reset password.'
-          }`}
-        />
+        <FieldError message={resetPasswordError.message || 'Failed to reset password.'} />
       )}
       <span data-spacing-node />
       <Button type="submit" variant="Primary" size="500">
@@ -237,34 +305,23 @@ export function PasswordResetForm({ defaultEmail }: PasswordResetFormProps) {
         </Text>
       </Button>
 
-      {resetPasswordResult && <ResetPasswordComplete email={formData?.email} />}
+      {resetComplete && <ResetPasswordComplete email={formData?.email} />}
 
-      {passwordEmailState.status === AsyncStatus.Success && formData && waitingToVerifyEmail && (
+      {showEmailOverlay && formData && emailToken && (
         <UIAFlowOverlay currentStep={1} stepCount={1} onCancel={handleCancel}>
-          <EmailStageDialog
-            stageData={{
-              type: AuthType.Email,
-              errorCode: flowErrorCode,
-              error: flowError,
-              session: ongoingAuthData?.session,
-            }}
-            submitAuthDict={handleSubmitRequest}
+          <EmailVerifyDialog
             email={formData.email}
-            clientSecret={formData.clientSecret}
-            requestEmailToken={passwordEmail}
-            emailTokenState={passwordEmailState}
+            errorCode={verifyError?.errorCode}
+            errorMessage={verifyError?.errorMessage}
+            onContinue={handleContinue}
+            onResend={handleResend}
             onCancel={handleCancel}
+            busy={busy}
           />
         </UIAFlowOverlay>
       )}
 
-      <Overlay
-        open={
-          passwordEmailState.status === AsyncStatus.Loading ||
-          resetPasswordState.status === AsyncStatus.Loading
-        }
-        backdrop={<OverlayBackdrop />}
-      >
+      <Overlay open={busy} backdrop={<OverlayBackdrop />}>
         <OverlayCenter>
           <Spinner variant="Secondary" size="600" />
         </OverlayCenter>

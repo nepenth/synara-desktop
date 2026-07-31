@@ -35,6 +35,7 @@ mod input;
 mod login;
 mod login_flow;
 pub(crate) mod product;
+mod reset_password;
 mod uia;
 
 pub use client_config::{homeserver_url_for_client_builder, identity_with_discovered_homeserver};
@@ -63,6 +64,10 @@ pub use login_flow::{
 };
 pub use product::{
     MatrixAuthCommandError, MatrixAuthState, MatrixLoginIdentity, MatrixSessionSnapshot,
+};
+pub use reset_password::{
+    complete_password_reset, password_reset_ephemeral_user_id, request_password_email_token,
+    PasswordEmailTokenResult, PasswordResetOutcome,
 };
 pub use uia::{
     UiaFlowKind, UiaOutcome, UiaPhase, UiaSession, UiaStage, UiaStageKind, MAX_UIA_ID_CHARS,

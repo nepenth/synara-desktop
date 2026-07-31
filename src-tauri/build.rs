@@ -33,6 +33,8 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "desktop_read_diagnostics",
     "desktop_clear_diagnostics",
     "desktop_agent_action",
+    "matrix_password_reset_request_email_token",
+    "matrix_password_reset_complete",
     "matrix_cross_signing_status",
     "matrix_cross_signing_setup",
     "matrix_cross_signing_setup_password",
