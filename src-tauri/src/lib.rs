@@ -280,6 +280,7 @@ pub fn run() {
             desktop_spellcheck::desktop_enable_spellcheck,
             desktop_agent_actions::desktop_agent_action,
             matrix::auth::product::matrix_login_password,
+            matrix::auth::product::matrix_login_flows,
             matrix::auth::product::matrix_password_reset_request_email_token,
             matrix::auth::product::matrix_password_reset_complete,
             matrix::auth::product::matrix_register_flows,
