@@ -33,7 +33,7 @@ import { getLoadedLiveTimelineEvents, getRoomCurrentState } from './timelineLife
 export const getStateEvent = (
   room: Room,
   eventType: StateEvent,
-  stateKey = ''
+  stateKey = '',
 ): MatrixEvent | undefined =>
   getRoomCurrentState(room)?.getStateEvents(eventType, stateKey) ?? undefined;
 
@@ -42,7 +42,7 @@ export const getStateEvents = (room: Room, eventType: StateEvent): MatrixEvent[]
 
 export const getAccountData = (
   mx: MatrixClient,
-  eventType: AccountDataEvent
+  eventType: AccountDataEvent,
 ): MatrixEvent | undefined => mx.getAccountData(eventType as any);
 
 export const getMDirects = (mDirectEvent: MatrixEvent): Set<string> => {
@@ -92,13 +92,6 @@ export const isUnsupportedRoom = (room: Room | null): boolean => {
   return event.getContent().type !== undefined && event.getContent().type !== RoomType.Space;
 };
 
-export function isValidChild(mEvent: MatrixEvent): boolean {
-  return (
-    mEvent.getType() === StateEvent.SpaceChild &&
-    Array.isArray(mEvent.getContent<{ via: string[] }>().via)
-  );
-}
-
 export const getAllParents = (roomToParents: RoomToParents, roomId: string): Set<string> => {
   const allParents = new Set<string>();
 
@@ -114,19 +107,10 @@ export const getAllParents = (roomToParents: RoomToParents, roomId: string): Set
   return allParents;
 };
 
-export const getSpaceChildren = (room: Room) =>
-  getStateEvents(room, StateEvent.SpaceChild).reduce<string[]>((filtered, mEvent) => {
-    const stateKey = mEvent.getStateKey();
-    if (isValidChild(mEvent) && stateKey) {
-      filtered.push(stateKey);
-    }
-    return filtered;
-  }, []);
-
 export const mapParentWithChildren = (
   roomToParents: RoomToParents,
   roomId: string,
-  children: string[]
+  children: string[],
 ) => {
   const allParents = getAllParents(roomToParents, roomId);
   children.forEach((childId) => {
@@ -140,19 +124,10 @@ export const mapParentWithChildren = (
   });
 };
 
-export const getRoomToParents = (mx: MatrixClient): RoomToParents => {
-  const map: RoomToParents = new Map();
-  mx.getRooms()
-    .filter((room) => isSpace(room))
-    .forEach((room) => mapParentWithChildren(map, room.roomId, getSpaceChildren(room)));
-
-  return map;
-};
-
 export const getOrphanParents = (roomToParents: RoomToParents, roomId: string): string[] => {
   const parents = getAllParents(roomToParents, roomId);
   const orphanParents = Array.from(parents).filter(
-    (parentRoomId) => !roomToParents.has(parentRoomId)
+    (parentRoomId) => !roomToParents.has(parentRoomId),
   );
 
   return orphanParents;
@@ -274,7 +249,7 @@ export const getUnreadInfos = (mx: MatrixClient): UnreadInfo[] => {
 export const getRoomIconSrc = (
   icons: Record<IconName, IconSrc>,
   roomType?: string,
-  joinRule?: JoinRule
+  joinRule?: JoinRule,
 ): IconSrc => {
   if (roomType === RoomType.Space) {
     if (joinRule === JoinRule.Public) return icons.SpaceGlobe;
@@ -315,11 +290,12 @@ export const getRoomAvatarUrl = (
   mx: MatrixClient,
   room: Room,
   size: 32 | 96 = 32,
-  useAuthentication = false
+  useAuthentication = false,
 ): string | undefined => {
   const mxcUrl = room.getMxcAvatarUrl();
   return mxcUrl
-    ? mx.mxcUrlToHttp(mxcUrl, size, size, 'crop', undefined, false, useAuthentication) ?? undefined
+    ? (mx.mxcUrlToHttp(mxcUrl, size, size, 'crop', undefined, false, useAuthentication) ??
+        undefined)
     : undefined;
 };
 
@@ -327,7 +303,7 @@ export const getDirectRoomAvatarUrl = (
   mx: MatrixClient,
   room: Room,
   size: 32 | 96 = 32,
-  useAuthentication = false
+  useAuthentication = false,
 ): string | undefined => {
   const mxcUrl = room.getAvatarFallbackMember()?.getMxcAvatarUrl();
 
@@ -362,10 +338,10 @@ export const parseReplyFormattedBody = (
   roomId: string,
   userId: string,
   eventId: string,
-  formattedBody: string
+  formattedBody: string,
 ): string => {
   const replyToLink = `<a href="https://matrix.to/#/${encodeURIComponent(
-    roomId
+    roomId,
   )}/${encodeURIComponent(eventId)}">In reply to</a>`;
   const userLink = `<a href="https://matrix.to/#/${encodeURIComponent(userId)}">${userId}</a>`;
 
@@ -382,7 +358,7 @@ export const getMemberDisplayName = (room: Room, userId: string): string | undef
 export const getMemberSearchStr = (
   member: RoomMember,
   query: string,
-  mxIdToName: (mxId: string) => string
+  mxIdToName: (mxId: string) => string,
 ): string[] => [
   member.rawDisplayName === member.userId ? mxIdToName(member.userId) : member.rawDisplayName,
   query.startsWith('@') || query.indexOf(':') > -1 ? member.userId : mxIdToName(member.userId),
@@ -410,7 +386,7 @@ export const getEventReactions = (timelineSet: EventTimelineSet, eventId: string
   timelineSet.relations.getChildEventsForEvent(
     eventId,
     RelationType.Annotation,
-    EventType.Reaction
+    EventType.Reaction,
   );
 
 export const getEventEdits = (timelineSet: EventTimelineSet, eventId: string, eventType: string) =>
@@ -418,7 +394,7 @@ export const getEventEdits = (timelineSet: EventTimelineSet, eventId: string, ev
 
 export const getLatestEdit = (
   targetEvent: MatrixEvent,
-  editEvents: MatrixEvent[]
+  editEvents: MatrixEvent[],
 ): MatrixEvent | undefined => {
   const eventByTargetSender = (rEvent: MatrixEvent) =>
     rEvent.getSender() === targetEvent.getSender();
@@ -428,7 +404,7 @@ export const getLatestEdit = (
 export const getEditedEvent = (
   mEventId: string,
   mEvent: MatrixEvent,
-  timelineSet: EventTimelineSet
+  timelineSet: EventTimelineSet,
 ): MatrixEvent | undefined => {
   const edits = getEventEdits(timelineSet, mEventId, mEvent.getType());
   return edits && getLatestEdit(mEvent, edits.getRelations());
@@ -449,7 +425,7 @@ export const canEditEvent = (mx: MatrixClient, mEvent: MatrixEvent) => {
 
 export const getLatestEditableEvt = (
   timeline: EventTimeline,
-  canEdit: (mEvent: MatrixEvent) => boolean
+  canEdit: (mEvent: MatrixEvent) => boolean,
 ): MatrixEvent | undefined => {
   const events = timeline.getEvents();
 
@@ -479,7 +455,7 @@ export const getMentionContent = (userIds: string[], room: boolean): IMentions =
 export const getCommonRooms = (
   mx: MatrixClient,
   rooms: string[],
-  otherUserId: string
+  otherUserId: string,
 ): string[] => {
   const commonRooms: string[] = [];
 
@@ -525,7 +501,7 @@ export const getAllVersionsRoomCreator = (room: Room): Set<string> => {
 export const guessPerfectParent = (
   mx: MatrixClient,
   roomId: string,
-  parents: string[]
+  parents: string[],
 ): string | undefined => {
   if (parents.length === 1) {
     return parents[0];
@@ -541,7 +517,7 @@ export const guessPerfectParent = (
 
     const powerLevels = getStateEvent(
       r,
-      StateEvent.RoomPowerLevels
+      StateEvent.RoomPowerLevels,
     )?.getContent<IPowerLevelsContent>();
 
     const { users_default: usersDefault, users } = powerLevels ?? {};
@@ -564,7 +540,7 @@ export const guessPerfectParent = (
   parents.forEach((parentId) => {
     const parentSpecialUsers = getSpecialUsers(parentId);
     const matchedUsersCount = parentSpecialUsers.filter((userId) =>
-      roomSpecialUsers.includes(userId)
+      roomSpecialUsers.includes(userId),
     ).length;
 
     if (matchedUsersCount > score) {

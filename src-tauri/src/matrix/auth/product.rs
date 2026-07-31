@@ -75,7 +75,9 @@ use crate::matrix::send::{
     AttachmentSendQueue, SendQueue,
 };
 use crate::matrix::spaces::{
-    snapshot_space_hierarchy, snapshot_space_parents, NativeSpaceHierarchySnapshot,
+    reparent_restricted_join_allow, remove_space_child, set_space_child, snapshot_space_children,
+    snapshot_space_hierarchy, snapshot_space_parents, NativeRestrictedJoinReparentResult,
+    NativeSpaceChildMutationResult, NativeSpaceChildrenSnapshot, NativeSpaceHierarchySnapshot,
     NativeSpaceParentsSnapshot,
 };
 use crate::matrix::store::{
@@ -1173,6 +1175,72 @@ pub async fn matrix_space_hierarchy_snapshot(
 }
 
 #[tauri::command]
+pub async fn matrix_space_children_snapshot(
+    state: State<'_, MatrixAuthState>,
+) -> Result<NativeSpaceChildrenSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    snapshot_space_children(&active.client, active.sync.session_generation())
+        .await
+        .map_err(map_space_children_error)
+}
+
+#[tauri::command]
+pub async fn matrix_space_child_set(
+    state: State<'_, MatrixAuthState>,
+    parent_id: String,
+    child_id: String,
+    via: Vec<String>,
+    order: Option<String>,
+    suggested: Option<bool>,
+) -> Result<NativeSpaceChildMutationResult, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    set_space_child(
+        &active.client,
+        &parent_id,
+        &child_id,
+        &via,
+        order.as_deref(),
+        suggested,
+    )
+    .await
+    .map_err(map_space_child_mutation_error)
+}
+
+#[tauri::command]
+pub async fn matrix_space_child_remove(
+    state: State<'_, MatrixAuthState>,
+    parent_id: String,
+    child_id: String,
+) -> Result<NativeSpaceChildMutationResult, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    remove_space_child(&active.client, &parent_id, &child_id)
+        .await
+        .map_err(map_space_child_mutation_error)
+}
+
+#[tauri::command]
+pub async fn matrix_restricted_join_reparent(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    remove_parent_id: Option<String>,
+    add_parent_id: String,
+) -> Result<NativeRestrictedJoinReparentResult, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    reparent_restricted_join_allow(
+        &active.client,
+        &room_id,
+        remove_parent_id.as_deref(),
+        &add_parent_id,
+    )
+    .await
+    .map_err(map_space_child_mutation_error)
+}
+
+#[tauri::command]
 pub async fn matrix_mdirect_snapshot(
     state: State<'_, MatrixAuthState>,
 ) -> Result<NativeMDirectSnapshot, MatrixAuthCommandError> {
@@ -2093,6 +2161,36 @@ fn map_space_hierarchy_error(diagnostic_id: &'static str) -> MatrixAuthCommandEr
         "The native Matrix space hierarchy is unavailable.",
         diagnostic_id,
     )
+}
+
+fn map_space_children_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "Unknown",
+        "The native Matrix space child graph is unavailable.",
+        diagnostic_id,
+    )
+}
+
+fn map_space_child_mutation_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    let (code, message) = match diagnostic_id {
+        "v-rooms.2c-invalid-parent"
+        | "v-rooms.2c-invalid-child"
+        | "v-rooms.2c-invalid-room"
+        | "v-rooms.2c-invalid-via"
+        | "v-rooms.2c-invalid-order" => (
+            "InvalidRequest",
+            "The native Matrix space child request is invalid.",
+        ),
+        "v-rooms.2c-room-missing" | "v-rooms.2c-room-not-joined" => (
+            "NotFound",
+            "The native Matrix space child room was not found.",
+        ),
+        _ => (
+            "Unknown",
+            "The native Matrix space child mutation could not be completed.",
+        ),
+    };
+    MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
 
 fn map_mdirect_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
