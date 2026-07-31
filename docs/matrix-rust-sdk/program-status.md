@@ -35,7 +35,7 @@ These release/main fields do not describe partial product wiring on the integrat
 - Next slices: `V-TIMELINE.1` → `V-AUTH.2` → `V-AUTH.3` → `V-AUTH.4` → `V-ROOMS.2` → `V-SEND.5`
 - Held PRs: #221, #240, #109, #193, #196, #198, #199, #201, #203, #204, #207, #208, #209
 - Completion evidence: negative capability-owner/file deletion delta; global direct-import delta recorded and non-increasing
-- matrix-js-sdk inventory: **200 files / 249 import lines current**; baseline **232 / 292**
+- matrix-js-sdk inventory: **200 files / 244 import lines current**; baseline **232 / 292**
 
 ## Phase gates
 
