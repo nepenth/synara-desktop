@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use matrix_sdk::{
     ruma::{
         events::direct::{DirectEventContent, OwnedDirectUserIdentifier},
-        OwnedRoomId, OwnedUserId, UserId,
+        OwnedRoomId, UserId,
     },
     Client,
 };
