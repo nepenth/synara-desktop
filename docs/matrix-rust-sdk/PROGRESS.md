@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-07-31**                                                                                                                                                                                                                                                        |
-| Integration tip    | `e6db76c7` — after [#278](https://github.com/nepenth/synara-desktop/pull/278) docs pin / [#277](https://github.com/nepenth/synara-desktop/pull/277) / [#276](https://github.com/nepenth/synara-desktop/pull/276) V-AUTH.3 |
-| Active work        | **This PR** desktop password login fail-closed native-only (`loginUtil`); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD |
+| Integration tip    | `7709507a` — tip after [#281](https://github.com/nepenth/synara-desktop/pull/281); **this PR** password loginUtil |
+| Active work        | **This PR** desktop password login fail-closed native-only (`loginUtil`); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD; [#280](https://github.com/nepenth/synara-desktop/pull/280) UIA non-retention draft |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | … [#276](https://github.com/nepenth/synara-desktop/pull/276) V-AUTH.3 production **172→169** / allowlist **175→171**. **This PR (password loginUtil):** production import files **169→167** / allowlist **171→169**. |
@@ -32,10 +32,10 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `e6db76c7`** — **This PR** desktop password login fail-closed native-only (`loginUtil` residual); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. |
+| **Now**        | **Tip `7709507a`** — **This PR** password `loginUtil` residual [#279](https://github.com/nepenth/synara-desktop/pull/279); [#280](https://github.com/nepenth/synara-desktop/pull/280) UIA non-retention; #240 HOLD. |
 | **Policy**     | [full-vertical-policy.md](full-vertical-policy.md) |
 | **Tip**        | `e6db76c7` after [#278](https://github.com/nepenth/synara-desktop/pull/278) / [#277](https://github.com/nepenth/synara-desktop/pull/277) / [#276](https://github.com/nepenth/synara-desktop/pull/276). |
-| **Active PRs** | **This PR** password `loginUtil` residual; [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. |
+| **Active PRs** | **This PR** [#279](https://github.com/nepenth/synara-desktop/pull/279); [#280](https://github.com/nepenth/synara-desktop/pull/280); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. |
 | **Blocked**    | Merging plateau D0.6 (#221); claiming V-TIMELINE cutover (#240 HOLD); starting new media/widgets/etc before residual queue; merging L1 foundations; umbrella #39. |
 
 ---
