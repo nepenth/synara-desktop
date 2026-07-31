@@ -151,7 +151,7 @@ methods that remain reachable on a native session are the residuals in §3.3–�
 | **V-SEND.R-ROOM-PROFILE** | Room avatar/name/topic writes | `RoomProfile.tsx` | No native `RoomAvatar`/`RoomName`/`RoomTopic` state writes |
 | **V-SEND.R-CALL-UPLOAD** | Call widget media upload/download | `CallWidgetDriver.ts` | No native widget media upload |
 | **V-SEND.R-FORWARD** | Message forward to another room | `Message.tsx` | No native forward/send-to-room owner |
-| **V-SEND.R-POLL-THREAD** | Poll start/response in a thread | `RoomInput.tsx` `handleSendPoll`, `nativePoll.ts` | Native poll owner lacks `threadRoot`/`replyTo` |
+| **V-SEND.R-POLL-THREAD** | Poll start/response in a thread | native poll owner | **DONE #282** — `threadRoot`/`replyTo` wired |
 | **V-SEND.R-EDIT** | Message edit/replace | `MessageEditor.tsx` | Native `matrix_edit_message` owner (in-PR); JS path only when no native session |
 | **V-SEND.R-DEVTOOL** | Developer-tool raw event send | `SendRoomEvent.tsx` | Developer tool; not a product path |
 
