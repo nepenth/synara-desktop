@@ -73,7 +73,7 @@ const getHierarchySpaces = (
   rootSpaceId: string,
   getRoom: GetRoomCallback,
   spaceRooms: Set<string>,
-  edgeMap: SpaceChildEdgeMap,
+  edgeMap: SpaceChildEdgeMap
 ): HierarchyItemSpace[] => {
   const rootSpaceItem: HierarchyItemSpace = {
     roomId: rootSpaceId,
@@ -129,13 +129,13 @@ const getSpaceHierarchy = (
   spaceRooms: Set<string>,
   getRoom: (roomId: string) => Room | undefined,
   closedCategory: (spaceId: string) => boolean,
-  edgeMap: SpaceChildEdgeMap,
+  edgeMap: SpaceChildEdgeMap
 ): SpaceHierarchy[] => {
   const spaceItems: HierarchyItemSpace[] = getHierarchySpaces(
     rootSpaceId,
     getRoom,
     spaceRooms,
-    edgeMap,
+    edgeMap
   );
 
   const hierarchy: SpaceHierarchy[] = spaceItems.map((spaceItem) => {
@@ -183,7 +183,7 @@ const useNativeSpaceChildEdgeMap = (): SpaceChildEdgeMap => {
           return;
         }
         const snapshot = await readSpaceChildrenWithNativeOwner(true, (command, args) =>
-          invokeDesktopWithAvailability(command, args),
+          invokeDesktopWithAvailability(command, args)
         );
         if (!disposed) {
           setEdgeMap(spaceChildEdgeMapFromNative(snapshot.edges));
@@ -210,12 +210,12 @@ export const useSpaceHierarchy = (
   spaceId: string,
   spaceRooms: Set<string>,
   getRoom: (roomId: string) => Room | undefined,
-  closedCategory: (spaceId: string) => boolean,
+  closedCategory: (spaceId: string) => boolean
 ): SpaceHierarchy[] => {
   const edgeMap = useNativeSpaceChildEdgeMap();
 
   const [hierarchyAtom] = useState(() =>
-    atom(getSpaceHierarchy(spaceId, spaceRooms, getRoom, closedCategory, edgeMap)),
+    atom(getSpaceHierarchy(spaceId, spaceRooms, getRoom, closedCategory, edgeMap))
   );
   const [hierarchy, setHierarchy] = useAtom(hierarchyAtom);
 
@@ -231,13 +231,13 @@ const getSpaceJoinedHierarchy = (
   getRoom: GetRoomCallback,
   excludeRoom: (parentId: string, roomId: string) => boolean,
   sortRoomItems: (parentId: string, items: HierarchyItem[]) => HierarchyItem[],
-  edgeMap: SpaceChildEdgeMap,
+  edgeMap: SpaceChildEdgeMap
 ): HierarchyItem[] => {
   const spaceItems: HierarchyItemSpace[] = getHierarchySpaces(
     rootSpaceId,
     getRoom,
     new Set(),
-    edgeMap,
+    edgeMap
   );
 
   const hierarchy: HierarchyItem[] = spaceItems.flatMap((spaceItem) => {
@@ -273,7 +273,7 @@ export const useSpaceJoinedHierarchy = (
   spaceId: string,
   getRoom: GetRoomCallback,
   excludeRoom: (parentId: string, roomId: string) => boolean,
-  sortByActivity: (spaceId: string) => boolean,
+  sortByActivity: (spaceId: string) => boolean
 ): HierarchyItem[] => {
   const mx = useMatrixClient();
   const edgeMap = useNativeSpaceChildEdgeMap();
@@ -287,11 +287,11 @@ export const useSpaceJoinedHierarchy = (
       items.sort(hierarchyItemTs).sort(hierarchyItemByOrder);
       return items;
     },
-    [mx, sortByActivity],
+    [mx, sortByActivity]
   );
 
   const [hierarchyAtom] = useState(() =>
-    atom(getSpaceJoinedHierarchy(spaceId, getRoom, excludeRoom, sortRoomItems, edgeMap)),
+    atom(getSpaceJoinedHierarchy(spaceId, getRoom, excludeRoom, sortRoomItems, edgeMap))
   );
   const [hierarchy, setHierarchy] = useAtom(hierarchyAtom);
 
@@ -329,12 +329,12 @@ const toSpaceHierarchyRoom = (room: NativeSpaceHierarchyRoom): SpaceHierarchyRoo
 });
 
 export async function fetchNativeSpaceHierarchyLevel(
-  roomId: string,
+  roomId: string
 ): Promise<SpaceHierarchyRoom[]> {
   const result = await readSpaceHierarchyWithNativeOwner(
     roomId,
     isSynaraDesktop(),
-    (command, args) => invokeDesktopWithAvailability(command, args),
+    (command, args) => invokeDesktopWithAvailability(command, args)
   );
   return result.rooms.map(toSpaceHierarchyRoom);
 }
@@ -346,7 +346,7 @@ export type FetchSpaceHierarchyLevelData = {
 };
 export const useFetchSpaceHierarchyLevel = (
   roomId: string,
-  enable: boolean,
+  enable: boolean
 ): FetchSpaceHierarchyLevelData => {
   const queryResponse = useQuery({
     enabled: enable,

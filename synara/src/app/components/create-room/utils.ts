@@ -16,7 +16,7 @@ import { CreateRoomAccess } from './types';
 export const createRoomCreationContent = (
   type: RoomType | undefined,
   allowFederation: boolean,
-  additionalCreators: string[] | undefined,
+  additionalCreators: string[] | undefined
 ): object => {
   const content: Record<string, any> = {};
   if (typeof type === 'string') {
@@ -35,7 +35,7 @@ export const createRoomCreationContent = (
 export const createRoomJoinRulesState = (
   access: CreateRoomAccess,
   parent: Room | undefined,
-  knock: boolean,
+  knock: boolean
 ) => {
   let content: RoomJoinRulesEventContent = {
     join_rule: knock ? JoinRule.Knock : JoinRule.Invite,
@@ -137,7 +137,7 @@ export const createRoom = async (mx: MatrixClient, data: CreateRoomData): Promis
     creation_content: createRoomCreationContent(
       data.type,
       data.allowFederation,
-      data.additionalCreators,
+      data.additionalCreators
     ),
     power_level_content_override:
       data.type === RoomType.Call ? createVoiceRoomPowerLevelsOverride() : undefined,

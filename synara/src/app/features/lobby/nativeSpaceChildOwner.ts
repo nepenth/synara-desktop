@@ -32,7 +32,7 @@ export type NativeRestrictedJoinReparentResult = {
 
 export type NativeInvoke = (
   command: string,
-  args?: Record<string, unknown>,
+  args?: Record<string, unknown>
 ) => Promise<DesktopInvokeResult<unknown>>;
 
 async function requireLoggedIn(invoke: NativeInvoke): Promise<void> {
@@ -48,7 +48,7 @@ async function requireLoggedIn(invoke: NativeInvoke): Promise<void> {
 
 export async function readSpaceChildrenWithNativeOwner(
   desktopAvailable: boolean,
-  invoke: NativeInvoke,
+  invoke: NativeInvoke
 ): Promise<NativeSpaceChildrenSnapshot> {
   if (!desktopAvailable) {
     throw new Error('Native Matrix space child graph is unavailable.');
@@ -66,7 +66,7 @@ export async function setSpaceChildWithNativeOwner(
   childId: string,
   content: MSpaceChildContent,
   desktopAvailable: boolean,
-  invoke: NativeInvoke,
+  invoke: NativeInvoke
 ): Promise<void> {
   if (!desktopAvailable) {
     throw new Error('Native Matrix space child ownership is unavailable.');
@@ -92,7 +92,7 @@ export async function removeSpaceChildWithNativeOwner(
   parentId: string,
   childId: string,
   desktopAvailable: boolean,
-  invoke: NativeInvoke,
+  invoke: NativeInvoke
 ): Promise<void> {
   if (!desktopAvailable) {
     throw new Error('Native Matrix space child ownership is unavailable.');
@@ -116,7 +116,7 @@ export async function reparentRestrictedJoinWithNativeOwner(
   removeParentId: string | undefined,
   addParentId: string,
   desktopAvailable: boolean,
-  invoke: NativeInvoke,
+  invoke: NativeInvoke
 ): Promise<void> {
   if (!desktopAvailable) {
     throw new Error('Native Matrix restricted join reparent is unavailable.');
