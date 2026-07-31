@@ -1382,6 +1382,7 @@ pub async fn matrix_reaction_redact(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
 pub async fn matrix_send_text(
     state: State<'_, MatrixAuthState>,
     room_id: String,
