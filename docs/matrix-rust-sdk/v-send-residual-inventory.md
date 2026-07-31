@@ -109,17 +109,17 @@ fully residual on the live JS client.
 |------|---------------|------------|----------------------|
 | `synara/src/app/features/room/message/Message.tsx` | `handleForwardConfirmed` → `mx.sendMessage(targetRoom.roomId, content)` | No native forward/send-to-room owner; JS `sendMessage` | **V-SEND.R-FORWARD** |
 
-### 3.6 Poll-in-thread — residual
+### 3.6 Poll-in-thread — DONE
 
-Poll **send** is native (#250), but the native poll owner does **not** accept a
-`threadRoot`/`replyTo` (verified: `sendPollWithNativeDesktopOwner` takes only
-`roomId/question/answers/maxSelections`). Starting a poll inside a thread is
-still residual.
+Poll **send** is native (#250). The native poll owner now accepts
+`threadRoot`/`replyTo` (mirroring V-SEND.5): `matrix_send_poll` wires
+`RelationWithoutReplacement::Thread` / `Reply` and `sendPollWithNativeDesktopOwner`
+forwards the thread args from `handleSendPoll`. Poll-in-thread is supported.
 
-| Path | Current owner | Native gap | Proposed residual ID |
-|------|---------------|------------|----------------------|
-| `synara/src/app/features/room/RoomInput.tsx` (`handleSendPoll`) | `sendPollWithNativeDesktopOwner({ roomId, question, answers, maxSelections })` — no `threadRoot`/`replyTo` | Native `matrix_send_poll` has no thread relation; poll-in-thread not supported | **V-SEND.R-POLL-THREAD** |
-| `synara/src/app/features/room/nativePoll.ts` / `nativePollOwner.ts` | Poll owner signature lacks thread args | Extend native poll owner with `threadRoot`/`replyTo` (mirror V-SEND.5) | **V-SEND.R-POLL-THREAD** |
+| Path | Current owner | Native gap | Residual ID |
+|------|---------------|------------|-------------|
+| `synara/src/app/features/room/RoomInput.tsx` (`handleSendPoll`) | `sendPollWithNativeDesktopOwner({ roomId, question, answers, maxSelections, threadRoot, replyTo })` | None — thread relation wired natively | **V-SEND.R-POLL-THREAD** (resolved) |
+| `synara/src/app/features/room/nativePoll.ts` / `nativePollOwner.ts` | Poll owner forwards `threadRoot`/`replyTo` to `matrix_send_poll` | None | **V-SEND.R-POLL-THREAD** (resolved) |
 
 ### 3.7 Other RoomInput send paths still on live JS client
 

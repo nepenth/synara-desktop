@@ -151,9 +151,13 @@ export const MessageEditor = as<'div', MessageEditorProps>(
         // The legacy `mx.sendMessage` replace path is only used when no native
         // session is live (web / logged-out). A native command failure throws
         // (fail-closed) rather than silently falling through to mx.sendMessage.
+        const eventId = mEvent.getId();
+        if (!eventId) {
+          throw new Error('Cannot edit a message without an event id.');
+        }
         const owner = await editMessageWithNativeDesktopOwner({
           roomId,
-          eventId: mEvent.getId(),
+          eventId,
           body: plainText,
           msgType: mEvent.getContent().msgtype,
           formattedBody: hasFormatted ? customHtml : undefined,
@@ -169,7 +173,7 @@ export const MessageEditor = as<'div', MessageEditorProps>(
           body: `* ${plainText}`,
           'm.new_content': newContent,
           'm.relates_to': {
-            event_id: mEvent.getId(),
+            event_id: eventId,
             rel_type: RelationType.Replace,
           },
         };
