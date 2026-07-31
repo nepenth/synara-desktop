@@ -156,6 +156,8 @@ export type NativeTimelineViewSnapshot = {
     unreadAnchorEventId?: string;
     isMarkedUnread: boolean;
   };
+  /** Authoritative `m.room.pinned_events` ids; absent/empty means nothing pinned. */
+  pinnedEventIds?: string[];
   rows: NativeTimelineViewRow[];
   capabilities: {
     markRead: boolean;
@@ -185,6 +187,8 @@ export type NativeTimelineViewDeltaBatch = {
   ops: NativeTimelineViewDeltaOp[];
   readState?: NativeTimelineViewSnapshot['readState'];
   pagination?: NativeTimelineViewSnapshot['pagination'];
+  /** Full replacement of room pin ids when the native owner observes a change. */
+  pinnedEventIds?: string[];
 };
 
 export type NativeTimelineOpenReadback = {
@@ -223,8 +227,9 @@ const isValidIndex = (index: number, length: number, allowEnd = false): boolean 
 /**
  * Applies one exact native stream update. Invalid operations and revision gaps
  * are rejected rather than guessed at or repaired with a JS timeline fetch.
- * Metadata-only batches (readState / pagination without row ops) are accepted
- * when the native owner emits live frontier or pagination signals.
+ * Metadata-only batches (readState / pagination / pinnedEventIds without row
+ * ops) are accepted when the native owner emits live frontier, pagination, or
+ * pin-list signals.
  */
 export const applyNativeTimelineViewDelta = (
   snapshot: NativeTimelineViewSnapshot,
@@ -239,7 +244,9 @@ export const applyNativeTimelineViewDelta = (
     return undefined;
   }
 
-  const hasMetadata = Boolean(batch.readState || batch.pagination);
+  const hasMetadata = Boolean(
+    batch.readState || batch.pagination || batch.pinnedEventIds !== undefined
+  );
   if (batch.ops.length === 0 && !hasMetadata) {
     return undefined;
   }
@@ -297,8 +304,61 @@ export const applyNativeTimelineViewDelta = (
     rows,
     ...(batch.readState ? { readState: batch.readState } : {}),
     ...(batch.pagination ? { pagination: batch.pagination } : {}),
+    ...(batch.pinnedEventIds !== undefined ? { pinnedEventIds: batch.pinnedEventIds } : {}),
   };
 };
+
+/** Whether the room pin list currently includes this remote event id. */
+export const isNativeTimelineEventPinned = (
+  pinnedEventIds: readonly string[] | undefined,
+  eventId: string | undefined
+): boolean => Boolean(eventId && pinnedEventIds?.includes(eventId));
+
+/**
+ * Attach Matrix HTML only when it is non-empty and distinct from plain text.
+ * Mirrors the Rust `should_attach_formatted_body` action helper.
+ */
+export const shouldAttachFormattedBody = (body: string, formattedBody?: string | null): boolean => {
+  const html = formattedBody?.trim();
+  if (!html) return false;
+  return html !== body.trim();
+};
+
+/** Prefer the latest remote thread event when focusing from a thread summary. */
+export const nativeThreadFocusEventId = (
+  thread: NativeTimelineThreadSummary | undefined
+): string | undefined => thread?.latestEventId ?? thread?.rootEventId;
+
+export type NativeForwardTargetRoom = {
+  roomId: string;
+  name?: string;
+  isEncrypted?: boolean;
+  isSpace?: boolean;
+};
+
+/**
+ * Filter joined rooms for the unselected forward shell (exclude source/spaces).
+ * Product multi-room pickers may add more constraints; this is the DTO-safe core.
+ */
+export const filterNativeForwardTargets = (
+  rooms: readonly NativeForwardTargetRoom[],
+  sourceRoomId: string,
+  query = ''
+): NativeForwardTargetRoom[] => {
+  const needle = query.trim().toLowerCase();
+  return rooms.filter((room) => {
+    if (!room.roomId || room.roomId === sourceRoomId || room.isSpace) return false;
+    if (!needle) return true;
+    const name = room.name?.toLowerCase() ?? '';
+    return name.includes(needle) || room.roomId.toLowerCase().includes(needle);
+  });
+};
+
+/** True when forwarding from an encrypted room into a cleartext target. */
+export const needsNativeForwardEncryptionConfirm = (
+  sourceEncrypted: boolean | undefined,
+  targetEncrypted: boolean | undefined
+): boolean => Boolean(sourceEncrypted) && targetEncrypted === false;
 
 export type NativeTimelineOpenInput = {
   roomId: string;

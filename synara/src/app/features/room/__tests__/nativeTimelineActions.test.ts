@@ -11,6 +11,7 @@ import {
   pollVoteWithNativeTimelineOwner,
   redactWithNativeTimelineOwner,
   reportWithNativeTimelineOwner,
+  selectNativeTimelinePinAction,
   unpinWithNativeTimelineOwner,
   type NativeInvoke,
 } from '../nativeTimelineActions';
@@ -202,4 +203,9 @@ test('isNativeTimelineForwardMedia routes sticker and media rows only', () => {
     isNativeTimelineForwardMedia({ kind: 'message', messageType: 'notice', hasMedia: true }),
     false
   );
+});
+
+test('selectNativeTimelinePinAction uses pin-list state not dual buttons', () => {
+  assert.equal(selectNativeTimelinePinAction(false), 'pin');
+  assert.equal(selectNativeTimelinePinAction(true), 'unpin');
 });

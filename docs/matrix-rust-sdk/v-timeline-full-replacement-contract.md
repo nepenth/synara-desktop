@@ -102,11 +102,13 @@ the exact returned stream, and rejects revision gaps or malformed operations
 instead of fetching through the JS timeline. The unselected virtualized
 presenter consumes only that product DTO and invokes only capability-gated
 native pagination/read/jump-latest commands plus capability-gated row actions
-(react, reply-draft, edit, forward target-room form, redact, report, pin/unpin,
-later save, poll vote, call decline) and surfaces reply/thread product fields.
-It is not an active presenter or a fallback route: product selection, full
-Message-menu/composer/room-picker parity, and live authenticated viewport proof
-remain absent. The initial unread/read-frontier open is
+(react, reply-draft including start-thread, rich edit plain+HTML body, forward
+room-list picker with encrypted→cleartext confirm, redact, report, pin/unpin
+gated by projected `pinnedEventIds`, later save, poll vote, call decline) and
+surfaces reply/thread product fields with in-shell focus open for reply parent
+and thread latest/root. It is not an active presenter or a fallback route:
+product selection, full Message-menu/composer parity, and live authenticated
+viewport proof remain absent. The initial unread/read-frontier open is
 native-owned. Normal opens now also carry a typed local viewport restore hint
 (`at_bottom`, `live_tail_event_id`, `updated_at_ms`, `restored_anchor_event_id`)
 and resolve placement with legacy-compatible precedence: unread beats
@@ -148,7 +150,7 @@ legacy composer or a rich reply/edit flow.
 | Reactions                   | V-SEND.2 typed toggle/ensure/redact commands       | Merged on tip via [#239](https://github.com/nepenth/synara-desktop/pull/239); row `react` capability open for remote message/sticker/poll; RoomTimeline + unselected presenter invoke `nativeReactionOwner`                                                                                  |
 | Plain-text reply            | Native send plus native reply draft/composer state | Transport via `matrix_send_text`/`reply_to`; `matrix_composer_{set,clear,get}_reply_draft` owns the reply target with typed readback; RoomTimeline/RoomInput consume that owner on desktop. Body drafts remain local Slate/localStorage                                                      |
 | Rich send, edit, forward    | Typed send/edit/forward DTO commands               | `matrix_send_text` accepts optional `formattedBody`; edit accepts optional HTML; text/media forward commands exist; Message forward UI uses native owners on desktop (no JS `sendMessage` fallback)                                                                                          |
-| Redact, report, pin         | Typed room-event action commands                   | `matrix_timeline_redact` / `report` / `pin` / `unpin` exist with typed readback; Message menu + RoomPinMenu invoke native owners on desktop (no JS `redactEvent` / `reportEvent` / pin `sendStateEvent`)                                                                                     |
+| Redact, report, pin         | Typed room-event action commands                   | `matrix_timeline_redact` / `report` / `pin` / `unpin` exist with typed readback; Message menu + RoomPinMenu invoke native owners on desktop (no JS `redactEvent` / `reportEvent` / pin `sendStateEvent`); unselected presenter gates Pin vs Unpin from stream `pinnedEventIds` (room-info live updates) |
 | Mark read/unread, receipts  | Native receipt/read-frontier command and readback  | Stream-addressed private `m.read` / unread-flag command and snapshot readback exist; unread opening uses the native `m.fully_read` frontier; normal open restore policy and jump-to-latest are native; live frontier and pagination metadata now emit on the view-delta stream               |
 | Save/later/notes/reminders  | Typed account-data commands and snapshot           | Typed `matrix_later_*` / `matrix_room_notes_*` snapshot+mutate with content readback; RoomTimeline / RoomNotesPanel / Later / badge prefer native owners on desktop; JS `setAccountData` writers deleted; pure codecs retained; **NativeTimelinePresenter unselected**; live proof unclaimed |
 | Media/sticker image display | Bounded native media-handle resolver               | Wired on the unselected presenter via stream/session-bound opaque handles and the shared `synara-media` protocol; selection still deferred                                                                                                                                                   |

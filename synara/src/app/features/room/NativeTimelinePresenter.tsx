@@ -2,7 +2,12 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Box, Button, Scroll, Text, config } from 'folds';
 import { sanitizeCustomHtml } from '../../utils/sanitize';
-import { setNativeComposerReplyDraft } from './nativeComposerDraft';
+import {
+  clearNativeComposerReplyDraft,
+  getNativeComposerReplyDraft,
+  setNativeComposerReplyDraft,
+} from './nativeComposerDraft';
+import type { NativeComposerReplyDraft } from './nativeComposerDraftOwner';
 import { createLaterItemFromIds, upsertLaterWithNativeOwner } from './nativeLaterOwner';
 import { toggleReactionWithNativeOwner } from './nativeReactionOwner';
 import {
@@ -18,13 +23,21 @@ import {
 import {
   callDeclineWithNativeTimelineOwner,
   isNativeTimelineForwardMedia,
+  selectNativeTimelinePinAction,
 } from './nativeTimelineActions';
 import {
+  filterNativeForwardTargets,
+  isNativeTimelineEventPinned,
+  nativeThreadFocusEventId,
   nativeTimelineMediaSrc,
+  needsNativeForwardEncryptionConfirm,
+  shouldAttachFormattedBody,
+  type NativeTimelineMediaHandle,
   type NativeTimelineRowCapabilities,
   type NativeTimelineViewRow,
   useNativeTimelineView,
 } from './nativeTimelineView';
+import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 
 type NativeTimelinePresenterProps = {
@@ -78,10 +91,20 @@ const rowCapabilities = (row: NativeTimelineViewRow): NativeTimelineRowCapabilit
   return undefined;
 };
 
+const mediaStyle = (media?: NativeTimelineMediaHandle): React.CSSProperties => {
+  const maxWidth = media?.width ? Math.min(media.width, 480) : 480;
+  const maxHeight = media?.height ? Math.min(media.height, 480) : 480;
+  return { maxWidth, maxHeight, width: 'auto', height: 'auto' };
+};
+
 type NativeTimelineRowProps = {
   row: NativeTimelineViewRow;
   roomId: string;
+  pinnedEventIds?: string[];
+  sourceEncrypted?: boolean;
   onActionError: (message: string) => void;
+  onReplyDraftChanged: () => void;
+  onFocusEvent: (eventId: string) => void;
 };
 
 const runNativeRowAction = (
@@ -98,30 +121,62 @@ const NativeTimelineRowActions = ({
   roomId,
   eventId,
   body,
+  formattedBody,
   rowKind,
   messageType,
   hasMedia,
   capabilities,
+  pinned,
+  sourceEncrypted,
   onActionError,
+  onReplyDraftChanged,
 }: {
   roomId: string;
   eventId?: string;
   body?: string;
+  formattedBody?: string;
   rowKind?: NativeTimelineViewRow['kind'];
   messageType?: string;
   hasMedia?: boolean;
   capabilities?: NativeTimelineRowCapabilities;
+  pinned?: boolean;
+  sourceEncrypted?: boolean;
   onActionError: (message: string) => void;
+  onReplyDraftChanged: () => void;
 }) => {
+  const roomList = useNativeRoomListSnapshot();
   const [editing, setEditing] = useState(false);
   const [editBody, setEditBody] = useState(body ?? '');
+  const [editFormattedBody, setEditFormattedBody] = useState(formattedBody ?? '');
   const [forwarding, setForwarding] = useState(false);
-  const [forwardTargetRoomId, setForwardTargetRoomId] = useState('');
+  const [forwardQuery, setForwardQuery] = useState('');
   const [forwardAsQuote, setForwardAsQuote] = useState(false);
+  const [forwardConfirm, setForwardConfirm] = useState<{
+    roomId: string;
+    name?: string;
+  } | null>(null);
 
   useEffect(() => {
-    if (!editing) setEditBody(body ?? '');
-  }, [body, editing]);
+    if (!editing) {
+      setEditBody(body ?? '');
+      setEditFormattedBody(formattedBody ?? '');
+    }
+  }, [body, editing, formattedBody]);
+
+  const forwardTargets = useMemo(
+    () =>
+      filterNativeForwardTargets(
+        roomList.rooms.map((room) => ({
+          roomId: room.roomId,
+          name: room.name,
+          isEncrypted: room.isEncrypted,
+          isSpace: room.isSpace,
+        })),
+        roomId,
+        forwardQuery
+      ),
+    [forwardQuery, roomId, roomList.rooms]
+  );
 
   if (!eventId || !capabilities) return null;
   const buttons: React.ReactNode[] = [];
@@ -138,6 +193,7 @@ const NativeTimelineRowActions = ({
               if (result === 'unavailable') {
                 throw new Error('Native reply draft is unavailable.');
               }
+              onReplyDraftChanged();
             },
             onActionError,
             'Native reply draft failed.'
@@ -145,6 +201,32 @@ const NativeTimelineRowActions = ({
         }
       >
         Reply
+      </Button>
+    );
+    buttons.push(
+      <Button
+        key="reply-thread"
+        size="300"
+        fill="Soft"
+        onClick={() =>
+          runNativeRowAction(
+            async () => {
+              const result = await setNativeComposerReplyDraft({
+                roomId,
+                eventId,
+                startThread: true,
+              });
+              if (result === 'unavailable') {
+                throw new Error('Native thread reply draft is unavailable.');
+              }
+              onReplyDraftChanged();
+            },
+            onActionError,
+            'Native thread reply draft failed.'
+          )
+        }
+      >
+        Reply in thread
       </Button>
     );
   }
@@ -158,6 +240,7 @@ const NativeTimelineRowActions = ({
           setForwarding(false);
           setEditing((open) => !open);
           setEditBody(body ?? '');
+          setEditFormattedBody(formattedBody ?? '');
         }}
       >
         {editing ? 'Cancel edit' : 'Edit'}
@@ -173,6 +256,7 @@ const NativeTimelineRowActions = ({
         onClick={() => {
           setEditing(false);
           setForwarding((open) => !open);
+          setForwardConfirm(null);
         }}
       >
         {forwarding ? 'Cancel forward' : 'Forward'}
@@ -216,36 +300,24 @@ const NativeTimelineRowActions = ({
     );
   }
   if (capabilities.pin) {
+    const pinAction = selectNativeTimelinePinAction(Boolean(pinned));
     buttons.push(
       <Button
-        key="pin"
+        key={pinAction}
         size="300"
         fill="Soft"
         onClick={() =>
           runNativeRowAction(
-            () => pinWithNativeTimelineAction({ roomId, eventId }),
+            () =>
+              pinAction === 'unpin'
+                ? unpinWithNativeTimelineAction({ roomId, eventId })
+                : pinWithNativeTimelineAction({ roomId, eventId }),
             onActionError,
-            'Native pin failed.'
+            pinAction === 'unpin' ? 'Native unpin failed.' : 'Native pin failed.'
           )
         }
       >
-        Pin
-      </Button>
-    );
-    buttons.push(
-      <Button
-        key="unpin"
-        size="300"
-        fill="Soft"
-        onClick={() =>
-          runNativeRowAction(
-            () => unpinWithNativeTimelineAction({ roomId, eventId }),
-            onActionError,
-            'Native unpin failed.'
-          )
-        }
-      >
-        Unpin
+        {pinAction === 'unpin' ? 'Unpin' : 'Pin'}
       </Button>
     );
   }
@@ -274,9 +346,17 @@ const NativeTimelineRowActions = ({
       onActionError('Edited body cannot be empty.');
       return;
     }
+    const nextFormatted = shouldAttachFormattedBody(nextBody, editFormattedBody)
+      ? editFormattedBody.trim()
+      : undefined;
     runNativeRowAction(
       async () => {
-        await editTextWithNativeTimelineAction({ roomId, eventId, body: nextBody });
+        await editTextWithNativeTimelineAction({
+          roomId,
+          eventId,
+          body: nextBody,
+          formattedBody: nextFormatted,
+        });
         setEditing(false);
       },
       onActionError,
@@ -284,12 +364,7 @@ const NativeTimelineRowActions = ({
     );
   };
 
-  const submitForward = () => {
-    const targetRoomId = forwardTargetRoomId.trim();
-    if (!targetRoomId) {
-      onActionError('Target room id is required to forward.');
-      return;
-    }
+  const sendForward = (targetRoomId: string) => {
     const useMedia =
       !forwardAsQuote &&
       isNativeTimelineForwardMedia({
@@ -314,12 +389,21 @@ const NativeTimelineRowActions = ({
           });
         }
         setForwarding(false);
-        setForwardTargetRoomId('');
+        setForwardQuery('');
         setForwardAsQuote(false);
+        setForwardConfirm(null);
       },
       onActionError,
       'Native forward failed.'
     );
+  };
+
+  const requestForward = (target: { roomId: string; name?: string; isEncrypted?: boolean }) => {
+    if (needsNativeForwardEncryptionConfirm(sourceEncrypted, target.isEncrypted)) {
+      setForwardConfirm({ roomId: target.roomId, name: target.name });
+      return;
+    }
+    sendForward(target.roomId);
   };
 
   return (
@@ -336,6 +420,14 @@ const NativeTimelineRowActions = ({
             style={{ width: '100%', resize: 'vertical' }}
             aria-label="Edit message body"
           />
+          <textarea
+            value={editFormattedBody}
+            onChange={(event) => setEditFormattedBody(event.target.value)}
+            rows={3}
+            style={{ width: '100%', resize: 'vertical' }}
+            aria-label="Edit message HTML body"
+            placeholder="Optional Matrix HTML (org.matrix.custom.html)"
+          />
           <Box gap="100">
             <Button size="300" onClick={submitEdit}>
               Save edit
@@ -345,35 +437,136 @@ const NativeTimelineRowActions = ({
       )}
       {forwarding && (
         <Box direction="Column" gap="100">
-          <input
-            value={forwardTargetRoomId}
-            onChange={(event) => setForwardTargetRoomId(event.target.value)}
-            placeholder="!target:example.org"
-            style={{ width: '100%' }}
-            aria-label="Forward target room id"
-          />
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input
-              type="checkbox"
-              checked={forwardAsQuote}
-              onChange={(event) => setForwardAsQuote(event.target.checked)}
-            />
-            <Text size="T200">Forward as quote</Text>
-          </label>
-          <Box gap="100">
-            <Button size="300" onClick={submitForward}>
-              Send forward
-            </Button>
-          </Box>
+          {forwardConfirm ? (
+            <Box direction="Column" gap="100">
+              <Text size="T200">
+                Forward from an encrypted room into {forwardConfirm.name || forwardConfirm.roomId}{' '}
+                (not encrypted)? Media keys will not transfer.
+              </Text>
+              <Box gap="100">
+                <Button size="300" onClick={() => sendForward(forwardConfirm.roomId)}>
+                  Forward anyway
+                </Button>
+                <Button size="300" fill="Soft" onClick={() => setForwardConfirm(null)}>
+                  Cancel
+                </Button>
+              </Box>
+            </Box>
+          ) : (
+            <>
+              <input
+                value={forwardQuery}
+                onChange={(event) => setForwardQuery(event.target.value)}
+                placeholder="Filter rooms by name or id"
+                style={{ width: '100%' }}
+                aria-label="Forward target room filter"
+              />
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  type="checkbox"
+                  checked={forwardAsQuote}
+                  onChange={(event) => setForwardAsQuote(event.target.checked)}
+                />
+                <Text size="T200">Forward as quote</Text>
+              </label>
+              <Box direction="Column" gap="100" style={{ maxHeight: 180, overflow: 'auto' }}>
+                {forwardTargets.length === 0 ? (
+                  <Text size="T200">No matching rooms.</Text>
+                ) : (
+                  forwardTargets.slice(0, 40).map((target) => (
+                    <Button
+                      key={target.roomId}
+                      size="300"
+                      fill="Soft"
+                      onClick={() => requestForward(target)}
+                    >
+                      {target.name || target.roomId}
+                      {target.isEncrypted ? ' · encrypted' : ''}
+                    </Button>
+                  ))
+                )}
+              </Box>
+            </>
+          )}
         </Box>
       )}
     </Box>
   );
 };
 
-const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProps) => {
+const NativeTimelineMedia = ({
+  media,
+  messageType,
+  body,
+  sticker,
+}: {
+  media?: NativeTimelineMediaHandle;
+  messageType?: string;
+  body?: string;
+  sticker?: boolean;
+}) => {
+  const mediaSrc = media ? nativeTimelineMediaSrc(media) : undefined;
+  if (!mediaSrc) {
+    return sticker ? <Text size="T300">Sticker media is unavailable.</Text> : null;
+  }
+  if (sticker) {
+    return <img src={mediaSrc} alt="Sticker" style={{ maxWidth: 256, maxHeight: 256 }} />;
+  }
+  if (messageType === 'image') {
+    return <img src={mediaSrc} alt={body || 'Image'} style={mediaStyle(media)} />;
+  }
+  if (messageType === 'audio') {
+    return (
+      // Matrix media metadata does not provide a captions track.
+      // eslint-disable-next-line jsx-a11y/media-has-caption
+      <audio
+        src={mediaSrc}
+        controls
+        {...(media?.durationMs ? { 'data-duration-ms': String(media.durationMs) } : {})}
+      />
+    );
+  }
+  if (messageType === 'video') {
+    return (
+      // Matrix media metadata does not provide a captions track.
+      // eslint-disable-next-line jsx-a11y/media-has-caption
+      <video
+        src={mediaSrc}
+        controls
+        style={mediaStyle(media)}
+        {...(media?.durationMs ? { 'data-duration-ms': String(media.durationMs) } : {})}
+      />
+    );
+  }
+  if (messageType === 'file') {
+    return (
+      <Box direction="Column" gap="100">
+        <a href={mediaSrc} download>
+          {body || 'Download file'}
+        </a>
+        {media?.mimeType ? (
+          <Text size="T200" style={{ opacity: 0.7 }}>
+            {media.mimeType}
+          </Text>
+        ) : null}
+      </Box>
+    );
+  }
+  return null;
+};
+
+const NativeTimelineRow = ({
+  row,
+  roomId,
+  pinnedEventIds,
+  sourceEncrypted,
+  onActionError,
+  onReplyDraftChanged,
+  onFocusEvent,
+}: NativeTimelineRowProps) => {
   const capabilities = rowCapabilities(row);
   const eventId = rowEventId(row);
+  const pinned = isNativeTimelineEventPinned(pinnedEventIds, eventId);
   const runReaction = (key: string) => {
     if (!eventId || !capabilities?.react) return;
     void toggleReactionWithNativeOwner({ roomId, eventId, key }).catch((error) => {
@@ -410,24 +603,41 @@ const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProp
 
   switch (row.kind) {
     case 'message': {
-      const mediaSrc = row.media ? nativeTimelineMediaSrc(row.media) : undefined;
       const isEmote = row.messageType === 'emote';
+      const threadFocus = nativeThreadFocusEventId(row.thread);
       return (
         <Box
           direction="Column"
           gap="100"
           style={{ padding: `${config.space.S200} ${config.space.S400}` }}
         >
-          <Text size="L400">{row.senderName}</Text>
+          <Box gap="200" alignItems="Center">
+            <Text size="L400">{row.senderName}</Text>
+            {pinned ? (
+              <Text size="T200" style={{ opacity: 0.7 }}>
+                Pinned
+              </Text>
+            ) : null}
+          </Box>
           {row.reply && (
             <Box
+              as="button"
               direction="Column"
               gap="100"
+              onClick={() => onFocusEvent(row.reply!.eventId)}
               style={{
                 opacity: 0.8,
                 borderLeft: '2px solid currentColor',
                 paddingLeft: config.space.S200,
+                background: 'transparent',
+                borderTop: 'none',
+                borderRight: 'none',
+                borderBottom: 'none',
+                textAlign: 'left',
+                cursor: 'pointer',
+                color: 'inherit',
               }}
+              aria-label={`Jump to replied message ${row.reply.eventId}`}
             >
               <Text size="T200">{row.reply.senderName}</Text>
               <Text size="T200" style={{ whiteSpace: 'pre-wrap' }}>
@@ -459,30 +669,13 @@ const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProp
               Edited
             </Text>
           ) : null}
-          {row.thread && (
-            <Text size="T200" style={{ opacity: 0.8 }}>
+          {row.thread && threadFocus ? (
+            <Button size="300" fill="Soft" onClick={() => onFocusEvent(threadFocus)}>
               Thread · {row.thread.replyCount} {row.thread.replyCount === 1 ? 'reply' : 'replies'}
-              {row.thread.latestEventId ? ` · latest ${row.thread.latestEventId}` : ''}
-            </Text>
-          )}
-          {mediaSrc && row.messageType === 'image' && (
-            <img src={mediaSrc} alt={row.body} style={{ maxWidth: '100%', maxHeight: 480 }} />
-          )}
-          {mediaSrc && row.messageType === 'audio' && (
-            // Matrix media metadata does not provide a captions track.
-            // eslint-disable-next-line jsx-a11y/media-has-caption
-            <audio src={mediaSrc} controls />
-          )}
-          {mediaSrc && row.messageType === 'video' && (
-            // Matrix media metadata does not provide a captions track.
-            // eslint-disable-next-line jsx-a11y/media-has-caption
-            <video src={mediaSrc} controls style={{ maxWidth: '100%', maxHeight: 480 }} />
-          )}
-          {mediaSrc && row.messageType === 'file' && (
-            <a href={mediaSrc} download>
-              {row.body}
-            </a>
-          )}
+              {row.thread.latestEventId ? ' · open latest' : ' · open root'}
+            </Button>
+          ) : null}
+          <NativeTimelineMedia media={row.media} messageType={row.messageType} body={row.body} />
           {(row.reactions?.length || capabilities?.react) && (
             <Box gap="100" wrap="Wrap">
               {row.reactions?.map((reaction) => (
@@ -508,11 +701,15 @@ const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProp
             roomId={roomId}
             eventId={eventId}
             body={row.body}
+            formattedBody={row.formattedBody}
             rowKind={row.kind}
             messageType={row.messageType}
             hasMedia={Boolean(row.media)}
             capabilities={capabilities}
+            pinned={pinned}
+            sourceEncrypted={sourceEncrypted}
             onActionError={onActionError}
+            onReplyDraftChanged={onReplyDraftChanged}
           />
         </Box>
       );
@@ -555,7 +752,10 @@ const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProp
             eventId={eventId}
             rowKind={row.kind}
             capabilities={capabilities}
+            pinned={pinned}
+            sourceEncrypted={sourceEncrypted}
             onActionError={onActionError}
+            onReplyDraftChanged={onReplyDraftChanged}
           />
         </Box>
       );
@@ -607,18 +807,18 @@ const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProp
         </Box>
       );
     case 'sticker': {
-      const mediaSrc = nativeTimelineMediaSrc(row.media);
       return (
         <Box
           direction="Column"
           gap="100"
           style={{ padding: `${config.space.S200} ${config.space.S400}` }}
         >
-          {mediaSrc ? (
-            <img src={mediaSrc} alt="Sticker" style={{ maxWidth: 256, maxHeight: 256 }} />
-          ) : (
-            <Text size="T300">Sticker media is unavailable.</Text>
-          )}
+          {pinned ? (
+            <Text size="T200" style={{ opacity: 0.7 }}>
+              Pinned
+            </Text>
+          ) : null}
+          <NativeTimelineMedia media={row.media} sticker />
           {capabilities?.react && (
             <Button size="300" fill="Soft" onClick={() => runReaction('👍')}>
               React
@@ -630,7 +830,10 @@ const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProp
             rowKind={row.kind}
             hasMedia={Boolean(row.media)}
             capabilities={capabilities}
+            pinned={pinned}
+            sourceEncrypted={sourceEncrypted}
             onActionError={onActionError}
+            onReplyDraftChanged={onReplyDraftChanged}
           />
         </Box>
       );
@@ -652,15 +855,20 @@ const NativeTimelineRow = ({ row, roomId, onActionError }: NativeTimelineRowProp
  * media, and viewport paths are incomplete; it is not a legacy fallback.
  */
 export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePresenterProps) {
+  const [focusEventId, setFocusEventId] = useState(eventId);
+  useEffect(() => {
+    setFocusEventId(eventId);
+  }, [eventId, roomId]);
+
   const openingViewport = useMemo(
-    () => (eventId ? undefined : nativeTimelineViewports.get(roomId)),
-    [eventId, roomId]
+    () => (focusEventId ? undefined : nativeTimelineViewports.get(roomId)),
+    [focusEventId, roomId]
   );
   const input = useMemo(
     () => ({
       roomId,
-      position: eventId
-        ? ({ kind: 'focused', eventId } as const)
+      position: focusEventId
+        ? ({ kind: 'focused', eventId: focusEventId } as const)
         : ({
             kind: 'normal',
             restoredAnchorEventId: openingViewport?.atBottom
@@ -668,12 +876,15 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
               : openingViewport?.anchor?.eventId,
           } as const),
     }),
-    [eventId, openingViewport, roomId]
+    [focusEventId, openingViewport, roomId]
   );
   const controller = useNativeTimelineView(input);
   const timelineState = controller.state;
   const readyState = timelineState.status === 'ready' ? timelineState : undefined;
   const [actionError, setActionError] = useState<string>();
+  const [replyDraft, setReplyDraft] = useState<NativeComposerReplyDraft | undefined>();
+  const roomList = useNativeRoomListSnapshot();
+  const sourceEncrypted = roomList.rooms.find((room) => room.roomId === roomId)?.isEncrypted;
   const scrollRef = useRef<HTMLDivElement>(null);
   const rows = useMemo(() => readyState?.snapshot.rows ?? [], [readyState?.snapshot.rows]);
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
@@ -689,6 +900,20 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     estimateSize: useCallback(() => 64, []),
     overscan: 8,
   });
+
+  const refreshReplyDraft = useCallback(() => {
+    void getNativeComposerReplyDraft({ roomId }).then((result) => {
+      if (result === 'unavailable') {
+        setReplyDraft(undefined);
+        return;
+      }
+      setReplyDraft(result.status === 'set' ? result.draft : undefined);
+    });
+  }, [roomId]);
+
+  useEffect(() => {
+    refreshReplyDraft();
+  }, [refreshReplyDraft]);
 
   const initialPlacementRef = useRef<string | undefined>(undefined);
   const saveViewport = useCallback(() => {
@@ -762,6 +987,19 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     return undefined;
   }, [readyState, roomId, rows, virtualizer]);
 
+  const onFocusEvent = useCallback(
+    (targetEventId: string) => {
+      const index = findAnchorIndex(rows, { itemId: targetEventId, eventId: targetEventId });
+      if (index >= 0) {
+        virtualizer.scrollToIndex(index, { align: 'center', behavior: 'smooth' });
+        return;
+      }
+      // Not in the current window: reopen focused through the native owner.
+      setFocusEventId(targetEventId);
+    },
+    [rows, virtualizer]
+  );
+
   if (timelineState.status === 'unavailable') return null;
   if (timelineState.status === 'loading') {
     return <Text size="T300">Opening native timeline…</Text>;
@@ -801,6 +1039,40 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
           </Button>
         )}
       </Box>
+      {replyDraft && (
+        <Box
+          direction="Column"
+          gap="100"
+          style={{
+            padding: config.space.S200,
+            borderBottom: '1px solid currentColor',
+            opacity: 0.9,
+          }}
+        >
+          <Text size="T200">
+            Replying to {replyDraft.senderId}
+            {replyDraft.threadRootEventId ? ' · in thread' : ''}
+          </Text>
+          <Text size="T200" style={{ whiteSpace: 'pre-wrap' }}>
+            {replyDraft.body}
+          </Text>
+          <Button
+            size="300"
+            fill="Soft"
+            onClick={() =>
+              runAction(async () => {
+                const result = await clearNativeComposerReplyDraft({ roomId });
+                if (result === 'unavailable') {
+                  throw new Error('Native reply draft clear is unavailable.');
+                }
+                refreshReplyDraft();
+              })
+            }
+          >
+            Cancel reply
+          </Button>
+        </Box>
+      )}
       {actionError && <Text size="T300">{actionError}</Text>}
       {snapshot.capabilities.paginateBackward && snapshot.pagination.backward !== 'exhausted' && (
         <Button size="300" onClick={() => runAction(() => controller.paginate('backwards'))}>
@@ -827,7 +1099,15 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
                   width: '100%',
                 }}
               >
-                <NativeTimelineRow row={row} roomId={roomId} onActionError={setActionError} />
+                <NativeTimelineRow
+                  row={row}
+                  roomId={roomId}
+                  pinnedEventIds={snapshot.pinnedEventIds}
+                  sourceEncrypted={sourceEncrypted}
+                  onActionError={setActionError}
+                  onReplyDraftChanged={refreshReplyDraft}
+                  onFocusEvent={onFocusEvent}
+                />
               </div>
             );
           })}

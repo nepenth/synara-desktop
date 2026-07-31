@@ -17,7 +17,7 @@ use matrix_sdk::{
         events::{reaction::ReactionEventContent, relation::Annotation},
         OwnedEventId, OwnedRoomId, OwnedUserId, UserId,
     },
-    Client,
+    Client, Room,
 };
 use matrix_sdk_crypto::types::events::UtdCause;
 use matrix_sdk_ui::timeline::{
@@ -1419,6 +1419,7 @@ fn spawn_view_update_owner(
             project_live_read_state(&timeline, &position, own_user_id.as_deref()).await;
         let mut last_pagination =
             pagination_state_from_hit_start(hit_start.load(Ordering::Acquire));
+        let mut last_pinned_event_ids = project_pinned_event_ids(timeline.room());
 
         let mut room_info = timeline.room().subscribe_info();
         let mut read_receipts = timeline.subscribe_own_user_read_receipts_changed().await;
@@ -1450,16 +1451,29 @@ fn spawn_view_update_owner(
                     if ops.is_empty() {
                         continue;
                     }
-                    emitter.emit(ops, None, None);
+                    emitter.emit(ops, None, None, None);
                 }
                 Some(_) = room_info.next() => {
                     let read_state =
                         project_live_read_state(&timeline, &position, own_user_id.as_deref()).await;
-                    if read_state == last_read_state {
+                    let pinned_event_ids = project_pinned_event_ids(timeline.room());
+                    let read_changed = read_state != last_read_state;
+                    let pins_changed = pinned_event_ids != last_pinned_event_ids;
+                    if !read_changed && !pins_changed {
                         continue;
                     }
-                    last_read_state = read_state.clone();
-                    emitter.emit(Vec::new(), Some(read_state), None);
+                    if read_changed {
+                        last_read_state = read_state.clone();
+                    }
+                    if pins_changed {
+                        last_pinned_event_ids = pinned_event_ids.clone();
+                    }
+                    emitter.emit(
+                        Vec::new(),
+                        read_changed.then_some(read_state),
+                        None,
+                        pins_changed.then_some(pinned_event_ids),
+                    );
                 }
                 Some(()) = read_receipts.next() => {
                     let read_state =
@@ -1468,7 +1482,7 @@ fn spawn_view_update_owner(
                         continue;
                     }
                     last_read_state = read_state.clone();
-                    emitter.emit(Vec::new(), Some(read_state), None);
+                    emitter.emit(Vec::new(), Some(read_state), None, None);
                 }
                 Some(status) = pagination_updates.next() => {
                     let pagination = pagination_state_from_status(status, &hit_start);
@@ -1476,7 +1490,7 @@ fn spawn_view_update_owner(
                         continue;
                     }
                     last_pagination = pagination.clone();
-                    emitter.emit(Vec::new(), None, Some(pagination));
+                    emitter.emit(Vec::new(), None, Some(pagination), None);
                 }
                 else => break,
             }
@@ -1498,8 +1512,13 @@ impl ViewDeltaEmitter {
         ops: Vec<super::TimelineViewDeltaOp>,
         read_state: Option<TimelineReadState>,
         pagination: Option<TimelinePaginationState>,
+        pinned_event_ids: Option<Vec<String>>,
     ) {
-        if ops.is_empty() && read_state.is_none() && pagination.is_none() {
+        if ops.is_empty()
+            && read_state.is_none()
+            && pagination.is_none()
+            && pinned_event_ids.is_none()
+        {
             return;
         }
         let next_revision = self
@@ -1517,6 +1536,7 @@ impl ViewDeltaEmitter {
                 ops,
                 read_state,
                 pagination,
+                pinned_event_ids,
             },
         );
     }
@@ -1678,6 +1698,7 @@ async fn view_snapshot_from_items(
         position: input.position,
         pagination: input.pagination,
         read_state,
+        pinned_event_ids: project_pinned_event_ids(timeline.room()),
         rows,
         capabilities: TimelineViewCapabilities {
             mark_read: true,
@@ -1686,6 +1707,15 @@ async fn view_snapshot_from_items(
             paginate_forward: true,
         },
     }
+}
+
+/// Project the room's current `m.room.pinned_events` list as product event ids.
+fn project_pinned_event_ids(room: &Room) -> Vec<String> {
+    room.pinned_event_ids()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|event_id| event_id.to_string())
+        .collect()
 }
 
 fn reaction_contains_event_id(
@@ -2177,6 +2207,7 @@ mod tests {
                     unread_anchor_event_id: None,
                     is_marked_unread: false,
                 },
+                pinned_event_ids: vec!["$pinned:example.org".into()],
                 rows: Vec::new(),
                 capabilities: TimelineViewCapabilities {
                     mark_read: false,
@@ -2193,6 +2224,7 @@ mod tests {
         assert!(snapshot.get("isEncrypted").is_none());
         assert!(snapshot.get("items").is_none());
         assert_eq!(snapshot["readState"]["isMarkedUnread"], false);
+        assert_eq!(snapshot["pinnedEventIds"][0], "$pinned:example.org");
         assert_eq!(json["position"]["kind"], "live_bottom");
     }
 
@@ -2214,6 +2246,7 @@ mod tests {
                 backward: TimelinePageState::Exhausted,
                 forward: TimelinePageState::Available,
             }),
+            pinned_event_ids: Some(vec!["$pin:example.org".into()]),
         };
         let json = serde_json::to_value(&batch).unwrap();
         assert_eq!(json["revision"], 4);
