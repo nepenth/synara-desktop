@@ -251,13 +251,7 @@ export function PasswordRegisterForm({
   >(
     useCallback(
       async (data, auth) =>
-        submitRegister(
-          baseUrl,
-          data.username,
-          data.password,
-          auth,
-          synaraDeviceDisplayName()
-        ),
+        submitRegister(baseUrl, data.username, data.password, auth, synaraDeviceDisplayName()),
       [baseUrl]
     )
   );

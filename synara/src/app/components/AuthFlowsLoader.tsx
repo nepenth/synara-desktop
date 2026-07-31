@@ -3,11 +3,7 @@ import { createClient } from 'matrix-js-sdk';
 import { AsyncStatus, useAsyncCallback } from '../hooks/useAsyncCallback';
 import { useAutoDiscoveryInfo } from '../hooks/useAutoDiscoveryInfo';
 import { promiseFulfilledResult } from '../utils/common';
-import {
-  AuthFlows,
-  RegisterFlowStatus,
-  type RegisterFlowsResponse,
-} from '../hooks/useAuthFlows';
+import { AuthFlows, RegisterFlowStatus, type RegisterFlowsResponse } from '../hooks/useAuthFlows';
 
 type AuthFlowsLoaderProps = {
   fallback?: () => ReactNode;
