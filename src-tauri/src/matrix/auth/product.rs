@@ -2875,6 +2875,75 @@ mod tests {
     }
 
     #[test]
+    fn v_auth_2_product_has_no_token_login_command_or_login_token_sdk_call() {
+        // Desktop product does not retain m.login.token (V-AUTH.2). Password
+        // login remains the only production Tauri login command.
+        //
+        // Read only production sections (exclude this tests module) so the
+        // negative assertions below do not match their own string literals.
+        let product_src = include_str!("product.rs");
+        let product_prod = product_src
+            .split("#[cfg(test)]")
+            .next()
+            .expect("product production section");
+        let login_src = include_str!("login.rs");
+        let login_prod = login_src
+            .split("#[cfg(test)]")
+            .next()
+            .expect("login production section");
+        let lib_src = include_str!("../../lib.rs");
+
+        assert!(
+            product_prod.contains("pub async fn matrix_login_password"),
+            "password login product command must remain registered"
+        );
+        assert!(
+            !product_prod.contains("pub async fn matrix_login_token"),
+            "token login must not be a product Tauri command"
+        );
+        assert!(
+            !lib_src.contains("matrix_login_token"),
+            "token login must not be registered in the invoke handler"
+        );
+        assert!(
+            !login_prod.contains("fn login_with_token"),
+            "login_with_token foundation must not remain after V-AUTH.2 non-retention"
+        );
+        assert!(
+            !login_prod.contains(".login_token("),
+            "SDK login_token must not be called from the desktop login module"
+        );
+
+        let login_fn = product_prod
+            .split("pub async fn matrix_login_password")
+            .nth(1)
+            .and_then(|rest| rest.split("pub async fn ").next())
+            .expect("matrix_login_password body");
+        // Secrets may be requested (request_refresh_token) but must not be read
+        // from/returned on the product DTO path or printed.
+        for forbidden in [
+            "access_token",
+            "login_token",
+            "println!",
+            "log::",
+            "tracing::",
+        ] {
+            assert!(
+                !login_fn.contains(forbidden),
+                "password login product path must not reference {forbidden}"
+            );
+        }
+        assert!(
+            login_fn.contains("request_refresh_token: true"),
+            "password login should request refresh tokens host-side without exposing them"
+        );
+        assert!(
+            login_fn.contains("MatrixLoginIdentity"),
+            "password login must return only privacy-safe identity fields"
+        );
+    }
+
+    #[test]
     fn crypto_status_projection_is_privacy_safe_and_reports_cross_signing_shape() {
         let status = crypto_status(
             7,
