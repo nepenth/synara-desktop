@@ -1,6 +1,6 @@
 # Matrix Rust SDK Replacement — Execution Handoff
 
-Last updated: 2026-07-30
+Last updated: 2026-07-31
 
 Authoritative program plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md)
 
@@ -24,33 +24,33 @@ Traceability artifacts:
 - [`feature-parity-traceability.json`](feature-parity-traceability.json)
 - [`feature-parity-traceability.md`](feature-parity-traceability.md)
 
-## Live continuation snapshot (2026-07-30)
+## Live continuation snapshot (2026-07-31)
 
 This section is the current handoff. The dated audit and former implementation
 ledger below remain historical evidence and must not override this snapshot,
 the operating model, or the canonical status ledger.
 
-| Field                        | Current value                                                                                                                                                                                                                                     |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `2c48fd45a08200a6e3491f100912f086e8458b3b`; V-ROOMS.1 [#241](https://github.com/nepenth/synara-desktop/pull/241) merged after V-AUTH.1 [#238](https://github.com/nepenth/synara-desktop/pull/238)    |
-| **Policy**                   | [Full vertical replacement](full-vertical-policy.md): no minima/plateau; **physical deletion per vertical**                                                                                                                                       |
-| **Active product work**      | Draft V-ROOMS.3 unread badges; [#239](https://github.com/nepenth/synara-desktop/pull/239) V-SEND.2 reactions; [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE boundary; V-CRYPTO.7 multi-session/UI proof remains unclaimed |
-| **Completed verticals**      | D0 core #214/#216/#218/#219/#220; V-CRYPTO.1–.7 have native owners and per-vertical legacy deletion complete; V-AUTH.1; V-ROOMS.1                                                                                                                 |
-| **Deletion residuals**       | V-CRYPTO.7 JS owners deleted; V-ROOMS.1 invite JS owners deleted; V-ROOMS.3 deletes JS room-list/unread binders on its candidate                                                                                                                  |
-| **Next product work**        | Land V-ROOMS.3 (candidate production **194→192**); keep V-SEND.2/V-TIMELINE ordered without selecting the timeline presenter; continue residual auth/rooms/send gaps                                                                              |
-| **Import baseline**          | 232 files / 292 direct import lines → 212 / 265 in V-CRYPTO.7; production importer files 207→201 and repository-wide 221→215                                                                                                                      |
-| **Held**                     | #221 plateau; L1-only notify/call/media/helper PRs unless they block the active vertical                                                                                                                                                          |
-| **Runtime truth**            | Native product cutover is underway capability-by-capability; relevant JS owners remain until deletion residuals close; **dual_backend false**                                                                                                     |
-| **Strict gates**             | Original-plan inventory ~74/112; 0/15 strict phase gates closed. Inventory is not product completion.                                                                                                                                             |
-| **Main PR**                  | [#39](https://github.com/nepenth/synara-desktop/pull/39) — do not merge without explicit user approval                                                                                                                                            |
+| Field                        | Current value                                                                                                                                                                                                                                                                      |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `0fb0fe425ae932e27445b8054f3a14d628e5a869`; V-ROOMS.5w [#251](https://github.com/nepenth/synara-desktop/pull/251) merged after V-ROOMS.5 read [#249](https://github.com/nepenth/synara-desktop/pull/249) at `d17ab2c`                  |
+| **Policy**                   | [Full vertical replacement](full-vertical-policy.md): no minima/plateau; **physical deletion per vertical**                                                                                                                                                                        |
+| **Active product work**      | V-SEND.3 [#250](https://github.com/nepenth/synara-desktop/pull/250) in flight (rebase after #251 → CI → merge). V-TIMELINE [#240](https://github.com/nepenth/synara-desktop/pull/240) **HOLD** (presenter unselected).                                                              |
+| **Completed verticals**      | D0 core #214/#216/#218/#219/#220; V-CRYPTO.1–.7; V-AUTH.1; V-ROOMS.1/.3/.4/.2a/.5/.5w; V-SEND.1/.2                                                                                                                                                                                  |
+| **Deletion residuals**       | V-SEND.3 poll JS writers on #250; V-TIMELINE JS shell until #240 closable; later auth/rooms/send/media gaps per residual queue                                                                                                                                                     |
+| **Next product work**        | Land #250 after rebase onto `0fb0fe4`; keep #240 draft/HOLD; do not start new media/widgets/notifications/calls until residual queue allows                                                                                                                                         |
+| **Import baseline**          | 232 files / 292 direct import lines → tip inventory production **187** / repository-wide **200**                                                                                                                                                                                   |
+| **Held**                     | #221 plateau; #240 incomplete timeline; L1 notify/call/media/filter/bootstrap/helper PRs (#109,#193,#196,#198,#199,#201,#203,#204,#207,#208,#209); umbrella #39                                                                                                                    |
+| **Runtime truth**            | Native product cutover is underway capability-by-capability; relevant JS owners remain until deletion residuals close; **dual_backend false**                                                                                                                                      |
+| **Strict gates**             | Original-plan inventory ~74/112; 0/15 strict phase gates closed. Inventory is not product completion.                                                                                                                                                                              |
+| **Main PR**                  | [#39](https://github.com/nepenth/synara-desktop/pull/39) — do not merge without explicit user approval                                                                                                                                                                             |
 
 ### Current next-owner procedure
 
-1. Treat V-CRYPTO.7 [#236](https://github.com/nepenth/synara-desktop/pull/236) as merged at `528a510`; its reviewed, green product/test head was `192be46`. Live multi-session/UI proof remains unconfirmed.
-2. Treat V-AUTH.1 [#238](https://github.com/nepenth/synara-desktop/pull/238) as merged at `08a185e`: it deletes JS SSO entry/callback/token-completion ownership and native SSO UIAA continuation with no replacement route; approved production importer delta is 201→197.
-3. Validate the rebased V-ROOMS.1 and V-SEND.2 candidates on their reviewed SHA; require each vertical/deletion residual to report deleted paths and measured importer/file count delta.
-4. Complete V-TIMELINE through its native owner route before selecting its presenter or deleting `RoomTimeline.tsx`.
-5. Update [PROGRESS.md](PROGRESS.md), [d0-residual-completion.md](d0-residual-completion.md), and the short [CONTINUATION.md](CONTINUATION.md) in the same PR whenever the active pointer or residual status changes.
+1. Treat tip `0fb0fe4` as current after V-ROOMS.5w [#251](https://github.com/nepenth/synara-desktop/pull/251).
+2. Finish V-SEND.3 [#250](https://github.com/nepenth/synara-desktop/pull/250): rebase onto tip, confirm Validate/Quality (+ poll proof) on exact head, undraft, merge to integration only.
+3. Keep V-TIMELINE [#240](https://github.com/nepenth/synara-desktop/pull/240) draft/HOLD — no presenter selection or `RoomTimeline.tsx` deletion until contract + runtime proof.
+4. Do **not** merge #221, L1 foundation PRs, or umbrella #39 without explicit policy/user approval.
+5. Update [PROGRESS.md](PROGRESS.md), [d0-residual-completion.md](d0-residual-completion.md), and [CONTINUATION.md](CONTINUATION.md) whenever tip/active/open disposition changes.
 
 Everything below this live snapshot is dated audit/history. It remains useful
 evidence, but old “next P3.2/P4.1,” `matrix-js-sdk-only`, or incomplete-minimum
