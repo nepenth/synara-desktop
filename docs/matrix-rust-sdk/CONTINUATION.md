@@ -6,17 +6,17 @@
 
 <!-- matrix-rust-program-status-link -->
 
-| Field                   | Current value                                                                                                                                                                    |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Date                    | 2026-07-30 (America/New_York)                                                                                                                                                    |
-| Integration branch      | `feature/matrix-rust-sdk-full-replacement`                                                                                                                                       |
-| Execution model         | Primary Codex and every implementation/review sub-agent: `gpt-5.6-sol`, medium reasoning                                                                                         |
-| Current integration tip | `d17ab2c0d72b129189a80d03bd0c1b56d6c230d6` — V-ROOMS.5 read [#249](https://github.com/nepenth/synara-desktop/pull/249) merged                                                              |
-| Active PRs              | Draft V-ROOMS.5 writers; V-SEND.3 [#250](https://github.com/nepenth/synara-desktop/pull/250); [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE |
-| Policy                  | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                               |
-| Operating path          | [operating-path-contract.md](operating-path-contract.md)                                                                                                                         |
-| Binding queue           | [d0-residual-completion.md](d0-residual-completion.md)                                                                                                                           |
-| Main merge              | PR #39 — explicit user approval required                                                                                                                                         |
+| Field                   | Current value                                                                                                                                                                                         |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Date                    | 2026-07-31 (America/New_York)                                                                                                                                                                         |
+| Integration branch      | `feature/matrix-rust-sdk-full-replacement`                                                                                                                                                            |
+| Execution model         | Primary Codex and every implementation/review sub-agent: `gpt-5.6-sol`, medium reasoning                                                                                                              |
+| Current integration tip | `0fb0fe425ae932e27445b8054f3a14d628e5a869` — V-ROOMS.5w [#251](https://github.com/nepenth/synara-desktop/pull/251) merged (after V-ROOMS.5 read [#249](https://github.com/nepenth/synara-desktop/pull/249) at `d17ab2c`) |
+| Active PRs              | Draft V-SEND.3 polls [#250](https://github.com/nepenth/synara-desktop/pull/250) (CI→merge in flight; rebase after #251); [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE **HOLD** |
+| Policy                  | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                                    |
+| Operating path          | [operating-path-contract.md](operating-path-contract.md)                                                                                                                                              |
+| Binding queue           | [d0-residual-completion.md](d0-residual-completion.md)                                                                                                                                                |
+| Main merge              | PR #39 — explicit user approval required                                                                                                                                                              |
 
 ## Active direction
 
@@ -36,28 +36,39 @@ obsolete tests/types before closure.
 
 ## Exact continuation point
 
-1. V-CRYPTO.7 [#236](https://github.com/nepenth/synara-desktop/pull/236) is merged at integration `528a510`; its reviewed, green product/test head was `192be46`. Live multi-session/UI proof remains unclaimed.
-2. V-AUTH.1 [#238](https://github.com/nepenth/synara-desktop/pull/238) is merged: all desktop SSO entry points, callback/token-completion ownership, and native SSO UIAA continuation are deleted without a replacement route. Approved inventory: production importers **201→197**.
-3. V-ROOMS.1 [#241](https://github.com/nepenth/synara-desktop/pull/241) is merged at integration `2c48fd45a08200a6e3491f100912f086e8458b3b`; candidate `7ac2c48` passed the required scope, Synapse, desktop/runtime, and quality jobs. Its measured deletion delta is production **197→194**, repository-wide **211→208**.
-4. V-ROOMS.3 [#245](https://github.com/nepenth/synara-desktop/pull/245) is merged at integration `efc90d59e6009f45589ce42a29a6f7ebafcf7624` from candidate `a81e026`. Native unread map owns list/nav/platform badges; JS room-list/unread binders deleted; production **194→192**, repository-wide **208→205**. Live badge runtime proof remains **Not confirmed** (not a reopen blocker).
-5. CI guardrails harness [#244](https://github.com/nepenth/synara-desktop/pull/244) is merged at `6aa109bf390531e00f79a03a8fac684d3f7b418f`.
-6. V-ROOMS.4 [#246](https://github.com/nepenth/synara-desktop/pull/246) is merged at integration `151948c8c2329ee6f0b37b8757607b3ac8bb44e7` from candidate `c4df9ed`. Native typing owns receive/send; production **192→190**, repository-wide **205→203**. Live typing proof remains **Not confirmed** (not a reopen blocker).
-7. V-ROOMS.2a [#247](https://github.com/nepenth/synara-desktop/pull/247) is merged at integration `a9196894edff24bddb76279aaf010fa8f56ffe47`. Native space parent map owns `roomToParentsAtom`; production **190→189**, repository-wide **203→202**. Live proof remains **Not confirmed**. Lobby hierarchy mutations remain **V-ROOMS.2b**.
-8. V-SEND.1 [#248](https://github.com/nepenth/synara-desktop/pull/248) is merged at integration `90be0f4ef6efb3915bb886790ebc94e39f088092`.
-9. V-ROOMS.5 read [#249](https://github.com/nepenth/synara-desktop/pull/249) is merged at integration `d17ab2c0d72b129189a80d03bd0c1b56d6c230d6` from candidate `708aef7`. Production **189→187**, repository-wide **202→200**, allowlist **196→194**.
-10. Continue **V-ROOMS.5w** native `m.direct` writers: `matrix_mdirect_add` / `matrix_mdirect_remove`; delete JS `addRoomIdToMDirect` / `removeRoomIdFromMDirect`. Keep V-SEND.3 [#250](https://github.com/nepenth/synara-desktop/pull/250) and V-TIMELINE [#240](https://github.com/nepenth/synara-desktop/pull/240) as parallel ownership; do not select the presenter or delete `RoomTimeline.tsx` until the full action/media route and runtime proof are complete.
-11. Run V-BURN only as the final convergence audit and npm dependency/bootstrap/store cleanup.
-12. Resume new media/widgets/notifications/calls verticals only after the residual queue allows.
+1. V-CRYPTO.7 [#236](https://github.com/nepenth/synara-desktop/pull/236) is merged at integration `528a510`; reviewed green product/test head was `192be46`. Live multi-session/UI proof remains unclaimed.
+2. V-AUTH.1 [#238](https://github.com/nepenth/synara-desktop/pull/238) is merged: desktop SSO entry points, callback/token-completion ownership, and native SSO UIAA continuation are deleted without a replacement route. Production importers **201→197**.
+3. V-ROOMS.1 [#241](https://github.com/nepenth/synara-desktop/pull/241) is merged at `2c48fd4` (candidate `7ac2c48`); production **197→194**, repository-wide **211→208**.
+4. V-ROOMS.3 [#245](https://github.com/nepenth/synara-desktop/pull/245) is merged at `efc90d5` (candidate `a81e026`); production **194→192**, repository-wide **208→205**. Live badge proof **Not confirmed** (not a reopen blocker).
+5. CI guardrails harness [#244](https://github.com/nepenth/synara-desktop/pull/244) is merged at `6aa109b`.
+6. V-ROOMS.4 [#246](https://github.com/nepenth/synara-desktop/pull/246) is merged at `151948c` (candidate `c4df9ed`); production **192→190**, repository-wide **205→203**. Live typing proof **Not confirmed**.
+7. V-SEND.2 [#239](https://github.com/nepenth/synara-desktop/pull/239) is merged at `988cdc2`; Synapse native reaction proof Confirmed on reviewed head; whole importers **197→197**.
+8. V-ROOMS.2a [#247](https://github.com/nepenth/synara-desktop/pull/247) is merged at `a919689`; production **190→189**, repository-wide **203→202**. Lobby hierarchy mutations remain **V-ROOMS.2b**.
+9. V-SEND.1 [#248](https://github.com/nepenth/synara-desktop/pull/248) is merged at `90be0f4`.
+10. V-ROOMS.5 read [#249](https://github.com/nepenth/synara-desktop/pull/249) is merged at `d17ab2c` (candidate `708aef7`); production **189→187**, repository-wide **202→200**, allowlist **196→194**.
+11. V-ROOMS.5w writers [#251](https://github.com/nepenth/synara-desktop/pull/251) is merged at `0fb0fe4` (candidate `e4e2639`); native `matrix_mdirect_add` / `matrix_mdirect_remove`; JS writer helpers deleted; importers **187→187**.
+12. Finish **V-SEND.3** [#250](https://github.com/nepenth/synara-desktop/pull/250) (another agent owns CI→merge): Synapse native poll proof Confirmed on `501242c`; rebase onto tip `0fb0fe4` after #251, then undraft/merge when Validate/Quality green. Keep V-TIMELINE [#240](https://github.com/nepenth/synara-desktop/pull/240) as parallel **HOLD** — do not select the presenter or delete `RoomTimeline.tsx` until the full action/media route and runtime proof are complete.
+13. Run V-BURN only as the final convergence audit and npm dependency/bootstrap/store cleanup.
+14. Resume new media/widgets/notifications/calls verticals only after the residual queue allows.
 
 ## Current accounting
 
-- Tip `d17ab2c` merges V-ROOMS.5 read [#249](https://github.com/nepenth/synara-desktop/pull/249); production **189→187**, repository-wide **202→200**, allowlist **196→194**.
-- V-ROOMS.5w writers candidate: importer files **187→187** (capability deletion inside retained files).
-- Repository baseline remains **232 files / 292 direct import lines** referencing
-  `matrix-js-sdk`. Each completed vertical must record a negative
-  capability-owner/file deletion delta and an honest, non-increasing global
-  import delta; the latter may be zero for indirect ownership.
+- Tip `0fb0fe4` merges V-ROOMS.5w [#251](https://github.com/nepenth/synara-desktop/pull/251); prior tip `d17ab2c` was V-ROOMS.5 read [#249](https://github.com/nepenth/synara-desktop/pull/249).
+- Inventory on tip: production import files **187**, repository-wide **200**.
+- Repository baseline remains **232 files / 292 direct import lines** referencing `matrix-js-sdk`. Each completed vertical must record a negative capability-owner/file deletion delta and an honest, non-increasing global import delta; the latter may be zero for indirect ownership.
 - #221 remains held: zero deleted importers is not completion.
+
+## Open PR disposition (integration base)
+
+| PR | Disposition | Why |
+| --- | --- | --- |
+| [#250](https://github.com/nepenth/synara-desktop/pull/250) V-SEND.3 | **In flight** | Poll proof green on `501242c`; rebase after #251; other agent finishing CI→merge |
+| [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE | **HOLD** | Incomplete full-replacement contract; presenter unselected; conflicting vs tip after #251 |
+| [#221](https://github.com/nepenth/synara-desktop/pull/221) D0.6 | **HOLD** | Plateau / zero importer deletion |
+| [#243](https://github.com/nepenth/synara-desktop/pull/243) docs tracking | **This PR** | Docs/tracking rewrite onto tip; merge when green (tracking-only historically lands) |
+| [#193](https://github.com/nepenth/synara-desktop/pull/193)–[#209](https://github.com/nepenth/synara-desktop/pull/209) L1 foundations | **HOLD (parked)** | L1-only notify/call/media/filter/bootstrap; do not merge until residual queue allows |
+| [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax helper | **HOLD (parked)** | Tooling helper; not on active vertical path |
+| [#39](https://github.com/nepenth/synara-desktop/pull/39) umbrella → main | **HOLD** | Never merge without explicit user approval |
 
 ## Required evidence for every vertical
 
@@ -78,8 +89,8 @@ obsolete tests/types before closure.
 ## Parked
 
 - #221 D0.6 plateau.
-- L1-only notification, call-state, media-boundary/policy, and helper PRs unless
-  they directly block the active full vertical.
+- #240 V-TIMELINE until contract closable (no presenter selection / no `RoomTimeline` deletion).
+- L1-only notification, call-state, media-boundary/policy, filter, crypto-bootstrap, and helper PRs (#109, #193, #196, #198, #199, #201, #203, #204, #207, #208, #209) unless they directly block the active full vertical.
 - Umbrella/main PR #39 until explicit approval and final gates.
 
 ## Never
