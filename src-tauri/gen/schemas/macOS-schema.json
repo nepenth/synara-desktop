@@ -657,6 +657,18 @@
           "markdownDescription": "Enables the matrix_logout command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_mdirect_add command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-mdirect-add",
+          "markdownDescription": "Enables the matrix_mdirect_add command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_mdirect_remove command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-mdirect-remove",
+          "markdownDescription": "Enables the matrix_mdirect_remove command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_mdirect_snapshot command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-mdirect-snapshot",
@@ -1159,6 +1171,18 @@
           "type": "string",
           "const": "deny-matrix-logout",
           "markdownDescription": "Denies the matrix_logout command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_mdirect_add command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-mdirect-add",
+          "markdownDescription": "Denies the matrix_mdirect_add command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_mdirect_remove command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-mdirect-remove",
+          "markdownDescription": "Denies the matrix_mdirect_remove command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_mdirect_snapshot command without any pre-configured scope.",
