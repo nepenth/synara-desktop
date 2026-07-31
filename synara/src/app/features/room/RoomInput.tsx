@@ -531,6 +531,11 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     const handleSendUpload = async (uploads: UploadSuccess[]) => {
       const replyTo = typeof replyDraft?.eventId === 'string' ? replyDraft.eventId : undefined;
+      const threadRoot =
+        replyDraft?.relation?.rel_type === RelationType.Thread &&
+        typeof replyDraft.relation.event_id === 'string'
+          ? replyDraft.relation.event_id
+          : undefined;
       const nativeFiles = await Promise.all(
         uploads.map(async (upload) => {
           const fileItem = selectedFiles.find((f) => f.file === upload.file);
@@ -543,7 +548,12 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           };
         })
       );
-      const owner = await sendComposerAttachmentsWithNativeOwner(roomId, nativeFiles, replyTo);
+      const owner = await sendComposerAttachmentsWithNativeOwner(
+        roomId,
+        nativeFiles,
+        replyTo,
+        threadRoot
+      );
       if (owner === 'native') {
         handleCancelUpload(uploads);
         if (nativeFiles.length > 0) {
@@ -642,10 +652,17 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         content.format = 'org.matrix.custom.html';
         content.formatted_body = formattedBody;
       }
+      // Thread/reply relations for the native owner travel as IPC fields, not
+      // via a JS-built m.relates_to blob. Legacy web keeps getReplyRelation.
       const relation = getReplyRelation();
       if (relation) {
         content['m.relates_to'] = relation;
       }
+      const threadRoot =
+        replyDraft?.relation?.rel_type === RelationType.Thread &&
+        typeof replyDraft.relation.event_id === 'string'
+          ? replyDraft.relation.event_id
+          : undefined;
       try {
         setSendingMessage(true);
         setSendError(undefined);
@@ -657,6 +674,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           mentionUserIds: Array.from(mentionData.users),
           mentionRoom: mentionData.room,
           replyTo: replyDraft?.eventId,
+          threadRoot,
         });
         if (nativeOwner === 'legacy') {
           await mx.sendMessage(roomId, content as any);

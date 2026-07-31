@@ -14,6 +14,7 @@ test('native logged-in session owns rich composer message sends', async () => {
       mentionUserIds: ['@alice:example.org'],
       mentionRoom: true,
       replyTo: '$event:example.org',
+      threadRoot: '$root:example.org',
     },
     true,
     async (command, args) => {
@@ -46,9 +47,41 @@ test('native logged-in session owns rich composer message sends', async () => {
         mentionUserIds: ['@alice:example.org'],
         mentionRoom: true,
         replyTo: '$event:example.org',
+        threadRoot: '$root:example.org',
       },
     },
   ]);
+});
+
+test('native owner forwards threadRoot without falling through to legacy', async () => {
+  let seenArgs: Record<string, unknown> | undefined;
+  const owner = await sendTextWithNativeOwner(
+    {
+      roomId: '!room:example.org',
+      body: 'in thread',
+      replyTo: '$child:example.org',
+      threadRoot: '$root:example.org',
+    },
+    true,
+    async (command, args) => {
+      if (command === 'matrix_session_snapshot') {
+        return { available: true, value: { status: 'logged_in' } };
+      }
+      seenArgs = args;
+      return {
+        available: true,
+        value: {
+          roomId: '!room:example.org',
+          eventId: '$sent:example.org',
+          localTxnId: 'local-txn-2',
+          status: 'sent',
+        },
+      };
+    }
+  );
+  assert.equal(owner, 'native');
+  assert.equal(seenArgs?.threadRoot, '$root:example.org');
+  assert.equal(seenArgs?.replyTo, '$child:example.org');
 });
 
 test('web and native logged-out sessions retain the legacy owner', async () => {

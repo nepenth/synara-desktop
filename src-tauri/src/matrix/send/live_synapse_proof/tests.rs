@@ -503,6 +503,7 @@ async fn live_native_rich_message_send_against_disposable_synapse_when_configure
         Some(vec![user_id.clone()]),
         true,
         None,
+        None,
     )
     .expect("build native rich message content");
     let response = room
@@ -516,6 +517,143 @@ async fn live_native_rich_message_send_against_disposable_synapse_when_configure
     assert_eq!(content["formatted_body"], "<strong>waves</strong>");
     assert_eq!(content["m.mentions"]["user_ids"][0], user_id);
     assert_eq!(content["m.mentions"]["room"], true);
+
+    let _ = std::fs::remove_dir_all(&store_root);
+}
+
+fn thread_send_live_enabled() -> bool {
+    std::env::var("SYNARA_RUN_MATRIX_RUST_THREAD_SEND_LIVE")
+        .ok()
+        .as_deref()
+        == Some("1")
+}
+
+/// V-SEND.5: native composer thread send against disposable Synapse.
+///
+/// Root event → in-thread reply via the same `message_content` builder as
+/// `matrix_send_text` with `thread_root` + `reply_to`. Verifies wire
+/// `m.relates_to` is `m.thread` with the correct root / in_reply_to and
+/// non-fallback flag.
+#[tokio::test]
+async fn live_native_thread_send_against_disposable_synapse_when_configured() {
+    if !thread_send_live_enabled() {
+        return;
+    }
+    let base = loopback_homeserver_url()
+        .expect("SYNARA_MATRIX_HOMESERVER_URL must be credential-free HTTP loopback");
+
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let localpart = format!("vs5_{stamp:x}");
+    let password = format!("S-{stamp:x}");
+    let registration = register_disposable_account(&base, &localpart, &password).await;
+    let user_id = registration["user_id"]
+        .as_str()
+        .expect("registration user_id")
+        .to_owned();
+
+    let store_root = temp_store_root();
+    let identity = AccountIdentity::new(&user_id, &base).expect("account identity");
+    let key = StoreKeyMaterial::generate().expect("store key");
+    let config = ClientBuildConfig::product_default(&store_root, identity, Some(key))
+        .expect("client config");
+    let client = build_unauthenticated_client(&config)
+        .await
+        .expect("unauthenticated client");
+    login_with_password(
+        &client,
+        &localpart,
+        &password,
+        &LoginOptions {
+            device_display_name: Some("V-SEND.5 thread-send proof".into()),
+            request_refresh_token: false,
+        },
+    )
+    .await
+    .expect("password login");
+
+    client
+        .sync_once(SyncSettings::default().timeout(Duration::from_secs(3)))
+        .await
+        .expect("initial sync");
+    let room = client
+        .create_room(CreateRoomRequest::new())
+        .await
+        .expect("create room");
+    client
+        .sync_once(SyncSettings::default().timeout(Duration::from_secs(3)))
+        .await
+        .expect("post-create sync");
+
+    let root_content = crate::matrix::auth::product::message_content(
+        "thread root".into(),
+        Some("m.text".into()),
+        None,
+        None,
+        false,
+        None,
+        None,
+    )
+    .expect("build root message");
+    let root_response = room
+        .send(root_content)
+        .await
+        .expect("send thread root via managed client");
+    let root_event_id = root_response.response.event_id.clone();
+    wait_for_message_event(&client, &room, &root_event_id).await;
+
+    // Start thread + genuine reply in one step: root == reply target.
+    let thread_content = crate::matrix::auth::product::message_content(
+        "thread reply".into(),
+        Some("m.text".into()),
+        None,
+        None,
+        false,
+        Some(root_event_id.clone()),
+        Some(root_event_id.clone()),
+    )
+    .expect("build in-thread reply content");
+    let thread_response = room
+        .send(thread_content)
+        .await
+        .expect("send thread reply via managed client");
+    let value = wait_for_message_event(&client, &room, &thread_response.response.event_id).await;
+    let relates = &value["content"]["m.relates_to"];
+    assert_eq!(relates["rel_type"], "m.thread");
+    assert_eq!(relates["event_id"], root_event_id.as_str());
+    assert_eq!(relates["m.in_reply_to"]["event_id"], root_event_id.as_str());
+    assert!(
+        relates
+            .get("is_falling_back")
+            .map(|v| v == false)
+            .unwrap_or(true),
+        "thread reply must not be a fallback: {relates}"
+    );
+
+    // Reply to the first thread reply, still under the same root.
+    let child_event_id = thread_response.response.event_id.clone();
+    let nested = crate::matrix::auth::product::message_content(
+        "nested reply".into(),
+        Some("m.text".into()),
+        None,
+        None,
+        false,
+        Some(child_event_id.clone()),
+        Some(root_event_id.clone()),
+    )
+    .expect("build nested in-thread reply");
+    let nested_response = room.send(nested).await.expect("send nested thread reply");
+    let nested_value =
+        wait_for_message_event(&client, &room, &nested_response.response.event_id).await;
+    let nested_relates = &nested_value["content"]["m.relates_to"];
+    assert_eq!(nested_relates["rel_type"], "m.thread");
+    assert_eq!(nested_relates["event_id"], root_event_id.as_str());
+    assert_eq!(
+        nested_relates["m.in_reply_to"]["event_id"],
+        child_event_id.as_str()
+    );
 
     let _ = std::fs::remove_dir_all(&store_root);
 }

@@ -12,6 +12,8 @@ export type NativeSendTextInput = {
   mentionUserIds?: string[];
   mentionRoom?: boolean;
   replyTo?: string;
+  /** Thread root event id (`m.thread`). Paired with `replyTo` for in-thread replies. */
+  threadRoot?: string;
   txnId?: string;
 };
 
