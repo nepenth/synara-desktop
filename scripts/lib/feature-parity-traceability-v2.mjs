@@ -933,13 +933,28 @@ function rawLines(bytes) {
   return lines;
 }
 
+// Cache line indexes by blob Buffer identity. GitObjectReader.contentCache returns
+// the same Buffer for a given oid, so 119 evidence checks must not rebuild ~1e5
+// line descriptors against the multi-megabyte pinned V1 blob on every call.
+const RAW_LINES_CACHE = new WeakMap();
+
+function rawLinesCached(bytes) {
+  if (!Buffer.isBuffer(bytes)) return rawLines(bytes);
+  let lines = RAW_LINES_CACHE.get(bytes);
+  if (!lines) {
+    lines = rawLines(bytes);
+    RAW_LINES_CACHE.set(bytes, lines);
+  }
+  return lines;
+}
+
 export async function verifySourceEvidence(evidence, gitObjects) {
   const errors = [];
   try {
     const bytes = await gitObjects.blobAt(evidence.source_sha, evidence.path);
     if (!bytes)
       return [issue("EVIDENCE_MISSING", "/path", "Evidence blob is missing.")];
-    const lines = rawLines(bytes);
+    const lines = rawLinesCached(bytes);
     const { start, end } = evidence.lines ?? {};
     if (
       !Number.isInteger(start) ||
@@ -5315,8 +5330,11 @@ export async function validateTraceability(
           throw new Error(
             "Git object adapter cannot derive first-parent lifecycle history."
           );
+        // One pretty-JSON materialization of the candidate: derive + chain compare
+        // previously each built a full multi-megabyte buffer.
+        const candidateBytes = Buffer.from(prettyJson(value));
         const previousIdentity = await gitObjects.derivePreviousArtifact(
-          Buffer.from(prettyJson(value)),
+          candidateBytes,
           V1_PATH
         );
         if (
@@ -5338,7 +5356,6 @@ export async function validateTraceability(
           );
         const versions = await gitObjects.lifecyclePathVersions(V1_PATH);
         const committedV2 = versions.filter((version) => version.kind === "v2");
-        const candidateBytes = Buffer.from(prettyJson(value));
         const candidateEqualsHead = Boolean(
           committedV2[0]?.bytes && candidateBytes.equals(committedV2[0].bytes)
         );
@@ -5608,6 +5625,19 @@ export async function validateTraceability(
   return sortDiagnostics(errors);
 }
 
+function joinUtf8Lines(lines) {
+  if (lines.length === 0) return Buffer.alloc(0);
+  let total = lines.length - 1;
+  for (const line of lines) total += Buffer.byteLength(line, "utf8");
+  const bytes = Buffer.allocUnsafe(total);
+  let offset = 0;
+  for (let index = 0; index < lines.length; index += 1) {
+    offset += bytes.write(lines[index], offset, "utf8");
+    if (index < lines.length - 1) bytes[offset++] = 0x0a;
+  }
+  return bytes;
+}
+
 function leaves(value, pointer = "") {
   if (value === null || typeof value !== "object")
     return [{ pointer: pointer || "/", value }];
@@ -5697,8 +5727,11 @@ function renderMarkdown(kind, value) {
     );
   }
   lines.push("");
+  // Encode lines directly into one Buffer so peak RSS does not hold both the
+  // giant joined string and the output bytes (33MiB+ markdown on 119-row graphs).
+  const bytes = joinUtf8Lines(lines);
   return {
-    bytes: Buffer.from(lines.join("\n"), "utf8"),
+    bytes,
     coveredPointers: new Set(semanticLeaves.map((leaf) => leaf.pointer)),
   };
 }
@@ -6073,8 +6106,12 @@ function parsePathVersion(repositoryRoot, version) {
   const bytes = runGitBytes(repositoryRoot, ["cat-file", "blob", version.oid]);
   try {
     const value = parseCanonicalJson(bytes);
-    if (value?.schema_version !== "2.0")
-      return { ...version, kind: "pre_v2", bytes, value };
+    if (value?.schema_version !== "2.0") {
+      // pre_v2 artifacts are only classified by kind for epoch checks and
+      // predecessor nulling. Drop multi-megabyte bytes/value graphs so lifecycle
+      // walks do not pin every historical v1 parse in RSS.
+      return { ...version, kind: "pre_v2" };
+    }
     if (!bytes.equals(Buffer.from(prettyJson(value))))
       return { ...version, kind: "invalid", bytes };
     return {
