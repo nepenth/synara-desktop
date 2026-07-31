@@ -2642,8 +2642,8 @@ async fn build_password_reset_client(
     let homeserver_url = normalize_homeserver_url(homeserver_url)
         .map_err(map_password_reset_auth_error)?
         .into_string();
-    let user_id = password_reset_ephemeral_user_id(&homeserver_url)
-        .map_err(map_password_reset_auth_error)?;
+    let user_id =
+        password_reset_ephemeral_user_id(&homeserver_url).map_err(map_password_reset_auth_error)?;
     let identity = AccountIdentity::new(&user_id, &homeserver_url).map_err(|_| {
         MatrixAuthCommandError::invalid_input("v-auth.4-password-reset-identity-invalid")
     })?;
