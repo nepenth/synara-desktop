@@ -1641,7 +1641,16 @@ pub async fn matrix_send_sticker(
     let room_id = parse_send_room_id(&room_id)?;
     let reply_to = parse_reply_event_id(reply_to)?;
     let thread_root = parse_thread_root_event_id(thread_root)?;
-    let content = sticker_content(body, mxc, width, height, mimetype, size, reply_to, thread_root)?;
+    let content = sticker_content(
+        body,
+        mxc,
+        width,
+        height,
+        mimetype,
+        size,
+        reply_to,
+        thread_root,
+    )?;
 
     let room = {
         let mut session = state.session.lock().await;
