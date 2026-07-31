@@ -5,9 +5,11 @@
 | Written | 2026-07-31 (America/New_York) |
 | Audience | Next orchestrator / implementation agent (Grok Build) |
 | Integration branch | `feature/matrix-rust-sdk-full-replacement` |
-| Tip at handoff | `b558344` — Merge PR [#253](https://github.com/nepenth/synara-desktop/pull/253) (V-SEND.4 rich messages) |
+| Tip at handoff | `fe62885` — Merge PR [#256](https://github.com/nepenth/synara-desktop/pull/256) (docs handoff) after product [#253](https://github.com/nepenth/synara-desktop/pull/253) at `b558344` |
+| Product tip | `b558344` — V-SEND.4 rich messages merged |
 | Prior tip (Cursor wrap) | `88ed143` — #250 V-SEND.3 polls |
-| Execution | **Grok-only** (grok-4.5). GPT-5.6 / Codex API and Cursor plan usage are exhausted — **do not** dispatch external Codices or parallel Cursor streams |
+| Execution | **Grok-only**. GPT-5.6 / Codex API and Cursor plan usage are exhausted — **do not** dispatch external Codices or parallel Cursor streams |
+| Skill | `rig-operating-path` installed under `.grok/skills/rig-operating-path` (local agent skill; not product runtime) |
 | Scheduler | None active (previous 4m Grok loop was failing idle; leave off unless re-created carefully) |
 
 Live trackers:
@@ -16,7 +18,7 @@ Live trackers:
 - [PROGRESS.md](PROGRESS.md)
 - [d0-residual-completion.md](d0-residual-completion.md)
 - [full-vertical-policy.md](full-vertical-policy.md)
-- [operating-path-contract.md](operating-path-contract.md) (if present)
+- [operating-path-contract.md](operating-path-contract.md)
 
 ## Goal
 
@@ -26,7 +28,7 @@ Complete Synara desktop Matrix client replacement as **serial, product-visible f
 React UI → versioned Tauri IPC + Synara DTOs → live Rust matrix-sdk
 ```
 
-**Complete replacement only.** No dogfood minima, no residual plateaus, no dual backend, no concurrent JS/Rust clients for one session. **Physical deletion** of the superseded JS owner is part of each vertical.
+**Complete replacement only.** No dogfood minima, no residual plateaus, no dual backend, no concurrent JS/Rust clients for one session. **Physical deletion** of the superseded JS owner is part of each vertical. Do **not** claim a vertical **done** without native ownership **and** deletion evidence.
 
 ## Never-main / never-#39
 
@@ -39,17 +41,20 @@ Prefer `/private/tmp/synara-codex-*` (or `/tmp/synara-codex-*`) worktrees. Many 
 
 | Path | Branch / PR | Status |
 | --- | --- | --- |
-| `/private/tmp/synara-codex-v-send-4-rich-messages` | #253 | **Merged** via tip `b558344` |
-| `/private/tmp/synara-codex-v-rooms-2b-hierarchy` | #254 | **Rebased** onto tip; head `e3a0b3d`; waiting CI |
-| `/private/tmp/synara-codex-v-timeline-contract` | #240 | **HOLD** incomplete contract |
-| `/private/tmp/synara-codex-docs-grok-handoff` | this docs PR | tip sync + handoff |
+| `/private/tmp/synara-codex-v-send-4-rich-messages` | #253 | **Merged** via tip product `b558344` |
+| `/private/tmp/synara-codex-v-rooms-2b-hierarchy` | #254 | **Rebased** head `e3a0b3d`; draft; required CI in progress |
+| `/private/tmp/synara-codex-v-timeline-contract` | #240 | **HOLD-merge** incomplete contract |
+| `/private/tmp/synara-codex-docs-residual-truth` | this docs PR | residual tracking truth-up on tip `fe62885` |
+| `/private/tmp/synara-codex-docs-grok-handoff` | #256 | **Merged** at `fe62885` |
 
-## What landed (high level, ~48h + session)
+## What landed (high level)
 
 ### Tip now
 
 ```text
+fe62885 Merge pull request #256 from nepenth/matrix-rust/docs-grok-session-handoff
 b558344 Merge pull request #253 from nepenth/matrix-rust/v-send-4-rich-messages
+88ed143 Merge pull request #250 from nepenth/matrix-rust/v-send-3-polls
 ```
 
 ### Merged (sample of recent integration)
@@ -70,20 +75,29 @@ b558344 Merge pull request #253 from nepenth/matrix-rust/v-send-4-rich-messages
 | #243 | docs tracking |
 | #252 | V-ROOMS.5r m.direct users |
 | #250 | V-SEND.3 polls |
-| **#253** | **V-SEND.4 rich composer messages** (merged this Grok session) |
+| **#253** | **V-SEND.4 rich composer messages** |
+| **#256** | **Grok session handoff docs** |
 
-### Inventory (approx on tip)
+### Inventory (measured on tip `fe62885`)
 
-- ~**205** files under `synara/src` still reference `matrix-js-sdk` (measure before each PR).
-- Baseline ledger still references historical **232 / 292**; treat measured deltas per PR as truth.
+Under `synara/src` direct `matrix-js-sdk` import/require files:
 
-## Open PR disposition (after this handoff)
+| Bucket | Files |
+| --- | ---: |
+| Production (non-test) | **187** |
+| Test | **10** |
+| Total under `synara/src` | **197** |
+| Repository-wide (prod+test+tooling; committed inventory) | **200** |
+| String references under `synara/src` (any `matrix-js-sdk` text) | **205** |
+
+Baseline ledger still references historical **232 / 292**. Treat measured deltas per PR as truth. Whole-importer delta for V-SEND.4 / V-ROOMS.5w / V-ROOMS.5r is **187→187** (honest zero global file burn).
+
+## Open PR disposition (after this truth-up)
 
 | PR | Disposition | Next action |
 | --- | --- | --- |
-| **#254** V-ROOMS.2b hierarchy | **Active** — rebased `e3a0b3d`, draft | Wait required CI green → undraft → `gh pr merge --merge` |
-| **#240** V-TIMELINE contract | **HOLD-merge** | Keep implementing toward full contract; **do not** select NativeTimelinePresenter or delete `RoomTimeline.tsx` until complete + runtime proof; then merge |
-| **#255** Cursor docs handoff | Superseded by this tip-sync | Close or ignore after this PR lands |
+| **#254** V-ROOMS.2b hierarchy | **Active** — rebased `e3a0b3d`, draft, CI | Wait required CI green → undraft → `gh pr merge --merge`. Not done until native+deletion evidence on merged head. |
+| **#240** V-TIMELINE contract | **HOLD-merge** | Keep implementing toward full contract after #254; **do not** select NativeTimelinePresenter or delete `RoomTimeline.tsx` until complete + runtime proof; then merge |
 | **#221** D0.6 plateau | **HOLD forever as-is** | Zero-deletion plateau; not complete |
 | L1 #109, #193–#209 | **Parked** | Do not merge while residual queue active |
 | **#39** | **HOLD** | No main merge without approval |
@@ -92,14 +106,15 @@ b558344 Merge pull request #253 from nepenth/matrix-rust/v-send-4-rich-messages
 
 1. **Finish #254** (CI → undraft → merge).
 2. **Continue #240** V-TIMELINE full vertical (implement until closable; merge only then).
-3. Remaining residual rows from [d0-residual-completion.md](d0-residual-completion.md) (V-SEND.5 threads, remaining V-ROOMS, etc.).
+3. Remaining residual rows from [d0-residual-completion.md](d0-residual-completion.md) (V-SEND.5 threads, remaining V-AUTH/V-ROOMS gaps, etc.).
 4. **V-BURN** last (import zero + drop npm dependency).
 5. Only then media/widgets/notifications/calls as new full verticals.
 
-## “Hold” clarification (user-corrected)
+## “Hold” clarification
 
-- **#253 / #254** were never plan-forbidden — only paused for usage wrap-up. **Finish them.**
-- **#240** “hold” means **do not merge incomplete**, not abandon. Keep serial implementation until the timeline contract is actually closable.
+- **#254** is active product work (not plan-forbidden). Finish it.
+- **#240** “hold” means **do not merge incomplete**, not abandon. Serial implementation after #254 until the timeline contract is actually closable.
+- **#221** / L1 / **#39** stay held.
 
 ## Hard constraints
 
@@ -119,13 +134,15 @@ Many “orchestrator” background failures (~1s, 0 tools) were **session/schedu
 Resume Matrix Rust full-replacement on feature/matrix-rust-sdk-full-replacement.
 
 Execution: Grok-only (this environment). No Codex API / no Cursor plan burn.
+Skill: .grok/skills/rig-operating-path (local).
 Read first: docs/matrix-rust-sdk/SESSION-HANDOFF.md, CONTINUATION.md, PROGRESS.md,
 d0-residual-completion.md, full-vertical-policy.md.
 
-Tip should be at or after b558344 (#253 V-SEND.4 merged).
+Tip should be at or after fe62885 (#256 docs) / b558344 (#253 V-SEND.4 merged).
 Serial next: #254 V-ROOMS.2b (rebased e3a0b3d) — green CI → undraft → merge.
 Then #240 V-TIMELINE — implement to full contract; do NOT merge until presenter
 cutover + RoomTimeline deletion + runtime proof are complete.
 Never merge #221 plateau, L1 parked PRs, or #39/main without explicit approval.
 Work under /private/tmp/synara-codex-* worktrees; keep tracking docs accurate.
+Do not claim verticals done without native ownership + physical JS deletion.
 ```

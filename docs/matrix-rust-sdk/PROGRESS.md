@@ -12,11 +12,11 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-07-31**                                                                                                                                                                                                                                                        |
-| Integration tip    | `b558344ee0f998ffb21edad13c6cb6806bd2d010` — V-SEND.3 polls [#250](https://github.com/nepenth/synara-desktop/pull/250) merged                                                                      |
-| Active work        | **V-SEND.4 rich composer messages** draft [#253](https://github.com/nepenth/synara-desktop/pull/253). V-TIMELINE [#240](https://github.com/nepenth/synara-desktop/pull/240) **HOLD** (presenter unselected).                             |
+| Integration tip    | `fe628859836f0b3e8f6dab696f7739074f28311c` — docs [#256](https://github.com/nepenth/synara-desktop/pull/256) after V-SEND.4 [#253](https://github.com/nepenth/synara-desktop/pull/253) at `b558344`                                                               |
+| Active work        | **V-ROOMS.2b hierarchy** draft [#254](https://github.com/nepenth/synara-desktop/pull/254) (CI). Serial next after #254: continue **#240** V-TIMELINE (**HOLD-merge**).                                                                                               |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
-| Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
-| Import accounting  | V-AUTH.1: **201→197** / **215→211**. V-ROOMS.1: **197→194** / **211→208**. V-ROOMS.3: **194→192** / **208→205**. V-ROOMS.4: **192→190** / **205→203**. V-ROOMS.2a: **190→189** / **203→202**. V-ROOMS.5 read: **189→187** / **202→200**. V-ROOMS.5w: **187→187**. Tip inventory **187** / **200**. |
+| Execution model    | **Grok-only**; skill `.grok/skills/rig-operating-path` (local). No Codex/Cursor plan burn.                                                                                                                                                                            |
+| Import accounting  | V-AUTH.1: **201→197** / **215→211**. V-ROOMS.1: **197→194** / **211→208**. V-ROOMS.3: **194→192** / **208→205**. V-ROOMS.4: **192→190** / **205→203**. V-ROOMS.2a: **190→189** / **203→202**. V-ROOMS.5 read: **189→187** / **202→200**. V-ROOMS.5w/5r/V-SEND.4: **187→187**. Tip inventory **187** prod / **197** `synara/src` / **200** repo-wide. |
 | Dual backend       | **`false`** (forbidden forever)                                                                                                                                                                                                                                       |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                                                                                                                                                              |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                                                                                                                                                  |
@@ -30,10 +30,10 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Integration tip `b558344ee0f998ffb21edad13c6cb6806bd2d010`** after V-SEND.3 [#250](https://github.com/nepenth/synara-desktop/pull/250). Active: V-ROOMS.2b [#254](https://github.com/nepenth/synara-desktop/pull/253) CI→merge. V-TIMELINE/#240 **HOLD**. **#221 HOLD**. L1 foundations parked. |
+| **Now**        | **Integration tip `fe62885`** after #253 V-SEND.4 + #256 docs handoff. Active: V-ROOMS.2b [#254](https://github.com/nepenth/synara-desktop/pull/254) CI→merge. Then continue #240 V-TIMELINE (**HOLD-merge**). **#221 HOLD**. L1 foundations parked. Grok-only. |
 | **Policy**     | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                                                                                                                                                              |
-| **Tip**        | `b558344ee0f998ffb21edad13c6cb6806bd2d010` merged V-SEND.3 [#250](https://github.com/nepenth/synara-desktop/pull/250).                                                                                                                  |
-| **Active PRs** | Draft [#254](https://github.com/nepenth/synara-desktop/pull/254) V-ROOMS.2b; [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE HOLD; [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE HOLD.                                                                                                                                                              |
+| **Tip**        | `fe628859836f0b3e8f6dab696f7739074f28311c` (product include: `b558344` #253).                                                                                                                                                                                    |
+| **Active PRs** | Draft [#254](https://github.com/nepenth/synara-desktop/pull/254) V-ROOMS.2b hierarchy; [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE HOLD-merge.                                                                                                                                                          |
 | **Blocked**    | Merging plateau D0.6 (#221); merging incomplete #240; starting new media/widgets/etc before the residual queue; merging L1 foundation PRs while parked.                                                                                                                                                                         |
 
 ---
@@ -59,26 +59,32 @@ Update rules:
 
 ## Work log (newest first)
 
-### 2026-07-31 (Grok resume)
+### 2026-07-31 (residual truth-up)
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| — | **V-SEND.4** rich messages | **Merged** [#253](https://github.com/nepenth/synara-desktop/pull/253) | tip `b558344` |
-| — | **V-ROOMS.2b** hierarchy | **Rebased** [#254](https://github.com/nepenth/synara-desktop/pull/254) | head `e3a0b3d` onto tip; CI pending |
-| — | **SESSION-HANDOFF** | **This PR** | Grok-only resume packet; Cursor/Codex credits exhausted |
+| — | **Docs residual truth-up** | **This PR** | Reconcile d0-residual / CONTINUATION / PROGRESS / SESSION-HANDOFF to tip after #253+#256; measured import counts; Grok-only serial queue |
+| — | **Import measure (tip `fe62885`)** | **Recorded** | `synara/src` production **187** / test **10** / total **197** import files; repository-wide **200**; string refs under `synara/src` **205** |
+| — | **Open disposition** | **Recorded** | #254 active CI; #240 HOLD-merge; #221 HOLD; L1 parked |
 
+### 2026-07-31 (Grok resume / #256)
 
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| — | **V-SEND.4** rich messages | **Merged** [#253](https://github.com/nepenth/synara-desktop/pull/253) | tip product `b558344`; whole importers **187→187** |
+| — | **V-ROOMS.2b** hierarchy | **Rebased** [#254](https://github.com/nepenth/synara-desktop/pull/254) | head `e3a0b3d` onto tip; CI in progress — **not done** |
+| — | **SESSION-HANDOFF** | **Merged** [#256](https://github.com/nepenth/synara-desktop/pull/256) | tip `fe62885`; Grok-only resume packet |
 
 ### 2026-07-31 (UTC) — tip audit / residual close
 
 | When (UTC) | Item | Result | Notes |
 | ---------- | ---- | ------ | ----- |
-| current | **V-SEND.4 rich composer messages** | **Draft / in flight** [#253](https://github.com/nepenth/synara-desktop/pull/253) | Native `matrix_send_text` now preserves emote/notice types, formatted HTML, mentions, and replies; exact-head Synapse rich-message proof pending. |
-| current | **V-SEND.3 polls** | **Merged** [#250](https://github.com/nepenth/synara-desktop/pull/250) | Integration `b558344ee0f998ffb21edad13c6cb6806bd2d010`; reviewed head `761d2ef`; Synapse native poll proof Confirmed. |
+| current | **V-SEND.4 rich composer messages** | **Merged** [#253](https://github.com/nepenth/synara-desktop/pull/253) | Integration `b558344`; native type/HTML/mentions/reply on `matrix_send_text`; composer emote/notice JS fallback removed; whole importers **187→187**. Not a claim that all send residuals are closed. |
+| current | **V-SEND.3 polls** | **Merged** [#250](https://github.com/nepenth/synara-desktop/pull/250) | Integration `88ed143`; reviewed head `761d2ef`; Synapse native poll proof Confirmed. |
 | current | **V-ROOMS.5w m.direct writers** | **Merged** [#251](https://github.com/nepenth/synara-desktop/pull/251) | Integration `0fb0fe425ae932e27445b8054f3a14d628e5a869`; candidate `e4e2639` required CI green. Native add/remove own DM writers; JS helpers deleted; importers **187→187**. See [v-rooms-5w-mdirect-writers.md](v-rooms-5w-mdirect-writers.md). |
 | current | **V-ROOMS.5 m.direct read** | **Merged** [#249](https://github.com/nepenth/synara-desktop/pull/249) | Integration `d17ab2c0d72b129189a80d03bd0c1b56d6c230d6`; candidate `708aef7`. Production **189→187**, repository-wide **202→200**. |
-| current | **Docs/tracking audit** | **This PR** [#243](https://github.com/nepenth/synara-desktop/pull/243) | Tracking rewritten onto tip `0fb0fe4`; open-PR disposition table in CONTINUATION. |
-| current | **V-TIMELINE boundary** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | Head `20da921`; incomplete contract; conflicting vs tip after #251. Presenter unselected; no `RoomTimeline` deletion. |
+| current | **Docs/tracking audit** | **Merged** [#243](https://github.com/nepenth/synara-desktop/pull/243) | Historical tracking rewrite onto tip `0fb0fe4`. |
+| current | **V-TIMELINE boundary** | **HOLD-merge** [#240](https://github.com/nepenth/synara-desktop/pull/240) | Incomplete contract; presenter unselected; no `RoomTimeline` deletion. Continue after #254. |
 | current | **D0.6 / L1 foundations** | **HOLD** | #221 plateau; parked L1 PRs #109/#193/#196/#198/#199/#201/#203/#204/#207/#208/#209; umbrella #39. |
 
 ### 2026-07-30 (UTC) — active replacement queue
