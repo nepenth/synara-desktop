@@ -11,9 +11,7 @@ use matrix_sdk::{
     ruma::{
         api::client::space::get_hierarchy,
         events::{
-            room::join_rules::RoomJoinRulesEventContent,
-            space::child::SpaceChildEventContent,
-            
+            room::join_rules::RoomJoinRulesEventContent, space::child::SpaceChildEventContent,
         },
         room::{AllowRule, JoinRule},
         OwnedRoomId, OwnedServerName, SpaceChildOrder, UInt,
@@ -273,9 +271,7 @@ pub async fn reparent_restricted_join_allow(
     let room_id = parse_room_id(room_id, "v-rooms.2c-invalid-room")?;
     let add_parent = parse_room_id(add_parent_id, "v-rooms.2c-invalid-parent")?;
     let remove_parent = match remove_parent_id {
-        Some(id) if !id.trim().is_empty() => {
-            Some(parse_room_id(id, "v-rooms.2c-invalid-parent")?)
-        }
+        Some(id) if !id.trim().is_empty() => Some(parse_room_id(id, "v-rooms.2c-invalid-parent")?),
         _ => None,
     };
     let room = joined_room(client, &room_id)?;
@@ -309,20 +305,12 @@ pub async fn reparent_restricted_join_allow(
     };
 
     let content = match &original.content.join_rule {
-        JoinRule::Restricted(restricted) => {
-            RoomJoinRulesEventContent::restricted(reparent_allow_list(
-                &restricted.allow,
-                remove_parent.as_ref(),
-                &add_parent,
-            ))
-        }
-        JoinRule::KnockRestricted(restricted) => {
-            RoomJoinRulesEventContent::knock_restricted(reparent_allow_list(
-                &restricted.allow,
-                remove_parent.as_ref(),
-                &add_parent,
-            ))
-        }
+        JoinRule::Restricted(restricted) => RoomJoinRulesEventContent::restricted(
+            reparent_allow_list(&restricted.allow, remove_parent.as_ref(), &add_parent),
+        ),
+        JoinRule::KnockRestricted(restricted) => RoomJoinRulesEventContent::knock_restricted(
+            reparent_allow_list(&restricted.allow, remove_parent.as_ref(), &add_parent),
+        ),
         _ => {
             return Ok(NativeRestrictedJoinReparentResult {
                 room_id: room_id.to_string(),
@@ -407,7 +395,11 @@ fn parse_valid_edge(
             Some(NativeSpaceChildEdge {
                 parent_id: parent_id.to_owned(),
                 child_id: original.state_key.to_string(),
-                order: original.content.order.as_ref().map(|value| value.to_string()),
+                order: original
+                    .content
+                    .order
+                    .as_ref()
+                    .map(|value| value.to_string()),
                 suggested: original.content.suggested,
                 via,
                 origin_server_ts: original.origin_server_ts.get().into(),
@@ -443,9 +435,7 @@ fn parse_room_id(room_id: &str, diagnostic: &'static str) -> Result<OwnedRoomId,
 }
 
 fn joined_room<'a>(client: &'a Client, room_id: &OwnedRoomId) -> Result<Room, &'static str> {
-    let room = client
-        .get_room(room_id)
-        .ok_or("v-rooms.2c-room-missing")?;
+    let room = client.get_room(room_id).ok_or("v-rooms.2c-room-missing")?;
     if room.state() != RoomState::Joined {
         return Err("v-rooms.2c-room-not-joined");
     }
