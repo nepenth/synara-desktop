@@ -884,12 +884,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           ? replyDraft.relation.event_id
           : undefined;
       try {
-        const nativeOwner = await sendComposerGifWithNativeOwner(
-          roomId,
-          gif,
-          replyTo,
-          threadRoot
-        );
+        const nativeOwner = await sendComposerGifWithNativeOwner(roomId, gif, replyTo, threadRoot);
         if (nativeOwner === 'native') {
           setReplyDraft(undefined);
           setGifPickerAnchor(undefined);

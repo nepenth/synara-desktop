@@ -1,8 +1,5 @@
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
-import {
-  sendStickerWithNativeOwner,
-  type NativeSendStickerInput,
-} from './nativeSendStickerOwner';
+import { sendStickerWithNativeOwner, type NativeSendStickerInput } from './nativeSendStickerOwner';
 
 export const sendComposerStickerWithNativeOwner = (
   input: NativeSendStickerInput
