@@ -74,6 +74,7 @@ const tests = [
   'src/app/state/__tests__/typingMembers.test.ts',
   'src/app/components/editor/__tests__/richText.test.ts',
   'src/app/pages/auth/login/__tests__/loginUtil.test.ts',
+  'src/app/pages/auth/login/__tests__/tokenLoginAbsence.test.ts',
   'src/app/state/__tests__/sw-session.test.ts',
 ];
 
