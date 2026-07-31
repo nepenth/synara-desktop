@@ -146,6 +146,8 @@ import {
   nativeComposerAttachmentReady,
   sendComposerAttachmentsWithNativeOwner,
 } from './nativeSendAttachment';
+import { sendComposerGifWithNativeOwner } from './nativeSendGif';
+import { sendComposerStickerWithNativeOwner } from './nativeSendSticker';
 import { sendPollWithNativeDesktopOwner } from './nativePoll';
 import { sendPlainTextWithNativeOwner } from './nativeSendText';
 import { clearNativeComposerReplyDraft } from './nativeComposerDraft';
@@ -822,14 +824,49 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     };
 
     const handleStickerSelect = async (mxc: string, shortcode: string, label: string) => {
+      const replyTo = typeof replyDraft?.eventId === 'string' ? replyDraft.eventId : undefined;
+      const threadRoot =
+        replyDraft?.relation?.rel_type === RelationType.Thread &&
+        typeof replyDraft.relation.event_id === 'string'
+          ? replyDraft.relation.event_id
+          : undefined;
+
+      // Prefer pack media info when resolvable; native send still works without it.
+      let info: { w?: number; h?: number; mimetype?: string; size?: number } | undefined;
       const stickerUrl = resolveOptionalMatrixMediaUrl(mx, mxc, { useAuthentication });
-      if (!stickerUrl) return;
+      if (stickerUrl) {
+        try {
+          info = await getImageInfo(
+            await loadImageElement(stickerUrl),
+            await getImageUrlBlob(stickerUrl)
+          );
+        } catch {
+          info = undefined;
+        }
+      }
 
-      const info = await getImageInfo(
-        await loadImageElement(stickerUrl),
-        await getImageUrlBlob(stickerUrl)
-      );
+      const nativeOwner = await sendComposerStickerWithNativeOwner({
+        roomId,
+        body: label || shortcode || 'sticker',
+        mxc,
+        info: info
+          ? {
+              width: info.w,
+              height: info.h,
+              mimetype: info.mimetype,
+              size: info.size,
+            }
+          : undefined,
+        replyTo,
+        threadRoot,
+      });
+      if (nativeOwner === 'native') {
+        setReplyDraft(undefined);
+        return;
+      }
 
+      // Legacy web path — only when no native Matrix session is live.
+      if (!stickerUrl || !info) return;
       mx.sendEvent(
         roomId,
         EventType.Sticker as any,
@@ -845,7 +882,21 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const handleGifSelect = async (gif: GifResult) => {
       setGifSending(true);
       setGifSendError(undefined);
+      const replyTo = typeof replyDraft?.eventId === 'string' ? replyDraft.eventId : undefined;
+      const threadRoot =
+        replyDraft?.relation?.rel_type === RelationType.Thread &&
+        typeof replyDraft.relation.event_id === 'string'
+          ? replyDraft.relation.event_id
+          : undefined;
       try {
+        const nativeOwner = await sendComposerGifWithNativeOwner(roomId, gif, replyTo, threadRoot);
+        if (nativeOwner === 'native') {
+          setReplyDraft(undefined);
+          setGifPickerAnchor(undefined);
+          return;
+        }
+
+        // Legacy web path — only when no native Matrix session is live.
         const { blob, fileName } = await fetchGifForUpload(gif);
         const gifFile = new File([blob], fileName, { type: 'image/gif' });
         const encrypted = room.hasEncryptionStateEvent() ? await encryptFile(gifFile) : undefined;

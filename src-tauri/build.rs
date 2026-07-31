@@ -83,6 +83,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_room_notes_move_todo",
     "matrix_send_text",
     "matrix_send_attachment",
+    "matrix_send_sticker",
     "matrix_send_poll",
     "matrix_poll_respond",
     "matrix_timeline_set_read_state",
