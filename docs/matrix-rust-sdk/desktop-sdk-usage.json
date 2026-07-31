@@ -1294,7 +1294,7 @@
           "fileCount": 8,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
-          "networkingOccurrences": 40
+          "networkingOccurrences": 30
         },
         "event_emitters_listeners": {
           "constructorCandidateOccurrences": 0,
@@ -1395,7 +1395,7 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 20,
+      "fileCount": 18,
       "importFileCount": 10,
       "methodCandidateFrequencies": [
         {
@@ -1528,30 +1528,6 @@
           "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs"
         },
         {
-          "indicator": "/_matrix/client/versions\\",
-          "kind": "matrix_cs_path_template",
-          "line": 340,
-          "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/versions\\",
-          "kind": "matrix_cs_path_template",
-          "line": 340,
-          "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/v1/media/download",
-          "kind": "matrix_cs_path_literal",
-          "line": 343,
-          "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/v1/media/download",
-          "kind": "matrix_cs_path_literal",
-          "line": 343,
-          "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs"
-        },
-        {
           "indicator": "/_matrix/client/v1/media/download",
           "kind": "matrix_cs_path_literal",
           "line": 343,
@@ -1567,42 +1543,6 @@
           "indicator": "/_matrix/client/v1/media/thumbnail",
           "kind": "matrix_cs_path_literal",
           "line": 361,
-          "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/v1/media/download",
-          "kind": "matrix_cs_path_literal",
-          "line": 361,
-          "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/v1/media/thumbnail",
-          "kind": "matrix_cs_path_literal",
-          "line": 361,
-          "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/v1/media/download",
-          "kind": "matrix_cs_path_literal",
-          "line": 361,
-          "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/v1/media/thumbnail",
-          "kind": "matrix_cs_path_literal",
-          "line": 361,
-          "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/v3/sync",
-          "kind": "matrix_cs_path_literal",
-          "line": 365,
-          "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/v3/sync",
-          "kind": "matrix_cs_path_literal",
-          "line": 365,
           "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs"
         },
         {
@@ -1721,7 +1661,7 @@
         }
       ],
       "networkingFileCount": 8,
-      "networkingFindingCount": 40,
+      "networkingFindingCount": 30,
       "role": "test",
       "scope": "role",
       "symbols": [
@@ -2249,94 +2189,6 @@
         }
       ],
       "path": "scripts/__tests__/feature-parity-audit-normalization.test.mjs",
-      "role": "test"
-    },
-    {
-      "bucket": null,
-      "categories": ["authenticated_media", "direct_matrix_networking"],
-      "constructorCandidates": [],
-      "desktopRuntime": false,
-      "imports": [],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [
-        {
-          "description": "Template literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/versions\\",
-          "kind": "matrix_cs_path_template",
-          "line": 340
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v1/media/download",
-          "kind": "matrix_cs_path_literal",
-          "line": 343
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v1/media/download",
-          "kind": "matrix_cs_path_literal",
-          "line": 361
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v1/media/thumbnail",
-          "kind": "matrix_cs_path_literal",
-          "line": 361
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v3/sync",
-          "kind": "matrix_cs_path_literal",
-          "line": 365
-        }
-      ],
-      "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs",
-      "role": "test"
-    },
-    {
-      "bucket": null,
-      "categories": ["authenticated_media", "direct_matrix_networking"],
-      "constructorCandidates": [],
-      "desktopRuntime": false,
-      "imports": [],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [
-        {
-          "description": "Template literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/versions\\",
-          "kind": "matrix_cs_path_template",
-          "line": 340
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v1/media/download",
-          "kind": "matrix_cs_path_literal",
-          "line": 343
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v1/media/download",
-          "kind": "matrix_cs_path_literal",
-          "line": 361
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v1/media/thumbnail",
-          "kind": "matrix_cs_path_literal",
-          "line": 361
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v3/sync",
-          "kind": "matrix_cs_path_literal",
-          "line": 365
-        }
-      ],
-      "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs",
       "role": "test"
     },
     {
@@ -13535,7 +13387,7 @@
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
       "testNetworkingFiles": 8,
-      "testNetworkingFindings": 40,
+      "testNetworkingFindings": 30,
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
