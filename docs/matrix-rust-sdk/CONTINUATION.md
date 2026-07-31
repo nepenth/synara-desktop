@@ -12,7 +12,7 @@
 | Integration branch      | `feature/matrix-rust-sdk-full-replacement`                                                                                                                                                            |
 | Execution model         | Primary Codex and every implementation/review sub-agent: `gpt-5.6-sol`, medium reasoning                                                                                                              |
 | Current integration tip | `88ed14308227b2eec2bed4fc33d97cfa0a2270f3` — V-SEND.3 polls [#250](https://github.com/nepenth/synara-desktop/pull/250) merged after V-ROOMS.5r [#252](https://github.com/nepenth/synara-desktop/pull/252) |
-| Active PRs              | V-SEND.4 rich composer messages; [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE **HOLD** |
+| Active PRs              | Draft V-SEND.4 rich composer messages [#253](https://github.com/nepenth/synara-desktop/pull/253); [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE **HOLD** |
 | Policy                  | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                                    |
 | Operating path          | [operating-path-contract.md](operating-path-contract.md)                                                                                                                                              |
 | Binding queue           | [d0-residual-completion.md](d0-residual-completion.md)                                                                                                                                                |
@@ -49,7 +49,7 @@ obsolete tests/types before closure.
 11. V-ROOMS.5w writers [#251](https://github.com/nepenth/synara-desktop/pull/251) is merged at `0fb0fe4` (candidate `e4e2639`); native `matrix_mdirect_add` / `matrix_mdirect_remove`; JS writer helpers deleted; importers **187→187**.
 12. V-ROOMS.5r native `m.direct` user list [#252](https://github.com/nepenth/synara-desktop/pull/252) is merged at `9579ea4`.
 13. V-SEND.3 polls [#250](https://github.com/nepenth/synara-desktop/pull/250) is merged at `88ed143` (reviewed head `761d2ef`); Synapse native poll proof Confirmed.
-14. Complete **V-SEND.4** rich composer messages. Keep V-TIMELINE [#240](https://github.com/nepenth/synara-desktop/pull/240) **HOLD** — do not select the presenter or delete `RoomTimeline.tsx` until the full action/media route and runtime proof are complete.
+14. Complete **V-SEND.4** rich composer messages [#253](https://github.com/nepenth/synara-desktop/pull/253). Keep V-TIMELINE [#240](https://github.com/nepenth/synara-desktop/pull/240) **HOLD** — do not select the presenter or delete `RoomTimeline.tsx` until the full action/media route and runtime proof are complete.
 15. Run V-BURN only as the final convergence audit and npm dependency/bootstrap/store cleanup.
 16. Resume new media/widgets/notifications/calls verticals only after the residual queue allows.
 
