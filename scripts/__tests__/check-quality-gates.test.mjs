@@ -87,10 +87,23 @@ ${iosBuildStep}
           -- --nocapture
       - if: always()
         run: scripts/synapse-integration.sh reset
+  synapse-native-rich-messages:
+    name: Synapse native rich-message proof
+    needs: [changes]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - run: scripts/synapse-integration.sh up
+      - run: >
+          cargo test --locked
+          live_native_rich_message_send_against_disposable_synapse_when_configured
+          -- --nocapture
+      - if: always()
+        run: scripts/synapse-integration.sh reset
   quality-gate:
     name: Quality gate
     if: always()
-    needs: [changes, validate, ios-tests, synapse-integration, synapse-native-reactions, synapse-native-attachments, synapse-native-polls]
+    needs: [changes, validate, ios-tests, synapse-integration, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages]
     runs-on: ubuntu-latest
     steps:
       - name: Require every scheduled client validation job
@@ -101,6 +114,7 @@ ${iosBuildStep}
           SYNAPSE_NATIVE_REACTIONS_RESULT: \${{ needs.synapse-native-reactions.result }}
           SYNAPSE_NATIVE_ATTACHMENTS_RESULT: \${{ needs.synapse-native-attachments.result }}
           SYNAPSE_NATIVE_POLLS_RESULT: \${{ needs.synapse-native-polls.result }}
+          SYNAPSE_NATIVE_RICH_MESSAGES_RESULT: \${{ needs.synapse-native-rich-messages.result }}
           CHANGES_RESULT: \${{ needs.changes.result }}
         run: |
           set -euo pipefail
@@ -127,6 +141,7 @@ ${iosBuildStep}
           ok "Synapse native reaction proof" "$SYNAPSE_NATIVE_REACTIONS_RESULT" || fail=1
           ok "Synapse native attachment proof" "$SYNAPSE_NATIVE_ATTACHMENTS_RESULT" || fail=1
           ok "Synapse native poll proof" "$SYNAPSE_NATIVE_POLLS_RESULT" || fail=1
+          ok "Synapse native rich-message proof" "$SYNAPSE_NATIVE_RICH_MESSAGES_RESULT" || fail=1
           if [[ "$fail" -ne 0 ]]; then
             exit 1
           fi

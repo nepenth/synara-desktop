@@ -3,12 +3,16 @@ import test from 'node:test';
 
 import { sendTextWithNativeOwner } from '../nativeSendTextOwner';
 
-test('native logged-in session is the sole plain-text send owner', async () => {
+test('native logged-in session owns rich composer message sends', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
   const owner = await sendTextWithNativeOwner(
     {
       roomId: '!room:example.org',
       body: 'hello',
+      msgType: 'm.emote',
+      formattedBody: '<strong>hello</strong>',
+      mentionUserIds: ['@alice:example.org'],
+      mentionRoom: true,
       replyTo: '$event:example.org',
     },
     true,
@@ -37,6 +41,10 @@ test('native logged-in session is the sole plain-text send owner', async () => {
       args: {
         roomId: '!room:example.org',
         body: 'hello',
+        msgType: 'm.emote',
+        formattedBody: '<strong>hello</strong>',
+        mentionUserIds: ['@alice:example.org'],
+        mentionRoom: true,
         replyTo: '$event:example.org',
       },
     },
