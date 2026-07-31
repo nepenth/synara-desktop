@@ -18,7 +18,8 @@ This vertical extends the existing native composer send owner to preserve:
 
 `RoomInput` no longer routes emotes or notices to `mx.sendMessage`, and rich
 text/mentions are no longer discarded by the native text route. Message edits,
-forwards, stickers, GIFs, and threads remain separate residuals.
+forwards, stickers, and GIFs remain separate residuals. Thread send/relations
+are owned by V-SEND.5 (see [v-send-5-threads.md](v-send-5-threads.md)).
 
 ## Operating path
 
