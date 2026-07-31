@@ -35,7 +35,7 @@
 | **Now**        | **Integration tip `a677a80`** after [#265](https://github.com/nepenth/synara-desktop/pull/265)/[#263](https://github.com/nepenth/synara-desktop/pull/263). Active: **this PR** sticker/GIF [#264](https://github.com/nepenth/synara-desktop/pull/264); V-AUTH.4b + V-ROOMS.2c residual; [#240](https://github.com/nepenth/synara-desktop/pull/240) **HOLD**. |
 | **Policy**     | [full-vertical-policy.md](full-vertical-policy.md) |
 | **Tip**        | `5ae9da2f2cdc9fc9767f65f8e2a4cf48e5f13653` merged [#263](https://github.com/nepenth/synara-desktop/pull/263) V-AUTH.4a password reset (after #262). |
-| **Active PRs** | Draft [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE HOLD. |
+| **Active PRs** | #264 sticker/GIF; Draft [#240](https://github.com/nepenth/synara-desktop/pull/240) V-TIMELINE HOLD. |
 | **Blocked**    | Merging plateau D0.6 (#221); claiming V-TIMELINE cutover (#240 HOLD); starting new media/widgets/etc before residual queue; merging L1 foundations; umbrella #39. |
 
 ---
