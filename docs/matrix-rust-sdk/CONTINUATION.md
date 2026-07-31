@@ -46,8 +46,8 @@ obsolete tests/types before closure.
 8. V-SEND.1 [#248](https://github.com/nepenth/synara-desktop/pull/248) is merged at integration `90be0f4ef6efb3915bb886790ebc94e39f088092`.
 9. V-ROOMS.5 read [#249](https://github.com/nepenth/synara-desktop/pull/249) is merged at integration `d17ab2c0d72b129189a80d03bd0c1b56d6c230d6` from candidate `708aef7`. Production **189→187**, repository-wide **202→200**, allowlist **196→194**.
 10. Continue **V-ROOMS.5w** native `m.direct` writers: `matrix_mdirect_add` / `matrix_mdirect_remove`; delete JS `addRoomIdToMDirect` / `removeRoomIdFromMDirect`. Keep V-SEND.3 [#250](https://github.com/nepenth/synara-desktop/pull/250) and V-TIMELINE [#240](https://github.com/nepenth/synara-desktop/pull/240) as parallel ownership; do not select the presenter or delete `RoomTimeline.tsx` until the full action/media route and runtime proof are complete.
-10. Run V-BURN only as the final convergence audit and npm dependency/bootstrap/store cleanup.
-11. Resume new media/widgets/notifications/calls verticals only after the residual queue allows.
+11. Run V-BURN only as the final convergence audit and npm dependency/bootstrap/store cleanup.
+12. Resume new media/widgets/notifications/calls verticals only after the residual queue allows.
 
 ## Current accounting
 
