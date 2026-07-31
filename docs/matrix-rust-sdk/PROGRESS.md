@@ -61,6 +61,14 @@ Update rules:
 
 ## Work log (newest first)
 
+### 2026-07-31 — V-AUTH post-3 residual inventory
+
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-AUTH.3 discovery** | **DONE #276** at `4d33227f` | Native `matrix_login_flows`; AuthFlowsLoader live js client deleted; allowlist **175→171**; production **172→169**. |
+| current | **V-AUTH post-3 residual** | **This PR** | Docs-only inventory of remaining auth edges: login UIA stage execution (`matrix_uia_*`, no command on tip) + `loginUtil` non-native fallback (`createClient`/`loginRequest`). See [v-auth-post-3-residual.md](v-auth-post-3-residual.md). |
+| current | **V-TIMELINE** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | No cutover. |
+
 ### 2026-07-31 — tip after #276 V-AUTH.3
 
 | When (UTC) | Item | Result | Notes |
