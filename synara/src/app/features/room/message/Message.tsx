@@ -37,9 +37,9 @@ import { useHover, useFocusWithin } from 'react-aria';
 import { MatrixEvent, Room } from 'matrix-js-sdk';
 import { Relations } from 'matrix-js-sdk/lib/models/relations';
 import classNames from 'classnames';
-import { RoomPinnedEventsEventContent } from 'matrix-js-sdk/lib/types';
 import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import { MsgType } from 'matrix-js-sdk/lib/@types/event';
 import {
   AvatarBase,
   BubbleLayout,
@@ -77,7 +77,7 @@ import { resolveMatrixThumbnailUrl } from '../../../matrix/media';
 import { getViaServers } from '../../../plugins/via-servers';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { useRoomPinnedEvents } from '../../../hooks/useRoomPinnedEvents';
-import { MemberPowerTag, StateEvent } from '../../../../types/matrix/room';
+import { MemberPowerTag } from '../../../../types/matrix/room';
 import { PowerIcon } from '../../../components/power';
 import colorMXID from '../../../../util/colorMXID';
 import { getPowerTagIconSrc } from '../../../hooks/useMemberPowerTag';
@@ -87,6 +87,14 @@ import {
   getRoomForwardTargets,
 } from '../../../utils/forward';
 import { allRoomsAtom } from '../../../state/room-list/roomList';
+import {
+  forwardMediaWithNativeTimelineAction,
+  forwardTextWithNativeTimelineAction,
+  pinWithNativeTimelineAction,
+  redactWithNativeTimelineAction,
+  reportWithNativeTimelineAction,
+  unpinWithNativeTimelineAction,
+} from '../nativeTimelineAction';
 
 export type ReactionHandler = (keyOrMxc: string, shortcode: string) => void;
 
@@ -485,11 +493,32 @@ export const MessageForwardItem = as<
     setSendingRoomId(targetRoom.roomId);
     setError(false);
     try {
-      await contents.reduce<Promise<void>>(
-        (prev, content) =>
-          prev.then(() => mx.sendMessage(targetRoom.roomId, content as any).then(() => undefined)),
-        Promise.resolve()
-      );
+      for (const event of events) {
+        const eventId = event.getId();
+        if (!eventId) continue;
+        const msgtype = event.getContent()?.msgtype;
+        const isMedia =
+          !quoteMode &&
+          (event.getType() === 'm.sticker' ||
+            msgtype === MsgType.Image ||
+            msgtype === MsgType.File ||
+            msgtype === MsgType.Audio ||
+            msgtype === MsgType.Video);
+        if (isMedia) {
+          await forwardMediaWithNativeTimelineAction({
+            sourceRoomId: room.roomId,
+            eventId,
+            targetRoomId: targetRoom.roomId,
+          });
+        } else {
+          await forwardTextWithNativeTimelineAction({
+            sourceRoomId: room.roomId,
+            eventId,
+            targetRoomId: targetRoom.roomId,
+            asQuote: quoteMode,
+          });
+        }
+      }
       handleClose();
     } catch {
       setError(true);
@@ -779,20 +808,19 @@ export const MessagePinItem = as<
     onClose?: () => void;
   }
 >(({ room, mEvent, onClose, ...props }, ref) => {
-  const mx = useMatrixClient();
   const pinnedEvents = useRoomPinnedEvents(room);
   const isPinned = pinnedEvents.includes(mEvent.getId() ?? '');
 
   const handlePin = () => {
     const eventId = mEvent.getId();
-    const pinContent: RoomPinnedEventsEventContent = {
-      pinned: Array.from(pinnedEvents).filter((id) => id !== eventId),
-    };
-    if (!isPinned && eventId) {
-      pinContent.pinned.push(eventId);
-    }
-    mx.sendStateEvent(room.roomId, StateEvent.RoomPinnedEvents as any, pinContent);
-    onClose?.();
+    if (!eventId) return;
+    void (
+      isPinned
+        ? unpinWithNativeTimelineAction({ roomId: room.roomId, eventId })
+        : pinWithNativeTimelineAction({ roomId: room.roomId, eventId })
+    )
+      .catch(() => undefined)
+      .finally(() => onClose?.());
   };
 
   return (
@@ -819,14 +847,17 @@ export const MessageDeleteItem = as<
     onClose?: () => void;
   }
 >(({ room, mEvent, onClose, ...props }, ref) => {
-  const mx = useMatrixClient();
   const [open, setOpen] = useState(false);
 
   const [deleteState, deleteMessage] = useAsyncCallback(
     useCallback(
       (eventId: string, reason?: string) =>
-        mx.redactEvent(room.roomId, eventId, undefined, reason ? { reason } : undefined),
-      [mx, room]
+        redactWithNativeTimelineAction({
+          roomId: room.roomId,
+          eventId,
+          reason,
+        }),
+      [room]
     )
   );
 
@@ -948,14 +979,17 @@ export const MessageReportItem = as<
     onClose?: () => void;
   }
 >(({ room, mEvent, onClose, ...props }, ref) => {
-  const mx = useMatrixClient();
   const [open, setOpen] = useState(false);
 
   const [reportState, reportMessage] = useAsyncCallback(
     useCallback(
-      (eventId: string, score: number, reason: string) =>
-        mx.reportEvent(room.roomId, eventId, score, reason),
-      [mx, room]
+      (eventId: string, _score: number, reason: string) =>
+        reportWithNativeTimelineAction({
+          roomId: room.roomId,
+          eventId,
+          reason,
+        }),
+      [room]
     )
   );
 
