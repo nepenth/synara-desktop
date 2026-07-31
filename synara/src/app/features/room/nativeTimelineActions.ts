@@ -27,6 +27,14 @@ export function isNativeTimelineForwardMedia(input: {
   );
 }
 
+/**
+ * Choose pin vs unpin from room pin-list readback.
+ * Capability `pin` only means the action is allowed; state comes from `pinnedEventIds`.
+ */
+export function selectNativeTimelinePinAction(pinned: boolean): 'pin' | 'unpin' {
+  return pinned ? 'unpin' : 'pin';
+}
+
 export const NATIVE_TIMELINE_ACTION_SCHEMA_VERSION = 1;
 
 export type NativeTimelineActionKind =

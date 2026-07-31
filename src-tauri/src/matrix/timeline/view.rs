@@ -815,6 +815,10 @@ pub struct TimelineViewSnapshot {
     pub position: TimelineViewPosition,
     pub pagination: TimelinePaginationState,
     pub read_state: TimelineReadState,
+    /// Authoritative `m.room.pinned_events` ids for this room (empty when none).
+    /// Presenters gate Pin vs Unpin against this list; do not invent pin state.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pinned_event_ids: Vec<EventId>,
     pub rows: Vec<TimelineViewRow>,
     pub capabilities: TimelineViewCapabilities,
 }
@@ -858,6 +862,9 @@ pub struct TimelineViewDeltaBatch {
     pub read_state: Option<TimelineReadState>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pagination: Option<TimelinePaginationState>,
+    /// Full replacement of room pin state when the native owner observes a change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pinned_event_ids: Option<Vec<EventId>>,
 }
 
 /// Project one SDK delta batch while keeping SDK items and diffs in Rust.
@@ -1135,5 +1142,53 @@ mod tests {
         assert!(!json.contains("ciphertext"));
         assert!(!json.contains("access_token"));
         assert!(!json.contains("mxc://"));
+    }
+
+    #[test]
+    fn snapshot_and_delta_project_pinned_event_ids_without_secrets() {
+        let snapshot = TimelineViewSnapshot {
+            schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+            session_generation: 1,
+            room_id: "!room:example.org".into(),
+            revision: 0,
+            position: TimelineViewPosition::LiveBottom,
+            pagination: TimelinePaginationState {
+                backward: TimelinePageState::Available,
+                forward: TimelinePageState::Available,
+            },
+            read_state: TimelineReadState {
+                own_read_event_id: None,
+                unread_anchor_event_id: None,
+                is_marked_unread: false,
+            },
+            pinned_event_ids: vec!["$pin:example.org".into(), "$pin2:example.org".into()],
+            rows: Vec::new(),
+            capabilities: TimelineViewCapabilities {
+                mark_read: true,
+                mark_unread: true,
+                paginate_backward: true,
+                paginate_forward: true,
+            },
+        };
+        let json = serde_json::to_string(&snapshot).unwrap();
+        assert!(json.contains("\"pinnedEventIds\""));
+        assert!(json.contains("$pin:example.org"));
+        assert!(!json.contains("ciphertext"));
+        assert!(!json.contains("access_token"));
+
+        let batch = TimelineViewDeltaBatch {
+            schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+            session_generation: 1,
+            stream_id: "live:!room:example.org:1".into(),
+            room_id: "!room:example.org".into(),
+            revision: 1,
+            ops: Vec::new(),
+            read_state: None,
+            pagination: None,
+            pinned_event_ids: Some(vec!["$pin:example.org".into()]),
+        };
+        let batch_json = serde_json::to_string(&batch).unwrap();
+        assert!(batch_json.contains("\"pinnedEventIds\""));
+        assert!(batch_json.contains("$pin:example.org"));
     }
 }
