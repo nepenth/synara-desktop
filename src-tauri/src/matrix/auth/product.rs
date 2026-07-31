@@ -3651,6 +3651,64 @@ mod tests {
     }
 
     #[test]
+    fn v_auth_3b_product_has_no_matrix_uia_login_stage_commands() {
+        // Desktop product does not retain multi-stage UIA on the login route
+        // (V-AUTH.3b). Password login remains single-shot; register/reset/device
+        // delete keep specialized native stage/UIAA owners. Do not invent unused
+        // matrix_uia_* session IPC for a non-product login surface.
+        let product_src = include_str!("product.rs");
+        let product_prod = product_src
+            .split("#[cfg(test)]")
+            .next()
+            .expect("product production section");
+        let lib_src = include_str!("../../lib.rs");
+        let login_src = include_str!("login.rs");
+        let login_prod = login_src
+            .split("#[cfg(test)]")
+            .next()
+            .expect("login production section");
+
+        assert!(
+            product_prod.contains("pub async fn matrix_login_password"),
+            "password login product command must remain registered"
+        );
+        assert!(
+            !product_prod.contains("pub async fn matrix_uia_"),
+            "generic matrix_uia_* login-stage commands must not be product Tauri commands"
+        );
+        assert!(
+            !lib_src.contains("matrix_uia_"),
+            "matrix_uia_* must not be registered in the invoke handler"
+        );
+        // Specialized multi-stage / UIAA product paths remain.
+        assert!(
+            product_prod.contains("pub async fn matrix_register"),
+            "register multi-stage owner must remain"
+        );
+        assert!(
+            product_prod.contains("pub async fn matrix_password_reset_complete"),
+            "password-reset owner must remain"
+        );
+        assert!(
+            product_prod.contains("pub async fn matrix_device_delete_password"),
+            "device-delete password UIAA owner must remain"
+        );
+        // Login maps UIAA to fail-closed InteractiveAuthRequired — no stage loop.
+        assert!(
+            login_prod.contains("InteractiveAuthRequired"),
+            "login must map UIAA to InteractiveAuthRequired"
+        );
+        assert!(
+            login_prod.contains("p3.2-login-uiaa-required"),
+            "login UIAA diagnostic must remain privacy-safe"
+        );
+        assert!(
+            !login_prod.contains("UiaSession"),
+            "login module must not drive the P3.4 UiaSession coordinator"
+        );
+    }
+
+    #[test]
     fn v_auth_2_product_has_no_token_login_command_or_login_token_sdk_call() {
         // Desktop product does not retain m.login.token (V-AUTH.2). Password
         // login remains the only production Tauri login command.
