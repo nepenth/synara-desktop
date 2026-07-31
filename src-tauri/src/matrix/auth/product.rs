@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use matrix_sdk::{
     attachment::AttachmentConfig,
+    authentication::matrix::MatrixSession,
     encryption::CrossSigningStatus,
     room::edit::EditedContent,
     room::reply::{EnforceThread, Reply as AttachmentReply},
@@ -32,7 +33,7 @@ use matrix_sdk::{
         EventId, MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedTransactionId, OwnedUserId,
         UInt,
     },
-    Client, Room,
+    Client, Room, SessionMeta, SessionTokens,
 };
 use mime::Mime;
 use serde::{Deserialize, Serialize};
@@ -42,8 +43,10 @@ use zeroize::Zeroize;
 
 use super::{
     complete_password_reset, login_with_password, normalize_homeserver_url,
-    password_reset_ephemeral_user_id, request_password_email_token, AuthError, LoginOptions,
-    PasswordEmailTokenResult, PasswordResetOutcome,
+    password_reset_ephemeral_user_id, probe_register_flows, register_ephemeral_user_id,
+    register_submit, request_password_email_token, request_register_email_token, AuthError,
+    LoginOptions, PasswordEmailTokenResult, PasswordResetOutcome, RegisterAuthStage,
+    RegisterFlowsProbe, RegisterSubmitOutcome, RegisterUiaFlow,
 };
 use crate::matrix::account_data::{
     add_room_to_mdirect, clear_completed_later_live, complete_later_item_live,
@@ -68,7 +71,7 @@ use crate::matrix::devices::{
 };
 use crate::matrix::lifecycle::{
     clear_session_material, persist_session_after_login, restore_session_from_vault,
-    KeyringSessionMaterialVault,
+    restore_session_onto_client, KeyringSessionMaterialVault, SessionMaterial,
 };
 use crate::matrix::room_keys::{
     live::{
@@ -436,6 +439,185 @@ pub async fn matrix_password_reset_complete(
     )
     .await
     .map_err(map_password_reset_auth_error)
+}
+
+/// V-AUTH.4b — probe registration UIAA flows (unauthenticated).
+#[tauri::command]
+pub async fn matrix_register_flows(
+    app: AppHandle,
+    homeserver_url: String,
+) -> Result<RegisterFlowsProbe, MatrixAuthCommandError> {
+    let client = build_register_ephemeral_client(&app, &homeserver_url).await?;
+    probe_register_flows(&client)
+        .await
+        .map_err(map_register_auth_error)
+}
+
+/// V-AUTH.4b — request a registration email token (unauthenticated).
+#[tauri::command]
+pub async fn matrix_register_request_email_token(
+    app: AppHandle,
+    homeserver_url: String,
+    email: String,
+    client_secret: <SET_IN_CONFIG>
+    send_attempt: u32,
+) -> Result<PasswordEmailTokenResult, MatrixAuthCommandError> {
+    let client_secret = zeroize::Zeroizing::new(client_secret);
+    let client = build_register_ephemeral_client(&app, &homeserver_url).await?;
+    request_register_email_token(&client, &email, client_secret.as_str(), send_attempt)
+        .await
+        .map_err(map_register_auth_error)
+}
+
+/// Serializable product outcome for register submit (no tokens).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum MatrixRegisterOutcome {
+    /// Registration completed and a native product session was installed.
+    Complete { identity: MatrixLoginIdentity },
+    /// UIAA stage still required.
+    #[serde(rename_all = "camelCase")]
+    UiaRequired {
+        session: Option<String>,
+        flows: Vec<RegisterUiaFlow>,
+        completed: Vec<String>,
+        params: Option<serde_json::Value>,
+        error_code: Option<String>,
+        error_message: Option<&'static str>,
+    },
+}
+
+/// V-AUTH.4b — submit registration (+ UIAA stage). On complete, installs native session.
+///
+/// Access/refresh tokens never leave the host. Unsupported UIAA stages fail closed.
+#[tauri::command]
+pub async fn matrix_register(
+    app: AppHandle,
+    state: State<'_, MatrixAuthState>,
+    homeserver_url: String,
+    username: String,
+    password: String,
+    device_display_name: Option<String>,
+    auth: RegisterAuthStage,
+) -> Result<MatrixRegisterOutcome, MatrixAuthCommandError> {
+    let mut session = state.session.lock().await;
+    if session.is_some() {
+        return Err(MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "A native Matrix session is already logged in.",
+            "v-auth.4b-session-already-active",
+        ));
+    }
+
+    let password = zeroize::Zeroizing::new(password);
+    let device_display_name = device_display_name
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| super::platform_device_display_name().to_owned());
+
+    let client = build_register_ephemeral_client(&app, &homeserver_url).await?;
+    let outcome = register_submit(
+        &client,
+        &username,
+        password.as_str(),
+        &device_display_name,
+        auth,
+    )
+    .await
+    .map_err(map_register_auth_error)?;
+
+    match outcome {
+        RegisterSubmitOutcome::UiaRequired(challenge) => Ok(MatrixRegisterOutcome::UiaRequired {
+            session: challenge.session,
+            flows: challenge.flows,
+            completed: challenge.completed,
+            params: challenge.params,
+            error_code: challenge.error_code,
+            error_message: challenge.error_message,
+        }),
+        RegisterSubmitOutcome::Complete(secrets) => {
+            let identity =
+                install_session_from_register_secrets(&app, &state, &mut session, secrets).await?;
+            Ok(MatrixRegisterOutcome::Complete { identity })
+        }
+    }
+}
+
+async fn install_session_from_register_secrets(
+    app: &AppHandle,
+    state: &State<'_, MatrixAuthState>,
+    session: &mut Option<ManagedMatrixSession>,
+    secrets: super::register::RegisterCompleteSecrets,
+) -> Result<MatrixLoginIdentity, MatrixAuthCommandError> {
+    let homeserver_url = normalize_homeserver_url(&secrets.homeserver_url)
+        .map_err(map_register_auth_error)?
+        .into_string();
+    let live_identity = AccountIdentity::new(&secrets.user_id, &homeserver_url).map_err(|_| {
+        MatrixAuthCommandError::invalid_input("v-auth.4b-register-identity-invalid")
+    })?;
+    let app_data_root = app_data_root(app)?;
+    let client = build_client(&app_data_root, live_identity.clone()).await?;
+
+    // Session install must go through lifecycle (guardrail: no Client::restore_session under matrix/auth/).
+    let material = SessionMaterial::from_matrix_tokens(
+        &live_identity,
+        secrets.device_id.as_str(),
+        secrets.access_token.as_str(),
+        secrets.refresh_token.as_ref().map(|t| t.as_str()),
+    )
+    .map_err(|_| {
+        MatrixAuthCommandError::invalid_input("v-auth.4b-register-session-material-invalid")
+    })?;
+    restore_session_onto_client(&client, &live_identity, &material)
+        .await
+        .map_err(|_| {
+            MatrixAuthCommandError::new(
+                "Unknown",
+                "Failed to restore the native Matrix session after registration.",
+                "v-auth.4b-register-restore-failed",
+            )
+        })?;
+
+    ensure_crypto_ready(&client).await?;
+    let session_generation = state.next_generation();
+    let verification = NativeVerificationOwner::new(&client, session_generation);
+    let devices = NativeDeviceOwner::start(&client, app.clone(), session_generation)
+        .await
+        .map_err(map_device_error)?;
+    let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
+    let sync = start_sync_owner(&client, session_generation).await?;
+    let session_vault = KeyringSessionMaterialVault::new();
+    persist_session_after_login(&client, &live_identity, &session_vault)
+        .map_err(|_| MatrixAuthCommandError::unavailable("v-auth.4b-session-persist-failed"))?;
+
+    let identity = MatrixLoginIdentity {
+        user_id: secrets.user_id.clone(),
+        device_id: secrets.device_id.clone(),
+        homeserver_url,
+    };
+    if let Err(error) = write_active_identity(&app_data_root, &identity) {
+        let _ = clear_session_material(&session_vault, &live_identity);
+        return Err(error);
+    }
+
+    *session = Some(ManagedMatrixSession {
+        client,
+        identity: identity.clone(),
+        sync,
+        invite_avatars: InviteAvatarHandles::new(session_generation),
+        timelines: NativeTimelineRegistry::new(session_generation),
+        sends: SendQueue::new(session_generation),
+        attachments: AttachmentSendQueue::new(session_generation),
+        verification,
+        _devices: devices,
+        typing,
+        pending_device_deletion: None,
+        next_device_delete_operation_id: 0,
+        pending_cross_signing_auth_session: None,
+        room_key_transfer: Arc::new(Mutex::new(RoomKeyTransferFlow::new(session_generation))),
+        selected_room_key_import: None,
+        next_room_key_import_selection_id: 0,
+    });
+    Ok(identity)
 }
 
 #[tauri::command]
@@ -3807,6 +3989,73 @@ async fn build_password_reset_client(
     build_unauthenticated_client(&config).await.map_err(|_| {
         MatrixAuthCommandError::unavailable("v-auth.4-password-reset-client-build-failed")
     })
+}
+
+/// Ephemeral unauthenticated client for registration probe/submit/email (no product session).
+async fn build_register_ephemeral_client(
+    app: &AppHandle,
+    homeserver_url: &str,
+) -> Result<Client, MatrixAuthCommandError> {
+    let homeserver_url = normalize_homeserver_url(homeserver_url)
+        .map_err(map_register_auth_error)?
+        .into_string();
+    let user_id = register_ephemeral_user_id(&homeserver_url).map_err(map_register_auth_error)?;
+    let identity = AccountIdentity::new(&user_id, &homeserver_url).map_err(|_| {
+        MatrixAuthCommandError::invalid_input("v-auth.4b-register-identity-invalid")
+    })?;
+    let app_data_root = app_data_root(app)?;
+    let store_key = StoreKeyMaterial::generate().map_err(|_| {
+        MatrixAuthCommandError::unavailable("v-auth.4b-register-store-key-unavailable")
+    })?;
+    let config = ClientBuildConfig::product_default(&app_data_root, identity, Some(store_key))
+        .map_err(|_| {
+            MatrixAuthCommandError::unavailable("v-auth.4b-register-client-config-failed")
+        })?;
+    build_unauthenticated_client(&config)
+        .await
+        .map_err(|_| MatrixAuthCommandError::unavailable("v-auth.4b-register-client-build-failed"))
+}
+
+fn map_register_auth_error(error: AuthError) -> MatrixAuthCommandError {
+    let diagnostic = error.diagnostic_id();
+    let code = match diagnostic {
+        "v-auth.4b-register-user-taken" => "UserTaken",
+        "v-auth.4b-register-user-invalid"
+        | "v-auth.4b-empty-username"
+        | "v-auth.4b-invalid-username" => "UserInvalid",
+        "v-auth.4b-register-user-exclusive" => "UserExclusive",
+        "v-auth.4b-register-password-weak" => "PasswordWeak",
+        "v-auth.4b-register-password-short" => "PasswordShort",
+        "v-auth.4b-register-forbidden" => "Forbidden",
+        id if id.contains("rate-limited") => "RateLimited",
+        id if id.contains("unsupported") => "Unsupported",
+        _ => match &error {
+            AuthError::InvalidInput { .. } => "InvalidRequest",
+            AuthError::AuthenticationRejected { .. } => "Forbidden",
+            AuthError::RateLimited { .. } => "RateLimited",
+            AuthError::Connectivity { .. }
+            | AuthError::HomeserverUnavailable { .. }
+            | AuthError::WellKnownNotFound { .. } => "InvalidServer",
+            AuthError::UnsupportedCapability { .. } => "Unsupported",
+            AuthError::InteractiveAuthRequired { .. } => "Unauthorized",
+            _ => "Unknown",
+        },
+    };
+    let message = match code {
+        "UserTaken" => "This username is already taken.",
+        "UserInvalid" => "This username contains invalid characters.",
+        "UserExclusive" => "This username is reserved.",
+        "PasswordWeak" => "Password rejected as too weak.",
+        "PasswordShort" => "Password rejected as too short.",
+        "RateLimited" => "The registration request was rate limited.",
+        "Forbidden" => "The homeserver does not permit registration.",
+        "InvalidRequest" => "The registration request is invalid.",
+        "InvalidServer" => "The Matrix homeserver is unavailable.",
+        "Unsupported" => "The homeserver requires an unsupported registration stage.",
+        "Unauthorized" => "Additional authentication is required to register.",
+        _ => "Native registration failed.",
+    };
+    MatrixAuthCommandError::new(code, message, diagnostic)
 }
 
 fn map_password_reset_auth_error(error: AuthError) -> MatrixAuthCommandError {

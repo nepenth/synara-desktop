@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback } from 'react';
 import { Dialog, Text, Box, Button, config } from 'folds';
-import { AuthType } from 'matrix-js-sdk';
+import { AuthStageType } from '../../utils/matrix-uia';
 import { StageComponentProps } from './types';
 
 function DummyErrorDialog({
@@ -41,7 +41,7 @@ export function AutoDummyStageDialog({ stageData, submitAuthDict, onCancel }: St
 
   const handleSubmit = useCallback(() => {
     submitAuthDict({
-      type: AuthType.Dummy,
+      type: AuthStageType.Dummy,
       session,
     });
   }, [session, submitAuthDict]);

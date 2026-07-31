@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-register-flows"
+description = "Enables the matrix_register_flows command without any pre-configured scope."
+commands.allow = ["matrix_register_flows"]
+
+[[permission]]
+identifier = "deny-matrix-register-flows"
+description = "Denies the matrix_register_flows command without any pre-configured scope."
+commands.deny = ["matrix_register_flows"]
