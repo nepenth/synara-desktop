@@ -605,6 +605,7 @@ async fn install_session_from_register_secrets(
         sync,
         invite_avatars: InviteAvatarHandles::new(session_generation),
         timelines: NativeTimelineRegistry::new(session_generation),
+        composer_drafts: ComposerDraftRegistry::new(),
         sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
         verification,

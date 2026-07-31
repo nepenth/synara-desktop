@@ -15,7 +15,7 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
 | production |          170 |                2 |                   3 |
-| test       |           10 |                8 |                  40 |
+| test       |           10 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
 | **total**  |      **183** |                  |                     |
 
@@ -224,7 +224,7 @@ Scope: **production only**. Import files: 170. Files with any finding: 172.
 
 ## Aggregates: test
 
-Scope: **test only**. Import files: 10. Files with any finding: 20.
+Scope: **test only**. Import files: 10. Files with any finding: 18.
 
 ### Imported modules
 
@@ -275,7 +275,7 @@ Scope: **test only**. Import files: 10. Files with any finding: 20.
 | `timelines`                |     2 |                 0 |                   0 |                      0 |          0 |
 | `receipts`                 |     2 |                 0 |                   0 |                      0 |          0 |
 | `uia_auth`                 |     1 |                 3 |                   0 |                      0 |          0 |
-| `direct_matrix_networking` |     8 |                 0 |                   0 |                      0 |         40 |
+| `direct_matrix_networking` |     8 |                 0 |                   0 |                      0 |         30 |
 
 ### Top method-name candidates (not type-proven)
 
@@ -295,19 +295,9 @@ Scope: **test only**. Import files: 10. Files with any finding: 20.
 | `scripts/__tests__/feature-parity-audit-normalization.test.mjs` | 2076 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
 | `scripts/__tests__/feature-parity-audit-normalization.test.mjs` | 2971 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
 | `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  340 | `matrix_cs_path_template` | `/_matrix/client/versions\`                  |
-| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  340 | `matrix_cs_path_template` | `/_matrix/client/versions\`                  |
-| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  340 | `matrix_cs_path_template` | `/_matrix/client/versions\`                  |
-| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  343 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
-| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  343 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
 | `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  343 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
 | `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  361 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
 | `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  361 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/thumbnail`         |
-| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  361 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
-| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  361 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/thumbnail`         |
-| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  361 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
-| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  361 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/thumbnail`         |
-| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  365 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
-| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  365 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
 | `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  365 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
 | `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  131 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
 | `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  131 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
@@ -408,8 +398,6 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `scripts/__tests__/audit-matrix-public.test.mjs`                                                                              | test       | no      | —                | —            | —                                                                                                                                                                         |
 | `scripts/__tests__/check-matrix-rust-sdk-guardrails.test.mjs`                                                                 | test       | no      | —                | —            | —                                                                                                                                                                         |
 | `scripts/__tests__/feature-parity-audit-normalization.test.mjs`                                                               | test       | no      | —                | —            | —                                                                                                                                                                         |
-| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`                                                                       | test       | no      | —                | —            | —                                                                                                                                                                         |
-| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`                                                                       | test       | no      | —                | —            | —                                                                                                                                                                         |
 | `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`                                                                       | test       | no      | —                | —            | —                                                                                                                                                                         |
 | `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`                                                                      | test       | no      | —                | —            | —                                                                                                                                                                         |
 | `scripts/__tests__/synapse-two-client-integration.test.mjs`                                                                   | test       | no      | —                | —            | —                                                                                                                                                                         |
