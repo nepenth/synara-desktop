@@ -743,11 +743,18 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         return;
       }
       try {
+        const threadRoot =
+          replyDraft?.relation?.rel_type === RelationType.Thread &&
+          typeof replyDraft.relation.event_id === 'string'
+            ? replyDraft.relation.event_id
+            : undefined;
         const owner = await sendPollWithNativeDesktopOwner({
           roomId,
           question: poll.question,
           answers: poll.answers.map((answer) => answer.text),
           maxSelections: poll.maxSelections,
+          threadRoot,
+          replyTo: replyDraft?.eventId,
         });
         if (owner === 'legacy') {
           setPollError(
