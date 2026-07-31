@@ -1,3 +1,9 @@
+import type { DesktopInvokeResult } from '../../utils/desktop';
+
+type NativeSessionSnapshot = {
+  status: 'logged_out' | 'logged_in';
+};
+
 export type NativeSpaceHierarchyRoom = {
   roomId: string;
   name?: string;
@@ -16,10 +22,10 @@ export type NativeSpaceHierarchySnapshot = {
   rooms: NativeSpaceHierarchyRoom[];
 };
 
-export type NativeInvoke = <T>(
+export type NativeInvoke = (
   command: string,
   args?: Record<string, unknown>
-) => Promise<{ available: boolean; value?: T }>;
+) => Promise<DesktopInvokeResult<unknown>>;
 
 export async function readSpaceHierarchyWithNativeOwner(
   roomId: string,
@@ -29,15 +35,19 @@ export async function readSpaceHierarchyWithNativeOwner(
   if (!desktopAvailable) {
     throw new Error('Native Matrix space hierarchy is unavailable.');
   }
-  const session = await invoke<{ status: 'logged_out' | 'logged_in' }>('matrix_session_snapshot');
-  if (!session.available || session.value?.status !== 'logged_in') {
+  const session = await invoke('matrix_session_snapshot');
+  if (!session.available) {
     throw new Error('Native Matrix space hierarchy requires a logged-in session.');
   }
-  const result = await invoke<NativeSpaceHierarchySnapshot>('matrix_space_hierarchy_snapshot', {
+  const sessionSnapshot = session.value as NativeSessionSnapshot | undefined;
+  if (sessionSnapshot?.status !== 'logged_in') {
+    throw new Error('Native Matrix space hierarchy requires a logged-in session.');
+  }
+  const result = await invoke('matrix_space_hierarchy_snapshot', {
     roomId,
   });
   if (!result.available || !result.value) {
     throw new Error('Native Matrix space hierarchy is unavailable.');
   }
-  return result.value;
+  return result.value as NativeSpaceHierarchySnapshot;
 }
