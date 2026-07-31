@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
-import { IAuthData, MatrixError } from 'matrix-js-sdk';
-import { ILoginFlowsResponse } from 'matrix-js-sdk/lib/@types/auth';
+import type { LoginFlowsDto } from '../pages/auth/login/nativeLoginFlows';
+import type { UIAAuthData } from '../utils/matrix-uia';
 
 export enum RegisterFlowStatus {
   FlowRequired = 401,
@@ -9,40 +9,22 @@ export enum RegisterFlowStatus {
   RateLimited = 429,
 }
 
+/**
+ * Stub register-flows shape retained on the shared AuthFlows context for login.
+ * Product registration discovery is native-owned by V-AUTH.4b (`Register.tsx` /
+ * `matrix_register_flows`) and is not loaded via this context.
+ */
 export type RegisterFlowsResponse =
   | {
       status: RegisterFlowStatus.FlowRequired;
-      data: IAuthData;
+      data: UIAAuthData;
     }
   | {
       status: Exclude<RegisterFlowStatus, RegisterFlowStatus.FlowRequired>;
     };
 
-export const parseRegisterErrResp = (matrixError: MatrixError): RegisterFlowsResponse => {
-  switch (matrixError.httpStatus) {
-    case RegisterFlowStatus.InvalidRequest: {
-      return { status: RegisterFlowStatus.InvalidRequest };
-    }
-    case RegisterFlowStatus.RateLimited: {
-      return { status: RegisterFlowStatus.RateLimited };
-    }
-    case RegisterFlowStatus.RegistrationDisabled: {
-      return { status: RegisterFlowStatus.RegistrationDisabled };
-    }
-    case RegisterFlowStatus.FlowRequired: {
-      return {
-        status: RegisterFlowStatus.FlowRequired,
-        data: matrixError.data as IAuthData,
-      };
-    }
-    default: {
-      return { status: RegisterFlowStatus.InvalidRequest };
-    }
-  }
-};
-
 export type AuthFlows = {
-  loginFlows: ILoginFlowsResponse;
+  loginFlows: LoginFlowsDto;
   registerFlows: RegisterFlowsResponse;
 };
 

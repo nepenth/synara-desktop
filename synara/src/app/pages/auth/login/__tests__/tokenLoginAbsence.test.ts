@@ -33,9 +33,16 @@ test('V-AUTH.2: desktop product has no TokenLogin surface or loginToken route', 
     path.join(packageRoot, 'src/app/hooks/useParsedLoginFlows.ts'),
     'utf8'
   );
-  assert.match(parsedFlows, /m\.login\.password/);
   assert.doesNotMatch(parsedFlows, /m\.login\.token|token\?:/);
-  assert.match(parsedFlows, /export type ParsedLoginFlows = \{\s*password\?: LoginFlow;\s*\}/s);
+  assert.match(parsedFlows, /export type ParsedLoginFlows = \{\s*password\?: LoginFlowDto;\s*\}/s);
+
+  // Password matrix type matching lives on the native login-flow owner (V-AUTH.3).
+  const nativeFlows = readFileSync(
+    path.join(packageRoot, 'src/app/pages/auth/login/nativeLoginFlows.ts'),
+    'utf8'
+  );
+  assert.match(nativeFlows, /m\.login\.password/);
+  assert.doesNotMatch(nativeFlows, /matrix_login_token/);
 
   const libRs = readFileSync(path.join(repoRoot, 'src-tauri/src/lib.rs'), 'utf8');
   assert.match(libRs, /matrix_login_password/);
