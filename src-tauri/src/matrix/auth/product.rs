@@ -19,7 +19,10 @@ use matrix_sdk::{
         events::{
             relation::{Reply, Thread},
             room::{
-                message::{AddMentions, Relation, ReplyWithinThread, RoomMessageEventContent},
+                message::{
+                    AddMentions, Relation, ReplacementMetadata, ReplyWithinThread,
+                    RoomMessageEventContent,
+                },
                 ImageInfo,
             },
             sticker::StickerEventContent,
@@ -1836,6 +1839,87 @@ pub async fn matrix_send_text(
     })
 }
 
+/// V-SEND.R-EDIT sole native message-edit owner.
+///
+/// Sends a replacement (`m.replace`) room message via the live matrix-sdk session.
+/// The new content is built with `m.new_content` semantics matching Element/Cinny
+/// (fallback body `* {plain}`; real body/html/mentions live in `m.new_content`).
+/// The JS `mx.sendMessage` edit path is only used when no native session is live;
+/// when a native session is live this command is the sole owner and failures are
+/// fail-closed (no silent fallthrough to `mx.sendMessage`).
+#[tauri::command]
+#[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
+pub async fn matrix_edit_message(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    event_id: String,
+    body: String,
+    msg_type: Option<String>,
+    formatted_body: Option<String>,
+    mention_user_ids: Option<Vec<String>>,
+    mention_room: Option<bool>,
+    txn_id: Option<String>,
+) -> Result<MatrixSendTextResult, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&room_id)?;
+    let event_id = parse_edit_event_id(event_id)?;
+    let txn_id = parse_transaction_id(txn_id)?;
+    let content = edit_message_content(
+        body.clone(),
+        msg_type,
+        formatted_body,
+        mention_user_ids,
+        mention_room.unwrap_or(false),
+        event_id,
+    )?;
+
+    let (room, session_generation, local_txn_id) = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        let room = active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-send.r-edit-room-not-found",
+            )
+        })?;
+        let session_generation = active.sends.session_generation();
+        let item = active
+            .sends
+            .enqueue_text(room_id.to_string(), body.clone())
+            .map_err(|error| map_send_error(error.diagnostic_id()))?;
+        (room, session_generation, item.local_txn_id.clone())
+    };
+
+    let send_result = send_message_to_room(&room, content, txn_id).await;
+
+    let mut session = state.session.lock().await;
+    if let Some(active) = session.as_mut() {
+        if active.sends.session_generation() == session_generation {
+            if send_result.is_ok() {
+                let _ = active.sends.mark_sent(&local_txn_id);
+            } else {
+                let _ = active
+                    .sends
+                    .mark_failed(&local_txn_id, "v-send.r-edit-sdk-failed");
+            }
+        }
+    }
+
+    let event_id = send_result.map_err(|_| {
+        MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix message edit could not be sent.",
+            "v-send.r-edit-sdk-failed",
+        )
+    })?;
+    Ok(MatrixSendTextResult {
+        room_id: room_id.to_string(),
+        event_id,
+        local_txn_id,
+        status: "sent",
+    })
+}
+
 /// V-SEND.1 sole composer attachment upload+send owner. Bytes cross IPC once;
 /// encrypted rooms are encrypted by the managed SDK (no JS dual-encrypt).
 /// V-SEND.5 extends the same command with optional `thread_root` so native
@@ -2835,6 +2919,12 @@ fn parse_thread_root_event_id(
         .transpose()
 }
 
+fn parse_edit_event_id(event_id: String) -> Result<OwnedEventId, MatrixAuthCommandError> {
+    event_id
+        .parse()
+        .map_err(|_| map_send_error("v-send.r-edit-invalid-event-id"))
+}
+
 fn parse_transaction_id(
     txn_id: Option<String>,
 ) -> Result<Option<OwnedTransactionId>, MatrixAuthCommandError> {
@@ -2959,6 +3049,34 @@ pub(crate) fn message_content(
         (None, None) => None,
     };
     Ok(content)
+}
+
+/// Build validated `m.replace` replacement content for the native edit owner.
+///
+/// The new content is built via `message_content` (msg_type / formatted_body /
+/// mentions), then wrapped with `make_replacement` so the real body/html/mentions
+/// live in `m.new_content` and the fallback body is `* {plain}` (Element/Cinny
+/// style). `make_replacement` strips any reply/thread relation and sets
+/// `m.relates_to.rel_type == m.replace` with the target `event_id`.
+pub(crate) fn edit_message_content(
+    body: String,
+    msg_type: Option<String>,
+    formatted_body: Option<String>,
+    mention_user_ids: Option<Vec<String>>,
+    mention_room: bool,
+    event_id: OwnedEventId,
+) -> Result<RoomMessageEventContent, MatrixAuthCommandError> {
+    let content = message_content(
+        body,
+        msg_type,
+        formatted_body,
+        mention_user_ids,
+        mention_room,
+        None,
+        None,
+    )?;
+    let mentions = content.mentions.clone();
+    Ok(content.make_replacement(ReplacementMetadata::new(event_id, mentions)))
 }
 
 async fn send_message_to_room(
@@ -3880,6 +3998,59 @@ mod tests {
             invalid_mention.diagnostic_id,
             "v-send.4-invalid-mention-user-id"
         );
+    }
+
+    #[test]
+    fn edit_message_content_emits_m_replace_with_new_content() {
+        let edited = edit_message_content(
+            "corrected".into(),
+            Some("m.text".into()),
+            Some("<p>corrected</p>".into()),
+            Some(vec!["@alice:example.org".into()]),
+            true,
+            "$original:example.org".parse().unwrap(),
+        )
+        .unwrap();
+        let json = serde_json::to_value(edited).unwrap();
+        // Replacement relation targets the original event.
+        assert_eq!(json["m.relates_to"]["rel_type"], "m.replace");
+        assert_eq!(json["m.relates_to"]["event_id"], "$original:example.org");
+        // Fallback body is `* {plain}`.
+        assert_eq!(json["body"], "* corrected");
+        // Real body/html/mentions live in m.new_content.
+        assert_eq!(json["m.new_content"]["body"], "corrected");
+        assert_eq!(json["m.new_content"]["formatted_body"], "<p>corrected</p>");
+        assert_eq!(
+            json["m.new_content"]["m.mentions"]["user_ids"][0],
+            "@alice:example.org"
+        );
+        assert_eq!(json["m.new_content"]["m.mentions"]["room"], true);
+        // The fallback content mentions are filtered to only *new* mentions; since the
+        // replacement metadata carries the same mentions, none remain in the fallback.
+        assert!(json["m.mentions"]
+            .get("user_ids")
+            .map(|v| v.as_array().map_or(true, |a| a.is_empty()))
+            .unwrap_or(true));
+    }
+
+    #[test]
+    fn edit_message_content_rejects_invalid_event_id_and_type() {
+        let invalid_event = parse_edit_event_id("not-an-event".into()).unwrap_err();
+        assert_eq!(
+            invalid_event.diagnostic_id,
+            "v-send.r-edit-invalid-event-id"
+        );
+
+        let invalid_type = edit_message_content(
+            "body".into(),
+            Some("m.image".into()),
+            None,
+            None,
+            false,
+            "$original:example.org".parse().unwrap(),
+        )
+        .unwrap_err();
+        assert_eq!(invalid_type.diagnostic_id, "v-send.4-invalid-message-type");
     }
 
     #[test]

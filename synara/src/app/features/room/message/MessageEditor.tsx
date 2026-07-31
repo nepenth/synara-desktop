@@ -53,6 +53,7 @@ import { UseStateProvider } from '../../../components/UseStateProvider';
 import { EmojiBoard } from '../../../components/emoji-board';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
+import { editMessageWithNativeDesktopOwner } from '../nativeEditMessage';
 import { getEditedEvent, getMentionContent, trimReplyFromFormattedBody } from '../../../utils/room';
 import { mobileOrTablet } from '../../../utils/user-agent';
 import { useComposingCheck } from '../../../hooks/useComposingCheck';
@@ -140,9 +141,27 @@ export const MessageEditor = as<'div', MessageEditorProps>(
         const mMentions = getMentionContent(Array.from(mentionData.users), mentionData.room);
         newContent['m.mentions'] = mMentions;
 
-        if (!customHtmlEqualsPlainText(customHtml, plainText)) {
+        const hasFormatted = !customHtmlEqualsPlainText(customHtml, plainText);
+        if (hasFormatted) {
           newContent.format = 'org.matrix.custom.html';
           newContent.formatted_body = customHtml;
+        }
+
+        // V-SEND.R-EDIT: a live native Matrix session is the sole edit owner.
+        // The legacy `mx.sendMessage` replace path is only used when no native
+        // session is live (web / logged-out). A native command failure throws
+        // (fail-closed) rather than silently falling through to mx.sendMessage.
+        const owner = await editMessageWithNativeDesktopOwner({
+          roomId,
+          eventId: mEvent.getId(),
+          body: plainText,
+          msgType: mEvent.getContent().msgtype,
+          formattedBody: hasFormatted ? customHtml : undefined,
+          mentionUserIds: Array.from(mentionData.users),
+          mentionRoom: mentionData.room,
+        });
+        if (owner === 'native') {
+          return undefined;
         }
 
         const content: IContent = {
