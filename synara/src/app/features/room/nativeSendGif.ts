@@ -8,8 +8,6 @@ export const sendComposerGifWithNativeOwner = (
   replyTo?: string,
   threadRoot?: string
 ): Promise<'native' | 'legacy'> =>
-  sendGifWithNativeOwner(
-    { roomId, gif, replyTo, threadRoot },
-    isSynaraDesktop(),
-    (command, args) => invokeDesktopWithAvailability(command, args)
+  sendGifWithNativeOwner({ roomId, gif, replyTo, threadRoot }, isSynaraDesktop(), (command, args) =>
+    invokeDesktopWithAvailability(command, args)
   );
