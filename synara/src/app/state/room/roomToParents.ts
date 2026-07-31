@@ -78,7 +78,7 @@ export const roomToParentsFromNativeSnapshot = (
 
 /**
  * Drive space parent map from the native Rust projection.
- * Lobby hierarchy mutations remain a V-ROOMS.2b residual.
+ * Lobby hierarchy mutations are owned by V-ROOMS.2c native commands.
  */
 export const useBindRoomToParentsAtom = (
   roomToParents: typeof roomToParentsAtom = roomToParentsAtom

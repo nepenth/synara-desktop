@@ -1,7 +1,7 @@
 //! P4.5 space hierarchy foundation + V-ROOMS.2 live ownership.
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p4.5-spaces.md`
-//! Product vertical: `docs/matrix-rust-sdk/v-rooms-2a-space-parents.md`
+//! Product verticals: V-ROOMS.2a parents, V-ROOMS.2b hierarchy, V-ROOMS.2c local graph/writers.
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
@@ -13,8 +13,11 @@ pub mod live;
 pub use error::SpaceError;
 pub use hierarchy::{space_child, SpaceHierarchy};
 pub use live::{
-    snapshot_space_hierarchy, snapshot_space_parents, NativeSpaceHierarchyRoom,
-    NativeSpaceHierarchySnapshot, NativeSpaceParentEntry, NativeSpaceParentsSnapshot,
+    remove_space_child, reparent_restricted_join_allow, set_space_child, snapshot_space_children,
+    snapshot_space_hierarchy, snapshot_space_parents, NativeRestrictedJoinReparentResult,
+    NativeSpaceChildEdge, NativeSpaceChildMutationResult, NativeSpaceChildrenSnapshot,
+    NativeSpaceHierarchyRoom, NativeSpaceHierarchySnapshot, NativeSpaceParentEntry,
+    NativeSpaceParentsSnapshot,
 };
 
 /// Static marker for link / schema smoke.
