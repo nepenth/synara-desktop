@@ -1,6 +1,6 @@
 //! Post-login session secret persistence (P3.5).
 //!
-//! After a successful password/token login, extract the native Matrix session
+//! After a successful password login, extract the native Matrix session
 //! from the live SDK `Client` and seal it into [`SessionMaterialVault`].
 //!
 //! - Tokens stay host-side only (vault blob); never on [`crate::matrix::auth::LoginResult`]
@@ -29,7 +29,7 @@ pub struct SessionPersistOutcome {
 
 /// Extract session secrets from a logged-in SDK client and persist them.
 ///
-/// `client` must already hold a native Matrix auth session (password/token login).
+/// `client` must already hold a native Matrix auth session (password login).
 /// `identity` must match the session user id and homeserver URL (binding check).
 ///
 /// OAuth sessions are rejected until a dedicated P3.3/P3.5 OAuth envelope lands.
