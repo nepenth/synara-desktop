@@ -32,7 +32,7 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `7709507a`** — V-SEND.R-EDIT native message edit (`matrix_edit_message`, `m.replace`) in-PR. #240 HOLD. |
+| **Now**        | **Tip `42ef9127`** — V-SEND.R-POLL-THREAD **merged** [#282](https://github.com/nepenth/synara-desktop/pull/282); V-SEND.R-EDIT native `matrix_edit_message` in-PR. Next: password `loginUtil` / UIA non-retention. #240 HOLD. |
 | **Policy**     | [full-vertical-policy.md](full-vertical-policy.md) |
 | **Tip**        | `4d33227f` merge [#276](https://github.com/nepenth/synara-desktop/pull/276) `matrix_login_flows` (allowlist **175→171**, production files **172→169**). |
 | **Active PRs** | [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. |
