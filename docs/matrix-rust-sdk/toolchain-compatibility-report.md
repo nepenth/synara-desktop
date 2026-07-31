@@ -275,4 +275,4 @@ cargo check --locked --target x86_64-apple-darwin
 | `toolchain-compatibility-report.json` | Machine-readable twin |
 | `probes/matrix-rust-sdk-0.18/` | Existing 0.18 API-shape probe |
 | `probes/tauri-matrix-sdk-compat/` | New coexistence probe + lockfile |
-| `implementation-handoff.md` | Program state (P0.4 merged tip, P0.5 evidence) |
+| `README.md` | Program state (P0.4 merged tip, P0.5 evidence) |

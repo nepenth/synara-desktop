@@ -301,4 +301,4 @@ exact crates `matrix-sdk` / `matrix-sdk-ui` **`=0.18.0`** at commit
 | ---- | ----- |
 | Authors | Bounded writer session (P0.4) |
 | Machine twin | `docs/matrix-rust-sdk/swift-rust-version-provenance.json` |
-| Related | `0.18.0-source-provenance.*`, `implementation-handoff.md`, plan §P0.4 |
+| Related | `0.18.0-source-provenance.*`, `README.md`, plan §P0.4 |
