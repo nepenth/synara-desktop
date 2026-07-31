@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { NativeInvoke, readSpaceHierarchyWithNativeOwner } from '../nativeSpaceHierarchyOwner';
+import { readSpaceHierarchyWithNativeOwner, type NativeInvoke } from '../nativeSpaceHierarchyOwner';
 
 const loggedIn: NativeInvoke = async (command) => {
   if (command === 'matrix_session_snapshot') {
