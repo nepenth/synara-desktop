@@ -4,10 +4,10 @@
 
 | Field                     | Value                                                                                                                                                                                         |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status                    | **Active — tip `bc9aa283` after #266 V-AUTH.4b DONE; free slot V-AUTH.3; #240 HOLD** (2026-07-31) |
+| Status                    | **Active — tip `48991e77` after #274 docs / #266 V-AUTH.4b DONE; free slot V-AUTH.3; #240 HOLD** (2026-07-31) |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                            |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)                                                                                                                                     |
-| Current integration tip   | `bc9aa283` ([#266](https://github.com/nepenth/synara-desktop/pull/266) V-AUTH.4b native registration) |
+| Current integration tip   | `48991e77` ([#274](https://github.com/nepenth/synara-desktop/pull/274) docs after [#266](https://github.com/nepenth/synara-desktop/pull/266) V-AUTH.4b) |
 | Active PRs                | [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD; next residual **V-AUTH.3** |
 
 ## Policy trigger
@@ -114,7 +114,7 @@ have already deleted their implementations.
 ## Execution order (binding)
 
 1. Treat V-ROOMS.1 as integrated at `2c48fd45a08200a6e3491f100912f086e8458b3b`; retain its measured production 197→194 and repository-wide 211→208 deletion deltas.
-2. Serial after tip `bc9aa283`: V-AUTH.4b **DONE #266** (allowlist 191→175). Next residual free-slot **V-AUTH.3** implementation (inventory #273); V-TIMELINE [#240] HOLD-cutover only.
+2. Serial after tip `48991e77`: V-AUTH.4b **DONE #266** (allowlist 191→175). Next residual free-slot **V-AUTH.3** implementation (inventory #273); V-TIMELINE [#240] HOLD-cutover only.
 3. Keep V-TIMELINE [#240] **HOLD-cutover**: implement and tip-merge are OK; **do not** select `NativeTimelinePresenter`, delete `RoomTimeline.tsx`, or claim cutover until full contract + runtime proof.
 4. Continue remaining **V-AUTH.3** UIA/loginFlows and other residual gaps, deleting each superseded JS owner in its slice.
 5. **V-BURN** final convergence audit + npm dependency removal
