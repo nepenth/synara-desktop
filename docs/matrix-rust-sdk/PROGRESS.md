@@ -32,7 +32,7 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `60674486`** — V-AUTH.3 **merged** [#276](https://github.com/nepenth/synara-desktop/pull/276); V-SEND residual inventory [#277](https://github.com/nepenth/synara-desktop/pull/277). Next: password `loginUtil` / UIA stage. #240 HOLD. |
+| **Now**        | **Tip `7709507a`** — V-SEND.R-POLL-THREAD **draft** (poll send wires `threadRoot`/`replyTo` mirroring V-SEND.5). Next: password `loginUtil` / UIA stage. #240 HOLD. |
 | **Policy**     | [full-vertical-policy.md](full-vertical-policy.md) |
 | **Tip**        | `4d33227f` merge [#276](https://github.com/nepenth/synara-desktop/pull/276) `matrix_login_flows` (allowlist **175→171**, production files **172→169**). |
 | **Active PRs** | [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. |
