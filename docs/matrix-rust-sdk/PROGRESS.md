@@ -91,7 +91,7 @@ Update rules:
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
 | current | **V-AUTH.2 token login** | **Merged** [#262](https://github.com/nepenth/synara-desktop/pull/262) | Integration `56d1544e5473764f9aaed64e98e074c15aa3b105`; product non-retention. |
-| current | **V-AUTH.4a password reset** | **Draft** [#263](https://github.com/nepenth/synara-desktop/pull/263) | Native password reset; tip-merged into 4b. |
+| current | **V-AUTH.4a password reset** | **This PR** [#263](https://github.com/nepenth/synara-desktop/pull/263) | Native password reset; 4b residual. |
 
 ### 2026-07-31 — tip after #258
 
