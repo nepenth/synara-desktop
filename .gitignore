@@ -17,3 +17,7 @@ xcuserdata/
 synara-ios/.build/
 src-tauri/capabilities/release-hardening.json
 src-tauri/gen/schemas/capabilities.json
+
+# Local Grok Build operator tooling (not product; keep off public history)
+.grok/
+.agents/skills/
