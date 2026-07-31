@@ -32,7 +32,7 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `42ef9127`** after [#282](https://github.com/nepenth/synara-desktop/pull/282) V-SEND.R-POLL-THREAD. **This PR** V-AUTH.3b UIA non-retention; parallel [#279](https://github.com/nepenth/synara-desktop/pull/279) password loginUtil; [#283](https://github.com/nepenth/synara-desktop/pull/283) edit; #240 HOLD. |
+| **Now**        | **Tip after #280.** Cutover for V-TIMELINE **approved**. In flight: #279 password loginUtil, #283 edit, #240 tip-merge/cutover. CI: parallel Validate Rust/Node. #39 still needs explicit merge approval. |
 | **Policy**     | [full-vertical-policy.md](full-vertical-policy.md) |
 | **Tip**        | `42ef9127` merge [#282](https://github.com/nepenth/synara-desktop/pull/282) V-SEND.R-POLL-THREAD. |
 | **Active PRs** | **This PR** [#280](https://github.com/nepenth/synara-desktop/pull/280); [#279](https://github.com/nepenth/synara-desktop/pull/279); [#283](https://github.com/nepenth/synara-desktop/pull/283); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. |
@@ -60,6 +60,15 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-07-31 — V-TIMELINE cutover approved + CI parallel Validate
+
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-TIMELINE cutover policy** | **Approved** | User: full steam js-sdk replacement; select presenter + delete RoomTimeline allowed; break/fix-forward OK. #39 still gated. |
+| current | **CI Validate** | **This PR** | Split Validate into parallel `validate-rust` + `validate-frontend` (same gates; less wall-clock). Path scopes for rust-only / frontend-only PRs. |
+| current | **Active product** | #279 loginUtil, #283 edit, #240 tip-merge | Serial `product.rs` residuals preferred after edit. |
+
 
 ### 2026-07-31 — tip after #282 V-SEND.R-POLL-THREAD
 
