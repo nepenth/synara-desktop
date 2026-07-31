@@ -3,6 +3,7 @@
 //! This is the only desktop product boundary for password login. The live
 //! `matrix_sdk::Client` and all access/refresh tokens remain in the Rust host.
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -1830,7 +1831,8 @@ pub async fn matrix_timeline_forward_text(
 
     let (sender_label, body) = load_forwardable_text(&source_room, &event_id).await?;
     let forwarded_body = format_forwarded_plain_body(&sender_label, &body, request.as_quote);
-    let event_id = send_text_to_room(&target_room, forwarded_body, None, None, None)
+    let content = message_content(forwarded_body, None, None, None, false, None)?;
+    let event_id = send_message_to_room(&target_room, content, None)
         .await
         .map_err(|_| map_timeline_action_error("v-timeline-forward-send-failed"))?;
 
@@ -2115,19 +2117,29 @@ async fn pin_or_unpin_event(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
 pub async fn matrix_send_text(
     state: State<'_, MatrixAuthState>,
     room_id: String,
     body: String,
+    msg_type: Option<String>,
+    formatted_body: Option<String>,
+    mention_user_ids: Option<Vec<String>>,
+    mention_room: Option<bool>,
     reply_to: Option<String>,
     txn_id: Option<String>,
-    formatted_body: Option<String>,
 ) -> Result<MatrixSendTextResult, MatrixAuthCommandError> {
     let room_id = parse_send_room_id(&room_id)?;
     let reply_to = parse_reply_event_id(reply_to)?;
     let txn_id = parse_transaction_id(txn_id)?;
-    let formatted_body = normalize_formatted_body(body.trim(), formatted_body.as_deref())?;
-
+    let content = message_content(
+        body.clone(),
+        msg_type,
+        formatted_body,
+        mention_user_ids,
+        mention_room.unwrap_or(false),
+        reply_to,
+    )?;
     let (room, session_generation, local_txn_id) = {
         let mut session = state.session.lock().await;
         let active = require_send_session_mut(session.as_mut())?;
@@ -2146,8 +2158,7 @@ pub async fn matrix_send_text(
         (room, session_generation, item.local_txn_id.clone())
     };
 
-    let send_result = send_text_to_room(&room, body, formatted_body, reply_to, txn_id).await;
-
+    let send_result = send_message_to_room(&room, content, txn_id).await;
     let mut session = state.session.lock().await;
     if let Some(active) = session.as_mut() {
         if active.sends.session_generation() == session_generation {
@@ -3267,30 +3278,58 @@ fn normalize_formatted_body(
     Ok(Some(html.to_owned()))
 }
 
-fn text_message_content(
+pub(crate) fn message_content(
     body: String,
+    msg_type: Option<String>,
     formatted_body: Option<String>,
+    mention_user_ids: Option<Vec<String>>,
+    mention_room: bool,
     reply_to: Option<OwnedEventId>,
-) -> RoomMessageEventContent {
-    let mut content = match formatted_body {
-        Some(html) => RoomMessageEventContent::text_html(body, html),
-        None => RoomMessageEventContent::text_plain(body),
+) -> Result<RoomMessageEventContent, MatrixAuthCommandError> {
+    let mut content = match (msg_type.as_deref().unwrap_or("m.text"), formatted_body) {
+        ("m.text", Some(html)) => RoomMessageEventContent::text_html(body, html),
+        ("m.text", None) => RoomMessageEventContent::text_plain(body),
+        ("m.emote", Some(html)) => RoomMessageEventContent::emote_html(body, html),
+        ("m.emote", None) => RoomMessageEventContent::emote_plain(body),
+        ("m.notice", Some(html)) => RoomMessageEventContent::notice_html(body, html),
+        ("m.notice", None) => RoomMessageEventContent::notice_plain(body),
+        _ => {
+            return Err(MatrixAuthCommandError::new(
+                "InvalidRequest",
+                "The native Matrix message type is invalid.",
+                "v-send.4-invalid-message-type",
+            ));
+        }
     };
-    content.mentions = Some(Mentions::new());
+    let user_ids = mention_user_ids
+        .unwrap_or_default()
+        .into_iter()
+        .map(|user_id| {
+            user_id.parse::<OwnedUserId>().map_err(|_| {
+                MatrixAuthCommandError::new(
+                    "InvalidRequest",
+                    "A native Matrix mention user ID is invalid.",
+                    "v-send.4-invalid-mention-user-id",
+                )
+            })
+        })
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    let mut mentions = Mentions::new();
+    mentions.user_ids = user_ids;
+    mentions.room = mention_room;
+    content.mentions = Some(mentions);
     if let Some(event_id) = reply_to {
         content.relates_to = Some(Relation::Reply(Reply::with_event_id(event_id)));
     }
-    content
+    Ok(content)
 }
 
-async fn send_text_to_room(
+async fn send_message_to_room(
     room: &Room,
-    body: String,
-    formatted_body: Option<String>,
-    reply_to: Option<OwnedEventId>,
+    content: RoomMessageEventContent,
     txn_id: Option<OwnedTransactionId>,
 ) -> matrix_sdk::Result<String> {
-    let send = room.send(text_message_content(body, formatted_body, reply_to));
+    let send = room.send(content);
     let result = match txn_id {
         Some(txn_id) => send.with_transaction_id(txn_id).await?,
         None => send.await?,
@@ -3691,28 +3730,75 @@ mod tests {
     }
 
     #[test]
-    fn text_content_sets_empty_mentions_html_and_optional_reply() {
-        let plain = text_message_content("hello".into(), None, None);
-        let plain_json = serde_json::to_value(plain).unwrap();
+    fn message_content_preserves_type_html_mentions_and_reply() {
+        let plain = message_content("hello".into(), None, None, None, false, None).unwrap();        let plain_json = serde_json::to_value(plain).unwrap();
         assert_eq!(plain_json["body"], "hello");
         assert_eq!(plain_json["msgtype"], "m.text");
         assert_eq!(plain_json["m.mentions"], serde_json::json!({}));
         assert!(plain_json.get("formatted_body").is_none());
 
-        let rich = text_message_content("hello".into(), Some("<p>hello</p>".into()), None);
-        let rich_json = serde_json::to_value(rich).unwrap();
-        assert_eq!(rich_json["formatted_body"], "<p>hello</p>");
-        assert_eq!(rich_json["format"], "org.matrix.custom.html");
-
-        let reply = text_message_content(
+        let reply = message_content(
             "reply".into(),
-            None,
+            Some("m.emote".into()),
+            Some("<strong>reply</strong>".into()),
+            Some(vec!["@alice:example.org".into()]),
+            true,
             Some("$event:example.org".parse().unwrap()),
-        );
+        )
+        .unwrap();
         let reply_json = serde_json::to_value(reply).unwrap();
+        assert_eq!(reply_json["msgtype"], "m.emote");
+        assert_eq!(reply_json["format"], "org.matrix.custom.html");
+        assert_eq!(reply_json["formatted_body"], "<strong>reply</strong>");
+        assert_eq!(
+            reply_json["m.mentions"],
+            serde_json::json!({
+                "user_ids": ["@alice:example.org"],
+                "room": true
+            })
+        );
         assert_eq!(
             reply_json["m.relates_to"]["m.in_reply_to"]["event_id"],
             "$event:example.org"
+        );
+
+        let notice = message_content(
+            "notice".into(),
+            Some("m.notice".into()),
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap();
+        assert_eq!(serde_json::to_value(notice).unwrap()["msgtype"], "m.notice");
+    }
+
+    #[test]
+    fn message_content_rejects_invalid_type_and_mentions() {
+        let invalid_type = message_content(
+            "body".into(),
+            Some("m.image".into()),
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap_err();
+        assert_eq!(invalid_type.diagnostic_id, "v-send.4-invalid-message-type");
+
+        let invalid_mention = message_content(
+            "body".into(),
+            None,
+            None,
+            Some(vec!["not-a-user".into()]),
+            false,
+            None,
+        )
+        .unwrap_err();
+        assert_eq!(
+            invalid_mention.diagnostic_id,
+            "v-send.4-invalid-mention-user-id"
         );
     }
 

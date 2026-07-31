@@ -28,6 +28,7 @@ jobs:
       synapse_native_reactions: ${{ steps.scope.outputs.synapse_native_reactions }}
       synapse_native_attachments: ${{ steps.scope.outputs.synapse_native_attachments }}
       synapse_native_polls: ${{ steps.scope.outputs.synapse_native_polls }}
+      synapse_native_rich_messages: ${{ steps.scope.outputs.synapse_native_rich_messages }}
     steps:
       - name: Checkout repository history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -52,6 +53,7 @@ jobs:
             echo "synapse_native_reactions=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_attachments=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_polls=true" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_rich_messages=true" >> "$GITHUB_OUTPUT"
             echo "CI scope: full (event=${GITHUB_EVENT_NAME})"
             exit 0
           fi
@@ -63,6 +65,7 @@ jobs:
             echo "synapse_native_reactions=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_attachments=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_polls=true" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_rich_messages=true" >> "$GITHUB_OUTPUT"
             echo "CI scope: full (missing PR SHAs)"
             exit 0
           fi
@@ -159,7 +162,23 @@ jobs:
             SYNAPSE_NATIVE_POLLS=true
           fi
 
-          echo "CI scope: validate=${VALIDATE} ios=${IOS} synapse=${SYNAPSE} synapse_native_reactions=${SYNAPSE_NATIVE_REACTIONS} synapse_native_attachments=${SYNAPSE_NATIVE_ATTACHMENTS} synapse_native_polls=${SYNAPSE_NATIVE_POLLS}"
+          # Native V-SEND.4 rich composer message proof against disposable Synapse.
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            .github/workflows/ci.yml \
+            scripts/synapse-integration.sh \
+            integration/synapse \
+            src-tauri/Cargo.toml \
+            src-tauri/Cargo.lock \
+            src-tauri/src/matrix/send/live_synapse_proof \
+            src-tauri/src/matrix/auth/product.rs; then
+            echo "synapse_native_rich_messages=false" >> "$GITHUB_OUTPUT"
+            SYNAPSE_NATIVE_RICH_MESSAGES=false
+          else
+            echo "synapse_native_rich_messages=true" >> "$GITHUB_OUTPUT"
+            SYNAPSE_NATIVE_RICH_MESSAGES=true
+          fi
+
+          echo "CI scope: validate=${VALIDATE} ios=${IOS} synapse=${SYNAPSE} synapse_native_reactions=${SYNAPSE_NATIVE_REACTIONS} synapse_native_attachments=${SYNAPSE_NATIVE_ATTACHMENTS} synapse_native_polls=${SYNAPSE_NATIVE_POLLS} synapse_native_rich_messages=${SYNAPSE_NATIVE_RICH_MESSAGES}"
           git diff --name-only "$BASE_SHA" "$HEAD_SHA" | head -80 || true
 
   validate:
@@ -471,10 +490,52 @@ jobs:
         if: always()
         run: scripts/synapse-integration.sh reset
 
+  synapse-native-rich-messages:
+    name: Synapse native rich-message proof
+    needs: [changes]
+    if: needs.changes.outputs.synapse_native_rich_messages == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust 1.93
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+        with:
+          toolchain: 1.93
+
+      - name: Install Linux Tauri dependencies
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.list /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Start disposable Synapse
+        run: scripts/synapse-integration.sh up
+
+      - name: Prove native rich composer send against Synapse
+        working-directory: src-tauri
+        env:
+          SYNARA_RUN_MATRIX_RUST_RICH_MESSAGE_LIVE: "1"
+          SYNARA_MATRIX_HOMESERVER_URL: http://127.0.0.1:8008
+        run: >
+          cargo test --locked
+          live_native_rich_message_send_against_disposable_synapse_when_configured
+          -- --nocapture
+
+      - name: Tear down disposable Synapse
+        if: always()
+        run: scripts/synapse-integration.sh reset
+
   quality-gate:
     name: Quality gate
     if: always()
-    needs: [changes, validate, ios-tests, synapse-integration, synapse-native-reactions, synapse-native-attachments, synapse-native-polls]
+    needs: [changes, validate, ios-tests, synapse-integration, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages]
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
@@ -486,6 +547,7 @@ jobs:
           SYNAPSE_NATIVE_REACTIONS_RESULT: ${{ needs.synapse-native-reactions.result }}
           SYNAPSE_NATIVE_ATTACHMENTS_RESULT: ${{ needs.synapse-native-attachments.result }}
           SYNAPSE_NATIVE_POLLS_RESULT: ${{ needs.synapse-native-polls.result }}
+          SYNAPSE_NATIVE_RICH_MESSAGES_RESULT: ${{ needs.synapse-native-rich-messages.result }}
           CHANGES_RESULT: ${{ needs.changes.result }}
         run: |
           set -euo pipefail
@@ -513,6 +575,7 @@ jobs:
           ok "Synapse native reaction proof" "$SYNAPSE_NATIVE_REACTIONS_RESULT" || fail=1
           ok "Synapse native attachment proof" "$SYNAPSE_NATIVE_ATTACHMENTS_RESULT" || fail=1
           ok "Synapse native poll proof" "$SYNAPSE_NATIVE_POLLS_RESULT" || fail=1
+          ok "Synapse native rich-message proof" "$SYNAPSE_NATIVE_RICH_MESSAGES_RESULT" || fail=1
           if [[ "$fail" -ne 0 ]]; then
             exit 1
           fi

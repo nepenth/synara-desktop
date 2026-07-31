@@ -97,8 +97,8 @@
   "vertical_execution": {
     "policy": "full-vertical-delete-per-vertical",
     "integration_product_state": "capability-cutover-in-progress",
-    "active_slice": "V-SEND.3",
-    "active_pr": 250,
+    "active_slice": "V-SEND.4",
+    "active_pr": 253,
     "completed_slices": [
       "V-CRYPTO.1",
       "V-CRYPTO.2",
@@ -113,7 +113,8 @@
       "V-ROOMS.4",
       "V-SEND.1",
       "V-SEND.2",
-      "V-ROOMS.5"
+      "V-ROOMS.5",
+      "V-SEND.3"
     ],
     "wired_deletion_open": [],
     "next_slices": [
@@ -122,7 +123,7 @@
       "V-AUTH.3",
       "V-AUTH.4",
       "V-ROOMS.2",
-      "V-SEND.4"
+      "V-SEND.5"
     ],
     "held_prs": [
       221,

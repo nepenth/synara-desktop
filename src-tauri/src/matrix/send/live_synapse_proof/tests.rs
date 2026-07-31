@@ -436,6 +436,117 @@ async fn live_native_poll_send_and_respond_against_disposable_synapse_when_confi
     let _ = std::fs::remove_dir_all(&store_root);
 }
 
+fn rich_message_live_enabled() -> bool {
+    std::env::var("SYNARA_RUN_MATRIX_RUST_RICH_MESSAGE_LIVE")
+        .ok()
+        .as_deref()
+        == Some("1")
+}
+
+#[tokio::test]
+async fn live_native_rich_message_send_against_disposable_synapse_when_configured() {
+    if !rich_message_live_enabled() {
+        return;
+    }
+    let base = loopback_homeserver_url()
+        .expect("SYNARA_MATRIX_HOMESERVER_URL must be credential-free HTTP loopback");
+
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let localpart = format!("vs4_{stamp:x}");
+    let password = format!("S-{stamp:x}");
+    let registration = register_disposable_account(&base, &localpart, &password).await;
+    let user_id = registration["user_id"]
+        .as_str()
+        .expect("registration user_id")
+        .to_owned();
+
+    let store_root = temp_store_root();
+    let identity = AccountIdentity::new(&user_id, &base).expect("account identity");
+    let key = StoreKeyMaterial::generate().expect("store key");
+    let config = ClientBuildConfig::product_default(&store_root, identity, Some(key))
+        .expect("client config");
+    let client = build_unauthenticated_client(&config)
+        .await
+        .expect("unauthenticated client");
+    login_with_password(
+        &client,
+        &localpart,
+        &password,
+        &LoginOptions {
+            device_display_name: Some("V-SEND.4 rich-message proof".into()),
+            request_refresh_token: false,
+        },
+    )
+    .await
+    .expect("password login");
+
+    client
+        .sync_once(SyncSettings::default().timeout(Duration::from_secs(3)))
+        .await
+        .expect("initial sync");
+    let room = client
+        .create_room(CreateRoomRequest::new())
+        .await
+        .expect("create room");
+    client
+        .sync_once(SyncSettings::default().timeout(Duration::from_secs(3)))
+        .await
+        .expect("post-create sync");
+
+    let content = crate::matrix::auth::product::message_content(
+        "waves".into(),
+        Some("m.emote".into()),
+        Some("<strong>waves</strong>".into()),
+        Some(vec![user_id.clone()]),
+        true,
+        None,
+    )
+    .expect("build native rich message content");
+    let response = room
+        .send(content)
+        .await
+        .expect("send rich message via managed client");
+    let value = wait_for_message_event(&client, &room, &response.response.event_id).await;
+    let content = &value["content"];
+    assert_eq!(content["msgtype"], "m.emote");
+    assert_eq!(content["format"], "org.matrix.custom.html");
+    assert_eq!(content["formatted_body"], "<strong>waves</strong>");
+    assert_eq!(content["m.mentions"]["user_ids"][0], user_id);
+    assert_eq!(content["m.mentions"]["room"], true);
+
+    let _ = std::fs::remove_dir_all(&store_root);
+}
+
+async fn wait_for_message_event(
+    client: &matrix_sdk::Client,
+    room: &matrix_sdk::Room,
+    event_id: &matrix_sdk::ruma::EventId,
+) -> serde_json::Value {
+    let deadline = Instant::now() + Duration::from_secs(45);
+    loop {
+        sync_briefly(client).await;
+        match room.load_or_fetch_event(event_id, None).await {
+            Ok(ev) => {
+                let raw = ev.into_raw();
+                let value: serde_json::Value =
+                    serde_json::from_str(raw.json().get()).expect("event json");
+                assert_eq!(value["type"], "m.room.message");
+                return value;
+            }
+            Err(_) => {
+                assert!(
+                    Instant::now() < deadline,
+                    "timed out waiting to fetch rich message {event_id} from managed room"
+                );
+                tokio::time::sleep(Duration::from_millis(250)).await;
+            }
+        }
+    }
+}
+
 async fn wait_for_room_event(
     client: &matrix_sdk::Client,
     room: &matrix_sdk::Room,
