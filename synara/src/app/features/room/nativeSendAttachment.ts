@@ -13,10 +13,16 @@ export const nativeComposerAttachmentReady = (): Promise<boolean> =>
 export const sendComposerAttachmentsWithNativeOwner = (
   roomId: string,
   files: NativeSendAttachmentFile[],
-  replyTo?: string
+  replyTo?: string,
+  threadRoot?: string
 ): Promise<'native' | 'legacy'> =>
-  sendAttachmentsWithNativeOwner(roomId, files, replyTo, isSynaraDesktop(), (command, args) =>
-    invokeDesktopWithAvailability(command, args)
+  sendAttachmentsWithNativeOwner(
+    roomId,
+    files,
+    replyTo,
+    threadRoot,
+    isSynaraDesktop(),
+    (command, args) => invokeDesktopWithAvailability(command, args)
   );
 
 export async function fileToNativeAttachmentBytes(file: Blob): Promise<number[]> {
