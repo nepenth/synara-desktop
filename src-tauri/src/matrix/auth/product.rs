@@ -30,7 +30,11 @@ use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
 use zeroize::Zeroize;
 
-use super::{login_with_password, normalize_homeserver_url, AuthError, LoginOptions};
+use super::{
+    complete_password_reset, login_with_password, normalize_homeserver_url,
+    password_reset_ephemeral_user_id, request_password_email_token, AuthError, LoginOptions,
+    PasswordEmailTokenResult, PasswordResetOutcome,
+};
 use crate::matrix::account_data::{
     add_room_to_mdirect, remove_room_from_mdirect, snapshot_mdirect, NativeMDirectMutationResult,
     NativeMDirectSnapshot,
@@ -75,7 +79,7 @@ use crate::matrix::spaces::{
     NativeSpaceParentsSnapshot,
 };
 use crate::matrix::store::{
-    get_or_create_store_key, AccountIdentity, KeyringStoreKeyVault, StoreKeyId,
+    get_or_create_store_key, AccountIdentity, KeyringStoreKeyVault, StoreKeyId, StoreKeyMaterial,
 };
 use crate::matrix::sync::{
     build_sync_service, unconfigured_snapshot, SyncReadinessSnapshot, SyncServiceConfig,
@@ -339,6 +343,51 @@ pub async fn matrix_login_password(
         next_room_key_import_selection_id: 0,
     });
     Ok(identity)
+}
+
+/// V-AUTH.4a — request a password-reset email token (unauthenticated CS API).
+///
+/// Does not create a product login session. Never logs email, client_secret, or sid.
+#[tauri::command]
+pub async fn matrix_password_reset_request_email_token(
+    app: AppHandle,
+    homeserver_url: String,
+    email: String,
+    client_secret: <SET_IN_CONFIG>
+    send_attempt: u32,
+) -> Result<PasswordEmailTokenResult, MatrixAuthCommandError> {
+    let client_secret = zeroize::Zeroizing::new(client_secret);
+    let client = build_password_reset_client(&app, &homeserver_url).await?;
+    request_password_email_token(&client, &email, client_secret.as_str(), send_attempt)
+        .await
+        .map_err(map_password_reset_auth_error)
+}
+
+/// V-AUTH.4a — complete password reset with email-identity (+ optional password) UIAA.
+///
+/// Host owns the stages required by the retained desktop flow. Unsupported UIAA
+/// stages fail closed. Never logs password, client_secret, or sid.
+#[tauri::command]
+pub async fn matrix_password_reset_complete(
+    app: AppHandle,
+    homeserver_url: String,
+    email: String,
+    new_password: String,
+    client_secret: <SET_IN_CONFIG>
+    sid: String,
+) -> Result<PasswordResetOutcome, MatrixAuthCommandError> {
+    let new_password = zeroize::Zeroizing::new(new_password);
+    let client_secret = zeroize::Zeroizing::new(client_secret);
+    let client = build_password_reset_client(&app, &homeserver_url).await?;
+    complete_password_reset(
+        &client,
+        &email,
+        new_password.as_str(),
+        client_secret.as_str(),
+        &sid,
+    )
+    .await
+    .map_err(map_password_reset_auth_error)
 }
 
 #[tauri::command]
@@ -2583,6 +2632,59 @@ async fn build_client(
     build_unauthenticated_client(&config)
         .await
         .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-client-build-failed"))
+}
+
+/// Ephemeral unauthenticated client for password-reset (no product session, no keyring key).
+async fn build_password_reset_client(
+    app: &AppHandle,
+    homeserver_url: &str,
+) -> Result<Client, MatrixAuthCommandError> {
+    let homeserver_url = normalize_homeserver_url(homeserver_url)
+        .map_err(map_password_reset_auth_error)?
+        .into_string();
+    let user_id =
+        password_reset_ephemeral_user_id(&homeserver_url).map_err(map_password_reset_auth_error)?;
+    let identity = AccountIdentity::new(&user_id, &homeserver_url).map_err(|_| {
+        MatrixAuthCommandError::invalid_input("v-auth.4-password-reset-identity-invalid")
+    })?;
+    let app_data_root = app_data_root(app)?;
+    // Process-local store key — never persisted to the OS credential store.
+    let store_key = StoreKeyMaterial::generate().map_err(|_| {
+        MatrixAuthCommandError::unavailable("v-auth.4-password-reset-store-key-unavailable")
+    })?;
+    let config = ClientBuildConfig::product_default(&app_data_root, identity, Some(store_key))
+        .map_err(|_| {
+            MatrixAuthCommandError::unavailable("v-auth.4-password-reset-client-config-failed")
+        })?;
+    build_unauthenticated_client(&config).await.map_err(|_| {
+        MatrixAuthCommandError::unavailable("v-auth.4-password-reset-client-build-failed")
+    })
+}
+
+fn map_password_reset_auth_error(error: AuthError) -> MatrixAuthCommandError {
+    let code = match error {
+        AuthError::AuthenticationRejected { .. } => "Forbidden",
+        AuthError::UserDeactivated { .. } => "UserDeactivated",
+        AuthError::RateLimited { .. } => "RateLimited",
+        AuthError::InvalidInput { .. } => "InvalidRequest",
+        AuthError::Connectivity { .. }
+        | AuthError::HomeserverUnavailable { .. }
+        | AuthError::WellKnownNotFound { .. } => "InvalidServer",
+        AuthError::UnsupportedCapability { .. } => "Unsupported",
+        AuthError::InteractiveAuthRequired { .. } => "Unauthorized",
+        _ => "Unknown",
+    };
+    let message = match code {
+        "Forbidden" => "The password reset request was rejected.",
+        "UserDeactivated" => "The Matrix account is deactivated.",
+        "RateLimited" => "The password reset request was rate limited.",
+        "InvalidRequest" => "The password reset request is invalid.",
+        "InvalidServer" => "The Matrix homeserver is unavailable.",
+        "Unsupported" => "The homeserver requires an unsupported authentication stage.",
+        "Unauthorized" => "Additional authentication is required to reset the password.",
+        _ => "Native password reset failed.",
+    };
+    MatrixAuthCommandError::new(code, message, error.diagnostic_id())
 }
 
 fn account_identity(
