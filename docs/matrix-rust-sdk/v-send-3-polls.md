@@ -52,9 +52,9 @@ Until that CI job is green on the reviewed SHA, runtime proof remains
 
 ## Inventory
 
-Rebased on integration `90be0f4` (V-SEND.1 merged):
+Rebased on integration `31b4a30` (#243/#251 tip; product `0fb0fe4`):
 
-- Production importers **189 → 189**; repository-wide **202 → 202**.
+- Production importers **187 → 187**; repository-wide **200 → 200**.
 - Scoped method-candidate deletion: poll `sendEvent` writers removed from
   `RoomInput`, `useCommands`, and `PollContent` (sticker/`SendRoomEvent`/call
   widget residual remain).
