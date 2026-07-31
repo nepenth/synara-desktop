@@ -1,4 +1,4 @@
-import { atom, useSetAtom } from 'jotai';
+import { atom, useAtomValue, useSetAtom } from 'jotai';
 import { useEffect } from 'react';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../utils/desktop';
 
@@ -7,9 +7,15 @@ export type MDirectAction = {
   rooms: Set<string>;
 };
 
+export type MDirectUsersAction = {
+  type: 'INITIALIZE' | 'PUT';
+  users: string[];
+};
+
 type NativeMDirectSnapshot = {
   sessionGeneration: number;
   roomIds: string[];
+  userIds: string[];
 };
 
 const baseMDirectAtom = atom(new Set<string>());
@@ -20,14 +26,24 @@ export const mDirectAtom = atom<Set<string>, [MDirectAction], undefined>(
   }
 );
 
+const baseMDirectUsersAtom = atom<string[]>([]);
+export const mDirectUsersAtom = atom<string[], [MDirectUsersAction], undefined>(
+  (get) => get(baseMDirectUsersAtom),
+  (get, set, action) => {
+    set(baseMDirectUsersAtom, action.users);
+  }
+);
+
 export const mDirectRoomsFromNativeSnapshot = (roomIds: string[]): Set<string> => new Set(roomIds);
 
+export const mDirectUsersFromNativeSnapshot = (userIds: string[]): string[] => [...userIds];
+
 /**
- * Drive DM room-id set from the native Rust `m.direct` projection.
- * Create/mark-DM writers remain residual where they still use MatrixClient.
+ * Drive DM room-id set and DM user-id list from the native Rust `m.direct` projection.
  */
 export const useBindMDirectAtom = (mDirect: typeof mDirectAtom = mDirectAtom) => {
   const setMDirect = useSetAtom(mDirect);
+  const setMDirectUsers = useSetAtom(mDirectUsersAtom);
 
   useEffect(() => {
     let disposed = false;
@@ -35,6 +51,7 @@ export const useBindMDirectAtom = (mDirect: typeof mDirectAtom = mDirectAtom) =>
 
     const clear = () => {
       setMDirect({ type: 'INITIALIZE', rooms: new Set() });
+      setMDirectUsers({ type: 'INITIALIZE', users: [] });
     };
 
     const refresh = async () => {
@@ -57,9 +74,13 @@ export const useBindMDirectAtom = (mDirect: typeof mDirectAtom = mDirectAtom) =>
             type: 'PUT',
             rooms: mDirectRoomsFromNativeSnapshot(result.value.roomIds),
           });
+          setMDirectUsers({
+            type: 'PUT',
+            users: mDirectUsersFromNativeSnapshot(result.value.userIds ?? []),
+          });
         }
       } catch {
-        // Preserve the last known DM set during transient failures.
+        // Preserve the last known DM projection during transient failures.
       } finally {
         inFlight = false;
       }
@@ -76,5 +97,8 @@ export const useBindMDirectAtom = (mDirect: typeof mDirectAtom = mDirectAtom) =>
       disposed = true;
       window.clearInterval(pollId);
     };
-  }, [setMDirect]);
+  }, [setMDirect, setMDirectUsers]);
 };
+
+/** Product hook: DM user keys with at least one joined room (native-owned). */
+export const useDirectUsers = (): string[] => useAtomValue(mDirectUsersAtom);
