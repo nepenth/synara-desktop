@@ -39,7 +39,7 @@ use matrix_sdk::{
             AnySyncTimelineEvent, Mentions,
         },
         serde::Raw,
-        EventId, MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId,
+        EventId, Int, MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId,
         OwnedServerName, OwnedTransactionId, OwnedUserId, RoomVersionId, UInt,
     },
     Client, Room, SessionMeta, SessionTokens,
@@ -2088,6 +2088,117 @@ pub async fn matrix_room_join(
         .map_err(|_| map_room_join_error("v-rooms-room-join-failed"))
 }
 
+/// V-ROOMS members moderation: invite a user through the live native Matrix SDK.
+/// Fail-closed: desktop moderation must not use the JS SDK membership methods.
+#[tauri::command]
+pub async fn matrix_room_invite(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    user_id: String,
+    reason: Option<String>,
+) -> Result<(), MatrixAuthCommandError> {
+    let room_id = parse_room_moderation_room_id(&room_id)?;
+    let user_id = parse_room_moderation_user_id(&user_id)?;
+    // matrix-sdk 0.18's invite_user_by_id API does not expose a reason field.
+    let _reason = normalize_moderation_reason(reason);
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    let room = active
+        .client
+        .get_room(&room_id)
+        .ok_or_else(|| map_room_moderation_error("v-rooms-members-moderation-room-not-found"))?;
+    room.invite_user_by_id(&user_id)
+        .await
+        .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-invite-failed"))
+}
+
+/// V-ROOMS members moderation: kick a user through the live native Matrix SDK.
+#[tauri::command]
+pub async fn matrix_room_kick(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    user_id: String,
+    reason: Option<String>,
+) -> Result<(), MatrixAuthCommandError> {
+    let room_id = parse_room_moderation_room_id(&room_id)?;
+    let user_id = parse_room_moderation_user_id(&user_id)?;
+    let reason = normalize_moderation_reason(reason);
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    let room = active
+        .client
+        .get_room(&room_id)
+        .ok_or_else(|| map_room_moderation_error("v-rooms-members-moderation-room-not-found"))?;
+    room.kick_user(&user_id, reason.as_deref())
+        .await
+        .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-kick-failed"))
+}
+
+/// V-ROOMS members moderation: ban a user through the live native Matrix SDK.
+#[tauri::command]
+pub async fn matrix_room_ban(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    user_id: String,
+    reason: Option<String>,
+) -> Result<(), MatrixAuthCommandError> {
+    let room_id = parse_room_moderation_room_id(&room_id)?;
+    let user_id = parse_room_moderation_user_id(&user_id)?;
+    let reason = normalize_moderation_reason(reason);
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    let room = active
+        .client
+        .get_room(&room_id)
+        .ok_or_else(|| map_room_moderation_error("v-rooms-members-moderation-room-not-found"))?;
+    room.ban_user(&user_id, reason.as_deref())
+        .await
+        .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-ban-failed"))
+}
+
+/// V-ROOMS members moderation: unban a user through the live native Matrix SDK.
+#[tauri::command]
+pub async fn matrix_room_unban(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    user_id: String,
+) -> Result<(), MatrixAuthCommandError> {
+    let room_id = parse_room_moderation_room_id(&room_id)?;
+    let user_id = parse_room_moderation_user_id(&user_id)?;
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    let room = active
+        .client
+        .get_room(&room_id)
+        .ok_or_else(|| map_room_moderation_error("v-rooms-members-moderation-room-not-found"))?;
+    room.unban_user(&user_id, None)
+        .await
+        .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-unban-failed"))
+}
+
+/// V-ROOMS members moderation: set one user's power level through the live SDK.
+#[tauri::command]
+pub async fn matrix_room_set_power_level(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    user_id: String,
+    power_level: i64,
+) -> Result<(), MatrixAuthCommandError> {
+    let room_id = parse_room_moderation_room_id(&room_id)?;
+    let user_id = parse_room_moderation_user_id(&user_id)?;
+    let power_level = parse_room_moderation_power_level(power_level)?;
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    let room = active
+        .client
+        .get_room(&room_id)
+        .ok_or_else(|| map_room_moderation_error("v-rooms-members-moderation-room-not-found"))?;
+    room.update_power_levels(vec![(&user_id, power_level)])
+        .await
+        .map(|_| ())
+        .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-power-level-failed"))
+}
+
 #[tauri::command]
 pub async fn matrix_invites_report_spam(
     state: State<'_, MatrixAuthState>,
@@ -4036,6 +4147,26 @@ fn map_room_leave_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
 
+fn map_room_moderation_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    let (code, message) = match diagnostic_id {
+        "v-rooms-members-moderation-invalid-room"
+        | "v-rooms-members-moderation-invalid-user"
+        | "v-rooms-members-moderation-invalid-power-level" => (
+            "InvalidRequest",
+            "The native Matrix member moderation request is invalid.",
+        ),
+        "v-rooms-members-moderation-room-not-found" => (
+            "NotFound",
+            "The native Matrix moderation room is not available.",
+        ),
+        _ => (
+            "Unknown",
+            "The native Matrix member moderation operation could not be completed.",
+        ),
+    };
+    MatrixAuthCommandError::new(code, message, diagnostic_id)
+}
+
 fn map_room_create_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     let (code, message) = match diagnostic_id {
         "v-rooms-room-create-invalid-name"
@@ -4346,6 +4477,32 @@ fn parse_room_leave_id(room_id: &str) -> Result<OwnedRoomId, MatrixAuthCommandEr
         .trim()
         .parse()
         .map_err(|_| map_room_leave_error("v-rooms-room-leave-invalid-room"))
+}
+
+fn parse_room_moderation_room_id(room_id: &str) -> Result<OwnedRoomId, MatrixAuthCommandError> {
+    room_id
+        .trim()
+        .parse()
+        .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-invalid-room"))
+}
+
+fn parse_room_moderation_user_id(user_id: &str) -> Result<OwnedUserId, MatrixAuthCommandError> {
+    user_id
+        .trim()
+        .parse()
+        .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-invalid-user"))
+}
+
+fn parse_room_moderation_power_level(power_level: i64) -> Result<Int, MatrixAuthCommandError> {
+    power_level
+        .try_into()
+        .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-invalid-power-level"))
+}
+
+fn normalize_moderation_reason(reason: Option<String>) -> Option<String> {
+    reason
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
 }
 
 fn map_room_join_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
@@ -6388,5 +6545,88 @@ mod tests {
             .expect("room join command body");
         assert!(command.contains("join_room_by_id_or_alias"));
         assert!(!command.contains("mx.joinRoom"));
+    }
+
+    #[test]
+    fn room_moderation_validates_ids_and_power_levels() {
+        assert_eq!(
+            parse_room_moderation_room_id("not-a-room")
+                .unwrap_err()
+                .diagnostic_id,
+            "v-rooms-members-moderation-invalid-room"
+        );
+        assert_eq!(
+            parse_room_moderation_room_id("  !room:example.org  ")
+                .unwrap()
+                .to_string(),
+            "!room:example.org"
+        );
+        assert_eq!(
+            parse_room_moderation_user_id("not-a-user")
+                .unwrap_err()
+                .diagnostic_id,
+            "v-rooms-members-moderation-invalid-user"
+        );
+        assert_eq!(
+            parse_room_moderation_user_id("  @alice:example.org  ")
+                .unwrap()
+                .to_string(),
+            "@alice:example.org"
+        );
+        assert!(parse_room_moderation_power_level(100).is_ok());
+        assert_eq!(
+            normalize_moderation_reason(Some("  spam  ".to_owned())).as_deref(),
+            Some("spam")
+        );
+        assert_eq!(normalize_moderation_reason(Some("   ".to_owned())), None);
+    }
+
+    #[test]
+    fn room_moderation_error_mapping_is_stable() {
+        assert_eq!(
+            map_room_moderation_error("v-rooms-members-moderation-invalid-room").code,
+            "InvalidRequest"
+        );
+        assert_eq!(
+            map_room_moderation_error("v-rooms-members-moderation-invalid-user").code,
+            "InvalidRequest"
+        );
+        assert_eq!(
+            map_room_moderation_error("v-rooms-members-moderation-invalid-power-level").code,
+            "InvalidRequest"
+        );
+        assert_eq!(
+            map_room_moderation_error("v-rooms-members-moderation-room-not-found").code,
+            "NotFound"
+        );
+        assert_eq!(
+            map_room_moderation_error("v-rooms-members-moderation-ban-failed").code,
+            "Unknown"
+        );
+    }
+
+    #[test]
+    fn room_moderation_commands_use_live_sdk_methods_without_js_fallbacks() {
+        let product = include_str!("product.rs");
+        let expected_methods = [
+            ("matrix_room_invite", "invite_user_by_id"),
+            ("matrix_room_kick", "kick_user"),
+            ("matrix_room_ban", "ban_user"),
+            ("matrix_room_unban", "unban_user"),
+            ("matrix_room_set_power_level", "update_power_levels"),
+        ];
+
+        for (command_name, sdk_method) in expected_methods {
+            let command = product
+                .split(&format!("pub async fn {command_name}"))
+                .nth(1)
+                .expect("moderation command");
+            let command = command
+                .split("#[tauri::command]")
+                .next()
+                .expect("moderation command body");
+            assert!(command.contains(sdk_method), "{command_name} SDK method");
+            assert!(!command.contains("mx."), "{command_name} JS fallback");
+        }
     }
 }

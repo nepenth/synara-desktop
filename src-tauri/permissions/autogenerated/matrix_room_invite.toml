@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-room-invite"
+description = "Enables the matrix_room_invite command without any pre-configured scope."
+commands.allow = ["matrix_room_invite"]
+
+[[permission]]
+identifier = "deny-matrix-room-invite"
+description = "Denies the matrix_room_invite command without any pre-configured scope."
+commands.deny = ["matrix_room_invite"]
