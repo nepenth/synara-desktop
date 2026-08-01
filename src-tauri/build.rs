@@ -80,6 +80,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_mdirect_remove",
     "matrix_get_user_image_pack",
     "matrix_set_user_image_pack",
+    "matrix_set_global_image_packs",
     "matrix_upload_media",
     "matrix_set_own_avatar",
     "matrix_set_own_display_name",

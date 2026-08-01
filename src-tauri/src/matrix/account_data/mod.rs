@@ -16,9 +16,9 @@ pub mod room_notes;
 
 pub use error::AccountDataError;
 pub use image_packs::{
-    set_user_image_pack, snapshot_global_image_packs, snapshot_room_image_packs,
-    snapshot_user_image_pack, NativeGlobalImagePacksSnapshot, NativeImagePack,
-    NativeRoomImagePacksSnapshot, NativeUserImagePackSnapshot,
+    set_global_image_packs, set_user_image_pack, snapshot_global_image_packs,
+    snapshot_room_image_packs, snapshot_user_image_pack, NativeGlobalImagePacksSnapshot,
+    NativeImagePack, NativeRoomImagePacksSnapshot, NativeUserImagePackSnapshot,
 };
 pub use index::{
     AccountDataEntry, AccountDataIndex, MAX_CONTENT_FIELDS, MAX_GLOBAL_TYPES, MAX_KEY_LEN,
