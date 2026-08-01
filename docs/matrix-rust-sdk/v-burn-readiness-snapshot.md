@@ -8,7 +8,7 @@
 | ----------------------- | -------------------------------------------------------------------------------- |
 | Readiness               | **Not ready**                                                                    |
 | Runtime proof           | **Not confirmed**                                                                |
-| Source tip              | `e4cf1a5f1d4c6127afd34f2b2f23d93400a03d45`                                       |
+| Source tip              | `ffaf79eb138b2dde4d1515447c670d98ffdfcd41`                                       |
 | Base                    | `feature/matrix-rust-sdk-full-replacement` only                                  |
 | Scope                   | Docs only; no product code or cutover state change                               |
 | `dual_backend`          | **Forbidden**; this snapshot does not enable or claim it                         |
@@ -55,7 +55,7 @@ remaining importers are acceptable at final convergence.
 
 The current residual queue is summarized in [`SCOREBOARD.md`](SCOREBOARD.md).
 Its tip field is intentionally not changed by this snapshot; the source
-evidence above is pinned explicitly to `e4cf1a5f1d4c6127afd34f2b2f23d93400a03d45`.
+evidence above is pinned explicitly to `ffaf79eb138b2dde4d1515447c670d98ffdfcd41`.
 
 ## Bottom line
 
