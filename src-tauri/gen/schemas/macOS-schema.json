@@ -801,6 +801,12 @@
           "markdownDescription": "Enables the matrix_send_attachment command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_edit_message command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-edit-message",
+          "markdownDescription": "Enables the matrix_edit_message command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_send_poll command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-send-poll",
@@ -1399,6 +1405,12 @@
           "type": "string",
           "const": "deny-matrix-send-attachment",
           "markdownDescription": "Denies the matrix_send_attachment command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_edit_message command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-edit-message",
+          "markdownDescription": "Denies the matrix_edit_message command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_send_poll command without any pre-configured scope.",
