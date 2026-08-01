@@ -1,4 +1,5 @@
 import React, { MouseEventHandler, forwardRef, useState } from 'react';
+import { useAtomValue } from 'jotai';
 import FocusTrap from 'focus-trap-react';
 import {
   Box,
@@ -69,9 +70,8 @@ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 import { RoomSettingsPage } from '../../state/roomSettings';
-import { useAccountData } from '../../hooks/useAccountData';
-import { AccountDataEvent, SynaraRoomNotesContent } from '../../../types/matrix/accountData';
 import { getRoomNotesSummary } from '../../utils/roomNotes';
+import { roomNotesContentAtom } from '../../state/roomNotesList';
 import { RoomNotesPanel } from './room-notes/RoomNotesPanel';
 import type { RoomSidePanelType } from './RoomSidePanel';
 
@@ -288,9 +288,7 @@ export function RoomViewHeader({
   const direct = useIsDirectRoom();
 
   const pinnedEvents = useRoomPinnedEvents(room);
-  const notesContent = useAccountData(AccountDataEvent.SynaraRoomNotes)?.getContent() as
-    | SynaraRoomNotesContent
-    | undefined;
+  const notesContent = useAtomValue(roomNotesContentAtom);
   const notesSummary = getRoomNotesSummary(notesContent, room.roomId);
   const encryptionEvent = useStateEvent(room, StateEvent.RoomEncryption);
   const encryptedRoom = !!encryptionEvent;

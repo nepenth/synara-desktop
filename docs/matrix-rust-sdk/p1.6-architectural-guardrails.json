@@ -24,10 +24,7 @@
       "scripts/__tests__/check-matrix-rust-sdk-guardrails.test.mjs"
     ],
     "legacyBoundaryCheck": "scripts/check-matrix-boundaries.mjs",
-    "npmScripts": [
-      "check:matrix-rust-guardrails",
-      "check:matrix-boundaries"
-    ],
+    "npmScripts": ["check:matrix-rust-guardrails", "check:matrix-boundaries"],
     "ciWorkflow": ".github/workflows/ci.yml"
   },
   "rules": [
@@ -64,8 +61,8 @@
     },
     {
       "id": "matrix-product-tauri-commands",
-      "description": "Allowlist matrix_* Tauri commands when cutover lands",
-      "waitsFor": "Phase 3+"
+      "description": "Matrix product Tauri commands require matching allow-matrix-* capability ACL entries",
+      "waitsFor": "per-vertical cutover ACL registration"
     }
   ],
   "outOfScope": [
@@ -79,7 +76,8 @@
     "noProductionMatrixLoginSync": true,
     "noDualBackend": true,
     "noSdkTypesInIpcDtoWireModules": true,
-    "noNewProductionTauriMatrixCommands": true,
+    "noNewProductionTauriMatrixCommands": false,
+    "matrixProductTauriCommandsRequireCapabilityAcl": true,
     "prTarget": "feature/matrix-rust-sdk-full-replacement"
   }
 }
