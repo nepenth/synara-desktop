@@ -228,7 +228,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       };
     }, [roomId]);
 
-    const imagePackRooms: Room[] = useImagePackRooms(roomId, roomToParents);
+    const imagePackRooms: string[] = useImagePackRooms(roomId, roomToParents);
 
     const [toolbar, setToolbar] = useSetting(settingsAtom, 'editorToolbar');
     const [autocompleteQuery, setAutocompleteQuery] =

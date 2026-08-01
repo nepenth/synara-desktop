@@ -62,7 +62,7 @@ type MessageEditorProps = {
   roomId: string;
   room: Room;
   mEvent: MatrixEvent;
-  imagePackRooms?: Room[];
+  imagePackRooms?: string[];
   onCancel: () => void;
 };
 export const MessageEditor = as<'div', MessageEditorProps>(

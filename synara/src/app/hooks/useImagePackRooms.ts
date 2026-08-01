@@ -1,22 +1,15 @@
-import { Room } from 'matrix-js-sdk';
 import { useMemo } from 'react';
 import { getAllParents } from '../utils/room';
-import { useMatrixClient } from './useMatrixClient';
+import { RoomToParents } from '../../types/matrix/room';
 
-export const useImagePackRooms = (
-  roomId: string,
-  roomToParents: Map<string, Set<string>>
-): Room[] => {
-  const mx = useMatrixClient();
-
-  const imagePackRooms: Room[] = useMemo(() => {
-    const allParentSpaces = [roomId].concat(Array.from(getAllParents(roomToParents, roomId)));
-    return allParentSpaces.reduce<Room[]>((list, rId) => {
-      const r = mx.getRoom(rId);
-      if (r) list.push(r);
-      return list;
-    }, []);
-  }, [mx, roomId, roomToParents]);
-
-  return imagePackRooms;
+/**
+ * V-SEND.R-PACK-READ: candidate pack room IDs = room + parent spaces.
+ * Pure graph resolution from roomToParents — no live `mx.getRoom` (JS client).
+ * Consumers load packs via native `matrix_get_room_image_packs` by room id.
+ */
+export const useImagePackRooms = (roomId: string, roomToParents: RoomToParents): string[] => {
+  return useMemo(() => {
+    const parents = Array.from(getAllParents(roomToParents, roomId));
+    return [roomId].concat(parents);
+  }, [roomId, roomToParents]);
 };
