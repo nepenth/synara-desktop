@@ -56,6 +56,7 @@ const tests = [
   'src/app/features/room/__tests__/nativeSendGifOwner.test.ts',
   'src/app/features/room/__tests__/nativeMDirectOwner.test.ts',
   'src/app/features/room/__tests__/nativePollOwner.test.ts',
+  'src/app/features/room/__tests__/nativeEditMessageOwner.test.ts',
   'src/app/features/room/__tests__/nativeReactionOwner.test.ts',
   'src/app/features/room/__tests__/nativeTimelineActions.test.ts',
   'src/app/features/room/__tests__/nativeTimelineViewportPolicy.test.ts',

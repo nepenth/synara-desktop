@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `ab2169a5`**. Landed: #279 loginUtil, #240 timeline contract, #284 CI, #286 cutover map, #287 pack-read, #288 scoreboard, #290 forward, #291 avatar, #292 pack-write inventories. In flight: #283 edit, #285 C1, #289 C2. Next: pack-read implement, C3–C5. #39 still needs explicit approval. |
-| **Tip**        | `ab2169a5` |
-| **Active PRs** | [#283](https://github.com/nepenth/synara-desktop/pull/283) edit; [#285](https://github.com/nepenth/synara-desktop/pull/285)/[#289](https://github.com/nepenth/synara-desktop/pull/289) timeline C1/C2 (draft stacked). |
+| **Now**        | **Tip `df8d42c2`**. Landed #283 edit + #290–#292 inventories. **This PR** scoreboard refresh. In flight: #285 C1 + #289 C2. Next: pack-read implement, C3–C5. #39 still needs explicit approval. |
+| **Tip**        | `df8d42c2` |
+| **Active PRs** | [#285](https://github.com/nepenth/synara-desktop/pull/285)/[#289](https://github.com/nepenth/synara-desktop/pull/289) timeline C1/C2; **this** scoreboard docs. |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
@@ -68,7 +68,7 @@ Update rules:
 ### 2026-08-01 — V-SEND.R-AVATAR-UPLOAD residual inventory
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| current | **V-SEND.R-AVATAR-UPLOAD** | **This PR** | Docs-only inventory of user + room avatar **upload** residual (grouped with R-ROOM-PROFILE): `Profile.tsx` (`mx.setAvatarUrl`/`mx.setDisplayName`), `RoomProfile.tsx` (`mx.sendStateEvent` m.room.avatar/name/topic), shared `state/upload.ts` + `utils/matrix.ts` `uploadContent` → `mx.uploadContent`. No native avatar IPC; native media upload only inside `matrix_send_attachment`. See [v-send-avatar-residual.md](v-send-avatar-residual.md). |
+| current | **V-SEND.R-AVATAR-UPLOAD** | **#291 merged** | Docs-only inventory of user + room avatar **upload** residual (grouped with R-ROOM-PROFILE): `Profile.tsx` (`mx.setAvatarUrl`/`mx.setDisplayName`), `RoomProfile.tsx` (`mx.sendStateEvent` m.room.avatar/name/topic), shared `state/upload.ts` + `utils/matrix.ts` `uploadContent` → `mx.uploadContent`. No native avatar IPC; native media upload only inside `matrix_send_attachment`. See [v-send-avatar-residual.md](v-send-avatar-residual.md). |
 
 ### 2026-08-01 — V-SEND.R-PACK-WRITE residual inventory
 | When (UTC) | Item | Result | Notes |
@@ -78,16 +78,16 @@ Update rules:
 ### 2026-08-01 — V-SEND.R-FORWARD residual inventory
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| current | **V-SEND.R-FORWARD** | **This PR** | Docs-only inventory of message **forward** residual: send is already native (`matrix_timeline_forward_text`/`matrix_timeline_forward_media`); residual is the legacy `MessageForwardItem` dialog in `Message.tsx` + `utils/forward.ts` read helpers on live JS client. See [v-send-forward-residual.md](v-send-forward-residual.md). |
+| current | **V-SEND.R-FORWARD** | **#290 merged** | Docs-only inventory of message **forward** residual: send is already native (`matrix_timeline_forward_text`/`matrix_timeline_forward_media`); residual is the legacy `MessageForwardItem` dialog in `Message.tsx` + `utils/forward.ts` read helpers on live JS client. See [v-send-forward-residual.md](v-send-forward-residual.md). |
 
 ### 2026-08-01 — progress honesty scoreboard
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| current | **Integration tip** | `95a6a71b` | After #288 scoreboard honesty; #287 pack-read inventory |
+| current | **Integration tip** | `310f4487` | After #291 avatar + #290 forward inventory; #288 scoreboard |
 | current | **Auth residual** | **loginUtil DONE #279**; UIA multi-stage non-retention #280; discovery #276 | Desktop password fail-closed native-only |
 | current | **V-TIMELINE** | Contract **#240** merged; cutover map **#286**; C1 **#285** + C2 **#289** in flight | C3–C5 residual after C1/C2 land |
-| current | **V-SEND residual** | Poll-thread #282 DONE; edit #283 in flight; pack-read inventory #287; **forward inventory this PR** | Pack-read implement + avatar/pack-write still open |
+| current | **V-SEND residual** | Poll-thread #282 DONE; edit #283 in flight; pack-read #287; forward #290; avatar #291 | Pack-read implement + avatar upload implement still open |
 | current | **CI** | Parallel Validate Rust∥Node **#284** | Path scopes; quality gates preserved |
 | current | **Import files (prod)** | **165** under synara/src | Down from plan 220 |
 
