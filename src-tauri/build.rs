@@ -93,6 +93,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_send_attachment",
     "matrix_send_sticker",
     "matrix_send_poll",
+    "matrix_edit_message",
     "matrix_poll_respond",
     "matrix_timeline_set_read_state",
     "matrix_timeline_close",
