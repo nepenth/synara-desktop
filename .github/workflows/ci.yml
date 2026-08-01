@@ -23,6 +23,8 @@ jobs:
     timeout-minutes: 5
     outputs:
       validate: ${{ steps.scope.outputs.validate }}
+      validate_rust: ${{ steps.scope.outputs.validate_rust }}
+      validate_frontend: ${{ steps.scope.outputs.validate_frontend }}
       ios: ${{ steps.scope.outputs.ios }}
       synapse: ${{ steps.scope.outputs.synapse }}
       synapse_native_reactions: ${{ steps.scope.outputs.synapse_native_reactions }}
@@ -49,6 +51,8 @@ jobs:
           # Full suite on push (main/release) and manual dispatch.
           if [[ "${GITHUB_EVENT_NAME}" != "pull_request" ]]; then
             echo "validate=true" >> "$GITHUB_OUTPUT"
+            echo "validate_rust=true" >> "$GITHUB_OUTPUT"
+            echo "validate_frontend=true" >> "$GITHUB_OUTPUT"
             echo "ios=true" >> "$GITHUB_OUTPUT"
             echo "synapse=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_reactions=true" >> "$GITHUB_OUTPUT"
@@ -62,6 +66,8 @@ jobs:
 
           if [[ -z "${BASE_SHA:-}" || -z "${HEAD_SHA:-}" ]]; then
             echo "validate=true" >> "$GITHUB_OUTPUT"
+            echo "validate_rust=true" >> "$GITHUB_OUTPUT"
+            echo "validate_frontend=true" >> "$GITHUB_OUTPUT"
             echo "ios=true" >> "$GITHUB_OUTPUT"
             echo "synapse=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_reactions=true" >> "$GITHUB_OUTPUT"
@@ -88,6 +94,48 @@ jobs:
           else
             echo "validate=true" >> "$GITHUB_OUTPUT"
             VALIDATE=true
+          fi
+
+          # Finer scopes so Rust and frontend Validate can run in parallel jobs
+          # without dropping any gate that currently runs when validate=true.
+          if [[ "$VALIDATE" == "true" ]]; then
+            if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+              .github/workflows/ci.yml \
+              src-tauri \
+              rust-toolchain.toml; then
+              echo "validate_rust=false" >> "$GITHUB_OUTPUT"
+              VALIDATE_RUST=false
+            else
+              echo "validate_rust=true" >> "$GITHUB_OUTPUT"
+              VALIDATE_RUST=true
+            fi
+            if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+              .github/workflows/ci.yml \
+              .node-version \
+              config.json \
+              package.json \
+              package-lock.json \
+              scripts \
+              synara; then
+              echo "validate_frontend=false" >> "$GITHUB_OUTPUT"
+              VALIDATE_FRONTEND=false
+            else
+              echo "validate_frontend=true" >> "$GITHUB_OUTPUT"
+              VALIDATE_FRONTEND=true
+            fi
+            # Safety: if only one side matched oddly, still run both when validate=true
+            # and neither finer flag fired (should not happen).
+            if [[ "$VALIDATE_RUST" == "false" && "$VALIDATE_FRONTEND" == "false" ]]; then
+              echo "validate_rust=true" >> "$GITHUB_OUTPUT"
+              echo "validate_frontend=true" >> "$GITHUB_OUTPUT"
+              VALIDATE_RUST=true
+              VALIDATE_FRONTEND=true
+            fi
+          else
+            echo "validate_rust=false" >> "$GITHUB_OUTPUT"
+            echo "validate_frontend=false" >> "$GITHUB_OUTPUT"
+            VALIDATE_RUST=false
+            VALIDATE_FRONTEND=false
           fi
 
           # iOS simulator suite — only when iOS tree or shared CI build entrypoints change.
@@ -197,13 +245,63 @@ jobs:
             SYNAPSE_NATIVE_THREADS=true
           fi
 
-          echo "CI scope: validate=${VALIDATE} ios=${IOS} synapse=${SYNAPSE} synapse_native_reactions=${SYNAPSE_NATIVE_REACTIONS} synapse_native_attachments=${SYNAPSE_NATIVE_ATTACHMENTS} synapse_native_polls=${SYNAPSE_NATIVE_POLLS} synapse_native_rich_messages=${SYNAPSE_NATIVE_RICH_MESSAGES} synapse_native_threads=${SYNAPSE_NATIVE_THREADS}"
+          echo "CI scope: validate=${VALIDATE} rust=${VALIDATE_RUST:-n/a} frontend=${VALIDATE_FRONTEND:-n/a} ios=${IOS} synapse=${SYNAPSE} synapse_native_reactions=${SYNAPSE_NATIVE_REACTIONS} synapse_native_attachments=${SYNAPSE_NATIVE_ATTACHMENTS} synapse_native_polls=${SYNAPSE_NATIVE_POLLS} synapse_native_rich_messages=${SYNAPSE_NATIVE_RICH_MESSAGES} synapse_native_threads=${SYNAPSE_NATIVE_THREADS}"
           git diff --name-only "$BASE_SHA" "$HEAD_SHA" | head -80 || true
 
-  validate:
-    name: Validate desktop and runtime
+  validate-rust:
+    name: Validate Rust desktop shell
     needs: [changes]
-    if: needs.changes.outputs.validate == 'true'
+    if: needs.changes.outputs.validate_rust == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust 1.93
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+        with:
+          toolchain: 1.93
+          components: rustfmt, clippy
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: validate-rust-desktop
+
+      - name: Install Linux Tauri dependencies
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.list /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Check Rust formatting
+        run: cargo fmt --check
+        working-directory: src-tauri
+
+      - name: Lint Rust desktop shell
+        run: cargo clippy --locked --all-targets -- -D warnings
+        working-directory: src-tauri
+
+      - name: Check Rust desktop shell
+        run: cargo check --locked
+        working-directory: src-tauri
+
+      - name: Test Rust desktop shell
+        run: cargo test --locked
+        working-directory: src-tauri
+
+  validate-frontend:
+    name: Validate Node desktop runtime
+    needs: [changes]
+    if: needs.changes.outputs.validate_frontend == 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
@@ -216,29 +314,10 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
-          package-manager-cache: false
-
-      - name: Install Rust 1.93
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
-        with:
-          toolchain: 1.93
-          components: rustfmt, clippy
-
-      - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
-        with:
-          workspaces: src-tauri -> target
-          shared-key: validate-desktop-runtime
-
-      - name: Install Linux Tauri dependencies
-        run: |
-          sudo rm -f /etc/apt/sources.list.d/azure-cli.list /etc/apt/sources.list.d/microsoft-prod.list
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            patchelf
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            synara/package-lock.json
 
       - name: Install desktop dependencies
         run: npm ci
@@ -277,22 +356,6 @@ jobs:
 
       - name: Test repository delivery scripts
         run: node --test scripts/__tests__/*.test.mjs
-
-      - name: Check Rust formatting
-        run: cargo fmt --check
-        working-directory: src-tauri
-
-      - name: Lint Rust desktop shell
-        run: cargo clippy --locked --all-targets -- -D warnings
-        working-directory: src-tauri
-
-      - name: Check Rust desktop shell
-        run: cargo check --locked
-        working-directory: src-tauri
-
-      - name: Test Rust desktop shell
-        run: cargo test --locked
-        working-directory: src-tauri
 
       - name: Typecheck desktop runtime
         run: npm run typecheck
@@ -596,13 +659,14 @@ jobs:
   quality-gate:
     name: Quality gate
     if: always()
-    needs: [changes, validate, ios-tests, synapse-integration, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads]
+    needs: [changes, validate-rust, validate-frontend, ios-tests, synapse-integration, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads]
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
       - name: Require every scheduled client validation job
         env:
-          DESKTOP_RESULT: ${{ needs.validate.result }}
+          DESKTOP_RUST_RESULT: ${{ needs.validate-rust.result }}
+          DESKTOP_FRONTEND_RESULT: ${{ needs.validate-frontend.result }}
           IOS_RESULT: ${{ needs.ios-tests.result }}
           SYNAPSE_RESULT: ${{ needs.synapse-integration.result }}
           SYNAPSE_NATIVE_REACTIONS_RESULT: ${{ needs.synapse-native-reactions.result }}
@@ -631,7 +695,8 @@ jobs:
             esac
           }
           fail=0
-          ok "Desktop/runtime validation" "$DESKTOP_RESULT" || fail=1
+          ok "Desktop/runtime Rust validation" "$DESKTOP_RUST_RESULT" || fail=1
+          ok "Desktop/runtime Node validation" "$DESKTOP_FRONTEND_RESULT" || fail=1
           ok "iOS simulator tests" "$IOS_RESULT" || fail=1
           ok "Synapse two-client integration" "$SYNAPSE_RESULT" || fail=1
           ok "Synapse native reaction proof" "$SYNAPSE_NATIVE_REACTIONS_RESULT" || fail=1

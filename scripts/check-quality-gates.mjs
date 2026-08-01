@@ -289,8 +289,10 @@ function aggregateGateError(jobLines, expectedName, expectedNeeds) {
 }
 
 /**
- * CI quality gate after path filters: needs include `changes` plus the eight
- * heavy jobs. `changes` must be success; heavy jobs may be success or skipped.
+ * CI quality gate after path filters: needs include `changes` plus heavy jobs.
+ * Desktop validation may be a single `validate` job or split
+ * `validate-rust` + `validate-frontend` (parallel wall-clock speedup).
+ * `changes` must be success; heavy jobs may be success or skipped.
  */
 function pathFilteredCiAggregateError(jobLines) {
   if (!jobLines) return "job is missing";
@@ -300,7 +302,7 @@ function pathFilteredCiAggregateError(jobLines) {
   if (getScalar(jobLines, "if", 4) !== "always()") {
     return "job must use if: always()";
   }
-  const expectedNeeds = [
+  const expectedNeedsMonolith = [
     "changes",
     "validate",
     "ios-tests",
@@ -311,8 +313,23 @@ function pathFilteredCiAggregateError(jobLines) {
     "synapse-native-rich-messages",
     "synapse-native-threads",
   ];
-  if (!sameList(getList(jobLines, "needs", 4), expectedNeeds)) {
-    return `job needs must be exactly [${expectedNeeds.join(", ")}]`;
+  const expectedNeedsSplit = [
+    "changes",
+    "validate-rust",
+    "validate-frontend",
+    "ios-tests",
+    "synapse-integration",
+    "synapse-native-reactions",
+    "synapse-native-attachments",
+    "synapse-native-polls",
+    "synapse-native-rich-messages",
+    "synapse-native-threads",
+  ];
+  const needs = getList(jobLines, "needs", 4);
+  const splitDesktop = sameList(needs, expectedNeedsSplit);
+  const monolithDesktop = sameList(needs, expectedNeedsMonolith);
+  if (!splitDesktop && !monolithDesktop) {
+    return `job needs must be exactly [${expectedNeedsSplit.join(", ")}] (or legacy monolith [${expectedNeedsMonolith.join(", ")}])`;
   }
 
   for (const step of parseSteps(jobLines)) {
@@ -322,6 +339,12 @@ function pathFilteredCiAggregateError(jobLines) {
     )?.[0];
     const desktopVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.validate.result }}"
+    )?.[0];
+    const desktopRustVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.validate-rust.result }}"
+    )?.[0];
+    const desktopFrontendVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.validate-frontend.result }}"
     )?.[0];
     const iosVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.ios-tests.result }}"
@@ -344,9 +367,12 @@ function pathFilteredCiAggregateError(jobLines) {
     const synapseNativeThreadsVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.synapse-native-threads.result }}"
     )?.[0];
+    const desktopOk = splitDesktop
+      ? Boolean(desktopRustVar && desktopFrontendVar)
+      : Boolean(desktopVar);
     if (
       !changesVar ||
-      !desktopVar ||
+      !desktopOk ||
       !iosVar ||
       !synapseVar ||
       !synapseNativeReactionsVar ||
@@ -377,8 +403,12 @@ function pathFilteredCiAggregateError(jobLines) {
     if (!runText.includes("success|skipped")) continue;
 
     // Each heavy result variable must be referenced in an ok()/case path.
+    const desktopRefsOk = splitDesktop
+      ? runText.includes(`"$${desktopRustVar}"`) &&
+        runText.includes(`"$${desktopFrontendVar}"`)
+      : runText.includes(`"$${desktopVar}"`);
     if (
-      !runText.includes(`"$${desktopVar}"`) ||
+      !desktopRefsOk ||
       !runText.includes(`"$${iosVar}"`) ||
       !runText.includes(`"$${synapseVar}"`) ||
       !runText.includes(`"$${synapseNativeReactionsVar}"`) ||
@@ -457,8 +487,11 @@ export function inspectQualityGates({
     );
   }
 
+  // Desktop Node gates may live on monolithic `validate` or split `validate-frontend`.
+  const ciDesktopNodeJob =
+    ciJobs.get("validate-frontend") ?? ciJobs.get("validate");
   for (const [jobLines, label] of [
-    [ciJobs.get("validate"), "CI desktop validation"],
+    [ciDesktopNodeJob, "CI desktop validation"],
     [
       releaseJobs.get("exact-tag-desktop-quality"),
       "Exact-tag desktop validation",
@@ -477,7 +510,7 @@ export function inspectQualityGates({
   }
 
   for (const [jobLines, label] of [
-    [ciJobs.get("validate"), "CI desktop validation"],
+    [ciDesktopNodeJob, "CI desktop validation"],
     [
       releaseJobs.get("exact-tag-desktop-quality"),
       "Exact-tag desktop validation",
