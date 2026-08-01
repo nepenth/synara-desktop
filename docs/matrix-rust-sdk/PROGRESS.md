@@ -60,6 +60,11 @@ Update rules:
 
 ## Work log (newest first)
 
+### 2026-08-01 — V-TIMELINE.C3 stream verify checklist
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-TIMELINE.C3** | **This PR** | Docs-only re-verify checklist for the native stream/delta binding after C1 (#285)/C2 (#289) cutover: contract points S1–S7, existing unit tests, live authenticated proof steps, fail-closed rules. No product code. See [v-timeline-c3-stream-verify.md](v-timeline-c3-stream-verify.md). |
+
 ### 2026-08-01 — V-SEND.R-AVATAR-UPLOAD residual inventory
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
