@@ -3,8 +3,8 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `8577f0b7` on `feature/matrix-rust-sdk-full-replacement` |
-| Production `matrix-js-sdk` import files (`synara/src`) | **155** (plan baseline was **220**)                      |
+| Tip                                                    | `ab3997fa` on `feature/matrix-rust-sdk-full-replacement` |
+| Production `matrix-js-sdk` import files (`synara/src`) | **154** (plan baseline was **220**)                      |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
 
@@ -48,6 +48,9 @@ run passes the relevant checklist.
 | V-SEND.R-ROOM-PROFILE           | **#313** `matrix_set_room_name`/`matrix_set_room_topic`/`matrix_set_room_avatar` + RoomProfile.tsx fail-closed                                                                                   |
 | V-SEND.R-PACK-UPLOAD            | **#314** reuses `matrix_upload_media` via CompactUploadCardRenderer fail-closed (pack + compact image uploads)                                                                                   |
 | V-SEND.R-GIF-PACK               | **NOOP** — `GifPicker` exposes provider search/selection only; selected GIF send is native via #264 and no GIF pack/collection owner exists                                                      |
+| Room leave vertical             | **#364** `matrix_room_leave` + LeaveRoom/LeaveSpace native owner                                                                                                                                 |
+| Room join vertical              | **#369** `matrix_room_join` + native owner; all production `joinRoom` sites fail-closed (imports **155→154**)                                                                                    |
+| Composer GIF/upload fallbacks   | **#363** RoomInput GIF + msgContent thumbnail JS upload fallbacks deleted                                                                                                                        |
 | V-SEND.R-CALL-UPLOAD            | **#328** native upload; [CallWidgetDriver residual](v-send-call-widget-residual.md)                                                                                                              |
 | Composer thumbnail (msgContent) | **#325** video thumbnails via `uploadMediaNative` / `matrix_upload_media` fail-closed                                                                                                            |
 | V-SEND.R-DEVTOOL                | [Docs-only inventory](v-send-devtool-inventory.md) · [implementation gate](v-send-devtool-inventory.md#implementation-gate): JS client remains; start only after C3–C5 live proofs; low priority |
@@ -55,16 +58,17 @@ run passes the relevant checklist.
 
 ## In flight
 
-| PR        | What                                                                                                                                          |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| (product) | Finish-line next: **join/create** lifecycle; **members/power**; C3–C5 live; R-DEVTOOL; CallWidget media config/download IPC; then V-BURN.1–3. |
+| PR     | What                                                                                                                                     |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| (none) | Join closed **#369**. Next: **createRoom** vertical; `/leave` command residual; members/power; C3–C5; CallWidget media IPC; V-BURN HOLD. |
 
 ## Left (finish-line order)
 
-1. **Room join/create (and remaining lifecycle) — native full vertical.** Leave
-   is **#364**. Re-home create/join/moderation through Tauri IPC to live
-   `matrix-sdk`, fail-closed, with JS owner deletion. See
-   [P6.9 room ops](p6.9-room-ops.md).
+1. **Room create (+ remaining lifecycle) — native full vertical.** Leave
+   **#364**, join **#369** closed. Re-home `createRoom` / CreateChat /
+   CreateSpace / `/create` through Tauri IPC to live `matrix-sdk`, fail-closed,
+   with JS owner deletion. Also residual: `/leave` in `useCommands` still uses
+   `mx.leave`. See [P6.9 room ops](p6.9-room-ops.md).
 2. **Members/power — native full vertical.** Re-home member and power-level
    reads/writes natively; delete JS owners. See [P4.6 members](p4.6-members.md).
 3. **V-TIMELINE.C3–C5 — live proofs.** All three remain **Not confirmed**
@@ -83,7 +87,7 @@ run passes the relevant checklist.
    complete. See [V-BURN gates](d0-residual-completion.md) and
    [blockers](v-burn-readiness-snapshot.md).
 7. **V-BURN.2 — zero production importers.** Current production importers
-   **155**. See [taxonomy](v-burn-importer-taxonomy.md).
+   **154**. See [taxonomy](v-burn-importer-taxonomy.md).
 8. **V-BURN.3 — drop npm and obsolete JS bootstrap/store code.** After
    V-BURN.1/.2. See the
    [V-BURN completion gates](d0-residual-completion.md) and [blocker snapshot](v-burn-readiness-snapshot.md).
