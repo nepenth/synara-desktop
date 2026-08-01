@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Updated | 2026-08-01 |
-| Tip | `c22515fa` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip | `e38bfdab` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **159** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
 | Umbrella #39 | **Do not merge** without explicit user approval |
@@ -56,12 +56,14 @@
 4. **C4** media/render parity on selected presenter (checklist [v-timeline-c4-media-render-verify.md](v-timeline-c4-media-render-verify.md))
 5. **C5** pins/notes/jump live proof (checklist [v-timeline-c5-pins-notes-jump-verify.md](v-timeline-c5-pins-notes-jump-verify.md))
 
-### Send / media residuals (inventories done; implement remains)
+### Send / media residuals (inventories done; implementation remains where noted)
 - ~~**V-SEND.R-FORWARD**~~ **#296**
 - ~~**V-SEND.R-PACK-READ** snapshot~~ **#297**; ~~**subscribe**~~ **#318**; ~~**room ids**~~ **#320** (JS utils deletion remains gated on the non-native web fallback)
 - ~~**V-SEND.R-PACK-WRITE** personal~~ **#306**; ~~**global**~~ **#309**; ~~**room**~~ **#310**; ~~**PACK-UPLOAD**~~ **#314** (reuses `matrix_upload_media` #303 via CompactUploadCardRenderer)
 - ~~**V-SEND.R-AVATAR-UPLOAD** user profile~~ **#303**; ~~**R-ROOM-PROFILE**~~ **#313** (room-avatar media upload covered by #314 CompactUploadCardRenderer path)
-- ~~**V-SEND.R-CALL-UPLOAD**~~ **#328**; ~~**V-SEND.R-GIF-PACK**~~ **NOOP** ([audit](v-send-gif-pack-audit.md)); composer/thumbnail legacy-web fallbacks — [upload call-site audit](v-send-upload-residual-audit.md); ~~**#325**~~ msgContent thumbnails via `uploadMediaNative`
+- ~~**V-SEND.R-CALL-UPLOAD**~~ **#328** (`CallWidgetDriver.uploadFile` → `uploadCallWidgetFileWithNativeOwner`)
+- ~~**V-SEND.R-GIF-PACK**~~ **NOOP** ([audit](v-send-gif-pack-audit.md)); provider search/selection only, with no pack or collection owner
+- ~~**Composer thumbnail (msgContent)**~~ **#325** via `uploadMediaNative`; remaining JS upload calls are legacy-web fallbacks only ([call-site audit](v-send-upload-residual-audit.md))
 - **V-SEND.R-DEVTOOL** (implementation remains low priority; [inventory complete](v-send-devtool-inventory.md))
 
 ### Convergence
