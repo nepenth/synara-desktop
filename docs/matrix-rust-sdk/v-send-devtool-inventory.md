@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Status | **Docs-only inventory** — no product code changed |
-| Measured tip | `8330c56bbb74b45ef01ad1f8be137b54caa2f568` (`feature/matrix-rust-sdk-full-replacement`) |
+| Measured tip | `b0fd42413a76b1000d1fab23ea225309ca62f82e` (`feature/matrix-rust-sdk-full-replacement`) |
 | Scope | `synara/src/app/features/common-settings/developer-tools/` and its SDK-bound hooks |
 | Residual | **V-SEND.R-DEVTOOL** |
 | Guard | Do not touch `main` or umbrella PR **#39** |
