@@ -2,11 +2,11 @@
 
 | Field | Value |
 |-------|-------|
-| Status | **Implement PR** — native snapshot get commands + hooks fail-closed; subscribe residual remains |
-| Tip SHA | `76f10138a629b3aaef2c0f37bf1ccdbaf793c892` (merge #286 V-TIMELINE cutover residual map) |
+| Status | **Snapshot DONE #297** — native `matrix_get_*_image_packs` + hooks fail-closed landed; **subscribe residual remains** (live push + physical delete + JS room resolution) |
+| Tip SHA | `dc5c414d` (after #297 pack-read snapshot + #300 scoreboard) |
 | Base | `feature/matrix-rust-sdk-full-replacement` |
 | Policy | [full-vertical-policy.md](full-vertical-policy.md) — physical deletion inside each owning slice |
-| Related | V-SEND sticker/GIF **#264** (native send), V-SEND residual inventory, V-TIMELINE #240 (HOLD) |
+| Related | V-SEND sticker/GIF **#264** (native send), V-SEND residual inventory, V-SEND.R-PACK-WRITE **#292** (write owners), V-TIMELINE #240 (HOLD) |
 
 > **Scope guard.** Docs only. No product code in `product.rs` or any TS. Does
 > not touch open **#240** (V-TIMELINE, HOLD) or **#39** (umbrella). No cutover.
@@ -18,34 +18,62 @@
 Sticker **send** is fully native since **#264** (`matrix_send_sticker` →
 `Room::send(m.sticker)`; `sendComposerStickerWithNativeOwner`), and GIF send
 rides the native attachment owner (`image/gif` bytes over
-`matrix_send_attachment`). What remains on the live `matrix-js-sdk` client is
-the **read** side of the emoji/sticker **pack** surface: which packs exist,
-which are enabled, and their metadata. The frontend still reads the
-`PoniesEmoteRooms` account-data event and `PoniesRoomEmotes` / `PoniesUserEmotes`
-state/account-data events through `mx.getAccountData` / `mx.getStateEvent`
-wrappers and subscribes to them via `useAccountDataCallback` /
-`useStateEventCallback` on the live client. There is **no** native pack-read
-projection or subscription, so the composer's sticker/emoji picker and the
-settings surfaces still depend on the JS client for pack discovery. This
-inventory scopes that read residual as **V-SEND.R-PACK-READ**; the matching
+`matrix_send_attachment`). The pack **read** surface — which packs exist, which
+are enabled, and their metadata — was inventoried here and its **snapshot get**
+is now native since **#297**: `matrix_get_user_image_pack` /
+`matrix_get_room_image_packs` / `matrix_get_global_image_packs` IPC plus the
+`nativeImagePackOwner` / `nativeImagePack` TS owners, and the `useImagePacks.ts`
+hooks now read through the native path and **fail-closed** on a native desktop
+session (no fall-through to `mx.getAccountData` / `mx.getStateEvent`).
+
+What **remains** on the live `matrix-js-sdk` client after #297:
+
+- **Live push / subscription** — there is still no `matrix_subscribe_image_packs`
+  native push. The hooks keep `useAccountDataCallback` / `useStateEventCallback`
+  listeners for the **non-native web** fallback only; on a native session the
+  snapshot is one-shot (no reactive updates when a pack changes).
+- **Room→pack-room resolution** — `useImagePackRooms.ts` still resolves candidate
+  pack rooms from `mx.getRoom` + `getAllParents` on the live client.
+- **Physical delete** — the JS read helpers in `custom-emoji/utils.ts` and the
+  JS read/subscription paths are still present (kept for the non-native web
+  fallback); they are deleted once the native read path is complete.
+
+This inventory scopes that read residual as **V-SEND.R-PACK-READ**; the matching
 **write** side (add/remove/enable/update packs) is a separate residual
-(V-SEND.R-PACK-WRITE) and is explicitly out of scope here.
+(V-SEND.R-PACK-WRITE, inventory **#292**) and is explicitly out of scope here.
 
 ---
 
-## 2. Residual table — V-SEND.R-PACK-READ
+## 2. Residual table — V-SEND.R-PACK-READ (remaining after #297)
+
+**Snapshot get is DONE (#297).** The table below is the **remaining** residual
+after the snapshot landed. The read hooks (`useUserImagePack`,
+`useGlobalImagePacks`, `useRoomImagePack(s)`, `useRoomsImagePacks`,
+`useRelevantImagePacks`) now read natively and fail-closed on desktop; the JS
+account-data/state callbacks in `useImagePacks.ts` remain only for the
+non-native web fallback.
 
 | Path | Role | Gap | ID |
 |------|------|-----|----|
-| `synara/src/app/plugins/custom-emoji/utils.ts` | `getGlobalImagePacks` / `getRoomImagePacks` / `getUserImagePack` read `PoniesEmoteRooms` / `PoniesRoomEmotes` / `PoniesUserEmotes` via `getAccountData` / `getStateEvent` (from `utils/room`) | No native pack-read projection; reads live `matrix-js-sdk` account-data/state | **V-SEND.R-PACK-READ** |
-| `synara/src/app/hooks/useImagePacks.ts` | `useUserImagePack` / `useGlobalImagePacks` / `useRoomImagePack(s)` / `useRelevantImagePacks` subscribe via `useAccountDataCallback` / `useStateEventCallback` on `mx` | No native pack subscription; JS event listeners on live client | **V-SEND.R-PACK-READ** |
-| `synara/src/app/hooks/useImagePackRooms.ts` | `useImagePackRooms` resolves candidate pack rooms from `mx.getRoom` + `getAllParents` | No native room→pack-room resolution; JS `mx.getRoom` | **V-SEND.R-PACK-READ** |
-| `synara/src/app/components/emoji-board/EmojiBoard.tsx` | Renders pack previews via `useRelevantImagePacks` + media URL resolution | Pack preview display depends on JS pack-read + media URL resolution | **V-SEND.R-PACK-READ** (display) |
-| `synara/src/app/components/editor/autocomplete/EmoticonAutocomplete.tsx` | Emoticon autocomplete via `useRelevantImagePacks` | No native pack-read for autocomplete suggestions | **V-SEND.R-PACK-READ** |
-| `synara/src/app/components/image-pack-view/UserImagePack.tsx` | Reads personal pack via `useUserImagePack` | No native `PoniesUserEmotes` read | **V-SEND.R-PACK-READ** |
-| `synara/src/app/features/settings/emojis-stickers/UserPack.tsx` | Reads personal pack via `useUserImagePack` | No native `PoniesUserEmotes` read | **V-SEND.R-PACK-READ** |
-| `synara/src/app/features/settings/emojis-stickers/GlobalPacks.tsx` | Reads global packs via `useGlobalImagePacks` | No native `PoniesEmoteRooms` read | **V-SEND.R-PACK-READ** |
-| `synara/src/app/features/common-settings/emojis-stickers/RoomPacks.tsx` | Reads room packs via `useRoomImagePacks` | No native `PoniesRoomEmotes` read | **V-SEND.R-PACK-READ** |
+| `matrix_subscribe_image_packs` (IPC, not yet implemented) | Native live push of `PoniesEmoteRooms` / `PoniesRoomEmotes` / `PoniesUserEmotes` changes to the frontend | No native subscription; native snapshot is one-shot (no reactive updates); JS `useAccountDataCallback` / `useStateEventCallback` remain for web fallback | **V-SEND.R-PACK-READ** (subscribe) |
+| `synara/src/app/plugins/custom-emoji/utils.ts` | `getGlobalImagePacks` / `getRoomImagePack(s)` / `getUserImagePack` / `makeImagePacks` read `PoniesEmoteRooms` / `PoniesRoomEmotes` / `PoniesUserEmotes` via `getAccountData` / `getStateEvent` | **Read-only helpers** — sole consumer is `useImagePacks.ts` (web fallback). **Not used by the write side** (see note below). Physically delete once subscribe lands + web fallback is dropped | **V-SEND.R-PACK-READ** (delete) |
+| `synara/src/app/hooks/useImagePackRooms.ts` | `useImagePackRooms` resolves candidate pack rooms from `mx.getRoom` + `getAllParents` | No native room→pack-room resolution; JS `mx.getRoom`; feeds `RoomInput.tsx`, `PowersEditor.tsx`, `EmojiBoard.tsx`, `EmoticonAutocomplete.tsx` | **V-SEND.R-PACK-READ** (JS consumer) |
+| `synara/src/app/components/emoji-board/EmojiBoard.tsx` | Renders pack previews via `useRelevantImagePacks` (native-backed) + `imagePackRooms` from JS `useImagePackRooms` | Pack preview display still depends on JS room resolution + media URL resolution | **V-SEND.R-PACK-READ** (display) |
+| `synara/src/app/components/editor/autocomplete/EmoticonAutocomplete.tsx` | Emoticon autocomplete via `useRelevantImagePacks` (native-backed) + `imagePackRooms` from JS `useImagePackRooms` | Autocomplete still depends on JS room resolution | **V-SEND.R-PACK-READ** (JS consumer) |
+| `synara/src/app/hooks/useImagePacks.ts` (web fallback) | `useAccountDataCallback` / `useStateEventCallback` listeners on `mx` for non-native web sessions | Native path is fail-closed; JS listeners remain only for web. Delete once subscribe lands + web fallback dropped | **V-SEND.R-PACK-READ** (delete) |
+
+**Write vs read owner clarification (physical delete of `custom-emoji/utils.ts`):**
+The pack-read helpers in `custom-emoji/utils.ts` are **read-only owners** — their
+sole consumer is `useImagePacks.ts` (the read hooks). The **write** surfaces
+(`GlobalPacks.tsx`, `RoomPacks.tsx`, `UserImagePack.tsx`, `RoomImagePack.tsx`)
+do **not** call these read helpers directly; they read current pack state through
+the native-backed hooks (`useGlobalImagePacks`, `useRoomsImagePacks`,
+`useRoomImagePacks`, `useUserImagePack`) and write via `mx.setAccountData` /
+`mx.sendStateEvent` (V-SEND.R-PACK-WRITE, #292). So deleting the read helpers
+does **not** break the write side — the write surfaces keep working through the
+native read hooks. The read helpers can be physically deleted once
+`matrix_subscribe_image_packs` lands and the non-native web fallback is dropped;
+the write residual (#292) is a separate slice and does not gate this deletion.
 
 **Note:** pack **preview** display is media-adjacent (authenticated media
 download / V-TIMELINE). The read residuals above are the account-data/state-event
@@ -54,28 +82,38 @@ owners; the actual media bytes for previews belong to the media vertical
 
 ---
 
-## 3. Proposed slice — native pack-read projection
+## 3. Native pack-read projection — landed vs remaining
 
-When this residual is claimed, the native slice should expose a read-only pack
-projection over IPC and delete the JS read/subscription owners. Proposed IPC
-names (read-only, fail-closed):
+**Landed (#297):** the read-only snapshot get commands over IPC, fail-closed:
 
 - `matrix_get_global_image_packs` — return enabled global packs from
-  `PoniesEmoteRooms` account-data.
+  `PoniesEmoteRooms` account-data. ✅ **#297**
 - `matrix_get_room_image_packs` — return `PoniesRoomEmotes` state packs for a
-  room (and optionally its parent spaces).
+  room (and optionally its parent spaces). ✅ **#297**
 - `matrix_get_user_image_pack` — return the personal `PoniesUserEmotes` pack.
+  ✅ **#297**
+
+TS owners `nativeImagePackOwner.ts` / `nativeImagePack.ts` and the
+`useImagePacks.ts` native fail-closed path are also landed (#297).
+
+**Remaining (this residual):**
+
 - `matrix_subscribe_image_packs` — push pack account-data/state changes to the
-  frontend (replaces `useAccountDataCallback` / `useStateEventCallback`).
+  frontend (replaces `useAccountDataCallback` / `useStateEventCallback`). Not yet
+  implemented; native snapshot is one-shot.
 - `matrix_get_image_pack_media` — resolve pack image/avatar MXC to a usable
   media URL/bytes (media-adjacent; coordinate with V-TIMELINE).
 
-**Deletion list** (physical deletion per [full-vertical-policy.md](full-vertical-policy.md)):
-`custom-emoji/utils.ts` pack-read functions, `useImagePacks.ts`,
-`useImagePackRooms.ts`, and the `useRelevantImagePacks`/`useGlobalImagePacks`/
-`useRoomImagePacks`/`useUserImagePack` consumers' JS read paths in
-`EmojiBoard.tsx`, `EmoticonAutocomplete.tsx`, `UserImagePack.tsx`, `UserPack.tsx`,
-`GlobalPacks.tsx`, `RoomPacks.tsx`.
+**Deletion list** (physical deletion per [full-vertical-policy.md](full-vertical-policy.md),
+once subscribe lands + web fallback dropped): `custom-emoji/utils.ts` pack-read
+functions (read-only owners; write side unaffected — see §2), the JS
+`useAccountDataCallback` / `useStateEventCallback` fallback paths in
+`useImagePacks.ts`, and `useImagePackRooms.ts` (JS `mx.getRoom` +
+`getAllParents`). The `useRelevantImagePacks`/`useGlobalImagePacks`/
+`useRoomImagePacks`/`useUserImagePack` consumers (`EmojiBoard.tsx`,
+`EmoticonAutocomplete.tsx`, `UserImagePack.tsx`, `UserPack.tsx`, `GlobalPacks.tsx`,
+`RoomPacks.tsx`) already read through the native-backed hooks; only their JS
+room-resolution dependency (`useImagePackRooms`) remains.
 
 **Fail-closed:** on a native logged-in session, absence/failure of any
 `matrix_get_*_image_packs` command is terminal — the picker/autocomplete must
@@ -99,22 +137,30 @@ paths remain only for non-native web sessions.
 
 ## 5. Self-eval
 
-**Confidence: high** for the inventory. I traced the pack-read surface from the
-read helpers (`custom-emoji/utils.ts`) through the subscription hooks
-(`useImagePacks.ts`, `useImagePackRooms.ts`) to every consumer
-(`EmojiBoard.tsx`, `EmoticonAutocomplete.tsx`, `UserImagePack.tsx`, `UserPack.tsx`,
-`GlobalPacks.tsx`, `RoomPacks.tsx`) and confirmed all read on the live
-`matrix-js-sdk` client via `getAccountData` / `getStateEvent` /
-`useAccountDataCallback` / `useStateEventCallback`. Sticker/GIF **send** is
-native (#264); only the pack **read** projection is residual. Possible missed
-files: any pack-read helper re-exported behind a barrel in the emoji/pack trees
-— verify during implementation with a full `grep -rn "matrix-js-sdk"` over
+**Confidence: high** for this truth-up. I re-traced the pack-read surface after
+**#297** landed: the snapshot get commands (`matrix_get_user_image_pack` /
+`matrix_get_room_image_packs` / `matrix_get_global_image_packs`) and the
+`nativeImagePackOwner` / `nativeImagePack` TS owners plus the `useImagePacks.ts`
+native fail-closed path are confirmed landed. The remaining residual is the
+**subscribe** live push, the **physical delete** of the read-only
+`custom-emoji/utils.ts` helpers (sole consumer `useImagePacks.ts`; write side
+#292 unaffected), and the JS **room resolution** (`useImagePackRooms.ts`) that
+still feeds `RoomInput.tsx`, `PowersEditor.tsx`, `EmojiBoard.tsx`,
+`EmoticonAutocomplete.tsx`. Sticker/GIF **send** is native (#264). Possible
+missed files: any pack-read helper re-exported behind a barrel in the emoji/pack
+trees — verify during implementation with a full `grep -rn "matrix-js-sdk"` over
 `custom-emoji`, `image-pack-view`, and the emoji/sticker settings dirs.
 
 
-## 7. Implementation close (this PR)
+## 7. Implementation close
 
+**Landed #297 (snapshot):**
 - Rust: `matrix_get_user_image_pack` / `matrix_get_room_image_packs` / `matrix_get_global_image_packs`
-- TS: `nativeImagePackOwner` + `useImagePacks` native path (fail-closed on desktop)
-- Residual follow-on: `matrix_subscribe_image_packs` live push; physical delete of JS pack-read helpers once subscribe lands
+- TS: `nativeImagePackOwner` + `nativeImagePack` + `useImagePacks` native path (fail-closed on desktop)
+
+**Residual follow-on (this doc):**
+- `matrix_subscribe_image_packs` live push (native reactive updates)
+- Physical delete of JS pack-read helpers (`custom-emoji/utils.ts` read-only
+  owners) + `useImagePacks.ts` web-fallback listeners + `useImagePackRooms.ts`
+  once subscribe lands and web fallback is dropped — write side (#292) unaffected
 - dual_backend false; pack-write/upload out of scope
