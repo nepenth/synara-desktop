@@ -32,7 +32,7 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `83adef68`**. Landed #297 V-SEND.R-PACK-READ snapshot get + hooks. Subscribe residual remains. Next: pack-write / avatar / C3 live. #39 gated. |
+| **Now**        | **Tip `83adef68`**. Landed #297 V-SEND.R-PACK-READ snapshot get + hooks. Subscribe residual remains. Next: pack-write / avatar / C3 live. C4/C5 verify checklists exist (docs-only). #39 gated. |
 | **Tip**        | `83adef68` |
 | **Active PRs** | none product open after #297. |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
@@ -96,6 +96,11 @@ Update rules:
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
 | current | **V-TIMELINE.C3** | **Merged #294** | Docs-only re-verify checklist for native stream/delta after C1/C2: S1–S7. See [v-timeline-c3-stream-verify.md](v-timeline-c3-stream-verify.md). |
+
+### 2026-08-01 — V-TIMELINE.C4/C5 verify checklists
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-TIMELINE.C4/C5** | **Docs-only checklists** | C4 media/render parity + C5 pins/notes/jump live-proof checklists mirroring C3. No product code; live proof still unclaimed. See [v-timeline-c4-media-render-verify.md](v-timeline-c4-media-render-verify.md) and [v-timeline-c5-pins-notes-jump-verify.md](v-timeline-c5-pins-notes-jump-verify.md). |
 
 
 ### 2026-08-01 — V-SEND.R-AVATAR-UPLOAD residual inventory

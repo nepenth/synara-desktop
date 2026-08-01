@@ -22,6 +22,8 @@
 | Send residual inventories | forward #290; avatar #291; pack-write #292 (docs only) |
 | V-SEND.R-EDIT | **#283** native `m.replace` merged |
 | V-TIMELINE.C3 checklist | **#294** docs-only stream verify checklist |
+| V-TIMELINE.C4 checklist | **docs-only** media/render verify checklist ([v-timeline-c4-media-render-verify.md](v-timeline-c4-media-render-verify.md)) |
+| V-TIMELINE.C5 checklist | **docs-only** pins/notes/jump verify checklist ([v-timeline-c5-pins-notes-jump-verify.md](v-timeline-c5-pins-notes-jump-verify.md)) |
 | V-TIMELINE.C1 | **#285** NativeTimelinePresenter owns RoomView |
 | V-TIMELINE.C2 | **#289** delete `RoomTimeline` (imports **165→164**, allowlist **169→168**) |
 | V-SEND.R-FORWARD | **#296** legacy MessageForwardItem + forward.ts deleted |
@@ -41,8 +43,8 @@
 1. ~~**C1** land #285~~ ✅
 2. ~~**C2** delete RoomTimeline~~ ✅ #289
 3. **C3** live re-verify stream deltas (checklist #294; residual truth #298)
-4. **C4** media/render parity on selected presenter
-5. **C5** pins/notes/jump live proof
+4. **C4** media/render parity on selected presenter (checklist [v-timeline-c4-media-render-verify.md](v-timeline-c4-media-render-verify.md))
+5. **C5** pins/notes/jump live proof (checklist [v-timeline-c5-pins-notes-jump-verify.md](v-timeline-c5-pins-notes-jump-verify.md))
 
 ### Send / media residuals (inventories done; implement remains)
 - ~~**V-SEND.R-FORWARD**~~ **#296**
