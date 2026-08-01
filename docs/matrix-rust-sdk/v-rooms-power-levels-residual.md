@@ -3,21 +3,27 @@
 | Field    | Value                                                                                                                                |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Status   | **Inventory (docs only)** — no product code or native vertical claim                                                                 |
-| Base tip | `3d76402f` (`feature/matrix-rust-sdk-full-replacement`)                                                                              |
+| Base tip | `22f1f06d` (`feature/matrix-rust-sdk-full-replacement`; post-#395 members-read first slice)                                      |
 | Scope    | PowersEditor tag writes and bulk `m.room.power_levels` writes after the single-user set-power-level slice                            |
 | Related  | #375 / adjacent commit `7eb5bc3d` (`matrix_room_set_power_level`); room-member moderation is separate                                |
 | Policy   | [full-vertical-policy.md](full-vertical-policy.md) — UI → Tauri IPC → live `matrix-sdk`, physical JS-owner deletion, no dual backend |
 
 **Implementation packet:** [v-rooms-power-levels-implement-packet.md](v-rooms-power-levels-implement-packet.md)
 
-> **Scope guard.** This inventory is based only on tip `3d76402f`. It does not
-> use `main`, #39, or claim V-BURN complete. The adjacent #375 commit is used
-> only to define the single-user comparison boundary; it is not present in the
-> base worktree.
+> **Tip/guard.** This docs-only inventory is carried at post-#395 tip
+> `22f1f06d` (after the #396 CallWidget media scan). It does not use `main` or
+> #39, claim powers-bulk implemented, or claim V-BURN complete. #395 released
+> the serial `product.rs` lock; the next product slice may be CallWidget media
+> IPC or powers-bulk. This PR does not edit product code.
+>
+> The detailed comparison below remains the original pre-#375 inventory
+> boundary; it is not a claim that powers-bulk is implemented at the current
+> tip.
 
 ## 1. Baseline and comparison boundary
 
-On the requested base tip, there is no `matrix_room_set_power_level` command.
+On the original inventory base tip, there is no `matrix_room_set_power_level`
+command.
 The current single-user UI call is still the JS SDK call in
 `synara/src/app/components/user-profile/PowerChip.tsx:181-187`:
 
