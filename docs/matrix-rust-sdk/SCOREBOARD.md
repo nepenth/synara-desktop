@@ -55,9 +55,9 @@ run passes the relevant checklist.
 
 ## In flight
 
-| PR     | What                                                                      |
-| ------ | ------------------------------------------------------------------------- |
-| (docs) | Next: pack-read **JS utils delete** (V-BURN-gated); **C3–C5** live verify |
+| PR     | What                                                                                                                                                                                   |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| (docs) | Residual queue docs-converged; product idle. Next real work: **C3–C5** live session or a user reorder for **R-DEVTOOL/widget verticals**. Pack `get*` remains V-BURN-gated; #327 HOLD. |
 
 ## Left (residual queue)
 
