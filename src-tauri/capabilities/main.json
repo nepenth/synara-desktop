@@ -121,6 +121,8 @@
     "allow-matrix-set-user-image-pack",
     "allow-matrix-set-global-image-packs",
     "allow-matrix-set-room-image-pack",
+    "allow-matrix-call-media-config",
+    "allow-matrix-media-download",
     "allow-matrix-upload-media",
     "allow-matrix-set-own-avatar",
     "allow-matrix-set-own-display-name",

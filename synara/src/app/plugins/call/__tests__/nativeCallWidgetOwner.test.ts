@@ -1,9 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  getKnownRoomsFromNativeSnapshot,
-  throwNativeCallWidgetCapabilityUnavailable,
-} from '../nativeCallWidgetOwner';
+import { getKnownRoomsFromNativeSnapshot } from '../nativeCallWidgetOwner';
 
 const snapshot = {
   sessionGeneration: 4,
@@ -20,16 +17,5 @@ test('call widget known rooms fail closed before a native snapshot is available'
   assert.deepEqual(
     getKnownRoomsFromNativeSnapshot(true, { ...snapshot, sessionGeneration: 0 }),
     []
-  );
-});
-
-test('call widget media capabilities fail closed without a native owner', () => {
-  assert.throws(
-    () => throwNativeCallWidgetCapabilityUnavailable('media config'),
-    /Native Matrix call widget media config is unavailable/
-  );
-  assert.throws(
-    () => throwNativeCallWidgetCapabilityUnavailable('media download'),
-    /Native Matrix call widget media download is unavailable/
   );
 });
