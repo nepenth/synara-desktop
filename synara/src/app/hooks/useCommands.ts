@@ -29,6 +29,8 @@ import { createRoomEncryptionState } from '../components/create-room';
 import { sendPollWithNativeDesktopOwner } from '../features/room/nativePoll';
 import { parsePollCommand } from '../utils/polls';
 import { getRoomCurrentState } from '../utils/timelineLifecycle';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../utils/desktop';
+import { joinRoomWithNativeOwner } from '../components/nativeRoomJoinOwner';
 
 export const SHRUG = '¯\\_(ツ)_/¯';
 export const TABLEFLIP = '(╯°□°)╯︵ ┻━┻';
@@ -236,9 +238,16 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           const roomIdOrAliases = rawIds.filter(
             (idOrAlias) => isRoomId(idOrAlias) || isRoomAlias(idOrAlias)
           );
-          roomIdOrAliases.forEach(async (idOrAlias) => {
-            await mx.joinRoom(idOrAlias);
-          });
+          await Promise.all(
+            roomIdOrAliases.map((idOrAlias) =>
+              joinRoomWithNativeOwner(
+                idOrAlias,
+                undefined,
+                isSynaraDesktop(),
+                invokeDesktopWithAvailability
+              )
+            )
+          );
         },
       },
       [Command.Leave]: {

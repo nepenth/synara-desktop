@@ -63,6 +63,8 @@ import { markAsReadInBackground } from '../../../utils/notifications';
 import { useRoomsUnread } from '../../../state/hooks/unread';
 import { UseStateProvider } from '../../../components/UseStateProvider';
 import { LeaveSpacePrompt } from '../../../components/leave-space-prompt';
+import { joinRoomWithNativeOwner } from '../../../components/nativeRoomJoinOwner';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../../utils/desktop';
 import { copyToClipboard } from '../../../utils/dom';
 import { useClosedNavCategoriesAtom } from '../../../state/hooks/closedNavCategories';
 import { useStateEvent } from '../../../hooks/useStateEvent';
@@ -315,16 +317,19 @@ export function SpaceTombstone({ roomId, replacementRoomId }: SpaceTombstoneProp
     useCallback(() => {
       const currentRoom = mx.getRoom(roomId);
       const via = currentRoom ? getViaServers(currentRoom) : [];
-      return mx.joinRoom(replacementRoomId, {
-        viaServers: via,
-      });
+      return joinRoomWithNativeOwner(
+        replacementRoomId,
+        via,
+        isSynaraDesktop(),
+        invokeDesktopWithAvailability
+      );
     }, [mx, roomId, replacementRoomId])
   );
   const replacementRoom = mx.getRoom(replacementRoomId);
 
   const handleOpen = () => {
     if (replacementRoom) navigateSpace(replacementRoom.roomId);
-    if (joinState.status === AsyncStatus.Success) navigateSpace(joinState.data.roomId);
+    if (joinState.status === AsyncStatus.Success) navigateSpace(replacementRoomId);
   };
 
   return (

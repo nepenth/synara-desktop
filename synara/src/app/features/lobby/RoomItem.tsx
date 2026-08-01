@@ -19,7 +19,7 @@ import {
   toRem,
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
-import { JoinRule, MatrixError, Room } from 'matrix-js-sdk';
+import { JoinRule, Room } from 'matrix-js-sdk';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
 import { SequenceCard } from '../../components/sequence-card';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -37,16 +37,19 @@ import { getDirectRoomAvatarUrl, getRoomAvatarUrl } from '../../utils/room';
 import { ItemDraggableTarget, useDraggableItem } from './DnD';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { joinRoomWithNativeOwner } from '../../components/nativeRoomJoinOwner';
 
 type RoomJoinButtonProps = {
   roomId: string;
   via?: string[];
 };
 function RoomJoinButton({ roomId, via }: RoomJoinButtonProps) {
-  const mx = useMatrixClient();
-
-  const [joinState, join] = useAsyncCallback<Room, MatrixError, []>(
-    useCallback(() => mx.joinRoom(roomId, { viaServers: via }), [mx, roomId, via])
+  const [joinState, join] = useAsyncCallback<void, Error, []>(
+    useCallback(
+      () => joinRoomWithNativeOwner(roomId, via, isSynaraDesktop(), invokeDesktopWithAvailability),
+      [roomId, via]
+    )
   );
 
   const canJoin = joinState.status === AsyncStatus.Idle || joinState.status === AsyncStatus.Error;
@@ -59,7 +62,7 @@ function RoomJoinButton({ roomId, via }: RoomJoinButtonProps) {
             <Tooltip variant="Critical" style={{ maxWidth: toRem(200) }}>
               <Box direction="Column" gap="100">
                 <Text style={{ wordBreak: 'break-word' }} size="T400">
-                  {joinState.error.data?.error || joinState.error.message}
+                  {joinState.error.message}
                 </Text>
                 <Text size="T200">{joinState.error.name}</Text>
               </Box>
@@ -74,7 +77,7 @@ function RoomJoinButton({ roomId, via }: RoomJoinButtonProps) {
               size="400"
               filled
               tabIndex={0}
-              aria-label={joinState.error.data?.error || joinState.error.message}
+              aria-label={joinState.error.message}
             />
           )}
         </TooltipProvider>

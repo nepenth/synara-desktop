@@ -31,8 +31,8 @@ use matrix_sdk::{
             sticker::StickerEventContent,
             AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncTimelineEvent, Mentions,
         },
-        EventId, MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedTransactionId, OwnedUserId,
-        UInt,
+        EventId, MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId,
+        OwnedServerName, OwnedTransactionId, OwnedUserId, UInt,
     },
     Client, Room, SessionMeta, SessionTokens,
 };
@@ -1976,6 +1976,27 @@ pub async fn matrix_room_leave(
     room.leave()
         .await
         .map_err(|_| map_room_leave_error("v-rooms-room-leave-failed"))
+}
+
+/// V-ROOMS room membership: join a room or room alias through the native SDK.
+/// Fail-closed: the desktop product must not use `mx.joinRoom` when a native
+/// Matrix session owns the room lifecycle.
+#[tauri::command]
+pub async fn matrix_room_join(
+    state: State<'_, MatrixAuthState>,
+    room_id_or_alias: String,
+    via_servers: Option<Vec<String>>,
+) -> Result<(), MatrixAuthCommandError> {
+    let target = parse_room_join_target(&room_id_or_alias)?;
+    let via_servers = parse_room_join_via_servers(via_servers.as_deref())?;
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    active
+        .client
+        .join_room_by_id_or_alias(&target, &via_servers)
+        .await
+        .map(|_| ())
+        .map_err(|_| map_room_join_error("v-rooms-room-join-failed"))
 }
 
 #[tauri::command]
@@ -3933,6 +3954,41 @@ fn parse_room_leave_id(room_id: &str) -> Result<OwnedRoomId, MatrixAuthCommandEr
         .map_err(|_| map_room_leave_error("v-rooms-room-leave-invalid-room"))
 }
 
+fn map_room_join_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    let (code, message) = match diagnostic_id {
+        "v-rooms-room-join-invalid-room" | "v-rooms-room-join-invalid-via-server" => (
+            "InvalidRequest",
+            "The native Matrix room join request is invalid.",
+        ),
+        _ => ("Unknown", "The native Matrix room could not be joined."),
+    };
+    MatrixAuthCommandError::new(code, message, diagnostic_id)
+}
+
+fn parse_room_join_target(
+    room_id_or_alias: &str,
+) -> Result<OwnedRoomOrAliasId, MatrixAuthCommandError> {
+    room_id_or_alias
+        .trim()
+        .parse()
+        .map_err(|_| map_room_join_error("v-rooms-room-join-invalid-room"))
+}
+
+fn parse_room_join_via_servers(
+    via_servers: Option<&[String]>,
+) -> Result<Vec<OwnedServerName>, MatrixAuthCommandError> {
+    via_servers
+        .unwrap_or_default()
+        .iter()
+        .map(|server| {
+            server
+                .trim()
+                .parse()
+                .map_err(|_| map_room_join_error("v-rooms-room-join-invalid-via-server"))
+        })
+        .collect()
+}
+
 async fn native_invite_target(
     active: &mut ManagedMatrixSession,
     room_id: &str,
@@ -5741,5 +5797,72 @@ mod tests {
             .expect("room leave command body");
         assert!(command.contains("room.leave()"));
         assert!(!command.contains("mx.leave"));
+    }
+
+    #[test]
+    fn room_join_validates_ids_aliases_and_via_servers() {
+        assert_eq!(
+            parse_room_join_target("not-a-room")
+                .unwrap_err()
+                .diagnostic_id,
+            "v-rooms-room-join-invalid-room"
+        );
+        assert_eq!(
+            parse_room_join_target("  !room:example.org  ")
+                .unwrap()
+                .to_string(),
+            "!room:example.org"
+        );
+        assert_eq!(
+            parse_room_join_target("#alias:example.org")
+                .unwrap()
+                .to_string(),
+            "#alias:example.org"
+        );
+        assert_eq!(parse_room_join_via_servers(None).unwrap().len(), 0);
+        let via = parse_room_join_via_servers(Some(&[
+            " example.org ".to_owned(),
+            "[::1]:8448".to_owned(),
+        ]))
+        .unwrap();
+        assert_eq!(via[0].to_string(), "example.org");
+        assert_eq!(via[1].to_string(), "[::1]:8448");
+        assert_eq!(
+            parse_room_join_via_servers(Some(&["not a server".to_owned()]))
+                .unwrap_err()
+                .diagnostic_id,
+            "v-rooms-room-join-invalid-via-server"
+        );
+    }
+
+    #[test]
+    fn room_join_error_mapping_is_stable() {
+        assert_eq!(
+            map_room_join_error("v-rooms-room-join-invalid-room").code,
+            "InvalidRequest"
+        );
+        assert_eq!(
+            map_room_join_error("v-rooms-room-join-invalid-via-server").code,
+            "InvalidRequest"
+        );
+        assert_eq!(
+            map_room_join_error("v-rooms-room-join-failed").code,
+            "Unknown"
+        );
+    }
+
+    #[test]
+    fn room_join_command_owns_sdk_join_without_a_js_fallback() {
+        let product = include_str!("product.rs");
+        let command = product
+            .split("pub async fn matrix_room_join")
+            .nth(1)
+            .expect("room join command");
+        let command = command
+            .split("#[tauri::command]")
+            .next()
+            .expect("room join command body");
+        assert!(command.contains("join_room_by_id_or_alias"));
+        assert!(!command.contains("mx.joinRoom"));
     }
 }
