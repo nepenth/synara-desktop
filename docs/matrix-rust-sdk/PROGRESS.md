@@ -15,7 +15,7 @@
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
 | Integration tip    | `95a6a71b` — after #288 scoreboard; #287 pack-read inventory; #284 CI; #240 contract; #279 loginUtil
-| Active work        | **#283** edit (CI); **#285** C1 + **#289** C2 timeline cutover; **#290** forward inventory (this); next pack-read implement + C3–C5
+| Active work        | **#283** edit (CI); **#285/#289** C1/C2; **this #291** avatar inventory; #290 forward landed; next pack-read implement + C3–C5
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | Desktop production import files **165** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
@@ -32,8 +32,8 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `ed60226b`**. **This PR** V-SEND.R-EDIT. Landed #290 forward inventory. In flight: #285 C1 + #289 C2. Next: pack-read implement, C3–C5, avatar. #39 still needs explicit approval. |
-| **Tip**        | `ed60226b` |
+| **Now**        | **Tip `310f4487`**. **This PR** V-SEND.R-EDIT. Landed #290 forward + #291 avatar inventory. In flight: #285 C1 + #289 C2. Next: pack-read implement, C3–C5. #39 still needs explicit approval. |
+| **Tip**        | `310f4487` |
 | **Active PRs** | [#283](https://github.com/nepenth/synara-desktop/pull/283) edit (this PR); [#285](https://github.com/nepenth/synara-desktop/pull/285)/[#289](https://github.com/nepenth/synara-desktop/pull/289) timeline C1/C2. |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
@@ -60,6 +60,11 @@ Update rules:
 
 ## Work log (newest first)
 
+### 2026-08-01 — V-SEND.R-AVATAR-UPLOAD residual inventory
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.R-AVATAR-UPLOAD** | **#291 merged** | Docs-only inventory of user + room avatar **upload** residual (grouped with R-ROOM-PROFILE): `Profile.tsx` (`mx.setAvatarUrl`/`mx.setDisplayName`), `RoomProfile.tsx` (`mx.sendStateEvent` m.room.avatar/name/topic), shared `state/upload.ts` + `utils/matrix.ts` `uploadContent` → `mx.uploadContent`. No native avatar IPC; native media upload only inside `matrix_send_attachment`. See [v-send-avatar-residual.md](v-send-avatar-residual.md). |
+
 ### 2026-08-01 — V-SEND.R-FORWARD residual inventory
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
@@ -69,10 +74,10 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| current | **Integration tip** | `ed60226b` | After #290 forward inventory; #288 scoreboard; #287 pack-read |
+| current | **Integration tip** | `310f4487` | After #291 avatar + #290 forward inventory; #288 scoreboard |
 | current | **Auth residual** | **loginUtil DONE #279**; UIA multi-stage non-retention #280; discovery #276 | Desktop password fail-closed native-only |
 | current | **V-TIMELINE** | Contract **#240** merged; cutover map **#286**; C1 **#285** + C2 **#289** in flight | C3–C5 residual after C1/C2 land |
-| current | **V-SEND residual** | Poll-thread #282 DONE; edit #283 in flight; pack-read inventory #287; forward inventory #290 | Pack-read implement + avatar/pack-write still open |
+| current | **V-SEND residual** | Poll-thread #282 DONE; edit #283 in flight; pack-read #287; forward #290; avatar #291 | Pack-read implement + avatar upload implement still open |
 | current | **CI** | Parallel Validate Rust∥Node **#284** | Path scopes; quality gates preserved |
 | current | **Import files (prod)** | **165** under synara/src | Down from plan 220 |
 
