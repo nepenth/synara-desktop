@@ -205,8 +205,14 @@ export function inspectWorkflowPolicy({ workflows, dependabot }) {
     );
   }
 
-  const ciValidate = parseJobs(workflows["ci.yml"] ?? "").get("validate") ?? [];
-  const ciValidationContract = ciValidate.join("\n");
+  // Rust gates may live in the monolithic `validate` job or the split
+  // `validate-rust` job (parallel with `validate-frontend` for wall-clock speed).
+  const ciJobs = parseJobs(workflows["ci.yml"] ?? "");
+  const ciValidateRust = [
+    ...(ciJobs.get("validate") ?? []),
+    ...(ciJobs.get("validate-rust") ?? []),
+  ];
+  const ciValidationContract = ciValidateRust.join("\n");
   for (const [label, command] of [
     ["formatting", "cargo fmt --check"],
     ["lint", "cargo clippy --locked --all-targets -- -D warnings"],
