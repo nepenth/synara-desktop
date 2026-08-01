@@ -3,7 +3,7 @@
 | Field        | Value                                                               |
 | ------------ | ------------------------------------------------------------------- |
 | Status       | **NOOP** — no product surface exists; docs-only residual correction |
-| Measured tip | `8bd7ee3f` on `feature/matrix-rust-sdk-full-replacement` |
+| Measured tip | `c22515fa` on `feature/matrix-rust-sdk-full-replacement` |
 | Base         | `feature/matrix-rust-sdk-full-replacement`                          |
 | Scope guard  | No product code, no `main`, no umbrella PR **#39**, no cutover      |
 
