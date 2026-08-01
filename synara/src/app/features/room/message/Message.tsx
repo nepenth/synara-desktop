@@ -29,7 +29,6 @@ import React, {
   MouseEventHandler,
   ReactNode,
   useCallback,
-  useMemo,
   useState,
 } from 'react';
 import FocusTrap from 'focus-trap-react';
@@ -37,9 +36,7 @@ import { useHover, useFocusWithin } from 'react-aria';
 import { MatrixEvent, Room } from 'matrix-js-sdk';
 import { Relations } from 'matrix-js-sdk/lib/models/relations';
 import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
-import { MsgType } from 'matrix-js-sdk/lib/@types/event';
 import {
   AvatarBase,
   BubbleLayout,
@@ -82,14 +79,6 @@ import { PowerIcon } from '../../../components/power';
 import colorMXID from '../../../../util/colorMXID';
 import { getPowerTagIconSrc } from '../../../hooks/useMemberPowerTag';
 import {
-  getForwardableEventContent,
-  getForwardableEventContents,
-  getRoomForwardTargets,
-} from '../../../utils/forward';
-import { allRoomsAtom } from '../../../state/room-list/roomList';
-import {
-  forwardMediaWithNativeTimelineAction,
-  forwardTextWithNativeTimelineAction,
   pinWithNativeTimelineAction,
   redactWithNativeTimelineAction,
   reportWithNativeTimelineAction,
@@ -435,273 +424,6 @@ export const MessageCopyLinkItem = as<
         Copy Link
       </Text>
     </MenuItem>
-  );
-});
-
-export const MessageForwardItem = as<
-  'button',
-  {
-    room: Room;
-    mEvent?: MatrixEvent;
-    mEvents?: MatrixEvent[];
-    label?: string;
-    onClose?: () => void;
-  }
->(({ room, mEvent, mEvents, label, onClose, ...props }, ref) => {
-  const mx = useMatrixClient();
-  const { t } = useTranslation();
-  const allRoomIds = useAtomValue(allRoomsAtom);
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [sendingRoomId, setSendingRoomId] = useState<string>();
-  const [error, setError] = useState(false);
-  const [confirmTargetRoom, setConfirmTargetRoom] = useState<Room>();
-  const [quoteMode, setQuoteMode] = useState(false);
-  const events = useMemo(() => mEvents ?? (mEvent ? [mEvent] : []), [mEvent, mEvents]);
-  const contents = useMemo(
-    () =>
-      events.length === 1
-        ? [getForwardableEventContent(events[0], quoteMode)].filter(
-            (content): content is Record<string, unknown> => !!content
-          )
-        : getForwardableEventContents(events, quoteMode),
-    [events, quoteMode]
-  );
-  const targets = useMemo(() => {
-    const rooms = allRoomIds
-      .map((roomId) => mx.getRoom(roomId))
-      .filter((targetRoom): targetRoom is Room => !!targetRoom);
-    const trimmedQuery = query.trim().toLowerCase();
-    return getRoomForwardTargets(rooms, room.roomId, mx.getUserId()).filter(
-      (targetRoom) =>
-        !trimmedQuery ||
-        targetRoom.name.toLowerCase().includes(trimmedQuery) ||
-        targetRoom.roomId.toLowerCase().includes(trimmedQuery)
-    );
-  }, [mx, allRoomIds, room.roomId, query]);
-
-  if (contents.length === 0) return null;
-
-  const handleClose = () => {
-    setConfirmTargetRoom(undefined);
-    setOpen(false);
-    onClose?.();
-  };
-
-  const handleForwardConfirmed = async (targetRoom: Room) => {
-    setConfirmTargetRoom(undefined);
-    setSendingRoomId(targetRoom.roomId);
-    setError(false);
-    try {
-      for (const event of events) {
-        const eventId = event.getId();
-        if (!eventId) continue;
-        const msgtype = event.getContent()?.msgtype;
-        const isMedia =
-          !quoteMode &&
-          (event.getType() === 'm.sticker' ||
-            msgtype === MsgType.Image ||
-            msgtype === MsgType.File ||
-            msgtype === MsgType.Audio ||
-            msgtype === MsgType.Video);
-        if (isMedia) {
-          await forwardMediaWithNativeTimelineAction({
-            sourceRoomId: room.roomId,
-            eventId,
-            targetRoomId: targetRoom.roomId,
-          });
-        } else {
-          await forwardTextWithNativeTimelineAction({
-            sourceRoomId: room.roomId,
-            eventId,
-            targetRoomId: targetRoom.roomId,
-            asQuote: quoteMode,
-          });
-        }
-      }
-      handleClose();
-    } catch {
-      setError(true);
-      setSendingRoomId(undefined);
-    }
-  };
-
-  const handleForward = async (targetRoom: Room) => {
-    if (room.hasEncryptionStateEvent() && !targetRoom.hasEncryptionStateEvent()) {
-      setConfirmTargetRoom(targetRoom);
-      return;
-    }
-    await handleForwardConfirmed(targetRoom);
-  };
-
-  return (
-    <>
-      <Overlay open={open} backdrop={<OverlayBackdrop />}>
-        <OverlayCenter>
-          <FocusTrap
-            focusTrapOptions={{
-              initialFocus: false,
-              onDeactivate: handleClose,
-              clickOutsideDeactivates: true,
-              escapeDeactivates: stopPropagation,
-            }}
-          >
-            <Dialog variant="Surface">
-              {confirmTargetRoom ? (
-                <>
-                  <Header
-                    style={{
-                      padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
-                      borderBottomWidth: config.borderWidth.B300,
-                    }}
-                    variant="Surface"
-                    size="500"
-                  >
-                    <Box grow="Yes">
-                      <Text size="H4">Forward to Unencrypted Room?</Text>
-                    </Box>
-                    <IconButton
-                      size="300"
-                      onClick={() => setConfirmTargetRoom(undefined)}
-                      radii="300"
-                    >
-                      <Icon src={Icons.Cross} />
-                    </IconButton>
-                  </Header>
-                  <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
-                    <Text priority="300">
-                      This message is from an encrypted room. Forwarding it to{' '}
-                      {confirmTargetRoom.name || confirmTargetRoom.roomId} will make the forwarded
-                      copy visible in an unencrypted room.
-                    </Text>
-                    <Box justifyContent="End" gap="200">
-                      <Button
-                        size="300"
-                        variant="Secondary"
-                        fill="None"
-                        onClick={() => setConfirmTargetRoom(undefined)}
-                      >
-                        <Text size="B300">Cancel</Text>
-                      </Button>
-                      <Button
-                        size="300"
-                        variant="Critical"
-                        onClick={() => handleForwardConfirmed(confirmTargetRoom)}
-                      >
-                        <Text size="B300">Forward anyway</Text>
-                      </Button>
-                    </Box>
-                  </Box>
-                </>
-              ) : (
-                <>
-                  <Header
-                    style={{
-                      padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
-                      borderBottomWidth: config.borderWidth.B300,
-                    }}
-                    variant="Surface"
-                    size="500"
-                  >
-                    <Box grow="Yes">
-                      <Text size="H4">
-                        {contents.length > 1
-                          ? t('modernization.forward.title_plural', { count: contents.length })
-                          : t('modernization.forward.title')}
-                      </Text>
-                    </Box>
-                    <IconButton size="300" onClick={handleClose} radii="300">
-                      <Icon src={Icons.Cross} />
-                    </IconButton>
-                  </Header>
-                  <Box direction="Column" gap="300" style={{ padding: config.space.S400 }}>
-                    <Input
-                      autoFocus
-                      variant="Background"
-                      placeholder="Search rooms"
-                      aria-label="Search rooms to forward to"
-                      value={query}
-                      onChange={(evt) => setQuery(evt.currentTarget.value)}
-                    />
-                    <MenuItem
-                      as="label"
-                      size="300"
-                      radii="300"
-                      after={
-                        <input
-                          type="checkbox"
-                          checked={quoteMode}
-                          aria-label="Forward as quote with context"
-                          onChange={(evt) => setQuoteMode(evt.currentTarget.checked)}
-                        />
-                      }
-                    >
-                      <Text className={css.MessageMenuItemText} as="span" size="T300" truncate>
-                        Forward as quote with context
-                      </Text>
-                    </MenuItem>
-                    {error && (
-                      <Text size="T300" style={{ color: color.Critical.Main }}>
-                        Failed to forward message. Please try again.
-                      </Text>
-                    )}
-                    <Scroll size="300" hideTrack visibility="Hover">
-                      <Box direction="Column" gap="100" style={{ maxHeight: '40vh' }}>
-                        {targets.map((targetRoom) => (
-                          <MenuItem
-                            key={targetRoom.roomId}
-                            size="300"
-                            radii="300"
-                            after={
-                              sendingRoomId === targetRoom.roomId ? (
-                                <Spinner size="100" />
-                              ) : (
-                                <Icon size="100" src={Icons.ArrowRight} />
-                              )
-                            }
-                            disabled={!!sendingRoomId}
-                            onClick={() => {
-                              handleForward(targetRoom);
-                            }}
-                          >
-                            <Text
-                              className={css.MessageMenuItemText}
-                              as="span"
-                              size="T300"
-                              truncate
-                            >
-                              {targetRoom.name || targetRoom.roomId}
-                            </Text>
-                          </MenuItem>
-                        ))}
-                        {targets.length === 0 && (
-                          <Text size="T300" priority="300">
-                            No rooms found.
-                          </Text>
-                        )}
-                      </Box>
-                    </Scroll>
-                  </Box>
-                </>
-              )}
-            </Dialog>
-          </FocusTrap>
-        </OverlayCenter>
-      </Overlay>
-      <MenuItem
-        size="300"
-        after={<Icon size="100" src={Icons.ArrowGoRight} />}
-        radii="300"
-        onClick={() => setOpen(true)}
-        {...props}
-        ref={ref}
-        aria-pressed={open}
-      >
-        <Text className={css.MessageMenuItemText} as="span" size="T300" truncate>
-          {label ?? t('modernization.forward.action')}
-        </Text>
-      </MenuItem>
-    </>
   );
 });
 
@@ -1739,11 +1461,6 @@ export const Message = as<'div', MessageProps>(
                                       </Text>
                                     </MenuItem>
                                   )}
-                                  <MessageForwardItem
-                                    room={room}
-                                    mEvent={mEvent}
-                                    onClose={closeMenu}
-                                  />
                                   {canPinEvent && (
                                     <MessagePinItem
                                       room={room}

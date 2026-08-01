@@ -4,7 +4,7 @@
 |-------|-------|
 | Updated | 2026-08-01 |
 | Tip | `8995add1` on `feature/matrix-rust-sdk-full-replacement` |
-| Production `matrix-js-sdk` import files (`synara/src`) | **164** (plan baseline was **220**) |
+| Production `matrix-js-sdk` import files (`synara/src`) | **163** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
 | Umbrella #39 | **Do not merge** without explicit approval |
 
@@ -30,7 +30,7 @@
 
 | PR | What |
 |----|------|
-| (none product) | Next: **V-SEND.R-PACK-READ** implement (inventory #287) or **V-SEND.R-FORWARD** TS dialog residual (#290) |
+| **This PR** | V-SEND.R-FORWARD residual close (MessageForwardItem + forward.ts deleted) |
 
 ## Left (ordered)
 
@@ -43,7 +43,7 @@
 
 ### Send / media residuals (inventories done; implement remains)
 - **V-SEND.R-PACK-READ** implement (inventory #287) — preferred next on `product.rs`
-- **V-SEND.R-FORWARD** implement (inventory #290; native send exists; TS dialog residual)
+- ~~**V-SEND.R-FORWARD**~~ **this PR** (dialog deleted; native presenter sole path)
 - **V-SEND.R-PACK-WRITE** / **PACK-UPLOAD** implement (inventory #292)
 - **V-SEND.R-AVATAR-UPLOAD** / **R-ROOM-PROFILE** implement (inventory #291)
 - **V-SEND.R-CALL-UPLOAD** / **R-GIF-PACK**
