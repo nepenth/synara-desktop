@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `324c40a4` — after #320 pack room ids (159 imports); #328 R-CALL-UPLOAD; #326 DEVTOOL inventory
-| Active work        | Next: #325 thumbnail native upload; pack-read JS utils (V-BURN); C3–C5 live; R-GIF-PACK
+| Integration tip    | `8bd7ee3f` — after #325 thumbnails; #320 pack room ids; #328 R-CALL-UPLOAD; GIF-PACK NOOP audit
+| Active work        | Next: pack-read JS utils (V-BURN); C3–C5 live; R-DEVTOOL low-pri
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | Desktop production import files **159** on tip (plan baseline was 220). Allowlist **163**.
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `324c40a4`**. Landed #320 pack room ids (**163→159**), #328 call-upload, #326 DEVTOOL inventory. Next: #325 thumbnail; JS utils delete gated; C3–C5. #39 gated. |
-| **Tip**        | `324c40a4` |
-| **Active PRs** | #325 thumbnail upload; #327 V-BURN readiness docs (hold — late only). |
+| **Now**        | **Tip `8bd7ee3f`**. Landed #325 thumbnails, #320 pack room ids (**159**), #328 call-upload. GIF-PACK NOOP. Next: JS utils delete gated; C3–C5. #39 gated. |
+| **Tip**        | `8bd7ee3f` |
+| **Active PRs** | this PR (GIF-PACK NOOP audit); #327 V-BURN readiness docs (hold — late only). |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
@@ -59,6 +59,11 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — V-SEND.R-GIF-PACK residual check
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.R-GIF-PACK** | **NOOP (docs-only)** | `gifProvider.ts:3-22,175-239` and `GifPicker.tsx:38-60,148-171` provide provider search/selection/download only; selected GIF send is native via `nativeSendGifOwner.ts:17-52` and `RoomInput.tsx:899-923`. No GIF pack/collection surface exists. #39 remains gated. |
 
 ### 2026-08-01 — scoreboard after #320 pack room ids + #328 call-upload
 

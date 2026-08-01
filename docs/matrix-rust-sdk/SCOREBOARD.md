@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Updated | 2026-08-01 |
-| Tip | `324c40a4` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip | `8bd7ee3f` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **159** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
 | Umbrella #39 | **Do not merge** without explicit user approval |
@@ -35,7 +35,9 @@
 | V-SEND.R-PACK-WRITE room | **#310** `matrix_set_room_image_pack` + RoomPacks/RoomImagePack fail-closed |
 | V-SEND.R-ROOM-PROFILE | **#313** `matrix_set_room_name`/`matrix_set_room_topic`/`matrix_set_room_avatar` + RoomProfile.tsx fail-closed |
 | V-SEND.R-PACK-UPLOAD | **#314** reuses `matrix_upload_media` via CompactUploadCardRenderer fail-closed (pack + compact image uploads) |
+| V-SEND.R-GIF-PACK | **NOOP** — `GifPicker` exposes provider search/selection only; selected GIF send is native via #264 and no GIF pack/collection owner exists |
 | V-SEND.R-CALL-UPLOAD | **#328** `CallWidgetDriver.uploadFile` → `uploadCallWidgetFileWithNativeOwner` / `matrix_upload_media` fail-closed |
+| Composer thumbnail (msgContent) | **#325** video thumbnails via `uploadMediaNative` / `matrix_upload_media` fail-closed |
 | V-SEND.R-DEVTOOL | [Docs-only inventory](v-send-devtool-inventory.md): all three developer-tools runtime files still use the JS client; implementation remains low priority |
 | CI | Parallel Validate #284 |
 
@@ -43,8 +45,7 @@
 
 | PR | What |
 |----|------|
-| **#325 (open)** | Video thumbnail upload via `uploadMediaNative` (msgContent belt-and-suspenders) |
-| (docs) | Next: pack-read **JS utils delete** (V-BURN-gated); **C3–C5** live verify; **R-GIF-PACK** |
+| (docs) | Next: pack-read **JS utils delete** (V-BURN-gated); **C3–C5** live verify |
 
 ## Left (ordered)
 
@@ -60,7 +61,7 @@
 - ~~**V-SEND.R-PACK-READ** snapshot~~ **#297**; ~~**subscribe**~~ **#318**; ~~**room ids**~~ **#320** (JS utils deletion remains gated on the non-native web fallback)
 - ~~**V-SEND.R-PACK-WRITE** personal~~ **#306**; ~~**global**~~ **#309**; ~~**room**~~ **#310**; ~~**PACK-UPLOAD**~~ **#314** (reuses `matrix_upload_media` #303 via CompactUploadCardRenderer)
 - ~~**V-SEND.R-AVATAR-UPLOAD** user profile~~ **#303**; ~~**R-ROOM-PROFILE**~~ **#313** (room-avatar media upload covered by #314 CompactUploadCardRenderer path)
-- ~~**V-SEND.R-CALL-UPLOAD**~~ **#328**; **R-GIF-PACK** remains; composer/thumbnail legacy-web fallbacks — [upload call-site audit](v-send-upload-residual-audit.md); **#325** open hardens msgContent thumbnails
+- ~~**V-SEND.R-CALL-UPLOAD**~~ **#328**; ~~**V-SEND.R-GIF-PACK**~~ **NOOP** ([audit](v-send-gif-pack-audit.md)); composer/thumbnail legacy-web fallbacks — [upload call-site audit](v-send-upload-residual-audit.md); ~~**#325**~~ msgContent thumbnails via `uploadMediaNative`
 - **V-SEND.R-DEVTOOL** (implementation remains low priority; [inventory complete](v-send-devtool-inventory.md))
 
 ### Convergence

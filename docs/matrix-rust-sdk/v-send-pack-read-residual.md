@@ -146,7 +146,7 @@ paths remain only for non-native web sessions.
 |------|--------|
 | **V-SEND.R-PACK-WRITE** (add/remove/enable/update packs: `RoomPacks.tsx`, `GlobalPacks.tsx`, `UserPack.tsx`, `RoomImagePack.tsx`, `UserImagePack.tsx` writes) | Separate residual — not this slice |
 | Pack image/avatar **upload** (`ImageTile.tsx` / `PackMeta.tsx` → `state/upload.ts` → `mx.uploadContent`) | V-SEND.R-PACK-UPLOAD — separate |
-| GIF pack/collection management | V-SEND.R-GIF-PACK — separate |
+| GIF pack/collection management | **NOOP** — the [GIF-pack audit](v-send-gif-pack-audit.md) found no such product surface on the measured tip |
 | Timeline media **display** (GIF playback, pack preview media bytes, authenticated media download) | **V-TIMELINE** — do not edit #240 (HOLD) |
 | Umbrella merge to `main` | **#39** — needs explicit user approval |
 | Cutover / dual-backend removal | #240 HOLD; no cutover |
