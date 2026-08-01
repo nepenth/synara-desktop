@@ -26,9 +26,13 @@ import {
 } from 'matrix-js-sdk';
 import { getCallCapabilities } from './utils';
 import { uploadCallWidgetFileWithNativeOwner } from './nativeCallMediaUploadOwner';
-import { downloadMedia, mxcUrlToHttp } from '../../utils/matrix';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { getNativeRoomListSnapshot } from '../../state/room-list/roomList';
 import { getLoadedLiveTimelineEvents, getRoomCurrentState } from '../../utils/timelineLifecycle';
+import {
+  getKnownRoomsFromNativeSnapshot,
+  throwNativeCallWidgetCapabilityUnavailable,
+} from './nativeCallWidgetOwner';
 
 export class CallWidgetDriver extends WidgetDriver {
   private allowedCapabilities: Set<Capability>;
@@ -309,9 +313,7 @@ export class CallWidgetDriver extends WidgetDriver {
   }
 
   public async getMediaConfig(): Promise<IGetMediaConfigResult> {
-    const client = this.mx;
-
-    return client.getMediaConfig();
+    return throwNativeCallWidgetCapabilityUnavailable('media config');
   }
 
   public async uploadFile(file: XMLHttpRequestBodyInit): Promise<{ contentUri: string }> {
@@ -325,17 +327,12 @@ export class CallWidgetDriver extends WidgetDriver {
     );
   }
 
-  public async downloadFile(contentUri: string): Promise<{ file: XMLHttpRequestBodyInit }> {
-    const httpUrl = mxcUrlToHttp(this.mx, contentUri, true);
-    if (!httpUrl) {
-      throw new Error('Call widget failed to download file! No http url!');
-    }
-    const blob = await downloadMedia(httpUrl);
-    return { file: blob };
+  public async downloadFile(_contentUri: string): Promise<{ file: XMLHttpRequestBodyInit }> {
+    return throwNativeCallWidgetCapabilityUnavailable('media download');
   }
 
   public getKnownRooms(): string[] {
-    return this.mx.getVisibleRooms().map((r) => r.roomId);
+    return getKnownRoomsFromNativeSnapshot(isSynaraDesktop(), getNativeRoomListSnapshot());
   }
 
   // eslint-disable-next-line class-methods-use-this

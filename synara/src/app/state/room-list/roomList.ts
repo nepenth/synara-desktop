@@ -17,6 +17,7 @@ const emptyRoomListSnapshot: NativeRoomListSnapshot = {
 };
 
 const nativeRoomListSnapshotAtom = atom<NativeRoomListSnapshot>(emptyRoomListSnapshot);
+let latestNativeRoomListSnapshot = emptyRoomListSnapshot;
 
 const baseRoomsAtom = atom<string[]>([]);
 export const allRoomsAtom = atom<string[], [RoomsAction], undefined>(
@@ -36,6 +37,12 @@ export const allRoomsAtom = atom<string[], [RoomsAction], undefined>(
 
 export const useNativeRoomListSnapshot = (): NativeRoomListSnapshot =>
   useAtomValue(nativeRoomListSnapshotAtom);
+
+/**
+ * Read the latest native snapshot outside React, for synchronous widget APIs.
+ * An empty snapshot means that no native room-list readback is available yet.
+ */
+export const getNativeRoomListSnapshot = (): NativeRoomListSnapshot => latestNativeRoomListSnapshot;
 
 const parseNativeRoomListSnapshot = (value: unknown): NativeRoomListSnapshot | null => {
   if (!value || typeof value !== 'object') return null;
@@ -83,6 +90,7 @@ export const useBindAllRoomsAtom = () => {
         );
         if (disposed || !session.available) return;
         if (session.value?.status !== 'logged_in') {
+          latestNativeRoomListSnapshot = emptyRoomListSnapshot;
           setSnapshot(emptyRoomListSnapshot);
           setRooms({ type: 'INITIALIZE', rooms: [] });
           return;
@@ -91,6 +99,7 @@ export const useBindAllRoomsAtom = () => {
         if (disposed || !result.available || !result.value) return;
         const snapshot = parseNativeRoomListSnapshot(result.value);
         if (!snapshot) return;
+        latestNativeRoomListSnapshot = snapshot;
         setSnapshot(snapshot);
         setRooms({ type: 'INITIALIZE', rooms: snapshot.orderedRoomIds });
       } catch {
@@ -101,6 +110,7 @@ export const useBindAllRoomsAtom = () => {
     };
 
     if (!isSynaraDesktop()) {
+      latestNativeRoomListSnapshot = emptyRoomListSnapshot;
       setSnapshot(emptyRoomListSnapshot);
       setRooms({ type: 'INITIALIZE', rooms: [] });
       return undefined;
