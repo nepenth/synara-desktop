@@ -13,12 +13,12 @@
 
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Last updated (UTC) | **2026-07-31**                                                                                                                                                                                                                                                        |
-| Integration tip    | `f4addd6f` — after [#280](https://github.com/nepenth/synara-desktop/pull/280) V-AUTH.3b / [#282](https://github.com/nepenth/synara-desktop/pull/282); **this PR** password loginUtil |
-| Active work        | **This PR** [#279](https://github.com/nepenth/synara-desktop/pull/279) desktop password login fail-closed native-only; [#283](https://github.com/nepenth/synara-desktop/pull/283) edit; [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD |
+| Last updated (UTC) | **2026-08-01**
+| Integration tip    | `0152c460` — after #287 pack-read inventory; #284 CI parallel; #240 timeline contract; #279 loginUtil
+| Active work        | **#283** V-SEND.R-EDIT (CI); **#285** V-TIMELINE C1 presenter cutover (CI); next C2 RoomTimeline delete + pack-read implement + forward residual
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
-| Import accounting  | … [#276](https://github.com/nepenth/synara-desktop/pull/276) V-AUTH.3 production **172→169** / allowlist **175→171**. [#280] V-AUTH.3b import delta **0**. **This PR (password loginUtil):** production import files **169→167** / allowlist **171→169**. |
+| Import accounting  | Desktop production import files **165** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
 | Dual backend       | **`false`** (forbidden forever)                                                                                                                                                                                                                                       |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                                                                                                                                                              |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                                                                                                                                                  |
@@ -32,10 +32,7 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip after #286**. **This PR** V-SEND.R-EDIT native message edit. #285 timeline cutover C1 in flight. |
-| **Tip**        | `f4addd6f` merge [#280](https://github.com/nepenth/synara-desktop/pull/280) V-AUTH.3b UIA non-retention. |
-| **Active PRs** | **This PR** [#279](https://github.com/nepenth/synara-desktop/pull/279); [#283](https://github.com/nepenth/synara-desktop/pull/283); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. |
-| **Blocked**    | Merging plateau D0.6 (#221); claiming V-TIMELINE cutover (#240 HOLD); starting new media/widgets/etc before residual queue; merging L1 foundations; umbrella #39. |
+| **Now**        | **Tip after #288**. **This PR** V-SEND.R-EDIT. #285 C1 cutover + #289 C2 delete RoomTimeline in flight. |
 
 ---
 
@@ -59,6 +56,23 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — progress honesty scoreboard
+
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **Integration tip** | `0152c460` | After #287 pack-read inventory |
+| current | **Auth residual** | **loginUtil DONE #279**; UIA multi-stage non-retention #280; discovery #276 | Desktop password fail-closed native-only |
+| current | **V-TIMELINE** | Contract **#240** merged; cutover map **#286**; C1 presenter select **#285** in flight | C2–C5 residual; RoomView still JS until #285 lands |
+| current | **V-SEND residual** | Poll-thread #282 DONE; edit #283 in flight; pack-read inventory #287 | Forward/avatar/pack-write still open |
+| current | **CI** | Parallel Validate Rust∥Node **#284** | Path scopes; quality gates preserved |
+| current | **Import files (prod)** | **165** under synara/src | Down from plan 220 |
+
+
+### 2026-07-31 — V-SEND.R-PACK-READ residual inventory
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.R-PACK-READ** | **This PR** | Docs-only inventory of sticker/emoji pack **read** residual (send is native #264): `custom-emoji/utils.ts`, `useImagePacks.ts`, `useImagePackRooms.ts` + consumers read `PoniesEmoteRooms`/`PoniesRoomEmotes`/`PoniesUserEmotes` on live JS client. See [v-send-pack-read-residual.md](v-send-pack-read-residual.md). |
 
 ### 2026-07-31 — V-TIMELINE cutover approved + CI parallel Validate
 
