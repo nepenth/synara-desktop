@@ -1,10 +1,11 @@
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import type { ImagePack } from '../../plugins/custom-emoji/ImagePack';
-import type { PackContent } from '../../plugins/custom-emoji/types';
+import type { PackContent, EmoteRoomsContent } from '../../plugins/custom-emoji/types';
 import {
   getGlobalImagePacksWithNativeOwner,
   getRoomImagePacksWithNativeOwner,
   getUserImagePackWithNativeOwner,
+  setGlobalImagePacksWithNativeOwner,
   setUserImagePackWithNativeOwner,
 } from './nativeImagePackOwner';
 
@@ -22,3 +23,8 @@ export const getGlobalImagePacksNative = (): Promise<ImagePack[] | 'legacy'> =>
 
 export const setUserImagePackNative = (content: PackContent): Promise<'native' | 'legacy'> =>
   setUserImagePackWithNativeOwner(content, isSynaraDesktop(), invoke);
+
+export const setGlobalImagePacksNative = (
+  content: EmoteRoomsContent
+): Promise<'native' | 'legacy'> =>
+  setGlobalImagePacksWithNativeOwner(content, isSynaraDesktop(), invoke);

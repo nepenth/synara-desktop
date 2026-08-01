@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `b21578e9` — after #306 personal pack-write; #304 scoreboard; #303 avatar; #302 C4/C5
-| Active work        | Next: pack-write global/room + PACK-UPLOAD; pack-read subscribe; R-ROOM-PROFILE; C3–C5 live
+| Integration tip    | `2f6f7f46` — after #308 scoreboard; #306 personal pack-write; #304 scoreboard; #303 avatar; #302 C4/C5
+| Active work        | Next: pack-write room + PACK-UPLOAD; pack-read subscribe; R-ROOM-PROFILE; C3–C5 live
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | Desktop production import files **163** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `b21578e9`**. Landed #306 personal pack-write (`matrix_set_user_image_pack`). Global/room/PACK-UPLOAD residual. Next serial: pack-write remainder or pack-read subscribe. #39 gated. |
-| **Tip**        | `b21578e9` |
-| **Active PRs** | none product open after #306. |
+| **Now**        | **Tip `2f6f7f46`**. Landed #306 personal pack-write (`matrix_set_user_image_pack`) and global pack-write (`matrix_set_global_image_packs`). Room/PACK-UPLOAD residual. Next serial: pack-write room or pack-read subscribe. #39 gated. |
+| **Tip**        | `2f6f7f46` |
+| **Active PRs** | none product open after global pack-write. |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
@@ -59,6 +59,11 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — V-SEND.R-PACK-WRITE global packs
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.R-PACK-WRITE** | **This PR** | Native `matrix_set_global_image_packs` (`im.ponies.emote_rooms`) + GlobalPacks.tsx fail-closed on desktop; room pack write residual remains. |
 
 ### 2026-08-01 — scoreboard after #306 pack-write personal
 | When (UTC) | Item | Result | Notes |

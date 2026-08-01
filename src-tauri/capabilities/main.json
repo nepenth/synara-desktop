@@ -110,6 +110,7 @@
     "allow-matrix-mdirect-remove",
     "allow-matrix-get-user-image-pack",
     "allow-matrix-set-user-image-pack",
+    "allow-matrix-set-global-image-packs",
     "allow-matrix-upload-media",
     "allow-matrix-set-own-avatar",
     "allow-matrix-set-own-display-name",

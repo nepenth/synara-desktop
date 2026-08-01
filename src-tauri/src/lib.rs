@@ -413,6 +413,7 @@ pub fn run() {
             matrix::auth::product::matrix_get_room_image_packs,
             matrix::auth::product::matrix_get_global_image_packs,
             matrix::auth::product::matrix_set_user_image_pack,
+            matrix::auth::product::matrix_set_global_image_packs,
             matrix::auth::product::matrix_later_snapshot,
             matrix::auth::product::matrix_later_upsert,
             matrix::auth::product::matrix_later_complete,

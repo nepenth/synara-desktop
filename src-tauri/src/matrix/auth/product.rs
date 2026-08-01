@@ -53,13 +53,13 @@ use super::{
 use crate::matrix::account_data::{
     add_room_to_mdirect, clear_completed_later_live, complete_later_item_live,
     complete_room_todo_item_live, delete_room_note_item_live, mark_later_reminded_live,
-    move_room_todo_item_live, remove_room_from_mdirect, set_user_image_pack,
-    snapshot_global_image_packs, snapshot_later, snapshot_mdirect, snapshot_room_image_packs,
-    snapshot_room_notes, snapshot_user_image_pack, snooze_later_item_live, upsert_later_item,
-    upsert_room_note_item, NativeGlobalImagePacksSnapshot, NativeLaterSnapshot,
-    NativeMDirectMutationResult, NativeMDirectSnapshot, NativeRoomImagePacksSnapshot,
-    NativeRoomNotesSnapshot, NativeUserImagePackSnapshot, RoomNoteMoveDirection, SynaraLaterItem,
-    SynaraRoomNoteItem,
+    move_room_todo_item_live, remove_room_from_mdirect, set_global_image_packs,
+    set_user_image_pack, snapshot_global_image_packs, snapshot_later, snapshot_mdirect,
+    snapshot_room_image_packs, snapshot_room_notes, snapshot_user_image_pack,
+    snooze_later_item_live, upsert_later_item, upsert_room_note_item,
+    NativeGlobalImagePacksSnapshot, NativeLaterSnapshot, NativeMDirectMutationResult,
+    NativeMDirectSnapshot, NativeRoomImagePacksSnapshot, NativeRoomNotesSnapshot,
+    NativeUserImagePackSnapshot, RoomNoteMoveDirection, SynaraLaterItem, SynaraRoomNoteItem,
 };
 use crate::matrix::backup::live::{
     self as live_backup, NativeBackupOperationResult, NativeBackupStatus,
@@ -1609,6 +1609,26 @@ pub async fn matrix_set_user_image_pack(
         active.client.clone()
     };
     set_user_image_pack(&client, content)
+        .await
+        .map_err(map_pack_write_error)?;
+    Ok(MatrixProfileWriteResult { status: "ok" })
+}
+
+/// V-SEND.R-PACK-WRITE — replace the global `im.ponies.emote_rooms`
+/// account-data content (add/remove/enable global pack references). Fail-closed:
+/// when a native session is live this command is the only path; the JS
+/// `mx.setAccountData(PoniesEmoteRooms)` must not be used as a fallback.
+#[tauri::command]
+pub async fn matrix_set_global_image_packs(
+    state: State<'_, MatrixAuthState>,
+    content: serde_json::Value,
+) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
+    let client = {
+        let session = state.session.lock().await;
+        let active = require_session(session.as_ref())?;
+        active.client.clone()
+    };
+    set_global_image_packs(&client, content)
         .await
         .map_err(map_pack_write_error)?;
     Ok(MatrixProfileWriteResult { status: "ok" })

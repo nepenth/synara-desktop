@@ -7,6 +7,7 @@ import {
   getUserImagePackWithNativeOwner,
   imagePackFromNativeDto,
   isNativePackReadSession,
+  setGlobalImagePacksWithNativeOwner,
   setUserImagePackWithNativeOwner,
   type NativeInvoke,
 } from '../nativeImagePackOwner';
@@ -64,6 +65,9 @@ const loggedInInvoke: NativeInvoke = async (command) => {
     };
   }
   if (command === 'matrix_set_user_image_pack') {
+    return { available: true, value: { status: 'ok' } };
+  }
+  if (command === 'matrix_set_global_image_packs') {
     return { available: true, value: { status: 'ok' } };
   }
   return { available: false };
@@ -140,6 +144,29 @@ test('user pack write fail-closed when command missing', async () => {
         true,
         failClosedInvoke
       ),
+    /unavailable/i
+  );
+});
+
+test('global pack write legacy when not desktop', async () => {
+  assert.equal(
+    await setGlobalImagePacksWithNativeOwner({ rooms: {} }, false, loggedInInvoke),
+    'legacy'
+  );
+});
+
+test('global pack write native ok', async () => {
+  const result = await setGlobalImagePacksWithNativeOwner(
+    { rooms: { '!r:example.org': { '': {} } } },
+    true,
+    loggedInInvoke
+  );
+  assert.equal(result, 'native');
+});
+
+test('global pack write fail-closed when command missing', async () => {
+  await assert.rejects(
+    () => setGlobalImagePacksWithNativeOwner({ rooms: {} }, true, failClosedInvoke),
     /unavailable/i
   );
 });
