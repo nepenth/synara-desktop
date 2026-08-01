@@ -14,11 +14,11 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `2a23f730` — after #352 PROGRESS; #349 call-widget residual; residual Left unchanged (pack utils V-BURN; C3–C5 live; DEVTOOL gate; #327 HOLD)
+| Integration tip    | `e4cf1a5f` — P1.6 allowlist/live-import reconciliation; residual queue unchanged (pack utils V-BURN; C3–C5 live; DEVTOOL gate; #327 HOLD)
 | Active work        | C3–C5 live-proof verification; R-DEVTOOL remains gated; #349 is docs-only residual inventory; V-BURN not started; #327 HOLD forever this cycle
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                                                                                                                                                         |
-| Import accounting  | Desktop production import files **159** on tip (plan baseline was 220). Allowlist **163**.
+| Import accounting  | Desktop production import files **159** on tip (plan baseline was 220). Allowlist **163**; four retained allowlist entries have no live direct importer (see the current work-log entry below).
 | Dual backend       | **`false`** (forbidden forever)                                                                                                                                                                                                                                       |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                                                                                                                                                              |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                                                                                                                                                  |
@@ -32,8 +32,8 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `2a23f730`**. Call-widget residual inventory #349; residual queue stable. Next: C3–C5 live or V-BURN-gated pack utils. #327 HOLD. #39 gated. |
-| **Tip**        | `2a23f730` |
+| **Now**        | **Tip `e4cf1a5f`**. P1.6 allowlist/live-import reconciliation is docs-only; residual queue stable. Next: C3–C5 live or V-BURN-gated pack utils. #327 HOLD. #39 gated. |
+| **Tip**        | `e4cf1a5f` |
 | **Active PRs** | #327 V-BURN readiness (hold — late only). |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; #327 V-BURN forever this cycle; umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
@@ -59,6 +59,26 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — tip `e4cf1a5f` — P1.6 allowlist/live-import gap
+
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **Integration tip** | **This PR** | Tip `e4cf1a5f` on `feature/matrix-rust-sdk-full-replacement`; no product code or residual state changed. |
+| current | **Allowlist/live-import reconciliation** | **NOOP — docs-only evidence** | The committed P1.6 allowlist has `pathCount: 163`; the generated desktop-runtime inventory has `productionImportFiles: 159`. The four-path difference is a set difference, not a deletion delta. |
+| current | **Allowlist policy** | **Preserved at 163** | All four paths below remain present and tracked at this tip, so there is no proof supporting allowlist ratcheting. New production importers remain fail-closed; `dual_backend` stays forbidden, V-BURN/#327 stays held, and #39 stays gated. |
+
+The allowlisted entries with no live direct `matrix-js-sdk` importer are:
+
+- `synara/src/app/pages/client/inbox/Invites.tsx`
+- `synara/src/app/state/room-list/inviteList.ts`
+- `synara/src/app/utils/later.ts`
+- `synara/src/app/utils/roomNotes.ts`
+
+The comparison uses the inventory’s `productionImportFiles` field, not its broader
+production `fileCount`: the latter also records two production-only networking
+findings (`synara/src/app/cs-api.ts` and `synara/src/sw.ts`) that are not SDK
+importers and are outside the allowlist set difference.
 
 ### 2026-08-01 — tip `13d5f6cf` after #349 (prior #347)
 
