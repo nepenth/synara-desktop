@@ -327,7 +327,8 @@ export class CallWidgetDriver extends WidgetDriver {
     );
   }
 
-  public async downloadFile(_contentUri: string): Promise<{ file: XMLHttpRequestBodyInit }> {
+  public async downloadFile(contentUri: string): Promise<{ file: XMLHttpRequestBodyInit }> {
+    void contentUri;
     return throwNativeCallWidgetCapabilityUnavailable('media download');
   }
 
