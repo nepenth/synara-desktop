@@ -32,7 +32,7 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip after #284** parallel Validate + cutover policy. **This PR** V-SEND.R-EDIT (`matrix_edit_message`). Next: timeline presenter cutover. |
+| **Now**        | **Tip after #286**. **This PR** V-SEND.R-EDIT native message edit. #285 timeline cutover C1 in flight. |
 | **Tip**        | `f4addd6f` merge [#280](https://github.com/nepenth/synara-desktop/pull/280) V-AUTH.3b UIA non-retention. |
 | **Active PRs** | **This PR** [#279](https://github.com/nepenth/synara-desktop/pull/279); [#283](https://github.com/nepenth/synara-desktop/pull/283); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. |
 | **Blocked**    | Merging plateau D0.6 (#221); claiming V-TIMELINE cutover (#240 HOLD); starting new media/widgets/etc before residual queue; merging L1 foundations; umbrella #39. |
