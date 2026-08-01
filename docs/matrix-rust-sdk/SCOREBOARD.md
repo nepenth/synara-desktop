@@ -3,8 +3,8 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `ab3997fa` on `feature/matrix-rust-sdk-full-replacement` |
-| Production `matrix-js-sdk` import files (`synara/src`) | **154** (plan baseline was **220**)                      |
+| Tip                                                    | `932d9aec` on `feature/matrix-rust-sdk-full-replacement` |
+| Production `matrix-js-sdk` import files (`synara/src`) | **153** (plan baseline was **220**)                      |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
 
