@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Updated | 2026-08-01 |
-| Tip | `0152c460` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip | `06709d31` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **165** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
 | Umbrella #39 | **Do not merge** without explicit approval |
@@ -19,30 +19,32 @@
 | Poll-in-thread | #282 |
 | Timeline contract | #240 native DTO/stream/actions + presenter code |
 | Cutover policy | Approved; residual map #286; pack-read inventory #287 |
+| Send residual inventories | forward #290; avatar #291; pack-write #292 (docs only) |
+| V-SEND.R-EDIT | **#283** native `m.replace` merged |
+| V-TIMELINE.C3 checklist | **#294** docs-only stream verify checklist |
 | CI | Parallel Validate #284 |
 
 ## In flight
 
 | PR | What |
 |----|------|
-| #283 | V-SEND.R-EDIT native `m.replace` |
-| #285 | V-TIMELINE.C1 select NativeTimelinePresenter in RoomView |
-| #288 | This scoreboard docs PR |
+| #285 | V-TIMELINE.C1 select NativeTimelinePresenter in RoomView (ready; CI) |
+| #289 | V-TIMELINE.C2 delete RoomTimeline (draft, stacked on #285) |
 
 ## Left (ordered)
 
 ### Timeline cutover
 1. **C1** land #285 (presenter selection)
 2. **C2** delete RoomTimeline.tsx when unmounted + clean dead imports/comments
-3. **C3** re-verify stream deltas after C1 (map claims no gap)
+3. **C3** live re-verify stream deltas after C1 (checklist #294; map claims no gap)
 4. **C4** media/render parity on selected presenter
 5. **C5** pins/notes/jump live proof
 
-### Send / media residuals
-- **V-SEND.R-PACK-READ** implement (inventory #287)
-- **V-SEND.R-PACK-WRITE** / **PACK-UPLOAD**
-- **V-SEND.R-FORWARD**
-- **V-SEND.R-AVATAR-UPLOAD** / **R-ROOM-PROFILE**
+### Send / media residuals (inventories done; implement remains)
+- **V-SEND.R-PACK-READ** implement (inventory #287) — next product after edit
+- **V-SEND.R-PACK-WRITE** / **PACK-UPLOAD** implement (inventory #292)
+- **V-SEND.R-FORWARD** implement (inventory #290; native send exists; TS dialog residual)
+- **V-SEND.R-AVATAR-UPLOAD** / **R-ROOM-PROFILE** implement (inventory #291)
 - **V-SEND.R-CALL-UPLOAD** / **R-GIF-PACK**
 - **V-SEND.R-DEVTOOL** (low priority)
 
