@@ -28,7 +28,7 @@ import { useStateEventCallback } from './useStateEventCallback';
 export const useUserImagePack = (): ImagePack | undefined => {
   const mx = useMatrixClient();
   const [userPack, setUserPack] = useState<ImagePack | undefined>(() =>
-    isSynaraDesktop() ? undefined : getUserImagePack(mx),
+    isSynaraDesktop() ? undefined : getUserImagePack(mx)
   );
   const [nativeActive, setNativeActive] = useState(false);
 
@@ -65,8 +65,8 @@ export const useUserImagePack = (): ImagePack | undefined => {
           setUserPack(getUserImagePack(mx));
         }
       },
-      [mx, nativeActive],
-    ),
+      [mx, nativeActive]
+    )
   );
 
   return userPack;
@@ -75,7 +75,7 @@ export const useUserImagePack = (): ImagePack | undefined => {
 export const useGlobalImagePacks = (): ImagePack[] => {
   const mx = useMatrixClient();
   const [globalPacks, setGlobalPacks] = useState<ImagePack[]>(() =>
-    isSynaraDesktop() ? [] : getGlobalImagePacks(mx),
+    isSynaraDesktop() ? [] : getGlobalImagePacks(mx)
   );
   const [nativeActive, setNativeActive] = useState(false);
 
@@ -111,8 +111,8 @@ export const useGlobalImagePacks = (): ImagePack[] => {
           setGlobalPacks(getGlobalImagePacks(mx));
         }
       },
-      [mx, nativeActive],
-    ),
+      [mx, nativeActive]
+    )
   );
 
   useStateEventCallback(
@@ -126,15 +126,15 @@ export const useGlobalImagePacks = (): ImagePack[] => {
         if (eventType === StateEvent.PoniesRoomEmotes && roomId && typeof stateKey === 'string') {
           const global = !!globalPacks.find(
             (pack) =>
-              pack.address && pack.address.roomId === roomId && pack.address.stateKey === stateKey,
+              pack.address && pack.address.roomId === roomId && pack.address.stateKey === stateKey
           );
           if (global) {
             setGlobalPacks(getGlobalImagePacks(mx));
           }
         }
       },
-      [mx, globalPacks, nativeActive],
-    ),
+      [mx, globalPacks, nativeActive]
+    )
   );
 
   return globalPacks;
@@ -143,7 +143,7 @@ export const useGlobalImagePacks = (): ImagePack[] => {
 export const useRoomImagePack = (room: Room, stateKey: string): ImagePack | undefined => {
   const mx = useMatrixClient();
   const [roomPack, setRoomPack] = useState<ImagePack | undefined>(() =>
-    isSynaraDesktop() ? undefined : getRoomImagePack(room, stateKey),
+    isSynaraDesktop() ? undefined : getRoomImagePack(room, stateKey)
   );
   const [nativeActive, setNativeActive] = useState(false);
 
@@ -183,8 +183,8 @@ export const useRoomImagePack = (room: Room, stateKey: string): ImagePack | unde
           setRoomPack(getRoomImagePack(room, stateKey));
         }
       },
-      [room, stateKey, nativeActive],
-    ),
+      [room, stateKey, nativeActive]
+    )
   );
 
   return roomPack;
@@ -193,7 +193,7 @@ export const useRoomImagePack = (room: Room, stateKey: string): ImagePack | unde
 export const useRoomImagePacks = (room: Room): ImagePack[] => {
   const mx = useMatrixClient();
   const [roomPacks, setRoomPacks] = useState<ImagePack[]>(() =>
-    isSynaraDesktop() ? [] : getRoomImagePacks(room),
+    isSynaraDesktop() ? [] : getRoomImagePacks(room)
   );
   const [nativeActive, setNativeActive] = useState(false);
 
@@ -232,8 +232,8 @@ export const useRoomImagePacks = (room: Room): ImagePack[] => {
           setRoomPacks(getRoomImagePacks(room));
         }
       },
-      [room, nativeActive],
-    ),
+      [room, nativeActive]
+    )
   );
 
   return roomPacks;
@@ -243,7 +243,7 @@ export const useRoomsImagePacks = (rooms: Room[]) => {
   const mx = useMatrixClient();
   const roomKey = rooms.map((r) => r.roomId).join(',');
   const [roomPacks, setRoomPacks] = useState<ImagePack[]>(() =>
-    isSynaraDesktop() ? [] : rooms.flatMap(getRoomImagePacks),
+    isSynaraDesktop() ? [] : rooms.flatMap(getRoomImagePacks)
   );
   const [nativeActive, setNativeActive] = useState(false);
 
@@ -297,8 +297,8 @@ export const useRoomsImagePacks = (rooms: Room[]) => {
           setRoomPacks(rooms.flatMap(getRoomImagePacks));
         }
       },
-      [rooms, nativeActive],
-    ),
+      [rooms, nativeActive]
+    )
   );
 
   return roomPacks;
@@ -315,7 +315,7 @@ export const useRelevantImagePacks = (usage: ImageUsage, rooms: Room[]): ImagePa
 
     const relPacks = packs.concat(
       globalPacks,
-      roomsPacks.filter((pack) => !globalPackIds.has(pack.id)),
+      roomsPacks.filter((pack) => !globalPackIds.has(pack.id))
     );
 
     return relPacks.filter((pack) => pack.getImages(usage).length > 0);

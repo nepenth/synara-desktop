@@ -32,7 +32,7 @@ export type NativeGlobalImagePacksSnapshot = {
 
 export type NativeInvoke = (
   command: string,
-  args?: Record<string, unknown>,
+  args?: Record<string, unknown>
 ) => Promise<DesktopInvokeResult<unknown>>;
 
 /**
@@ -41,7 +41,7 @@ export type NativeInvoke = (
  */
 export async function isNativePackReadSession(
   desktopAvailable: boolean,
-  invoke: NativeInvoke,
+  invoke: NativeInvoke
 ): Promise<boolean> {
   if (!desktopAvailable) return false;
   const session = await invoke('matrix_session_snapshot');
@@ -60,7 +60,7 @@ export function imagePackFromNativeDto(dto: NativeImagePackDto): ImagePack {
 
 export async function getUserImagePackWithNativeOwner(
   desktopAvailable: boolean,
-  invoke: NativeInvoke,
+  invoke: NativeInvoke
 ): Promise<ImagePack | undefined | 'legacy'> {
   if (!(await isNativePackReadSession(desktopAvailable, invoke))) {
     return 'legacy';
@@ -80,7 +80,7 @@ export async function getUserImagePackWithNativeOwner(
 export async function getRoomImagePacksWithNativeOwner(
   roomId: string,
   desktopAvailable: boolean,
-  invoke: NativeInvoke,
+  invoke: NativeInvoke
 ): Promise<ImagePack[] | 'legacy'> {
   if (!(await isNativePackReadSession(desktopAvailable, invoke))) {
     return 'legacy';
@@ -98,7 +98,7 @@ export async function getRoomImagePacksWithNativeOwner(
 
 export async function getGlobalImagePacksWithNativeOwner(
   desktopAvailable: boolean,
-  invoke: NativeInvoke,
+  invoke: NativeInvoke
 ): Promise<ImagePack[] | 'legacy'> {
   if (!(await isNativePackReadSession(desktopAvailable, invoke))) {
     return 'legacy';

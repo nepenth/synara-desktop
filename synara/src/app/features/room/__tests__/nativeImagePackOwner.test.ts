@@ -77,7 +77,7 @@ export async function testLegacyWhenNotDesktop() {
   assert.equal(await getGlobalImagePacksWithNativeOwner(false, loggedInInvoke), 'legacy');
   assert.equal(
     await getRoomImagePacksWithNativeOwner('!r:example.org', false, loggedInInvoke),
-    'legacy',
+    'legacy'
   );
 }
 
@@ -103,11 +103,11 @@ export async function testNativeRoomAndGlobalPacks() {
 export async function testFailClosedWhenCommandMissing() {
   await assert.rejects(
     () => getUserImagePackWithNativeOwner(true, failClosedInvoke),
-    /unavailable/i,
+    /unavailable/i
   );
   await assert.rejects(
     () => getGlobalImagePacksWithNativeOwner(true, failClosedInvoke),
-    /unavailable/i,
+    /unavailable/i
   );
 }
 
