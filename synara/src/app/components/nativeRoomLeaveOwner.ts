@@ -1,4 +1,4 @@
-import type { DesktopInvokeResult } from '../../utils/desktop';
+import type { DesktopInvokeResult } from '../utils/desktop';
 
 type NativeSessionSnapshot = {
   status: 'logged_out' | 'logged_in';
