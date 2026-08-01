@@ -94,7 +94,7 @@ profile form must not fall through to `mx.uploadContent` / `mx.setAvatarUrl` /
 | Item | Status |
 |------|--------|
 | **V-SEND.R-PACK-UPLOAD** (image-pack avatar upload via `PackMeta.tsx`) | Separate residual — not this slice |
-| **V-SEND.R-FORWARD** / **V-SEND.R-CALL-UPLOAD** / **V-SEND.R-GIF-PACK** | Separate residuals |
+| **V-SEND.R-FORWARD** / **V-SEND.R-CALL-UPLOAD** | Separate residuals; GIF-pack audit is a NOOP ([evidence](v-send-gif-pack-audit.md)) |
 | **V-SEND.R-EDIT** (`m.replace`) | Open **#283** — do not touch |
 | **V-TIMELINE** cutover (RoomTimeline delete, presenter selection) | Open **#285/#289** — do not touch |
 | Umbrella merge to `main` | **#39** — needs explicit user approval |
