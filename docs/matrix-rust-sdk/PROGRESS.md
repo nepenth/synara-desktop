@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `8995add1` — after #289 C2 delete RoomTimeline; #285 C1; #293 scoreboard; #294 C3; #283 edit
-| Active work        | **this** V-SEND.R-FORWARD delete; pack-read implement next; C3–C5 live proof
+| Integration tip    | `1695b9f7` — after #296 R-FORWARD; #295 scoreboard; #289 C2; #285 C1; #283 edit
+| Active work        | **this** V-SEND.R-PACK-READ implement; C3–C5 live proof remaining
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | Desktop production import files **163** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `8995add1`**. Landed #285 C1 + #289 C2 (RoomTimeline deleted; imports **164**). Next: pack-read implement, C3–C5 live, R-FORWARD dialog. #39 gated. |
-| **Tip**        | `8995add1` |
-| **Active PRs** | none product open; pack-read implement next. |
+| **Now**        | **Tip `1695b9f7`**. **This PR** V-SEND.R-PACK-READ native pack snapshot get + hooks fail-closed. Landed #296 forward. Next: pack subscribe residual, C3–C5. #39 gated. |
+| **Tip**        | `1695b9f7` |
+| **Active PRs** | **this** pack-read implement. |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
@@ -59,6 +59,12 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — V-SEND.R-PACK-READ implement
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.R-PACK-READ** | **This PR** | Native `matrix_get_*_image_packs` + TS owner + `useImagePacks` fail-closed. Subscribe residual remains. dual_backend forbidden. |
+
 
 ### 2026-08-01 — V-SEND.R-FORWARD residual close
 | When (UTC) | Item | Result | Notes |

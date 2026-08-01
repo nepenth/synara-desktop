@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Updated | 2026-08-01 |
-| Tip | `8995add1` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip | `1695b9f7` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **163** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
 | Umbrella #39 | **Do not merge** without explicit approval |
@@ -24,13 +24,14 @@
 | V-TIMELINE.C3 checklist | **#294** docs-only stream verify checklist |
 | V-TIMELINE.C1 | **#285** NativeTimelinePresenter owns RoomView |
 | V-TIMELINE.C2 | **#289** delete `RoomTimeline` (imports **165→164**, allowlist **169→168**) |
+| V-SEND.R-FORWARD | **#296** legacy MessageForwardItem + forward.ts deleted |
 | CI | Parallel Validate #284 |
 
 ## In flight
 
 | PR | What |
 |----|------|
-| **This PR** | V-SEND.R-FORWARD residual close (MessageForwardItem + forward.ts deleted) |
+| **This PR** | V-SEND.R-PACK-READ implement (native snapshot get + hooks) |
 
 ## Left (ordered)
 
@@ -42,8 +43,8 @@
 5. **C5** pins/notes/jump live proof
 
 ### Send / media residuals (inventories done; implement remains)
-- **V-SEND.R-PACK-READ** implement (inventory #287) — preferred next on `product.rs`
-- ~~**V-SEND.R-FORWARD**~~ **this PR** (dialog deleted; native presenter sole path)
+- ~~**V-SEND.R-FORWARD**~~ **#296** (dialog deleted; native presenter sole path)
+- **V-SEND.R-PACK-READ** **this PR** (inventory #287; subscribe residual remains)
 - **V-SEND.R-PACK-WRITE** / **PACK-UPLOAD** implement (inventory #292)
 - **V-SEND.R-AVATAR-UPLOAD** / **R-ROOM-PROFILE** implement (inventory #291)
 - **V-SEND.R-CALL-UPLOAD** / **R-GIF-PACK**

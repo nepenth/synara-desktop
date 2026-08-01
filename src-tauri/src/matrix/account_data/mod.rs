@@ -8,12 +8,18 @@
 #![allow(unused_imports)]
 
 mod error;
+mod image_packs;
 mod index;
 pub mod later;
 pub mod live;
 pub mod room_notes;
 
 pub use error::AccountDataError;
+pub use image_packs::{
+    snapshot_global_image_packs, snapshot_room_image_packs, snapshot_user_image_pack,
+    NativeGlobalImagePacksSnapshot, NativeImagePack, NativeRoomImagePacksSnapshot,
+    NativeUserImagePackSnapshot,
+};
 pub use index::{
     AccountDataEntry, AccountDataIndex, MAX_CONTENT_FIELDS, MAX_GLOBAL_TYPES, MAX_KEY_LEN,
     MAX_ROOMS_WITH_ACCOUNT_DATA, MAX_ROOM_TYPES, MAX_VALUE_LEN, TYPE_DIRECT, TYPE_FULLY_READ,
