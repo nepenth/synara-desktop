@@ -12,13 +12,13 @@
 > [docs/matrix-rust-sdk/PROGRESS.md](https://github.com/nepenth/synara-desktop/blob/feature/matrix-rust-sdk-full-replacement/docs/matrix-rust-sdk/PROGRESS.md)
 
 | Field              | Value                                                                                                                                |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**                                                                                                                       |
-| Integration tip    | `5f202231` — after #364 leave, #362 CallWidget, #363 composer fallbacks, #365 pack get\* delete                                      |
+| Integration tip    | `932d9aec` — after #364 leave, #362 CallWidget, #363 composer fallbacks, #365 pack get\* delete                                      | — after #372 create, #371 /leave, #369 join, #364 leave |
 | Active work        | Next: room join/create native vertical; C3–C5 live proofs; members/power. R-DEVTOOL gated; V-BURN HOLD                               |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
-| Import accounting  | Desktop production import files **154** on tip (plan baseline was 220). Allowlist **154** (matched after #365/#364 deletions).       |
+| Import accounting  | Desktop production import files **153** on tip (plan baseline was 220). Allowlist **154** (matched after #365/#364 deletions).       |
 | Dual backend       | **`false`** (forbidden forever)                                                                                                      |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                             |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                 |
@@ -32,8 +32,8 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `5f202231`**. Join **#369** merged. Next: createRoom vertical; C3–C5 live; members/power. #39 gated.                                                                                                                             |
-| **Tip**        | `5f202231`                                                                                                                                                                                                                             |
+| **Now**        | **Tip `932d9aec`**. Leave/join/create native. Next: members/power or C3–C5 live. #39 gated.                                                                                                                                            |
+| **Tip**        | `932d9aec`                                                                                                                                                                                                                             |
 | **Active PRs** | none (V-BURN HOLD; no product PR).                                                                                                                                                                                                     |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
@@ -59,6 +59,15 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — tip `932d9aec` — room create #372
+
+| When (UTC) | Item                | Result                                        | Notes                                                                 |
+| ---------- | ------------------- | --------------------------------------------- | --------------------------------------------------------------------- |
+| current    | **Integration tip** | **This PR**                                   | Tip `932d9aec` after #372 create vertical.                            |
+| current    | **Room create**     | **#372**                                      | `matrix_room_create` + CreateRoom/Space/Chat + `/create` fail-closed. |
+| current    | **Lifecycle**       | **Leave #364/#371 · Join #369 · Create #372** | Next: members/power; C3–C5 live; V-BURN HOLD.                         |
+| current    | **Imports**         | **153**                                       | Allowlist matched on product PR inventory.                            |
 
 ### 2026-08-01 — tip `ab3997fa` after #369 room join
 
