@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `1695b9f7` — after #296 R-FORWARD; #295 scoreboard; #289 C2; #285 C1; #283 edit
-| Active work        | **this** V-SEND.R-PACK-READ implement; C3–C5 live proof remaining
+| Integration tip    | `83adef68` — after #297 pack-read; #298 residual truth; #296 forward; #289 C2; #285 C1; #283 edit
+| Active work        | Next pack-write / pack-read subscribe / avatar; C3–C5 live proof remaining
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | Desktop production import files **163** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `1695b9f7`**. **This PR** V-SEND.R-PACK-READ native pack snapshot get + hooks fail-closed. Landed #296 forward. Next: pack subscribe residual, C3–C5. #39 gated. |
-| **Tip**        | `1695b9f7` |
-| **Active PRs** | **this** pack-read implement. |
+| **Now**        | **Tip `83adef68`**. Landed #297 V-SEND.R-PACK-READ snapshot get + hooks. Subscribe residual remains. Next: pack-write / avatar / C3 live. #39 gated. |
+| **Tip**        | `83adef68` |
+| **Active PRs** | none product open after #297. |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
@@ -60,10 +60,16 @@ Update rules:
 
 ## Work log (newest first)
 
+### 2026-08-01 — scoreboard after #297 pack-read
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **Scoreboard** | **This PR** | Honesty after #297 pack-read snapshot + #298 residual truth + #296 forward. Tip `83adef68`. Imports **163**. Next: pack-write / subscribe / avatar. #39 gated. |
+
+
 ### 2026-08-01 — V-SEND.R-PACK-READ implement
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| current | **V-SEND.R-PACK-READ** | **This PR** | Native `matrix_get_*_image_packs` + TS owner + `useImagePacks` fail-closed. Subscribe residual remains. dual_backend forbidden. |
+| current | **V-SEND.R-PACK-READ** | **Merged #297** | Native `matrix_get_*_image_packs` + TS owner + `useImagePacks` fail-closed. Subscribe residual remains. dual_backend forbidden. |
 
 
 ### 2026-08-01 — V-SEND.R-FORWARD residual close
