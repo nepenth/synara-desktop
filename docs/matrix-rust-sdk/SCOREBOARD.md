@@ -3,7 +3,7 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `2a23f730` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip                                                    | `77f44208` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **159** (plan baseline was **220**)                      |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
@@ -55,9 +55,9 @@ run passes the relevant checklist.
 
 ## In flight
 
-| PR     | What                                                                      |
-| ------ | ------------------------------------------------------------------------- |
-| (docs) | Next: pack-read **JS utils delete** (V-BURN-gated); **C3–C5** live verify |
+| PR     | What                                                                                                                                                                                   |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| (docs) | Residual queue docs-converged; product idle. Next real work: **C3–C5** live session or a user reorder for **R-DEVTOOL/widget verticals**. Pack `get*` remains V-BURN-gated; #327 HOLD. |
 
 ## Left (residual queue)
 
