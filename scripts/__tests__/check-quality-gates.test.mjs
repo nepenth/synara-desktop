@@ -74,6 +74,19 @@ ${iosBuildStep}
           -- --nocapture
       - if: always()
         run: scripts/synapse-integration.sh reset
+  synapse-native-call-media:
+    name: Synapse native CallWidget media proof
+    needs: [changes]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - run: scripts/synapse-integration.sh up
+      - run: >
+          cargo test --locked
+          live_native_call_widget_media_paths_against_disposable_synapse_when_configured
+          -- --nocapture
+      - if: always()
+        run: scripts/synapse-integration.sh reset
   synapse-native-polls:
     name: Synapse native poll proof
     needs: [changes]
@@ -116,7 +129,7 @@ ${iosBuildStep}
   quality-gate:
     name: Quality gate
     if: always()
-    needs: [changes, validate, ios-tests, synapse-integration, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads]
+    needs: [changes, validate, ios-tests, synapse-integration, synapse-native-reactions, synapse-native-attachments, synapse-native-call-media, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads]
     runs-on: ubuntu-latest
     steps:
       - name: Require every scheduled client validation job
@@ -126,6 +139,7 @@ ${iosBuildStep}
           SYNAPSE_RESULT: \${{ needs.synapse-integration.result }}
           SYNAPSE_NATIVE_REACTIONS_RESULT: \${{ needs.synapse-native-reactions.result }}
           SYNAPSE_NATIVE_ATTACHMENTS_RESULT: \${{ needs.synapse-native-attachments.result }}
+          SYNAPSE_NATIVE_CALL_MEDIA_RESULT: \${{ needs.synapse-native-call-media.result }}
           SYNAPSE_NATIVE_POLLS_RESULT: \${{ needs.synapse-native-polls.result }}
           SYNAPSE_NATIVE_RICH_MESSAGES_RESULT: \${{ needs.synapse-native-rich-messages.result }}
           SYNAPSE_NATIVE_THREADS_RESULT: \${{ needs.synapse-native-threads.result }}
@@ -154,6 +168,7 @@ ${iosBuildStep}
           ok "Synapse two-client integration" "$SYNAPSE_RESULT" || fail=1
           ok "Synapse native reaction proof" "$SYNAPSE_NATIVE_REACTIONS_RESULT" || fail=1
           ok "Synapse native attachment proof" "$SYNAPSE_NATIVE_ATTACHMENTS_RESULT" || fail=1
+          ok "Synapse native CallWidget media proof" "$SYNAPSE_NATIVE_CALL_MEDIA_RESULT" || fail=1
           ok "Synapse native poll proof" "$SYNAPSE_NATIVE_POLLS_RESULT" || fail=1
           ok "Synapse native rich-message proof" "$SYNAPSE_NATIVE_RICH_MESSAGES_RESULT" || fail=1
           ok "Synapse native thread-send proof" "$SYNAPSE_NATIVE_THREADS_RESULT" || fail=1

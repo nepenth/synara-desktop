@@ -26,13 +26,14 @@ import {
 } from 'matrix-js-sdk';
 import { getCallCapabilities } from './utils';
 import { uploadCallWidgetFileWithNativeOwner } from './nativeCallMediaUploadOwner';
+import {
+  downloadFileWithNativeOwner,
+  getMediaConfigWithNativeOwner,
+} from './nativeCallWidgetMediaOwner';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { getNativeRoomListSnapshot } from '../../state/room-list/roomList';
 import { getLoadedLiveTimelineEvents, getRoomCurrentState } from '../../utils/timelineLifecycle';
-import {
-  getKnownRoomsFromNativeSnapshot,
-  throwNativeCallWidgetCapabilityUnavailable,
-} from './nativeCallWidgetOwner';
+import { getKnownRoomsFromNativeSnapshot } from './nativeCallWidgetOwner';
 
 export class CallWidgetDriver extends WidgetDriver {
   private allowedCapabilities: Set<Capability>;
@@ -313,7 +314,9 @@ export class CallWidgetDriver extends WidgetDriver {
   }
 
   public async getMediaConfig(): Promise<IGetMediaConfigResult> {
-    return throwNativeCallWidgetCapabilityUnavailable('media config');
+    return getMediaConfigWithNativeOwner(isSynaraDesktop(), (command, args) =>
+      invokeDesktopWithAvailability(command, args)
+    );
   }
 
   public async uploadFile(file: XMLHttpRequestBodyInit): Promise<{ contentUri: string }> {
@@ -328,8 +331,9 @@ export class CallWidgetDriver extends WidgetDriver {
   }
 
   public async downloadFile(contentUri: string): Promise<{ file: XMLHttpRequestBodyInit }> {
-    void contentUri;
-    return throwNativeCallWidgetCapabilityUnavailable('media download');
+    return downloadFileWithNativeOwner(contentUri, isSynaraDesktop(), (command, args) =>
+      invokeDesktopWithAvailability(command, args)
+    );
   }
 
   public getKnownRooms(): string[] {
