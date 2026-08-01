@@ -14,7 +14,7 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `324c40a4` — after #320 pack room ids (159 imports); #328 R-CALL-UPLOAD; #326 DEVTOOL inventory
+| Integration tip    | `1e318d71` — after #320 pack room ids (159 imports); #328 R-CALL-UPLOAD; #326 DEVTOOL inventory; #329 scoreboard truth-up
 | Active work        | Next: #325 thumbnail native upload; pack-read JS utils (V-BURN); C3–C5 live; R-GIF-PACK
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
@@ -32,8 +32,8 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `324c40a4`**. Landed #320 pack room ids (**163→159**), #328 call-upload, #326 DEVTOOL inventory. Next: #325 thumbnail; JS utils delete gated; C3–C5. #39 gated. |
-| **Tip**        | `324c40a4` |
+| **Now**        | **Tip `1e318d71`**. Landed #320 pack room ids (**163→159**), #328 call-upload, #326 DEVTOOL inventory, and #329 scoreboard truth-up. Next: #325 thumbnail; JS utils delete gated; C3–C5. #39 gated. |
+| **Tip**        | `1e318d71` |
 | **Active PRs** | #325 thumbnail upload; #327 V-BURN readiness docs (hold — late only). |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
@@ -64,7 +64,7 @@ Update rules:
 
 | Field | Value |
 |-------|-------|
-| current | **Scoreboard honesty** | **This PR** | Tip `324c40a4`. Imports **159**. #320 room ids + #328 R-CALL-UPLOAD landed. #325 open. #39 gated. |
+| current | **Scoreboard honesty** | **This PR** | Tip `1e318d71` after #320 + #328 + #329. Imports **159**. #320 room ids + #328 R-CALL-UPLOAD landed. #325 open. #39 gated. |
 
 
 ### 2026-08-01 — scoreboard after #318 pack-read subscribe
