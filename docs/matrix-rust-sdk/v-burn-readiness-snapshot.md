@@ -8,7 +8,7 @@
 | ----------------------- | -------------------------------------------------------------------------------- |
 | Readiness               | **Not ready**                                                                    |
 | Runtime proof           | **Not confirmed**                                                                |
-| Source tip              | `5d1fc28b3efbc494b4362ce2af65ca5f4c22eaff`                                       |
+| Source tip              | `b0fd42413a76b1000d1fab23ea225309ca62f82e`                                       |
 | Base                    | `feature/matrix-rust-sdk-full-replacement` only                                  |
 | Scope                   | Docs only; no product code or cutover state change                               |
 | `dual_backend`          | **Forbidden**; this snapshot does not enable or claim it                         |
@@ -16,6 +16,7 @@
 | Prettier                | `2.8.1`                                                                          |
 | Production import files | **152** under `synara/src/`                                                      |
 | P1.6 allowlist entries  | **152**                                                                          |
+| CallWidget #407         | **Merged at this tip**; native media config/download owners landed; no V-BURN claim |
 | V-BURN                  | **HOLD** — not started; do not claim ready                                       |
 | #39 / `main`            | **Gated** — do not merge                                                         |
 
@@ -33,6 +34,17 @@ The tip still constructs and starts a live JavaScript Matrix client:
   **152** production import files. The committed
   [`p1.6-js-sdk-import-allowlist.json`](p1.6-js-sdk-import-allowlist.json)
   contains **152** paths.
+
+CallWidget **#407** is merged at this tip. Its `getMediaConfig()` and
+`downloadFile()` methods now use native owners and terminal, validated IPC
+failures; they do not fall back to JS media handling. See
+[`CallWidgetDriver.ts:316`](../../synara/src/app/plugins/call/CallWidgetDriver.ts#L316),
+[`CallWidgetDriver.ts:333`](../../synara/src/app/plugins/call/CallWidgetDriver.ts#L333),
+and [`nativeCallWidgetMediaOwner.ts:103`](../../synara/src/app/plugins/call/nativeCallWidgetMediaOwner.ts#L103).
+This bounded merge does not remove the live JS client, the remaining
+`CallWidgetDriver` SDK boundary, or any of the other residual proofs; it also
+does not change the measured 152 production importer files. This docs update
+does not edit `product.rs` or start a burn slice.
 
 These facts alone prevent a zero-live-client or zero-import V-BURN conclusion.
 The allowlist is inventory policy during migration; it is not evidence that the
@@ -56,12 +68,14 @@ remaining importers are acceptable at final convergence.
 The current residual queue is summarized in [`SCOREBOARD.md`](SCOREBOARD.md).
 Its tip field is intentionally not changed by this snapshot; the source
 evidence above is pinned explicitly to
-`5d1fc28b3efbc494b4362ce2af65ca5f4c22eaff`.
+`b0fd42413a76b1000d1fab23ea225309ca62f82e`.
 
 ## Bottom line
 
 Native replacement progress is real, but the tip still has a live JS client,
 the npm dependency, 152 production import files against a 152-entry migration
-allowlist, and unconfirmed residual proofs. Therefore the honest statement is:
+allowlist, and unconfirmed residual proofs. The #407 CallWidget media merge is
+progress within that residual map, not final convergence. Therefore the honest
+statement is:
 
 **V-BURN is blocked; readiness is Not ready; this file is not a readiness claim.**
