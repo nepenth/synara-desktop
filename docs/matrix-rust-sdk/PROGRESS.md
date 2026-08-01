@@ -14,11 +14,11 @@
 | Field              | Value                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**                                                                                                                       |
-| Integration tip    | `932d9aec` — after #364 leave, #362 CallWidget, #363 composer fallbacks, #365 pack get\* delete                                      | — after #372 create, #371 /leave, #369 join, #364 leave |
-| Active work        | Next: room join/create native vertical; C3–C5 live proofs; members/power. R-DEVTOOL gated; V-BURN HOLD                               |
+| Integration tip    | `a53f14fa` — after #364 leave, #362 CallWidget, #363 composer fallbacks, #365 pack get\* delete                                      | — after #372 create, #371 /leave, #369 join, #364 leave |
+| Active work        | Next: members moderation / power vertical; C3–C5 live proofs; members/power. R-DEVTOOL gated; V-BURN HOLD                            |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
-| Import accounting  | Desktop production import files **153** on tip (plan baseline was 220). Allowlist **154** (matched after #365/#364 deletions).       |
+| Import accounting  | Desktop production import files **153** on tip (plan baseline was 220). Allowlist **153** (matched after #365/#364 deletions).       |
 | Dual backend       | **`false`** (forbidden forever)                                                                                                      |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                             |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                 |
@@ -32,8 +32,8 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `932d9aec`**. Leave/join/create native. Next: members/power or C3–C5 live. #39 gated.                                                                                                                                            |
-| **Tip**        | `932d9aec`                                                                                                                                                                                                                             |
+| **Now**        | **Tip `a53f14fa`**. Leave/join/create native. Next: members/power or C3–C5 live. #39 gated.                                                                                                                                            |
+| **Tip**        | `a53f14fa`                                                                                                                                                                                                                             |
 | **Active PRs** | none (V-BURN HOLD; no product PR).                                                                                                                                                                                                     |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
@@ -60,11 +60,11 @@ Update rules:
 
 ## Work log (newest first)
 
-### 2026-08-01 — tip `932d9aec` — room create #372
+### 2026-08-01 — tip `a53f14fa` — room create #372
 
 | When (UTC) | Item                | Result                                        | Notes                                                                 |
 | ---------- | ------------------- | --------------------------------------------- | --------------------------------------------------------------------- |
-| current    | **Integration tip** | **This PR**                                   | Tip `932d9aec` after #372 create vertical.                            |
+| current    | **Integration tip** | **This PR**                                   | Tip `a53f14fa` after #372 create vertical.                            |
 | current    | **Room create**     | **#372**                                      | `matrix_room_create` + CreateRoom/Space/Chat + `/create` fail-closed. |
 | current    | **Lifecycle**       | **Leave #364/#371 · Join #369 · Create #372** | Next: members/power; C3–C5 live; V-BURN HOLD.                         |
 | current    | **Imports**         | **153**                                       | Allowlist matched on product PR inventory.                            |
@@ -73,7 +73,7 @@ Update rules:
 
 | When (UTC) | Item                   | Result                  | Notes                                                                                                                        |
 | ---------- | ---------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| current    | **Integration tip**    | **This PR**             | Tip `ab3997fa`. Imports/allowlist **154**.                                                                                   |
+| current    | **Integration tip**    | **This PR**             | Tip `ab3997fa`. Imports/allowlist **153**.                                                                                   |
 | current    | **Room join vertical** | **Merged #369**         | `matrix_room_join` + native owner; RoomCard/Intro/lobby/tombstone/`/join` fail-closed; **155→154**. Create residual remains. |
 | current    | **Next**               | **createRoom vertical** | CreateChat/CreateRoom/CreateSpace/`/create`; `/leave` command residual uses `mx.leave`. V-BURN HOLD; #39 gated.              |
 
@@ -81,7 +81,7 @@ Update rules:
 
 | When (UTC) | Item                                  | Result          | Notes                                                                                             |
 | ---------- | ------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------- |
-| current    | **Integration tip**                   | **This PR**     | Tip `5f202231` on `feature/matrix-rust-sdk-full-replacement`. Imports/allowlist **154**.          |
+| current    | **Integration tip**                   | **This PR**     | Tip `5f202231` on `feature/matrix-rust-sdk-full-replacement`. Imports/allowlist **153**.          |
 | current    | **V-SEND.R-PACK-READ finish-line #1** | **Merged #365** | Delete JS image pack read helpers + web fallback; equality helpers retained.                      |
 | current    | **Composer GIF/upload fallbacks**     | **Merged #363** | RoomInput GIF + msgContent thumbnail fail-closed native-only; no dual_backend.                    |
 | current    | **CallWidget residual**               | **Merged #362** | `getKnownRooms` native room-list snapshot; media config/download fail closed.                     |
