@@ -17,16 +17,16 @@ export type NativeSendGifInput = {
 /**
  * Sole composer GIF upload/send owner when a native session is live.
  * Reuses `matrix_send_attachment` (image/gif bytes); never falls through to
- * `mx.uploadContent` / `mx.sendMessage`.
+ * a legacy JS upload/send path.
  */
 export async function sendGifWithNativeOwner(
   input: NativeSendGifInput,
   desktopAvailable: boolean,
   invoke: NativeInvoke,
   fetchGif: typeof fetchGifForUpload = fetchGifForUpload
-): Promise<'native' | 'legacy'> {
+): Promise<'native'> {
   if (!(await isNativeMatrixLoggedIn(desktopAvailable, invoke))) {
-    return 'legacy';
+    throw new Error('Native Matrix GIF send is unavailable.');
   }
 
   const { blob, fileName } = await fetchGif(input.gif);
