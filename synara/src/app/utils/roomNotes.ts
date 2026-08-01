@@ -1,8 +1,4 @@
-import type { MatrixClient } from 'matrix-js-sdk/lib/client';
-import type { MatrixEvent } from 'matrix-js-sdk/lib/models/event';
-import type { Room } from 'matrix-js-sdk/lib/models/room';
 import {
-  AccountDataEvent,
   SynaraRoomNoteItem,
   SynaraRoomNoteItemKind,
   SynaraRoomNotesContent,
@@ -12,8 +8,6 @@ export const ROOM_NOTES_ACCOUNT_DATA_VERSION = 1;
 const MAX_NOTE_BODY_LENGTH = 4000;
 const MAX_MESSAGE_BODY_LENGTH = 1000;
 const MAX_ITEMS_PER_ROOM = 200;
-
-const roomNotesWriteQueues = new WeakMap<MatrixClient, Promise<void>>();
 
 const limitText = (value: string, maxLength: number): string => value.trim().slice(0, maxLength);
 
@@ -257,69 +251,3 @@ export const createManualRoomNoteItem = (
     order: kind === 'todo' ? now : undefined,
   };
 };
-
-export const createMessageRoomNoteItem = (
-  room: Room,
-  event: MatrixEvent,
-  now = Date.now()
-): SynaraRoomNoteItem | undefined => {
-  const eventId = event.getId();
-  if (!eventId) return undefined;
-  const content = event.getContent();
-  const body =
-    typeof content.body === 'string' ? limitText(content.body, MAX_MESSAGE_BODY_LENGTH) : '';
-  return {
-    id: `${room.roomId}\n${eventId}`,
-    kind: 'message',
-    roomId: room.roomId,
-    eventId,
-    eventTs: event.getTs(),
-    sender: event.getSender() ?? undefined,
-    body: body || undefined,
-    createdAt: now,
-    updatedAt: now,
-  };
-};
-
-export const updateRoomNotesContent = (
-  mx: MatrixClient,
-  update: (current: SynaraRoomNotesContent) => SynaraRoomNotesContent
-): Promise<void> => {
-  const previous = roomNotesWriteQueues.get(mx) ?? Promise.resolve();
-  const next = previous.then(async () => {
-    const event = mx.getAccountData(AccountDataEvent.SynaraRoomNotes as any);
-    const content = normalizeRoomNotesContent(
-      event?.getContent() as SynaraRoomNotesContent | undefined
-    );
-    await mx.setAccountData(AccountDataEvent.SynaraRoomNotes as any, update(content) as any);
-  });
-  roomNotesWriteQueues.set(
-    mx,
-    next.catch(() => undefined)
-  );
-  return next;
-};
-
-export const addRoomNoteItemAccountData = async (mx: MatrixClient, item: SynaraRoomNoteItem) =>
-  updateRoomNotesContent(mx, (content) => putRoomNoteItem(content, item));
-
-export const deleteRoomNoteItemAccountData = async (
-  mx: MatrixClient,
-  roomId: string,
-  itemId: string
-) => updateRoomNotesContent(mx, (content) => removeRoomNoteItem(content, roomId, itemId));
-
-export const completeRoomTodoItemAccountData = async (
-  mx: MatrixClient,
-  roomId: string,
-  itemId: string,
-  completed: boolean
-) =>
-  updateRoomNotesContent(mx, (content) => completeRoomTodoItem(content, roomId, itemId, completed));
-
-export const moveRoomTodoItemAccountData = async (
-  mx: MatrixClient,
-  roomId: string,
-  itemId: string,
-  direction: 'up' | 'down'
-) => updateRoomNotesContent(mx, (content) => moveRoomTodoItem(content, roomId, itemId, direction));

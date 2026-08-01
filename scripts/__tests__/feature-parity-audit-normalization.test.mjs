@@ -306,6 +306,9 @@ function reclaimHeapIfPossible() {
  */
 function dualRenderDigests(render) {
   const firstDigest = api.sha256(render().bytes);
+  // Drop first-render peak before the second pass so dual determinism does not
+  // stack two full markdown materializations in RSS.
+  reclaimHeapIfPossible();
   const secondDigest = api.sha256(render().bytes);
   assert.equal(firstDigest, secondDigest);
   return [firstDigest, secondDigest];
@@ -4390,6 +4393,9 @@ test(BENCHMARK_TEST_NAME, async (t) => {
           durableAudit: audit,
         });
         assert.deepEqual(errors, []);
+        // Reclaim validate residual (lifecycle walks, evidence line indexes) so
+        // markdown materialization can reuse heap within the 512 MiB delta budget.
+        reclaimHeapIfPossible();
         return dualRenderDigests(() => api.renderTraceabilityMarkdown(v2));
       });
     } finally {

@@ -33,13 +33,14 @@ use tauri::{
 };
 use tauri_plugin_opener::OpenerExt;
 
-const INVITE_AVATAR_PROTOCOL: &str = "synara-media";
+const SYNARA_MEDIA_PROTOCOL: &str = "synara-media";
 const INVITE_AVATAR_MAX_BYTES: usize = 1_048_576;
+const TIMELINE_MEDIA_MAX_BYTES: usize = 64 * 1_048_576;
 
-fn invite_avatar_response(
+fn synara_media_response(
     status: tauri::http::StatusCode,
     body: Vec<u8>,
-    content_type: Option<&'static str>,
+    content_type: Option<&str>,
 ) -> tauri::http::Response<Vec<u8>> {
     let mut builder = tauri::http::Response::builder()
         .status(status)
@@ -53,7 +54,7 @@ fn invite_avatar_response(
         .expect("fixed invite avatar response headers are valid")
 }
 
-fn invite_avatar_content_type(bytes: &[u8]) -> Option<&'static str> {
+fn image_content_type(bytes: &[u8]) -> Option<&'static str> {
     if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
         Some("image/png")
     } else if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
@@ -69,17 +70,50 @@ fn invite_avatar_content_type(bytes: &[u8]) -> Option<&'static str> {
     }
 }
 
-fn register_invite_avatar_protocol<R: tauri::Runtime>(
+fn timeline_media_content_type(bytes: &[u8], declared: Option<&str>) -> Option<&'static str> {
+    let candidates: &[&'static str] = if let Some(image) = image_content_type(bytes) {
+        &[image]
+    } else if bytes.starts_with(b"%PDF-") {
+        &["application/pdf"]
+    } else if bytes.starts_with(b"ID3")
+        || matches!(bytes, [0xff, second, ..] if second & 0xe0 == 0xe0)
+    {
+        &["audio/mpeg"]
+    } else if bytes.starts_with(b"fLaC") {
+        &["audio/flac"]
+    } else if bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE" {
+        &["audio/wav"]
+    } else if bytes.starts_with(b"OggS") {
+        &["audio/ogg", "video/ogg", "application/ogg"]
+    } else if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" {
+        &["video/mp4", "audio/mp4"]
+    } else if bytes.starts_with(&[0x1a, 0x45, 0xdf, 0xa3]) {
+        &["video/webm", "audio/webm"]
+    } else {
+        return None;
+    };
+    let declared = declared.map(str::trim).filter(|value| !value.is_empty());
+    match declared {
+        None | Some("application/octet-stream") => candidates.first().copied(),
+        Some("image/jpg") if candidates.contains(&"image/jpeg") => Some("image/jpeg"),
+        Some(value) => candidates
+            .iter()
+            .copied()
+            .find(|candidate| candidate.eq_ignore_ascii_case(value)),
+    }
+}
+
+fn register_synara_media_protocol<R: tauri::Runtime>(
     builder: tauri::Builder<R>,
 ) -> tauri::Builder<R> {
     builder.register_asynchronous_uri_scheme_protocol(
-        INVITE_AVATAR_PROTOCOL,
+        SYNARA_MEDIA_PROTOCOL,
         |context, request, responder| {
             if context.webview_label() != desktop::MAIN_WINDOW_LABEL
                 || request.method() != tauri::http::Method::GET
                 || request.uri().query().is_some()
             {
-                responder.respond(invite_avatar_response(
+                responder.respond(synara_media_response(
                     tauri::http::StatusCode::NOT_FOUND,
                     Vec::new(),
                     None,
@@ -87,28 +121,71 @@ fn register_invite_avatar_protocol<R: tauri::Runtime>(
                 return;
             }
             let Some(handle) = request.uri().path().strip_prefix('/') else {
-                responder.respond(invite_avatar_response(
+                responder.respond(synara_media_response(
                     tauri::http::StatusCode::NOT_FOUND,
                     Vec::new(),
                     None,
                 ));
                 return;
             };
-            if handle.len() != 64 || !handle.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-                responder.respond(invite_avatar_response(
-                    tauri::http::StatusCode::NOT_FOUND,
-                    Vec::new(),
-                    None,
-                ));
-                return;
-            }
-
             let app = context.app_handle().clone();
             let handle = handle.to_owned();
             tauri::async_runtime::spawn(async move {
                 let state = app.state::<matrix::auth::MatrixAuthState>();
+                if matrix::timeline::is_timeline_media_handle(&handle) {
+                    let Some((client, source)) = state.resolve_timeline_media(&handle).await else {
+                        responder.respond(synara_media_response(
+                            tauri::http::StatusCode::NOT_FOUND,
+                            Vec::new(),
+                            None,
+                        ));
+                        return;
+                    };
+                    let request = matrix_sdk::media::MediaRequestParameters {
+                        source: source.source,
+                        format: matrix_sdk::media::MediaFormat::File,
+                    };
+                    let Ok(bytes) = client.media().get_media_content(&request, false).await else {
+                        responder.respond(synara_media_response(
+                            tauri::http::StatusCode::NOT_FOUND,
+                            Vec::new(),
+                            None,
+                        ));
+                        return;
+                    };
+                    let Some(content_type) = (bytes.len() <= TIMELINE_MEDIA_MAX_BYTES)
+                        .then(|| {
+                            timeline_media_content_type(
+                                &bytes,
+                                source.declared_mime_type.as_deref(),
+                            )
+                        })
+                        .flatten()
+                    else {
+                        responder.respond(synara_media_response(
+                            tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                            Vec::new(),
+                            None,
+                        ));
+                        return;
+                    };
+                    responder.respond(synara_media_response(
+                        tauri::http::StatusCode::OK,
+                        bytes,
+                        Some(content_type),
+                    ));
+                    return;
+                }
+                if handle.len() != 64 || !handle.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                    responder.respond(synara_media_response(
+                        tauri::http::StatusCode::NOT_FOUND,
+                        Vec::new(),
+                        None,
+                    ));
+                    return;
+                }
                 let Some((client, source)) = state.resolve_invite_avatar(&handle).await else {
-                    responder.respond(invite_avatar_response(
+                    responder.respond(synara_media_response(
                         tauri::http::StatusCode::NOT_FOUND,
                         Vec::new(),
                         None,
@@ -125,7 +202,7 @@ fn register_invite_avatar_protocol<R: tauri::Runtime>(
                     ),
                 };
                 let Ok(bytes) = client.media().get_media_content(&request, false).await else {
-                    responder.respond(invite_avatar_response(
+                    responder.respond(synara_media_response(
                         tauri::http::StatusCode::NOT_FOUND,
                         Vec::new(),
                         None,
@@ -133,17 +210,17 @@ fn register_invite_avatar_protocol<R: tauri::Runtime>(
                     return;
                 };
                 let Some(content_type) = (bytes.len() <= INVITE_AVATAR_MAX_BYTES)
-                    .then(|| invite_avatar_content_type(&bytes))
+                    .then(|| image_content_type(&bytes))
                     .flatten()
                 else {
-                    responder.respond(invite_avatar_response(
+                    responder.respond(synara_media_response(
                         tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
                         Vec::new(),
                         None,
                     ));
                     return;
                 };
-                responder.respond(invite_avatar_response(
+                responder.respond(synara_media_response(
                     tauri::http::StatusCode::OK,
                     bytes,
                     Some(content_type),
@@ -239,7 +316,7 @@ pub fn run() {
     let updater_configured = updater_plugin_configured(&context);
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let updater_configured = false;
-    let mut builder = register_invite_avatar_protocol(tauri::Builder::default())
+    let mut builder = register_synara_media_protocol(tauri::Builder::default())
         .manage(matrix::auth::MatrixAuthState::new())
         .plugin(tauri_plugin_localhost::Builder::new(port).build())
         .plugin(tauri_plugin_window_state::Builder::default().build())
@@ -332,15 +409,41 @@ pub fn run() {
             matrix::auth::product::matrix_mdirect_snapshot,
             matrix::auth::product::matrix_mdirect_add,
             matrix::auth::product::matrix_mdirect_remove,
+            matrix::auth::product::matrix_later_snapshot,
+            matrix::auth::product::matrix_later_upsert,
+            matrix::auth::product::matrix_later_complete,
+            matrix::auth::product::matrix_later_snooze,
+            matrix::auth::product::matrix_later_clear_completed,
+            matrix::auth::product::matrix_later_mark_reminded,
+            matrix::auth::product::matrix_room_notes_snapshot,
+            matrix::auth::product::matrix_room_notes_upsert,
+            matrix::auth::product::matrix_room_notes_delete,
+            matrix::auth::product::matrix_room_notes_complete_todo,
+            matrix::auth::product::matrix_room_notes_move_todo,
             matrix::auth::product::matrix_typing_snapshot,
             matrix::auth::product::matrix_typing_set,
             matrix::auth::product::matrix_timeline_open,
+            matrix::auth::product::matrix_timeline_close,
+            matrix::auth::product::matrix_timeline_jump_latest,
             matrix::auth::product::matrix_timeline_snapshot,
             matrix::auth::product::matrix_timeline_paginate,
+            matrix::auth::product::matrix_timeline_set_read_state,
             matrix::auth::product::matrix_timeline_event_readback,
             matrix::auth::product::matrix_timeline_reaction_toggle,
             matrix::auth::product::matrix_reaction_ensure,
             matrix::auth::product::matrix_reaction_redact,
+            matrix::auth::product::matrix_timeline_edit_text,
+            matrix::auth::product::matrix_timeline_redact,
+            matrix::auth::product::matrix_timeline_forward_text,
+            matrix::auth::product::matrix_timeline_report,
+            matrix::auth::product::matrix_timeline_pin,
+            matrix::auth::product::matrix_timeline_unpin,
+            matrix::auth::product::matrix_composer_set_reply_draft,
+            matrix::auth::product::matrix_composer_clear_reply_draft,
+            matrix::auth::product::matrix_composer_get_reply_draft,
+            matrix::auth::product::matrix_timeline_forward_media,
+            matrix::auth::product::matrix_timeline_poll_vote,
+            matrix::auth::product::matrix_timeline_call_decline,
             matrix::auth::product::matrix_send_text,
             matrix::auth::product::matrix_send_attachment,
             matrix::auth::product::matrix_send_sticker,
@@ -502,7 +605,9 @@ pub fn run() {
 
 #[cfg(test)]
 mod localhost_port_tests {
-    use super::{select_localhost_port_with, PREFERRED_LOCALHOST_PORT};
+    use super::{
+        select_localhost_port_with, timeline_media_content_type, PREFERRED_LOCALHOST_PORT,
+    };
 
     #[test]
     fn select_localhost_port_returns_first_available_port() {
@@ -516,5 +621,19 @@ mod localhost_port_tests {
         let port = select_localhost_port_with(|port| port != PREFERRED_LOCALHOST_PORT)
             .expect("fallback localhost port should be available");
         assert_eq!(port, PREFERRED_LOCALHOST_PORT + 1);
+    }
+
+    #[test]
+    fn timeline_media_requires_allowlisted_bytes_and_matching_mime() {
+        let png = b"\x89PNG\r\n\x1a\nrest";
+        assert_eq!(
+            timeline_media_content_type(png, Some("image/png")),
+            Some("image/png")
+        );
+        assert_eq!(timeline_media_content_type(png, Some("image/jpeg")), None);
+        assert_eq!(
+            timeline_media_content_type(b"arbitrary file bytes", None),
+            None
+        );
     }
 }
