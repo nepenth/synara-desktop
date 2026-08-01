@@ -57,7 +57,7 @@
 - ~~**V-SEND.R-PACK-READ** snapshot~~ **#297**; ~~**subscribe**~~ **#318** (JS utils + `useImagePackRooms` residual for web/desktop room resolution)
 - ~~**V-SEND.R-PACK-WRITE** personal~~ **#306**; ~~**global**~~ **#309**; ~~**room**~~ **#310**; ~~**PACK-UPLOAD**~~ **#314** (reuses `matrix_upload_media` #303 via CompactUploadCardRenderer)
 - ~~**V-SEND.R-AVATAR-UPLOAD** user profile~~ **#303**; ~~**R-ROOM-PROFILE**~~ **#313** (room-avatar media upload covered by #314 CompactUploadCardRenderer path)
-- **V-SEND.R-CALL-UPLOAD** / **R-GIF-PACK**
+- **V-SEND.R-CALL-UPLOAD** / **R-GIF-PACK** — [upload call-site audit](v-send-upload-residual-audit.md); composer/thumbnail usages are legacy-web fallbacks
 - **V-SEND.R-DEVTOOL** (low priority)
 
 ### Convergence
