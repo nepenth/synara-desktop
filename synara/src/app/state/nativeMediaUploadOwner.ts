@@ -39,6 +39,14 @@ export async function uploadMediaWithNativeOwner(
   if (!(await isNativeMediaUploadSession(desktopAvailable, invoke))) {
     return 'legacy';
   }
+  return uploadMediaBytesWithNativeOwner(mimeType, bytes, invoke);
+}
+
+export async function uploadMediaBytesWithNativeOwner(
+  mimeType: string,
+  bytes: number[],
+  invoke: NativeInvoke
+): Promise<{ mxc: string }> {
   const result = await invoke('matrix_upload_media', { mimeType, bytes });
   if (!result.available) {
     throw new Error('Native Matrix media upload is unavailable.');
