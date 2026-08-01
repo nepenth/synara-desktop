@@ -49,7 +49,6 @@ import {
 import { useOrphanSpaces } from '../../state/hooks/roomList';
 import { roomToParentsAtom } from '../../state/room/roomToParents';
 import { AccountDataEvent } from '../../../types/matrix/accountData';
-import { useRoomMembers } from '../../hooks/useRoomMembers';
 import { SpaceHierarchy } from './SpaceHierarchy';
 import { useGetRoom } from '../../hooks/useGetRoom';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
@@ -156,7 +155,6 @@ export function Lobby() {
   const space = useSpace();
   const spacePowerLevels = usePowerLevels(space);
   const lex = useMemo(() => new ASCIILexicalTable(' '.charCodeAt(0), '~'.charCodeAt(0), 6), []);
-  const members = useRoomMembers(mx, space.roomId);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const heroSectionRef = useRef<HTMLDivElement>(null);
@@ -519,7 +517,7 @@ export function Lobby() {
         {screenSize === ScreenSize.Desktop && isDrawer && (
           <>
             <Line variant="Background" direction="Vertical" size="300" />
-            <MembersDrawer room={space} members={members} />
+            <MembersDrawer room={space} />
           </>
         )}
       </Box>
