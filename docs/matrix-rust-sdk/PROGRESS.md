@@ -15,10 +15,10 @@
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
 | Integration tip    | `8995add1` — after #289 C2 delete RoomTimeline; #285 C1; #293 scoreboard; #294 C3; #283 edit
-| Active work        | Next **V-SEND.R-PACK-READ** implement (or R-FORWARD dialog); C3–C5 live proof remaining
+| Active work        | **this** V-SEND.R-FORWARD delete; pack-read implement next; C3–C5 live proof
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
-| Import accounting  | Desktop production import files **164** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
+| Import accounting  | Desktop production import files **163** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
 | Dual backend       | **`false`** (forbidden forever)                                                                                                                                                                                                                                       |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                                                                                                                                                              |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                                                                                                                                                  |
@@ -59,6 +59,11 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — V-SEND.R-FORWARD residual close
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.R-FORWARD** | **This PR** | Delete legacy `MessageForwardItem` + `utils/forward.ts` after C1/C2; native presenter forward sole product path; allowlist **168→167**; prod import files **164→163**. |
 
 ### 2026-08-01 — scoreboard after C1+C2
 | When (UTC) | Item | Result | Notes |
