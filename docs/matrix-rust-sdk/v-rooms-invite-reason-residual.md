@@ -3,7 +3,7 @@
 | Field   | Value                                                                                                                           |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | Status  | **Open residual — docs only**                                                                                                   |
-| Tip SHA | `22f1f06d` (merged #395 members-read first slice; invite-reason residual unchanged)                                              |
+| Tip SHA | `52953091` (merged #424 directory documentation only; invite-reason residual unchanged)                                      |
 | Base    | `feature/matrix-rust-sdk-full-replacement`                                                                                      |
 | SDK pin | `matrix-sdk = 0.18.0`, `matrix-sdk-ui = 0.18.0`                                                                                 |
 | Policy  | Native desktop is fail-closed; `dual_backend` is forbidden                                                                      |
