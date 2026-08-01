@@ -10,7 +10,7 @@
 | P1.6 allowlist entries | **163**                                                                  |
 | Policy                 | Full replacement; `dual_backend` forbidden; fail-closed                  |
 | V-BURN                 | **Not started**; `active_slice` must not be `V-BURN`                     |
-| Hold                   | **#327 HOLD**; do not merge or claim V-BURN-ready; **#39 remains gated** |
+| Hold                   | **V-BURN HOLD** (blockers #355); do not claim V-BURN-ready; **#39 remains gated** |
 
 This is a classification snapshot, not a cutover plan or readiness claim. An
 importer can be native-first, a non-native web fallback, a shared type/model
