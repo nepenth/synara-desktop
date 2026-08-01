@@ -3,8 +3,8 @@
 | Field | Value |
 |-------|-------|
 | Updated | 2026-08-01 |
-| Tip |  on  |
-| Production  import files () | **165** (plan baseline was **220**) |
+| Tip | `0152c460` on `feature/matrix-rust-sdk-full-replacement` |
+| Production `matrix-js-sdk` import files (`synara/src`) | **165** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
 | Umbrella #39 | **Do not merge** without explicit approval |
 
@@ -25,8 +25,9 @@
 
 | PR | What |
 |----|------|
-| #283 | V-SEND.R-EDIT native  |
+| #283 | V-SEND.R-EDIT native `m.replace` |
 | #285 | V-TIMELINE.C1 select NativeTimelinePresenter in RoomView |
+| #288 | This scoreboard docs PR |
 
 ## Left (ordered)
 
@@ -46,7 +47,7 @@
 - **V-SEND.R-DEVTOOL** (low priority)
 
 ### Convergence
-- **V-BURN.1–3** zero live JS client + drop npm  after residual owners clear
+- **V-BURN.1–3** zero live JS client + drop npm `matrix-js-sdk` after residual owners clear
 
 ### Not residual free-for-all
 - Widgets/calls polish beyond residual IDs — full verticals after burn queue allows
