@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Updated | 2026-08-01 |
-| Tip | `c22515fa` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip | `e38bfdab68bd57e4f3110a812c5e4c5d543c1ff5` on `feature/matrix-rust-sdk-full-replacement` (after #332 tip honesty) |
 | Production `matrix-js-sdk` import files (`synara/src`) | **159** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
 | Umbrella #39 | **Do not merge** without explicit user approval |
@@ -38,6 +38,7 @@
 | V-SEND.R-GIF-PACK | **NOOP** — `GifPicker` exposes provider search/selection only; selected GIF send is native via #264 and no GIF pack/collection owner exists |
 | V-SEND.R-CALL-UPLOAD | **#328** `CallWidgetDriver.uploadFile` → `uploadCallWidgetFileWithNativeOwner` / `matrix_upload_media` fail-closed |
 | Composer thumbnail (msgContent) | **#325** video thumbnails via `uploadMediaNative` / `matrix_upload_media` fail-closed |
+| Tip honesty | **#332** records the post-#331 integration tip; current tip is `e38bfdab68bd57e4f3110a812c5e4c5d543c1ff5` |
 | V-SEND.R-DEVTOOL | [Docs-only inventory](v-send-devtool-inventory.md): all three developer-tools runtime files still use the JS client; implementation remains low priority |
 | CI | Parallel Validate #284 |
 
