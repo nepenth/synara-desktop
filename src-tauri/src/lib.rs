@@ -398,6 +398,7 @@ pub fn run() {
             matrix::auth::product::matrix_invites_snapshot,
             matrix::auth::product::matrix_invites_accept,
             matrix::auth::product::matrix_invites_decline,
+            matrix::auth::product::matrix_room_create,
             matrix::auth::product::matrix_room_leave,
             matrix::auth::product::matrix_room_join,
             matrix::auth::product::matrix_invites_report_spam,

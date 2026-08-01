@@ -1,108 +1,42 @@
-import {
-  ICreateRoomOpts,
-  ICreateRoomStateEvent,
-  JoinRule,
-  MatrixClient,
-  RestrictedAllowType,
-  Room,
-} from 'matrix-js-sdk';
-import { RoomJoinRulesEventContent } from 'matrix-js-sdk/lib/types';
-import { RoomType, StateEvent } from '../../../types/matrix/room';
-import { getViaServers } from '../../plugins/via-servers';
-import { getMxIdServer } from '../../utils/matrix';
+import { RoomType } from '../../../types/matrix/room';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { setSpaceChild } from '../../features/lobby/nativeSpaceChild';
+import { createRoomWithNativeOwner, type NativeRoomCreateRequest } from '../nativeRoomCreateOwner';
 import { CreateRoomAccess } from './types';
 
 export const createRoomCreationContent = (
   type: RoomType | undefined,
   allowFederation: boolean,
   additionalCreators: string[] | undefined
-): object => {
-  const content: Record<string, any> = {};
+): NativeRoomCreateRequest['creationContent'] => {
+  const content: NonNullable<NativeRoomCreateRequest['creationContent']> = {};
   if (typeof type === 'string') {
     content.type = type;
   }
   if (allowFederation === false) {
-    content['m.federate'] = false;
+    content.federate = false;
   }
   if (Array.isArray(additionalCreators)) {
-    content.additional_creators = additionalCreators;
+    content.additionalCreators = additionalCreators;
   }
 
   return content;
 };
 
-export const createRoomJoinRulesState = (
+export const createRoomJoinRule = (
   access: CreateRoomAccess,
-  parent: Room | undefined,
+  parentRoomId: string | undefined,
   knock: boolean
-) => {
-  let content: RoomJoinRulesEventContent = {
-    join_rule: knock ? JoinRule.Knock : JoinRule.Invite,
-  };
-
-  if (access === CreateRoomAccess.Public) {
-    content = {
-      join_rule: JoinRule.Public,
-    };
-  }
-
-  if (access === CreateRoomAccess.Restricted && parent) {
-    content = {
-      join_rule: knock ? ('knock_restricted' as JoinRule) : JoinRule.Restricted,
-      allow: [
-        {
-          type: RestrictedAllowType.RoomMembership,
-          room_id: parent.roomId,
-        },
-      ],
-    };
-  }
-
-  return {
-    type: StateEvent.RoomJoinRules,
-    state_key: '',
-    content,
-  };
+): NativeRoomCreateRequest['joinRule'] => {
+  if (access === CreateRoomAccess.Public) return 'public';
+  if (access === CreateRoomAccess.Restricted && parentRoomId) return 'restricted';
+  return 'invite';
 };
-
-export const createRoomParentState = (parent: Room) => ({
-  type: StateEvent.SpaceParent,
-  state_key: parent.roomId,
-  content: {
-    canonical: true,
-    via: getViaServers(parent),
-  },
-});
-
-const createSpacePowerLevelsOverride = () => ({
-  events_default: 50,
-});
-
-export const createRoomEncryptionState = () => ({
-  type: 'm.room.encryption',
-  state_key: '',
-  content: {
-    algorithm: 'm.megolm.v1.aes-sha2',
-  },
-});
-
-export const createRoomCallState = () => ({
-  type: 'org.matrix.msc3401.call',
-  state_key: '',
-  content: {},
-});
-
-export const createVoiceRoomPowerLevelsOverride = () => ({
-  events: {
-    [StateEvent.GroupCallMemberPrefix]: 0,
-  },
-});
 
 export type CreateRoomData = {
   version: string;
   type?: RoomType;
-  parent?: Room;
+  parentRoomId?: string;
   access: CreateRoomAccess;
   name: string;
   topic?: string;
@@ -112,50 +46,45 @@ export type CreateRoomData = {
   allowFederation: boolean;
   additionalCreators?: string[];
 };
-export const createRoom = async (mx: MatrixClient, data: CreateRoomData): Promise<string> => {
-  const initialState: ICreateRoomStateEvent[] = [];
+const getRoomIdServer = (roomId: string): string | undefined => {
+  const separator = roomId.indexOf(':');
+  return separator === -1 ? undefined : roomId.slice(separator + 1);
+};
 
-  if (data.encryption) {
-    initialState.push(createRoomEncryptionState());
-  }
-
-  if (data.parent) {
-    initialState.push(createRoomParentState(data.parent));
-  }
-
-  if (data.type === RoomType.Call) {
-    initialState.push(createRoomCallState());
-  }
-
-  initialState.push(createRoomJoinRulesState(data.access, data.parent, data.knock));
-
-  const options: ICreateRoomOpts = {
-    room_version: data.version,
+export const createRoom = async (data: CreateRoomData): Promise<string> => {
+  const request: NativeRoomCreateRequest = {
+    roomVersion: data.version,
     name: data.name,
     topic: data.topic,
-    room_alias_name: data.aliasLocalPart,
-    creation_content: createRoomCreationContent(
+    roomAliasName: data.aliasLocalPart,
+    creationContent: createRoomCreationContent(
       data.type,
       data.allowFederation,
       data.additionalCreators
     ),
-    power_level_content_override:
-      data.type === RoomType.Call ? createVoiceRoomPowerLevelsOverride() : undefined,
-    initial_state: initialState,
+    encryption: data.encryption,
+    joinRule: createRoomJoinRule(data.access, data.parentRoomId, data.knock),
+    knock: data.access !== CreateRoomAccess.Public && data.knock,
+    parentRoomId: data.parentRoomId,
+    powerLevelContentOverride:
+      data.type === RoomType.Space
+        ? { eventsDefault: 50 }
+        : data.type === RoomType.Call
+        ? { events: { 'org.matrix.msc3401.call.member': 0 } }
+        : undefined,
   };
 
-  if (data.type === RoomType.Space) {
-    options.power_level_content_override = createSpacePowerLevelsOverride();
-  }
+  const roomId = await createRoomWithNativeOwner(request, isSynaraDesktop(), (command, args) =>
+    invokeDesktopWithAvailability(command, args)
+  );
 
-  const result = await mx.createRoom(options);
-
-  if (data.parent) {
-    await setSpaceChild(data.parent.roomId, result.room_id, {
+  if (data.parentRoomId) {
+    const via = getRoomIdServer(roomId);
+    await setSpaceChild(data.parentRoomId, roomId, {
       suggested: false,
-      via: [getMxIdServer(mx.getUserId() ?? '') ?? ''],
+      via: via ? [via] : [],
     });
   }
 
-  return result.room_id;
+  return roomId;
 };

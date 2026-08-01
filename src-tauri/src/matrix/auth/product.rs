@@ -3,7 +3,7 @@
 //! This is the only desktop product boundary for password login. The live
 //! `matrix_sdk::Client` and all access/refresh tokens remain in the Rust host.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -16,7 +16,13 @@ use matrix_sdk::{
     room::edit::EditedContent,
     room::reply::{EnforceThread, Reply as AttachmentReply},
     ruma::{
-        api::client::uiaa,
+        api::client::{
+            room::{
+                create_room::{self, v3::RoomPreset},
+                Visibility,
+            },
+            uiaa,
+        },
         events::{
             poll::unstable_response::UnstablePollResponseEventContent,
             relation::{Reply, Thread},
@@ -29,10 +35,12 @@ use matrix_sdk::{
                 ImageInfo,
             },
             sticker::StickerEventContent,
-            AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncTimelineEvent, Mentions,
+            AnyInitialStateEvent, AnyMessageLikeEventContent, AnySyncMessageLikeEvent,
+            AnySyncTimelineEvent, Mentions,
         },
+        serde::Raw,
         EventId, MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId,
-        OwnedServerName, OwnedTransactionId, OwnedUserId, UInt,
+        OwnedServerName, OwnedTransactionId, OwnedUserId, RoomVersionId, UInt,
     },
     Client, Room, SessionMeta, SessionTokens,
 };
@@ -233,6 +241,65 @@ pub struct MatrixProfileWriteResult {
 #[serde(rename_all = "camelCase")]
 pub struct MatrixUploadMediaResult {
     pub mxc: String,
+}
+
+/// JSON-friendly create-room request owned by the desktop Matrix SDK route.
+/// `parent_room_id` is used for restricted join rules; the post-create space
+/// child edge remains an explicit `matrix_space_child_set` operation in TS.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MatrixRoomCreateRequest {
+    pub name: Option<String>,
+    pub topic: Option<String>,
+    pub room_version: Option<String>,
+    pub room_alias_name: Option<String>,
+    #[serde(default)]
+    pub is_direct: bool,
+    #[serde(default)]
+    pub invite: Vec<String>,
+    pub visibility: Option<MatrixRoomCreateVisibility>,
+    pub preset: Option<MatrixRoomCreatePreset>,
+    pub creation_content: Option<MatrixRoomCreateContent>,
+    #[serde(default)]
+    pub encryption: bool,
+    pub join_rule: Option<String>,
+    #[serde(default)]
+    pub knock: bool,
+    pub parent_room_id: Option<String>,
+    pub power_level_content_override: Option<MatrixRoomCreatePowerLevels>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MatrixRoomCreateVisibility {
+    Private,
+    Public,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MatrixRoomCreatePreset {
+    PrivateChat,
+    PublicChat,
+    TrustedPrivateChat,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MatrixRoomCreateContent {
+    #[serde(rename = "type")]
+    pub room_type: Option<String>,
+    #[serde(rename = "m.federate", alias = "federate")]
+    pub federate: Option<bool>,
+    pub additional_creators: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MatrixRoomCreatePowerLevels {
+    pub events_default: Option<i64>,
+    #[serde(default)]
+    pub events: BTreeMap<String, i64>,
 }
 
 /// Soft IPC/body cap for one-shot composer attachment transfer (bytes).
@@ -1954,6 +2021,25 @@ pub async fn matrix_invites_decline(
     )
     .await
     .map_err(map_invite_error)
+}
+
+/// V-ROOMS room creation: create the room through the live native Matrix SDK.
+/// Fail-closed: desktop create call sites must not use `mx.createRoom` when a
+/// native Matrix session owns room lifecycle mutations.
+#[tauri::command]
+pub async fn matrix_room_create(
+    state: State<'_, MatrixAuthState>,
+    request: MatrixRoomCreateRequest,
+) -> Result<String, MatrixAuthCommandError> {
+    let request = build_room_create_request(request)?;
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    let room = active
+        .client
+        .create_room(request)
+        .await
+        .map_err(|_| map_room_create_error("v-rooms-room-create-failed"))?;
+    Ok(room.room_id().to_string())
 }
 
 /// V-ROOMS room membership: leave the selected room through the native SDK.
@@ -3947,6 +4033,311 @@ fn map_room_leave_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
 
+fn map_room_create_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    let (code, message) = match diagnostic_id {
+        "v-rooms-room-create-invalid-name"
+        | "v-rooms-room-create-invalid-topic"
+        | "v-rooms-room-create-invalid-room-version"
+        | "v-rooms-room-create-invalid-alias"
+        | "v-rooms-room-create-invalid-invite"
+        | "v-rooms-room-create-invalid-creation-content"
+        | "v-rooms-room-create-invalid-additional-creator"
+        | "v-rooms-room-create-invalid-parent"
+        | "v-rooms-room-create-invalid-join-rule"
+        | "v-rooms-room-create-missing-restricted-parent"
+        | "v-rooms-room-create-invalid-power-level" => (
+            "InvalidRequest",
+            "The native Matrix room create request is invalid.",
+        ),
+        _ => ("Unknown", "The native Matrix room could not be created."),
+    };
+    MatrixAuthCommandError::new(code, message, diagnostic_id)
+}
+
+fn build_room_create_request(
+    input: MatrixRoomCreateRequest,
+) -> Result<create_room::v3::Request, MatrixAuthCommandError> {
+    let MatrixRoomCreateRequest {
+        name,
+        topic,
+        room_version,
+        room_alias_name,
+        is_direct,
+        invite,
+        visibility,
+        preset,
+        creation_content,
+        encryption,
+        join_rule,
+        knock,
+        parent_room_id,
+        power_level_content_override,
+    } = input;
+
+    let name = name
+        .map(|value| {
+            let value = value.trim();
+            if value.is_empty() || value.chars().count() > 255 {
+                return Err(map_room_create_error("v-rooms-room-create-invalid-name"));
+            }
+            Ok(value.to_owned())
+        })
+        .transpose()?;
+    let topic = topic
+        .map(|value| {
+            let value = value.trim();
+            if value.chars().count() > 2_048 {
+                return Err(map_room_create_error("v-rooms-room-create-invalid-topic"));
+            }
+            if value.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(value.to_owned()))
+            }
+        })
+        .transpose()?
+        .flatten();
+    let room_version = room_version
+        .map(|value| {
+            value
+                .trim()
+                .parse::<RoomVersionId>()
+                .map_err(|_| map_room_create_error("v-rooms-room-create-invalid-room-version"))
+        })
+        .transpose()?;
+    let room_alias_name = room_alias_name
+        .map(|value| {
+            let value = value.trim();
+            if value.is_empty() || value.chars().count() > 255 {
+                return Err(map_room_create_error("v-rooms-room-create-invalid-alias"));
+            }
+            Ok(value.to_owned())
+        })
+        .transpose()?;
+    let invite = invite
+        .into_iter()
+        .map(|value| {
+            value
+                .trim()
+                .parse::<OwnedUserId>()
+                .map_err(|_| map_room_create_error("v-rooms-room-create-invalid-invite"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let parent_room_id = parent_room_id
+        .map(|value| {
+            value
+                .trim()
+                .parse::<OwnedRoomId>()
+                .map_err(|_| map_room_create_error("v-rooms-room-create-invalid-parent"))
+        })
+        .transpose()?;
+
+    let room_type = creation_content
+        .as_ref()
+        .and_then(|content| content.room_type.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned);
+    if creation_content
+        .as_ref()
+        .and_then(|content| content.room_type.as_deref())
+        .is_some_and(|value| value.trim().is_empty())
+    {
+        return Err(map_room_create_error(
+            "v-rooms-room-create-invalid-creation-content",
+        ));
+    }
+
+    let creation_content = creation_content
+        .map(build_room_create_creation_content)
+        .transpose()?;
+    let power_level_content_override = power_level_content_override
+        .map(build_room_create_power_levels)
+        .transpose()?;
+
+    let mut initial_state = Vec::new();
+    if encryption {
+        initial_state.push(raw_room_create_state(
+            "m.room.encryption",
+            "",
+            serde_json::json!({ "algorithm": "m.megolm.v1.aes-sha2" }),
+        )?);
+    }
+    if room_type.as_deref() == Some("org.matrix.msc3417.call") {
+        initial_state.push(raw_room_create_state(
+            "org.matrix.msc3401.call",
+            "",
+            serde_json::json!({}),
+        )?);
+    }
+    if let Some(join_rules) =
+        build_room_create_join_rules(join_rule.as_deref(), knock, parent_room_id.as_ref())?
+    {
+        initial_state.push(join_rules);
+    }
+
+    let mut request = create_room::v3::Request::new();
+    request.name = name;
+    request.topic = topic;
+    request.room_version = room_version;
+    request.room_alias_name = room_alias_name;
+    request.is_direct = is_direct;
+    request.invite = invite;
+    request.visibility = match visibility {
+        Some(MatrixRoomCreateVisibility::Public) => Visibility::Public,
+        Some(MatrixRoomCreateVisibility::Private) | None => Visibility::Private,
+    };
+    request.preset = preset.map(|preset| match preset {
+        MatrixRoomCreatePreset::PrivateChat => RoomPreset::PrivateChat,
+        MatrixRoomCreatePreset::PublicChat => RoomPreset::PublicChat,
+        MatrixRoomCreatePreset::TrustedPrivateChat => RoomPreset::TrustedPrivateChat,
+    });
+    request.creation_content = creation_content;
+    request.initial_state = initial_state;
+    request.power_level_content_override = power_level_content_override;
+    Ok(request)
+}
+
+fn build_room_create_creation_content(
+    content: MatrixRoomCreateContent,
+) -> Result<Raw<create_room::v3::CreationContent>, MatrixAuthCommandError> {
+    let mut value = serde_json::Map::new();
+    if let Some(room_type) = content.room_type {
+        value.insert("type".to_owned(), serde_json::Value::String(room_type));
+    }
+    if let Some(federate) = content.federate {
+        value.insert("m.federate".to_owned(), serde_json::json!(federate));
+    }
+    if let Some(additional_creators) = content.additional_creators {
+        let additional_creators = additional_creators
+            .into_iter()
+            .map(|value| {
+                value.trim().parse::<OwnedUserId>().map_err(|_| {
+                    map_room_create_error("v-rooms-room-create-invalid-additional-creator")
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        value.insert(
+            "additional_creators".to_owned(),
+            serde_json::to_value(additional_creators).expect("user IDs serialize"),
+        );
+    }
+    raw_room_create(
+        serde_json::Value::Object(value),
+        "v-rooms-room-create-invalid-creation-content",
+    )
+}
+
+fn build_room_create_power_levels(
+    power_levels: MatrixRoomCreatePowerLevels,
+) -> Result<Raw<create_room::RoomPowerLevelsContentOverride>, MatrixAuthCommandError> {
+    if power_levels.events_default.is_none() && power_levels.events.is_empty() {
+        return Err(map_room_create_error(
+            "v-rooms-room-create-invalid-power-level",
+        ));
+    }
+    let mut value = serde_json::Map::new();
+    if let Some(events_default) = power_levels.events_default {
+        value.insert(
+            "events_default".to_owned(),
+            serde_json::json!(events_default),
+        );
+    }
+    if !power_levels.events.is_empty() {
+        value.insert(
+            "events".to_owned(),
+            serde_json::to_value(power_levels.events).expect("power level map serializes"),
+        );
+    }
+    raw_room_create(
+        serde_json::Value::Object(value),
+        "v-rooms-room-create-invalid-power-level",
+    )
+}
+
+fn build_room_create_join_rules(
+    join_rule: Option<&str>,
+    knock: bool,
+    parent_room_id: Option<&OwnedRoomId>,
+) -> Result<Option<Raw<AnyInitialStateEvent>>, MatrixAuthCommandError> {
+    let Some(join_rule) = join_rule else {
+        if knock {
+            return Err(map_room_create_error(
+                "v-rooms-room-create-invalid-join-rule",
+            ));
+        }
+        return Ok(None);
+    };
+
+    let join_rule = join_rule.trim();
+    let join_rule = match join_rule {
+        "invite" | "knock" => {
+            if join_rule == "knock" || knock {
+                "knock"
+            } else {
+                "invite"
+            }
+        }
+        "restricted" | "knock_restricted" => {
+            if join_rule == "knock_restricted" || knock {
+                "knock_restricted"
+            } else {
+                "restricted"
+            }
+        }
+        "public" if !knock => "public",
+        _ => {
+            return Err(map_room_create_error(
+                "v-rooms-room-create-invalid-join-rule",
+            ));
+        }
+    };
+
+    let restricted = matches!(join_rule, "restricted" | "knock_restricted");
+    if restricted && parent_room_id.is_none() {
+        return Err(map_room_create_error(
+            "v-rooms-room-create-missing-restricted-parent",
+        ));
+    }
+
+    let mut content = serde_json::json!({ "join_rule": join_rule });
+    if restricted {
+        content["allow"] = serde_json::json!([{
+            "type": "m.room_membership",
+            "room_id": parent_room_id.expect("restricted parent checked").to_string(),
+        }]);
+    }
+    Ok(Some(raw_room_create_state(
+        "m.room.join_rules",
+        "",
+        content,
+    )?))
+}
+
+fn raw_room_create_state(
+    event_type: &str,
+    state_key: &str,
+    content: serde_json::Value,
+) -> Result<Raw<AnyInitialStateEvent>, MatrixAuthCommandError> {
+    raw_room_create(
+        serde_json::json!({
+            "type": event_type,
+            "state_key": state_key,
+            "content": content,
+        }),
+        "v-rooms-room-create-invalid-creation-content",
+    )
+}
+
+fn raw_room_create<T>(
+    value: serde_json::Value,
+    diagnostic_id: &'static str,
+) -> Result<Raw<T>, MatrixAuthCommandError> {
+    serde_json::value::to_raw_value(&value)
+        .map(Raw::<T>::from_json)
+        .map_err(|_| map_room_create_error(diagnostic_id))
+}
+
 fn parse_room_leave_id(room_id: &str) -> Result<OwnedRoomId, MatrixAuthCommandError> {
     room_id
         .trim()
@@ -5797,6 +6188,136 @@ mod tests {
             .expect("room leave command body");
         assert!(command.contains("room.leave()"));
         assert!(!command.contains("mx.leave"));
+    }
+
+    #[test]
+    fn room_create_builds_sdk_request_and_native_initial_state() {
+        let request = build_room_create_request(MatrixRoomCreateRequest {
+            name: Some("  Native room  ".into()),
+            topic: Some("topic".into()),
+            room_version: Some("11".into()),
+            room_alias_name: Some("native-room".into()),
+            is_direct: false,
+            invite: vec!["@alice:example.org".into()],
+            visibility: Some(MatrixRoomCreateVisibility::Public),
+            preset: Some(MatrixRoomCreatePreset::PublicChat),
+            creation_content: Some(MatrixRoomCreateContent {
+                room_type: Some("m.space".into()),
+                federate: Some(false),
+                additional_creators: Some(vec!["@bob:example.org".into()]),
+            }),
+            encryption: true,
+            join_rule: Some("restricted".into()),
+            knock: false,
+            parent_room_id: Some("!parent:example.org".into()),
+            power_level_content_override: Some(MatrixRoomCreatePowerLevels {
+                events_default: Some(50),
+                events: BTreeMap::new(),
+            }),
+        })
+        .unwrap();
+        assert_eq!(request.name.as_deref(), Some("Native room"));
+        assert_eq!(request.room_version.as_ref().unwrap().as_str(), "11");
+        let creation_content: serde_json::Value =
+            serde_json::from_str(request.creation_content.as_ref().unwrap().json().get()).unwrap();
+        assert_eq!(creation_content["type"], "m.space");
+        assert_eq!(creation_content["m.federate"], false);
+        assert_eq!(
+            creation_content["additional_creators"][0],
+            "@bob:example.org"
+        );
+        let power_levels: serde_json::Value = serde_json::from_str(
+            request
+                .power_level_content_override
+                .as_ref()
+                .unwrap()
+                .json()
+                .get(),
+        )
+        .unwrap();
+        assert_eq!(power_levels["events_default"], 50);
+        let initial_state = request
+            .initial_state
+            .iter()
+            .map(|event| serde_json::from_str::<serde_json::Value>(event.json().get()).unwrap())
+            .collect::<Vec<_>>();
+        assert!(initial_state
+            .iter()
+            .any(|event| event["type"] == "m.room.encryption"));
+        assert_eq!(
+            initial_state
+                .iter()
+                .find(|event| event["type"] == "m.room.join_rules")
+                .unwrap()["content"]["allow"][0]["room_id"],
+            "!parent:example.org"
+        );
+    }
+
+    #[test]
+    fn room_create_validation_and_error_maps_are_fail_closed() {
+        let mut request = MatrixRoomCreateRequest {
+            name: Some("room".into()),
+            topic: None,
+            room_version: Some(String::new()),
+            room_alias_name: None,
+            is_direct: false,
+            invite: vec![],
+            visibility: None,
+            preset: None,
+            creation_content: None,
+            encryption: false,
+            join_rule: None,
+            knock: false,
+            parent_room_id: None,
+            power_level_content_override: None,
+        };
+        assert_eq!(
+            build_room_create_request(request.clone())
+                .unwrap_err()
+                .diagnostic_id,
+            "v-rooms-room-create-invalid-room-version"
+        );
+
+        request.room_version = None;
+        request.join_rule = Some("restricted".into());
+        assert_eq!(
+            build_room_create_request(request.clone())
+                .unwrap_err()
+                .diagnostic_id,
+            "v-rooms-room-create-missing-restricted-parent"
+        );
+
+        request.join_rule = None;
+        request.invite = vec!["not-a-user".into()];
+        assert_eq!(
+            build_room_create_request(request)
+                .unwrap_err()
+                .diagnostic_id,
+            "v-rooms-room-create-invalid-invite"
+        );
+        assert_eq!(
+            map_room_create_error("v-rooms-room-create-invalid-parent").code,
+            "InvalidRequest"
+        );
+        assert_eq!(
+            map_room_create_error("v-rooms-room-create-failed").code,
+            "Unknown"
+        );
+    }
+
+    #[test]
+    fn room_create_command_owns_sdk_create_without_a_js_fallback() {
+        let product = include_str!("product.rs");
+        let command = product
+            .split("pub async fn matrix_room_create")
+            .nth(1)
+            .expect("room create command");
+        let command = command
+            .split("#[tauri::command]")
+            .next()
+            .expect("room create command body");
+        assert!(command.contains("create_room(request)"));
+        assert!(!command.contains("mx.createRoom"));
     }
 
     #[test]
