@@ -60,6 +60,12 @@ Update rules:
 
 ## Work log (newest first)
 
+### 2026-08-01 — V-SEND.R-PACK-READ residual truth-up after #297
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.R-PACK-READ** | **This PR** | Docs-only residual truth-up after #297 snapshot. Snapshot get DONE; remaining: `matrix_subscribe_image_packs` live push, physical delete of read-only `custom-emoji/utils.ts` helpers (write side #292 unaffected), JS `useImagePackRooms` room resolution. See [v-send-pack-read-residual.md](v-send-pack-read-residual.md). |
+
+
 ### 2026-08-01 — scoreboard after #297 pack-read
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
