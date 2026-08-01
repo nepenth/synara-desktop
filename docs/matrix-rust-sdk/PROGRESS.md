@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | after #283 edit merge (`df8d42c2`); #292 pack-write; #291 avatar; #290 forward; #288 scoreboard; #287 pack-read; #284 CI; #240 contract; #279 loginUtil
-| Active work        | **this #285** C1 + **#289** C2; next pack-read implement + C3–C5
+| Integration tip    | `1c514ecb` — after #293 scoreboard; #294 C3 checklist; #283 edit; #292 pack-write; #291 avatar; #290 forward
+| Active work        | **this #285** C1 + **#289** C2 (draft stacked); next pack-read implement + C4–C5 live
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | Desktop production import files **165** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip after #283 edit merge**. **This PR #285** V-TIMELINE.C1 NativeTimelinePresenter owns RoomView. Landed #283 edit; #291 avatar + #292 pack-write. #289 C2 stacked. Next: C3–C5, pack-read implement. #39 gated. |
-| **Tip**        | after #283 (`df8d42c2` on integration) |
-| **Active PRs** | **this** [#285](https://github.com/nepenth/synara-desktop/pull/285) C1; [#289](https://github.com/nepenth/synara-desktop/pull/289) C2. |
+| **Now**        | **Tip `1c514ecb`**. **This PR #285** V-TIMELINE.C1 NativeTimelinePresenter owns RoomView. Landed #283 edit + #293 scoreboard + #294 C3 checklist. #289 C2 stacked. Next: pack-read implement, C4–C5. #39 gated. |
+| **Tip**        | `1c514ecb` |
+| **Active PRs** | **this** [#285](https://github.com/nepenth/synara-desktop/pull/285) C1; [#289](https://github.com/nepenth/synara-desktop/pull/289) C2 draft. |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
@@ -60,10 +60,16 @@ Update rules:
 
 ## Work log (newest first)
 
+### 2026-08-01 — scoreboard after #290–#292 inventories
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **Scoreboard** | **Merged #293** | Docs-only SCOREBOARD/PROGRESS honesty after inventories + #283/#294 tip. Production import files **165**. In flight: #285 C1, #289 C2. #39 still gated. |
+
 ### 2026-08-01 — V-TIMELINE.C3 stream verify checklist
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| current | **V-TIMELINE.C3** | **This PR** | Docs-only re-verify checklist for the native stream/delta binding after C1 (#285)/C2 (#289) cutover: contract points S1–S7, existing unit tests, live authenticated proof steps, fail-closed rules. No product code. See [v-timeline-c3-stream-verify.md](v-timeline-c3-stream-verify.md). |
+| current | **V-TIMELINE.C3** | **Merged #294** | Docs-only re-verify checklist for native stream/delta after C1/C2: S1–S7. See [v-timeline-c3-stream-verify.md](v-timeline-c3-stream-verify.md). |
+
 
 ### 2026-08-01 — V-SEND.R-AVATAR-UPLOAD residual inventory
 | When (UTC) | Item | Result | Notes |
