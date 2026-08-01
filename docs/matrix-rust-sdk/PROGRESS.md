@@ -14,11 +14,11 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `95ad2656` — after #318 pack-read subscribe; #317 scoreboard; #314 PACK-UPLOAD; #313 R-ROOM-PROFILE
-| Active work        | Next: pack-read JS utils / useImagePackRooms; C3–C5 live
+| Integration tip    | `324c40a4` — after #320 pack room ids (159 imports); #328 R-CALL-UPLOAD; #326 DEVTOOL inventory
+| Active work        | Next: #325 thumbnail native upload; pack-read JS utils (V-BURN); C3–C5 live; R-GIF-PACK
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
-| Import accounting  | Desktop production import files **163** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
+| Import accounting  | Desktop production import files **159** on tip (plan baseline was 220). Allowlist **163**.
 | Dual backend       | **`false`** (forbidden forever)                                                                                                                                                                                                                                       |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                                                                                                                                                              |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                                                                                                                                                  |
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `95ad2656`**. Landed pack-read **subscribe #318** (`NativeImagePackOwner` signal → re-snapshot). Snapshot #297 + write #306/#309/#310 + upload #314 + room profile #313. Next: JS pack-read utils/`useImagePackRooms` residual; C3–C5 live. #39 gated. |
-| **Tip**        | `95ad2656` |
-| **Active PRs** | none product open after pack-read subscribe #318. |
+| **Now**        | **Tip `324c40a4`**. Landed #320 pack room ids (**163→159**), #328 call-upload, #326 DEVTOOL inventory. Next: #325 thumbnail; JS utils delete gated; C3–C5. #39 gated. |
+| **Tip**        | `324c40a4` |
+| **Active PRs** | #325 thumbnail upload; #327 V-BURN readiness docs (hold — late only). |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
@@ -59,6 +59,13 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — scoreboard after #320 pack room ids + #328 call-upload
+
+| Field | Value |
+|-------|-------|
+| current | **Scoreboard honesty** | **This PR** | Tip `324c40a4`. Imports **159**. #320 room ids + #328 R-CALL-UPLOAD landed. #325 open. #39 gated. |
+
 
 ### 2026-08-01 — scoreboard after #318 pack-read subscribe
 | When (UTC) | Item | Result | Notes |
