@@ -488,7 +488,7 @@ test("repository inventory includes tooling dynamic import and records the curre
   );
   assert.equal(baseline.buckets.feature, 54);
   assert.equal(baseline.buckets.hook, 43);
-  assert.equal(baseline.buckets.component, 26);
+  assert.equal(baseline.buckets.component, 24);
   assert.equal(baseline.buckets.page, 8);
   assert.equal(baseline.buckets.utility, 10);
   assert.equal(baseline.buckets.state, 5);

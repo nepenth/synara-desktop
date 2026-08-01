@@ -11,9 +11,9 @@
         },
         "authenticated_media": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 6,
+          "fileCount": 4,
           "listenerCandidateOccurrences": 0,
-          "methodCandidateOccurrences": 7,
+          "methodCandidateOccurrences": 5,
           "networkingOccurrences": 0
         },
         "client_events": {
@@ -25,7 +25,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 91,
+          "fileCount": 88,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -88,9 +88,9 @@
         },
         "room_lists": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 36,
+          "fileCount": 34,
           "listenerCandidateOccurrences": 10,
-          "methodCandidateOccurrences": 88,
+          "methodCandidateOccurrences": 86,
           "networkingOccurrences": 0
         },
         "room_methods": {
@@ -132,7 +132,7 @@
           "constructorCandidateOccurrences": 0,
           "fileCount": 27,
           "listenerCandidateOccurrences": 40,
-          "methodCandidateOccurrences": 23,
+          "methodCandidateOccurrences": 22,
           "networkingOccurrences": 0
         },
         "typing": {
@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 159,
-      "importFileCount": 157,
+      "fileCount": 157,
+      "importFileCount": 155,
       "methodCandidateFrequencies": [
         {
           "count": 62,
@@ -207,19 +207,7 @@
         },
         {
           "count": 4,
-          "name": "leave"
-        },
-        {
-          "count": 4,
-          "name": "sendMessage"
-        },
-        {
-          "count": 4,
           "name": "stopClient"
-        },
-        {
-          "count": 4,
-          "name": "uploadContent"
         },
         {
           "count": 3,
@@ -247,6 +235,10 @@
         },
         {
           "count": 3,
+          "name": "sendMessage"
+        },
+        {
+          "count": 3,
           "name": "setPushRuleActions"
         },
         {
@@ -267,6 +259,10 @@
         },
         {
           "count": 2,
+          "name": "leave"
+        },
+        {
+          "count": 2,
           "name": "redactEvent"
         },
         {
@@ -276,6 +272,10 @@
         {
           "count": 2,
           "name": "search"
+        },
+        {
+          "count": 2,
+          "name": "uploadContent"
         },
         {
           "count": 1,
@@ -360,12 +360,12 @@
           "importOccurrences": 1
         },
         "MatrixClient": {
-          "fileCount": 42,
-          "importOccurrences": 42
+          "fileCount": 41,
+          "importOccurrences": 41
         },
         "MatrixError": {
-          "fileCount": 26,
-          "importOccurrences": 26
+          "fileCount": 24,
+          "importOccurrences": 24
         },
         "MatrixEvent": {
           "fileCount": 27,
@@ -398,8 +398,8 @@
       },
       "modules": [
         {
-          "fileCount": 151,
-          "importCount": 151,
+          "fileCount": 149,
+          "importCount": 149,
           "path": "matrix-js-sdk"
         },
         {
@@ -501,11 +501,11 @@
           "valueImports": 73
         },
         {
-          "fileCount": 42,
-          "importCount": 42,
+          "fileCount": 41,
+          "importCount": 41,
           "name": "MatrixClient",
           "typeImports": 4,
-          "valueImports": 38
+          "valueImports": 37
         },
         {
           "fileCount": 27,
@@ -515,11 +515,11 @@
           "valueImports": 23
         },
         {
-          "fileCount": 26,
-          "importCount": 26,
+          "fileCount": 24,
+          "importCount": 24,
           "name": "MatrixError",
           "typeImports": 0,
-          "valueImports": 26
+          "valueImports": 24
         },
         {
           "fileCount": 18,
@@ -1216,7 +1216,7 @@
           "fileCount": 8,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
-          "networkingOccurrences": 50
+          "networkingOccurrences": 30
         },
         "event_emitters_listeners": {
           "constructorCandidateOccurrences": 0,
@@ -1317,7 +1317,7 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 20,
+      "fileCount": 18,
       "importFileCount": 10,
       "methodCandidateFrequencies": [
         {
@@ -1481,30 +1481,6 @@
         },
         {
           "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_literal",
-          "line": 133,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_literal",
-          "line": 133,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_template",
-          "line": 133,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_template",
-          "line": 133,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_template",
           "line": 133,
           "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
@@ -1517,30 +1493,6 @@
         },
         {
           "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_literal",
-          "line": 136,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_literal",
-          "line": 136,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_template",
-          "line": 136,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_template",
-          "line": 136,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_template",
           "line": 136,
           "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
@@ -1553,30 +1505,6 @@
         },
         {
           "indicator": "/_matrix/client/v1/media/download",
-          "kind": "matrix_cs_path_literal",
-          "line": 292,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/v1/media/download",
-          "kind": "matrix_cs_path_literal",
-          "line": 292,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/v1/media/download",
-          "kind": "matrix_cs_path_template",
-          "line": 292,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/v1/media/download",
-          "kind": "matrix_cs_path_template",
-          "line": 292,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/v1/media/download",
           "kind": "matrix_cs_path_template",
           "line": 292,
           "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
@@ -1589,30 +1517,6 @@
         },
         {
           "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_literal",
-          "line": 293,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_literal",
-          "line": 293,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_template",
-          "line": 293,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_template",
-          "line": 293,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_template",
           "line": 293,
           "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
@@ -1620,30 +1524,6 @@
         {
           "indicator": "/_matrix/client/v3/sync",
           "kind": "matrix_cs_path_literal",
-          "line": 319,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/v3/sync",
-          "kind": "matrix_cs_path_literal",
-          "line": 319,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/v3/sync",
-          "kind": "matrix_cs_path_literal",
-          "line": 319,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/v3/sync",
-          "kind": "matrix_cs_path_template",
-          "line": 319,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/v3/sync",
-          "kind": "matrix_cs_path_template",
           "line": 319,
           "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
         },
@@ -1703,7 +1583,7 @@
         }
       ],
       "networkingFileCount": 8,
-      "networkingFindingCount": 50,
+      "networkingFindingCount": 30,
       "role": "test",
       "scope": "role",
       "symbols": [
@@ -2151,9 +2031,7 @@
   "files": [
     {
       "bucket": null,
-      "categories": [
-        "direct_matrix_networking"
-      ],
+      "categories": ["direct_matrix_networking"],
       "constructorCandidates": [],
       "desktopRuntime": false,
       "imports": [],
@@ -2191,9 +2069,7 @@
     },
     {
       "bucket": null,
-      "categories": [
-        "direct_matrix_networking"
-      ],
+      "categories": ["direct_matrix_networking"],
       "constructorCandidates": [],
       "desktopRuntime": false,
       "imports": [],
@@ -2213,9 +2089,7 @@
     },
     {
       "bucket": null,
-      "categories": [
-        "direct_matrix_networking"
-      ],
+      "categories": ["direct_matrix_networking"],
       "constructorCandidates": [],
       "desktopRuntime": false,
       "imports": [],
@@ -2241,10 +2115,7 @@
     },
     {
       "bucket": null,
-      "categories": [
-        "authenticated_media",
-        "direct_matrix_networking"
-      ],
+      "categories": ["authenticated_media", "direct_matrix_networking"],
       "constructorCandidates": [],
       "desktopRuntime": false,
       "imports": [],
@@ -2288,9 +2159,7 @@
     },
     {
       "bucket": null,
-      "categories": [
-        "direct_matrix_networking"
-      ],
+      "categories": ["direct_matrix_networking"],
       "constructorCandidates": [],
       "desktopRuntime": false,
       "imports": [],
@@ -2364,161 +2233,7 @@
     },
     {
       "bucket": null,
-      "categories": [
-        "direct_matrix_networking"
-      ],
-      "constructorCandidates": [],
-      "desktopRuntime": false,
-      "imports": [],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_literal",
-          "line": 133
-        },
-        {
-          "description": "Template literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_template",
-          "line": 133
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_literal",
-          "line": 136
-        },
-        {
-          "description": "Template literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_template",
-          "line": 136
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v1/media/download",
-          "kind": "matrix_cs_path_literal",
-          "line": 292
-        },
-        {
-          "description": "Template literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v1/media/download",
-          "kind": "matrix_cs_path_template",
-          "line": 292
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_literal",
-          "line": 293
-        },
-        {
-          "description": "Template literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_template",
-          "line": 293
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v3/sync",
-          "kind": "matrix_cs_path_literal",
-          "line": 319
-        },
-        {
-          "description": "Template literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v3/sync",
-          "kind": "matrix_cs_path_template",
-          "line": 319
-        }
-      ],
-      "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs",
-      "role": "test"
-    },
-    {
-      "bucket": null,
-      "categories": [
-        "direct_matrix_networking"
-      ],
-      "constructorCandidates": [],
-      "desktopRuntime": false,
-      "imports": [],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_literal",
-          "line": 133
-        },
-        {
-          "description": "Template literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_template",
-          "line": 133
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_literal",
-          "line": 136
-        },
-        {
-          "description": "Template literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_template",
-          "line": 136
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v1/media/download",
-          "kind": "matrix_cs_path_literal",
-          "line": 292
-        },
-        {
-          "description": "Template literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v1/media/download",
-          "kind": "matrix_cs_path_template",
-          "line": 292
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_literal",
-          "line": 293
-        },
-        {
-          "description": "Template literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_template",
-          "line": 293
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v3/sync",
-          "kind": "matrix_cs_path_literal",
-          "line": 319
-        },
-        {
-          "description": "Template literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v3/sync",
-          "kind": "matrix_cs_path_template",
-          "line": 319
-        }
-      ],
-      "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs",
-      "role": "test"
-    },
-    {
-      "bucket": null,
-      "categories": [
-        "direct_matrix_networking"
-      ],
+      "categories": ["direct_matrix_networking"],
       "constructorCandidates": [],
       "desktopRuntime": false,
       "imports": [],
@@ -2538,9 +2253,7 @@
     },
     {
       "bucket": null,
-      "categories": [
-        "direct_matrix_networking"
-      ],
+      "categories": ["direct_matrix_networking"],
       "constructorCandidates": [],
       "desktopRuntime": false,
       "imports": [],
@@ -2578,10 +2291,7 @@
     },
     {
       "bucket": null,
-      "categories": [
-        "client_methods",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": false,
       "imports": [
@@ -2611,18 +2321,14 @@
           "name": "getUserId"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "scripts/fixtures/matrix-rust-p1.6/prohibited/js-sdk-in-matrix-ipc/synara/src/app/features/matrix-ipc/leakyImport.ts",
       "role": "tooling"
     },
     {
       "bucket": null,
-      "categories": [
-        "client_methods"
-      ],
+      "categories": ["client_methods"],
       "constructorCandidates": [],
       "desktopRuntime": false,
       "imports": [
@@ -2644,18 +2350,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "createClient"
-      ],
+      "modelCoupling": ["createClient"],
       "networking": [],
       "path": "scripts/fixtures/matrix-rust-p1.6/prohibited/js-sdk-new-file/synara/src/app/features/brand-new-migration/NewClientBridge.ts",
       "role": "tooling"
     },
     {
       "bucket": null,
-      "categories": [
-        "direct_matrix_networking"
-      ],
+      "categories": ["direct_matrix_networking"],
       "constructorCandidates": [],
       "desktopRuntime": false,
       "imports": [],
@@ -2894,19 +2596,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixError"
-      ],
+      "modelCoupling": ["MatrixError"],
       "networking": [],
       "path": "synara/src/app/components/AccountDataEditor.tsx",
       "role": "production"
     },
     {
       "bucket": "component",
-      "categories": [
-        "client_methods",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -3001,10 +2698,7 @@
     },
     {
       "bucket": "component",
-      "categories": [
-        "client_methods",
-        "room_methods"
-      ],
+      "categories": ["client_methods", "room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -3031,20 +2725,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixClient",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixClient", "Room"],
       "networking": [],
       "path": "synara/src/app/components/RoomSummaryLoader.tsx",
       "role": "production"
     },
     {
       "bucket": "component",
-      "categories": [
-        "client_methods",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -3086,11 +2774,7 @@
     },
     {
       "bucket": "component",
-      "categories": [
-        "client_methods",
-        "room_lists",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "room_lists", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -3134,9 +2818,7 @@
           "name": "getSafeUserId"
         }
       ],
-      "modelCoupling": [
-        "MatrixError"
-      ],
+      "modelCoupling": ["MatrixError"],
       "networking": [],
       "path": "synara/src/app/components/create-room/CreateRoomAliasInput.tsx",
       "role": "production"
@@ -3225,21 +2907,14 @@
           "name": "getUserId"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixClient", "Room"],
       "networking": [],
       "path": "synara/src/app/components/create-room/utils.ts",
       "role": "production"
     },
     {
       "bucket": "component",
-      "categories": [
-        "client_methods",
-        "room_lists",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "room_lists", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -3309,20 +2984,14 @@
           "name": "getRoom"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/components/editor/autocomplete/RoomMentionAutocomplete.tsx",
       "role": "production"
     },
     {
       "bucket": "component",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "room_methods", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -3369,21 +3038,14 @@
           "name": "getUserId"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient",
-        "Room",
-        "RoomMember"
-      ],
+      "modelCoupling": ["MatrixClient", "Room", "RoomMember"],
       "networking": [],
       "path": "synara/src/app/components/editor/autocomplete/UserMentionAutocomplete.tsx",
       "role": "production"
     },
     {
       "bucket": "component",
-      "categories": [
-        "client_methods",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -3413,18 +3075,14 @@
           "name": "getUserId"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/components/editor/output.ts",
       "role": "production"
     },
     {
       "bucket": "component",
-      "categories": [
-        "client_methods"
-      ],
+      "categories": ["client_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -3446,18 +3104,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/components/emoji-board/components/Item.tsx",
       "role": "production"
     },
     {
       "bucket": "component",
-      "categories": [
-        "room_methods"
-      ],
+      "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -3479,9 +3133,7 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/components/event-readers/EventReaders.tsx",
       "role": "production"
@@ -3530,20 +3182,14 @@
           "name": "sendStateEvent"
         }
       ],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/components/image-pack-view/RoomImagePack.tsx",
       "role": "production"
     },
     {
       "bucket": "component",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "room_lists"
-      ],
+      "categories": ["client_methods", "room_methods", "room_lists"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -3573,103 +3219,14 @@
           "name": "invite"
         }
       ],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/components/invite-user-prompt/InviteUserPrompt.tsx",
       "role": "production"
     },
     {
       "bucket": "component",
-      "categories": [
-        "client_methods",
-        "room_lists"
-      ],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 19,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixError"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 34,
-          "name": "leave"
-        }
-      ],
-      "modelCoupling": [
-        "MatrixError"
-      ],
-      "networking": [],
-      "path": "synara/src/app/components/leave-room-prompt/LeaveRoomPrompt.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "component",
-      "categories": [
-        "client_methods",
-        "room_lists"
-      ],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 19,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixError"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 34,
-          "name": "leave"
-        }
-      ],
-      "modelCoupling": [
-        "MatrixError"
-      ],
-      "networking": [],
-      "path": "synara/src/app/components/leave-space-prompt/LeaveSpacePrompt.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "component",
-      "categories": [
-        "client_methods",
-        "room_methods"
-      ],
+      "categories": ["client_methods", "room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -3701,11 +3258,7 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixClient",
-        "Room",
-        "RoomMember"
-      ],
+      "modelCoupling": ["MatrixClient", "Room", "RoomMember"],
       "networking": [],
       "path": "synara/src/app/components/member-tile/MemberTile.tsx",
       "role": "production"
@@ -3741,10 +3294,7 @@
     },
     {
       "bucket": "component",
-      "categories": [
-        "client_methods",
-        "room_methods"
-      ],
+      "categories": ["client_methods", "room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -3776,21 +3326,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixClient",
-        "MatrixEvent",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixClient", "MatrixEvent", "Room"],
       "networking": [],
       "path": "synara/src/app/components/message/Reaction.tsx",
       "role": "production"
     },
     {
       "bucket": "component",
-      "categories": [
-        "room_methods",
-        "timelines"
-      ],
+      "categories": ["room_methods", "timelines"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -3825,20 +3368,14 @@
           "name": "findEventById"
         }
       ],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/components/message/Reply.tsx",
       "role": "production"
     },
     {
       "bucket": "component",
-      "categories": [
-        "client_methods",
-        "timelines",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "timelines", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -3868,9 +3405,7 @@
           "name": "getUserId"
         }
       ],
-      "modelCoupling": [
-        "MatrixEvent"
-      ],
+      "modelCoupling": ["MatrixEvent"],
       "networking": [],
       "path": "synara/src/app/components/message/content/PollContent.tsx",
       "role": "production"
@@ -3906,12 +3441,7 @@
     },
     {
       "bucket": "component",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "room_lists",
-        "spaces"
-      ],
+      "categories": ["client_methods", "room_methods", "room_lists", "spaces"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -3960,21 +3490,14 @@
           "name": "isSpaceRoom"
         }
       ],
-      "modelCoupling": [
-        "MatrixError",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixError", "Room"],
       "networking": [],
       "path": "synara/src/app/components/room-card/RoomCard.tsx",
       "role": "production"
     },
     {
       "bucket": "component",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "room_lists"
-      ],
+      "categories": ["client_methods", "room_methods", "room_lists"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -4011,21 +3534,14 @@
           "name": "getRoom"
         }
       ],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/components/room-intro/RoomIntro.tsx",
       "role": "production"
     },
     {
       "bucket": "component",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "spaces",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "room_methods", "spaces", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -4083,18 +3599,14 @@
           "name": "isSpaceRoom"
         }
       ],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/components/user-profile/UserChips.tsx",
       "role": "production"
     },
     {
       "bucket": "app-other",
-      "categories": [
-        "direct_matrix_networking"
-      ],
+      "categories": ["direct_matrix_networking"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [],
@@ -4114,10 +3626,7 @@
     },
     {
       "bucket": "feature",
-      "categories": [
-        "room_methods",
-        "spaces"
-      ],
+      "categories": ["room_methods", "spaces"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -4147,18 +3656,14 @@
           "name": "isSpaceRoom"
         }
       ],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/features/add-existing/AddExisting.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "room_methods"
-      ],
+      "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -4180,19 +3685,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/features/call-status/CallRoomName.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "room_methods",
-        "matrixrtc_calls"
-      ],
+      "categories": ["room_methods", "matrixrtc_calls"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -4229,20 +3729,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "CallMembership",
-        "Room"
-      ],
+      "modelCoupling": ["CallMembership", "Room"],
       "networking": [],
       "path": "synara/src/app/features/call-status/LiveChip.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "room_methods",
-        "matrixrtc_calls"
-      ],
+      "categories": ["room_methods", "matrixrtc_calls"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -4279,19 +3773,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "CallMembership",
-        "Room"
-      ],
+      "modelCoupling": ["CallMembership", "Room"],
       "networking": [],
       "path": "synara/src/app/features/call-status/MemberGlance.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "room_methods"
-      ],
+      "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -4313,18 +3802,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/features/call-status/MemberSpeaking.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "matrixrtc_calls"
-      ],
+      "categories": ["matrixrtc_calls"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -4346,19 +3831,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "CallMembership"
-      ],
+      "modelCoupling": ["CallMembership"],
       "networking": [],
       "path": "synara/src/app/features/call/CallMemberCard.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "custom_raw_event_sends"
-      ],
+      "categories": ["client_methods", "custom_raw_event_sends"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -4395,20 +3875,14 @@
           "name": "sendEvent"
         }
       ],
-      "modelCoupling": [
-        "MatrixError"
-      ],
+      "modelCoupling": ["MatrixError"],
       "networking": [],
       "path": "synara/src/app/features/common-settings/developer-tools/SendRoomEvent.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "uia_auth",
-        "custom_raw_event_sends"
-      ],
+      "categories": ["client_methods", "uia_auth", "custom_raw_event_sends"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -4445,20 +3919,14 @@
           "name": "getSafeUserId"
         }
       ],
-      "modelCoupling": [
-        "MatrixError"
-      ],
+      "modelCoupling": ["MatrixError"],
       "networking": [],
       "path": "synara/src/app/features/common-settings/developer-tools/StateEventEditor.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "uia_auth",
-        "custom_raw_event_sends"
-      ],
+      "categories": ["client_methods", "uia_auth", "custom_raw_event_sends"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -4502,19 +3970,14 @@
           "name": "sendStateEvent"
         }
       ],
-      "modelCoupling": [
-        "MatrixError"
-      ],
+      "modelCoupling": ["MatrixError"],
       "networking": [],
       "path": "synara/src/app/features/common-settings/emojis-stickers/RoomPacks.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -4558,20 +4021,14 @@
           "name": "getSafeUserId"
         }
       ],
-      "modelCoupling": [
-        "MatrixError"
-      ],
+      "modelCoupling": ["MatrixError"],
       "networking": [],
       "path": "synara/src/app/features/common-settings/general/RoomAddress.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "uia_auth",
-        "custom_raw_event_sends"
-      ],
+      "categories": ["client_methods", "uia_auth", "custom_raw_event_sends"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -4608,20 +4065,14 @@
           "name": "sendStateEvent"
         }
       ],
-      "modelCoupling": [
-        "MatrixError"
-      ],
+      "modelCoupling": ["MatrixError"],
       "networking": [],
       "path": "synara/src/app/features/common-settings/general/RoomEncryption.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "uia_auth",
-        "custom_raw_event_sends"
-      ],
+      "categories": ["client_methods", "uia_auth", "custom_raw_event_sends"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -4678,9 +4129,7 @@
           "name": "sendStateEvent"
         }
       ],
-      "modelCoupling": [
-        "MatrixError"
-      ],
+      "modelCoupling": ["MatrixError"],
       "networking": [],
       "path": "synara/src/app/features/common-settings/general/RoomHistoryVisibility.tsx",
       "role": "production"
@@ -4769,20 +4218,14 @@
           "name": "isSpaceRoom"
         }
       ],
-      "modelCoupling": [
-        "MatrixError"
-      ],
+      "modelCoupling": ["MatrixError"],
       "networking": [],
       "path": "synara/src/app/features/common-settings/general/RoomJoinRules.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "uia_auth",
-        "custom_raw_event_sends"
-      ],
+      "categories": ["client_methods", "uia_auth", "custom_raw_event_sends"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -4852,21 +4295,14 @@
           "name": "getSafeUserId"
         }
       ],
-      "modelCoupling": [
-        "MatrixError"
-      ],
+      "modelCoupling": ["MatrixError"],
       "networking": [],
       "path": "synara/src/app/features/common-settings/general/RoomProfile.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "spaces",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "room_methods", "spaces", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -4923,21 +4359,14 @@
           "name": "isSpaceRoom"
         }
       ],
-      "modelCoupling": [
-        "MatrixError"
-      ],
+      "modelCoupling": ["MatrixError"],
       "networking": [],
       "path": "synara/src/app/features/common-settings/general/RoomPublish.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "spaces",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "room_methods", "spaces", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -5043,9 +4472,7 @@
           "name": "isSpaceRoom"
         }
       ],
-      "modelCoupling": [
-        "MatrixError"
-      ],
+      "modelCoupling": ["MatrixError"],
       "networking": [],
       "path": "synara/src/app/features/common-settings/general/RoomUpgrade.tsx",
       "role": "production"
@@ -5074,19 +4501,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "RoomMember"
-      ],
+      "modelCoupling": ["RoomMember"],
       "networking": [],
       "path": "synara/src/app/features/common-settings/members/Members.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "room_lists"
-      ],
+      "categories": ["client_methods", "room_lists"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -5131,18 +4553,14 @@
           "name": "createRoom"
         }
       ],
-      "modelCoupling": [
-        "MatrixError"
-      ],
+      "modelCoupling": ["MatrixError"],
       "networking": [],
       "path": "synara/src/app/features/create-chat/CreateChat.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "room_methods"
-      ],
+      "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -5174,19 +4592,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixError",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixError", "Room"],
       "networking": [],
       "path": "synara/src/app/features/create-room/CreateRoom.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "room_methods"
-      ],
+      "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -5213,10 +4626,7 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixError",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixError", "Room"],
       "networking": [],
       "path": "synara/src/app/features/create-space/CreateSpace.tsx",
       "role": "production"
@@ -5306,20 +4716,14 @@
           "name": "setAccountData"
         }
       ],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/features/lobby/Lobby.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "room_lists"
-      ],
+      "categories": ["client_methods", "room_methods", "room_lists"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -5359,21 +4763,14 @@
           "name": "joinRoom"
         }
       ],
-      "modelCoupling": [
-        "MatrixError",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixError", "Room"],
       "networking": [],
       "path": "synara/src/app/features/lobby/RoomItem.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "room_methods", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -5438,20 +4835,14 @@
           "name": "getSafeUserId"
         }
       ],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/features/lobby/SpaceHierarchy.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "room_lists"
-      ],
+      "categories": ["client_methods", "room_methods", "room_lists"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -5486,20 +4877,14 @@
           "name": "joinRoom"
         }
       ],
-      "modelCoupling": [
-        "MatrixError",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixError", "Room"],
       "networking": [],
       "path": "synara/src/app/features/lobby/SpaceItem.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "room_lists"
-      ],
+      "categories": ["client_methods", "room_lists"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -5536,10 +4921,7 @@
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "room_lists"
-      ],
+      "categories": ["client_methods", "room_lists"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -5597,9 +4979,7 @@
     },
     {
       "bucket": "feature",
-      "categories": [
-        "room_methods"
-      ],
+      "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -5636,19 +5016,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/features/message-search/SearchResultGroup.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "searches"
-      ],
+      "categories": ["client_methods", "searches"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -5710,11 +5085,7 @@
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "room_methods", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -5758,9 +5129,7 @@
           "name": "getSafeUserId"
         }
       ],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/features/room-nav/RoomNavItem.tsx",
       "role": "production"
@@ -5796,9 +5165,7 @@
     },
     {
       "bucket": "feature",
-      "categories": [
-        "room_methods"
-      ],
+      "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -5820,19 +5187,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/features/room/CommandAutocomplete.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "room_methods"
-      ],
+      "categories": ["client_methods", "room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -5864,11 +5226,7 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixClient",
-        "Room",
-        "RoomMember"
-      ],
+      "modelCoupling": ["MatrixClient", "Room", "RoomMember"],
       "networking": [],
       "path": "synara/src/app/features/room/MembersDrawer.tsx",
       "role": "production"
@@ -5878,7 +5236,6 @@
       "categories": [
         "client_methods",
         "room_methods",
-        "authenticated_media",
         "timelines",
         "uia_auth",
         "custom_raw_event_sends"
@@ -5938,106 +5295,88 @@
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 453,
+          "line": 452,
           "name": "getUserId"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 468,
+          "line": 467,
           "name": "getSafeUserId"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 480,
+          "line": 479,
           "name": "getSafeUserId"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 483,
+          "line": 482,
           "name": "getSafeUserId"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 494,
+          "line": 493,
           "name": "getSafeUserId"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 497,
+          "line": 496,
           "name": "getSafeUserId"
         },
         {
           "category": "timelines",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 585,
+          "line": 584,
           "name": "sendMessage"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 646,
+          "line": 645,
           "name": "getUserId"
         },
         {
           "category": "timelines",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 682,
+          "line": 681,
           "name": "sendMessage"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 686,
+          "line": 685,
           "name": "getSafeUserId"
         },
         {
           "category": "custom_raw_event_sends",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 877,
+          "line": 876,
           "name": "sendEvent"
-        },
-        {
-          "category": "authenticated_media",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 911,
-          "name": "uploadContent"
-        },
-        {
-          "category": "timelines",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 918,
-          "name": "sendMessage"
         }
       ],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/features/room/RoomInput.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "room_methods"
-      ],
+      "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -6059,19 +5398,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/features/room/RoomSidePanel.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -6108,11 +5442,7 @@
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "room_methods", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -6142,20 +5472,14 @@
           "name": "getUserId"
         }
       ],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/features/room/RoomViewFollowing.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "room_methods", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -6185,18 +5509,14 @@
           "name": "getSafeUserId"
         }
       ],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/features/room/RoomViewHeader.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "room_methods"
-      ],
+      "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -6218,18 +5538,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/features/room/RoomViewTyping.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "timelines"
-      ],
+      "categories": ["timelines"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -6256,21 +5572,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixError"
-      ],
+      "modelCoupling": ["MatrixError"],
       "networking": [],
       "path": "synara/src/app/features/room/jump-to-time/JumpToTime.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "timelines",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "room_methods", "timelines", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -6341,22 +5650,14 @@
           "name": "getUserId"
         }
       ],
-      "modelCoupling": [
-        "MatrixEvent",
-        "Relations",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixEvent", "Relations", "Room"],
       "networking": [],
       "path": "synara/src/app/features/room/message/Message.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "timelines"
-      ],
+      "categories": ["client_methods", "room_methods", "timelines"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -6406,10 +5707,7 @@
           "name": "sendMessage"
         }
       ],
-      "modelCoupling": [
-        "MatrixEvent",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixEvent", "Room"],
       "networking": [],
       "path": "synara/src/app/features/room/message/MessageEditor.tsx",
       "role": "production"
@@ -6443,21 +5741,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixEvent"
-      ],
+      "modelCoupling": ["MatrixEvent"],
       "networking": [],
       "path": "synara/src/app/features/room/message/NativeEventContent.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "timelines",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "room_methods", "timelines", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -6502,20 +5793,14 @@
           "name": "getUserId"
         }
       ],
-      "modelCoupling": [
-        "Relations",
-        "Room"
-      ],
+      "modelCoupling": ["Relations", "Room"],
       "networking": [],
       "path": "synara/src/app/features/room/message/Reactions.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "authenticated_media"
-      ],
+      "categories": [],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -6534,11 +5819,6 @@
             {
               "alias": null,
               "isTypeOnly": false,
-              "name": "MatrixClient"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
               "name": "MsgType"
             }
           ],
@@ -6546,28 +5826,15 @@
         }
       ],
       "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "authenticated_media",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 39,
-          "name": "uploadContent"
-        }
-      ],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "methodCandidates": [],
+      "modelCoupling": [],
       "networking": [],
       "path": "synara/src/app/features/room/msgContent.ts",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "room_methods",
-        "timelines"
-      ],
+      "categories": ["room_methods", "timelines"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -6614,21 +5881,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixEvent",
-        "Relations",
-        "Room",
-        "RoomMember"
-      ],
+      "modelCoupling": ["MatrixEvent", "Relations", "Room", "RoomMember"],
       "networking": [],
       "path": "synara/src/app/features/room/reaction-viewer/ReactionViewer.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "room_methods"
-      ],
+      "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -6650,20 +5910,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/features/room/room-notes/RoomNotesPanel.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "room_methods", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -6698,22 +5952,14 @@
           "name": "getUserId"
         }
       ],
-      "modelCoupling": [
-        "MatrixEvent",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixEvent", "Room"],
       "networking": [],
       "path": "synara/src/app/features/room/room-pin-menu/RoomPinMenu.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "spaces",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "room_methods", "spaces", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -6764,19 +6010,14 @@
           "name": "isSpaceRoom"
         }
       ],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/features/search/Search.tsx",
       "role": "production"
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "notifications_push_rules"
-      ],
+      "categories": ["client_methods", "notifications_push_rules"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -6833,10 +6074,7 @@
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "notifications_push_rules"
-      ],
+      "categories": ["client_methods", "notifications_push_rules"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -6897,9 +6135,7 @@
     },
     {
       "bucket": "feature",
-      "categories": [
-        "notifications_push_rules"
-      ],
+      "categories": ["notifications_push_rules"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -6928,11 +6164,7 @@
     },
     {
       "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "notifications_push_rules",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "notifications_push_rules", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -7130,9 +6362,7 @@
         }
       ],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/hooks/useAccountDataCallback.ts",
       "role": "production"
@@ -7301,20 +6531,14 @@
         }
       ],
       "methodCandidates": [],
-      "modelCoupling": [
-        "CallMembership",
-        "Room"
-      ],
+      "modelCoupling": ["CallMembership", "Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useCall.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "client_methods",
-        "room_methods"
-      ],
+      "categories": ["client_methods", "room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -7341,10 +6565,7 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixClient",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixClient", "Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useCallEmbed.ts",
       "role": "production"
@@ -7565,22 +6786,14 @@
           "name": "sendStateEvent"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient",
-        "Room",
-        "RoomMember"
-      ],
+      "modelCoupling": ["MatrixClient", "Room", "RoomMember"],
       "networking": [],
       "path": "synara/src/app/hooks/useCommands.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "room_lists"
-      ],
+      "categories": ["client_methods", "room_methods", "room_lists"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -7610,18 +6823,14 @@
           "name": "getRoom"
         }
       ],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useGetRoom.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "room_methods"
-      ],
+      "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -7658,18 +6867,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useLocalRoomSummary.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "client_methods"
-      ],
+      "categories": ["client_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -7691,9 +6896,7 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/hooks/useMatrixClient.ts",
       "role": "production"
@@ -7722,9 +6925,7 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixEvent"
-      ],
+      "modelCoupling": ["MatrixEvent"],
       "networking": [],
       "path": "synara/src/app/hooks/useMemberEventParser.tsx",
       "role": "production"
@@ -7753,19 +6954,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "RoomMember"
-      ],
+      "modelCoupling": ["RoomMember"],
       "networking": [],
       "path": "synara/src/app/hooks/useMemberFilter.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "client_methods",
-        "room_methods"
-      ],
+      "categories": ["client_methods", "room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -7797,11 +6993,7 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixClient",
-        "Room",
-        "RoomMember"
-      ],
+      "modelCoupling": ["MatrixClient", "Room", "RoomMember"],
       "networking": [],
       "path": "synara/src/app/hooks/useMemberPowerTag.ts",
       "role": "production"
@@ -7830,20 +7022,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "RoomMember"
-      ],
+      "modelCoupling": ["RoomMember"],
       "networking": [],
       "path": "synara/src/app/hooks/useMemberSort.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "room_methods",
-        "event_emitters_listeners",
-        "room_lists"
-      ],
+      "categories": ["room_methods", "event_emitters_listeners", "room_lists"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -7890,18 +7076,14 @@
         }
       ],
       "methodCandidates": [],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useMembership.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "notifications_push_rules"
-      ],
+      "categories": ["notifications_push_rules"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -7940,9 +7122,7 @@
     },
     {
       "bucket": "hook",
-      "categories": [
-        "room_methods"
-      ],
+      "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -7964,18 +7144,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/hooks/usePowerLevelTags.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "room_methods"
-      ],
+      "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -8002,19 +7178,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixEvent",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixEvent", "Room"],
       "networking": [],
       "path": "synara/src/app/hooks/usePowerLevels.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "notifications_push_rules"
-      ],
+      "categories": ["notifications_push_rules"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -8120,20 +7291,14 @@
         }
       ],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixClient",
-        "MatrixEvent"
-      ],
+      "modelCoupling": ["MatrixClient", "MatrixEvent"],
       "networking": [],
       "path": "synara/src/app/hooks/useRecentEmoji.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "event_emitters_listeners",
-        "timelines"
-      ],
+      "categories": ["event_emitters_listeners", "timelines"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -8203,18 +7368,14 @@
         }
       ],
       "methodCandidates": [],
-      "modelCoupling": [
-        "Relations"
-      ],
+      "modelCoupling": ["Relations"],
       "networking": [],
       "path": "synara/src/app/hooks/useRelations.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "room_methods"
-      ],
+      "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -8236,9 +7397,7 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useRoom.ts",
       "role": "production"
@@ -8296,19 +7455,14 @@
         }
       ],
       "methodCandidates": [],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useRoomAccountData.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "client_methods",
-        "room_lists"
-      ],
+      "categories": ["client_methods", "room_lists"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -8338,9 +7492,7 @@
           "name": "getRoom"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/hooks/useRoomActivity.ts",
       "role": "production"
@@ -8423,21 +7575,14 @@
           "name": "getLocalAliases"
         }
       ],
-      "modelCoupling": [
-        "MatrixError",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixError", "Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useRoomAliases.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "room_lists"
-      ],
+      "categories": ["client_methods", "room_methods", "room_lists"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -8477,11 +7622,7 @@
           "name": "getRoom"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient",
-        "MatrixEvent",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixClient", "MatrixEvent", "Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useRoomCreators.ts",
       "role": "production"
@@ -8517,10 +7658,7 @@
     },
     {
       "bucket": "hook",
-      "categories": [
-        "room_methods",
-        "timelines"
-      ],
+      "categories": ["room_methods", "timelines"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -8560,10 +7698,7 @@
           "name": "findEventById"
         }
       ],
-      "modelCoupling": [
-        "MatrixEvent",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixEvent", "Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useRoomEvent.ts",
       "role": "production"
@@ -8672,20 +7807,14 @@
           "name": "getUsersReadUpTo"
         }
       ],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useRoomEventReaders.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "room_methods",
-        "event_emitters_listeners",
-        "timelines"
-      ],
+      "categories": ["room_methods", "event_emitters_listeners", "timelines"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -8765,10 +7894,7 @@
         }
       ],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixEvent",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixEvent", "Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useRoomLatestRenderedEvent.ts",
       "role": "production"
@@ -8853,22 +7979,14 @@
           "name": "getRoom"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient",
-        "MatrixEvent",
-        "RoomMember"
-      ],
+      "modelCoupling": ["MatrixClient", "MatrixEvent", "RoomMember"],
       "networking": [],
       "path": "synara/src/app/hooks/useRoomMembers.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "room_methods",
-        "event_emitters_listeners",
-        "timelines"
-      ],
+      "categories": ["room_methods", "event_emitters_listeners", "timelines"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -8930,18 +8048,14 @@
         }
       ],
       "methodCandidates": [],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useRoomMeta.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "room_methods"
-      ],
+      "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -8978,20 +8092,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useRoomPinnedEvents.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "room_methods",
-        "event_emitters_listeners",
-        "timelines"
-      ],
+      "categories": ["room_methods", "event_emitters_listeners", "timelines"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -9067,20 +8175,14 @@
         }
       ],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixEvent",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixEvent", "Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useRoomState.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "client_methods",
-        "notifications_push_rules"
-      ],
+      "categories": ["client_methods", "notifications_push_rules"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -9146,19 +8248,14 @@
           "name": "addPushRule"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/hooks/useRoomsNotificationPreferences.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "client_methods",
-        "room_lists"
-      ],
+      "categories": ["client_methods", "room_lists"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -9188,18 +8285,14 @@
           "name": "getRoom"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/hooks/useSidebarItems.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "room_methods"
-      ],
+      "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -9221,19 +8314,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useSpace.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "room_methods",
-        "spaces"
-      ],
+      "categories": ["room_methods", "spaces"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -9282,18 +8370,14 @@
           "name": "isSpaceRoom"
         }
       ],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useSpaceHierarchy.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "room_methods"
-      ],
+      "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -9315,20 +8399,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useStateEvent.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "client_methods",
-        "event_emitters_listeners",
-        "timelines"
-      ],
+      "categories": ["client_methods", "event_emitters_listeners", "timelines"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -9380,11 +8458,7 @@
         }
       ],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixClient",
-        "MatrixEvent",
-        "RoomState"
-      ],
+      "modelCoupling": ["MatrixClient", "MatrixEvent", "RoomState"],
       "networking": [],
       "path": "synara/src/app/hooks/useStateEventCallback.ts",
       "role": "production"
@@ -9450,18 +8524,14 @@
           "name": "getSyncState"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/hooks/useSyncState.ts",
       "role": "production"
     },
     {
       "bucket": "hook",
-      "categories": [
-        "event_emitters_listeners"
-      ],
+      "categories": ["event_emitters_listeners"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -9543,9 +8613,7 @@
     },
     {
       "bucket": "hook",
-      "categories": [
-        "event_emitters_listeners"
-      ],
+      "categories": ["event_emitters_listeners"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -9608,9 +8676,7 @@
     },
     {
       "bucket": "media-boundary",
-      "categories": [
-        "direct_matrix_networking"
-      ],
+      "categories": ["direct_matrix_networking"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [],
@@ -9660,9 +8726,7 @@
     },
     {
       "bucket": "media-boundary",
-      "categories": [
-        "client_methods"
-      ],
+      "categories": ["client_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -9684,9 +8748,7 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/matrix/media.ts",
       "role": "production"
@@ -9879,10 +8941,7 @@
           "name": "findEventById"
         }
       ],
-      "modelCoupling": [
-        "MatrixEvent",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixEvent", "Room"],
       "networking": [],
       "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
       "role": "production"
@@ -9975,18 +9034,14 @@
           "name": "retryImmediately"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/pages/client/ClientRoot.tsx",
       "role": "production"
     },
     {
       "bucket": "page",
-      "categories": [
-        "client_methods"
-      ],
+      "categories": ["client_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -10008,18 +9063,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/pages/client/SyncStatus.tsx",
       "role": "production"
     },
     {
       "bucket": "page",
-      "categories": [
-        "sync_lifecycle"
-      ],
+      "categories": ["sync_lifecycle"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -10048,10 +9099,7 @@
     },
     {
       "bucket": "page",
-      "categories": [
-        "client_methods",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -10091,9 +9139,7 @@
           "name": "getUserId"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/pages/client/explore/Server.tsx",
       "role": "production"
@@ -10167,9 +9213,7 @@
           "name": "getRoom"
         }
       ],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/pages/client/inbox/Notifications.tsx",
       "role": "production"
@@ -10254,9 +9298,7 @@
           "name": "getRoom"
         }
       ],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/pages/client/sidebar/SpaceTabs.tsx",
       "role": "production"
@@ -10361,18 +9403,14 @@
           "name": "isSpaceRoom"
         }
       ],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/pages/client/space/Space.tsx",
       "role": "production"
     },
     {
       "bucket": "page",
-      "categories": [
-        "sync_lifecycle"
-      ],
+      "categories": ["sync_lifecycle"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -10598,11 +9636,7 @@
           "name": "getRoom"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient",
-        "MatrixEvent",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixClient", "MatrixEvent", "Room"],
       "networking": [],
       "path": "synara/src/app/plugins/call/CallEmbed.ts",
       "role": "production"
@@ -10758,11 +9792,7 @@
           "name": "getVisibleRooms"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient",
-        "MatrixError",
-        "MatrixEvent"
-      ],
+      "modelCoupling": ["MatrixClient", "MatrixError", "MatrixEvent"],
       "networking": [],
       "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
       "role": "production"
@@ -10820,20 +9850,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixEvent"
-      ],
+      "modelCoupling": ["MatrixEvent"],
       "networking": [],
       "path": "synara/src/app/plugins/custom-emoji/ImagePack.ts",
       "role": "production"
     },
     {
       "bucket": "plugin",
-      "categories": [
-        "client_methods",
-        "room_lists",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "room_lists", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -10884,19 +9908,14 @@
           "name": "getRoom"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/plugins/react-custom-html-parser.tsx",
       "role": "production"
     },
     {
       "bucket": "plugin",
-      "categories": [
-        "client_methods",
-        "account_data"
-      ],
+      "categories": ["client_methods", "account_data"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -10926,18 +9945,14 @@
           "name": "setAccountData"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/plugins/recent-emoji.ts",
       "role": "production"
     },
     {
       "bucket": "plugin",
-      "categories": [
-        "room_methods"
-      ],
+      "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -10959,18 +9974,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "Room"
-      ],
+      "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/plugins/via-servers.ts",
       "role": "production"
     },
     {
       "bucket": "state",
-      "categories": [
-        "client_methods"
-      ],
+      "categories": ["client_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -10992,18 +10003,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/state/__tests__/initMatrix.test.ts",
       "role": "test"
     },
     {
       "bucket": "state",
-      "categories": [
-        "client_methods"
-      ],
+      "categories": ["client_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -11025,19 +10032,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/state/__tests__/performLogout.test.ts",
       "role": "test"
     },
     {
       "bucket": "state",
-      "categories": [
-        "client_methods",
-        "uia_auth"
-      ],
+      "categories": ["client_methods", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -11091,20 +10093,14 @@
           "name": "refreshToken"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient",
-        "MatrixError"
-      ],
+      "modelCoupling": ["MatrixClient", "MatrixError"],
       "networking": [],
       "path": "synara/src/app/state/__tests__/tokenRefresh.test.ts",
       "role": "test"
     },
     {
       "bucket": "state",
-      "categories": [
-        "client_methods",
-        "room_lists"
-      ],
+      "categories": ["client_methods", "room_lists"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -11218,18 +10214,14 @@
           "name": "getRoom"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/state/hooks/roomList.ts",
       "role": "production"
     },
     {
       "bucket": "state",
-      "categories": [
-        "event_emitters_listeners"
-      ],
+      "categories": ["event_emitters_listeners"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -11493,11 +10485,7 @@
           "name": "getRoom"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient",
-        "MatrixEvent",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixClient", "MatrixEvent", "Room"],
       "networking": [],
       "path": "synara/src/app/state/room-list/roomActivity.ts",
       "role": "production"
@@ -11599,10 +10587,7 @@
           "name": "getRooms"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixClient", "Room"],
       "networking": [],
       "path": "synara/src/app/state/room-list/utils.ts",
       "role": "production"
@@ -11638,9 +10623,7 @@
     },
     {
       "bucket": "state",
-      "categories": [
-        "client_methods"
-      ],
+      "categories": ["client_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -11677,19 +10660,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "MatrixClient",
-        "MatrixError"
-      ],
+      "modelCoupling": ["MatrixClient", "MatrixError"],
       "networking": [],
       "path": "synara/src/app/state/upload.ts",
       "role": "production"
     },
     {
       "bucket": "utility",
-      "categories": [
-        "receipts"
-      ],
+      "categories": ["receipts"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -11718,9 +10696,7 @@
     },
     {
       "bucket": "utility",
-      "categories": [
-        "direct_matrix_networking"
-      ],
+      "categories": ["direct_matrix_networking"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [],
@@ -11740,9 +10716,7 @@
     },
     {
       "bucket": "utility",
-      "categories": [
-        "sync_lifecycle"
-      ],
+      "categories": ["sync_lifecycle"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -11771,9 +10745,7 @@
     },
     {
       "bucket": "utility",
-      "categories": [
-        "sync_lifecycle"
-      ],
+      "categories": ["sync_lifecycle"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -11802,10 +10774,7 @@
     },
     {
       "bucket": "utility",
-      "categories": [
-        "room_methods",
-        "timelines"
-      ],
+      "categories": ["room_methods", "timelines"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -11842,22 +10811,14 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "EventTimeline",
-        "MatrixEvent",
-        "Room"
-      ],
+      "modelCoupling": ["EventTimeline", "MatrixEvent", "Room"],
       "networking": [],
       "path": "synara/src/app/utils/__tests__/timelineLinks.test.ts",
       "role": "test"
     },
     {
       "bucket": "utility",
-      "categories": [
-        "room_methods",
-        "timelines",
-        "receipts"
-      ],
+      "categories": ["room_methods", "timelines", "receipts"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -11929,11 +10890,7 @@
       ],
       "listenerCandidates": [],
       "methodCandidates": [],
-      "modelCoupling": [
-        "EventTimeline",
-        "MatrixEvent",
-        "Room"
-      ],
+      "modelCoupling": ["EventTimeline", "MatrixEvent", "Room"],
       "networking": [],
       "path": "synara/src/app/utils/__tests__/timelineOpening.test.ts",
       "role": "test"
@@ -12200,20 +11157,14 @@
           "name": "getRoom"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient",
-        "MatrixEvent",
-        "Room"
-      ],
+      "modelCoupling": ["MatrixClient", "MatrixEvent", "Room"],
       "networking": [],
       "path": "synara/src/app/utils/notifications.ts",
       "role": "production"
     },
     {
       "bucket": "utility",
-      "categories": [
-        "timelines"
-      ],
+      "categories": ["timelines"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -12450,10 +11401,7 @@
     },
     {
       "bucket": "utility",
-      "categories": [
-        "client_methods",
-        "room_lists"
-      ],
+      "categories": ["client_methods", "room_lists"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -12504,18 +11452,14 @@
           "name": "getRoom"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/utils/sort.ts",
       "role": "production"
     },
     {
       "bucket": "utility",
-      "categories": [
-        "sync_lifecycle"
-      ],
+      "categories": ["sync_lifecycle"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -12544,9 +11488,7 @@
     },
     {
       "bucket": "utility",
-      "categories": [
-        "sync_lifecycle"
-      ],
+      "categories": ["sync_lifecycle"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -12575,11 +11517,7 @@
     },
     {
       "bucket": "utility",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "timelines"
-      ],
+      "categories": ["client_methods", "room_methods", "timelines"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -12678,10 +11616,7 @@
     },
     {
       "bucket": "utility",
-      "categories": [
-        "room_methods",
-        "timelines"
-      ],
+      "categories": ["room_methods", "timelines"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -12740,11 +11675,7 @@
           "name": "getUnfilteredTimelineSet"
         }
       ],
-      "modelCoupling": [
-        "EventTimeline",
-        "MatrixEvent",
-        "Room"
-      ],
+      "modelCoupling": ["EventTimeline", "MatrixEvent", "Room"],
       "networking": [],
       "path": "synara/src/app/utils/timelineLinks.ts",
       "role": "production"
@@ -12871,21 +11802,14 @@
           "name": "getLiveTimeline"
         }
       ],
-      "modelCoupling": [
-        "EventTimeline",
-        "MatrixEvent",
-        "Room"
-      ],
+      "modelCoupling": ["EventTimeline", "MatrixEvent", "Room"],
       "networking": [],
       "path": "synara/src/app/utils/timelineOpening.ts",
       "role": "production"
     },
     {
       "bucket": "client-lifecycle",
-      "categories": [
-        "client_methods",
-        "crypto_verification_recovery"
-      ],
+      "categories": ["client_methods", "crypto_verification_recovery"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [
@@ -12930,9 +11854,7 @@
           "name": "getCrypto"
         }
       ],
-      "modelCoupling": [
-        "MatrixClient"
-      ],
+      "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/client/cryptoStoreContinuity.ts",
       "role": "production"
@@ -13175,10 +12097,7 @@
     },
     {
       "bucket": "service-worker",
-      "categories": [
-        "authenticated_media",
-        "direct_matrix_networking"
-      ],
+      "categories": ["authenticated_media", "direct_matrix_networking"],
       "constructorCandidates": [],
       "desktopRuntime": true,
       "imports": [],
@@ -13235,18 +12154,11 @@
   "schemaVersion": 2,
   "scope": {
     "desktopRuntimePrefix": "synara/src/",
-    "extensions": [
-      ".cjs",
-      ".js",
-      ".jsx",
-      ".mjs",
-      ".ts",
-      ".tsx"
-    ],
+    "extensions": [".cjs", ".js", ".jsx", ".mjs", ".ts", ".tsx"],
     "methodAnalysis": "Method and listener findings are AST property-name candidates in files that import matrix-js-sdk. Receivers are not type-checked; counts are candidates, not verified SDK API calls.",
     "notes": [
       "Repository-wide totals include production, test, and tooling roles.",
-      "Desktop runtime baseline counts only import files under synara/src/ and matches plan \u00a74 (220 production / 12 test).",
+      "Desktop runtime baseline counts only import files under synara/src/ and matches plan §4 (220 production / 12 test).",
       "Aggregates under aggregates.{production,test,tooling} never mix roles.",
       "Direct networking uses false-positive-resistant /_matrix/{client,media,federation,key}/ path literals.",
       "Generated inventory; no wall-clock timestamps or absolute paths.",
@@ -13263,7 +12175,7 @@
     "desktopRuntimeBaseline": {
       "buckets": {
         "client-lifecycle": 2,
-        "component": 26,
+        "component": 24,
         "feature": 54,
         "hook": 43,
         "media-boundary": 1,
@@ -13290,7 +12202,7 @@
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
       "testNetworkingFiles": 8,
-      "testNetworkingFindings": 50,
+      "testNetworkingFindings": 30,
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
