@@ -35,6 +35,7 @@
 | V-SEND.R-PACK-WRITE room | **#310** `matrix_set_room_image_pack` + RoomPacks/RoomImagePack fail-closed |
 | V-SEND.R-ROOM-PROFILE | **#313** `matrix_set_room_name`/`matrix_set_room_topic`/`matrix_set_room_avatar` + RoomProfile.tsx fail-closed |
 | V-SEND.R-PACK-UPLOAD | **#314** reuses `matrix_upload_media` via CompactUploadCardRenderer fail-closed (pack + compact image uploads) |
+| V-SEND.R-DEVTOOL | [Docs-only inventory](v-send-devtool-inventory.md): all three developer-tools runtime files still use the JS client; implementation remains low priority |
 | CI | Parallel Validate #284 |
 
 ## In flight
@@ -59,7 +60,7 @@
 - ~~**V-SEND.R-PACK-WRITE** personal~~ **#306**; ~~**global**~~ **#309**; ~~**room**~~ **#310**; ~~**PACK-UPLOAD**~~ **#314** (reuses `matrix_upload_media` #303 via CompactUploadCardRenderer)
 - ~~**V-SEND.R-AVATAR-UPLOAD** user profile~~ **#303**; ~~**R-ROOM-PROFILE**~~ **#313** (room-avatar media upload covered by #314 CompactUploadCardRenderer path)
 - **V-SEND.R-CALL-UPLOAD** / **R-GIF-PACK** — [upload call-site audit](v-send-upload-residual-audit.md); composer/thumbnail usages are legacy-web fallbacks
-- **V-SEND.R-DEVTOOL** (low priority)
+- **V-SEND.R-DEVTOOL** (implementation remains low priority; [inventory complete](v-send-devtool-inventory.md))
 
 ### Convergence
 - **V-BURN.1–3** zero live JS client + drop npm `matrix-js-sdk` after residual owners clear
