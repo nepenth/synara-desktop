@@ -4,24 +4,25 @@
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | Status   | **Implementation packet** — this PR is docs-only and does not claim the vertical is implemented                                        |
 | Residual | **V-ROOMS.R-POWERS-BULK** from **#377**                                                                                                |
-| Base     | `5d1fc28b` on `feature/matrix-rust-sdk-full-replacement` (current feature tip after #410)                                    |
+| Base     | `52953091` on `feature/matrix-rust-sdk-full-replacement` (current feature tip after #424)                                    |
 | PR shape | Focused **draft** PR targeting `feature/matrix-rust-sdk-full-replacement`                                                              |
 | Policy   | [full-vertical-policy.md](full-vertical-policy.md): native UI → Tauri IPC → live `matrix-sdk`, physical JS-owner deletion, fail-closed |
-| Guard    | Never `main`, umbrella **#39**, or V-BURN/#327; **CallWidget #407 holds `product.rs` while its REJECT fix is in flight**; `dual_backend` is forbidden; powers-bulk has not started |
+| Guard    | Never `main`, umbrella **#39**, or V-BURN/#327; **CallWidget #407 owns `product.rs` until its parent merge**; `dual_backend` is forbidden; powers-bulk is next after #407 |
 
 The source inventory is
 [v-rooms-power-levels-residual.md](v-rooms-power-levels-residual.md). This
 packet freezes the implementation boundary for the two settings-editor writes
 left by #377: custom power-level tags and the complete `m.room.power_levels`
 state event. It is not product implementation and does not claim powers-bulk
-implemented. CallWidget **#407** holds the serial
-`src-tauri/src/matrix/auth/product.rs` owner while its **REJECT fix is in
-flight**; powers-bulk has not started at this tip. This docs PR does not edit
-`src-tauri/src/matrix/auth/product.rs`.
+implemented. CallWidget **#407** still owns the serial
+`src-tauri/src/matrix/auth/product.rs` until its parent merge lands. Powers-bulk
+is the next product slice after #407 and has not started at this tip. This docs
+PR does not edit `src-tauri/src/matrix/auth/product.rs`.
 
-> **Serial ownership note at `5d1fc28b`.** This packet is a docs-only draft
-> handoff. Revalidate the managed session boundary after #407 moves on before
-> starting product implementation.
+> **Serial ownership note at `52953091`.** This packet is a docs-only draft
+> handoff. Do not start powers-bulk or edit `product.rs` until the parent
+> CallWidget merge releases #407's serial ownership; then revalidate the
+> managed session boundary before starting product implementation.
 
 ## 1. Objective and completion bar
 
@@ -70,7 +71,7 @@ V-ROOMS power vertical closed from this packet alone.
 
 Before product implementation starts, the writer must verify:
 
-1. `HEAD` is exactly `5d1fc28b` or the
+1. `HEAD` is exactly `52953091` or the
    approved integration tip that explicitly includes it.
 2. The PR target is
    `feature/matrix-rust-sdk-full-replacement`, never `main` or #39.
