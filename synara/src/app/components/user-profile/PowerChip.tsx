@@ -43,6 +43,8 @@ import { getPowerTagIconSrc, useGetMemberPowerTag } from '../../hooks/useMemberP
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useMemberPowerCompare } from '../../hooks/useMemberPowerCompare';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { setPowerLevelWithNativeOwner } from '../nativeRoomModerationOwner';
 
 type SelfDemoteAlertProps = {
   power: number;
@@ -181,9 +183,15 @@ export function PowerChip({ userId }: { userId: string }) {
   const [powerState, changePower] = useAsyncCallback<undefined, Error, [number]>(
     useCallback(
       async (power: number) => {
-        await mx.setPowerLevel(room.roomId, userId, power);
+        await setPowerLevelWithNativeOwner(
+          room.roomId,
+          userId,
+          power,
+          isSynaraDesktop(),
+          invokeDesktopWithAvailability
+        );
       },
-      [mx, userId, room]
+      [userId, room]
     )
   );
   const changing = powerState.status === AsyncStatus.Loading;

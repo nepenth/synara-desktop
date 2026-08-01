@@ -23,6 +23,12 @@ import { invokeDesktopWithAvailability, isSynaraDesktop } from '../utils/desktop
 import { createRoomWithNativeOwner } from '../components/nativeRoomCreateOwner';
 import { joinRoomWithNativeOwner } from '../components/nativeRoomJoinOwner';
 import { leaveRoomWithNativeOwner } from '../components/nativeRoomLeaveOwner';
+import {
+  banUserWithNativeOwner,
+  inviteUserWithNativeOwner,
+  kickUserWithNativeOwner,
+  unbanUserWithNativeOwner,
+} from '../components/nativeRoomModerationOwner';
 
 export const SHRUG = '¯\\_(ツ)_/¯';
 export const TABLEFLIP = '(╯°□°)╯︵ ┻━┻';
@@ -269,7 +275,17 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           const users = parseUsers(content);
           const flagToContent = parseFlags(flags);
           const reason = flagToContent.r;
-          users.map((id) => mx.invite(room.roomId, id, reason));
+          await Promise.all(
+            users.map((id) =>
+              inviteUserWithNativeOwner(
+                room.roomId,
+                id,
+                reason,
+                isSynaraDesktop(),
+                invokeDesktopWithAvailability
+              )
+            )
+          );
         },
       },
       [Command.DisInvite]: {
@@ -280,7 +296,17 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           const users = parseUsers(content);
           const flagToContent = parseFlags(flags);
           const reason = flagToContent.r;
-          users.map((id) => mx.kick(room.roomId, id, reason));
+          await Promise.all(
+            users.map((id) =>
+              kickUserWithNativeOwner(
+                room.roomId,
+                id,
+                reason,
+                isSynaraDesktop(),
+                invokeDesktopWithAvailability
+              )
+            )
+          );
         },
       },
       [Command.Kick]: {
@@ -304,7 +330,17 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
             });
           }
 
-          rateLimitedActions(users, (id) => mx.kick(room.roomId, id, reason));
+          await Promise.all(
+            users.map((id) =>
+              kickUserWithNativeOwner(
+                room.roomId,
+                id,
+                reason,
+                isSynaraDesktop(),
+                invokeDesktopWithAvailability
+              )
+            )
+          );
         },
       },
       [Command.Ban]: {
@@ -326,7 +362,17 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
             });
           }
 
-          rateLimitedActions(users, (id) => mx.ban(room.roomId, id, reason));
+          await Promise.all(
+            users.map((id) =>
+              banUserWithNativeOwner(
+                room.roomId,
+                id,
+                reason,
+                isSynaraDesktop(),
+                invokeDesktopWithAvailability
+              )
+            )
+          );
         },
       },
       [Command.UnBan]: {
@@ -335,7 +381,16 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         exe: async (payload) => {
           const rawIds = splitWithSpace(payload);
           const users = rawIds.filter((id) => isUserId(id));
-          users.map((id) => mx.unban(room.roomId, id));
+          await Promise.all(
+            users.map((id) =>
+              unbanUserWithNativeOwner(
+                room.roomId,
+                id,
+                isSynaraDesktop(),
+                invokeDesktopWithAvailability
+              )
+            )
+          );
         },
       },
       [Command.Ignore]: {

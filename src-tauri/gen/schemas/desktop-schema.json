@@ -819,10 +819,22 @@
           "markdownDescription": "Enables the matrix_restricted_join_reparent command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_room_ban command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-ban",
+          "markdownDescription": "Enables the matrix_room_ban command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_room_create command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-room-create",
           "markdownDescription": "Enables the matrix_room_create command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_invite command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-invite",
+          "markdownDescription": "Enables the matrix_room_invite command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_room_join command without any pre-configured scope.",
@@ -853,6 +865,12 @@
           "type": "string",
           "const": "allow-matrix-room-key-transfer-status",
           "markdownDescription": "Enables the matrix_room_key_transfer_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_kick command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-kick",
+          "markdownDescription": "Enables the matrix_room_kick command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_room_leave command without any pre-configured scope.",
@@ -895,6 +913,18 @@
           "type": "string",
           "const": "allow-matrix-room-notes-upsert",
           "markdownDescription": "Enables the matrix_room_notes_upsert command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_set_power_level command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-set-power-level",
+          "markdownDescription": "Enables the matrix_room_set_power_level command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_unban command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-unban",
+          "markdownDescription": "Enables the matrix_room_unban command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_secret_storage_bootstrap command without any pre-configured scope.",
@@ -1677,10 +1707,22 @@
           "markdownDescription": "Denies the matrix_restricted_join_reparent command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_room_ban command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-ban",
+          "markdownDescription": "Denies the matrix_room_ban command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_room_create command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-room-create",
           "markdownDescription": "Denies the matrix_room_create command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_invite command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-invite",
+          "markdownDescription": "Denies the matrix_room_invite command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_room_join command without any pre-configured scope.",
@@ -1711,6 +1753,12 @@
           "type": "string",
           "const": "deny-matrix-room-key-transfer-status",
           "markdownDescription": "Denies the matrix_room_key_transfer_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_kick command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-kick",
+          "markdownDescription": "Denies the matrix_room_kick command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_room_leave command without any pre-configured scope.",
@@ -1753,6 +1801,18 @@
           "type": "string",
           "const": "deny-matrix-room-notes-upsert",
           "markdownDescription": "Denies the matrix_room_notes_upsert command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_set_power_level command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-set-power-level",
+          "markdownDescription": "Denies the matrix_room_set_power_level command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_unban command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-unban",
+          "markdownDescription": "Denies the matrix_room_unban command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_secret_storage_bootstrap command without any pre-configured scope.",

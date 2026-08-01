@@ -39,9 +39,10 @@ import { Membership } from '../../../types/matrix/room';
 import { useAsyncSearch, UseAsyncSearchOptions } from '../../hooks/useAsyncSearch';
 import { highlightText, makeHighlightRegex } from '../../plugins/react-custom-html-parser';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { BreakWord } from '../../styles/Text.css';
 import { useAlive } from '../../hooks/useAlive';
+import { inviteUserWithNativeOwner } from '../nativeRoomModerationOwner';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 
 const SEARCH_OPTIONS: UseAsyncSearchOptions = {
   limit: 1000,
@@ -56,7 +57,6 @@ type InviteUserProps = {
   requestClose: () => void;
 };
 export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
-  const mx = useMatrixClient();
   const alive = useAlive();
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -83,9 +83,15 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
   const [inviteState, invite] = useAsyncCallback<void, Error, [string, string | undefined]>(
     useCallback(
       async (userId, reason) => {
-        await mx.invite(room.roomId, userId, reason);
+        await inviteUserWithNativeOwner(
+          room.roomId,
+          userId,
+          reason,
+          isSynaraDesktop(),
+          invokeDesktopWithAvailability
+        );
       },
-      [mx, room]
+      [room]
     )
   );
 

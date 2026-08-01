@@ -9,6 +9,13 @@ import { BreakWord } from '../../styles/Text.css';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { timeDayMonYear, timeHourMinute } from '../../utils/time';
+import {
+  banUserWithNativeOwner,
+  inviteUserWithNativeOwner,
+  kickUserWithNativeOwner,
+  unbanUserWithNativeOwner,
+} from '../nativeRoomModerationOwner';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 
 type UserKickAlertProps = {
   reason?: string;
@@ -74,8 +81,13 @@ export function UserBanAlert({ userId, reason, canUnban, bannedBy, ts }: UserBan
 
   const [unbanState, unban] = useAsyncCallback<undefined, Error, []>(
     useCallback(async () => {
-      await mx.unban(room.roomId, userId);
-    }, [mx, room, userId])
+      await unbanUserWithNativeOwner(
+        room.roomId,
+        userId,
+        isSynaraDesktop(),
+        invokeDesktopWithAvailability
+      );
+    }, [room, userId])
   );
   const banning = unbanState.status === AsyncStatus.Loading;
   const error = unbanState.status === AsyncStatus.Error;
@@ -149,8 +161,14 @@ export function UserInviteAlert({ userId, reason, canKick, invitedBy, ts }: User
 
   const [kickState, kick] = useAsyncCallback<undefined, Error, []>(
     useCallback(async () => {
-      await mx.kick(room.roomId, userId);
-    }, [mx, room, userId])
+      await kickUserWithNativeOwner(
+        room.roomId,
+        userId,
+        undefined,
+        isSynaraDesktop(),
+        invokeDesktopWithAvailability
+      );
+    }, [room, userId])
   );
   const kicking = kickState.status === AsyncStatus.Loading;
   const error = kickState.status === AsyncStatus.Error;
@@ -215,7 +233,6 @@ type UserModerationProps = {
   canInvite: boolean;
 };
 export function UserModeration({ userId, canKick, canBan, canInvite }: UserModerationProps) {
-  const mx = useMatrixClient();
   const room = useRoom();
   const reasonInputRef = useRef<HTMLInputElement>(null);
 
@@ -229,20 +246,38 @@ export function UserModeration({ userId, canKick, canBan, canInvite }: UserModer
 
   const [kickState, kick] = useAsyncCallback<undefined, Error, []>(
     useCallback(async () => {
-      await mx.kick(room.roomId, userId, getReason());
-    }, [mx, room, userId, getReason])
+      await kickUserWithNativeOwner(
+        room.roomId,
+        userId,
+        getReason(),
+        isSynaraDesktop(),
+        invokeDesktopWithAvailability
+      );
+    }, [room, userId, getReason])
   );
 
   const [banState, ban] = useAsyncCallback<undefined, Error, []>(
     useCallback(async () => {
-      await mx.ban(room.roomId, userId, getReason());
-    }, [mx, room, userId, getReason])
+      await banUserWithNativeOwner(
+        room.roomId,
+        userId,
+        getReason(),
+        isSynaraDesktop(),
+        invokeDesktopWithAvailability
+      );
+    }, [room, userId, getReason])
   );
 
   const [inviteState, invite] = useAsyncCallback<undefined, Error, []>(
     useCallback(async () => {
-      await mx.invite(room.roomId, userId, getReason());
-    }, [mx, room, userId, getReason])
+      await inviteUserWithNativeOwner(
+        room.roomId,
+        userId,
+        getReason(),
+        isSynaraDesktop(),
+        invokeDesktopWithAvailability
+      );
+    }, [room, userId, getReason])
   );
 
   const disabled =
