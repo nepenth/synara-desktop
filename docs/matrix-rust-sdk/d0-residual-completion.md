@@ -4,7 +4,7 @@
 
 | Field                     | Value                                                                                                                                                                                         |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status                    | **Active — tip after #279; CI parallel Validate this PR; V-TIMELINE cutover approved; #240/#283 in flight** (2026-07-31) |
+| Status                    | **Active — tip `0152c460`; #283 edit + #285 C1 cutover in CI; pack-read inventory #287 landed; forward/avatar/pack-write residual; #39 gated** (2026-08-01) |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                            |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)                                                                                                                                     |
 | Current integration tip   | `f4addd6f` (after [#280](https://github.com/nepenth/synara-desktop/pull/280) / [#282](https://github.com/nepenth/synara-desktop/pull/282)) |
