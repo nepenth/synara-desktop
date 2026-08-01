@@ -18,7 +18,7 @@
 | Active work        | Next: room join/create native vertical; C3–C5 live proofs; members/power. R-DEVTOOL gated; V-BURN HOLD                               |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
-| Import accounting  | Desktop production import files **155** on tip (plan baseline was 220). Allowlist **155** (matched after #365/#364 deletions).       |
+| Import accounting  | Desktop production import files **154** on tip (plan baseline was 220). Allowlist **154** (matched after #365/#364 deletions).       |
 | Dual backend       | **`false`** (forbidden forever)                                                                                                      |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                             |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                 |
@@ -32,7 +32,7 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `5f202231`**. Product idle after finish-line leave (#364). Next: join/create lifecycle or members/power; C3–C5 live session. #39 gated.                                                                                          |
+| **Now**        | **Tip `5f202231`**. Join **#369** merged. Next: createRoom vertical; C3–C5 live; members/power. #39 gated.                                                                                                                             |
 | **Tip**        | `5f202231`                                                                                                                                                                                                                             |
 | **Active PRs** | none (V-BURN HOLD; no product PR).                                                                                                                                                                                                     |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
@@ -60,11 +60,19 @@ Update rules:
 
 ## Work log (newest first)
 
+### 2026-08-01 — tip `ab3997fa` after #369 room join
+
+| When (UTC) | Item                   | Result                  | Notes                                                                                                                        |
+| ---------- | ---------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**    | **This PR**             | Tip `ab3997fa`. Imports/allowlist **154**.                                                                                   |
+| current    | **Room join vertical** | **Merged #369**         | `matrix_room_join` + native owner; RoomCard/Intro/lobby/tombstone/`/join` fail-closed; **155→154**. Create residual remains. |
+| current    | **Next**               | **createRoom vertical** | CreateChat/CreateRoom/CreateSpace/`/create`; `/leave` command residual uses `mx.leave`. V-BURN HOLD; #39 gated.              |
+
 ### 2026-08-01 — tip `5f202231` after #365/#363/#362/#364
 
 | When (UTC) | Item                                  | Result          | Notes                                                                                             |
 | ---------- | ------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------- |
-| current    | **Integration tip**                   | **This PR**     | Tip `5f202231` on `feature/matrix-rust-sdk-full-replacement`. Imports/allowlist **155**.          |
+| current    | **Integration tip**                   | **This PR**     | Tip `5f202231` on `feature/matrix-rust-sdk-full-replacement`. Imports/allowlist **154**.          |
 | current    | **V-SEND.R-PACK-READ finish-line #1** | **Merged #365** | Delete JS image pack read helpers + web fallback; equality helpers retained.                      |
 | current    | **Composer GIF/upload fallbacks**     | **Merged #363** | RoomInput GIF + msgContent thumbnail fail-closed native-only; no dual_backend.                    |
 | current    | **CallWidget residual**               | **Merged #362** | `getKnownRooms` native room-list snapshot; media config/download fail closed.                     |
