@@ -3,7 +3,7 @@
 | Field    | Value                                                                                                                   |
 | -------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Status   | **Native room-list reuse + fail-closed media boundary; #378 media IPC design + reuse scan; implement packet frozen**     |
-| Base tip | `b87f3a87` on `feature/matrix-rust-sdk-full-replacement`                                                                |
+| Base tip | `1c9653b2` on `feature/matrix-rust-sdk-full-replacement`                                                                |
 | Scope    | `CallWidgetDriver` upload, media-config, media-download, and known-room methods                                         |
 | Guard    | Never touch `main` or umbrella PR **#39**; `dual_backend` is forbidden; **#327 remains HOLD and V-BURN is not started** |
 
