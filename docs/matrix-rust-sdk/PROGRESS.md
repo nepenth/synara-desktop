@@ -14,11 +14,11 @@
 | Field              | Value                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**                                                                                                                       |
-| Integration tip    | `96015ccd` — after #387 CallWidget media scan — after #386 tip honesty, #375 moderation writes, #364 leave, #362 CallWidget, #363 composer fallbacks, #365 pack get\* delete       | — after #372 create, #371 /leave, #369 join, #364 leave |
-| Active work        | Next: members moderation / power vertical; C3–C5 live proofs; members/power. R-DEVTOOL gated; V-BURN HOLD                            |
+| Integration tip    | `22f1f06d` — after #395 members-read first slice — after #396 CallWidget media scan, #394 tip honesty, #375 moderation writes, #364 leave, #362 CallWidget, #363 composer fallbacks, #365 pack get\* delete       | — after #372 create, #371 /leave, #369 join, #364 leave |
+| Active work        | Next: powers-bulk or CallWidget media IPC; members-read residual (drawer/lobby/mentions + power reads); C3–C5 live proofs. R-DEVTOOL gated; V-BURN HOLD                            |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
-| Import accounting  | Desktop production import files **153** on tip (plan baseline was 220). Allowlist **153** (matched after #365/#364 deletions).       |
+| Import accounting  | Desktop production import files **152** on tip (plan baseline was 220). Allowlist **152** (ratcheted after #395 Members.tsx drop).       |
 | Dual backend       | **`false`** (forbidden forever)                                                                                                      |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                             |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                 |
@@ -32,8 +32,8 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `96015ccd`**. #375 moderation writes landed; #386/#387 docs honesty merged. Next: members-read product; powers-bulk. #39 gated.                                                                                                                                |
-| **Tip**        | `96015ccd`                                                                                                                                                                                                                             |
+| **Now**        | **Tip `22f1f06d`**. #395 members-read first slice landed (Members settings native). Next: powers-bulk or CallWidget media IPC; members-read residual. #39 gated.                                                                                                                                |
+| **Tip**        | `22f1f06d`                                                                                                                                                                                                                             |
 | **Active PRs** | none (V-BURN HOLD; no product PR).                                                                                                                                                                                                     |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
@@ -59,6 +59,14 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — tip `22f1f06d` — members-read first slice #395
+
+| When (UTC) | Item                     | Result          | Notes                                                                                                                          |
+| ---------- | ------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| current    | **Integration tip**      | **This PR**     | Tip `22f1f06d` on `feature/matrix-rust-sdk-full-replacement`. Imports/allowlist **152** (ratcheted 153→152).                   |
+| current    | **Members-read first slice** | **Merged #395** | `matrix_room_members_snapshot` IPC + Members settings native fail-closed; drawer/lobby/mentions + power-level/creator reads residual. |
+| current    | **Next**                 | **powers-bulk / CallWidget media IPC** | members-read residual (Room/MembersDrawer/Lobby/UserMentionAutocomplete + power reads); powers-bulk writes (packet #388); CallWidget media IPC (packet #396). V-BURN HOLD; #39 gated. |
 
 ### 2026-08-01 — tip `96015ccd` — docs honesty after #375/#386/#387
 
