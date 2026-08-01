@@ -3099,11 +3099,10 @@ pub async fn matrix_set_own_avatar(
     Ok(MatrixProfileWriteResult { status: "ok" })
 }
 
-/// V-SEND.R-AVATAR-UPLOAD / V-SEND.R-PACK-UPLOAD — sole native owner for
-/// desktop media upload (user avatar, pack images/avatars, and other compact
-/// image uploads). Bytes cross IPC once; the SDK `Media::upload` returns the
-/// `mxc://` URI. Reuses the byte-IPC + size-guard pattern of
-/// `matrix_send_attachment` (no JS `mx.uploadContent` on a native session).
+/// V-SEND.R-AVATAR-UPLOAD — sole native owner for user-avatar media upload.
+/// Bytes cross IPC once; the SDK `Media::upload` returns the `mxc://` URI which
+/// is then passed to `matrix_set_own_avatar`. Reuses the byte-IPC + size-guard
+/// pattern of `matrix_send_attachment` (no JS `mx.uploadContent`).
 #[tauri::command]
 pub async fn matrix_upload_media(
     state: State<'_, MatrixAuthState>,
