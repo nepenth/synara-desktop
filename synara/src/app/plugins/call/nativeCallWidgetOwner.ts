@@ -7,7 +7,3 @@ export const getKnownRoomsFromNativeSnapshot = (
   if (!desktopAvailable || snapshot.sessionGeneration <= 0) return [];
   return [...snapshot.orderedRoomIds];
 };
-
-export const throwNativeCallWidgetCapabilityUnavailable = (capability: string): never => {
-  throw new Error(`Native Matrix call widget ${capability} is unavailable.`);
-};
