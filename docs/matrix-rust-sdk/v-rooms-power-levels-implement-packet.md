@@ -4,17 +4,18 @@
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | Status   | **Implementation packet** — this PR is docs-only and does not claim the vertical is implemented                                        |
 | Residual | **V-ROOMS.R-POWERS-BULK** from **#377**                                                                                                |
-| Base     | `c0d5ec4053511423b979d76d5586da0ed7643cf3` on `feature/matrix-rust-sdk-full-replacement`                                               |
+| Base     | `22f1f06d` on `feature/matrix-rust-sdk-full-replacement` (post-#395 members-read first slice)                                    |
 | PR shape | Focused **draft** PR targeting `feature/matrix-rust-sdk-full-replacement`                                                              |
 | Policy   | [full-vertical-policy.md](full-vertical-policy.md): native UI → Tauri IPC → live `matrix-sdk`, physical JS-owner deletion, fail-closed |
-| Guard    | Never `main`, umbrella **#39**, or V-BURN/#327; `dual_backend` is forbidden                                                            |
+| Guard    | Never `main`, umbrella **#39**, or V-BURN/#327; `dual_backend` is forbidden; #395 released the serial `product.rs` lock; next product slice may be CallWidget media IPC or powers-bulk |
 
 The source inventory is
 [v-rooms-power-levels-residual.md](v-rooms-power-levels-residual.md). This
 packet freezes the implementation boundary for the two settings-editor writes
 left by #377: custom power-level tags and the complete `m.room.power_levels`
-state event. It is not product implementation, and it does not authorize a
-change to `src-tauri/src/matrix/auth/product.rs` in this docs PR.
+state event. It is not product implementation and does not claim powers-bulk
+implemented. #395 released the serial `product.rs` lock for a subsequent
+product slice, but this docs PR does not edit `src-tauri/src/matrix/auth/product.rs`.
 
 ## 1. Objective and completion bar
 
@@ -63,7 +64,7 @@ V-ROOMS power vertical closed from this packet alone.
 
 Before product implementation starts, the writer must verify:
 
-1. `HEAD` is exactly `c0d5ec4053511423b979d76d5586da0ed7643cf3` or the
+1. `HEAD` is exactly `22f1f06d` or the
    approved integration tip that explicitly includes it.
 2. The PR target is
    `feature/matrix-rust-sdk-full-replacement`, never `main` or #39.
