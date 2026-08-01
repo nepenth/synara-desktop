@@ -3,7 +3,7 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `5116c9da` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip                                                    | `93281bac` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **159** (plan baseline was **220**)                      |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
@@ -50,7 +50,7 @@ run passes the relevant checklist.
 | V-SEND.R-GIF-PACK               | **NOOP** — `GifPicker` exposes provider search/selection only; selected GIF send is native via #264 and no GIF pack/collection owner exists                      |
 | V-SEND.R-CALL-UPLOAD            | **#328** `CallWidgetDriver.uploadFile` → `uploadCallWidgetFileWithNativeOwner` / `matrix_upload_media` fail-closed                                               |
 | Composer thumbnail (msgContent) | **#325** video thumbnails via `uploadMediaNative` / `matrix_upload_media` fail-closed                                                                            |
-| V-SEND.R-DEVTOOL                | [Docs-only inventory](v-send-devtool-inventory.md): all three developer-tools runtime files still use the JS client; implementation remains low priority         |
+| V-SEND.R-DEVTOOL                | [Docs-only inventory](v-send-devtool-inventory.md) · [implementation gate](v-send-devtool-inventory.md#implementation-gate): JS client remains; start only after C3–C5 live proofs; low priority |
 | CI                              | Parallel Validate #284                                                                                                                                           |
 
 ## In flight
@@ -69,7 +69,6 @@ run passes the relevant checklist.
    index exists: [C3](v-timeline-c3-stream-verify.md),
    [C4](v-timeline-c4-media-render-verify.md), and
    [C5](v-timeline-c5-pins-notes-jump-verify.md).
-3. **V-SEND.R-DEVTOOL** — inventory only; implementation is low priority
-   ([inventory](v-send-devtool-inventory.md)).
+3. **V-SEND.R-DEVTOOL** — inventory only; [implementation gate](v-send-devtool-inventory.md#implementation-gate) after C3–C5 live proofs (low priority).
 4. **V-BURN.1–3** — final convergence; **#327 HOLD**; **#39 gated** (do not
    merge to `main`).
