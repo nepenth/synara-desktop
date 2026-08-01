@@ -840,7 +840,7 @@ export type MessageProps = {
   canSendReaction?: boolean;
   canRedactReactions?: boolean;
   canPinEvent?: boolean;
-  imagePackRooms?: Room[];
+  imagePackRooms?: string[];
   relations?: Relations;
   messageLayout: MessageLayout;
   messageSpacing: MessageSpacing;

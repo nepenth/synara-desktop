@@ -23,7 +23,7 @@ type EmoticonCompleteHandler = (key: string, shortcode: string) => void;
 type EmoticonSearchItem = PackImageReader | IEmoji;
 
 type EmoticonAutocompleteProps = {
-  imagePackRooms: Room[];
+  imagePackRooms: string[];
   editor: Editor;
   query: AutocompleteQuery<string>;
   requestClose: () => void;

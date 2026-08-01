@@ -357,7 +357,7 @@ const VIRTUAL_OVER_SCAN = 2;
 type EmojiBoardProps = {
   tab?: EmojiBoardTab;
   onTabChange?: (tab: EmojiBoardTab) => void;
-  imagePackRooms: Room[];
+  imagePackRooms: string[];
   requestClose: () => void;
   returnFocusOnDeactivate?: boolean;
   onEmojiSelect?: (unicode: string, shortcode: string) => void;
