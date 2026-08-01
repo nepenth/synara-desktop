@@ -7,6 +7,12 @@ import { AccountDataEvent } from '../../../types/matrix/accountData';
 import { PackMetaReader } from './PackMetaReader';
 import { PackAddress } from './PackAddress';
 
+// TODO(V-SEND.R-PACK-READ): the pack-read helpers below are now native-owned on
+// desktop (see `nativeImagePacks.ts` + the Rust `matrix_get_*_image_packs`
+// projection). They remain here ONLY for non-native web sessions and for the
+// pack-write path (V-SEND.R-PACK-WRITE). Delete them once the web fallback and
+// the write path are migrated to native.
+
 export function packAddressEqual(a1?: PackAddress, a2?: PackAddress): boolean {
   if (!a1 && !a2) return true;
   if (!a1 || !a2) return false;

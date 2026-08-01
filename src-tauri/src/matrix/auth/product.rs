@@ -61,6 +61,10 @@ use crate::matrix::account_data::{
 use crate::matrix::backup::live::{
     self as live_backup, NativeBackupOperationResult, NativeBackupStatus,
 };
+use crate::matrix::image_pack::{
+    snapshot_global_image_packs, snapshot_room_image_packs, snapshot_user_image_pack,
+    NativeImagePackSnapshot,
+};
 use crate::matrix::client_builder::{build_unauthenticated_client, ClientBuildConfig};
 use crate::matrix::cross_signing::live::{
     project_status, supported_authentication, NativeCrossSigningSetupOutcome,
@@ -1750,6 +1754,40 @@ pub async fn matrix_room_notes_move_todo(
 }
 
 #[tauri::command]
+pub async fn matrix_get_user_image_pack(
+    state: State<'_, MatrixAuthState>,
+) -> Result<NativeImagePackSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    snapshot_user_image_pack(&active.client, active.sync.session_generation())
+        .await
+        .map_err(map_image_pack_error)
+}
+
+#[tauri::command]
+pub async fn matrix_get_global_image_packs(
+    state: State<'_, MatrixAuthState>,
+) -> Result<NativeImagePackSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    snapshot_global_image_packs(&active.client, active.sync.session_generation())
+        .await
+        .map_err(map_image_pack_error)
+}
+
+#[tauri::command]
+pub async fn matrix_get_room_image_packs(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+) -> Result<NativeImagePackSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    snapshot_room_image_packs(&active.client, &room_id, active.sync.session_generation())
+        .await
+        .map_err(map_image_pack_error)
+}
+
+#[tauri::command]
 pub async fn matrix_typing_snapshot(
     state: State<'_, MatrixAuthState>,
 ) -> Result<NativeTypingSnapshot, MatrixAuthCommandError> {
@@ -3357,6 +3395,28 @@ fn map_later_notes_error(diagnostic_id: &'static str) -> MatrixAuthCommandError 
         _ => (
             "Unknown",
             "The native Matrix later/notes account data is unavailable.",
+        ),
+    };
+    MatrixAuthCommandError::new(code, message, diagnostic_id)
+}
+
+fn map_image_pack_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    let (code, message) = match diagnostic_id {
+        "v-send-pack-read-invalid-room" => (
+            "InvalidRequest",
+            "The native Matrix image-pack request is invalid.",
+        ),
+        "v-send-pack-read-room-missing" | "v-send-pack-read-room-not-joined" => (
+            "NotFound",
+            "The native Matrix image-pack room was not found.",
+        ),
+        "v-send-pack-read-user-missing" => (
+            "Forbidden",
+            "No native Matrix session is active.",
+        ),
+        _ => (
+            "Unknown",
+            "The native Matrix image-pack projection is unavailable.",
         ),
     };
     MatrixAuthCommandError::new(code, message, diagnostic_id)

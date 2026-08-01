@@ -60,6 +60,11 @@ Update rules:
 
 ## Work log (newest first)
 
+### 2026-08-01 — V-SEND.R-PACK-READ implement (native pack-read projection)
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.R-PACK-READ** | **PR open** | Native read-only pack projection: Rust `matrix/image_pack` parses `im.ponies.user_emotes`/`emote_rooms`/`room_emotes` → DTO; IPC `matrix_get_user_image_pack`/`matrix_get_global_image_packs`/`matrix_get_room_image_packs` (fail-closed); `useImagePacks.ts` invokes native on desktop, JS fallback only on web. Pack-write/upload + subscription remain residual. See [v-send-pack-read-residual.md](v-send-pack-read-residual.md). |
+
 ### 2026-08-01 — scoreboard after C1+C2
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |

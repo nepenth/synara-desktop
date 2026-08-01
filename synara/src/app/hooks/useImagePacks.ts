@@ -1,5 +1,5 @@
 import { Room } from 'matrix-js-sdk';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AccountDataEvent } from '../../types/matrix/accountData';
 import { StateEvent } from '../../types/matrix/room';
 import {
@@ -10,13 +10,51 @@ import {
   ImagePack,
   ImageUsage,
 } from '../plugins/custom-emoji';
+import {
+  fetchNativeGlobalImagePacks,
+  fetchNativeRoomImagePacks,
+  fetchNativeUserImagePack,
+} from '../plugins/custom-emoji/nativeImagePacks';
 import { useMatrixClient } from './useMatrixClient';
 import { useAccountDataCallback } from './useAccountDataCallback';
 import { useStateEventCallback } from './useStateEventCallback';
+import { isSynaraDesktop } from '../utils/desktop';
+
+const NATIVE_PACK_POLL_MS = 1_000;
+
+/**
+ * V-SEND.R-PACK-READ: on desktop the pack-read projection is owned by the Rust
+ * host (read-only IPC). These hooks invoke the native commands and fall back to
+ * the legacy `matrix-js-sdk` read path only on non-native web sessions.
+ */
 
 export const useUserImagePack = (): ImagePack | undefined => {
   const mx = useMatrixClient();
   const [userPack, setUserPack] = useState(() => getUserImagePack(mx));
+
+  useEffect(() => {
+    if (!isSynaraDesktop()) return undefined;
+    let disposed = false;
+    let inFlight = false;
+    const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const pack = await fetchNativeUserImagePack();
+        if (!disposed) setUserPack(pack);
+      } catch {
+        // Fail-closed: keep the last known projection during transient failures.
+      } finally {
+        inFlight = false;
+      }
+    };
+    void refresh();
+    const pollId = window.setInterval(() => void refresh(), NATIVE_PACK_POLL_MS);
+    return () => {
+      disposed = true;
+      window.clearInterval(pollId);
+    };
+  }, []);
 
   useAccountDataCallback(
     mx,
@@ -36,6 +74,30 @@ export const useUserImagePack = (): ImagePack | undefined => {
 export const useGlobalImagePacks = (): ImagePack[] => {
   const mx = useMatrixClient();
   const [globalPacks, setGlobalPacks] = useState(() => getGlobalImagePacks(mx));
+
+  useEffect(() => {
+    if (!isSynaraDesktop()) return undefined;
+    let disposed = false;
+    let inFlight = false;
+    const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const packs = await fetchNativeGlobalImagePacks();
+        if (!disposed) setGlobalPacks(packs);
+      } catch {
+        // Fail-closed: keep the last known projection during transient failures.
+      } finally {
+        inFlight = false;
+      }
+    };
+    void refresh();
+    const pollId = window.setInterval(() => void refresh(), NATIVE_PACK_POLL_MS);
+    return () => {
+      disposed = true;
+      window.clearInterval(pollId);
+    };
+  }, []);
 
   useAccountDataCallback(
     mx,
@@ -77,6 +139,32 @@ export const useRoomImagePack = (room: Room, stateKey: string): ImagePack | unde
   const mx = useMatrixClient();
   const [roomPack, setRoomPack] = useState(() => getRoomImagePack(room, stateKey));
 
+  useEffect(() => {
+    if (!isSynaraDesktop()) return undefined;
+    let disposed = false;
+    let inFlight = false;
+    const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const packs = await fetchNativeRoomImagePacks(room.roomId);
+        if (!disposed) {
+          setRoomPack(packs.find((pack) => pack.address?.stateKey === stateKey));
+        }
+      } catch {
+        // Fail-closed: keep the last known projection during transient failures.
+      } finally {
+        inFlight = false;
+      }
+    };
+    void refresh();
+    const pollId = window.setInterval(() => void refresh(), NATIVE_PACK_POLL_MS);
+    return () => {
+      disposed = true;
+      window.clearInterval(pollId);
+    };
+  }, [room.roomId, stateKey]);
+
   useStateEventCallback(
     mx,
     useCallback(
@@ -100,6 +188,30 @@ export const useRoomImagePacks = (room: Room): ImagePack[] => {
   const mx = useMatrixClient();
   const [roomPacks, setRoomPacks] = useState(() => getRoomImagePacks(room));
 
+  useEffect(() => {
+    if (!isSynaraDesktop()) return undefined;
+    let disposed = false;
+    let inFlight = false;
+    const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const packs = await fetchNativeRoomImagePacks(room.roomId);
+        if (!disposed) setRoomPacks(packs);
+      } catch {
+        // Fail-closed: keep the last known projection during transient failures.
+      } finally {
+        inFlight = false;
+      }
+    };
+    void refresh();
+    const pollId = window.setInterval(() => void refresh(), NATIVE_PACK_POLL_MS);
+    return () => {
+      disposed = true;
+      window.clearInterval(pollId);
+    };
+  }, [room.roomId]);
+
   useStateEventCallback(
     mx,
     useCallback(
@@ -121,6 +233,30 @@ export const useRoomImagePacks = (room: Room): ImagePack[] => {
 export const useRoomsImagePacks = (rooms: Room[]) => {
   const mx = useMatrixClient();
   const [roomPacks, setRoomPacks] = useState(() => rooms.flatMap(getRoomImagePacks));
+
+  useEffect(() => {
+    if (!isSynaraDesktop()) return undefined;
+    let disposed = false;
+    let inFlight = false;
+    const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const results = await Promise.all(rooms.map((room) => fetchNativeRoomImagePacks(room.roomId)));
+        if (!disposed) setRoomPacks(results.flat());
+      } catch {
+        // Fail-closed: keep the last known projection during transient failures.
+      } finally {
+        inFlight = false;
+      }
+    };
+    void refresh();
+    const pollId = window.setInterval(() => void refresh(), NATIVE_PACK_POLL_MS);
+    return () => {
+      disposed = true;
+      window.clearInterval(pollId);
+    };
+  }, [rooms]);
 
   useStateEventCallback(
     mx,

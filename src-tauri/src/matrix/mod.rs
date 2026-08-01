@@ -58,6 +58,7 @@
 
 pub mod account_data;
 pub mod auth;
+pub mod image_pack;
 pub mod backup;
 pub mod client_builder;
 pub mod cross_signing;
@@ -123,6 +124,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _diagnostics = diagnostics::matrix_diagnostics_markers();
     let _lifecycle = lifecycle::matrix_lifecycle_markers();
     let _account_data = account_data::matrix_account_data_markers();
+    let _image_pack = image_pack::matrix_image_pack_markers();
     let _auth = auth::matrix_auth_markers();
     let _sync = sync::matrix_sync_markers();
     let _room_keys = room_keys::matrix_room_keys_markers();
@@ -176,6 +178,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_diagnostics, diagnostics::MATRIX_DIAGNOSTICS_MARKER);
     debug_assert_eq!(_lifecycle, lifecycle::MATRIX_LIFECYCLE_MARKER);
     debug_assert_eq!(_account_data, account_data::MATRIX_ACCOUNT_DATA_MARKER);
+    debug_assert_eq!(_image_pack, image_pack::MATRIX_IMAGE_PACK_MARKER);
     debug_assert_eq!(_auth, auth::MATRIX_AUTH_MARKER);
     debug_assert_eq!(_sync, sync::MATRIX_SYNC_MARKER);
     debug_assert_eq!(_room_keys, room_keys::MATRIX_ROOM_KEYS_MARKER);
