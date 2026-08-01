@@ -25,7 +25,9 @@ import {
   MatrixClient,
 } from 'matrix-js-sdk';
 import { getCallCapabilities } from './utils';
+import { uploadCallWidgetFileWithNativeOwner } from './nativeCallMediaUploadOwner';
 import { downloadMedia, mxcUrlToHttp } from '../../utils/matrix';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { getLoadedLiveTimelineEvents, getRoomCurrentState } from '../../utils/timelineLifecycle';
 
 export class CallWidgetDriver extends WidgetDriver {
@@ -315,9 +317,12 @@ export class CallWidgetDriver extends WidgetDriver {
   public async uploadFile(file: XMLHttpRequestBodyInit): Promise<{ contentUri: string }> {
     const client = this.mx;
 
-    const uploadResult = await client.uploadContent(file);
-
-    return { contentUri: uploadResult.content_uri };
+    return uploadCallWidgetFileWithNativeOwner(
+      file,
+      isSynaraDesktop(),
+      (command, args) => invokeDesktopWithAvailability(command, args),
+      () => client.uploadContent(file)
+    );
   }
 
   public async downloadFile(contentUri: string): Promise<{ file: XMLHttpRequestBodyInit }> {
