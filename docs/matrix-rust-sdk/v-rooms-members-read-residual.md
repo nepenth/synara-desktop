@@ -3,7 +3,7 @@
 | Field   | Value                                                                                                                                                                             |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Status  | **Partial product (first slice)** — `matrix_room_members_snapshot` + Members settings UI native; drawer/lobby/mentions + power-level reads remain residual |
-| Tip SHA | `3d76402f` (merge #374 scoreboard honesty; after create #372)                                                                                                                     |
+| Tip SHA | `22f1f06d` (merge #395 members-read first slice; after #396 CallWidget media scan)                                                                                                                     |
 | Base    | `feature/matrix-rust-sdk-full-replacement`                                                                                                                                        |
 | Policy  | [full-vertical-policy.md](full-vertical-policy.md) — physical deletion inside each owning slice                                                                                   |
 | Related | **#375** (native room moderation **write** vertical — open/draft), P4.6 members index, [p4.6-members.md](p4.6-members.md), [p4.3-membership-unread.md](p4.3-membership-unread.md) |
