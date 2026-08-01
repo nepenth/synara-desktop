@@ -25,7 +25,7 @@ export type NativeEditMessageResult = {
 
 export type NativeInvoke = (
   command: string,
-  args?: Record<string, unknown>,
+  args?: Record<string, unknown>
 ) => Promise<DesktopInvokeResult<unknown>>;
 
 /**
@@ -39,7 +39,7 @@ export type NativeInvoke = (
 export async function editMessageWithNativeOwner(
   input: NativeEditMessageInput,
   desktopAvailable: boolean,
-  invoke: NativeInvoke,
+  invoke: NativeInvoke
 ): Promise<'native' | 'legacy'> {
   if (!desktopAvailable) return 'legacy';
 
