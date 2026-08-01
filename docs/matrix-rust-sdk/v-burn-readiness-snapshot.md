@@ -8,7 +8,7 @@
 | ----------------------- | -------------------------------------------------------------------------------- |
 | Readiness               | **Not ready**                                                                    |
 | Runtime proof           | **Not confirmed**                                                                |
-| Source tip              | `ffaf79eb138b2dde4d1515447c670d98ffdfcd41`                                       |
+| Source tip              | `d0b347814a780368e18db0db4d22614b2d751c79`                                       |
 | Base                    | `feature/matrix-rust-sdk-full-replacement` only                                  |
 | Scope                   | Docs only; no product code or cutover state change                               |
 | `dual_backend`          | **Forbidden**; this snapshot does not enable or claim it                         |
@@ -16,7 +16,7 @@
 | Prettier                | `2.8.1`                                                                          |
 | Production import files | **159** under `synara/src/`                                                      |
 | P1.6 allowlist entries  | **163**                                                                          |
-| #327                    | **HOLD** — do not merge                                                          |
+| V-BURN                   | **HOLD** — not started; do not claim ready                                       |
 | #39 / `main`            | **Gated** — do not merge                                                         |
 
 ## Direct source blockers
