@@ -44,6 +44,8 @@ import { ModalWide } from '../../../styles/Modal.css';
 import { createUploadAtom, UploadSuccess } from '../../../state/upload';
 import { CompactUploadCardRenderer } from '../../../components/upload-card';
 import { useCapabilities } from '../../../hooks/useCapabilities';
+import { setOwnAvatarNative, setOwnDisplayNameNative, uploadMediaNative } from './nativeProfile';
+import { isSynaraDesktop } from '../../../utils/desktop';
 
 type ProfileProps = {
   profile: UserProfile;
@@ -63,8 +65,13 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
 
   const [imageFile, setImageFile] = useState<File>();
   const imageFileURL = useObjectURL(imageFile);
+  const [nativeUploading, setNativeUploading] = useState(false);
+  const [nativeUploadError, setNativeUploadError] = useState(false);
   const uploadAtom = useMemo(() => {
-    if (imageFile) return createUploadAtom(imageFile);
+    // Legacy web path only: desktop native uses uploadMediaNative below.
+    if (imageFile && !isSynaraDesktop()) {
+      return createUploadAtom(imageFile);
+    }
     return undefined;
   }, [imageFile]);
 
@@ -72,19 +79,65 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
 
   const handleRemoveUpload = useCallback(() => {
     setImageFile(undefined);
+    setNativeUploadError(false);
   }, []);
 
   const handleUploaded = useCallback(
-    (upload: UploadSuccess) => {
+    async (upload: UploadSuccess) => {
       const { mxc } = upload;
-      mx.setAvatarUrl(mxc);
+      const result = await setOwnAvatarNative(mxc);
+      if (result === 'legacy') {
+        await mx.setAvatarUrl(mxc);
+      }
       handleRemoveUpload();
     },
     [mx, handleRemoveUpload]
   );
 
-  const handleRemoveAvatar = () => {
-    mx.setAvatarUrl('');
+  useEffect(() => {
+    if (!imageFile || !isSynaraDesktop()) return;
+    // Desktop native: fail-closed upload + set avatar without mx.uploadContent.
+    let cancelled = false;
+    (async () => {
+      setNativeUploading(true);
+      setNativeUploadError(false);
+      try {
+        const bytes = Array.from(new Uint8Array(await imageFile.arrayBuffer()));
+        const mimeType = imageFile.type || 'image/png';
+        const uploaded = await uploadMediaNative(mimeType, bytes);
+        if (cancelled) return;
+        if (uploaded === 'legacy') {
+          // Not a native session (unexpected on desktop shell) — fail closed.
+          setNativeUploadError(true);
+          setNativeUploading(false);
+          return;
+        }
+        const setResult = await setOwnAvatarNative(uploaded.mxc);
+        if (cancelled) return;
+        if (setResult === 'legacy') {
+          setNativeUploadError(true);
+          setNativeUploading(false);
+          return;
+        }
+        handleRemoveUpload();
+        setNativeUploading(false);
+      } catch {
+        if (!cancelled) {
+          setNativeUploadError(true);
+          setNativeUploading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [imageFile, mx, handleRemoveUpload]);
+
+  const handleRemoveAvatar = async () => {
+    const result = await setOwnAvatarNative('');
+    if (result === 'legacy') {
+      await mx.setAvatarUrl('');
+    }
     setAlertRemove(false);
   };
 
@@ -105,7 +158,17 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
         </Avatar>
       }
     >
-      {uploadAtom ? (
+      {nativeUploading ? (
+        <Box gap="200" alignItems="Center">
+          <Spinner size="300" />
+          <Text size="T300">Uploading avatar…</Text>
+          {nativeUploadError && (
+            <Text size="T300" style={{ color: 'var(--folds-color-Critical-Main)' }}>
+              Native avatar upload failed.
+            </Text>
+          )}
+        </Box>
+      ) : uploadAtom ? (
         <Box gap="200" direction="Column">
           <CompactUploadCardRenderer
             uploadAtom={uploadAtom}
@@ -215,7 +278,15 @@ function ProfileDisplayName({ profile, userId }: ProfileProps) {
   const [displayName, setDisplayName] = useState<string>(defaultDisplayName);
 
   const [changeState, changeDisplayName] = useAsyncCallback(
-    useCallback((name: string) => mx.setDisplayName(name), [mx])
+    useCallback(
+      async (name: string) => {
+        const result = await setOwnDisplayNameNative(name);
+        if (result === 'legacy') {
+          await mx.setDisplayName(name);
+        }
+      },
+      [mx]
+    )
   );
   const changingDisplayName = changeState.status === AsyncStatus.Loading;
 

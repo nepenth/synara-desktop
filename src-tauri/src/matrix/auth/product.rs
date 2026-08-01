@@ -217,8 +217,29 @@ pub struct MatrixPollRespondResult {
     pub status: &'static str,
 }
 
+/// V-SEND.R-AVATAR-UPLOAD — result of a native user-profile write
+/// (display name or avatar URL). `status` is always `"ok"` on success.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixProfileWriteResult {
+    pub status: &'static str,
+}
+
+/// V-SEND.R-AVATAR-UPLOAD — result of a native media upload for a user
+/// avatar. Returns the homeserver `mxc://` URI; no file bytes cross back.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixUploadMediaResult {
+    pub mxc: String,
+}
+
 /// Soft IPC/body cap for one-shot composer attachment transfer (bytes).
 const MAX_ATTACHMENT_IPC_BYTES: usize = 32 * 1024 * 1024;
+
+/// Soft IPC/body cap for one-shot user-avatar media transfer (bytes).
+/// Avatars are small images; 8 MiB is generous and keeps the webview buffer
+/// bounded (well under the 32 MiB attachment cap).
+const MAX_AVATAR_IPC_BYTES: usize = 8 * 1024 * 1024;
 
 impl MatrixAuthCommandError {
     pub(crate) fn new(
@@ -2956,6 +2977,170 @@ fn map_poll_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     }
 }
 
+/// V-SEND.R-AVATAR-UPLOAD — sole native owner for the logged-in user's
+/// display name write. Empty string removes the display name (set to `None`).
+/// Fail-closed: when a native session is live this command is the only path;
+/// the JS `mx.setDisplayName` must not be used as a fallback.
+#[tauri::command]
+pub async fn matrix_set_own_display_name(
+    state: State<'_, MatrixAuthState>,
+    display_name: String,
+) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
+    let display_name = parse_display_name(&display_name)?;
+    let client = {
+        let session = state.session.lock().await;
+        let active = require_session(session.as_ref())?;
+        active.client.clone()
+    };
+    client
+        .account()
+        .set_display_name(display_name.as_deref())
+        .await
+        .map_err(|_| {
+            MatrixAuthCommandError::new(
+                "Unknown",
+                "The native Matrix display name could not be updated.",
+                "v-send.r-avatar-display-name-sdk-failed",
+            )
+        })?;
+    Ok(MatrixProfileWriteResult { status: "ok" })
+}
+
+/// V-SEND.R-AVATAR-UPLOAD — sole native owner for the logged-in user's avatar
+/// URL write. Empty string removes the avatar (set to `None`). The `mxc` must
+/// be a valid `mxc://` URI (typically produced by `matrix_upload_media`).
+/// Fail-closed: when a native session is live this command is the only path;
+/// the JS `mx.setAvatarUrl` must not be used as a fallback.
+#[tauri::command]
+pub async fn matrix_set_own_avatar(
+    state: State<'_, MatrixAuthState>,
+    mxc: String,
+) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
+    let mxc = parse_avatar_mxc(&mxc)?;
+    let client = {
+        let session = state.session.lock().await;
+        let active = require_session(session.as_ref())?;
+        active.client.clone()
+    };
+    client
+        .account()
+        .set_avatar_url(mxc.as_deref())
+        .await
+        .map_err(|_| {
+            MatrixAuthCommandError::new(
+                "Unknown",
+                "The native Matrix avatar could not be updated.",
+                "v-send.r-avatar-set-sdk-failed",
+            )
+        })?;
+    Ok(MatrixProfileWriteResult { status: "ok" })
+}
+
+/// V-SEND.R-AVATAR-UPLOAD — sole native owner for user-avatar media upload.
+/// Bytes cross IPC once; the SDK `Media::upload` returns the `mxc://` URI which
+/// is then passed to `matrix_set_own_avatar`. Reuses the byte-IPC + size-guard
+/// pattern of `matrix_send_attachment` (no JS `mx.uploadContent`).
+#[tauri::command]
+pub async fn matrix_upload_media(
+    state: State<'_, MatrixAuthState>,
+    mime_type: String,
+    bytes: Vec<u8>,
+) -> Result<MatrixUploadMediaResult, MatrixAuthCommandError> {
+    let mime_type = validate_avatar_mime(&mime_type)?;
+    if bytes.is_empty() {
+        return Err(map_avatar_error("v-send.r-avatar-upload-empty"));
+    }
+    if bytes.len() > MAX_AVATAR_IPC_BYTES {
+        return Err(map_avatar_error("v-send.r-avatar-upload-too-large"));
+    }
+    let client = {
+        let session = state.session.lock().await;
+        let active = require_session(session.as_ref())?;
+        active.client.clone()
+    };
+    let response = client
+        .media()
+        .upload(&mime_type, bytes, None)
+        .await
+        .map_err(|_| {
+            MatrixAuthCommandError::new(
+                "Unknown",
+                "The native Matrix avatar upload failed.",
+                "v-send.r-avatar-upload-sdk-failed",
+            )
+        })?;
+    Ok(MatrixUploadMediaResult {
+        mxc: response.content_uri.to_string(),
+    })
+}
+
+fn map_avatar_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    match diagnostic_id {
+        "v-send.r-avatar-display-name-empty"
+        | "v-send.r-avatar-display-name-too-long"
+        | "v-send.r-avatar-invalid-mxc"
+        | "v-send.r-avatar-upload-empty"
+        | "v-send.r-avatar-upload-invalid-mime"
+        | "v-send.r-avatar-upload-too-large" => MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "The native Matrix profile request is invalid.",
+            diagnostic_id,
+        ),
+        _ => MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix profile operation failed.",
+            diagnostic_id,
+        ),
+    }
+}
+
+/// Parse and validate a display name. Empty/whitespace-only input is treated as
+/// a removal request (`None`). Non-empty names are trimmed and capped.
+fn parse_display_name(display_name: &str) -> Result<Option<String>, MatrixAuthCommandError> {
+    let trimmed = display_name.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.chars().count() > 255 {
+        return Err(map_avatar_error("v-send.r-avatar-display-name-too-long"));
+    }
+    Ok(Some(trimmed.to_owned()))
+}
+
+/// Parse and validate an avatar MXC URI. Empty/whitespace-only input is treated
+/// as a removal request (`None`). Non-empty values must be valid `mxc://` URIs.
+fn parse_avatar_mxc(mxc: &str) -> Result<Option<OwnedMxcUri>, MatrixAuthCommandError> {
+    let trimmed = mxc.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if !trimmed.starts_with("mxc://") {
+        return Err(map_avatar_error("v-send.r-avatar-invalid-mxc"));
+    }
+    let owned = OwnedMxcUri::from(trimmed);
+    // Reject obviously incomplete URIs (no media id).
+    if owned.as_str().matches('/').count() < 3 {
+        return Err(map_avatar_error("v-send.r-avatar-invalid-mxc"));
+    }
+    Ok(Some(owned))
+}
+
+/// Validate an avatar upload MIME type. Only image types are accepted for
+/// avatars (matching the `image/*` file picker in `Profile.tsx`).
+fn validate_avatar_mime(mime_type: &str) -> Result<Mime, MatrixAuthCommandError> {
+    let mime_type = mime_type.trim();
+    if mime_type.is_empty() || mime_type.len() > 255 {
+        return Err(map_avatar_error("v-send.r-avatar-upload-invalid-mime"));
+    }
+    let parsed = mime_type
+        .parse::<Mime>()
+        .map_err(|_| map_avatar_error("v-send.r-avatar-upload-invalid-mime"))?;
+    if parsed.type_() != mime::IMAGE {
+        return Err(map_avatar_error("v-send.r-avatar-upload-invalid-mime"));
+    }
+    Ok(parsed)
+}
+
 #[tauri::command]
 pub async fn matrix_logout(
     app: AppHandle,
@@ -5138,5 +5323,83 @@ mod tests {
                 .diagnostic_id,
             "d0.4-send-invalid-transaction-id"
         );
+    }
+
+    #[test]
+    fn display_name_parser_handles_removal_and_trim() {
+        // Empty / whitespace-only → removal (None).
+        assert_eq!(parse_display_name("").unwrap(), None);
+        assert_eq!(parse_display_name("   ").unwrap(), None);
+        // Non-empty → trimmed Some.
+        assert_eq!(parse_display_name("  Alice  ").unwrap(), Some("Alice".to_owned()));
+        assert_eq!(parse_display_name("Alice").unwrap(), Some("Alice".to_owned()));
+    }
+
+    #[test]
+    fn display_name_parser_rejects_oversized_names() {
+        let long = "a".repeat(256);
+        assert_eq!(
+            parse_display_name(&long).unwrap_err().diagnostic_id,
+            "v-send.r-avatar-display-name-too-long"
+        );
+    }
+
+    #[test]
+    fn avatar_mxc_parser_handles_removal_and_valid_uri() {
+        // Empty / whitespace-only → removal (None).
+        assert_eq!(parse_avatar_mxc("").unwrap(), None);
+        assert_eq!(parse_avatar_mxc("   ").unwrap(), None);
+        // Valid mxc → Some.
+        let parsed = parse_avatar_mxc("mxc://example.org/abc123").unwrap();
+        assert_eq!(parsed.unwrap().to_string(), "mxc://example.org/abc123");
+    }
+
+    #[test]
+    fn avatar_mxc_parser_rejects_invalid_uri() {
+        assert_eq!(
+            parse_avatar_mxc("not-an-mxc").unwrap_err().diagnostic_id,
+            "v-send.r-avatar-invalid-mxc"
+        );
+        assert_eq!(
+            parse_avatar_mxc("https://example.org/x.png").unwrap_err().diagnostic_id,
+            "v-send.r-avatar-invalid-mxc"
+        );
+    }
+
+    #[test]
+    fn avatar_mime_validator_accepts_images_only() {
+        assert_eq!(
+            validate_avatar_mime("image/png").unwrap().essence_str(),
+            "image/png"
+        );
+        assert_eq!(
+            validate_avatar_mime("image/jpeg").unwrap().essence_str(),
+            "image/jpeg"
+        );
+        assert_eq!(
+            validate_avatar_mime("image/webp").unwrap().essence_str(),
+            "image/webp"
+        );
+        assert_eq!(
+            validate_avatar_mime("text/plain").unwrap_err().diagnostic_id,
+            "v-send.r-avatar-upload-invalid-mime"
+        );
+        assert_eq!(
+            validate_avatar_mime("").unwrap_err().diagnostic_id,
+            "v-send.r-avatar-upload-invalid-mime"
+        );
+    }
+
+    #[test]
+    fn avatar_error_mapping_is_stable() {
+        assert_eq!(
+            map_avatar_error("v-send.r-avatar-invalid-mxc").code,
+            "InvalidRequest"
+        );
+        assert_eq!(
+            map_avatar_error("v-send.r-avatar-upload-too-large").code,
+            "InvalidRequest"
+        );
+        assert_eq!(map_avatar_error("unknown").code, "Unknown");
     }
 }
