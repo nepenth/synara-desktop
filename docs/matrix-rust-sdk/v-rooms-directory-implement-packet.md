@@ -4,7 +4,7 @@
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | Status          | **Implementation packet** — this packet is docs-only; it does not claim the vertical is implemented                            |
 | Residual        | **V-ROOMS.R-DIRECTORY** from [#383](v-rooms-directory-residual.md)                                                             |
-| Base            | `feature/matrix-rust-sdk-full-replacement` at `ee450251638eb61064710f85b79676a27866e07b`                                       |
+| Base            | `feature/matrix-rust-sdk-full-replacement` at `e8a00f7273cb1ee8528df4fa2c3bffc455704322`                                       |
 | PR shape        | Focused **draft** PR targeting `feature/matrix-rust-sdk-full-replacement`                                                      |
 | Policy          | Complete UI → Tauri IPC → live `matrix-sdk` owner; superseded JS directory network is deleted in the same implementation slice |
 | Desktop failure | **Fail closed** when the native Matrix session, command, response, or generation is unavailable                                |
@@ -16,6 +16,14 @@ The source of truth for the measured residual is
 turns only the live public-room directory slice into a bounded implementation
 contract. It does not close the related preview, card, navigation, or join
 proof slices, and it is not a V-BURN completion claim.
+
+> **Serial ownership note at `e8a00f72`.** CallWidget **#407** holds the
+> serial `src-tauri/src/matrix/auth/product.rs` owner. The room-directory
+> product slice has not started at this tip; this PR is only a docs-only draft
+> handoff. It must not edit or claim completion of `product.rs`. A future
+> directory implementation remains module-owned under
+> `src-tauri/src/matrix/room_directory/` and must revalidate the managed
+> session boundary after the serial owner moves on.
 
 ## 1. Objective and completion bar
 
@@ -100,7 +108,7 @@ adding a second client or editing `product.rs` is not an allowed workaround.
 
 Before any future product implementation starts, the writer must verify:
 
-1. `HEAD` is exactly `ee450251638eb61064710f85b79676a27866e07b` and the PR
+1. `HEAD` is exactly `e8a00f7273cb1ee8528df4fa2c3bffc455704322` and the PR
    target is `feature/matrix-rust-sdk-full-replacement`;
 2. the existing managed native session is the sole authenticated Matrix SDK
    client for the desktop session;
