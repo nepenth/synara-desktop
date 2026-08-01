@@ -3,7 +3,7 @@
 | Field   | Value                                                                                                                                                                                                                                                                                                             |
 | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Status  | **Snapshot #297 + subscribe #318 + room ids #320 DONE** — native desktop reads are fail-closed, subscription refresh is landed, and `useImagePackRooms` is pure graph resolution; **remaining:** physical delete of the JS read-helper functions in `custom-emoji/utils.ts`, gated on the non-native web fallback |
-| Tip SHA | `e38bfdab68bd57e4f3110a812c5e4c5d543c1ff5`                                                                                                                                                                                                                                                                        |
+| Tip SHA | `b8a35ce5`                                                                                                                                                                                                                                                                        |
 | Base    | `feature/matrix-rust-sdk-full-replacement`                                                                                                                                                                                                                                                                        |
 | Policy  | [full-vertical-policy.md](full-vertical-policy.md) — physical deletion inside each owning slice                                                                                                                                                                                                                   |
 | Related | V-SEND sticker/GIF **#264** (native send), V-SEND residual inventory, V-SEND.R-PACK-WRITE **#292** (write owners), V-TIMELINE #240 (HOLD)                                                                                                                                                                         |
@@ -155,7 +155,7 @@ paths remain only for non-native web sessions.
 ## 5. Self-eval
 
 **Confidence: high** for this truth-up at tip
-`e38bfdab68bd57e4f3110a812c5e4c5d543c1ff5`. I re-traced the pack-read surface
+`b8a35ce5`. I re-traced the pack-read surface
 after **#297** landed: the snapshot get commands (`matrix_get_user_image_pack` /
 `matrix_get_room_image_packs` / `matrix_get_global_image_packs`) and the
 `nativeImagePackOwner` / `nativeImagePack` TS owners plus the `useImagePacks.ts`
