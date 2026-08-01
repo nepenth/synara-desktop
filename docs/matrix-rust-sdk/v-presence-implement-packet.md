@@ -5,11 +5,11 @@
 | Status     | **Implementation packet** — this PR is docs-only; it does not claim the presence vertical is implemented                   |
 | Residual   | **V-PRESENCE.USER**                                                                                                        |
 | Source     | [v-presence-typing-residual.md](v-presence-typing-residual.md) from #384                                                   |
-| Base       | `feature/matrix-rust-sdk-full-replacement` at `ee450251638eb61064710f85b79676a27866e07b`                                   |
+| Base       | `feature/matrix-rust-sdk-full-replacement` at `e8a00f7273cb1ee8528df4fa2c3bffc455704322`                                   |
 | PR shape   | Focused **draft** PR targeting `feature/matrix-rust-sdk-full-replacement`                                                  |
 | Scope      | Desktop user presence (`m.presence`) in the user-room profile; typing and MatrixRTC call membership are separate residuals |
 | Policy     | [full-vertical-policy.md](full-vertical-policy.md): one UI → Tauri IPC → live `matrix-sdk` owner, with JS-owner deletion   |
-| Guard      | Never `main`, umbrella PR **#39**, or V-BURN; `dual_backend` is forbidden; native failure is fail-closed                   |
+| Guard      | Never `main`, umbrella PR **#39**, or V-BURN; **#407 owns `product.rs`**; `dual_backend` is forbidden; native failure is fail-closed |
 | Current PR | Only this packet is allowed to change; `src-tauri/src/matrix/auth/product.rs` is prohibited                                |
 
 The source of truth for the residual is the #384 inventory. This packet turns
