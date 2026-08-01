@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `4ce64909` — after #313 R-ROOM-PROFILE; #310 room pack-write; #311 scoreboard; #309 global; #306 personal; #303 avatar
-| Active work        | Next: PACK-UPLOAD (#314 open); pack-read subscribe; C3–C5 live
+| Integration tip    | `25bfa150` — after #314 PACK-UPLOAD; #315 scoreboard; #313 R-ROOM-PROFILE; #310 room pack-write
+| Active work        | Next: pack-read subscribe; C3–C5 live
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | Desktop production import files **163** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `4ce64909`**. Landed pack-write personal #306, global #309, room #310, and **R-ROOM-PROFILE #313** (room name/topic/avatar native fail-closed). **PACK-UPLOAD** residual remains (open **#314**; may reuse `matrix_upload_media` #303). Next serial: PACK-UPLOAD or pack-read subscribe or C3–C5 live. #39 gated. |
-| **Tip**        | `4ce64909` |
-| **Active PRs** | **#314** PACK-UPLOAD open; none other product open after R-ROOM-PROFILE #313. |
+| **Now**        | **Tip `25bfa150`**. Landed pack-write #306/#309/#310, R-ROOM-PROFILE #313, **PACK-UPLOAD #314** (CompactUploadCardRenderer → `matrix_upload_media` fail-closed). Next: pack-read subscribe; C3–C5 live. #39 gated. |
+| **Tip**        | `25bfa150` |
+| **Active PRs** | none product open after PACK-UPLOAD #314. |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
@@ -59,6 +59,16 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — scoreboard after #314 PACK-UPLOAD
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **Scoreboard** | **This PR** | Honesty after #314 PACK-UPLOAD. Tip `25bfa150`. CompactUploadCardRenderer reuses `matrix_upload_media` fail-closed; pack-read subscribe residual. #39 gated. |
+
+### 2026-08-01 — V-SEND.R-PACK-UPLOAD
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.R-PACK-UPLOAD** | **Merged #314** | Desktop compact media upload (pack images/avatars + RoomProfile/PowersEditor) fail-closed via `matrix_upload_media`; never falls through to `mx.uploadContent` on native session. |
 
 ### 2026-08-01 — scoreboard after R-ROOM-PROFILE #313
 | When (UTC) | Item | Result | Notes |
