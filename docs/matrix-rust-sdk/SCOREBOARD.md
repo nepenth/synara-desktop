@@ -1,0 +1,52 @@
+# Matrix Rust full-replacement — scoreboard
+
+| Field | Value |
+|-------|-------|
+| Updated | 2026-08-01 |
+| Tip |  on  |
+| Production  import files () | **165** (plan baseline was **220**) |
+| Dual backend | **false** (forbidden) |
+| Umbrella #39 | **Do not merge** without explicit approval |
+
+## Done (high level)
+
+| Area | Evidence |
+|------|----------|
+| Crypto vertical | V-CRYPTO done earlier |
+| Core send | text/attachment/reaction/poll/thread/sticker/GIF native |
+| Rooms | hierarchy + space writers |
+| Auth | SSO removed; token non-retention; register; password reset; login-flow discovery; UIA multi-stage non-retention; **loginUtil fail-closed #279** |
+| Poll-in-thread | #282 |
+| Timeline contract | #240 native DTO/stream/actions + presenter code |
+| Cutover policy | Approved; residual map #286; pack-read inventory #287 |
+| CI | Parallel Validate #284 |
+
+## In flight
+
+| PR | What |
+|----|------|
+| #283 | V-SEND.R-EDIT native  |
+| #285 | V-TIMELINE.C1 select NativeTimelinePresenter in RoomView |
+
+## Left (ordered)
+
+### Timeline cutover
+1. **C1** land #285 (presenter selection)
+2. **C2** delete RoomTimeline.tsx when unmounted + clean dead imports/comments
+3. **C3** re-verify stream deltas after C1 (map claims no gap)
+4. **C4** media/render parity on selected presenter
+5. **C5** pins/notes/jump live proof
+
+### Send / media residuals
+- **V-SEND.R-PACK-READ** implement (inventory #287)
+- **V-SEND.R-PACK-WRITE** / **PACK-UPLOAD**
+- **V-SEND.R-FORWARD**
+- **V-SEND.R-AVATAR-UPLOAD** / **R-ROOM-PROFILE**
+- **V-SEND.R-CALL-UPLOAD** / **R-GIF-PACK**
+- **V-SEND.R-DEVTOOL** (low priority)
+
+### Convergence
+- **V-BURN.1–3** zero live JS client + drop npm  after residual owners clear
+
+### Not residual free-for-all
+- Widgets/calls polish beyond residual IDs — full verticals after burn queue allows
