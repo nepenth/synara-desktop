@@ -3,7 +3,7 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `a53f14fa` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip                                                    | `c0d5ec40` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **153** (plan baseline was **220**)                      |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
@@ -60,9 +60,9 @@ run passes the relevant checklist.
 
 ## In flight
 
-| PR     | What                                                                                                                      |
-| ------ | ------------------------------------------------------------------------------------------------------------------------- |
-| (none) | Leave/join/create closed. Next: **members moderation** (invite/kick/ban/power); C3–C5; CallWidget media IPC; V-BURN HOLD. |
+| PR     | What                                                                                           |
+| ------ | ---------------------------------------------------------------------------------------------- |
+| (none) | Next: **members-read** product (#385 inventory); **powers-bulk**; CallWidget media IPC; C3–C5. |
 
 ## Left (finish-line order)
 
