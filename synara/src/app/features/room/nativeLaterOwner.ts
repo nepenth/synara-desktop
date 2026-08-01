@@ -2,7 +2,8 @@
  * SDK-neutral owner for `in.synara.later` account data.
  *
  * Desktop mutations go through native Tauri commands. There is no
- * matrix-js-sdk setAccountData fallback. Does not select NativeTimelinePresenter.
+ * matrix-js-sdk setAccountData fallback. Consumed by NativeTimelinePresenter
+ * after V-TIMELINE.C1/C2 cutover.
  */
 
 import { invokeDesktopWithAvailability, type DesktopInvokeResult } from '../../utils/desktop';

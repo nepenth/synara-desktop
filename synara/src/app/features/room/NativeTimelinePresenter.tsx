@@ -647,7 +647,7 @@ const NativeTimelineRow = ({
           )}
           {row.formattedBody ? (
             <div
-              // Defense in depth: re-sanitize Matrix HTML before the unselected shell renders it.
+              // Defense in depth: re-sanitize Matrix HTML before the native presenter renders it.
               // eslint-disable-next-line react/no-danger
               dangerouslySetInnerHTML={{ __html: sanitizeCustomHtml(row.formattedBody) }}
               style={{
@@ -850,9 +850,9 @@ const NativeTimelineRow = ({
 };
 
 /**
- * SDK-neutral, virtualized presentation of the native timeline DTO. This
- * component is intentionally unselected while V-TIMELINE's retained action,
- * media, and viewport paths are incomplete; it is not a legacy fallback.
+ * SDK-neutral, virtualized presentation of the native timeline DTO.
+ * Active owner mounted by RoomView after V-TIMELINE.C1; JS RoomTimeline deleted
+ * in V-TIMELINE.C2 (dual_backend false).
  */
 export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePresenterProps) {
   const [focusEventId, setFocusEventId] = useState(eventId);

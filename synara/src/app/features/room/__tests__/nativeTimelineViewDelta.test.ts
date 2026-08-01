@@ -87,7 +87,7 @@ test('applies pagination and pin-list metadata and rejects empty batches', () =>
   );
 });
 
-test('pin and forward pure helpers gate unselected presenter UX', () => {
+test('pin and forward pure helpers gate native presenter UX', () => {
   assert.equal(isNativeTimelineEventPinned(['$a'], '$a'), true);
   assert.equal(isNativeTimelineEventPinned(['$a'], '$b'), false);
   assert.equal(isNativeTimelineEventPinned(undefined, '$a'), false);

@@ -337,7 +337,7 @@ export type NativeForwardTargetRoom = {
 };
 
 /**
- * Filter joined rooms for the unselected forward shell (exclude source/spaces).
+ * Filter joined rooms for the native forward shell (exclude source/spaces).
  * Product multi-room pickers may add more constraints; this is the DTO-safe core.
  */
 export const filterNativeForwardTargets = (
@@ -396,8 +396,8 @@ const toNativeTimelineOpenRequest = (input: NativeTimelineOpenInput) => {
 
 /**
  * Opens one native timeline view after registering for its native delta event.
- * This hook is deliberately not an activation switch: until the full presenter
- * and action/media routes exist, RoomTimeline remains the active owner.
+ * Mounted via NativeTimelinePresenter (V-TIMELINE.C1); JS RoomTimeline deleted
+ * in V-TIMELINE.C2.
  */
 export const useNativeTimelineView = (
   input: NativeTimelineOpenInput | undefined

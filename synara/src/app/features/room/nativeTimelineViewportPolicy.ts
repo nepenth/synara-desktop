@@ -2,8 +2,7 @@
  * SDK-neutral viewport restore policy for the native timeline owner.
  *
  * Mirrors the legacy RoomTimeline restore gates without importing
- * matrix-js-sdk. Used by the unselected native bridge; selecting the native
- * presenter remains a later cutover gate.
+ * matrix-js-sdk. Used by NativeTimelinePresenter after V-TIMELINE.C1/C2 cutover.
  */
 
 export const NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS = 10 * 60 * 1000;
