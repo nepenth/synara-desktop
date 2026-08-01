@@ -133,4 +133,4 @@ Landed:
 - `RoomPacks.tsx` / `RoomImagePack.tsx` fail-closed via `setRoomImagePackNative` — **#310**
 
 Remaining:
-- Pack image/avatar upload (**PACK-UPLOAD**) — still via `mx.uploadContent` in `state/upload.ts` / `utils/matrix.ts`; may reuse `matrix_upload_media` from #303
+- Pack image/avatar upload (**PACK-UPLOAD**) — still via `mx.uploadContent` in `state/upload.ts` / `utils/matrix.ts`; may reuse `matrix_upload_media` from #303. Open **#314**.

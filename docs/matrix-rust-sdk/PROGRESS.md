@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `980231f7` — after #310 room pack-write; #311 scoreboard; #309 global; #306 personal; #303 avatar
-| Active work        | Next: PACK-UPLOAD; pack-read subscribe; R-ROOM-PROFILE; C3–C5 live
+| Integration tip    | `4ce64909` — after #313 R-ROOM-PROFILE; #310 room pack-write; #311 scoreboard; #309 global; #306 personal; #303 avatar
+| Active work        | Next: PACK-UPLOAD (#314 open); pack-read subscribe; C3–C5 live
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | Desktop production import files **163** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `980231f7`**. Landed pack-write personal #306, global #309, room #310. **PACK-UPLOAD** residual remains (may reuse `matrix_upload_media` #303). Next serial: PACK-UPLOAD or pack-read subscribe or R-ROOM-PROFILE. #39 gated. |
-| **Tip**        | `980231f7` |
-| **Active PRs** | none product open after room pack-write #310. |
+| **Now**        | **Tip `4ce64909`**. Landed pack-write personal #306, global #309, room #310, and **R-ROOM-PROFILE #313** (room name/topic/avatar native fail-closed). **PACK-UPLOAD** residual remains (open **#314**; may reuse `matrix_upload_media` #303). Next serial: PACK-UPLOAD or pack-read subscribe or C3–C5 live. #39 gated. |
+| **Tip**        | `4ce64909` |
+| **Active PRs** | **#314** PACK-UPLOAD open; none other product open after R-ROOM-PROFILE #313. |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
@@ -59,6 +59,16 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — scoreboard after R-ROOM-PROFILE #313
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **Scoreboard** | **This PR** | Honesty after R-ROOM-PROFILE #313. Tip `4ce64909`. Room name/topic/avatar native fail-closed; pack-write personal #306 + global #309 + room #310 landed. **PACK-UPLOAD** residual remains (open **#314**). #39 gated. |
+
+### 2026-08-01 — V-SEND.R-ROOM-PROFILE room profile
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.R-ROOM-PROFILE** | **Merged #313** | Native `matrix_set_room_name`/`matrix_set_room_topic`/`matrix_set_room_avatar` + RoomProfile.tsx fail-closed on desktop; JS `sendStateEvent` only for non-native web. Room-avatar media upload residual remains (PACK-UPLOAD-adjacent). |
 
 ### 2026-08-01 — scoreboard after #310 room pack-write
 | When (UTC) | Item | Result | Notes |
