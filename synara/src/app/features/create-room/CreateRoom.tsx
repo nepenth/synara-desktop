@@ -22,7 +22,6 @@ import {
   knockSupported,
   restrictedSupported,
 } from '../../utils/matrix';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { millisecondsToMinutes, replaceSpaceWithDash } from '../../utils/common';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { useCapabilities } from '../../hooks/useCapabilities';
@@ -70,7 +69,6 @@ export function CreateRoomForm({
   space,
   onCreate,
 }: CreateRoomFormProps) {
-  const mx = useMatrixClient();
   const alive = useAlive();
 
   const capabilities = useCapabilities();
@@ -107,7 +105,7 @@ export function CreateRoomForm({
   };
 
   const [createState, create] = useAsyncCallback<string, Error | MatrixError, [CreateRoomData]>(
-    useCallback((data) => createRoom(mx, data), [mx])
+    useCallback((data) => createRoom(data), [])
   );
   const loading = createState.status === AsyncStatus.Loading;
   const error = createState.status === AsyncStatus.Error ? createState.error : undefined;
@@ -142,7 +140,7 @@ export function CreateRoomForm({
     create({
       version: selectedRoomVersion,
       type: roomType,
-      parent: space,
+      parentRoomId: space?.roomId,
       access,
       name: roomName,
       topic: roomTopic || undefined,

@@ -95,6 +95,7 @@
     "allow-matrix-invites-snapshot",
     "allow-matrix-invites-accept",
     "allow-matrix-invites-decline",
+    "allow-matrix-room-create",
     "allow-matrix-room-leave",
     "allow-matrix-room-join",
     "allow-matrix-invites-report-spam",
