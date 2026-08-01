@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Updated | 2026-08-01 |
-| Tip | `83adef68` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip | `c42b93c5` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **163** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
 | Umbrella #39 | **Do not merge** without explicit user approval |
@@ -29,13 +29,14 @@
 | V-SEND.R-FORWARD | **#296** legacy MessageForwardItem + forward.ts deleted |
 | V-TIMELINE residual truth | **#298** C1/C2 done notes |
 | V-SEND.R-PACK-READ | **#297** native snapshot get + hooks fail-closed (subscribe residual remains) |
+| V-SEND.R-AVATAR-UPLOAD | **#303** native `matrix_upload_media` + set own avatar/display name; Profile.tsx fail-closed (R-ROOM-PROFILE remains) |
 | CI | Parallel Validate #284 |
 
 ## In flight
 
 | PR | What |
 |----|------|
-| (none product) | Next: **V-SEND.R-PACK-WRITE** / pack-read **subscribe** / avatar implement |
+| (none product) | Next: **V-SEND.R-PACK-WRITE** / pack-read **subscribe** / **R-ROOM-PROFILE** |
 
 ## Left (ordered)
 
@@ -49,8 +50,8 @@
 ### Send / media residuals (inventories done; implement remains)
 - ~~**V-SEND.R-FORWARD**~~ **#296**
 - ~~**V-SEND.R-PACK-READ** snapshot~~ **#297** (subscribe residual remains)
-- **V-SEND.R-PACK-WRITE** / **PACK-UPLOAD** implement (inventory #292)
-- **V-SEND.R-AVATAR-UPLOAD** / **R-ROOM-PROFILE** implement (inventory #291)
+- **V-SEND.R-PACK-WRITE** / **PACK-UPLOAD** implement (inventory #292; may reuse `matrix_upload_media` #303)
+- ~~**V-SEND.R-AVATAR-UPLOAD** user profile~~ **#303**; **R-ROOM-PROFILE** remains (inventory #291)
 - **V-SEND.R-CALL-UPLOAD** / **R-GIF-PACK**
 - **V-SEND.R-DEVTOOL** (low priority)
 

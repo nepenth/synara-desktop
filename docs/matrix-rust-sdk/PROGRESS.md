@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `83adef68` — after #297 pack-read; #298 residual truth; #296 forward; #289 C2; #285 C1; #283 edit
-| Active work        | **this** V-SEND.R-AVATAR user profile writes; room profile residual; pack-write next
+| Integration tip    | `c42b93c5` — after #303 avatar user profile; #302 C4/C5 checklists; #301 pack-read residual; #297 pack-read snapshot
+| Active work        | Next: pack-write / pack-read subscribe / R-ROOM-PROFILE; C3–C5 live proof remaining
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | Desktop production import files **163** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `83adef68`**. Landed #297 V-SEND.R-PACK-READ snapshot get + hooks. Subscribe residual remains. Next: pack-write / avatar / C3 live. C4/C5 verify checklists exist (docs-only). #39 gated. |
-| **Tip**        | `83adef68` |
-| **Active PRs** | none product open after #297. |
+| **Now**        | **Tip `c42b93c5`**. Landed #303 V-SEND.R-AVATAR-UPLOAD user profile (`matrix_upload_media` + set avatar/display name). R-ROOM-PROFILE residual. Next: pack-write / pack-read subscribe. C3–C5 live proof remaining. #39 gated. |
+| **Tip**        | `c42b93c5` |
+| **Active PRs** | none product open after #303. Pack-write implement in flight. |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
@@ -59,6 +59,12 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — scoreboard after #303 avatar
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **Scoreboard** | **This PR** | Honesty after #303 V-SEND.R-AVATAR-UPLOAD user profile. Tip `c42b93c5`. R-ROOM-PROFILE residual. Next: pack-write / subscribe. #39 gated. |
+
 
 ### 2026-08-01 — V-SEND.R-AVATAR-UPLOAD user profile writes
 | When (UTC) | Item | Result | Notes |
