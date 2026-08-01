@@ -4,10 +4,11 @@
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | Status   | **Implementation packet** — this PR is docs-only and does not claim the vertical is implemented                                        |
 | Residual | **V-ROOMS.R-POWERS-BULK** from **#377**                                                                                                |
-| Base     | `c0d5ec4053511423b979d76d5586da0ed7643cf3` on `feature/matrix-rust-sdk-full-replacement`                                               |
+| Base     | `ee450251` on `feature/matrix-rust-sdk-full-replacement` (tip after #395 members-read first slice + #397 tip honesty)                  |
 | PR shape | Focused **draft** PR targeting `feature/matrix-rust-sdk-full-replacement`                                                              |
 | Policy   | [full-vertical-policy.md](full-vertical-policy.md): native UI → Tauri IPC → live `matrix-sdk`, physical JS-owner deletion, fail-closed |
 | Guard    | Never `main`, umbrella **#39**, or V-BURN/#327; `dual_backend` is forbidden                                                            |
+| Serial   | **powers-bulk product NOT started.** `product.rs` serial: #395 members-read first slice **MERGED**; next product in flight may be CallWidget media IPC; powers-bulk is not in flight and this packet does not claim it |
 
 The source inventory is
 [v-rooms-power-levels-residual.md](v-rooms-power-levels-residual.md). This
@@ -63,8 +64,10 @@ V-ROOMS power vertical closed from this packet alone.
 
 Before product implementation starts, the writer must verify:
 
-1. `HEAD` is exactly `c0d5ec4053511423b979d76d5586da0ed7643cf3` or the
-   approved integration tip that explicitly includes it.
+1. `HEAD` is exactly `ee450251` (tip after #395 members-read first slice and
+   #397 tip honesty) or the approved integration tip that explicitly includes
+   it. The #395 members-read first slice is **merged**; powers-bulk product is
+   **not started** — do not claim it is in flight.
 2. The PR target is
    `feature/matrix-rust-sdk-full-replacement`, never `main` or #39.
 3. The managed native session exposes one live `matrix-sdk` client for the

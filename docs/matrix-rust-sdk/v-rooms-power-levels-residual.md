@@ -3,10 +3,11 @@
 | Field    | Value                                                                                                                                |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Status   | **Inventory (docs only)** — no product code or native vertical claim                                                                 |
-| Base tip | `3d76402f` (`feature/matrix-rust-sdk-full-replacement`)                                                                              |
+| Base tip | `ee450251` (`feature/matrix-rust-sdk-full-replacement`; tip after #395 members-read first slice + #397 tip honesty)                  |
 | Scope    | PowersEditor tag writes and bulk `m.room.power_levels` writes after the single-user set-power-level slice                            |
 | Related  | #375 / adjacent commit `7eb5bc3d` (`matrix_room_set_power_level`); room-member moderation is separate                                |
 | Policy   | [full-vertical-policy.md](full-vertical-policy.md) — UI → Tauri IPC → live `matrix-sdk`, physical JS-owner deletion, no dual backend |
+| Serial   | **powers-bulk product NOT started.** `product.rs` serial: #395 members-read first slice **MERGED**; next product in flight may be CallWidget media IPC; powers-bulk is not in flight. Never `main`/umbrella #39; `dual_backend` forbidden |
 
 **Implementation packet:** [v-rooms-power-levels-implement-packet.md](v-rooms-power-levels-implement-packet.md)
 
