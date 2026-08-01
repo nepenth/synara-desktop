@@ -3,7 +3,7 @@
 | Field            | Value                                                                          |
 | ---------------- | ------------------------------------------------------------------------------ |
 | Status           | **Inventory only** — no product implementation in this document                |
-| Measured tip     | `ee450251638eb61064710f85b79676a27866e07b`                                     |
+| Measured tip     | `e8a00f7273cb1ee8528df4fa2c3bffc455704322`                                     |
 | Base             | `feature/matrix-rust-sdk-full-replacement`                                     |
 | Policy           | Full vertical: UI → Tauri IPC → live Matrix Rust SDK; one owner per capability |
 | Desktop fallback | **Fail closed** when native Matrix IPC is unavailable                          |
