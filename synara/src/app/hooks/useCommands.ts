@@ -31,6 +31,7 @@ import { parsePollCommand } from '../utils/polls';
 import { getRoomCurrentState } from '../utils/timelineLifecycle';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../utils/desktop';
 import { joinRoomWithNativeOwner } from '../components/nativeRoomJoinOwner';
+import { leaveRoomWithNativeOwner } from '../components/nativeRoomLeaveOwner';
 
 export const SHRUG = '¯\\_(ツ)_/¯';
 export const TABLEFLIP = '(╯°□°)╯︵ ┻━┻';
@@ -254,13 +255,15 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         name: Command.Leave,
         description: 'Leave current room.',
         exe: async (payload) => {
-          if (payload.trim() === '') {
-            mx.leave(room.roomId);
-            return;
-          }
-          const rawIds = splitWithSpace(payload);
-          const roomIds = rawIds.filter((id) => isRoomId(id));
-          roomIds.map((id) => mx.leave(id));
+          const roomIds =
+            payload.trim() === ''
+              ? [room.roomId]
+              : splitWithSpace(payload).filter((id) => isRoomId(id));
+          await Promise.all(
+            roomIds.map((id) =>
+              leaveRoomWithNativeOwner(id, isSynaraDesktop(), invokeDesktopWithAvailability)
+            )
+          );
         },
       },
       [Command.Invite]: {
