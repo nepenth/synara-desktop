@@ -57,9 +57,10 @@ use crate::matrix::account_data::{
     set_room_image_pack, set_user_image_pack, snapshot_global_image_packs, snapshot_later,
     snapshot_mdirect, snapshot_room_image_packs, snapshot_room_notes, snapshot_user_image_pack,
     snooze_later_item_live, upsert_later_item, upsert_room_note_item,
-    NativeGlobalImagePacksSnapshot, NativeLaterSnapshot, NativeMDirectMutationResult,
-    NativeMDirectSnapshot, NativeRoomImagePacksSnapshot, NativeRoomNotesSnapshot,
-    NativeUserImagePackSnapshot, RoomNoteMoveDirection, SynaraLaterItem, SynaraRoomNoteItem,
+    NativeGlobalImagePacksSnapshot, NativeImagePackOwner, NativeLaterSnapshot,
+    NativeMDirectMutationResult, NativeMDirectSnapshot, NativeRoomImagePacksSnapshot,
+    NativeRoomNotesSnapshot, NativeUserImagePackSnapshot, RoomNoteMoveDirection, SynaraLaterItem,
+    SynaraRoomNoteItem,
 };
 use crate::matrix::backup::live::{
     self as live_backup, NativeBackupOperationResult, NativeBackupStatus,
@@ -283,6 +284,7 @@ struct ManagedMatrixSession {
     attachments: AttachmentSendQueue,
     verification: NativeVerificationOwner,
     _devices: NativeDeviceOwner,
+    _image_packs: NativeImagePackOwner,
     typing: NativeTypingOwner,
     pending_device_deletion: Option<PendingDeviceDeletion>,
     next_device_delete_operation_id: u64,
@@ -435,6 +437,8 @@ pub async fn matrix_login_password(
     let devices = NativeDeviceOwner::start(&client, app.clone(), session_generation)
         .await
         .map_err(map_device_error)?;
+    let image_packs = NativeImagePackOwner::start(&client, app.clone(), session_generation)
+        .map_err(map_pack_read_subscribe_error)?;
     let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
     let sync = start_sync_owner(&client, session_generation).await?;
     let session_vault = KeyringSessionMaterialVault::new();
@@ -462,6 +466,7 @@ pub async fn matrix_login_password(
         attachments: AttachmentSendQueue::new(session_generation),
         verification,
         _devices: devices,
+        _image_packs: image_packs,
         typing,
         pending_device_deletion: None,
         next_device_delete_operation_id: 0,
@@ -660,6 +665,8 @@ async fn install_session_from_register_secrets(
     let devices = NativeDeviceOwner::start(&client, app.clone(), session_generation)
         .await
         .map_err(map_device_error)?;
+    let image_packs = NativeImagePackOwner::start(&client, app.clone(), session_generation)
+        .map_err(map_pack_read_subscribe_error)?;
     let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
     let sync = start_sync_owner(&client, session_generation).await?;
     let session_vault = KeyringSessionMaterialVault::new();
@@ -687,6 +694,7 @@ async fn install_session_from_register_secrets(
         attachments: AttachmentSendQueue::new(session_generation),
         verification,
         _devices: devices,
+        _image_packs: image_packs,
         typing,
         pending_device_deletion: None,
         next_device_delete_operation_id: 0,
@@ -3430,6 +3438,8 @@ pub async fn matrix_restore_session(
     let devices = NativeDeviceOwner::start(&client, app.clone(), session_generation)
         .await
         .map_err(map_device_error)?;
+    let image_packs = NativeImagePackOwner::start(&client, app.clone(), session_generation)
+        .map_err(map_pack_read_subscribe_error)?;
     let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
     let sync = start_sync_owner(&client, session_generation).await?;
     *session = Some(ManagedMatrixSession {
@@ -3443,6 +3453,7 @@ pub async fn matrix_restore_session(
         attachments: AttachmentSendQueue::new(session_generation),
         verification,
         _devices: devices,
+        _image_packs: image_packs,
         typing,
         pending_device_deletion: None,
         next_device_delete_operation_id: 0,
@@ -3787,6 +3798,14 @@ fn map_mdirect_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
         ),
     };
     MatrixAuthCommandError::new(code, message, diagnostic_id)
+}
+
+fn map_pack_read_subscribe_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "Unknown",
+        "The native Matrix image pack subscription could not be started.",
+        diagnostic_id,
+    )
 }
 
 fn map_pack_read_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {

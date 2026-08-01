@@ -1,10 +1,13 @@
 //! V-SEND.R-PACK-READ — native read projection for im.ponies image packs.
 //!
-//! Snapshot-only (no push subscribe in this slice). Live pack mutation remains
-//! V-SEND.R-PACK-WRITE. Pack media bytes remain media/timeline vertical.
+//! Pack-read snapshot + V-SEND.R-PACK-READ subscribe (signal-only push).
+//! Live pack mutation remains V-SEND.R-PACK-WRITE. Pack media bytes remain
+//! media/timeline vertical.
 
 use std::collections::BTreeMap;
 
+use matrix_sdk::event_handler::EventHandlerDropGuard;
+use matrix_sdk::ruma::events::{AnyGlobalAccountDataEvent, AnySyncStateEvent};
 use matrix_sdk::{
     deserialized_responses::RawAnySyncOrStrippedState,
     ruma::{
@@ -17,6 +20,7 @@ use matrix_sdk::{
 use serde::{Deserialize, Serialize};
 use serde_json::value::to_raw_value;
 use serde_json::Value as JsonValue;
+use tauri::{AppHandle, Emitter};
 
 pub const USER_EMOTES_EVENT_TYPE: &str = "im.ponies.user_emotes";
 pub const EMOTE_ROOMS_EVENT_TYPE: &str = "im.ponies.emote_rooms";
@@ -293,6 +297,76 @@ pub async fn set_room_image_pack(
     Ok(())
 }
 
+fn is_image_pack_account_data_type(event_type: &str) -> bool {
+    event_type == USER_EMOTES_EVENT_TYPE || event_type == EMOTE_ROOMS_EVENT_TYPE
+}
+
+fn is_image_pack_room_state_type(event_type: &str) -> bool {
+    event_type == ROOM_EMOTES_EVENT_TYPE
+}
+
+/// Tauri event: packs may have changed; UI re-snapshots via matrix_get_* commands.
+/// Signal only — never carries pack content (no second data owner).
+pub const IMAGE_PACKS_UPDATED_EVENT: &str = "matrix-image-packs-updated";
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeImagePackUpdateSignal {
+    session_generation: u64,
+}
+
+/// V-SEND.R-PACK-READ subscribe: live push of pack account-data/state changes.
+/// Emits a signal so the frontend re-reads via existing snapshot IPC (fail-closed).
+pub struct NativeImagePackOwner {
+    _account_data: EventHandlerDropGuard,
+    _state: EventHandlerDropGuard,
+}
+
+impl NativeImagePackOwner {
+    pub fn start(
+        client: &Client,
+        app: AppHandle,
+        session_generation: u64,
+    ) -> Result<Self, &'static str> {
+        let _ = client
+            .user_id()
+            .ok_or("v-send.r-pack-read-subscribe-no-user")?;
+
+        let app_account = app.clone();
+        let account_handle = client.add_event_handler(move |event: AnyGlobalAccountDataEvent| {
+            let app = app_account.clone();
+            async move {
+                let event_type = event.event_type().to_string();
+                if is_image_pack_account_data_type(&event_type) {
+                    let _ = app.emit(
+                        IMAGE_PACKS_UPDATED_EVENT,
+                        NativeImagePackUpdateSignal { session_generation },
+                    );
+                }
+            }
+        });
+
+        let app_state = app.clone();
+        let state_handle = client.add_event_handler(move |event: AnySyncStateEvent| {
+            let app = app_state.clone();
+            async move {
+                let event_type = event.event_type().to_string();
+                if is_image_pack_room_state_type(&event_type) {
+                    let _ = app.emit(
+                        IMAGE_PACKS_UPDATED_EVENT,
+                        NativeImagePackUpdateSignal { session_generation },
+                    );
+                }
+            }
+        });
+
+        Ok(Self {
+            _account_data: client.event_handler_drop_guard(account_handle),
+            _state: client.event_handler_drop_guard(state_handle),
+        })
+    }
+}
+
 /// Pure guard extracted from `set_user_image_pack` so the fail-closed content
 /// check is unit-testable without a live client.
 fn set_user_image_pack_content_guard(content: &JsonValue) -> Result<(), &'static str> {
@@ -389,5 +463,14 @@ mod tests {
             &json!({ "pack": { "display_name": "Room" }, "images": {} })
         )
         .is_ok());
+    }
+
+    #[test]
+    fn pack_event_type_filters_match_ponies_types() {
+        assert!(is_image_pack_account_data_type(USER_EMOTES_EVENT_TYPE));
+        assert!(is_image_pack_account_data_type(EMOTE_ROOMS_EVENT_TYPE));
+        assert!(!is_image_pack_account_data_type("m.direct"));
+        assert!(is_image_pack_room_state_type(ROOM_EMOTES_EVENT_TYPE));
+        assert!(!is_image_pack_room_state_type("m.room.name"));
     }
 }
