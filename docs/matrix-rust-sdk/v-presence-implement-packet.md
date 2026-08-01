@@ -5,7 +5,7 @@
 | Status     | **Implementation packet** — this PR is docs-only; it does not claim the presence vertical is implemented                   |
 | Residual   | **V-PRESENCE.USER**                                                                                                        |
 | Source     | [v-presence-typing-residual.md](v-presence-typing-residual.md) from #384                                                   |
-| Base       | `feature/matrix-rust-sdk-full-replacement` at `c0d5ec4053511423b979d76d5586da0ed7643cf3`                                   |
+| Base       | `feature/matrix-rust-sdk-full-replacement` at `ee450251638eb61064710f85b79676a27866e07b`                                   |
 | PR shape   | Focused **draft** PR targeting `feature/matrix-rust-sdk-full-replacement`                                                  |
 | Scope      | Desktop user presence (`m.presence`) in the user-room profile; typing and MatrixRTC call membership are separate residuals |
 | Policy     | [full-vertical-policy.md](full-vertical-policy.md): one UI → Tauri IPC → live `matrix-sdk` owner, with JS-owner deletion   |
