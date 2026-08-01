@@ -8,15 +8,15 @@
 | ----------------------- | -------------------------------------------------------------------------------- |
 | Readiness               | **Not ready**                                                                    |
 | Runtime proof           | **Not confirmed**                                                                |
-| Source tip              | `d0b347814a780368e18db0db4d22614b2d751c79`                                       |
+| Source tip              | `c0d5ec4053511423b979d76d5586da0ed7643cf3`                                       |
 | Base                    | `feature/matrix-rust-sdk-full-replacement` only                                  |
 | Scope                   | Docs only; no product code or cutover state change                               |
 | `dual_backend`          | **Forbidden**; this snapshot does not enable or claim it                         |
 | Fail-closed policy      | Native-session command absence/failure is terminal; no JS fallback is authorized |
 | Prettier                | `2.8.1`                                                                          |
-| Production import files | **159** under `synara/src/`                                                      |
-| P1.6 allowlist entries  | **163**                                                                          |
-| V-BURN                   | **HOLD** — not started; do not claim ready                                       |
+| Production import files | **153** under `synara/src/`                                                      |
+| P1.6 allowlist entries  | **153**                                                                          |
+| V-BURN                  | **HOLD** — not started; do not claim ready                                       |
 | #39 / `main`            | **Gated** — do not merge                                                         |
 
 ## Direct source blockers
@@ -30,9 +30,9 @@ The tip still constructs and starts a live JavaScript Matrix client:
 - [`synara/package.json:99`](../../synara/package.json#L99) retains
   `matrix-js-sdk` at `42.0.0`; the lockfile retains the dependency as well.
 - The committed [`desktop-sdk-usage.md`](desktop-sdk-usage.md) report counts
-  **159** production import files. The committed
+  **153** production import files. The committed
   [`p1.6-js-sdk-import-allowlist.json`](p1.6-js-sdk-import-allowlist.json)
-  contains **163** paths.
+  contains **153** paths.
 
 These facts alone prevent a zero-live-client or zero-import V-BURN conclusion.
 The allowlist is inventory policy during migration; it is not evidence that the
@@ -55,12 +55,13 @@ remaining importers are acceptable at final convergence.
 
 The current residual queue is summarized in [`SCOREBOARD.md`](SCOREBOARD.md).
 Its tip field is intentionally not changed by this snapshot; the source
-evidence above is pinned explicitly to `ffaf79eb138b2dde4d1515447c670d98ffdfcd41`.
+evidence above is pinned explicitly to
+`c0d5ec4053511423b979d76d5586da0ed7643cf3`.
 
 ## Bottom line
 
 Native replacement progress is real, but the tip still has a live JS client,
-the npm dependency, 159 production import files against a 163-entry migration
+the npm dependency, 153 production import files against a 153-entry migration
 allowlist, and unconfirmed residual proofs. Therefore the honest statement is:
 
 **V-BURN is blocked; readiness is Not ready; this file is not a readiness claim.**
