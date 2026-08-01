@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Updated | 2026-08-01 |
-| Tip | `de13b048` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip | `980231f7` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **163** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
 | Umbrella #39 | **Do not merge** without explicit user approval |
@@ -31,14 +31,15 @@
 | V-SEND.R-PACK-READ | **#297** native snapshot get + hooks fail-closed (subscribe residual remains) |
 | V-SEND.R-AVATAR-UPLOAD | **#303** native `matrix_upload_media` + set own avatar/display name; Profile.tsx fail-closed (R-ROOM-PROFILE remains) |
 | V-SEND.R-PACK-WRITE personal | **#306** `matrix_set_user_image_pack` + UserImagePack fail-closed |
-| V-SEND.R-PACK-WRITE global | **#309** `matrix_set_global_image_packs` + GlobalPacks fail-closed (room/PACK-UPLOAD residual) |
+| V-SEND.R-PACK-WRITE global | **#309** `matrix_set_global_image_packs` + GlobalPacks fail-closed |
+| V-SEND.R-PACK-WRITE room | **#310** `matrix_set_room_image_pack` + RoomPacks/RoomImagePack fail-closed (PACK-UPLOAD residual) |
 | CI | Parallel Validate #284 |
 
 ## In flight
 
 | PR | What |
 |----|------|
-| (none product) | Next: pack-write **room** + **PACK-UPLOAD**; pack-read **subscribe**; **R-ROOM-PROFILE** |
+| (none product) | Next: **PACK-UPLOAD**; pack-read **subscribe**; **R-ROOM-PROFILE** |
 
 ## Left (ordered)
 
@@ -52,7 +53,7 @@
 ### Send / media residuals (inventories done; implement remains)
 - ~~**V-SEND.R-FORWARD**~~ **#296**
 - ~~**V-SEND.R-PACK-READ** snapshot~~ **#297** (subscribe residual remains)
-- ~~**V-SEND.R-PACK-WRITE** personal~~ **#306**; ~~**global**~~ **#309**; **room pack-write** + **PACK-UPLOAD** remain (inventory #292; upload may reuse `matrix_upload_media` #303)
+- ~~**V-SEND.R-PACK-WRITE** personal~~ **#306**; ~~**global**~~ **#309**; ~~**room**~~ **#310**; **PACK-UPLOAD** remains (inventory #292; may reuse `matrix_upload_media` #303)
 - ~~**V-SEND.R-AVATAR-UPLOAD** user profile~~ **#303**; **R-ROOM-PROFILE** remains (inventory #291)
 - **V-SEND.R-CALL-UPLOAD** / **R-GIF-PACK**
 - **V-SEND.R-DEVTOOL** (low priority)
