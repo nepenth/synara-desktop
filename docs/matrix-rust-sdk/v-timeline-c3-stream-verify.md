@@ -3,6 +3,7 @@
 | Field        | Value                                                                                                                                                            |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Status       | Docs-only verification checklist — **no product code**                                                                                                           |
+| Live proof   | **Not confirmed** — no authenticated desktop evidence is recorded for this tip                                                                                |
 | Scope        | `synara/src/app/features/room/nativeTimelineView.ts` (`useNativeTimelineView`, `applyNativeTimelineViewDelta`), `NativeTimelinePresenter.tsx` stream consumption |
 | Precondition | C1 (#285) selects `NativeTimelinePresenter` in `RoomView`; C2 (#289) deletes `RoomTimeline` + dead JS timeline path                                              |
 | Policy       | [full-vertical-policy.md](full-vertical-policy.md); [cutover-operating-model.md](cutover-operating-model.md); dual_backend **false**; **never touch #39**        |
@@ -56,7 +57,7 @@ Run from the repository root before opening the desktop:
 git status --short --branch
 git branch --show-current
 git rev-parse HEAD
-git merge-base --is-ancestor 3d76402f7e8775256d4455947cba60080b9f706e HEAD
+git merge-base --is-ancestor ee450251638eb61064710f85b79676a27866e07b HEAD
 node --version
 npm --version
 npm exec --yes --package=prettier@2.8.1 -- prettier --version
@@ -65,8 +66,8 @@ npm exec --yes --package=prettier@2.8.1 -- prettier --version
 Continue only when all of the following are true:
 
 - the proof is on `feature/matrix-rust-sdk-full-replacement` or a docs branch
-  whose checked-out base is exactly feature tip
-  `3d76402f7e8775256d4455947cba60080b9f706e`, never `main` or PR #39. The
+  whose checked-out history includes current feature tip
+  `ee450251638eb61064710f85b79676a27866e07b`, never `main` or PR #39. The
   `git merge-base --is-ancestor` check must pass; if it fails, stop and record
   `Not confirmed`;
 - record the exact output of `git rev-parse HEAD` as the **evidence head** in
@@ -218,7 +219,7 @@ generated success label, or a retry that lacks the complete route chronology.
 proof: V-TIMELINE.C3
 verdict: Not confirmed | Failed | Confirmed
 base: feature/matrix-rust-sdk-full-replacement
-base-tip: 3d76402f7e8775256d4455947cba60080b9f706e
+base-tip: ee450251638eb61064710f85b79676a27866e07b
 head: <exact output of git rev-parse HEAD>
 operator: <name or team alias>
 platform: <macOS/Linux + desktop build or dev run>
