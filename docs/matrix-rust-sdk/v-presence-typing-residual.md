@@ -3,7 +3,7 @@
 | Field         | Value                                                                                                                     |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Status        | **Docs-only residual audit**; no product code changed                                                                     |
-| Measured tip  | `3d76402f` on `feature/matrix-rust-sdk-full-replacement`                                                                  |
+| Measured tip  | `ee450251638eb61064710f85b79676a27866e07b` on `feature/matrix-rust-sdk-full-replacement`                                  |
 | Scope         | Desktop user presence and room typing paths in `synara/src` and `src-tauri/src`                                           |
 | Policy        | Native desktop is fail-closed; `dual_backend` is forbidden                                                                |
 | Runtime proof | Typing live proof remains unclaimed; presence native proof is not applicable because no live native presence owner exists |
