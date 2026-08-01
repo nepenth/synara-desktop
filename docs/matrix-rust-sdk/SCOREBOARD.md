@@ -3,7 +3,7 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `932d9aec` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip                                                    | `a53f14fa` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **153** (plan baseline was **220**)                      |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
@@ -49,6 +49,8 @@ run passes the relevant checklist.
 | V-SEND.R-PACK-UPLOAD            | **#314** reuses `matrix_upload_media` via CompactUploadCardRenderer fail-closed (pack + compact image uploads)                                                                                   |
 | V-SEND.R-GIF-PACK               | **NOOP** — `GifPicker` exposes provider search/selection only; selected GIF send is native via #264 and no GIF pack/collection owner exists                                                      |
 | Room leave vertical             | **#364** `matrix_room_leave` + LeaveRoom/LeaveSpace native owner                                                                                                                                 |
+| Room create vertical            | **#372** `matrix_room_create` + native owner; CreateRoom/Space/Chat + `/startdm` fail-closed (imports **154→153**)                                                                               |
+| /leave command                  | **#371** useCommands Leave → leaveRoomWithNativeOwner                                                                                                                                            |
 | Room join vertical              | **#369** `matrix_room_join` + native owner; all production `joinRoom` sites fail-closed (imports **155→154**)                                                                                    |
 | Composer GIF/upload fallbacks   | **#363** RoomInput GIF + msgContent thumbnail JS upload fallbacks deleted                                                                                                                        |
 | V-SEND.R-CALL-UPLOAD            | **#328** native upload; [CallWidgetDriver residual](v-send-call-widget-residual.md)                                                                                                              |
@@ -58,37 +60,34 @@ run passes the relevant checklist.
 
 ## In flight
 
-| PR     | What                                                                                                                                     |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| (none) | Join closed **#369**. Next: **createRoom** vertical; `/leave` command residual; members/power; C3–C5; CallWidget media IPC; V-BURN HOLD. |
+| PR     | What                                                                                                                      |
+| ------ | ------------------------------------------------------------------------------------------------------------------------- |
+| (none) | Leave/join/create closed. Next: **members moderation** (invite/kick/ban/power); C3–C5; CallWidget media IPC; V-BURN HOLD. |
 
 ## Left (finish-line order)
 
-1. **Room create (+ remaining lifecycle) — native full vertical.** Leave
-   **#364**, join **#369** closed. Re-home `createRoom` / CreateChat /
-   CreateSpace / `/create` through Tauri IPC to live `matrix-sdk`, fail-closed,
-   with JS owner deletion. Also residual: `/leave` in `useCommands` still uses
-   `mx.leave`. See [P6.9 room ops](p6.9-room-ops.md).
-2. **Members/power — native full vertical.** Re-home member and power-level
-   reads/writes natively; delete JS owners. See [P4.6 members](p4.6-members.md).
-3. **V-TIMELINE.C3–C5 — live proofs.** All three remain **Not confirmed**
+1. **Members/power — native full vertical.** Leave/join/create closed
+   (**#364/#369/#372**); `/leave` command **#371**. Re-home invite/kick/ban/
+   unban/setPowerLevel writes first, then member list/power reads. See
+   [P4.6 members](p4.6-members.md) and [P4.3 membership](p4.3-membership-unread.md).
+2. **V-TIMELINE.C3–C5 — live proofs.** All three remain **Not confirmed**
    (C3 blocked without Docker Synapse harness in agent env). Operator index:
    [C3](v-timeline-c3-stream-verify.md),
    [C4](v-timeline-c4-media-render-verify.md),
    [C5](v-timeline-c5-pins-notes-jump-verify.md).
-4. **V-SEND.R-DEVTOOL — native full vertical.** Inventory remains; implement
+3. **V-SEND.R-DEVTOOL — native full vertical.** Inventory remains; implement
    after C3–C5 live or explicit reorder. See
    [implementation gate](v-send-devtool-inventory.md#implementation-gate).
-5. **CallWidget media config/download IPC.** **#362** closed `getKnownRooms`
+4. **CallWidget media config/download IPC.** **#362** closed `getKnownRooms`
    natively and fail-closed the rest; still need native `getMediaConfig` /
    `downloadFile` owners (not JS fallthrough). See
    [CallWidget residual](v-send-call-widget-residual.md).
-6. **V-BURN.1 — no live `createClient`/`startClient` on desktop.** Not
+5. **V-BURN.1 — no live `createClient`/`startClient` on desktop.** Not
    complete. See [V-BURN gates](d0-residual-completion.md) and
    [blockers](v-burn-readiness-snapshot.md).
-7. **V-BURN.2 — zero production importers.** Current production importers
-   **154**. See [taxonomy](v-burn-importer-taxonomy.md).
-8. **V-BURN.3 — drop npm and obsolete JS bootstrap/store code.** After
+6. **V-BURN.2 — zero production importers.** Current production importers
+   **153**. See [taxonomy](v-burn-importer-taxonomy.md).
+7. **V-BURN.3 — drop npm and obsolete JS bootstrap/store code.** After
    V-BURN.1/.2. See the
    [V-BURN completion gates](d0-residual-completion.md) and [blocker snapshot](v-burn-readiness-snapshot.md).
 
