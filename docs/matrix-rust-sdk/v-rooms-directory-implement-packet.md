@@ -4,7 +4,7 @@
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | Status          | **Implementation packet** — this packet is docs-only; it does not claim the vertical is implemented                            |
 | Residual        | **V-ROOMS.R-DIRECTORY** from [#383](v-rooms-directory-residual.md)                                                             |
-| Base            | `feature/matrix-rust-sdk-full-replacement` at `c0d5ec4053511423b979d76d5586da0ed7643cf3`                                       |
+| Base            | `feature/matrix-rust-sdk-full-replacement` at `ee450251638eb61064710f85b79676a27866e07b`                                       |
 | PR shape        | Focused **draft** PR targeting `feature/matrix-rust-sdk-full-replacement`                                                      |
 | Policy          | Complete UI → Tauri IPC → live `matrix-sdk` owner; superseded JS directory network is deleted in the same implementation slice |
 | Desktop failure | **Fail closed** when the native Matrix session, command, response, or generation is unavailable                                |
@@ -100,7 +100,7 @@ adding a second client or editing `product.rs` is not an allowed workaround.
 
 Before any future product implementation starts, the writer must verify:
 
-1. `HEAD` is exactly `c0d5ec4053511423b979d76d5586da0ed7643cf3` and the PR
+1. `HEAD` is exactly `ee450251638eb61064710f85b79676a27866e07b` and the PR
    target is `feature/matrix-rust-sdk-full-replacement`;
 2. the existing managed native session is the sole authenticated Matrix SDK
    client for the desktop session;
