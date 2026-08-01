@@ -2,16 +2,18 @@
 
 | Field    | Value                                                                                                                   |
 | -------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Status   | **Native room-list reuse + fail-closed media boundary at the base tip; #407 media IPC in flight with Synapse proof `cd07f4fc`; not merged/complete** |
-| Base tip | `1c9653b2` on `feature/matrix-rust-sdk-full-replacement`                                                                |
+| Status   | **Base tip remains fail-closed; #407 parent branch contains the media IPC and Synapse proof, but its parent merge is pending; not complete** |
+| Base tip | `52953091` on `feature/matrix-rust-sdk-full-replacement`                                                                |
 | Scope    | `CallWidgetDriver` upload, media-config, media-download, and known-room methods                                         |
-| Guard    | Never touch `main` or umbrella PR **#39**; `dual_backend` is forbidden; **#327 remains HOLD and V-BURN is not started** |
+| Guard    | Never touch `main` or umbrella PR **#39**; `dual_backend` is forbidden; **V-BURN remains HOLD and is not started** |
 
-> **#407 status: in flight.** The CallWidget media IPC implementation remains
-> open. Its implementation branch includes [`cd07f4fc`](https://github.com/nepenth/synara-desktop/commit/cd07f4fc),
-> `test(matrix): prove CallWidget media against Synapse`, as media proof
-> evidence. That commit is not a merge or completion claim for **#407**; this
-> residual remains anchored to the base tip above and makes no V-BURN claim.
+> **#407 status: parent merge pending.** The parent branch currently points to
+> [`fa6ac162`](https://github.com/nepenth/synara-desktop/commit/fa6ac162), with
+> the media implementation at `0df5cb1e` and the Synapse proof at
+> `fa6ac162`. Those commits are evidence from the open parent branch, not
+> evidence that **#407** has merged into `feature/matrix-rust-sdk-full-replacement`.
+> This residual is measured at base `52953091` and must remain open until the
+> parent merges and the integration tip is revalidated. No V-BURN claim is made.
 
 > **Implement packet.** The frozen IPC contract, JS-owner deletion list,
 > fail-closed rules, and test plan for the media config/download vertical live
@@ -34,8 +36,31 @@ the desktop state binder, while media config/download fail closed because this
 tip has no native command for either capability. No SDK room-list, media-config,
 MXC URL, or HTTP-download fallback remains reachable from the desktop widget
 driver. This document now records the proposed native media contract and its
-implementation sequence; it does not wire that contract at this tip. This does
-not claim full call/widget cutover or start a burn slice.
+implementation sequence; it does not wire that contract at this base tip. The
+parent branch's implementation is tracked separately below and does not change
+the base-tip status. This does not claim full call/widget cutover or start a
+burn slice.
+
+## Conditional post-#407 residual (draft; merge not recorded)
+
+The open parent branch was inspected only to answer whether a separate
+CallWidget media residual remains after **#407**, if that parent merges without
+scope changes. The result is conditional and must not be read as an integration
+closure:
+
+| Surface | Base `52953091` | Parent `#407` branch | Conditional post-merge result |
+| --- | --- | --- | --- |
+| `getMediaConfig()` | Fail-closed; no native command at the base tip | `nativeCallWidgetMediaOwner` → `matrix_call_media_config` | No separate config residual identified, but close only after the parent merge and a retip |
+| `downloadFile(contentUri)` | Fail-closed; no native command at the base tip | `nativeCallWidgetMediaOwner` → `matrix_media_download` | No separate download residual identified, but close only after the parent merge and a retip |
+| `uploadFile(file)` | Native-first/fail-closed on a logged-in native session via **#328** | Unchanged by #407 | Native upload is already separately owned; the web/logged-out legacy callback is outside this native desktop residual |
+| `getKnownRooms()` | Native snapshot-backed via **#362** | Unchanged by #407 | No post-#407 room-list residual identified |
+
+Therefore, if **#407** merges unchanged, this specific media-config/download
+residual has no additional post-merge item identified. That is a future
+conditional outcome, not the current status: the base tip still contains the
+fail-closed stubs, and this docs PR does not close the residual. Broader
+CallWidget/MatrixRTC parity and full cutover remain outside this inventory and
+are not claimed complete here. **V-BURN remains HOLD.**
 
 ## CallWidgetDriver inventory
 
@@ -46,9 +71,10 @@ not claim full call/widget cutover or start a burn slice.
 | `CallWidgetDriver.ts:330-333` | `downloadFile(contentUri)`                                            | **Fail-closed**; no native call-widget media-download command is present in this tip                                            | Implement `matrix_media_download`; no JS fallback on native desktop         |
 | `CallWidgetDriver.ts`         | `getKnownRooms()`                                                     | **Native snapshot-backed**; uses the cached `matrix_room_list_snapshot` readback and returns `[]` until a valid snapshot exists | Room-list owner is native; no SDK visible-room fallback                     |
 
-The media methods remain explicit blocked surfaces until the serial product
-slice lands. The room method is wired to the native snapshot owner. This slice
-does not claim full call/widget cutover or start a burn slice.
+The media methods remain explicit blocked surfaces on base `52953091` until the
+serial product slice lands on the integration branch. The room method is wired
+to the native snapshot owner. This slice does not claim full call/widget
+cutover or start a burn slice.
 
 ## Native route evidence
 
@@ -222,7 +248,8 @@ TypeScript stubs for commands that are not registered yet.
   returns original bytes with a hard size limit and no byte logging.
 - Focused Rust/TypeScript tests cover validation, session retirement, command
   availability, response validation, and the no-fallback invariant.
-- No V-BURN claim is made. `#327` remains HOLD and V-BURN remains not started.
+- No V-BURN claim is made. V-BURN remains HOLD and not started; this note does
+  not change the blocker ledger.
 
 ## SCOREBOARD cross-link
 
@@ -245,5 +272,6 @@ rg -n -i 'mx\.download(Media|File)|downloadMedia|downloadMatrixMedia|mxcUrlToHtt
 
 The scan found no `mx.downloadMedia`/`mx.downloadFile` call and no CallWidget
 path to the existing HTTP/Blob helpers. No Rust product command, dual-backend
-flag, V-BURN state, or #327 state was changed; this remains a docs-only
-alignment with #378.
+flag, or V-BURN state was changed in this draft. The open parent branch may
+contain the planned product commands, but its unmerged state does not alter
+this base-tip finding; this remains a docs-only residual note.
