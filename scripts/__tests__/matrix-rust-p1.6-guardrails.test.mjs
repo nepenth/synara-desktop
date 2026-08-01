@@ -97,7 +97,9 @@ use matrix_sdk::Room;
   assert.match(stripped, /"use matrix_sdk::Client"/);
   assert.doesNotMatch(stripped, /OwnedRoomId/);
   assert.equal(
-    findRustSdkWireHits(src).some((h) => h.text.includes("Client") && h.line < 3),
+    findRustSdkWireHits(src).some(
+      (h) => h.text.includes("Client") && h.line < 3
+    ),
     false
   );
   assert.ok(
@@ -110,8 +112,8 @@ test("findJsSdkImportHits detects from/require/import()", () => {
     findJsSdkImportHits(`import { Room } from 'matrix-js-sdk';`).length > 0
   );
   assert.ok(
-    findJsSdkImportHits(`import x from "matrix-js-sdk/lib/crypto-api";`).length >
-      0
+    findJsSdkImportHits(`import x from "matrix-js-sdk/lib/crypto-api";`)
+      .length > 0
   );
   assert.ok(
     findJsSdkImportHits(`const m = require('matrix-js-sdk');`).length > 0
@@ -159,12 +161,12 @@ test("runGuardrails passes on current repository tree", () => {
   }
   assert.equal(result.ok, true);
   assert.equal(result.findingCount, 0);
-  assert.ok(result.allowlistSize >= 163);
+  assert.ok(result.allowlistSize >= 159);
 });
 
 test("committed JS SDK allowlist loads and has expected size", () => {
   const allow = loadJsSdkAllowlist(REPO_ROOT);
-  assert.ok(allow.size >= 163);
+  assert.ok(allow.size >= 159);
   assert.equal(
     allow.has("synara/src/app/features/room/RoomTimeline.tsx"),
     false
@@ -222,7 +224,9 @@ test("fixture: unversioned IPC envelope fails", () => {
         f.rule === "unversioned-ipc-envelope" ||
         f.rule === "unversioned-ipc-missing-const"
     ),
-    `expected unversioned-ipc-* finding, got ${result.findings.map((f) => f.rule)}`
+    `expected unversioned-ipc-* finding, got ${result.findings.map(
+      (f) => f.rule
+    )}`
   );
 });
 
