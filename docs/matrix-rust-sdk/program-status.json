@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "as_of_date": "2026-07-31",
+  "as_of_date": "2026-08-01",
   "source_of_truth": "Original-plan inventory, strict gates, release runtime, and current full-vertical product execution. Dated evidence and audit artifacts remain historical sources.",
   "integration_branch": "feature/matrix-rust-sdk-full-replacement",
   "audited_snapshot": {
@@ -150,8 +150,8 @@
         "import_lines": 292
       },
       "current": {
-        "files": 200,
-        "import_lines": 244
+        "files": 172,
+        "import_lines": 202
       }
     }
   },
