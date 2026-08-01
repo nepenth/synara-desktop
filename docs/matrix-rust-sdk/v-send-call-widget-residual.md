@@ -2,8 +2,8 @@
 
 | Field    | Value                                                                                                                   |
 | -------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Status   | **Native room-list reuse + fail-closed media boundary; media IPC design only**                                          |
-| Base tip | `3d76402f` on `feature/matrix-rust-sdk-full-replacement`                                                                |
+| Status   | **Native room-list reuse + fail-closed media boundary; #378 media IPC design + reuse scan**                             |
+| Base tip | `c0d5ec40` on `feature/matrix-rust-sdk-full-replacement`                                                                |
 | Scope    | `CallWidgetDriver` upload, media-config, media-download, and known-room methods                                         |
 | Guard    | Never touch `main` or umbrella PR **#39**; `dual_backend` is forbidden; **#327 remains HOLD and V-BURN is not started** |
 
@@ -80,6 +80,28 @@ Relevant source evidence at the measured tip:
   covers native success, web ownership, missing-command failure,
   invalid-response failure, and unsupported widget bodies.
 
+## Remaining media-route scan
+
+The source scan found no literal `mx.downloadMedia` or `mx.downloadFile` call
+(`mx.downloadKeysForUsers` is an unrelated crypto path). The remaining Matrix
+download/display paths are either browser HTTP/Blob helpers or a separate
+native timeline protocol; neither is a compatible CallWidget download owner.
+
+| Existing surface                                                                                                                           | Measured route and consumers                                                                                                                                                                                                                                                                      | CallWidget reuse decision                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `synara/src/app/matrix/media.ts:19-83` → `synara/src/app/utils/matrix.ts:226-260`                                                          | `resolveMatrixMediaUrl` calls `mx.mxcUrlToHttp`; `downloadMatrixMedia` resolves an HTTP URL and calls `downloadMedia`/`downloadEncryptedMedia`, which uses `fetch` and returns a `Blob`. FileHeader/FileContent, text/audio/video/image viewers, and thumbnail/media renderers consume this path. | **Do not reuse.** It is a webview HTTP/Blob boundary, performs optional client-side decryption, and requires event encryption metadata that the Widget API `contentUri` does not provide. It also violates the native desktop no-HTTP/no-JS-fallback boundary in #378.                              |
+| `synara/src/app/utils/room.ts:297-314`, `synara/src/app/plugins/react-custom-html-parser.tsx:546`, and `resolveMatrixThumbnailUrl` callers | MXC values become authenticated HTTP image/thumbnail URLs for avatars, member images, room images, HTML media, and message thumbnails. These are URL/display paths, not byte-returning download owners.                                                                                           | **Do not reuse.** A URL-producing helper cannot satisfy `downloadFile(contentUri) → { file: Uint8Array }`, and routing the widget through an HTTP URL would reintroduce the forbidden fallback.                                                                                                     |
+| `src-tauri/src/lib.rs:135-177` → `MatrixAuthState::resolve_timeline_media` → `synara-media`                                                | Native timeline rows use opaque, stream/session-bound handles. The protocol resolves a retained SDK `MediaSource`, fetches a file with `get_media_content`, validates size/type, and serves a main-window GET response.                                                                           | **Do not reuse as CallWidget IPC.** It accepts a timeline handle rather than a raw widget `contentUri`, is a URI protocol rather than an invoke response, and has timeline-specific handle lifetime and MIME policy. Its SDK ownership pattern is evidence for #378, not a shared CallWidget route. |
+| `src-tauri/src/matrix/media/` and P7.2/P7.3                                                                                                | P7.2 download jobs and P7.3 cache entries contain metadata, source IDs, progress, and handles only; they do not own a live SDK client, network I/O, or media bytes.                                                                                                                               | **Do not reuse at this tip.** They are foundations, not production download commands or a byte-delivery boundary.                                                                                                                                                                                   |
+| `matrix_upload_media`                                                                                                                      | Native upload command returning an upload `mxc`; it does not resolve or return downloaded media.                                                                                                                                                                                                  | **Do not reuse.** Upload validation and response semantics are different from CallWidget original-file download.                                                                                                                                                                                    |
+
+The compatible reuse is therefore limited to the native session/SDK ownership
+and the SDK `Client::media().get_media_content(...)` primitive already selected
+by #378. The CallWidget path still needs its dedicated
+`matrix_media_download` command, with bounded `mxc://` input and direct byte
+response. No JS `mxcUrlToHttp`, browser `fetch`, `synara-media` URL, P7.2 queue,
+or upload-command fallback is part of that route.
+
 ## Native media IPC implementation plan
 
 ### Contract decision
@@ -91,12 +113,14 @@ Add two dedicated Tauri commands in the serial product slice:
 | `matrix_call_media_config` | no fields                | `{ "m.upload.size": number }` | `client.load_or_fetch_max_upload_size()` |
 | `matrix_media_download`    | `{ contentUri: string }` | `{ bytes: number[] }`         | `client.media().get_media_content(...)`  |
 
-No existing media IPC is suitable for reuse. `matrix_upload_media` returns an
-upload `mxc` and has upload-specific validation. `src-tauri/src/matrix/media`
-and P7.2 currently hold metadata-only queues; they do not own a live SDK
-client, network I/O, or production Tauri commands. The versioned JSON IPC
-envelopes and domain DTOs also remain metadata-only. These two commands are
-narrow product commands, not new stream topics.
+The scan above confirms that no existing media IPC is suitable for direct
+CallWidget download reuse. `matrix_upload_media` returns an upload `mxc` and
+has upload-specific validation. The `synara-media` protocol serves
+timeline-owned opaque handles, while `src-tauri/src/matrix/media` and P7.2
+hold metadata-only queues; none accepts a widget `contentUri` as a direct
+byte-returning command. The versioned JSON IPC envelopes and domain DTOs also
+remain metadata-only. These two commands are narrow product commands, not new
+stream topics.
 
 ### Command behavior
 
@@ -198,12 +222,16 @@ explicit.
 
 ## Verification
 
-The production inventory was checked with:
+The production inventory and media-route scan were checked with:
 
 ```text
 rg -n 'getMediaConfig|downloadFile|getKnownRooms|uploadFile' \
   synara/src/app/plugins/call/CallWidgetDriver.ts
+rg -n -i 'mx\.download(Media|File)|downloadMedia|downloadMatrixMedia|mxcUrlToHttp|synara-media|get_media_content' \
+  synara/src src-tauri/src
 ```
 
-No Rust product command, dual-backend flag, V-BURN state, or #327 state was
-changed. The TypeScript owner and this residual record were updated together.
+The scan found no `mx.downloadMedia`/`mx.downloadFile` call and no CallWidget
+path to the existing HTTP/Blob helpers. No Rust product command, dual-backend
+flag, V-BURN state, or #327 state was changed; this remains a docs-only
+alignment with #378.
