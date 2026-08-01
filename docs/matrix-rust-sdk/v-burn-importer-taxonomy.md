@@ -275,7 +275,7 @@ At this snapshot the residual queue is unchanged:
 1. Pack `get*` helper deletion is **V-BURN-gated**.
 2. **C3–C5 are Not confirmed**.
 3. **R-DEVTOOL starts only after C3–C5**, per its implementation gate.
-4. **#327 is HOLD**. Do not merge, claim V-BURN-ready, set
+4. **V-BURN is HOLD**. Do not claim V-BURN-ready, set
    `active_slice=V-BURN`, or introduce a dual backend.
 5. **#39 is gated** and `main` is out of scope.
 
