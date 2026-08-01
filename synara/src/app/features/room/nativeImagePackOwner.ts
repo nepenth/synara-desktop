@@ -1,7 +1,7 @@
 import type { DesktopInvokeResult } from '../../utils/desktop';
 import { ImagePack } from '../../plugins/custom-emoji/ImagePack';
 import { PackAddress } from '../../plugins/custom-emoji/PackAddress';
-import type { PackContent } from '../../plugins/custom-emoji/types';
+import type { PackContent, EmoteRoomsContent } from '../../plugins/custom-emoji/types';
 
 type NativeSessionSnapshot = {
   status: 'logged_out' | 'logged_in';
@@ -138,6 +138,30 @@ export async function setUserImagePackWithNativeOwner(
   const body = result.value as NativePackWriteResult | undefined;
   if (body?.status !== 'ok') {
     throw new Error('Native Matrix image pack write is unavailable.');
+  }
+  return 'native';
+}
+
+/**
+ * V-SEND.R-PACK-WRITE: sole global-pack write owner when a native Matrix
+ * session is live. Fail-closed — never falls through to
+ * mx.setAccountData(PoniesEmoteRooms).
+ */
+export async function setGlobalImagePacksWithNativeOwner(
+  content: EmoteRoomsContent,
+  desktopAvailable: boolean,
+  invoke: NativeInvoke
+): Promise<'native' | 'legacy'> {
+  if (!(await isNativePackReadSession(desktopAvailable, invoke))) {
+    return 'legacy';
+  }
+  const result = await invoke('matrix_set_global_image_packs', { content });
+  if (!result.available) {
+    throw new Error('Native Matrix global image pack write is unavailable.');
+  }
+  const body = result.value as NativePackWriteResult | undefined;
+  if (body?.status !== 'ok') {
+    throw new Error('Native Matrix global image pack write is unavailable.');
   }
   return 'native';
 }

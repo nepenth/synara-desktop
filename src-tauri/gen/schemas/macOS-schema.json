@@ -933,6 +933,12 @@
           "markdownDescription": "Enables the matrix_session_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_set_global_image_packs command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-set-global-image-packs",
+          "markdownDescription": "Enables the matrix_set_global_image_packs command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_set_own_avatar command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-set-own-avatar",
@@ -1741,6 +1747,12 @@
           "type": "string",
           "const": "deny-matrix-session-snapshot",
           "markdownDescription": "Denies the matrix_session_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_set_global_image_packs command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-set-global-image-packs",
+          "markdownDescription": "Denies the matrix_set_global_image_packs command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_set_own_avatar command without any pre-configured scope.",
