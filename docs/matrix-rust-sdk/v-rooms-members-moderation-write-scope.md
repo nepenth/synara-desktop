@@ -16,7 +16,7 @@
 
 | ID                          | Residual                                                                                    | Notes                                                                                                                                        |
 | --------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **V-ROOMS.R-MEMBERS-READ**  | Member list / membership listeners still JS (`useRoomMembers`, etc.)                        | Follow-up full vertical                                                                                                                      |
+| **V-ROOMS.R-MEMBERS-READ**  | #395 owns the settings member snapshot; #405 is the pending native drawer/lobby/mention wiring. After #405, power-level/creator reads remain residual. | See [members-read residual inventory](v-rooms-members-read-residual.md); do not treat #405 as a power-read implementation |
 | **V-ROOMS.R-POWERS-BULK**   | PowersEditor / PermissionGroups bulk `m.room.power_levels` via `mx.sendStateEvent`          | Not dual-backend for single-user PowerChip; bulk editor is separate residual                                                                 |
 | **V-ROOMS.R-INVITE-REASON** | matrix-sdk 0.18 `invite_user_by_id` has no reason field; reason arg accepted then discarded | See [invite-reason residual options](v-rooms-invite-reason-residual.md); preserve UI flag until SDK exposes reason or product drops the flag |
 

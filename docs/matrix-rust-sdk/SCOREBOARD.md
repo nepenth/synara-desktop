@@ -3,7 +3,7 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `8330c56b` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip                                                    | `52953091` docs base on `feature/matrix-rust-sdk-full-replacement`; #405 product head `cd2d57b4` is the post-merge input |
 | Production `matrix-js-sdk` import files (`synara/src`) | **152** (plan baseline was **220**)                      |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
@@ -51,7 +51,7 @@ run passes the relevant checklist.
 | Room leave vertical             | **#364** `matrix_room_leave` + LeaveRoom/LeaveSpace native owner                                                                                                                                 |
 | Room create vertical            | **#372** `matrix_room_create` + native owner; CreateRoom/Space/Chat + `/startdm` fail-closed (imports **154→153**)                                                                               |
 | Room moderation writes          | **#375** native invite/kick/ban/unban/setPowerLevel writes; moderation write product vertical merged                                                                                             |
-| Members-read first slice        | **#395** `matrix_room_members_snapshot` + Members settings native fail-closed (imports **153→152**); drawer/lobby/mentions + power-level reads residual |
+| Members-read member surfaces    | **#395** `matrix_room_members_snapshot` + Members settings native fail-closed; **#405** wires drawer/lobby/mentions member snapshots (post-merge target); power-level/creator reads and powers-bulk writes remain residual |
 | /leave command                  | **#371** useCommands Leave → leaveRoomWithNativeOwner                                                                                                                                            |
 | Room join vertical              | **#369** `matrix_room_join` + native owner; all production `joinRoom` sites fail-closed (imports **155→154**)                                                                                    |
 | Composer GIF/upload fallbacks   | **#363** RoomInput GIF + msgContent thumbnail JS upload fallbacks deleted                                                                                                                        |
@@ -64,7 +64,7 @@ run passes the relevant checklist.
 
 | PR     | What                                                                                           |
 | ------ | ---------------------------------------------------------------------------------------------- |
-| [#405](https://github.com/nepenth/synara-desktop/pull/405) | **Members drawer/lobby/mentions native member wiring** — **`ACCEPT`**; CI may re-run; not merged at this tip. |
+| [#405](https://github.com/nepenth/synara-desktop/pull/405) | **Members drawer/lobby/mentions native member wiring** — **`ACCEPT`** at product head [`cd2d57b4`](https://github.com/nepenth/synara-desktop/commit/cd2d57b4); pending merge into this docs base. |
 | [#407](https://github.com/nepenth/synara-desktop/pull/407) | **CallWidget media config/download IPC** — **`ACCEPT_WITH_NITS`**; full-green proof at [`cd07f4fc`](https://github.com/nepenth/synara-desktop/commit/cd07f4fc), which is behind this tip; parent merge pending. |
 
 ## Left (finish-line order)
@@ -72,10 +72,11 @@ run passes the relevant checklist.
 1. **Members/power — native full vertical.** Leave/join/create closed
    (**#364/#369/#372**); `/leave` command **#371**; moderation writes
    invite/kick/ban/unban/setPowerLevel **#375 merged**; members-read first slice
-   **#395** (`matrix_room_members_snapshot` + Members settings native). Residual:
-   Room/MembersDrawer/Lobby/UserMentionAutocomplete member reads, power-level/creator
-   reads, and powers-bulk writes (packet **#388**). **#405** is **`ACCEPT`**;
-   CI may re-run, but its product wiring is not landed in this tip. See
+   **#395** (`matrix_room_members_snapshot` + Members settings native). The
+   post-#405 target closes Room/MembersDrawer/Lobby/UserMentionAutocomplete
+   member enumeration on native desktop; the residual after that merge is
+   power-level/creator reads plus powers-bulk writes (packet **#388**). **#405**
+   is **`ACCEPT`** at `cd2d57b4` and pending merge into this docs base. See
    [read residual inventory](v-rooms-members-read-residual.md),
    [P4.6 members](p4.6-members.md) and [P4.3 membership](p4.3-membership-unread.md).
 2. **V-TIMELINE.C3–C5 — live proofs.** All three remain **Not confirmed**
