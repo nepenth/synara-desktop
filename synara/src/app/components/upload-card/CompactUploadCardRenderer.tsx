@@ -1,11 +1,20 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { Chip, Icon, IconButton, Icons, Text, color } from 'folds';
+import { useAtom } from 'jotai';
 import { UploadCard, UploadCardError, CompactUploadCardProgress } from './UploadCard';
-import { TUploadAtom, UploadStatus, UploadSuccess, useBindUploadAtom } from '../../state/upload';
+import {
+  TUploadAtom,
+  UploadStatus,
+  UploadSuccess,
+  useBindUploadAtom,
+  makeUploadError,
+} from '../../state/upload';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { TUploadContent } from '../../utils/matrix';
 import { bytesToSize, getFileTypeIcon } from '../../utils/common';
 import { useMediaConfig } from '../../hooks/useMediaConfig';
+import { isSynaraDesktop } from '../../utils/desktop';
+import { uploadMediaNative } from '../../state/nativeMediaUpload';
 
 type CompactUploadCardRendererProps = {
   isEncrypted?: boolean;
@@ -22,17 +31,52 @@ export function CompactUploadCardRenderer({
   const mx = useMatrixClient();
   const mediaConfig = useMediaConfig();
   const allowSize = mediaConfig['m.upload.size'] || Infinity;
+  const desktop = isSynaraDesktop();
+  const [, setUpload] = useAtom(uploadAtom);
 
   const { upload, startUpload, cancelUpload } = useBindUploadAtom(mx, uploadAtom, isEncrypted);
   const { file } = upload;
   const fileSizeExceeded = file.size >= allowSize;
+  const nativeStarted = useRef(false);
+
+  const startNativeUpload = useCallback(async () => {
+    // V-SEND.R-PACK-UPLOAD: fail-closed native media upload on desktop.
+    // Reuses matrix_upload_media; never falls through to mx.uploadContent.
+    const loadingPromise = Promise.resolve({ content_uri: '' } as never);
+    setUpload({ promise: loadingPromise });
+    try {
+      const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
+      const mimeType = file.type || 'image/png';
+      const uploaded = await uploadMediaNative(mimeType, bytes);
+      if (uploaded === 'legacy') {
+        throw new Error('Native Matrix media upload is unavailable.');
+      }
+      setUpload({ mxc: uploaded.mxc });
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error && typeof e.message === 'string'
+          ? e.message
+          : 'Native Matrix media upload is unavailable.';
+      setUpload({ error: makeUploadError(message) });
+    }
+  }, [file, setUpload]);
 
   if (upload.status === UploadStatus.Idle && !fileSizeExceeded) {
-    startUpload();
+    if (desktop) {
+      if (!nativeStarted.current) {
+        nativeStarted.current = true;
+        void startNativeUpload();
+      }
+    } else {
+      startUpload();
+    }
   }
 
   const removeUpload = () => {
-    cancelUpload();
+    if (!desktop) {
+      cancelUpload();
+    }
+    nativeStarted.current = false;
     onRemove(file);
   };
 
@@ -53,7 +97,14 @@ export function CompactUploadCardRenderer({
           {upload.status === UploadStatus.Error && (
             <Chip
               as="button"
-              onClick={startUpload}
+              onClick={() => {
+                if (desktop) {
+                  nativeStarted.current = false;
+                  void startNativeUpload();
+                } else {
+                  startUpload();
+                }
+              }}
               aria-label="Retry Upload"
               variant="Critical"
               radii="Pill"

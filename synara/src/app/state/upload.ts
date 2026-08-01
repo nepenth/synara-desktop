@@ -36,6 +36,11 @@ export type UploadError = {
   error: MatrixError;
 };
 
+/** Build a MatrixError for native upload failures without new js-sdk importers. */
+export function makeUploadError(message: string): MatrixError {
+  return new MatrixError({ error: message });
+}
+
 export type Upload = UploadIdle | UploadLoading | UploadSuccess | UploadError;
 
 export type UploadAtomAction =
@@ -138,6 +143,7 @@ export const useBindUploadAtom = (
     startUpload,
     cancelUpload,
     markNativeStaged,
+    setUpload,
   };
 };
 
