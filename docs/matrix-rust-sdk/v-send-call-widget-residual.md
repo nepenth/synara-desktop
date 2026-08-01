@@ -2,10 +2,16 @@
 
 | Field    | Value                                                                                                                   |
 | -------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Status   | **Native room-list reuse + fail-closed media boundary; #378 media IPC design + reuse scan; implement packet frozen**     |
+| Status   | **Native room-list reuse + fail-closed media boundary at the base tip; #407 media IPC in flight with Synapse proof `cd07f4fc`; not merged/complete** |
 | Base tip | `1c9653b2` on `feature/matrix-rust-sdk-full-replacement`                                                                |
 | Scope    | `CallWidgetDriver` upload, media-config, media-download, and known-room methods                                         |
 | Guard    | Never touch `main` or umbrella PR **#39**; `dual_backend` is forbidden; **#327 remains HOLD and V-BURN is not started** |
+
+> **#407 status: in flight.** The CallWidget media IPC implementation remains
+> open. Its implementation branch includes [`cd07f4fc`](https://github.com/nepenth/synara-desktop/commit/cd07f4fc),
+> `test(matrix): prove CallWidget media against Synapse`, as media proof
+> evidence. That commit is not a merge or completion claim for **#407**; this
+> residual remains anchored to the base tip above and makes no V-BURN claim.
 
 > **Implement packet.** The frozen IPC contract, JS-owner deletion list,
 > fail-closed rules, and test plan for the media config/download vertical live
