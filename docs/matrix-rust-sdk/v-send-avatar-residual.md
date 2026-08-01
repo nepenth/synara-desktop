@@ -131,4 +131,4 @@ Landed native IPC + desktop Profile.tsx wiring:
 Landed native IPC + desktop RoomProfile.tsx wiring:
 - `matrix_set_room_name` / `matrix_set_room_topic` / `matrix_set_room_avatar` — **#313**
 - `RoomProfile.tsx` fail-closed via `nativeRoomProfile` / `nativeRoomProfileOwner`; JS `sendStateEvent` only for non-native web
-- Room-avatar **media upload** residual remains (still via JS `state/upload.ts` → `mx.uploadContent`; PACK-UPLOAD-adjacent, open **#314**)
+- Room-avatar **media upload** now covered by **#314** PACK-UPLOAD: `RoomProfile.tsx` uses `CompactUploadCardRenderer` → `uploadMediaNative` → `matrix_upload_media` fail-closed on desktop (never falls through to `mx.uploadContent` on a native session). No remaining avatar/room-avatar `mx.uploadContent` path on desktop.
