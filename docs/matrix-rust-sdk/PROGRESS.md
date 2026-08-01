@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `0152c460` — after #287 pack-read inventory; #284 CI parallel; #240 timeline contract; #279 loginUtil
-| Active work        | **#283** V-SEND.R-EDIT (CI); **#285** V-TIMELINE C1 presenter cutover (CI); next C2 RoomTimeline delete + pack-read implement + forward residual
+| Integration tip    | `95a6a71b` — after #288 scoreboard; #287 pack-read inventory; #284 CI; #240 contract; #279 loginUtil
+| Active work        | **#283** edit (CI); **this #285** C1 + **#289** C2 timeline cutover; #290 forward inventory landed; next pack-read implement + C3–C5
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | Desktop production import files **165** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
@@ -32,7 +32,10 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip after #288** scoreboard. **This PR** V-TIMELINE.C1 NativeTimelinePresenter owns RoomView. #283 edit; #289 C2 delete RoomTimeline stacked. |
+| **Now**        | **Tip after #290** forward inventory. **This PR #285** V-TIMELINE.C1 NativeTimelinePresenter owns RoomView. #283 edit in CI; #289 C2 delete RoomTimeline stacked. Next: C3–C5, pack-read implement, avatar. #39 gated. |
+| **Tip**        | after #290 (merge `ed60226b` base) |
+| **Active PRs** | [#283](https://github.com/nepenth/synara-desktop/pull/283) edit; **this** [#285](https://github.com/nepenth/synara-desktop/pull/285) C1; [#289](https://github.com/nepenth/synara-desktop/pull/289) C2. |
+| **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
 
@@ -57,17 +60,25 @@ Update rules:
 
 ## Work log (newest first)
 
+### 2026-08-01 — V-TIMELINE.C1 presenter cutover
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-TIMELINE.C1** | **This PR** | `RoomView` mounts `NativeTimelinePresenter` only (sole owner). #289 C2 deletes `RoomTimeline`. dual_backend forbidden. |
+### 2026-08-01 — V-SEND.R-FORWARD residual inventory
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.R-FORWARD** | **This PR** | Docs-only inventory of message **forward** residual: send is already native (`matrix_timeline_forward_text`/`matrix_timeline_forward_media`); residual is the legacy `MessageForwardItem` dialog in `Message.tsx` + `utils/forward.ts` read helpers on live JS client. See [v-send-forward-residual.md](v-send-forward-residual.md). |
+
 ### 2026-08-01 — progress honesty scoreboard
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| current | **Integration tip** | `0152c460` | After #287 pack-read inventory |
+| current | **Integration tip** | `95a6a71b` | After #288 scoreboard honesty; #287 pack-read inventory |
 | current | **Auth residual** | **loginUtil DONE #279**; UIA multi-stage non-retention #280; discovery #276 | Desktop password fail-closed native-only |
-| current | **V-TIMELINE** | Contract **#240** merged; cutover map **#286**; C1 presenter select **#285** in flight | C2–C5 residual; RoomView still JS until #285 lands |
-| current | **V-SEND residual** | Poll-thread #282 DONE; edit #283 in flight; pack-read inventory #287 | Forward/avatar/pack-write still open |
+| current | **V-TIMELINE** | Contract **#240** merged; cutover map **#286**; C1 **#285** + C2 **#289** in flight | C3–C5 residual after C1/C2 land |
+| current | **V-SEND residual** | Poll-thread #282 DONE; edit #283 in flight; pack-read inventory #287; **forward inventory this PR** | Pack-read implement + avatar/pack-write still open |
 | current | **CI** | Parallel Validate Rust∥Node **#284** | Path scopes; quality gates preserved |
 | current | **Import files (prod)** | **165** under synara/src | Down from plan 220 |
-
 
 ### 2026-07-31 — V-SEND.R-PACK-READ residual inventory
 | When (UTC) | Item | Result | Notes |
