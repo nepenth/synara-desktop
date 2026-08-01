@@ -3,7 +3,7 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `77f44208` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip                                                    | `d0b34781` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **159** (plan baseline was **220**)                      |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
@@ -57,7 +57,7 @@ run passes the relevant checklist.
 
 | PR     | What                                                                                                                                                                                   |
 | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| (docs) | Residual queue docs-converged; product idle. Next real work: **C3–C5** live session or a user reorder for **R-DEVTOOL/widget verticals**. Pack `get*` remains V-BURN-gated; #327 HOLD. |
+| (docs) | Residual queue docs-converged; product idle. Next real work: **C3–C5** live session or a user reorder for **R-DEVTOOL/widget verticals**. Pack `get*` remains V-BURN-gated; V-BURN HOLD ([blockers](v-burn-readiness-snapshot.md) #355). |
 
 ## Left (residual queue)
 
@@ -70,5 +70,5 @@ run passes the relevant checklist.
    [C4](v-timeline-c4-media-render-verify.md), and
    [C5](v-timeline-c5-pins-notes-jump-verify.md).
 3. **V-SEND.R-DEVTOOL** — inventory only; [implementation gate](v-send-devtool-inventory.md#implementation-gate) after C3–C5 live proofs (low priority).
-4. **V-BURN.1–3** — final convergence; **#327 HOLD**; **#39 gated** (do not
+4. **V-BURN.1–3** — final convergence; **V-BURN HOLD** ([blockers](v-burn-readiness-snapshot.md) #355; [taxonomy](v-burn-importer-taxonomy.md) #358); **#39 gated** (do not
    merge to `main`).

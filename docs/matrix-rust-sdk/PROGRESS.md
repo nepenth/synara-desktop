@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `e4cf1a5f` — P1.6 allowlist/live-import reconciliation; residual queue unchanged (pack utils V-BURN; C3–C5 live; DEVTOOL gate; #327 HOLD)
-| Active work        | C3–C5 live-proof verification; R-DEVTOOL remains gated; #349 is docs-only residual inventory; V-BURN not started; #327 HOLD forever this cycle
+| Integration tip    | `d0b34781` — after #358 taxonomy; #357 C3 preflight; #355 burn blockers (**Not ready**); #327 closed as superseded
+| Active work        | C3–C5 live-proof verification; R-DEVTOOL remains gated; V-BURN HOLD (blockers #355; #327 closed superseded)
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                                                                                                                                                         |
 | Import accounting  | Desktop production import files **159** on tip (plan baseline was 220). Allowlist **163**; four retained allowlist entries have no live direct importer (see the current work-log entry below).
@@ -32,10 +32,10 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `e4cf1a5f`**. P1.6 allowlist/live-import reconciliation is docs-only; residual queue stable. Next: C3–C5 live or V-BURN-gated pack utils. #327 HOLD. #39 gated. |
-| **Tip**        | `e4cf1a5f` |
-| **Active PRs** | #327 V-BURN readiness (hold — late only). |
-| **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; #327 V-BURN forever this cycle; umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
+| **Now**        | **Tip `d0b34781`**. Product idle. Burn blockers #355 **Not ready**; #327 closed (superseded). Next: C3–C5 live session. #39 gated. |
+| **Tip**        | `d0b34781` |
+| **Active PRs** | none (V-BURN HOLD; no product PR). |
+| **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
 ---
 
