@@ -1,11 +1,11 @@
 # V-SEND upload call-site audit after #325/#328/#331
 
-| Field | Value |
-|-------|-------|
-| Status | **Docs-only audit** — no product code changed |
-| Measured tip | `e38bfdab` on `feature/matrix-rust-sdk-full-replacement` |
-| Scope | Production `mx.uploadContent` / `uploadContent(mx, …)` usages under `synara/src`, excluding the `CompactUploadCardRenderer` native path from #314 |
-| Guard | Do not touch `main` or umbrella PR **#39** |
+| Field        | Value                                                                                                                                             |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status       | **Docs-only audit** — no product code changed                                                                                                     |
+| Measured tip | `5116c9da` on `feature/matrix-rust-sdk-full-replacement`                                                                                          |
+| Scope        | Production `mx.uploadContent` / `uploadContent(mx, …)` usages under `synara/src`, excluding the `CompactUploadCardRenderer` native path from #314 |
+| Guard        | Do not touch `main` or umbrella PR **#39**                                                                                                        |
 
 ## Finding
 
@@ -20,13 +20,13 @@ compact desktop uploads themselves use `matrix_upload_media` after #314.
 
 ## Call-site inventory
 
-| Source | Production operation | Reachability on a native desktop session | Residual mapping |
-|--------|----------------------|------------------------------------------|------------------|
-| `synara/src/app/plugins/call/CallWidgetDriver.ts:318` | `client.uploadContent(file)` is the legacy callback passed to `uploadCallWidgetFileWithNativeOwner`; the same driver also owns widget media config/download | **Not reachable** on a native desktop session; #328 routes binary uploads through `matrix_upload_media` and fails closed on native failure | **V-SEND.R-CALL-UPLOAD** — closed by **#328** |
-| `synara/src/app/features/room/RoomInput.tsx:911` | GIF picker legacy branch downloads the GIF, optionally encrypts it, then calls `mx.uploadContent` before `mx.sendMessage` | **Not reachable** when `sendComposerGifWithNativeOwner` sees a logged-in native session; native GIF send uses `matrix_send_attachment` | **Composer GIF send / #264 legacy-web fallback**; not a GIF-pack residual. The [GIF-pack audit](v-send-gif-pack-audit.md) found no collection-management surface. |
-| `synara/src/app/features/room/msgContent.ts:35` | Video thumbnail generation uploads the thumbnail through `mx.uploadContent`; invoked while building legacy attachment message content | **Not reachable** after native attachment ownership succeeds; native attachment bytes and encryption are sent through `matrix_send_attachment` | **Composer attachment / V-SEND.1 + V-SEND.5 legacy-web fallback**; no new SCOREBOARD residual |
-| `synara/src/app/state/upload.ts:120` | `useBindUploadAtom` calls the shared `uploadContent(mx, file, …)` wrapper | **Not used** by `UploadCardRenderer` when `nativeComposerSend` is true; compact desktop also bypasses it | Shared owner for non-native web uploads and compact consumers: **V-SEND.R-AVATAR-UPLOAD**, **R-ROOM-PROFILE**, and historical **V-SEND.R-PACK-UPLOAD** ownership; not a new residual by itself |
-| `synara/src/app/utils/matrix.ts:155` | Shared `uploadContent` wrapper calls `mx.uploadContent(file, …)` | Same as `state/upload.ts` | Shared implementation for the mappings above; retain until the remaining web/legacy consumers are removed |
+| Source                                                | Production operation                                                                                                                                        | Reachability on a native desktop session                                                                                                       | Residual mapping                                                                                                                                                                               |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `synara/src/app/plugins/call/CallWidgetDriver.ts:318` | `client.uploadContent(file)` is the legacy callback passed to `uploadCallWidgetFileWithNativeOwner`; the same driver also owns widget media config/download | **Not reachable** on a native desktop session; #328 routes binary uploads through `matrix_upload_media` and fails closed on native failure     | **V-SEND.R-CALL-UPLOAD** — closed by **#328**                                                                                                                                                  |
+| `synara/src/app/features/room/RoomInput.tsx:911`      | GIF picker legacy branch downloads the GIF, optionally encrypts it, then calls `mx.uploadContent` before `mx.sendMessage`                                   | **Not reachable** when `sendComposerGifWithNativeOwner` sees a logged-in native session; native GIF send uses `matrix_send_attachment`         | **Composer GIF send / #264 legacy-web fallback**; not a GIF-pack residual. The [GIF-pack audit](v-send-gif-pack-audit.md) found no collection-management surface.                              |
+| `synara/src/app/features/room/msgContent.ts:35`       | Video thumbnail generation uploads the thumbnail through `mx.uploadContent`; invoked while building legacy attachment message content                       | **Not reachable** after native attachment ownership succeeds; native attachment bytes and encryption are sent through `matrix_send_attachment` | **Composer attachment / V-SEND.1 + V-SEND.5 legacy-web fallback**; no new SCOREBOARD residual                                                                                                  |
+| `synara/src/app/state/upload.ts:120`                  | `useBindUploadAtom` calls the shared `uploadContent(mx, file, …)` wrapper                                                                                   | **Not used** by `UploadCardRenderer` when `nativeComposerSend` is true; compact desktop also bypasses it                                       | Shared owner for non-native web uploads and compact consumers: **V-SEND.R-AVATAR-UPLOAD**, **R-ROOM-PROFILE**, and historical **V-SEND.R-PACK-UPLOAD** ownership; not a new residual by itself |
+| `synara/src/app/utils/matrix.ts:155`                  | Shared `uploadContent` wrapper calls `mx.uploadContent(file, …)`                                                                                            | Same as `state/upload.ts`                                                                                                                      | Shared implementation for the mappings above; retain until the remaining web/legacy consumers are removed                                                                                      |
 
 ## Native-path boundary
 
@@ -50,12 +50,12 @@ The composer send gates are explicit:
 
 ## SCOREBOARD reconciliation
 
-| SCOREBOARD entry | Audit result |
-|------------------|--------------|
-| **V-SEND.R-CALL-UPLOAD** | **Closed by #328**. The `CallWidgetDriver` native owner handles logged-in desktop uploads; `client.uploadContent` is retained only as the non-native/web callback. |
-| **V-SEND.R-GIF-PACK** | **NOOP** — the picker has no pack/collection-management surface. The `RoomInput` GIF upload is a native-send legacy-web fallback, not pack management; see [audit](v-send-gif-pack-audit.md). |
-| **V-SEND.R-PACK-UPLOAD** | #314 is correct for compact desktop uploads. The shared JS helper remains for web/legacy reachability, but there is no native desktop fallthrough in `CompactUploadCardRenderer`. |
-| Composer attachments / GIF send | Native owners are already landed (#248/#258/#264); remaining JS upload text is fallback evidence, not a new native-session residual. |
+| SCOREBOARD entry                | Audit result                                                                                                                                                                                  |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **V-SEND.R-CALL-UPLOAD**        | **Closed by #328**. The `CallWidgetDriver` native owner handles logged-in desktop uploads; `client.uploadContent` is retained only as the non-native/web callback.                            |
+| **V-SEND.R-GIF-PACK**           | **NOOP** — the picker has no pack/collection-management surface. The `RoomInput` GIF upload is a native-send legacy-web fallback, not pack management; see [audit](v-send-gif-pack-audit.md). |
+| **V-SEND.R-PACK-UPLOAD**        | #314 is correct for compact desktop uploads. The shared JS helper remains for web/legacy reachability, but there is no native desktop fallthrough in `CompactUploadCardRenderer`.             |
+| Composer attachments / GIF send | Native owners are already landed (#248/#258/#264); remaining JS upload text is fallback evidence, not a new native-session residual.                                                          |
 
 The GIF-pack scoreboard entry is **NOOP**, call-upload is closed by **#328**,
 and thumbnails are closed by **#325**. This audit records the remaining
