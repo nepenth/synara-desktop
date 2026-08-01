@@ -3,7 +3,7 @@
 | Field                  | Value                                                                    |
 | ---------------------- | ------------------------------------------------------------------------ |
 | Status                 | **Docs-only taxonomy**; no product code changed                          |
-| Measured tip           | `e4cf1a5f1d4c6127afd34f2b2f23d93400a03d45`                               |
+| Measured tip           | `3502125ae2f529ae66c403efe9b79ae734c1c464`                               |
 | Base                   | `feature/matrix-rust-sdk-full-replacement`                               |
 | Scope                  | Production `matrix-js-sdk` importers under `synara/src`                  |
 | Current importers      | **159**                                                                  |
