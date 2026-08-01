@@ -70,6 +70,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_room_ban",
     "matrix_room_unban",
     "matrix_room_set_power_level",
+    "matrix_room_members_snapshot",
     "matrix_invites_report_spam",
     "matrix_invites_block_sender",
     "matrix_typing_snapshot",

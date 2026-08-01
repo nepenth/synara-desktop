@@ -22,7 +22,6 @@ import {
   toRem,
 } from 'folds';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { RoomMember } from 'matrix-js-sdk';
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { useRoom } from '../../../hooks/useRoom';
 import { useRoomMembers } from '../../../hooks/useRoomMembers';
@@ -56,6 +55,10 @@ import { useSpaceOptionally } from '../../../hooks/useSpace';
 import { useFlattenPowerTagMembers, useGetMemberPowerTag } from '../../../hooks/useMemberPowerTag';
 import { useRoomCreators } from '../../../hooks/useRoomCreators';
 import { getMouseEventCords } from '../../../utils/dom';
+import { getSessionBootstrapResult } from '../../../state/sessionBootstrap';
+import { isSynaraDesktop } from '../../../utils/desktop';
+import type { RoomMemberListItem } from '../../../hooks/useRoomMembers';
+import { Membership } from '../../../../types/matrix/room';
 
 const SEARCH_OPTIONS: UseAsyncSearchOptions = {
   limit: 1000,
@@ -68,8 +71,9 @@ const SEARCH_OPTIONS: UseAsyncSearchOptions = {
 };
 
 const mxIdToName = (mxId: string) => getMxIdLocalPart(mxId) ?? mxId;
-const getRoomMemberStr: SearchItemStrGetter<RoomMember> = (m, query) =>
+const getRoomMemberStr: SearchItemStrGetter<RoomMemberListItem> = (m, query) =>
   getMemberSearchStr(m, query, mxIdToName);
+const EMPTY_ROOM_MEMBERS: RoomMemberListItem[] = [];
 
 type MembersProps = {
   requestClose: () => void;
@@ -78,8 +82,15 @@ export function Members({ requestClose }: MembersProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const room = useRoom();
-  const members = useRoomMembers(mx, room.roomId);
-  const fetchingMembers = members.length < room.getJoinedMemberCount();
+  const nativeSession = isSynaraDesktop() && getSessionBootstrapResult().source === 'native';
+  const memberSnapshot = useRoomMembers(mx, room.roomId, nativeSession);
+  const members = memberSnapshot ?? EMPTY_ROOM_MEMBERS;
+  const joinedMemberCount = nativeSession
+    ? members.filter((member) => member.membership === Membership.Join).length
+    : room.getJoinedMemberCount();
+  const fetchingMembers = nativeSession
+    ? memberSnapshot === null
+    : members.length < joinedMemberCount;
   const openProfile = useOpenUserRoomProfile();
   const profileUser = useUserRoomProfileState();
   const space = useSpaceOptionally();
@@ -157,7 +168,7 @@ export function Members({ requestClose }: MembersProps) {
         <Box grow="Yes" gap="200">
           <Box grow="Yes" alignItems="Center" gap="200">
             <Text size="H3" truncate>
-              {room.getJoinedMemberCount()} Members
+              {joinedMemberCount} Members
             </Text>
           </Box>
           <Box shrink="No">

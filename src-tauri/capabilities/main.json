@@ -103,6 +103,7 @@
     "allow-matrix-room-ban",
     "allow-matrix-room-unban",
     "allow-matrix-room-set-power-level",
+    "allow-matrix-room-members-snapshot",
     "allow-matrix-invites-report-spam",
     "allow-matrix-invites-block-sender",
     "allow-matrix-typing-snapshot",

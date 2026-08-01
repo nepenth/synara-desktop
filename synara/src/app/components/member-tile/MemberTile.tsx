@@ -6,14 +6,21 @@ import { getMxIdLocalPart } from '../../utils/matrix';
 import { UserAvatar } from '../user-avatar';
 import * as css from './style.css';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
+import type { RoomMember as NativeRoomMember } from '../../features/matrix-dto/member';
 
-const getName = (room: Room, member: RoomMember) =>
-  getMemberDisplayName(room, member.userId) ?? getMxIdLocalPart(member.userId) ?? member.userId;
+type RoomMemberListItem = RoomMember | NativeRoomMember;
+
+const getName = (room: Room, member: RoomMemberListItem) =>
+  (!('getMxcAvatarUrl' in member)
+    ? member.displayName
+    : getMemberDisplayName(room, member.userId)) ??
+  getMxIdLocalPart(member.userId) ??
+  member.userId;
 
 type MemberTileProps = {
   mx: MatrixClient;
   room: Room;
-  member: RoomMember;
+  member: RoomMemberListItem;
   useAuthentication: boolean;
   after?: ReactNode;
 };
@@ -22,7 +29,9 @@ export const MemberTile = as<'button', MemberTileProps>(
     const name = getName(room, member);
     const username = getMxIdLocalPart(member.userId);
 
-    const avatarMxcUrl = member.getMxcAvatarUrl();
+    const avatarMxcUrl = !('getMxcAvatarUrl' in member)
+      ? member.avatarUrl
+      : member.getMxcAvatarUrl();
     const avatarUrl = avatarMxcUrl
       ? resolveMatrixThumbnailUrl(mx, avatarMxcUrl, 100, {
           useAuthentication,

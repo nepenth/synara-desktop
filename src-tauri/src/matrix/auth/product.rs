@@ -27,11 +27,13 @@ use matrix_sdk::{
             poll::unstable_response::UnstablePollResponseEventContent,
             relation::{Reply, Thread},
             room::{
+                member::MembershipState,
                 message::{
                     AddMentions, MessageFormat, MessageType, Relation, RelationWithoutReplacement,
                     ReplacementMetadata, ReplyWithinThread, RoomMessageEventContent,
                     RoomMessageEventContentWithoutRelation,
                 },
+                power_levels::UserPowerLevel,
                 ImageInfo,
             },
             sticker::StickerEventContent,
@@ -42,7 +44,7 @@ use matrix_sdk::{
         EventId, Int, MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId,
         OwnedServerName, OwnedTransactionId, OwnedUserId, RoomVersionId, UInt,
     },
-    Client, Room, SessionMeta, SessionTokens,
+    Client, Room, RoomMemberships, SessionMeta, SessionTokens,
 };
 use mime::Mime;
 use serde::{Deserialize, Serialize};
@@ -83,6 +85,7 @@ use crate::matrix::devices::{
     NativeDeviceDeleteChallenge, NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot,
     PendingDeviceDeletion,
 };
+use crate::matrix::dto::{Membership as ProductMembership, RoomMember as ProductRoomMember};
 use crate::matrix::lifecycle::{
     clear_session_material, persist_session_after_login, restore_session_from_vault,
     restore_session_onto_client, KeyringSessionMaterialVault, SessionMaterial,
@@ -182,6 +185,15 @@ pub struct MatrixAuthCommandError {
     pub code: &'static str,
     pub message: &'static str,
     pub diagnostic_id: &'static str,
+}
+
+/// V-ROOMS.R-MEMBERS-READ — live native room-member projection.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeRoomMembersSnapshot {
+    pub session_generation: u64,
+    pub room_id: String,
+    pub members: Vec<ProductRoomMember>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1518,6 +1530,40 @@ pub async fn matrix_room_list_snapshot(
     snapshot_from_sync_owner(&active.sync)
         .await
         .map_err(map_room_list_error)
+}
+
+#[tauri::command]
+pub async fn matrix_room_members_snapshot(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+) -> Result<NativeRoomMembersSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    let room_id = parse_room_members_room_id(&room_id).map_err(map_room_members_error)?;
+    let room = active
+        .client
+        .get_room(&room_id)
+        .ok_or_else(|| map_room_members_error("v-rooms-members-read-room-not-found"))?;
+    let is_direct = room.is_direct().await.unwrap_or(false);
+    let current_user = active.client.user_id();
+    let sdk_members = room
+        .members(RoomMemberships::empty())
+        .await
+        .map_err(|_| map_room_members_error("v-rooms-members-read-members-failed"))?;
+    let is_two_party_direct = is_direct && sdk_members.len() == 2;
+
+    let mut members = sdk_members
+        .iter()
+        .map(|member| project_room_member(&room_id, member, is_two_party_direct, current_user))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(map_room_members_error)?;
+    members.sort_by(|left, right| left.user_id.cmp(&right.user_id));
+
+    Ok(NativeRoomMembersSnapshot {
+        session_generation: active.sync.session_generation(),
+        room_id: room_id.to_string(),
+        members,
+    })
 }
 
 #[tauri::command]
@@ -3983,6 +4029,21 @@ fn map_room_list_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     )
 }
 
+fn map_room_members_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    let (code, message) = match diagnostic_id {
+        "v-rooms-members-read-invalid-room" => (
+            "InvalidRequest",
+            "The native Matrix room members request is invalid.",
+        ),
+        "v-rooms-members-read-room-not-found" => (
+            "NotFound",
+            "The native Matrix room members are unavailable.",
+        ),
+        _ => ("Unknown", "The native Matrix room members are unavailable."),
+    };
+    MatrixAuthCommandError::new(code, message, diagnostic_id)
+}
+
 fn map_space_parents_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     MatrixAuthCommandError::new(
         "Unknown",
@@ -4477,6 +4538,47 @@ fn parse_room_leave_id(room_id: &str) -> Result<OwnedRoomId, MatrixAuthCommandEr
         .trim()
         .parse()
         .map_err(|_| map_room_leave_error("v-rooms-room-leave-invalid-room"))
+}
+
+fn parse_room_members_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
+    room_id
+        .trim()
+        .parse()
+        .map_err(|_| "v-rooms-members-read-invalid-room")
+}
+
+fn project_room_member(
+    room_id: &OwnedRoomId,
+    member: &matrix_sdk::room::RoomMember,
+    is_two_party_direct: bool,
+    current_user: Option<&matrix_sdk::ruma::UserId>,
+) -> Result<ProductRoomMember, &'static str> {
+    let membership = match member.membership() {
+        MembershipState::Ban => ProductMembership::Ban,
+        MembershipState::Invite => ProductMembership::Invite,
+        MembershipState::Join => ProductMembership::Join,
+        MembershipState::Knock => ProductMembership::Knock,
+        MembershipState::Leave => ProductMembership::Leave,
+        _ => return Err("v-rooms-members-read-unsupported-membership"),
+    };
+    let power_level = match member.power_level() {
+        UserPowerLevel::Infinite => i32::MAX,
+        UserPowerLevel::Int(value) => {
+            i32::try_from(value).map_err(|_| "v-rooms-members-read-power-level-invalid")?
+        }
+        _ => return Err("v-rooms-members-read-power-level-invalid"),
+    };
+
+    Ok(ProductRoomMember {
+        room_id: room_id.to_string(),
+        user_id: member.user_id().to_string(),
+        display_name: member.display_name().map(ToOwned::to_owned),
+        avatar_url: member.avatar_url().map(ToString::to_string),
+        membership,
+        power_level,
+        is_direct_target: is_two_party_direct
+            .then(|| current_user.is_some_and(|current_user| current_user != member.user_id())),
+    })
 }
 
 fn parse_room_moderation_room_id(room_id: &str) -> Result<OwnedRoomId, MatrixAuthCommandError> {
@@ -6545,6 +6647,48 @@ mod tests {
             .expect("room join command body");
         assert!(command.contains("join_room_by_id_or_alias"));
         assert!(!command.contains("mx.joinRoom"));
+    }
+
+    #[test]
+    fn room_members_snapshot_validates_and_maps_errors_fail_closed() {
+        assert_eq!(
+            parse_room_members_room_id("not-a-room").unwrap_err(),
+            "v-rooms-members-read-invalid-room"
+        );
+        assert_eq!(
+            parse_room_members_room_id("  !room:example.org  ")
+                .unwrap()
+                .to_string(),
+            "!room:example.org"
+        );
+        assert_eq!(
+            map_room_members_error("v-rooms-members-read-invalid-room").code,
+            "InvalidRequest"
+        );
+        assert_eq!(
+            map_room_members_error("v-rooms-members-read-room-not-found").code,
+            "NotFound"
+        );
+        assert_eq!(
+            map_room_members_error("v-rooms-members-read-members-failed").code,
+            "Unknown"
+        );
+    }
+
+    #[test]
+    fn room_members_snapshot_owns_live_sdk_members_without_js_fallback() {
+        let product = include_str!("product.rs");
+        let command = product
+            .split("pub async fn matrix_room_members_snapshot")
+            .nth(1)
+            .expect("room members snapshot command");
+        let command = command
+            .split("#[tauri::command]")
+            .next()
+            .expect("room members snapshot command body");
+        assert!(command.contains("members(RoomMemberships::empty())"));
+        assert!(!command.contains("getMembers"));
+        assert!(!command.contains("matrix-js-sdk"));
     }
 
     #[test]

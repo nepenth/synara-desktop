@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { MatrixClient, Room, RoomMember } from 'matrix-js-sdk';
+import { MatrixClient, Room, RoomMember as MatrixRoomMember } from 'matrix-js-sdk';
 import { getPowerLevelTag, PowerLevelTags, usePowerLevelTags } from './usePowerLevelTags';
 import { IPowerLevels, readPowerLevel } from './usePowerLevels';
 import { MemberPowerTag, MemberPowerTagIcon } from '../../types/matrix/room';
@@ -7,6 +7,9 @@ import { useRoomCreatorsTag } from './useRoomCreatorsTag';
 import { ThemeKind } from './useTheme';
 import { accessibleColor } from '../plugins/color';
 import { resolveMatrixMediaUrl } from '../matrix/media';
+import type { RoomMember as NativeRoomMember } from '../features/matrix-dto/member';
+
+type RoomMemberListItem = MatrixRoomMember | NativeRoomMember;
 
 export type GetMemberPowerTag = (userId: string) => MemberPowerTag;
 
@@ -76,13 +79,13 @@ export const useAccessiblePowerTagColors = (
   return accessibleColors;
 };
 
-export const useFlattenPowerTagMembers = (
-  members: RoomMember[],
+export const useFlattenPowerTagMembers = <T extends RoomMemberListItem>(
+  members: T[],
   getTag: GetMemberPowerTag
-): Array<MemberPowerTag | RoomMember> => {
+): Array<MemberPowerTag | T> => {
   const PLTagOrRoomMember = useMemo(() => {
     let prevTag: MemberPowerTag | undefined;
-    const tagOrMember: Array<MemberPowerTag | RoomMember> = [];
+    const tagOrMember: Array<MemberPowerTag | T> = [];
     members.forEach((member) => {
       const tag = getTag(member.userId);
       if (tag !== prevTag) {
