@@ -14,7 +14,7 @@
 | Field              | Value                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**                                                                                                                       |
-| Integration tip    | `a53f14fa` — after #364 leave, #362 CallWidget, #363 composer fallbacks, #365 pack get\* delete                                      | — after #372 create, #371 /leave, #369 join, #364 leave |
+| Integration tip    | `c0d5ec40` — after #375 moderation writes — after #364 leave, #362 CallWidget, #363 composer fallbacks, #365 pack get\* delete       | — after #372 create, #371 /leave, #369 join, #364 leave |
 | Active work        | Next: members moderation / power vertical; C3–C5 live proofs; members/power. R-DEVTOOL gated; V-BURN HOLD                            |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
@@ -32,8 +32,8 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `a53f14fa`**. Leave/join/create native. Next: members/power or C3–C5 live. #39 gated.                                                                                                                                            |
-| **Tip**        | `a53f14fa`                                                                                                                                                                                                                             |
+| **Now**        | **Tip `c0d5ec40`**. #375 moderation writes landed. Next: members-read product; powers-bulk. #39 gated.                                                                                                                                 |
+| **Tip**        | `c0d5ec40`                                                                                                                                                                                                                             |
 | **Active PRs** | none (V-BURN HOLD; no product PR).                                                                                                                                                                                                     |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
