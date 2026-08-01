@@ -29,8 +29,10 @@ export const createRoomJoinRule = (
   knock: boolean
 ): NativeRoomCreateRequest['joinRule'] => {
   if (access === CreateRoomAccess.Public) return 'public';
-  if (access === CreateRoomAccess.Restricted && parentRoomId) return 'restricted';
-  return 'invite';
+  if (access === CreateRoomAccess.Restricted && parentRoomId) {
+    return knock ? 'knock_restricted' : 'restricted';
+  }
+  return knock ? 'knock' : 'invite';
 };
 
 export type CreateRoomData = {
