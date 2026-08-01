@@ -1,14 +1,6 @@
-import type { MatrixClient } from 'matrix-js-sdk/lib/client';
-import type { MatrixEvent } from 'matrix-js-sdk/lib/models/event';
-import type { Room } from 'matrix-js-sdk/lib/models/room';
-import {
-  AccountDataEvent,
-  SynaraLaterContent,
-  SynaraLaterItem,
-} from '../../types/matrix/accountData';
+import { SynaraLaterContent, SynaraLaterItem } from '../../types/matrix/accountData';
 
 export const LATER_ACCOUNT_DATA_VERSION = 1;
-const laterWriteQueues = new WeakMap<MatrixClient, Promise<void>>();
 
 export const getLaterItemId = (roomId: string, eventId: string): string => `${roomId}\n${eventId}`;
 
@@ -196,57 +188,3 @@ export const getLaterDueSummary = (
     { active: 0, completed: 0, overdue: 0, dueToday: 0 }
   );
 };
-
-export const createLaterItem = (
-  room: Room,
-  event: MatrixEvent,
-  kind: SynaraLaterItem['kind'],
-  dueTs?: number
-): SynaraLaterItem | undefined => {
-  const eventId = event.getId();
-  if (!eventId) return undefined;
-
-  return {
-    id: getLaterItemId(room.roomId, eventId),
-    kind,
-    roomId: room.roomId,
-    eventId,
-    createdAt: Date.now(),
-    dueTs,
-  };
-};
-
-export const updateLaterContent = (
-  mx: MatrixClient,
-  update: (current: SynaraLaterContent) => SynaraLaterContent
-): Promise<void> => {
-  const previous = laterWriteQueues.get(mx) ?? Promise.resolve();
-  const next = previous.then(async () => {
-    const event = mx.getAccountData(AccountDataEvent.SynaraLater as any);
-    const content = normalizeLaterContent(event?.getContent() as SynaraLaterContent | undefined);
-    await mx.setAccountData(AccountDataEvent.SynaraLater as any, update(content) as any);
-  });
-  laterWriteQueues.set(
-    mx,
-    next.catch(() => undefined)
-  );
-  return next;
-};
-
-export const setLaterItem = async (mx: MatrixClient, item: SynaraLaterItem) =>
-  updateLaterContent(mx, (content) => putLaterItem(content, item));
-
-export const deleteLaterItem = async (mx: MatrixClient, itemId: string) =>
-  updateLaterContent(mx, (content) => removeLaterItem(content, itemId));
-
-export const completeLaterItemAccountData = async (
-  mx: MatrixClient,
-  itemId: string,
-  completedAt = Date.now()
-) => updateLaterContent(mx, (content) => completeLaterItem(content, itemId, completedAt));
-
-export const snoozeLaterItemAccountData = async (mx: MatrixClient, itemId: string, dueTs: number) =>
-  updateLaterContent(mx, (content) => snoozeLaterItem(content, itemId, dueTs));
-
-export const clearCompletedLaterItemsAccountData = async (mx: MatrixClient) =>
-  updateLaterContent(mx, clearCompletedLaterItems);

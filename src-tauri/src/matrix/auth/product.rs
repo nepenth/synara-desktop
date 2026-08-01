@@ -13,22 +13,26 @@ use matrix_sdk::{
     attachment::AttachmentConfig,
     authentication::matrix::MatrixSession,
     encryption::CrossSigningStatus,
+    room::edit::EditedContent,
     room::reply::{EnforceThread, Reply as AttachmentReply},
     ruma::{
         api::client::uiaa,
         events::{
+            poll::unstable_response::UnstablePollResponseEventContent,
             relation::{Reply, Thread},
             room::{
                 message::{
-                    AddMentions, Relation, RelationWithoutReplacement, ReplacementMetadata,
-                    ReplyWithinThread, RoomMessageEventContent,
+                    AddMentions, MessageFormat, MessageType, Relation, RelationWithoutReplacement,
+                    ReplacementMetadata, ReplyWithinThread, RoomMessageEventContent,
+                    RoomMessageEventContentWithoutRelation,
                 },
                 ImageInfo,
             },
             sticker::StickerEventContent,
-            Mentions,
+            AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncTimelineEvent, Mentions,
         },
-        MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedTransactionId, OwnedUserId, UInt,
+        EventId, MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedTransactionId, OwnedUserId,
+        UInt,
     },
     Client, Room, SessionMeta, SessionTokens,
 };
@@ -47,8 +51,12 @@ use super::{
     RegisterUiaFlow,
 };
 use crate::matrix::account_data::{
-    add_room_to_mdirect, remove_room_from_mdirect, snapshot_mdirect, NativeMDirectMutationResult,
-    NativeMDirectSnapshot,
+    add_room_to_mdirect, clear_completed_later_live, complete_later_item_live,
+    complete_room_todo_item_live, delete_room_note_item_live, mark_later_reminded_live,
+    move_room_todo_item_live, remove_room_from_mdirect, snapshot_later, snapshot_mdirect,
+    snapshot_room_notes, snooze_later_item_live, upsert_later_item, upsert_room_note_item,
+    NativeLaterSnapshot, NativeMDirectMutationResult, NativeMDirectSnapshot,
+    NativeRoomNotesSnapshot, RoomNoteMoveDirection, SynaraLaterItem, SynaraRoomNoteItem,
 };
 use crate::matrix::backup::live::{
     self as live_backup, NativeBackupOperationResult, NativeBackupStatus,
@@ -99,8 +107,18 @@ use crate::matrix::sync::{
     SyncServiceOwner,
 };
 use crate::matrix::timeline::{
-    NativeReactionMutationResult, NativeTimelineDirection, NativeTimelineEventReadback,
-    NativeTimelineRegistry, NativeTimelineSnapshot,
+    format_forwarded_media_body, format_forwarded_plain_body, reply_draft_readback,
+    should_attach_formatted_body, ComposerDraftRegistry, NativeComposerReplyDraft,
+    NativeComposerReplyDraftReadback, NativeComposerReplyDraftRoomRequest,
+    NativeComposerSetReplyDraftRequest, NativeReactionMutationResult, NativeTimelineActionKind,
+    NativeTimelineActionReadback, NativeTimelineCallDeclineRequest, NativeTimelineCloseRequest,
+    NativeTimelineDirection, NativeTimelineEditTextRequest, NativeTimelineEventReadback,
+    NativeTimelineForwardMediaRequest, NativeTimelineForwardTextRequest,
+    NativeTimelineJumpLatestRequest, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
+    NativeTimelinePinRequest, NativeTimelinePollVoteRequest, NativeTimelineReadStateReadback,
+    NativeTimelineReadStateRequest, NativeTimelineRedactRequest, NativeTimelineRegistry,
+    NativeTimelineReportRequest, NativeTimelineSnapshot, NativeTimelineViewPaginationRequest,
+    TimelineMediaSource, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
 };
 use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
 use crate::matrix::verification::live::{
@@ -236,6 +254,7 @@ struct ManagedMatrixSession {
     sync: SyncServiceOwner,
     invite_avatars: InviteAvatarHandles,
     timelines: NativeTimelineRegistry,
+    composer_drafts: ComposerDraftRegistry,
     sends: SendQueue,
     attachments: AttachmentSendQueue,
     verification: NativeVerificationOwner,
@@ -272,6 +291,18 @@ impl MatrixAuthState {
         let source = active
             .invite_avatars
             .resolve(active.sync.session_generation(), handle)?;
+        Some((active.client.clone(), source))
+    }
+
+    /// Resolve a stream/session-bound V-TIMELINE media capability. Neither the
+    /// SDK media source nor downloaded bytes cross command IPC.
+    pub async fn resolve_timeline_media(
+        &self,
+        handle: &str,
+    ) -> Option<(Client, TimelineMediaSource)> {
+        let session = self.session.lock().await;
+        let active = session.as_ref()?;
+        let source = active.timelines.resolve_media(handle).await?;
         Some((active.client.clone(), source))
     }
 }
@@ -402,6 +433,7 @@ pub async fn matrix_login_password(
         sync,
         invite_avatars: InviteAvatarHandles::new(session_generation),
         timelines: NativeTimelineRegistry::new(session_generation),
+        composer_drafts: ComposerDraftRegistry::new(),
         sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
         verification,
@@ -626,6 +658,7 @@ async fn install_session_from_register_secrets(
         sync,
         invite_avatars: InviteAvatarHandles::new(session_generation),
         timelines: NativeTimelineRegistry::new(session_generation),
+        composer_drafts: ComposerDraftRegistry::new(),
         sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
         verification,
@@ -1526,6 +1559,197 @@ pub async fn matrix_mdirect_remove(
 }
 
 #[tauri::command]
+pub async fn matrix_later_snapshot(
+    state: State<'_, MatrixAuthState>,
+) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    snapshot_later(&active.client, active.sync.session_generation())
+        .await
+        .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
+pub async fn matrix_later_upsert(
+    state: State<'_, MatrixAuthState>,
+    item: SynaraLaterItem,
+) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    upsert_later_item(&active.client, active.sync.session_generation(), item)
+        .await
+        .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
+pub async fn matrix_later_complete(
+    state: State<'_, MatrixAuthState>,
+    item_id: String,
+    completed_at: Option<f64>,
+) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    let completed_at = completed_at.unwrap_or_else(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as f64)
+            .unwrap_or(0.0)
+    });
+    complete_later_item_live(
+        &active.client,
+        active.sync.session_generation(),
+        item_id,
+        completed_at,
+    )
+    .await
+    .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
+pub async fn matrix_later_snooze(
+    state: State<'_, MatrixAuthState>,
+    item_id: String,
+    due_ts: f64,
+) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    snooze_later_item_live(
+        &active.client,
+        active.sync.session_generation(),
+        item_id,
+        due_ts,
+    )
+    .await
+    .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
+pub async fn matrix_later_clear_completed(
+    state: State<'_, MatrixAuthState>,
+) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    clear_completed_later_live(&active.client, active.sync.session_generation())
+        .await
+        .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
+pub async fn matrix_later_mark_reminded(
+    state: State<'_, MatrixAuthState>,
+    item_id: String,
+    reminded_at: Option<f64>,
+) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    let reminded_at = reminded_at.unwrap_or_else(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as f64)
+            .unwrap_or(0.0)
+    });
+    mark_later_reminded_live(
+        &active.client,
+        active.sync.session_generation(),
+        item_id,
+        reminded_at,
+    )
+    .await
+    .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
+pub async fn matrix_room_notes_snapshot(
+    state: State<'_, MatrixAuthState>,
+) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    snapshot_room_notes(&active.client, active.sync.session_generation())
+        .await
+        .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
+pub async fn matrix_room_notes_upsert(
+    state: State<'_, MatrixAuthState>,
+    item: SynaraRoomNoteItem,
+) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    upsert_room_note_item(&active.client, active.sync.session_generation(), item)
+        .await
+        .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
+pub async fn matrix_room_notes_delete(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    item_id: String,
+) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    delete_room_note_item_live(
+        &active.client,
+        active.sync.session_generation(),
+        room_id,
+        item_id,
+    )
+    .await
+    .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
+pub async fn matrix_room_notes_complete_todo(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    item_id: String,
+    completed: bool,
+) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as f64)
+        .unwrap_or(0.0);
+    complete_room_todo_item_live(
+        &active.client,
+        active.sync.session_generation(),
+        room_id,
+        item_id,
+        completed,
+        now,
+    )
+    .await
+    .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
+pub async fn matrix_room_notes_move_todo(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    item_id: String,
+    direction: RoomNoteMoveDirection,
+) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as f64)
+        .unwrap_or(0.0);
+    move_room_todo_item_live(
+        &active.client,
+        active.sync.session_generation(),
+        room_id,
+        item_id,
+        direction,
+        now,
+    )
+    .await
+    .map_err(map_later_notes_error)
+}
+
+#[tauri::command]
 pub async fn matrix_typing_snapshot(
     state: State<'_, MatrixAuthState>,
 ) -> Result<NativeTypingSnapshot, MatrixAuthCommandError> {
@@ -1651,14 +1875,40 @@ pub async fn matrix_invites_block_sender(
 
 #[tauri::command]
 pub async fn matrix_timeline_open(
+    app: AppHandle,
     state: State<'_, MatrixAuthState>,
-    room_id: String,
-) -> Result<NativeTimelineSnapshot, MatrixAuthCommandError> {
+    request: NativeTimelineOpenRequest,
+) -> Result<NativeTimelineOpenReadback, MatrixAuthCommandError> {
     let mut session = state.session.lock().await;
     let active = require_session_mut(session.as_mut())?;
     active
         .timelines
-        .open(&active.client, &room_id)
+        .open_at(app, &active.client, request)
+        .await
+        .map_err(map_timeline_error)
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_close(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelineCloseRequest,
+) -> Result<bool, MatrixAuthCommandError> {
+    let mut session = state.session.lock().await;
+    let active = require_session_mut(session.as_mut())?;
+    Ok(active.timelines.close_view(request))
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_jump_latest(
+    app: AppHandle,
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelineJumpLatestRequest,
+) -> Result<NativeTimelineOpenReadback, MatrixAuthCommandError> {
+    let mut session = state.session.lock().await;
+    let active = require_session_mut(session.as_mut())?;
+    active
+        .timelines
+        .jump_latest(app, &active.client, request)
         .await
         .map_err(map_timeline_error)
 }
@@ -1695,14 +1945,27 @@ pub async fn matrix_timeline_event_readback(
 #[tauri::command]
 pub async fn matrix_timeline_paginate(
     state: State<'_, MatrixAuthState>,
-    room_id: String,
-    dir: NativeTimelineDirection,
-) -> Result<NativeTimelineSnapshot, MatrixAuthCommandError> {
+    request: NativeTimelineViewPaginationRequest,
+) -> Result<crate::matrix::timeline::TimelineViewSnapshot, MatrixAuthCommandError> {
     let mut session = state.session.lock().await;
     let active = require_session_mut(session.as_mut())?;
     active
         .timelines
-        .paginate(&active.client, &room_id, dir)
+        .paginate(&active.client, request)
+        .await
+        .map_err(map_timeline_error)
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_set_read_state(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelineReadStateRequest,
+) -> Result<NativeTimelineReadStateReadback, MatrixAuthCommandError> {
+    let mut session = state.session.lock().await;
+    let active = require_session_mut(session.as_mut())?;
+    active
+        .timelines
+        .set_read_state(&active.client, request)
         .await
         .map_err(map_timeline_error)
 }
@@ -1763,6 +2026,477 @@ pub async fn matrix_reaction_redact(
 }
 
 #[tauri::command]
+pub async fn matrix_composer_set_reply_draft(
+    state: State<'_, MatrixAuthState>,
+    request: NativeComposerSetReplyDraftRequest,
+) -> Result<NativeComposerReplyDraftReadback, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&request.room_id)?;
+    let event_id =
+        parse_required_event_id(&request.event_id, "v-timeline-reply-draft-invalid-event-id")?;
+
+    let room = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-timeline-reply-draft-room-not-found",
+            )
+        })?
+    };
+
+    let draft = load_reply_draft_preview(&room, &event_id, request.start_thread).await?;
+    let room_id_string = room_id.to_string();
+    {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active
+            .composer_drafts
+            .set(room_id_string.clone(), draft.clone());
+    }
+
+    Ok(reply_draft_readback(room_id_string, "set", Some(draft)))
+}
+
+#[tauri::command]
+pub async fn matrix_composer_clear_reply_draft(
+    state: State<'_, MatrixAuthState>,
+    request: NativeComposerReplyDraftRoomRequest,
+) -> Result<NativeComposerReplyDraftReadback, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&request.room_id)?;
+    let room_id_string = room_id.to_string();
+    {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.composer_drafts.clear(&room_id_string);
+    }
+    Ok(reply_draft_readback(room_id_string, "cleared", None))
+}
+
+#[tauri::command]
+pub async fn matrix_composer_get_reply_draft(
+    state: State<'_, MatrixAuthState>,
+    request: NativeComposerReplyDraftRoomRequest,
+) -> Result<NativeComposerReplyDraftReadback, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&request.room_id)?;
+    let room_id_string = room_id.to_string();
+    let draft = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.composer_drafts.get(&room_id_string).cloned()
+    };
+    Ok(reply_draft_readback(
+        room_id_string,
+        if draft.is_some() { "set" } else { "empty" },
+        draft,
+    ))
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_edit_text(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelineEditTextRequest,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&request.room_id)?;
+    let event_id = parse_required_event_id(&request.event_id, "v-timeline-edit-invalid-event-id")?;
+    let body = request.body.trim();
+    if body.is_empty() {
+        return Err(map_timeline_action_error("v-timeline-edit-empty-body"));
+    }
+    let formatted_body = normalize_formatted_body(body, request.formatted_body.as_deref())?;
+
+    let room = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-timeline-edit-room-not-found",
+            )
+        })?
+    };
+
+    let new_content = match formatted_body {
+        Some(html) => RoomMessageEventContentWithoutRelation::text_html(body.to_owned(), html),
+        None => RoomMessageEventContentWithoutRelation::text_plain(body.to_owned()),
+    };
+    let edit_content = room
+        .make_edit_event(&event_id, EditedContent::RoomMessage(new_content))
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-edit-prepare-failed"))?;
+    let response = room
+        .send(edit_content)
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-edit-send-failed"))?;
+
+    Ok(NativeTimelineActionReadback {
+        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+        action: NativeTimelineActionKind::EditText,
+        room_id: room_id.to_string(),
+        event_id: response.response.event_id.to_string(),
+        status: "sent",
+    })
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_redact(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelineRedactRequest,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&request.room_id)?;
+    let event_id =
+        parse_required_event_id(&request.event_id, "v-timeline-redact-invalid-event-id")?;
+    let reason = request
+        .reason
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    let room = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-timeline-redact-room-not-found",
+            )
+        })?
+    };
+
+    room.redact(&event_id, reason, None)
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-redact-failed"))?;
+
+    Ok(NativeTimelineActionReadback {
+        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+        action: NativeTimelineActionKind::Redact,
+        room_id: room_id.to_string(),
+        event_id: event_id.to_string(),
+        status: "redacted",
+    })
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_forward_text(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelineForwardTextRequest,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let source_room_id = parse_send_room_id(&request.source_room_id)?;
+    let target_room_id = parse_send_room_id(&request.target_room_id)?;
+    let event_id =
+        parse_required_event_id(&request.event_id, "v-timeline-forward-invalid-event-id")?;
+
+    let (source_room, target_room) = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        let source_room = active.client.get_room(&source_room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix source room is not available.",
+                "v-timeline-forward-source-room-not-found",
+            )
+        })?;
+        let target_room = active.client.get_room(&target_room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix target room is not available.",
+                "v-timeline-forward-target-room-not-found",
+            )
+        })?;
+        (source_room, target_room)
+    };
+
+    let (sender_label, body) = load_forwardable_text(&source_room, &event_id).await?;
+    let forwarded_body = format_forwarded_plain_body(&sender_label, &body, request.as_quote);
+    let content = message_content(forwarded_body, None, None, None, false, None, None)?;
+    let event_id = send_message_to_room(&target_room, content, None)
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-forward-send-failed"))?;
+
+    Ok(NativeTimelineActionReadback {
+        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+        action: NativeTimelineActionKind::ForwardText,
+        room_id: target_room_id.to_string(),
+        event_id,
+        status: "sent",
+    })
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_forward_media(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelineForwardMediaRequest,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let source_room_id = parse_send_room_id(&request.source_room_id)?;
+    let target_room_id = parse_send_room_id(&request.target_room_id)?;
+    let event_id = parse_required_event_id(
+        &request.event_id,
+        "v-timeline-forward-media-invalid-event-id",
+    )?;
+
+    let (source_room, target_room) = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        let source_room = active.client.get_room(&source_room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix source room is not available.",
+                "v-timeline-forward-media-source-room-not-found",
+            )
+        })?;
+        let target_room = active.client.get_room(&target_room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix target room is not available.",
+                "v-timeline-forward-media-target-room-not-found",
+            )
+        })?;
+        (source_room, target_room)
+    };
+
+    let content = load_forwardable_media(&source_room, &event_id).await?;
+    let event_id = target_room
+        .send(content)
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-forward-media-send-failed"))?
+        .response
+        .event_id
+        .to_string();
+
+    Ok(NativeTimelineActionReadback {
+        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+        action: NativeTimelineActionKind::ForwardMedia,
+        room_id: target_room_id.to_string(),
+        event_id,
+        status: "sent",
+    })
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_report(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelineReportRequest,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&request.room_id)?;
+    let event_id =
+        parse_required_event_id(&request.event_id, "v-timeline-report-invalid-event-id")?;
+    let reason = request
+        .reason
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned);
+
+    let room = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-timeline-report-room-not-found",
+            )
+        })?
+    };
+
+    room.report_content(event_id.clone(), reason)
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-report-failed"))?;
+
+    Ok(NativeTimelineActionReadback {
+        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+        action: NativeTimelineActionKind::Report,
+        room_id: room_id.to_string(),
+        event_id: event_id.to_string(),
+        status: "reported",
+    })
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_pin(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelinePinRequest,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    pin_or_unpin_event(state, request, true).await
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_unpin(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelinePinRequest,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    pin_or_unpin_event(state, request, false).await
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_poll_vote(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelinePollVoteRequest,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&request.room_id)?;
+    let event_id =
+        parse_required_event_id(&request.event_id, "v-timeline-poll-vote-invalid-event-id")?;
+    let answer_ids = request
+        .answer_ids
+        .into_iter()
+        .map(|answer| answer.trim().to_owned())
+        .filter(|answer| !answer.is_empty())
+        .collect::<Vec<_>>();
+
+    let room = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-timeline-poll-vote-room-not-found",
+            )
+        })?
+    };
+
+    let content = UnstablePollResponseEventContent::new(answer_ids, event_id.clone());
+    let sent_event_id = room
+        .send(content)
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-poll-vote-send-failed"))?
+        .response
+        .event_id
+        .to_string();
+
+    Ok(NativeTimelineActionReadback {
+        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+        action: NativeTimelineActionKind::PollVote,
+        room_id: room_id.to_string(),
+        event_id: sent_event_id,
+        status: "voted",
+    })
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_call_decline(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelineCallDeclineRequest,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&request.room_id)?;
+    let event_id = parse_required_event_id(
+        &request.event_id,
+        "v-timeline-call-decline-invalid-event-id",
+    )?;
+
+    let room = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-timeline-call-decline-room-not-found",
+            )
+        })?
+    };
+
+    let content = room
+        .make_decline_call_event(&event_id)
+        .await
+        .map_err(|error| match error {
+            matrix_sdk::room::calls::CallError::DeclineOwnCall => MatrixAuthCommandError::new(
+                "InvalidRequest",
+                "A call started by this session cannot be declined.",
+                "v-timeline-call-decline-own-call",
+            ),
+            matrix_sdk::room::calls::CallError::BadEventType => MatrixAuthCommandError::new(
+                "InvalidRequest",
+                "Only m.rtc.notification events can be declined.",
+                "v-timeline-call-decline-bad-event-type",
+            ),
+            _ => map_timeline_action_error("v-timeline-call-decline-prepare-failed"),
+        })?;
+    let sent_event_id = room
+        .send(content)
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-call-decline-send-failed"))?
+        .response
+        .event_id
+        .to_string();
+
+    Ok(NativeTimelineActionReadback {
+        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+        action: NativeTimelineActionKind::CallDecline,
+        room_id: room_id.to_string(),
+        event_id: sent_event_id,
+        status: "declined",
+    })
+}
+
+async fn pin_or_unpin_event(
+    state: State<'_, MatrixAuthState>,
+    request: NativeTimelinePinRequest,
+    pin: bool,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&request.room_id)?;
+    let event_id = parse_required_event_id(
+        &request.event_id,
+        if pin {
+            "v-timeline-pin-invalid-event-id"
+        } else {
+            "v-timeline-unpin-invalid-event-id"
+        },
+    )?;
+
+    let room = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                if pin {
+                    "v-timeline-pin-room-not-found"
+                } else {
+                    "v-timeline-unpin-room-not-found"
+                },
+            )
+        })?
+    };
+
+    let changed = if pin {
+        room.pin_event(&event_id)
+            .await
+            .map_err(|_| map_timeline_action_error("v-timeline-pin-failed"))?
+    } else {
+        room.unpin_event(&event_id)
+            .await
+            .map_err(|_| map_timeline_action_error("v-timeline-unpin-failed"))?
+    };
+
+    Ok(NativeTimelineActionReadback {
+        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+        action: if pin {
+            NativeTimelineActionKind::Pin
+        } else {
+            NativeTimelineActionKind::Unpin
+        },
+        room_id: room_id.to_string(),
+        event_id: event_id.to_string(),
+        status: if changed {
+            if pin {
+                "pinned"
+            } else {
+                "unpinned"
+            }
+        } else if pin {
+            "already_pinned"
+        } else {
+            "already_unpinned"
+        },
+    })
+}
+
+#[tauri::command]
 #[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
 pub async fn matrix_send_text(
     state: State<'_, MatrixAuthState>,
@@ -1790,7 +2524,6 @@ pub async fn matrix_send_text(
         reply_to,
         thread_root,
     )?;
-
     let (room, session_generation, local_txn_id) = {
         let mut session = state.session.lock().await;
         let active = require_send_session_mut(session.as_mut())?;
@@ -1810,7 +2543,6 @@ pub async fn matrix_send_text(
     };
 
     let send_result = send_message_to_room(&room, content, txn_id).await;
-
     let mut session = state.session.lock().await;
     if let Some(active) = session.as_mut() {
         if active.sends.session_generation() == session_generation {
@@ -2265,6 +2997,7 @@ pub async fn matrix_restore_session(
         sync,
         invite_avatars: InviteAvatarHandles::new(session_generation),
         timelines: NativeTimelineRegistry::new(session_generation),
+        composer_drafts: ComposerDraftRegistry::new(),
         sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
         verification,
@@ -2615,6 +3348,20 @@ fn map_mdirect_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
 
+fn map_later_notes_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    let (code, message) = match diagnostic_id {
+        "v-timeline-later-invalid-item" | "v-timeline-room-notes-invalid-item" => (
+            "InvalidRequest",
+            "The native Matrix later/notes request is invalid.",
+        ),
+        _ => (
+            "Unknown",
+            "The native Matrix later/notes account data is unavailable.",
+        ),
+    };
+    MatrixAuthCommandError::new(code, message, diagnostic_id)
+}
+
 fn map_typing_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     let (code, message) = match diagnostic_id {
         "v-rooms.4-typing-invalid-room" => (
@@ -2927,6 +3674,164 @@ fn parse_reply_event_id(
         .transpose()
 }
 
+fn parse_required_event_id(
+    event_id: &str,
+    diagnostic_id: &'static str,
+) -> Result<OwnedEventId, MatrixAuthCommandError> {
+    event_id
+        .trim()
+        .parse()
+        .map_err(|_| map_timeline_action_error(diagnostic_id))
+}
+
+fn map_timeline_action_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "InvalidRequest",
+        "The native Matrix timeline action request is invalid.",
+        diagnostic_id,
+    )
+}
+
+async fn load_forwardable_text(
+    room: &Room,
+    event_id: &EventId,
+) -> Result<(String, String), MatrixAuthCommandError> {
+    let timeline_event = room
+        .load_or_fetch_event(event_id, None)
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-forward-event-unavailable"))?;
+    let sync_event = timeline_event
+        .raw()
+        .deserialize()
+        .map_err(|_| map_timeline_action_error("v-timeline-forward-event-decode-failed"))?;
+    match sync_event {
+        AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomMessage(message)) => {
+            let original = message
+                .as_original()
+                .ok_or_else(|| map_timeline_action_error("v-timeline-forward-event-redacted"))?;
+            Ok((
+                original.sender.to_string(),
+                original.content.body().to_owned(),
+            ))
+        }
+        _ => Err(map_timeline_action_error(
+            "v-timeline-forward-unsupported-event",
+        )),
+    }
+}
+
+async fn load_forwardable_media(
+    room: &Room,
+    event_id: &EventId,
+) -> Result<AnyMessageLikeEventContent, MatrixAuthCommandError> {
+    let timeline_event = room
+        .load_or_fetch_event(event_id, None)
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-forward-media-event-unavailable"))?;
+    let sync_event = timeline_event
+        .raw()
+        .deserialize()
+        .map_err(|_| map_timeline_action_error("v-timeline-forward-media-event-decode-failed"))?;
+    match sync_event {
+        AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomMessage(message)) => {
+            let original = message.as_original().ok_or_else(|| {
+                map_timeline_action_error("v-timeline-forward-media-event-redacted")
+            })?;
+            let sender = original.sender.to_string();
+            let mut msgtype = original.content.msgtype.clone();
+            match &mut msgtype {
+                MessageType::Image(content) => {
+                    content.body = format_forwarded_media_body(&sender, &content.body);
+                }
+                MessageType::File(content) => {
+                    content.body = format_forwarded_media_body(&sender, &content.body);
+                }
+                MessageType::Audio(content) => {
+                    content.body = format_forwarded_media_body(&sender, &content.body);
+                }
+                MessageType::Video(content) => {
+                    content.body = format_forwarded_media_body(&sender, &content.body);
+                }
+                _ => {
+                    return Err(map_timeline_action_error(
+                        "v-timeline-forward-media-unsupported-event",
+                    ));
+                }
+            }
+            Ok(AnyMessageLikeEventContent::RoomMessage(
+                RoomMessageEventContent::new(msgtype),
+            ))
+        }
+        AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::Sticker(sticker)) => {
+            let original = sticker.as_original().ok_or_else(|| {
+                map_timeline_action_error("v-timeline-forward-media-event-redacted")
+            })?;
+            let sender = original.sender.to_string();
+            Ok(AnyMessageLikeEventContent::Sticker(
+                StickerEventContent::with_source(
+                    format_forwarded_media_body(&sender, &original.content.body),
+                    original.content.info.clone(),
+                    original.content.source.clone(),
+                ),
+            ))
+        }
+        _ => Err(map_timeline_action_error(
+            "v-timeline-forward-media-unsupported-event",
+        )),
+    }
+}
+
+async fn load_reply_draft_preview(
+    room: &Room,
+    event_id: &EventId,
+    start_thread: bool,
+) -> Result<NativeComposerReplyDraft, MatrixAuthCommandError> {
+    let timeline_event = room
+        .load_or_fetch_event(event_id, None)
+        .await
+        .map_err(|_| map_timeline_action_error("v-timeline-reply-draft-event-unavailable"))?;
+    let sync_event = timeline_event
+        .raw()
+        .deserialize()
+        .map_err(|_| map_timeline_action_error("v-timeline-reply-draft-event-decode-failed"))?;
+    match sync_event {
+        AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomMessage(message)) => {
+            let original = message.as_original().ok_or_else(|| {
+                map_timeline_action_error("v-timeline-reply-draft-event-redacted")
+            })?;
+            let body = original.content.body().to_owned();
+            let formatted_body = match original.content.msgtype {
+                MessageType::Text(ref content) => content.formatted.as_ref(),
+                MessageType::Notice(ref content) => content.formatted.as_ref(),
+                MessageType::Emote(ref content) => content.formatted.as_ref(),
+                _ => None,
+            }
+            .filter(|formatted| formatted.format == MessageFormat::Html)
+            .map(|formatted| formatted.body.trim().to_owned())
+            .filter(|html| !html.is_empty() && html != body.trim());
+            let existing_thread_root = match &original.content.relates_to {
+                Some(Relation::Thread(thread)) => Some(thread.event_id.to_string()),
+                _ => None,
+            };
+            let thread_root_event_id = if start_thread {
+                Some(event_id.to_string())
+            } else {
+                existing_thread_root
+            };
+            Ok(NativeComposerReplyDraft {
+                event_id: event_id.to_string(),
+                sender_id: original.sender.to_string(),
+                body,
+                formatted_body,
+                thread_root_event_id,
+            })
+        }
+        _ => Err(map_timeline_action_error(
+            "v-timeline-reply-draft-unsupported-event",
+        )),
+    }
+}
+
 fn parse_thread_root_event_id(
     thread_root: Option<String>,
 ) -> Result<Option<OwnedEventId>, MatrixAuthCommandError> {
@@ -2956,6 +3861,25 @@ fn parse_transaction_id(
             Ok(OwnedTransactionId::from(txn_id))
         })
         .transpose()
+}
+
+fn normalize_formatted_body(
+    body: &str,
+    formatted_body: Option<&str>,
+) -> Result<Option<String>, MatrixAuthCommandError> {
+    let Some(html) = formatted_body
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
+    };
+    if html.len() > 65_536 {
+        return Err(map_send_error("d0.4-send-formatted-body-too-large"));
+    }
+    if !should_attach_formatted_body(body, Some(html)) {
+        return Ok(None);
+    }
+    Ok(Some(html.to_owned()))
 }
 
 /// Build validated `m.sticker` content for the native sticker owner.
@@ -3960,6 +4884,7 @@ mod tests {
         assert_eq!(plain_json["body"], "hello");
         assert_eq!(plain_json["msgtype"], "m.text");
         assert_eq!(plain_json["m.mentions"], serde_json::json!({}));
+        assert!(plain_json.get("formatted_body").is_none());
 
         let reply = message_content(
             "reply".into(),

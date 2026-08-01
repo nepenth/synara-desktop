@@ -12,7 +12,8 @@
  *    SyncService::builder allowed only under matrix/sync/ for P4.1).
  * 5. No dual-backend / Matrix backend selector in production runtime sources.
  * 6. Matrix IPC contract surface must remain versioned (protocolVersion / constant).
- * 7. No Matrix product Tauri commands registered in invoke_handler yet.
+ * 7. Matrix product Tauri commands in invoke_handler must each have a matching
+ *    `allow-matrix-*` permission in `src-tauri/capabilities/main.json`.
  *
  * Product matrix-js-sdk usage outside greenfield zones remains allowed until cutover.
  * Link-smoke (`matrix_sdk_link_smoke`) is outside Zone B and may reference SDK types.
@@ -110,6 +111,33 @@ export function stripCommentsAndStrings(source, opts = {}) {
       continue;
     }
 
+    // Rust lifetimes ('static, 'a) and raw identifiers (r#type) are code, not
+    // string delimiters. Mis-parsing them blanks generate_handler bodies and
+    // creates false negatives for product-command ACL checks.
+    if (lang === "rs" && c === "'" && next && /[A-Za-z_]/.test(next)) {
+      out += c;
+      i += 1;
+      while (i < n && /[A-Za-z0-9_]/.test(source[i])) {
+        out += source[i];
+        i += 1;
+      }
+      continue;
+    }
+    if (lang === "rs" && c === "r" && next === "#") {
+      let j = i + 1;
+      let hashes = 0;
+      while (j < n && source[j] === "#") {
+        hashes += 1;
+        j += 1;
+      }
+      if (!(j < n && source[j] === '"')) {
+        // Raw identifier: r#foo — keep as code.
+        out += c;
+        i += 1;
+        continue;
+      }
+    }
+
     // Strings — blank only when blankStrings is true (import/use checks).
     // Keep string contents for /_matrix/ path detection.
     if (
@@ -141,6 +169,11 @@ export function stripCommentsAndStrings(source, opts = {}) {
           }
           continue;
         }
+        // Not a raw string after all (should be unreachable after raw-ident
+        // handling above); emit as code.
+        out += c;
+        i += 1;
+        continue;
       }
 
       const quote = c;
@@ -206,6 +239,31 @@ function inAnyZone(rel, zones) {
   return zones.some((z) => rel === z.slice(0, -1) || rel.startsWith(z));
 }
 
+/**
+ * Cutover-phase product commands are allowed only when the main webview
+ * capability ACL grants the matching `allow-matrix-*` permission.
+ * `allow-matrix-timeline-open` → `matrix_timeline_open`.
+ */
+function loadAllowedMatrixProductCommands(root) {
+  const rel = "src-tauri/capabilities/main.json";
+  const abs = join(root, rel);
+  if (!existsSync(abs)) return new Set();
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(abs, "utf8"));
+  } catch {
+    return new Set();
+  }
+  const allowed = new Set();
+  for (const perm of parsed.permissions ?? []) {
+    if (typeof perm !== "string" || !perm.startsWith("allow-matrix-")) continue;
+    const slug = perm.slice("allow-matrix-".length);
+    if (!slug) continue;
+    allowed.add(`matrix_${slug.replaceAll("-", "_")}`);
+  }
+  return allowed;
+}
+
 function listRepoFiles(root) {
   if (existsSync(join(root, ".git"))) {
     try {
@@ -233,7 +291,8 @@ function listRepoFiles(root) {
 function walkFiles(root, dir) {
   const out = [];
   for (const name of readdirSync(dir)) {
-    if (name === "node_modules" || name === "target" || name === ".git") continue;
+    if (name === "node_modules" || name === "target" || name === ".git")
+      continue;
     const abs = join(dir, name);
     const st = statSync(abs);
     if (st.isDirectory()) out.push(...walkFiles(root, abs));
@@ -411,7 +470,10 @@ export function runGuardrails(opts) {
     const abs = join(root, rel);
     if (!existsSync(abs)) continue;
     const raw = readFileSync(abs, "utf8");
-    const code = stripCommentsAndStrings(raw, { lang: "rs", blankStrings: true });
+    const code = stripCommentsAndStrings(raw, {
+      lang: "rs",
+      blankStrings: true,
+    });
     for (const hit of findHits(code, RUST_SDK_TYPE_PATTERNS)) {
       add(
         "no-sdk-types-in-dto-ipc",
@@ -468,7 +530,10 @@ export function runGuardrails(opts) {
     const abs = join(root, rel);
     if (!existsSync(abs)) continue;
     const raw = readFileSync(abs, "utf8");
-    const code = stripCommentsAndStrings(raw, { lang: "rs", blankStrings: true });
+    const code = stripCommentsAndStrings(raw, {
+      lang: "rs",
+      blankStrings: true,
+    });
     const inClientBuilder = inAnyZone(rel, ZONE_CLIENT_BUILDER_ALLOW);
     const inAuthLogin = inAnyZone(rel, ZONE_AUTH_LOGIN_ALLOW);
     const inLifecycleRestore = inAnyZone(rel, ZONE_LIFECYCLE_RESTORE_ALLOW);
@@ -564,7 +629,9 @@ export function runGuardrails(opts) {
         "MATRIX_IPC_PROTOCOL_VERSION constant missing (unversioned IPC forbidden)"
       );
     }
-  } else if (files.some((f) => f.startsWith("synara/src/app/features/matrix-ipc/"))) {
+  } else if (
+    files.some((f) => f.startsWith("synara/src/app/features/matrix-ipc/"))
+  ) {
     add(
       "versioned-matrix-ipc",
       "synara/src/app/features/matrix-ipc/version.ts",
@@ -573,25 +640,27 @@ export function runGuardrails(opts) {
     );
   }
 
-  // --- No Matrix product Tauri commands in invoke_handler yet ---
+  // --- Matrix product Tauri commands must be ACL-registered ---
   const libRs = "src-tauri/src/lib.rs";
   if (files.includes(libRs) || existsSync(join(root, libRs))) {
     const text = readFileSync(join(root, libRs), "utf8");
-    const code = stripCommentsAndStrings(text, { lang: "rs", blankStrings: true });
+    const code = stripCommentsAndStrings(text, {
+      lang: "rs",
+      blankStrings: true,
+    });
     // Match generate_handler![...] body for matrix_ product commands
-    const handlerMatch = code.match(
-      /generate_handler!\s*\[([\s\S]*?)\]/
-    );
+    const handlerMatch = code.match(/generate_handler!\s*\[([\s\S]*?)\]/);
     if (handlerMatch) {
       const body = handlerMatch[1];
       const cmdHits = body.match(/\bmatrix_[A-Za-z0-9_]+/g) ?? [];
-      // Allow nothing matrix_* in handler until Phase 3+
+      const allowed = loadAllowedMatrixProductCommands(root);
       for (const cmd of cmdHits) {
+        if (allowed.has(cmd)) continue;
         add(
           "no-matrix-product-tauri-commands",
           libRs,
           1,
-          `Matrix product Tauri command '${cmd}' registered in invoke_handler (not allowed until cutover phases)`
+          `Matrix product Tauri command '${cmd}' registered in invoke_handler without matching allow-matrix-* capability ACL`
         );
       }
     }

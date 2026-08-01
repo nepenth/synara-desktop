@@ -1,10 +1,5 @@
 import assert from "node:assert/strict";
-import {
-  mkdtempSync,
-  mkdirSync,
-  writeFileSync,
-  rmSync,
-} from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -45,7 +40,10 @@ use foo::Bar;
 let s = "matrix_sdk::Client";
 /* matrix_sdk::ui */
 `;
-  const stripped = stripCommentsAndStrings(src, { lang: "rs", blankStrings: true });
+  const stripped = stripCommentsAndStrings(src, {
+    lang: "rs",
+    blankStrings: true,
+  });
   assert.equal(stripped.includes("use matrix_sdk"), false);
   assert.equal(stripped.includes("use foo::Bar"), true);
   // string body + quotes blanked
@@ -62,11 +60,10 @@ let s = "matrix_sdk::Client";
 test("clean greenfield contracts pass", () => {
   const { root, files } = makeTree({
     "src-tauri/src/matrix/ipc/version.rs":
-      'pub const MATRIX_IPC_PROTOCOL_VERSION: u32 = 1;\n',
+      "pub const MATRIX_IPC_PROTOCOL_VERSION: u32 = 1;\n",
     "src-tauri/src/matrix/ipc/mod.rs":
       "pub mod version;\npub use version::*;\n",
-    "src-tauri/src/matrix/dto/mod.rs":
-      "pub struct SessionSnapshot;\n",
+    "src-tauri/src/matrix/dto/mod.rs": "pub struct SessionSnapshot;\n",
     "synara/src/app/features/matrix-ipc/version.ts":
       "export const MATRIX_IPC_PROTOCOL_VERSION = 1 as const;\n",
     "synara/src/app/features/matrix-ipc/index.ts":
@@ -177,9 +174,9 @@ test("fails on production Client construction under matrix/ outside client_build
 test("allows Client::builder under matrix/client_builder/ but bans login/sync", () => {
   const { root, files } = makeTree({
     "src-tauri/src/matrix/client_builder/open.rs":
-      "fn open() { let _ = Client::builder().homeserver_url(\"https://example.org\"); }\n",
+      'fn open() { let _ = Client::builder().homeserver_url("https://example.org"); }\n',
     "src-tauri/src/matrix/client_builder/evil.rs":
-      "fn login(c: Client) { let _ = c.matrix_auth().login_username(\"a\", \"b\"); }\n",
+      'fn login(c: Client) { let _ = c.matrix_auth().login_username("a", "b"); }\n',
     "src-tauri/src/matrix/ipc/version.rs":
       "pub const MATRIX_IPC_PROTOCOL_VERSION: u32 = 1;\n",
     "synara/src/app/features/matrix-ipc/version.ts":
@@ -216,7 +213,7 @@ test("allows restore_session under matrix/lifecycle/ but bans login/builder/sync
     "src-tauri/src/matrix/lifecycle/session_restore.rs":
       "async fn restore(c: &Client, s: AuthSession) { let _ = c.restore_session(s).await; }\n",
     "src-tauri/src/matrix/lifecycle/evil_login.rs":
-      "fn login(c: &Client) { let _ = c.matrix_auth().login_token(\"t\"); }\n",
+      'fn login(c: &Client) { let _ = c.matrix_auth().login_token("t"); }\n',
     "src-tauri/src/matrix/lifecycle/evil_builder.rs":
       "fn open() { let _ = Client::builder(); }\n",
     "src-tauri/src/matrix/lifecycle/evil_sync.rs":
@@ -268,13 +265,13 @@ test("allows restore_session under matrix/lifecycle/ but bans login/builder/sync
 test("allows password/token login under matrix/auth/ but bans Client::builder and sync", () => {
   const { root, files } = makeTree({
     "src-tauri/src/matrix/auth/login.rs":
-      "async fn login(c: &Client) { let _ = c.matrix_auth().login_username(\"a\", \"b\").initial_device_display_name(\"Synara macOS\").await; let _ = c.matrix_auth().login_token(\"t\"); }\n",
+      'async fn login(c: &Client) { let _ = c.matrix_auth().login_username("a", "b").initial_device_display_name("Synara macOS").await; let _ = c.matrix_auth().login_token("t"); }\n',
     "src-tauri/src/matrix/auth/evil_builder.rs":
       "fn open() { let _ = Client::builder(); }\n",
     "src-tauri/src/matrix/auth/evil_sync.rs":
       "async fn s(c: &Client) { let _ = c.sync_once(Default::default()).await; }\n",
     "src-tauri/src/matrix/supervisor/evil_login.rs":
-      "fn login(c: &Client) { let _ = c.matrix_auth().login_token(\"t\"); }\n",
+      'fn login(c: &Client) { let _ = c.matrix_auth().login_token("t"); }\n',
     "src-tauri/src/matrix/ipc/version.rs":
       "pub const MATRIX_IPC_PROTOCOL_VERSION: u32 = 1;\n",
     "synara/src/app/features/matrix-ipc/version.ts":
@@ -412,7 +409,33 @@ test("fails on missing MATRIX_IPC_PROTOCOL_VERSION (unversioned IPC)", () => {
   }
 });
 
-test("fails on matrix_ product Tauri command in invoke_handler", () => {
+test("stripCommentsAndStrings keeps Rust lifetimes and generate_handler visible", () => {
+  const src = `
+fn content_type() -> Option<&'static str> { None }
+fn emit() {
+  let script = format!(
+    "window.dispatchEvent(new CustomEvent('synara-native-file-drop', {{ detail: {} }}));",
+    "{}"
+  );
+  let _ = script;
+}
+fn main() {
+  tauri::Builder::default().invoke_handler(tauri::generate_handler![
+    matrix::auth::product::matrix_login_password,
+  ]);
+}
+`;
+  const stripped = stripCommentsAndStrings(src, {
+    lang: "rs",
+    blankStrings: true,
+  });
+  assert.match(stripped, /&'static str/);
+  assert.match(stripped, /generate_handler!/);
+  assert.match(stripped, /matrix_login_password/);
+  assert.equal(stripped.includes("synara-native-file-drop"), false);
+});
+
+test("fails on matrix_ product Tauri command without capability ACL", () => {
   const { root, files } = makeTree({
     "src-tauri/src/lib.rs": `
 fn main() {
@@ -422,6 +445,11 @@ fn main() {
       matrix_login,
       matrix_sync_status,
     ]);
+}
+`,
+    "src-tauri/capabilities/main.json": `{
+  "identifier": "main",
+  "permissions": ["allow-matrix-login"]
 }
 `,
     "src-tauri/src/matrix/ipc/version.rs":
@@ -434,10 +462,55 @@ fn main() {
     assert.equal(result.ok, false);
     assert.ok(
       result.violations.some(
-        (v) => v.rule === "no-matrix-product-tauri-commands"
+        (v) =>
+          v.rule === "no-matrix-product-tauri-commands" &&
+          v.detail.includes("matrix_sync_status")
       ),
       formatFail(result)
     );
+    assert.equal(
+      result.violations.some(
+        (v) =>
+          v.rule === "no-matrix-product-tauri-commands" &&
+          v.detail.includes("matrix_login")
+      ),
+      false,
+      formatFail(result)
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("passes ACL-registered matrix_ product Tauri commands", () => {
+  const { root, files } = makeTree({
+    "src-tauri/src/lib.rs": `
+fn phase(_: &'static str) {}
+fn main() {
+  tauri::Builder::default()
+    .invoke_handler(tauri::generate_handler![
+      desktop::desktop_show,
+      matrix::auth::product::matrix_login_password,
+      matrix::auth::product::matrix_timeline_open,
+    ]);
+}
+`,
+    "src-tauri/capabilities/main.json": `{
+  "identifier": "main",
+  "permissions": [
+    "allow-matrix-login-password",
+    "allow-matrix-timeline-open"
+  ]
+}
+`,
+    "src-tauri/src/matrix/ipc/version.rs":
+      "pub const MATRIX_IPC_PROTOCOL_VERSION: u32 = 1;\n",
+    "synara/src/app/features/matrix-ipc/version.ts":
+      "export const MATRIX_IPC_PROTOCOL_VERSION = 1 as const;\n",
+  });
+  try {
+    const result = runGuardrails({ root, files });
+    assert.equal(result.ok, true, formatFail(result));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
