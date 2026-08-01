@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**                                                                                                                       |
-| Integration tip    | `8330c56b` — V-BURN blockers tip after #410; #405/#407 acceptance status is tracked below; no product merge is claimed here |
-| Active work        | **#405 members drawer/lobby/mentions wiring — `ACCEPT`, CI may re-run; #407 CallWidget media IPC — `ACCEPT_WITH_NITS`, full-green proof at `cd07f4fc` behind tip, parent merge pending**. C3–C5 live proofs; R-DEVTOOL gated; V-BURN HOLD |
+| Integration tip    | `52953091` — docs-only base; post-#405 residual refresh uses product head `cd2d57b4` as a pending merge input |
+| Active work        | **#405 members drawer/lobby/mentions wiring — `ACCEPT` at `cd2d57b4`, pending merge; this draft narrows the after-#405 residual to power-level/creator reads**. #407 CallWidget media IPC — `ACCEPT_WITH_NITS`, full-green proof at `cd07f4fc` behind tip, parent merge pending. C3–C5 live proofs; R-DEVTOOL gated; V-BURN HOLD |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
 | Import accounting  | Desktop production import files **152** on tip (plan baseline was 220). Allowlist **152** (ratcheted after #395 Members.tsx drop).       |
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `8330c56b`**. #405 members drawer/lobby/mentions wiring is **`ACCEPT`** and CI may re-run; #407 CallWidget media IPC is **`ACCEPT_WITH_NITS`** with full-green proof at `cd07f4fc`, behind this tip, parent merge pending. Imports remain 152; neither product PR is merged here. #39 gated. |
-| **Tip**        | `8330c56b`                                                                                                                                                                                                                             |
-| **Active PRs** | [#405](https://github.com/nepenth/synara-desktop/pull/405) `ACCEPT`, CI may re-run; [#407](https://github.com/nepenth/synara-desktop/pull/407) `ACCEPT_WITH_NITS`, full green at [`cd07f4fc`](https://github.com/nepenth/synara-desktop/commit/cd07f4fc), behind tip, parent merge pending. This docs-only update claims no product code. |
+| **Now**        | **Docs base `52953091`**. The post-#405 target closes drawer/lobby/mention member enumeration after #405 merges; power-level/creator reads remain residual. #407 CallWidget media IPC is **`ACCEPT_WITH_NITS`** with full-green proof at `cd07f4fc`, behind this tip, parent merge pending. Imports remain 152; this draft claims no product merge. #39 gated. |
+| **Tip**        | `52953091`                                                                                                                                                                                                                             |
+| **Active PRs** | [#405](https://github.com/nepenth/synara-desktop/pull/405) `ACCEPT` at [`cd2d57b4`](https://github.com/nepenth/synara-desktop/commit/cd2d57b4), pending merge; [#407](https://github.com/nepenth/synara-desktop/pull/407) `ACCEPT_WITH_NITS`, full green at [`cd07f4fc`](https://github.com/nepenth/synara-desktop/commit/cd07f4fc), behind tip, parent merge pending. This docs-only draft claims no product code. |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
 ---
@@ -59,6 +59,15 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — docs base `52953091` — post-#405 residual boundary
+
+| When (UTC) | Item                      | Result               | Notes                                                                                                                              |
+| ---------- | ------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration base**      | **This draft**       | Docs-only refresh based at `52953091`; product PR #405 is not merged into this base.                                             |
+| current    | **Members drawer wiring** | **Post-#405 target** | Product head `cd2d57b4` wires drawer/lobby/mentions member snapshots; after merge those member reads are done on native desktop.     |
+| current    | **Power/creator reads**   | **Residual**         | #405 does not add native power-level or creator snapshots; those remain the next members-read slice.                              |
+| current    | **Policy**                | **Held**             | `dual_backend=false`; native paths remain fail-closed; #39 remains gated and `main` is untouched.                                 |
 
 ### 2026-08-01 — base tip `8330c56b` — #405/#407 acceptance status
 
