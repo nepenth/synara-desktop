@@ -14,11 +14,11 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `0c021419` — after #285 C1 cutover; #293 scoreboard; #294 C3 checklist; #283 edit
-| Active work        | **this #289** C2 delete RoomTimeline (after #285 C1); next pack-read implement + C3–C5 live proof
+| Integration tip    | `8995add1` — after #289 C2 delete RoomTimeline; #285 C1; #293 scoreboard; #294 C3; #283 edit
+| Active work        | Next **V-SEND.R-PACK-READ** implement (or R-FORWARD dialog); C3–C5 live proof remaining
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
-| Import accounting  | Desktop production import files **165** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
+| Import accounting  | Desktop production import files **164** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
 | Dual backend       | **`false`** (forbidden forever)                                                                                                                                                                                                                                       |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                                                                                                                                                              |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                                                                                                                                                  |
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `0c021419`**. **This PR #289** V-TIMELINE.C2: delete `RoomTimeline` after C1 (#285). C3 checklist #294. Next: pack-read implement, C3–C5 live. #39 gated. |
-| **Tip**        | `0c021419` |
-| **Active PRs** | **this** [#289](https://github.com/nepenth/synara-desktop/pull/289) C2. |
+| **Now**        | **Tip `8995add1`**. Landed #285 C1 + #289 C2 (RoomTimeline deleted; imports **164**). Next: pack-read implement, C3–C5 live, R-FORWARD dialog. #39 gated. |
+| **Tip**        | `8995add1` |
+| **Active PRs** | none product open; pack-read implement next. |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
@@ -60,10 +60,16 @@ Update rules:
 
 ## Work log (newest first)
 
+### 2026-08-01 — scoreboard after C1+C2
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **Scoreboard** | **This PR** | Honesty after #285 C1 + #289 C2. Tip `8995add1`. Production import files **164**. Next: pack-read implement / R-FORWARD. #39 gated. |
+
+
 ### 2026-08-01 — V-TIMELINE.C2 delete RoomTimeline
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| current | **V-TIMELINE.C2** | **This PR** | Delete `RoomTimeline.tsx`/`RoomTimeline.css.ts` after C1 sole owner; allowlist/import ratchet. dual_backend forbidden. |
+| current | **V-TIMELINE.C2** | **Merged #289** | Delete `RoomTimeline.tsx`/`RoomTimeline.css.ts` after C1 sole owner; allowlist 169→168; imports 165→164. dual_backend forbidden. |
 ### 2026-08-01 — scoreboard after #290–#292 inventories
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
