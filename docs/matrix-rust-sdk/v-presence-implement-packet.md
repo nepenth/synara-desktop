@@ -5,16 +5,20 @@
 | Status     | **Implementation packet** — this PR is docs-only; it does not claim the presence vertical is implemented                   |
 | Residual   | **V-PRESENCE.USER**                                                                                                        |
 | Source     | [v-presence-typing-residual.md](v-presence-typing-residual.md) from #384                                                   |
-| Base       | `feature/matrix-rust-sdk-full-replacement` at `e8a00f7273cb1ee8528df4fa2c3bffc455704322`                                   |
+| Base       | `feature/matrix-rust-sdk-full-replacement` at `b0fd42413a76b1000d1fab23ea225309ca62f82e`                                   |
 | PR shape   | Focused **draft** PR targeting `feature/matrix-rust-sdk-full-replacement`                                                  |
 | Scope      | Desktop user presence (`m.presence`) in the user-room profile; typing and MatrixRTC call membership are separate residuals |
 | Policy     | [full-vertical-policy.md](full-vertical-policy.md): one UI → Tauri IPC → live `matrix-sdk` owner, with JS-owner deletion   |
-| Guard      | Never `main`, umbrella PR **#39**, or V-BURN; **#407 owns `product.rs`**; `dual_backend` is forbidden; native failure is fail-closed |
+| Guard      | Never `main`, umbrella PR **#39**, or V-BURN; **#407 is merged at this base**; powers-bulk may be the next serial `product.rs` owner; `dual_backend` is forbidden; native failure is fail-closed |
 | Current PR | Only this packet is allowed to change; `src-tauri/src/matrix/auth/product.rs` is prohibited                                |
 
 The source of truth for the residual is the #384 inventory. This packet turns
 the user-presence portion into a bounded implementation contract. It does not
 implement product code, update generated status, or claim V-BURN completion.
+CallWidget **#407** is present in the recorded base; this packet does not
+reserve or edit the serial `product.rs` owner. Powers-bulk may take the next
+product slice, so any future presence implementation must revalidate that
+ownership before changing a product boundary.
 
 ## 1. Objective and completion bar
 
