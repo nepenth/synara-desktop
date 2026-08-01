@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `3a71f482` — after #343 upload audit; #342 residual queue; #341 DevTool gate; imports **159**, allowlist **163**
-| Active work        | C3–C5 live-proof verification; R-DEVTOOL remains gated; V-BURN not started; #327 HOLD forever this cycle
+| Integration tip    | `13d5f6cf` — after #349 CallWidget residual inventory; prior #347 at `9eb4689b`; imports **159**, allowlist **163**
+| Active work        | C3–C5 live-proof verification; R-DEVTOOL remains gated; #349 is docs-only residual inventory; V-BURN not started; #327 HOLD forever this cycle
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                                                                                                                                                         |
 | Import accounting  | Desktop production import files **159** on tip (plan baseline was 220). Allowlist **163**.
@@ -32,8 +32,8 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `3a71f482`**. #341 DevTool gate, #342 narrowed residual queue, and #343 upload audit are merged. C3–C5 live proofs remain **Not confirmed**; R-DEVTOOL is gated. #327 V-BURN is **HOLD forever this cycle**; no V-BURN start. #39 gated. |
-| **Tip**        | `3a71f482` |
+| **Now**        | **Tip `13d5f6cf`**. #349 CallWidgetDriver residual inventory is merged after prior progress #347 at `9eb4689b`. Upload ownership remains native-first and fail-closed via #328; media-config, media-download, and known-room widget methods remain documented JS residuals. C3–C5 live proofs remain **Not confirmed**; R-DEVTOOL is gated; no V-BURN start. #327 is **HOLD forever this cycle**; #39 gated. |
+| **Tip**        | `13d5f6cf` |
 | **Active PRs** | #327 V-BURN readiness — **HOLD forever this cycle**; not active work. |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; #327 V-BURN forever this cycle; umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
@@ -59,6 +59,14 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — tip `13d5f6cf` after #349 (prior #347)
+
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **Integration tip** | **This PR** | Tip `13d5f6cf` on `feature/matrix-rust-sdk-full-replacement`; #349 CallWidget residual inventory is merged after #347 at `9eb4689b`. Imports **159**; allowlist **163**. |
+| current | **V-SEND.R-CALL-UPLOAD** | **Merged #349 — docs-only residual inventory** | #349 records the upload owner as native-first and fail-closed from #328, with `getMediaConfig`, `downloadFile`, and `getKnownRooms` retained as documented widget-adjacent JS residuals. No product code, `dual_backend`, or V-BURN state changed; #327 remains **HOLD forever**. |
+| prior | **PROGRESS** | **Merged #347** | Tip `9eb4689b` after #341–#343; C3–C5 live proofs remained **Not confirmed** and R-DEVTOOL remained gated. |
 
 ### 2026-08-01 — tip `3a71f482` after #341–#343
 
