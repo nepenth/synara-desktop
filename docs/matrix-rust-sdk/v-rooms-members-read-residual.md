@@ -6,12 +6,14 @@
 | Tip SHA | `22f1f06d` (merged #395 members-read first slice)                                                                                                                           |
 | Base    | `feature/matrix-rust-sdk-full-replacement`                                                                                                                                  |
 | Policy  | [full-vertical-policy.md](full-vertical-policy.md) — physical deletion inside each owning slice                                                                             |
+| Follow-up | **#405 open/in-flight** — drawer/lobby/mentions member wiring is proposed, not merged                                                                              |
 | Related | **#375 merged** (native room moderation **write** vertical), P4.6 members index, [p4.6-members.md](p4.6-members.md), [p4.3-membership-unread.md](p4.3-membership-unread.md) |
 
 > **Scope guard.** Docs only. No product code in `product.rs` or any TS. The
 > moderation-write vertical **#375 is already merged**; this inventory does not
 > change it. It also does not touch **#39** (umbrella) or any timeline/send
-> slice. No cutover.
+> slice. **#405 is still open/in-flight** and is not treated as landed here. No
+> cutover.
 
 ---
 
@@ -29,7 +31,15 @@ Still residual on desktop native:
 - `Members.tsx` and those remaining consumers still use JS power-level/creator read owners
 - `useRoomMembers` retains its JS `getMembers` / `loadMembersIfNeeded` + event-listener path for non-native sessions and for existing legacy call sites until they are migrated
 
-This is a scoped first slice, not dual_backend: native session does not fall through to JS for the wired Members settings screen; remaining call sites stay residual until a follow-up PR.
+This is a scoped first slice, not dual_backend: native session does not fall through to JS for the wired Members settings screen; remaining call sites stay residual while the open #405 follow-up is in flight.
+
+### Follow-up status (#405)
+
+PR **#405 is open/in-flight** against this product branch and proposes native
+member-snapshot wiring for the room/lobby drawer and mention autocomplete. It
+has not merged at this tip, so those consumers remain residual in this
+inventory; do not describe the proposed wiring as landed until #405 merges and
+the inventory is refreshed.
 
 ## 1. What this residual covers
 
@@ -160,6 +170,7 @@ session must never select a JS fallback, and `dual_backend` remains forbidden.
 | **Typing members read**                                              | Native (typing stream) — not a residual                                             |
 | **Room membership / unread**                                         | [p4.3-membership-unread.md](p4.3-membership-unread.md) — separate                   |
 | **P4.6 member index**                                                | [p4.6-members.md](p4.6-members.md) — pure index over DTOs; no SDK member APIs       |
+| Open product PRs                                                     | **#405 open/in-flight** — proposes drawer/lobby/mentions member-snapshot wiring; #375 is already merged and excluded from this row |
 | Product changes in this PR                                           | None; this update is docs-only                                                      |
 | Umbrella merge to `main`                                             | **#39** — needs explicit user approval                                              |
 | Cutover / dual-backend removal                                       | #240 HOLD; no cutover                                                               |
