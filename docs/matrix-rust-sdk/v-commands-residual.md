@@ -2,7 +2,7 @@
 
 | Field       | Value                                                                                                                                                  |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Tip audited | `ee450251` (`feature/matrix-rust-sdk-full-replacement`, after #375 moderation and #395 members snapshot)                                                   |
+| Tip audited | `b11abcd8` (`feature/matrix-rust-sdk-full-replacement`, after #375 moderation and #395 members snapshot)                                                   |
 | Scope       | `synara/src/app/hooks/useCommands.ts`, `synara/src/app/features/room/CommandAutocomplete.tsx`, and the command-specific submit path in `RoomInput.tsx` |
 | Change type | Documentation only                                                                                                                                     |
 | Policy      | Native desktop is fail-closed; `dual_backend` is forbidden                                                                                             |
