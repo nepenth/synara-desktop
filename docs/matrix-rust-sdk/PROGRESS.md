@@ -14,7 +14,7 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `e38bfdab` — after #332 tip honesty; #331 GIF-PACK NOOP; #325 thumbnails; #320 pack room ids (159); #328 call-upload
+| Integration tip    | `27dd03f6` — after #333 residual Left honesty; #331 GIF-PACK NOOP; #325 thumbnails; #320 pack room ids (159)
 | Active work        | Next: pack-read JS utils (V-BURN); C3–C5 live; R-DEVTOOL low-pri
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `e38bfdab`**. #332 records tip honesty after #331 GIF-PACK NOOP; #325 thumbnails, #320 pack room ids (**159**), and #328 call-upload are landed. Next: JS utils delete (V-BURN); C3–C5 live. #39 gated. |
-| **Tip**        | `e38bfdab` |
-| **Active PRs** | #327 V-BURN readiness docs (hold — late only). |
+| **Now**        | **Tip `27dd03f6`**. #333 residual Left honesty; #331 GIF NOOP; #325 thumbnails; #320 pack room ids (**159**); #328 call-upload. Next: JS utils (V-BURN); C3–C5 live. #39 gated. |
+| **Tip**        | `27dd03f6` |
+| **Active PRs** | #334 C3–C5 operator index (open); #327 V-BURN readiness (hold). |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
@@ -64,7 +64,7 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| current | **Integration tip** | **This PR** | Tip `e38bfdab`. #331 GIF-PACK NOOP, #325 thumbnails, and #328 call-upload are landed; #320 pack room ids leaves production imports at **159**. #39 gated. |
+| current | **Integration tip** | **This PR** | Tip `27dd03f6`. #331 GIF-PACK NOOP, #325 thumbnails, and #328 call-upload are landed; #320 pack room ids leaves production imports at **159**. #39 gated. |
 
 ### 2026-08-01 — V-SEND.R-GIF-PACK residual check
 | When (UTC) | Item | Result | Notes |
