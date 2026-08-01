@@ -309,6 +309,7 @@ function pathFilteredCiAggregateError(jobLines) {
     "synapse-integration",
     "synapse-native-reactions",
     "synapse-native-attachments",
+    "synapse-native-call-media",
     "synapse-native-polls",
     "synapse-native-rich-messages",
     "synapse-native-threads",
@@ -321,6 +322,7 @@ function pathFilteredCiAggregateError(jobLines) {
     "synapse-integration",
     "synapse-native-reactions",
     "synapse-native-attachments",
+    "synapse-native-call-media",
     "synapse-native-polls",
     "synapse-native-rich-messages",
     "synapse-native-threads",
@@ -358,6 +360,9 @@ function pathFilteredCiAggregateError(jobLines) {
     const synapseNativeAttachmentsVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.synapse-native-attachments.result }}"
     )?.[0];
+    const synapseNativeCallMediaVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.synapse-native-call-media.result }}"
+    )?.[0];
     const synapseNativePollsVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.synapse-native-polls.result }}"
     )?.[0];
@@ -377,6 +382,7 @@ function pathFilteredCiAggregateError(jobLines) {
       !synapseVar ||
       !synapseNativeReactionsVar ||
       !synapseNativeAttachmentsVar ||
+      !synapseNativeCallMediaVar ||
       !synapseNativePollsVar ||
       !synapseNativeRichMessagesVar ||
       !synapseNativeThreadsVar
@@ -413,6 +419,7 @@ function pathFilteredCiAggregateError(jobLines) {
       !runText.includes(`"$${synapseVar}"`) ||
       !runText.includes(`"$${synapseNativeReactionsVar}"`) ||
       !runText.includes(`"$${synapseNativeAttachmentsVar}"`) ||
+      !runText.includes(`"$${synapseNativeCallMediaVar}"`) ||
       !runText.includes(`"$${synapseNativePollsVar}"`) ||
       !runText.includes(`"$${synapseNativeRichMessagesVar}"`) ||
       !runText.includes(`"$${synapseNativeThreadsVar}"`)

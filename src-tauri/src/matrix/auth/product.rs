@@ -13,6 +13,7 @@ use matrix_sdk::{
     attachment::AttachmentConfig,
     authentication::matrix::MatrixSession,
     encryption::CrossSigningStatus,
+    media::{MediaFormat, MediaRequestParameters},
     room::edit::EditedContent,
     room::reply::{EnforceThread, Reply as AttachmentReply},
     ruma::{
@@ -34,7 +35,7 @@ use matrix_sdk::{
                     RoomMessageEventContentWithoutRelation,
                 },
                 power_levels::UserPowerLevel,
-                ImageInfo,
+                ImageInfo, MediaSource,
             },
             sticker::StickerEventContent,
             AnyInitialStateEvent, AnyMessageLikeEventContent, AnySyncMessageLikeEvent,
@@ -86,6 +87,7 @@ use crate::matrix::devices::{
     PendingDeviceDeletion,
 };
 use crate::matrix::dto::{Membership as ProductMembership, RoomMember as ProductRoomMember};
+use crate::matrix::ipc::MAX_WIRE_COUNTER;
 use crate::matrix::lifecycle::{
     clear_session_material, persist_session_after_login, restore_session_from_vault,
     restore_session_onto_client, KeyringSessionMaterialVault, SessionMaterial,
@@ -255,6 +257,27 @@ pub struct MatrixUploadMediaResult {
     pub mxc: String,
 }
 
+/// V-SEND.R-CALL-MEDIA — the exact config shape required by the widget API.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MatrixCallMediaConfigResult {
+    #[serde(rename = "m.upload.size")]
+    pub upload_size: u64,
+}
+
+/// V-SEND.R-CALL-MEDIA — original-file bytes returned by the native media
+/// owner. This DTO is intentionally not part of a versioned Matrix envelope.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MatrixMediaDownloadResult {
+    pub bytes: Vec<u8>,
+}
+
+/// V-SEND.R-CALL-MEDIA — camelCase request used by the widget media owner.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MatrixMediaDownloadRequest {
+    pub content_uri: String,
+}
+
 /// JSON-friendly create-room request owned by the desktop Matrix SDK route.
 /// `parent_room_id` is used for restricted join rules; the post-create space
 /// child edge remains an explicit `matrix_space_child_set` operation in TS.
@@ -319,6 +342,12 @@ pub struct MatrixRoomCreatePowerLevels {
 
 /// Soft IPC/body cap for one-shot composer attachment transfer (bytes).
 const MAX_ATTACHMENT_IPC_BYTES: usize = 32 * 1024 * 1024;
+
+/// Maximum bounded identifier accepted by the direct CallWidget media path.
+const MAX_CALL_WIDGET_MEDIA_URI_BYTES: usize = 2 * 1024;
+
+/// V-SEND.R-CALL-MEDIA response ceiling. Never truncate over-limit content.
+const MAX_CALL_WIDGET_MEDIA_DOWNLOAD_BYTES: usize = MAX_ATTACHMENT_IPC_BYTES;
 
 /// Soft IPC/body cap for one-shot user-avatar media transfer (bytes).
 /// Avatars are small images; 8 MiB is generous and keeps the webview buffer
@@ -3432,6 +3461,125 @@ pub async fn matrix_upload_media(
     Ok(MatrixUploadMediaResult {
         mxc: response.content_uri.to_string(),
     })
+}
+
+/// V-SEND.R-CALL-MEDIA — sole native CallWidget media-config owner.
+/// Uses the live managed Matrix SDK client and returns only the widget's exact
+/// `m.upload.size` field. Native/session/SDK failures are terminal.
+#[tauri::command]
+pub async fn matrix_call_media_config(
+    state: State<'_, MatrixAuthState>,
+) -> Result<MatrixCallMediaConfigResult, MatrixAuthCommandError> {
+    let client = {
+        let session = state.session.lock().await;
+        require_call_widget_media_session(session.as_ref())?
+            .client
+            .clone()
+    };
+    let upload_size = client
+        .load_or_fetch_max_upload_size()
+        .await
+        .map_err(|_| map_call_widget_media_error("v-send.r-call-media-config-sdk-failed"))?;
+    let upload_size = project_call_media_upload_size(upload_size)?;
+
+    Ok(MatrixCallMediaConfigResult { upload_size })
+}
+
+/// V-SEND.R-CALL-MEDIA — sole native CallWidget original-file download owner.
+/// The managed SDK media cache may satisfy the request; otherwise the SDK uses
+/// the authenticated media endpoint selected for this live client.
+#[tauri::command]
+pub async fn matrix_media_download(
+    state: State<'_, MatrixAuthState>,
+    content_uri: String,
+) -> Result<MatrixMediaDownloadResult, MatrixAuthCommandError> {
+    let request = MatrixMediaDownloadRequest { content_uri };
+    let content_uri = parse_call_widget_media_uri(&request.content_uri)?;
+    let media_request = MediaRequestParameters {
+        source: MediaSource::Plain(content_uri),
+        format: MediaFormat::File,
+    };
+    let client = {
+        let session = state.session.lock().await;
+        require_call_widget_media_session(session.as_ref())?
+            .client
+            .clone()
+    };
+    let bytes = client
+        .media()
+        .get_media_content(&media_request, true)
+        .await
+        .map_err(|_| map_call_widget_media_error("v-send.r-call-media-download-sdk-failed"))?;
+    validate_call_widget_media_download_size(bytes.len())?;
+
+    Ok(MatrixMediaDownloadResult { bytes })
+}
+
+fn require_call_widget_media_session(
+    session: Option<&ManagedMatrixSession>,
+) -> Result<&ManagedMatrixSession, MatrixAuthCommandError> {
+    session.ok_or_else(|| map_call_widget_media_error("v-send.r-call-media-requires-session"))
+}
+
+fn project_call_media_upload_size(upload_size: UInt) -> Result<u64, MatrixAuthCommandError> {
+    // `UInt` is already JS-safe, but keep the product boundary explicit so a
+    // future SDK type change cannot silently round a value on the wire.
+    let upload_size = u64::try_from(i64::from(upload_size))
+        .map_err(|_| map_call_widget_media_error("v-send.r-call-media-config-unsafe-size"))?;
+    if upload_size > MAX_WIRE_COUNTER {
+        return Err(map_call_widget_media_error(
+            "v-send.r-call-media-config-unsafe-size",
+        ));
+    }
+    Ok(upload_size)
+}
+
+fn parse_call_widget_media_uri(content_uri: &str) -> Result<OwnedMxcUri, MatrixAuthCommandError> {
+    if content_uri.is_empty()
+        || content_uri.len() > MAX_CALL_WIDGET_MEDIA_URI_BYTES
+        || content_uri != content_uri.trim()
+        || !content_uri.is_ascii()
+        || content_uri.contains(['?', '#'])
+    {
+        return Err(map_call_widget_media_error(
+            "v-send.r-call-media-invalid-content-uri",
+        ));
+    }
+
+    let owned = OwnedMxcUri::from(content_uri);
+    let valid = owned.validate().is_ok()
+        && owned
+            .media_id()
+            .map(|media_id| !media_id.is_empty())
+            .unwrap_or(false);
+    if !valid {
+        return Err(map_call_widget_media_error(
+            "v-send.r-call-media-invalid-content-uri",
+        ));
+    }
+    Ok(owned)
+}
+
+fn validate_call_widget_media_download_size(byte_len: usize) -> Result<(), MatrixAuthCommandError> {
+    if byte_len > MAX_CALL_WIDGET_MEDIA_DOWNLOAD_BYTES {
+        return Err(map_call_widget_media_error(
+            "v-send.r-call-media-download-too-large",
+        ));
+    }
+    Ok(())
+}
+
+fn map_call_widget_media_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    let code = match diagnostic_id {
+        "v-send.r-call-media-invalid-content-uri" => "InvalidRequest",
+        "v-send.r-call-media-requires-session" => "Forbidden",
+        _ => "Unknown",
+    };
+    MatrixAuthCommandError::new(
+        code,
+        "The native CallWidget media operation is unavailable.",
+        diagnostic_id,
+    )
 }
 
 fn map_avatar_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
@@ -6772,5 +6920,118 @@ mod tests {
             assert!(command.contains(sdk_method), "{command_name} SDK method");
             assert!(!command.contains("mx."), "{command_name} JS fallback");
         }
+    }
+
+    #[test]
+    fn call_widget_media_contract_uses_exact_wire_shapes() {
+        let request = MatrixMediaDownloadRequest {
+            content_uri: "mxc://example.org/call-media".to_owned(),
+        };
+        assert_eq!(
+            serde_json::to_value(request).unwrap(),
+            serde_json::json!({ "contentUri": "mxc://example.org/call-media" })
+        );
+
+        let config = MatrixCallMediaConfigResult {
+            upload_size: 16 * 1024 * 1024,
+        };
+        assert_eq!(
+            serde_json::to_value(config).unwrap(),
+            serde_json::json!({ "m.upload.size": 16 * 1024 * 1024 })
+        );
+
+        let download = MatrixMediaDownloadResult {
+            bytes: vec![0, 1, 255],
+        };
+        assert_eq!(
+            serde_json::to_value(download).unwrap(),
+            serde_json::json!({ "bytes": [0, 1, 255] })
+        );
+    }
+
+    #[test]
+    fn call_widget_media_uri_validation_is_bounded_and_fail_closed() {
+        assert_eq!(
+            parse_call_widget_media_uri("mxc://example.org/call-media")
+                .unwrap()
+                .to_string(),
+            "mxc://example.org/call-media"
+        );
+
+        for invalid in [
+            "",
+            " ",
+            "https://example.org/call-media",
+            "data:text/plain,secret",
+            "javascript:alert(1)",
+            "mxc://example.org/",
+            "mxc://example.org/call-media?access_token=secret",
+            "mxc://example.org/call/media",
+            &format!("mxc://example.org/{}", "a".repeat(2_050)),
+        ] {
+            assert_eq!(
+                parse_call_widget_media_uri(invalid)
+                    .unwrap_err()
+                    .diagnostic_id,
+                "v-send.r-call-media-invalid-content-uri",
+                "invalid URI should be rejected: {invalid}"
+            );
+        }
+    }
+
+    #[test]
+    fn call_widget_media_size_ceiling_never_truncates() {
+        assert!(
+            validate_call_widget_media_download_size(MAX_CALL_WIDGET_MEDIA_DOWNLOAD_BYTES).is_ok()
+        );
+        assert_eq!(
+            validate_call_widget_media_download_size(MAX_CALL_WIDGET_MEDIA_DOWNLOAD_BYTES + 1)
+                .unwrap_err()
+                .diagnostic_id,
+            "v-send.r-call-media-download-too-large"
+        );
+    }
+
+    #[test]
+    fn call_widget_media_errors_are_stable_and_privacy_safe() {
+        let error = map_call_widget_media_error("v-send.r-call-media-download-sdk-failed");
+        let raw = serde_json::to_string(&error).unwrap();
+        assert_eq!(error.code, "Unknown");
+        assert_eq!(
+            error.diagnostic_id,
+            "v-send.r-call-media-download-sdk-failed"
+        );
+        assert!(!raw.contains("mxc://"));
+        assert!(!raw.contains("access_token"));
+        assert!(!raw.contains("bytes"));
+        assert!(!raw.contains("sdk error"));
+    }
+
+    #[test]
+    fn call_widget_media_commands_use_the_live_client_and_original_file() {
+        let product = include_str!("product.rs");
+        let config = product
+            .split("pub async fn matrix_call_media_config")
+            .nth(1)
+            .expect("media config command");
+        let config = config
+            .split("#[tauri::command]")
+            .next()
+            .expect("media config command body");
+        assert!(config.contains("load_or_fetch_max_upload_size"));
+        assert!(!config.contains("matrix-js-sdk"));
+
+        let download = product
+            .split("pub async fn matrix_media_download")
+            .nth(1)
+            .expect("media download command");
+        let download = download
+            .split("#[tauri::command]")
+            .next()
+            .expect("media download command body");
+        assert!(download.contains("MediaFormat::File"));
+        assert!(download.contains("get_media_content(&media_request, true)"));
+        assert!(!download.contains("Thumbnail"));
+        assert!(!download.contains("mxcUrlToHttp"));
     }
 }
