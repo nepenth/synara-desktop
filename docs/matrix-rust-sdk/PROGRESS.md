@@ -14,7 +14,7 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `2f6f7f46` — after #308 scoreboard; #306 personal pack-write; #304 scoreboard; #303 avatar; #302 C4/C5
+| Integration tip    | `de13b048` — after #309 global pack-write; #308 scoreboard; #306 personal pack-write; #304 scoreboard; #303 avatar; #302 C4/C5
 | Active work        | Next: pack-write room + PACK-UPLOAD; pack-read subscribe; R-ROOM-PROFILE; C3–C5 live
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
@@ -32,8 +32,8 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `2f6f7f46`**. Landed #306 personal pack-write (`matrix_set_user_image_pack`) and global pack-write (`matrix_set_global_image_packs`). Room/PACK-UPLOAD residual. Next serial: pack-write room or pack-read subscribe. #39 gated. |
-| **Tip**        | `2f6f7f46` |
+| **Now**        | **Tip `de13b048`**. Landed #306 personal pack-write (`matrix_set_user_image_pack`) and #309 global pack-write (`matrix_set_global_image_packs`). Room/PACK-UPLOAD residual. Next serial: pack-write room or pack-read subscribe. #39 gated. |
+| **Tip**        | `de13b048` |
 | **Active PRs** | none product open after global pack-write. |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
@@ -60,10 +60,15 @@ Update rules:
 
 ## Work log (newest first)
 
+### 2026-08-01 — scoreboard after #309 global pack-write
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **Scoreboard** | **This PR** | Honesty after #309 global pack-write. Tip `de13b048`. Personal #306 + global #309 landed; room/PACK-UPLOAD residual. #39 gated. |
+
 ### 2026-08-01 — V-SEND.R-PACK-WRITE global packs
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| current | **V-SEND.R-PACK-WRITE** | **This PR** | Native `matrix_set_global_image_packs` (`im.ponies.emote_rooms`) + GlobalPacks.tsx fail-closed on desktop; room pack write residual remains. |
+| current | **V-SEND.R-PACK-WRITE** | **Merged #309** | Native `matrix_set_global_image_packs` (`im.ponies.emote_rooms`) + GlobalPacks.tsx fail-closed on desktop; room pack write residual remains. |
 
 ### 2026-08-01 — scoreboard after #306 pack-write personal
 | When (UTC) | Item | Result | Notes |
