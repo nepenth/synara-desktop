@@ -18,7 +18,7 @@ import {
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
 import classNames from 'classnames';
-import { MatrixError, Room } from 'matrix-js-sdk';
+import { Room } from 'matrix-js-sdk';
 import { HierarchyItem, SpaceHierarchyRoom } from '../../hooks/useSpaceHierarchy';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { RoomAvatar } from '../../components/room-avatar';
@@ -37,6 +37,8 @@ import { AddExistingModal } from '../add-existing';
 import { CreateRoomType } from '../../components/create-room/types';
 import { BetaNoticeBadge } from '../../components/BetaNoticeBadge';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { joinRoomWithNativeOwner } from '../../components/nativeRoomJoinOwner';
 
 function SpaceProfileLoading() {
   return (
@@ -109,10 +111,11 @@ function UnjoinedSpaceProfile({
   avatarUrl,
   suggested,
 }: UnjoinedSpaceProfileProps) {
-  const mx = useMatrixClient();
-
-  const [joinState, join] = useAsyncCallback<Room, MatrixError, []>(
-    useCallback(() => mx.joinRoom(roomId, { viaServers: via }), [mx, roomId, via])
+  const [joinState, join] = useAsyncCallback<void, Error, []>(
+    useCallback(
+      () => joinRoomWithNativeOwner(roomId, via, isSynaraDesktop(), invokeDesktopWithAvailability),
+      [roomId, via]
+    )
   );
 
   const canJoin = joinState.status === AsyncStatus.Idle || joinState.status === AsyncStatus.Error;

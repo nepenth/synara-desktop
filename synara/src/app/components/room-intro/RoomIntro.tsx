@@ -5,6 +5,7 @@ import { useAtomValue } from 'jotai';
 import { IRoomCreateContent, Membership, StateEvent } from '../../../types/matrix/room';
 import { getMemberDisplayName, getStateEvent } from '../../utils/room';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
@@ -18,6 +19,7 @@ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { InviteUserPrompt } from '../invite-user-prompt';
+import { joinRoomWithNativeOwner } from '../nativeRoomJoinOwner';
 
 export type RoomIntroProps = {
   room: Room;
@@ -45,8 +47,17 @@ export const RoomIntro = as<'div', RoomIntroProps>(({ room, ...props }, ref) => 
     creatorId && (getMemberDisplayName(room, creatorId) ?? getMxIdLocalPart(creatorId));
   const prevRoomId = createContent?.predecessor?.room_id;
 
-  const [prevRoomState, joinPrevRoom] = useAsyncCallback(
-    useCallback(async (roomId: string) => mx.joinRoom(roomId), [mx])
+  const [prevRoomState, joinPrevRoom] = useAsyncCallback<void, Error, [string]>(
+    useCallback(
+      (roomId: string) =>
+        joinRoomWithNativeOwner(
+          roomId,
+          undefined,
+          isSynaraDesktop(),
+          invokeDesktopWithAvailability
+        ),
+      []
+    )
   );
 
   const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
