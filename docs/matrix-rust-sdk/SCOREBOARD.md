@@ -4,7 +4,7 @@
 |-------|-------|
 | Updated | 2026-08-01 |
 | Tip | `95ad2656` on `feature/matrix-rust-sdk-full-replacement` |
-| Production `matrix-js-sdk` import files (`synara/src`) | **162** (plan baseline was **220**) |
+| Production `matrix-js-sdk` import files (`synara/src`) | **159** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
 | Umbrella #39 | **Do not merge** without explicit user approval |
 
