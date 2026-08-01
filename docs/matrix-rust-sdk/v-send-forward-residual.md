@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | **Inventory (docs only)** — no product code in this PR |
+| Status | **Implement PR** — legacy MessageForwardItem + `utils/forward.ts` deleted after C1/C2; native presenter forward remains sole product path |
 | Tip SHA | `95a6a71b` (merge #288 scoreboard honesty; after #287 pack-read inventory) |
 | Base | `feature/matrix-rust-sdk-full-replacement` |
 | Policy | [full-vertical-policy.md](full-vertical-policy.md) — physical deletion inside each owning slice |
@@ -133,3 +133,17 @@ content and resolve/filter targets on the live `matrix-js-sdk` client. Possible
 missed files: any other consumer of `utils/forward.ts` helpers or a barrel
 re-export — verify during implementation with a full `grep -rn "utils/forward"`
 and `grep -rn "getForwardableEventContent"` over `synara/src`.
+
+
+## 7. Implementation close (this PR)
+
+After V-TIMELINE C1 (#285) + C2 (#289), `RoomTimeline` no longer mounts multi-select forward.
+`NativeTimelinePresenter` owns product forward (native room list + `matrix_timeline_forward_*`).
+
+This PR deletes:
+- `MessageForwardItem` (+ menu mount) from `message/Message.tsx`
+- `synara/src/app/utils/forward.ts` and unit tests
+- allowlist path `synara/src/app/utils/forward.ts` (**168→167**)
+- production import files **164→163**
+
+Fail-closed: no JS forward dialog residual on the selected timeline path; send was already native.
