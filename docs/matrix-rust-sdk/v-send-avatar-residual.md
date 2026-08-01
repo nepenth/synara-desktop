@@ -125,3 +125,10 @@ Landed native IPC + desktop Profile.tsx wiring:
 - `matrix_upload_media` / `matrix_set_own_avatar` / `matrix_set_own_display_name`
 - Fail-closed on native logged-in desktop sessions
 - Room profile (m.room.avatar/name/topic) remains residual **R-ROOM-PROFILE**
+
+## Implementation (room profile slice)
+
+Landed native IPC + desktop RoomProfile.tsx wiring:
+- `matrix_set_room_name` / `matrix_set_room_topic` / `matrix_set_room_avatar` — **#313**
+- `RoomProfile.tsx` fail-closed via `nativeRoomProfile` / `nativeRoomProfileOwner`; JS `sendStateEvent` only for non-native web
+- Room-avatar **media upload** residual remains (still via JS `state/upload.ts` → `mx.uploadContent`; PACK-UPLOAD-adjacent, open **#314**)
