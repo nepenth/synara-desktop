@@ -56,13 +56,13 @@ non-native web fallback.
 | Path | Role | Gap | ID |
 |------|------|-----|----|
 | `matrix_subscribe_image_packs` (IPC, not yet implemented) | Native live push of `PoniesEmoteRooms` / `PoniesRoomEmotes` / `PoniesUserEmotes` changes to the frontend | No native subscription; native snapshot is one-shot (no reactive updates); JS `useAccountDataCallback` / `useStateEventCallback` remain for web fallback | **V-SEND.R-PACK-READ** (subscribe) |
-| `synara/src/app/plugins/custom-emoji/utils.ts` | `getGlobalImagePacks` / `getRoomImagePack(s)` / `getUserImagePack` / `makeImagePacks` read `PoniesEmoteRooms` / `PoniesRoomEmotes` / `PoniesUserEmotes` via `getAccountData` / `getStateEvent` | **Read-only helpers** — sole consumer is `useImagePacks.ts` (web fallback). **Not used by the write side** (see note below). Physically delete once subscribe lands + web fallback is dropped | **V-SEND.R-PACK-READ** (delete) |
+| `synara/src/app/plugins/custom-emoji/utils.ts` (read-helper **functions only**) | `getGlobalImagePacks` / `getRoomImagePack(s)` / `getUserImagePack` / `makeImagePacks` read `PoniesEmoteRooms` / `PoniesRoomEmotes` / `PoniesUserEmotes` via `getAccountData` / `getStateEvent` | **Read-only helpers** — sole consumer is `useImagePacks.ts` (web fallback). **Not used by the write side** (see note below). Delete the read-helper **functions** once web fallback is dropped. **The whole file is NOT deletable** — it also exports `packAddressEqual` (write-side `GlobalPacks.tsx`/`RoomPacks.tsx`), `imageUsageEqual` (`ImageTile.tsx`), `packMetaEqual` (`ImagePackContent.tsx`), which must be retained | **V-SEND.R-PACK-READ** (delete) |
 | `synara/src/app/hooks/useImagePackRooms.ts` | `useImagePackRooms` resolves candidate pack rooms from `mx.getRoom` + `getAllParents` | No native room→pack-room resolution; JS `mx.getRoom`; feeds `RoomInput.tsx`, `PowersEditor.tsx`, `EmojiBoard.tsx`, `EmoticonAutocomplete.tsx` | **V-SEND.R-PACK-READ** (JS consumer) |
 | `synara/src/app/components/emoji-board/EmojiBoard.tsx` | Renders pack previews via `useRelevantImagePacks` (native-backed) + `imagePackRooms` from JS `useImagePackRooms` | Pack preview display still depends on JS room resolution + media URL resolution | **V-SEND.R-PACK-READ** (display) |
 | `synara/src/app/components/editor/autocomplete/EmoticonAutocomplete.tsx` | Emoticon autocomplete via `useRelevantImagePacks` (native-backed) + `imagePackRooms` from JS `useImagePackRooms` | Autocomplete still depends on JS room resolution | **V-SEND.R-PACK-READ** (JS consumer) |
-| `synara/src/app/hooks/useImagePacks.ts` (web fallback) | `useAccountDataCallback` / `useStateEventCallback` listeners on `mx` for non-native web sessions | Native path is fail-closed; JS listeners remain only for web. Delete once subscribe lands + web fallback dropped | **V-SEND.R-PACK-READ** (delete) |
+| `synara/src/app/hooks/useImagePacks.ts` (web fallback) | `useAccountDataCallback` / `useStateEventCallback` listeners on `mx` for non-native web sessions | Native path is fail-closed; JS listeners remain only for web. Delete once the non-native web fallback is dropped (V-BURN) — subscribe #318 has landed | **V-SEND.R-PACK-READ** (delete) |
 
-**Write vs read owner clarification (physical delete of `custom-emoji/utils.ts`):**
+**Write vs read owner clarification (physical delete of the read helpers in `custom-emoji/utils.ts`):**
 The pack-read helpers in `custom-emoji/utils.ts` are **read-only owners** — their
 sole consumer is `useImagePacks.ts` (the read hooks). The **write** surfaces
 (`GlobalPacks.tsx`, `RoomPacks.tsx`, `UserImagePack.tsx`, `RoomImagePack.tsx`)
@@ -71,9 +71,23 @@ the native-backed hooks (`useGlobalImagePacks`, `useRoomsImagePacks`,
 `useRoomImagePacks`, `useUserImagePack`) and write via `mx.setAccountData` /
 `mx.sendStateEvent` (V-SEND.R-PACK-WRITE, #292). So deleting the read helpers
 does **not** break the write side — the write surfaces keep working through the
-native read hooks. The read helpers can be physically deleted once
-`matrix_subscribe_image_packs` lands and the non-native web fallback is dropped;
-the write residual (#292) is a separate slice and does not gate this deletion.
+native read hooks.
+
+**Deletion is of the read-helper *functions*, not the whole file.** `utils.ts`
+also exports `packAddressEqual` (used by write-side `GlobalPacks.tsx` /
+`RoomPacks.tsx`), `imageUsageEqual` (`ImageTile.tsx`), and `packMetaEqual`
+(`ImagePackContent.tsx`) — these are **not** read helpers and must be retained
+even after the web fallback is dropped. Only `getUserImagePack`,
+`getRoomImagePack` (singular), `getRoomImagePacks`, `getGlobalImagePacks`, and
+`makeImagePacks` are deletable.
+
+**Gating:** the read helpers **cannot be deleted now** — `useImagePacks.ts` still
+calls them in its non-native web fallback paths (`isSynaraDesktop() ? ... :
+getX(mx)` and the `'legacy'` branches). Deletion is gated on **dropping the
+non-native web fallback** (V-BURN), not merely on `matrix_subscribe_image_packs`
+landing (#318 landed the subscribe signal, but the web fallback code paths in
+`useImagePacks.ts` remain live for non-native sessions). The write residual
+(#292) is a separate slice and does not gate this deletion.
 
 **Note:** pack **preview** display is media-adjacent (authenticated media
 download / V-TIMELINE). The read residuals above are the account-data/state-event
@@ -105,8 +119,12 @@ TS owners `nativeImagePackOwner.ts` / `nativeImagePack.ts` and the
   media URL/bytes (media-adjacent; coordinate with V-TIMELINE).
 
 **Deletion list** (physical deletion per [full-vertical-policy.md](full-vertical-policy.md),
-once subscribe lands + web fallback dropped): `custom-emoji/utils.ts` pack-read
-functions (read-only owners; write side unaffected — see §2), the JS
+gated on **dropping the non-native web fallback** — subscribe #318 has landed, so
+the remaining gate is web fallback drop / V-BURN): the **read-helper functions**
+in `custom-emoji/utils.ts` (`getUserImagePack`, `getRoomImagePack`,
+`getRoomImagePacks`, `getGlobalImagePacks`, `makeImagePacks` — read-only owners;
+write side unaffected — see §2; the file's `packAddressEqual`/`imageUsageEqual`/
+`packMetaEqual` equality helpers are **retained**), the JS
 `useAccountDataCallback` / `useStateEventCallback` fallback paths in
 `useImagePacks.ts`, and `useImagePackRooms.ts` (JS `mx.getRoom` +
 `getAllParents`). The `useRelevantImagePacks`/`useGlobalImagePacks`/
@@ -164,8 +182,10 @@ trees — verify during implementation with a full `grep -rn "matrix-js-sdk"` ov
 - TS: `useImagePacks` native refresh token listen (fail-closed desktop)
 
 **Residual follow-on (this doc):**
-- Physical delete of JS pack-read helpers (`custom-emoji/utils.ts` read-only
-  owners) + `useImagePacks.ts` web-fallback listeners once non-native web path is
-  retired — write side unaffected
+- Physical delete of the JS pack-read helper **functions** in
+  `custom-emoji/utils.ts` (read-only owners; retain the file's
+  `packAddressEqual`/`imageUsageEqual`/`packMetaEqual` equality helpers used by
+  the write side + image-pack-view) + `useImagePacks.ts` web-fallback listeners
+  once the non-native web path is retired (V-BURN) — write side unaffected
 - `useImagePackRooms.ts` JS `mx.getRoom` + `getAllParents` room→pack-room resolution
 - dual_backend false
