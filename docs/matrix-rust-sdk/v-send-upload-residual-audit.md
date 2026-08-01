@@ -11,10 +11,11 @@
 
 The source scan still finds four `mx.uploadContent`/`uploadContent(mx, …)`
 sites, plus one call-widget equivalent (`client.uploadContent`). The #325
-thumbnail site and #328 call-widget site now sit behind native owners: a
-logged-in desktop Matrix session uses `matrix_upload_media`, and the JS call
-is retained only for the non-native web/legacy route. The shared upload helper
-is still source-reachable from those web routes and from compact-upload
+thumbnail site and #328 call-widget site now sit behind native owners: when
+native session detection confirms a logged-in desktop Matrix session, the
+owner uses `matrix_upload_media`; the JS call remains only for a non-native,
+logged-out, or otherwise unavailable native-session route. The shared upload
+helper is still source-reachable from those web routes and from compact-upload
 consumers, while compact desktop uploads themselves use `matrix_upload_media`
 after #314.
 
@@ -22,9 +23,9 @@ after #314.
 
 | Source | Production operation | Reachability on a native desktop session | Residual mapping |
 |--------|----------------------|------------------------------------------|------------------|
-| `synara/src/app/plugins/call/CallWidgetDriver.ts:324` | `uploadCallWidgetFileWithNativeOwner` receives the legacy `client.uploadContent(file)` callback for widget `uploadFile`; the same driver also owns widget media config/download | **Not reachable** on a logged-in desktop Matrix session; #328 uses `matrix_upload_media` and fails closed on native command failure. The callback remains for web or logged-out sessions. | **V-SEND.R-CALL-UPLOAD** — complete via **#328**; the source match is a non-native fallback. |
+| `synara/src/app/plugins/call/CallWidgetDriver.ts:324` | `uploadCallWidgetFileWithNativeOwner` receives the legacy `client.uploadContent(file)` callback for widget `uploadFile`; the same driver also owns widget media config/download | **Not reachable** when native session detection confirms a logged-in desktop Matrix session; #328 uses `matrix_upload_media` and fails closed if that native upload is unavailable. The callback remains for web, logged-out, or unavailable native-session detection. | **V-SEND.R-CALL-UPLOAD** — complete via **#328**; the source match is a non-native fallback. |
 | `synara/src/app/features/room/RoomInput.tsx:911` | GIF picker legacy branch downloads the GIF, optionally encrypts it, then calls `mx.uploadContent` before `mx.sendMessage` | **Not reachable** when `sendComposerGifWithNativeOwner` sees a logged-in native session; native GIF send uses `matrix_send_attachment` | **Composer GIF send / #264 legacy-web fallback**; not a GIF-pack residual. The [GIF-pack audit](v-send-gif-pack-audit.md) found no collection-management surface. |
-| `synara/src/app/features/room/msgContent.ts:39` | Video thumbnail bytes go through `uploadMediaNative`; the `mx.uploadContent` call is the fallback while building legacy attachment message content | **Not reachable** on a logged-in desktop Matrix session; #325 uses `matrix_upload_media` and fails closed on native command failure. The JS call remains only when no live native session exists. | **Composer thumbnail** — complete via **#325**; the source match is a non-native fallback. |
+| `synara/src/app/features/room/msgContent.ts:39` | Video thumbnail bytes go through `uploadMediaNative`; the `mx.uploadContent` call is the fallback while building legacy attachment message content | **Not reachable** when native session detection confirms a logged-in desktop Matrix session; #325 uses `matrix_upload_media` and fails closed if that native upload is unavailable. The JS call remains only when no live/available native session exists. | **Composer thumbnail** — complete via **#325**; the source match is a non-native fallback. |
 | `synara/src/app/state/upload.ts:120` | `useBindUploadAtom` calls the shared `uploadContent(mx, file, …)` wrapper | **Not used** by `UploadCardRenderer` when `nativeComposerSend` is true; compact desktop also bypasses it | Shared owner for non-native web uploads and compact consumers: **V-SEND.R-AVATAR-UPLOAD**, **R-ROOM-PROFILE**, and historical **V-SEND.R-PACK-UPLOAD** ownership; not a new residual by itself |
 | `synara/src/app/utils/matrix.ts:155` | Shared `uploadContent` wrapper calls `mx.uploadContent(file, …)` | Same as `state/upload.ts` | Shared implementation for the mappings above; retain until the remaining web/legacy consumers are removed |
 
@@ -39,11 +40,12 @@ upload is unavailable and does not fall through to `mx.uploadContent`.
 upload; otherwise it starts the legacy JS upload.
 
 The #325 thumbnail path also uses `uploadMediaNative` and only selects
-`mx.uploadContent` when there is no live native Matrix session. The #328 call
-widget path uses `uploadCallWidgetFileWithNativeOwner`; its
-`client.uploadContent` callback is likewise limited to web or logged-out
-sessions. Native command absence or failure is terminal for both paths; it
-does not select the JS fallback.
+`mx.uploadContent` when there is no live/available native Matrix session. The
+#328 call-widget path uses `uploadCallWidgetFileWithNativeOwner`; its
+`client.uploadContent` callback is likewise outside a confirmed logged-in
+native session. Once native ownership is selected, `matrix_upload_media`
+absence or an invalid response is terminal for both paths; it does not select
+the JS fallback.
 
 The composer send gates are explicit:
 
