@@ -3,7 +3,7 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `83112c9b` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip                                                    | `22f1f06d` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **152** (plan baseline was **220**)                      |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
@@ -51,6 +51,7 @@ run passes the relevant checklist.
 | Room leave vertical             | **#364** `matrix_room_leave` + LeaveRoom/LeaveSpace native owner                                                                                                                                 |
 | Room create vertical            | **#372** `matrix_room_create` + native owner; CreateRoom/Space/Chat + `/startdm` fail-closed (imports **154→153**)                                                                               |
 | Room moderation writes          | **#375** native invite/kick/ban/unban/setPowerLevel writes; moderation write product vertical merged                                                                                             |
+| Members-read first slice        | **#395** `matrix_room_members_snapshot` + Members settings native fail-closed (imports **153→152**); drawer/lobby/mentions + power-level reads residual |
 | /leave command                  | **#371** useCommands Leave → leaveRoomWithNativeOwner                                                                                                                                            |
 | Room join vertical              | **#369** `matrix_room_join` + native owner; all production `joinRoom` sites fail-closed (imports **155→154**)                                                                                    |
 | Composer GIF/upload fallbacks   | **#363** RoomInput GIF + msgContent thumbnail JS upload fallbacks deleted                                                                                                                        |
@@ -63,14 +64,17 @@ run passes the relevant checklist.
 
 | PR     | What                                                                                           |
 | ------ | ---------------------------------------------------------------------------------------------- |
-| (none) | Next: **members-read** product (#385 inventory); **powers-bulk**; CallWidget media IPC; C3–C5. |
+| (none) | Next: **powers-bulk** or CallWidget media IPC; members-read residual (drawer/lobby/mentions + power reads); C3–C5. |
 
 ## Left (finish-line order)
 
 1. **Members/power — native full vertical.** Leave/join/create closed
    (**#364/#369/#372**); `/leave` command **#371**; moderation writes
-   invite/kick/ban/unban/setPowerLevel **#375 merged**. Next: member list/power
-   reads ([read residual inventory](v-rooms-members-read-residual.md)). See
+   invite/kick/ban/unban/setPowerLevel **#375 merged**; members-read first slice
+   **#395** (`matrix_room_members_snapshot` + Members settings native). Residual:
+   Room/MembersDrawer/Lobby/UserMentionAutocomplete member reads, power-level/creator
+   reads, and powers-bulk writes (packet **#388**). See
+   [read residual inventory](v-rooms-members-read-residual.md),
    [P4.6 members](p4.6-members.md) and [P4.3 membership](p4.3-membership-unread.md).
 2. **V-TIMELINE.C3–C5 — live proofs.** All three remain **Not confirmed**
    (C3 blocked without Docker Synapse harness in agent env). Operator index:
