@@ -19,7 +19,6 @@ import {
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
 import { Link } from 'react-router-dom';
-import { MatrixError } from 'matrix-js-sdk';
 import { getMxIdLocalPart, getMxIdServer, isUserId } from '../../../utils/matrix';
 import { EMAIL_REGEX } from '../../../utils/regex';
 import { useAutoDiscoveryInfo } from '../../../hooks/useAutoDiscoveryInfo';
@@ -28,6 +27,7 @@ import { useAuthServer } from '../../../hooks/useAuthServer';
 import { useClientConfig } from '../../../hooks/useClientConfig';
 import {
   LoginError,
+  PasswordLoginError,
   PasswordLoginResponse,
   factoryGetBaseUrl,
   loginPassword,
@@ -120,7 +120,7 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
 
   const [loginState, startLogin] = useAsyncCallback<
     PasswordLoginResponse,
-    MatrixError,
+    PasswordLoginError,
     Parameters<typeof loginPassword>
   >(useCallback(loginPassword, []));
 

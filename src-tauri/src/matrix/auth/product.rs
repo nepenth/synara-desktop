@@ -22,8 +22,9 @@ use matrix_sdk::{
             relation::{Reply, Thread},
             room::{
                 message::{
-                    AddMentions, MessageFormat, MessageType, Relation, ReplyWithinThread,
-                    RoomMessageEventContent, RoomMessageEventContentWithoutRelation,
+                    AddMentions, MessageFormat, MessageType, Relation, RelationWithoutReplacement,
+                    ReplyWithinThread, RoomMessageEventContent,
+                    RoomMessageEventContentWithoutRelation,
                 },
                 ImageInfo,
             },
@@ -2722,12 +2723,32 @@ pub async fn matrix_send_poll(
     question: String,
     answers: Vec<String>,
     max_selections: u32,
+    // Thread root (`m.thread`). With reply_to → Thread::reply (is_falling_back false).
+    thread_root: Option<String>,
+    reply_to: Option<String>,
 ) -> Result<MatrixSendPollResult, MatrixAuthCommandError> {
     let room_id = parse_send_room_id(&room_id)?;
+    let thread_root = parse_thread_root_event_id(thread_root)?;
+    let reply_to = parse_reply_event_id(reply_to)?;
     let normalized = normalize_poll(&question, &answers, max_selections)
         .map_err(|error| map_poll_error(error.diagnostic_id()))?;
-    let content =
+    let mut content =
         poll_start_content(&normalized).map_err(|error| map_poll_error(error.diagnostic_id()))?;
+    // Relation rules match text/attachment (V-SEND.5): thread_root + reply_to →
+    // in-thread reply; thread_root only → thread without fallback; reply_to only →
+    // classic reply.
+    content.relates_to = match (thread_root, reply_to) {
+        (Some(root), Some(reply)) => Some(RelationWithoutReplacement::Thread(Thread::reply(
+            root, reply,
+        ))),
+        (Some(root), None) => Some(RelationWithoutReplacement::Thread(
+            Thread::without_fallback(root),
+        )),
+        (None, Some(reply)) => Some(RelationWithoutReplacement::Reply(Reply::with_event_id(
+            reply,
+        ))),
+        (None, None) => None,
+    };
 
     let room = {
         let mut session = state.session.lock().await;
@@ -4436,6 +4457,64 @@ mod tests {
             assert!(!json.contains("refresh_token"));
             assert!(!json.contains("password"));
         }
+    }
+
+    #[test]
+    fn v_auth_3b_product_has_no_matrix_uia_login_stage_commands() {
+        // Desktop product does not retain multi-stage UIA on the login route
+        // (V-AUTH.3b). Password login remains single-shot; register/reset/device
+        // delete keep specialized native stage/UIAA owners. Do not invent unused
+        // matrix_uia_* session IPC for a non-product login surface.
+        let product_src = include_str!("product.rs");
+        let product_prod = product_src
+            .split("#[cfg(test)]")
+            .next()
+            .expect("product production section");
+        let lib_src = include_str!("../../lib.rs");
+        let login_src = include_str!("login.rs");
+        let login_prod = login_src
+            .split("#[cfg(test)]")
+            .next()
+            .expect("login production section");
+
+        assert!(
+            product_prod.contains("pub async fn matrix_login_password"),
+            "password login product command must remain registered"
+        );
+        assert!(
+            !product_prod.contains("pub async fn matrix_uia_"),
+            "generic matrix_uia_* login-stage commands must not be product Tauri commands"
+        );
+        assert!(
+            !lib_src.contains("matrix_uia_"),
+            "matrix_uia_* must not be registered in the invoke handler"
+        );
+        // Specialized multi-stage / UIAA product paths remain.
+        assert!(
+            product_prod.contains("pub async fn matrix_register"),
+            "register multi-stage owner must remain"
+        );
+        assert!(
+            product_prod.contains("pub async fn matrix_password_reset_complete"),
+            "password-reset owner must remain"
+        );
+        assert!(
+            product_prod.contains("pub async fn matrix_device_delete_password"),
+            "device-delete password UIAA owner must remain"
+        );
+        // Login maps UIAA to fail-closed InteractiveAuthRequired — no stage loop.
+        assert!(
+            login_prod.contains("InteractiveAuthRequired"),
+            "login must map UIAA to InteractiveAuthRequired"
+        );
+        assert!(
+            login_prod.contains("p3.2-login-uiaa-required"),
+            "login UIAA diagnostic must remain privacy-safe"
+        );
+        assert!(
+            !login_prod.contains("UiaSession"),
+            "login module must not drive the P3.4 UiaSession coordinator"
+        );
     }
 
     #[test]
