@@ -270,6 +270,29 @@ pub async fn set_global_image_packs(
     Ok(())
 }
 
+/// V-SEND.R-PACK-WRITE — create/update/delete a `im.ponies.room_emotes` state
+/// pack for a room. Empty `{}` content deletes the state event (mirrors the JS
+/// `mx.sendStateEvent(roomId, PoniesRoomEmotes, {}, stateKey)` delete path).
+/// Fail-closed: this is the sole native owner for the room-pack write; the JS
+/// `mx.sendStateEvent(PoniesRoomEmotes)` must not be used as a fallback on a
+/// native session.
+pub async fn set_room_image_pack(
+    client: &Client,
+    room_id: &str,
+    state_key: &str,
+    content: JsonValue,
+) -> Result<(), &'static str> {
+    set_room_image_pack_content_guard(&content)?;
+    let room_id = parse_room_id(room_id)?;
+    let room = client
+        .get_room(&room_id)
+        .ok_or("v-send.r-pack-write-room-missing")?;
+    room.send_state_event_raw(ROOM_EMOTES_EVENT_TYPE, state_key, content)
+        .await
+        .map_err(|_| "v-send.r-pack-write-set-failed")?;
+    Ok(())
+}
+
 /// Pure guard extracted from `set_user_image_pack` so the fail-closed content
 /// check is unit-testable without a live client.
 fn set_user_image_pack_content_guard(content: &JsonValue) -> Result<(), &'static str> {
@@ -282,6 +305,15 @@ fn set_user_image_pack_content_guard(content: &JsonValue) -> Result<(), &'static
 /// Pure guard extracted from `set_global_image_packs` so the fail-closed content
 /// check is unit-testable without a live client.
 fn set_global_image_packs_content_guard(content: &JsonValue) -> Result<(), &'static str> {
+    if !content.is_object() {
+        return Err("v-send.r-pack-write-invalid-content");
+    }
+    Ok(())
+}
+
+/// Pure guard extracted from `set_room_image_pack` so the fail-closed content
+/// check is unit-testable without a live client.
+fn set_room_image_pack_content_guard(content: &JsonValue) -> Result<(), &'static str> {
     if !content.is_object() {
         return Err("v-send.r-pack-write-invalid-content");
     }
@@ -344,5 +376,18 @@ mod tests {
         let err = set_global_image_packs_content_guard(&JsonValue::String("x".into())).unwrap_err();
         assert_eq!(err, "v-send.r-pack-write-invalid-content");
         assert!(set_global_image_packs_content_guard(&json!({ "rooms": {} })).is_ok());
+    }
+
+    #[test]
+    fn set_room_image_pack_rejects_non_object_content() {
+        // Fail-closed: a non-object body is rejected before any SDK call.
+        // Empty object is valid (delete path).
+        let err = set_room_image_pack_content_guard(&JsonValue::Array(vec![])).unwrap_err();
+        assert_eq!(err, "v-send.r-pack-write-invalid-content");
+        assert!(set_room_image_pack_content_guard(&json!({})).is_ok());
+        assert!(set_room_image_pack_content_guard(
+            &json!({ "pack": { "display_name": "Room" }, "images": {} })
+        )
+        .is_ok());
     }
 }

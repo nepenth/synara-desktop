@@ -165,3 +165,33 @@ export async function setGlobalImagePacksWithNativeOwner(
   }
   return 'native';
 }
+
+/**
+ * V-SEND.R-PACK-WRITE: sole room-pack write owner when a native Matrix
+ * session is live. Empty `{}` content deletes the state event. Fail-closed —
+ * never falls through to mx.sendStateEvent(PoniesRoomEmotes).
+ */
+export async function setRoomImagePackWithNativeOwner(
+  roomId: string,
+  stateKey: string,
+  content: PackContent,
+  desktopAvailable: boolean,
+  invoke: NativeInvoke
+): Promise<'native' | 'legacy'> {
+  if (!(await isNativePackReadSession(desktopAvailable, invoke))) {
+    return 'legacy';
+  }
+  const result = await invoke('matrix_set_room_image_pack', {
+    roomId,
+    stateKey,
+    content,
+  });
+  if (!result.available) {
+    throw new Error('Native Matrix room image pack write is unavailable.');
+  }
+  const body = result.value as NativePackWriteResult | undefined;
+  if (body?.status !== 'ok') {
+    throw new Error('Native Matrix room image pack write is unavailable.');
+  }
+  return 'native';
+}
