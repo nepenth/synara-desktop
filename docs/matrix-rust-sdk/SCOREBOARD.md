@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Updated | 2026-08-01 |
-| Tip | `c42b93c5` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip | `738abb30` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **163** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
 | Umbrella #39 | **Do not merge** without explicit user approval |
@@ -15,48 +15,41 @@
 | Crypto vertical | V-CRYPTO done earlier |
 | Core send | text/attachment/reaction/poll/thread/sticker/GIF native |
 | Rooms | hierarchy + space writers |
-| Auth | SSO removed; token non-retention; register; password reset; login-flow discovery; UIA multi-stage non-retention; **loginUtil fail-closed #279** |
+| Auth | SSO removed; token non-retention; register; password reset; login-flows; UIA non-retention; loginUtil **#279** |
 | Poll-in-thread | #282 |
-| Timeline contract | #240 native DTO/stream/actions + presenter code |
-| Cutover policy | Approved; residual map #286; pack-read inventory #287 |
-| Send residual inventories | forward #290; avatar #291; pack-write #292 (docs only) |
-| V-SEND.R-EDIT | **#283** native `m.replace` merged |
-| V-TIMELINE.C3 checklist | **#294** docs-only stream verify checklist |
-| V-TIMELINE.C4 checklist | **docs-only** media/render verify checklist ([v-timeline-c4-media-render-verify.md](v-timeline-c4-media-render-verify.md)) |
-| V-TIMELINE.C5 checklist | **docs-only** pins/notes/jump verify checklist ([v-timeline-c5-pins-notes-jump-verify.md](v-timeline-c5-pins-notes-jump-verify.md)) |
+| Timeline contract | #240 |
+| V-SEND.R-EDIT | **#283** native `m.replace` |
 | V-TIMELINE.C1 | **#285** NativeTimelinePresenter owns RoomView |
-| V-TIMELINE.C2 | **#289** delete `RoomTimeline` (imports **165→164**, allowlist **169→168**) |
-| V-SEND.R-FORWARD | **#296** legacy MessageForwardItem + forward.ts deleted |
-| V-TIMELINE residual truth | **#298** C1/C2 done notes |
-| V-SEND.R-PACK-READ | **#297** native snapshot get + hooks fail-closed (subscribe residual remains) |
-| V-SEND.R-AVATAR-UPLOAD | **#303** native `matrix_upload_media` + set own avatar/display name; Profile.tsx fail-closed (R-ROOM-PROFILE remains) |
+| V-TIMELINE.C2 | **#289** delete RoomTimeline |
+| V-SEND.R-FORWARD | **#296** legacy dialog + forward.ts deleted |
+| V-SEND.R-PACK-READ snapshot | **#297** native get + hooks (subscribe residual) |
+| V-SEND.R-AVATAR-UPLOAD user | **#303** upload_media + set_own_avatar/display_name; Profile.tsx fail-closed |
 | CI | Parallel Validate #284 |
+| Docs/checklists | #294 C3; #302 C4/C5; residual truth #298/#301; scoreboards #293/#295/#300 |
 
 ## In flight
 
 | PR | What |
 |----|------|
-| (none product) | Next: **V-SEND.R-PACK-WRITE** / pack-read **subscribe** / **R-ROOM-PROFILE** |
+| (none product) | Next: pack-write implement; pack-read subscribe; room-profile residual |
 
 ## Left (ordered)
 
-### Timeline cutover
-1. ~~**C1** land #285~~ ✅
-2. ~~**C2** delete RoomTimeline~~ ✅ #289
-3. **C3** live re-verify stream deltas (checklist #294; residual truth #298)
-4. **C4** media/render parity on selected presenter (checklist [v-timeline-c4-media-render-verify.md](v-timeline-c4-media-render-verify.md))
-5. **C5** pins/notes/jump live proof (checklist [v-timeline-c5-pins-notes-jump-verify.md](v-timeline-c5-pins-notes-jump-verify.md))
+### Timeline
+1. ~~C1~~ ✅ #285 · ~~C2~~ ✅ #289
+2. **C3** live stream re-verify (checklist #294)
+3. **C4** media/render parity (checklist #302)
+4. **C5** pins/notes/jump live proof (checklist #302)
 
-### Send / media residuals (inventories done; implement remains)
-- ~~**V-SEND.R-FORWARD**~~ **#296**
-- ~~**V-SEND.R-PACK-READ** snapshot~~ **#297** (subscribe residual remains)
-- **V-SEND.R-PACK-WRITE** / **PACK-UPLOAD** implement (inventory #292; may reuse `matrix_upload_media` #303)
-- ~~**V-SEND.R-AVATAR-UPLOAD** user profile~~ **#303**; **R-ROOM-PROFILE** remains (inventory #291)
-- **V-SEND.R-CALL-UPLOAD** / **R-GIF-PACK**
-- **V-SEND.R-DEVTOOL** (low priority)
+### Send / media residuals
+- Pack-read **subscribe** + physical JS utils delete (snapshot #297 landed)
+- **V-SEND.R-PACK-WRITE** / PACK-UPLOAD implement (inventory #292)
+- **R-ROOM-PROFILE** room name/topic/avatar (user avatar #303 done)
+- CALL-UPLOAD / GIF-PACK / DEVTOOL (low)
 
 ### Convergence
-- **V-BURN.1–3** zero live JS client + drop npm `matrix-js-sdk` after residual owners clear
+- **V-BURN.1–3** zero live JS client + drop npm `matrix-js-sdk`
+- **#39** umbrella — explicit approval only
 
 ### Not residual free-for-all
-- Widgets/calls polish beyond residual IDs — full verticals after burn queue allows
+- Widgets/calls polish beyond residual IDs after burn queue allows
