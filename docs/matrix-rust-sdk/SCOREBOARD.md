@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Updated | 2026-08-01 |
-| Tip | `4ce64909` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip | `25bfa150` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **163** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
 | Umbrella #39 | **Do not merge** without explicit user approval |
@@ -29,18 +29,18 @@
 | V-SEND.R-FORWARD | **#296** legacy MessageForwardItem + forward.ts deleted |
 | V-TIMELINE residual truth | **#298** C1/C2 done notes |
 | V-SEND.R-PACK-READ | **#297** native snapshot get + hooks fail-closed (subscribe residual remains) |
-| V-SEND.R-AVATAR-UPLOAD | **#303** native `matrix_upload_media` + set own avatar/display name; Profile.tsx fail-closed (R-ROOM-PROFILE remains) |
+| V-SEND.R-AVATAR-UPLOAD | **#303** native `matrix_upload_media` + set own avatar/display name; Profile.tsx fail-closed |
 | V-SEND.R-PACK-WRITE personal | **#306** `matrix_set_user_image_pack` + UserImagePack fail-closed |
 | V-SEND.R-PACK-WRITE global | **#309** `matrix_set_global_image_packs` + GlobalPacks fail-closed |
-| V-SEND.R-PACK-WRITE room | **#310** `matrix_set_room_image_pack` + RoomPacks/RoomImagePack fail-closed (PACK-UPLOAD residual) |
-| V-SEND.R-ROOM-PROFILE | **#313** `matrix_set_room_name`/`matrix_set_room_topic`/`matrix_set_room_avatar` + RoomProfile.tsx fail-closed (room-avatar media upload residual) |
+| V-SEND.R-PACK-WRITE room | **#310** `matrix_set_room_image_pack` + RoomPacks/RoomImagePack fail-closed |
+| V-SEND.R-ROOM-PROFILE | **#313** `matrix_set_room_name`/`matrix_set_room_topic`/`matrix_set_room_avatar` + RoomProfile.tsx fail-closed |
+| V-SEND.R-PACK-UPLOAD | **#314** reuses `matrix_upload_media` via CompactUploadCardRenderer fail-closed (pack + compact image uploads) |
 | CI | Parallel Validate #284 |
 
 ## In flight
 
 | PR | What |
 |----|------|
-| **#314** | **PACK-UPLOAD** native pack media upload (open) |
 | (none product) | Next: pack-read **subscribe**; **C3–C5** live verify |
 
 ## Left (ordered)
@@ -55,8 +55,8 @@
 ### Send / media residuals (inventories done; implement remains)
 - ~~**V-SEND.R-FORWARD**~~ **#296**
 - ~~**V-SEND.R-PACK-READ** snapshot~~ **#297** (subscribe residual remains)
-- ~~**V-SEND.R-PACK-WRITE** personal~~ **#306**; ~~**global**~~ **#309**; ~~**room**~~ **#310**; **PACK-UPLOAD** remains (inventory #292; open **#314**; may reuse `matrix_upload_media` #303)
-- ~~**V-SEND.R-AVATAR-UPLOAD** user profile~~ **#303**; ~~**R-ROOM-PROFILE**~~ **#313** (room-avatar media upload residual remains — PACK-UPLOAD-adjacent)
+- ~~**V-SEND.R-PACK-WRITE** personal~~ **#306**; ~~**global**~~ **#309**; ~~**room**~~ **#310**; ~~**PACK-UPLOAD**~~ **#314** (reuses `matrix_upload_media` #303 via CompactUploadCardRenderer)
+- ~~**V-SEND.R-AVATAR-UPLOAD** user profile~~ **#303**; ~~**R-ROOM-PROFILE**~~ **#313** (room-avatar media upload covered by #314 CompactUploadCardRenderer path)
 - **V-SEND.R-CALL-UPLOAD** / **R-GIF-PACK**
 - **V-SEND.R-DEVTOOL** (low priority)
 

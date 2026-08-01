@@ -33,7 +33,7 @@ covered together here).
 
 ## 2. Residual table — V-SEND.R-PACK-WRITE (+ PACK-UPLOAD)
 
-> **Status after #310:** personal (#306), global (#309), and room (#310) pack **writes** are native fail-closed. Rows below for those paths are historical inventory. **Active residual:** **PACK-UPLOAD** (`state/upload.ts` / `utils/matrix.ts` `uploadContent` for pack media).
+> **Status after #314:** personal (#306), global (#309), room (#310) pack **writes** and **PACK-UPLOAD (#314)** are native fail-closed. Rows below for those paths are historical inventory. **Active residual** for this surface: none (pack-read **subscribe** is separate inventory).
 
 | Path | Role | Gap | ID |
 |------|------|-----|----|
@@ -132,5 +132,7 @@ Landed:
 - `matrix_set_room_image_pack` (native `im.ponies.room_emotes` create/update/delete; empty `{}` deletes) — **#310**
 - `RoomPacks.tsx` / `RoomImagePack.tsx` fail-closed via `setRoomImagePackNative` — **#310**
 
+- Pack image/avatar upload (**PACK-UPLOAD**) — **#314** reuses `matrix_upload_media` via `CompactUploadCardRenderer` fail-closed on desktop (also covers RoomProfile/PowersEditor compact uploads)
+
 Remaining:
-- Pack image/avatar upload (**PACK-UPLOAD**) — still via `mx.uploadContent` in `state/upload.ts` / `utils/matrix.ts`; may reuse `matrix_upload_media` from #303. Open **#314**.
+- None on this write/upload surface. Pack-read **subscribe** + JS utils delete remain under [v-send-pack-read-residual.md](v-send-pack-read-residual.md).
