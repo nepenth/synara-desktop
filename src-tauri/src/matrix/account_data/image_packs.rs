@@ -270,6 +270,25 @@ pub async fn set_global_image_packs(
     Ok(())
 }
 
+
+/// Pure guard extracted from `set_user_image_pack` so the fail-closed content
+/// check is unit-testable without a live client.
+fn set_user_image_pack_content_guard(content: &JsonValue) -> Result<(), &'static str> {
+    if !content.is_object() {
+        return Err("v-send.r-pack-write-invalid-content");
+    }
+    Ok(())
+}
+
+/// Pure guard extracted from `set_global_image_packs` so the fail-closed content
+/// check is unit-testable without a live client.
+fn set_global_image_packs_content_guard(content: &JsonValue) -> Result<(), &'static str> {
+    if !content.is_object() {
+        return Err("v-send.r-pack-write-invalid-content");
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -327,22 +346,4 @@ mod tests {
         assert_eq!(err, "v-send.r-pack-write-invalid-content");
         assert!(set_global_image_packs_content_guard(&json!({ "rooms": {} })).is_ok());
     }
-}
-
-/// Pure guard extracted from `set_user_image_pack` so the fail-closed content
-/// check is unit-testable without a live client.
-fn set_user_image_pack_content_guard(content: &JsonValue) -> Result<(), &'static str> {
-    if !content.is_object() {
-        return Err("v-send.r-pack-write-invalid-content");
-    }
-    Ok(())
-}
-
-/// Pure guard extracted from `set_global_image_packs` so the fail-closed content
-/// check is unit-testable without a live client.
-fn set_global_image_packs_content_guard(content: &JsonValue) -> Result<(), &'static str> {
-    if !content.is_object() {
-        return Err("v-send.r-pack-write-invalid-content");
-    }
-    Ok(())
 }
