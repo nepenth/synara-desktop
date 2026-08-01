@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `de13b048` — after #309 global pack-write; #308 scoreboard; #306 personal pack-write; #304 scoreboard; #303 avatar; #302 C4/C5
-| Active work        | Next: pack-write room + PACK-UPLOAD; pack-read subscribe; R-ROOM-PROFILE; C3–C5 live
+| Integration tip    | `980231f7` — after #310 room pack-write; #311 scoreboard; #309 global; #306 personal; #303 avatar
+| Active work        | Next: PACK-UPLOAD; pack-read subscribe; R-ROOM-PROFILE; C3–C5 live
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | Desktop production import files **163** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `de13b048`**. Landed #306 personal pack-write (`matrix_set_user_image_pack`) and #309 global pack-write (`matrix_set_global_image_packs`). Room/PACK-UPLOAD residual. Next serial: pack-write room or pack-read subscribe. #39 gated. |
-| **Tip**        | `de13b048` |
-| **Active PRs** | none product open after global pack-write. |
+| **Now**        | **Tip `980231f7`**. Landed pack-write personal #306, global #309, room #310. **PACK-UPLOAD** residual remains (may reuse `matrix_upload_media` #303). Next serial: PACK-UPLOAD or pack-read subscribe or R-ROOM-PROFILE. #39 gated. |
+| **Tip**        | `980231f7` |
+| **Active PRs** | none product open after room pack-write #310. |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
@@ -59,6 +59,16 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — scoreboard after #310 room pack-write
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **Scoreboard** | **This PR** | Honesty after #310 room pack-write. Tip `980231f7`. Personal #306 + global #309 + room #310 landed; **PACK-UPLOAD** residual. #39 gated. |
+
+### 2026-08-01 — V-SEND.R-PACK-WRITE room packs
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.R-PACK-WRITE** | **Merged #310** | Native `matrix_set_room_image_pack` (`im.ponies.room_emotes`) + RoomPacks/RoomImagePack fail-closed on desktop; PACK-UPLOAD residual remains. |
 
 ### 2026-08-01 — scoreboard after #309 global pack-write
 | When (UTC) | Item | Result | Notes |

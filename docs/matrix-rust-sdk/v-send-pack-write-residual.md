@@ -33,6 +33,8 @@ covered together here).
 
 ## 2. Residual table — V-SEND.R-PACK-WRITE (+ PACK-UPLOAD)
 
+> **Status after #310:** personal (#306), global (#309), and room (#310) pack **writes** are native fail-closed. Rows below for those paths are historical inventory. **Active residual:** **PACK-UPLOAD** (`state/upload.ts` / `utils/matrix.ts` `uploadContent` for pack media).
+
 | Path | Role | Gap | ID |
 |------|------|-----|----|
 | `synara/src/app/features/settings/emojis-stickers/GlobalPacks.tsx` | `applyChanges` writes `mx.setAccountData(PoniesEmoteRooms, updatedContent)` to **add/remove/enable** global pack references in `EmoteRoomsContent.rooms` (selected/removed `PackAddress`es) | No native global-pack write; JS `setAccountData` on live client | **V-SEND.R-PACK-WRITE** |
@@ -127,6 +129,8 @@ Landed:
 - `matrix_set_global_image_packs` (native `im.ponies.emote_rooms` write) — **#309**
 - `GlobalPacks.tsx` fail-closed via `setGlobalImagePacksNative` — **#309**
 
+- `matrix_set_room_image_pack` (native `im.ponies.room_emotes` create/update/delete; empty `{}` deletes) — **#310**
+- `RoomPacks.tsx` / `RoomImagePack.tsx` fail-closed via `setRoomImagePackNative` — **#310**
+
 Remaining:
-- Room pack create/update/delete (`PoniesRoomEmotes` via `sendStateEvent`) — `RoomPacks.tsx` / `RoomImagePack.tsx` still on live JS client; no `matrix_set_room_image_pack` IPC yet
-- Pack image upload (PACK-UPLOAD)
+- Pack image/avatar upload (**PACK-UPLOAD**) — still via `mx.uploadContent` in `state/upload.ts` / `utils/matrix.ts`; may reuse `matrix_upload_media` from #303
