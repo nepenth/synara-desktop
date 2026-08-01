@@ -2,21 +2,21 @@
 
 | Field  | Value                                                                                          |
 | ------ | ---------------------------------------------------------------------------------------------- |
-| Status | **C1 done** (presenter selected); **C2 this PR** (RoomTimeline deleted). Residuals C3–C5 remain |
-| Tip    | Stacked on [#285](https://github.com/nepenth/synara-desktop/pull/285) C1 presenter cutover head |
+| Status | **C1 done** (#285) + **C2 done** (#289). Residuals C3–C5 remain; **C3 is checklist-only until live proof** |
+| Tip    | `1695b9f7` on `feature/matrix-rust-sdk-full-replacement` (after #296 V-SEND.R-FORWARD landed) |
 | Policy | [full-vertical-policy.md](full-vertical-policy.md); [cutover-operating-model.md](cutover-operating-model.md) |
 | Owner  | Managed Rust `matrix-sdk-ui::Timeline` + SDK-neutral presenter (`NativeTimelinePresenter`)       |
 
 ## 1. Tip measured
 
-- **Branch:** `matrix-rust/v-timeline-c2-delete-roomtimeline`
-- **Base stack:** [#285](https://github.com/nepenth/synara-desktop/pull/285) C1 (`matrix-rust/v-timeline-cutover-presenter`) after tip-merge past [#286](https://github.com/nepenth/synara-desktop/pull/286).
-- **Base:** `feature/matrix-rust-sdk-full-replacement` (via #285).
+- **Branch:** `matrix-rust/docs-c3-c4-residual-truth` (docs-only residual truth-up)
+- **Base stack:** tip `1695b9f7` — after #285 C1, #289 C2, #294 C3 checklist, #295 scoreboard, #296 V-SEND.R-FORWARD.
+- **Base:** `feature/matrix-rust-sdk-full-replacement`.
 
 ## 2. Product path today (after C1 + C2)
 
 `RoomView` mounts **only** `NativeTimelinePresenter` as the sole active timeline presenter.
-JS `RoomTimeline.tsx` / `RoomTimeline.css.ts` are **deleted** (this PR, V-TIMELINE.C2).
+JS `RoomTimeline.tsx` / `RoomTimeline.css.ts` are **deleted** (V-TIMELINE.C2, #289).
 
 - `synara/src/app/features/room/RoomView.tsx` — imports `NativeTimelinePresenter` and renders
   `<NativeTimelinePresenter key={roomId} roomId={roomId} eventId={eventId} />`. Sole timeline mount.
@@ -35,10 +35,10 @@ presenter selection + dead JS owner deletion; break/fix-forward OK.
 
 | ID | Slice | Path | Current owner | Native gap | Done when |
 | -- | ----- | ---- | ------------- | ---------- | --------- |
-| V-TIMELINE.C1 | Select presenter in RoomView | `synara/src/app/features/room/RoomView.tsx` | **DONE** — `NativeTimelinePresenter` | — | `RoomView` mounts `NativeTimelinePresenter` as the sole active timeline; no JS fallback route |
-| V-TIMELINE.C2 | Delete RoomTimeline + dead imports | `RoomTimeline.tsx`, `RoomTimeline.css.ts` | **DONE this PR** | — | Files deleted; allowlist drop; shared notification/open utilities retained; no broken imports |
-| V-TIMELINE.C3 | Stream delta binding gaps | `synara/src/app/features/room/nativeTimelineView.ts` (`useNativeTimelineView`) | Native stream (`matrix-timeline-view-updated`) | Binding implemented: registers listener before open, keeps exact returned `streamId`, rejects revision gaps / malformed ops, aborts with session registry | Live authenticated viewport proof after C1 selection |
-| V-TIMELINE.C4 | Media / render parity gaps | `NativeTimelinePresenter.tsx` (`NativeTimelineMedia`), `nativeTimelineView.ts` (`nativeTimelineMediaSrc`) | Native media-handle registry + `synara-media` protocol | Image/audio/video/sticker/file render via opaque handles; parity with legacy renderers unproven on the selected path | Selected presenter renders every retained media/sticker row with native handles |
+| V-TIMELINE.C1 | Select presenter in RoomView | `synara/src/app/features/room/RoomView.tsx` | **DONE #285** — `NativeTimelinePresenter` | — | `RoomView` mounts `NativeTimelinePresenter` as the sole active timeline; no JS fallback route |
+| V-TIMELINE.C2 | Delete RoomTimeline + dead imports | `RoomTimeline.tsx`, `RoomTimeline.css.ts` | **DONE #289** | — | Files deleted; allowlist drop; shared notification/open utilities retained; no broken imports |
+| V-TIMELINE.C3 | Stream delta binding gaps | `synara/src/app/features/room/nativeTimelineView.ts` (`useNativeTimelineView`) | Native stream (`matrix-timeline-view-updated`) | Binding implemented: registers listener before open, keeps exact returned `streamId`, rejects revision gaps / malformed ops, aborts with session registry | **Checklist-only until live proof** — see [v-timeline-c3-stream-verify.md](v-timeline-c3-stream-verify.md) (#294). Blocked on: authenticated desktop session, C1/C2 merged (done), steps 1–6 + 8 pass live, step 7 fail-closed demonstrated once |
+| V-TIMELINE.C4 | Media / render parity gaps | `NativeTimelinePresenter.tsx` (`NativeTimelineMedia`), `nativeTimelineView.ts` (`nativeTimelineMediaSrc`) | Native media-handle registry + `synara-media` protocol | Image/audio/video/sticker/file render via opaque handles; parity with legacy renderers unproven on the selected path | Selected presenter renders every retained media/sticker row with native handles. **Unproven** — no live authenticated render proof yet; media rows are exercised as part of the C3 live proof steps (see [v-timeline-c3-stream-verify.md](v-timeline-c3-stream-verify.md)) |
 | V-TIMELINE.C5 | Pins / notes / jump residual | `NativeTimelinePresenter.tsx`, `nativeTimelineAction.ts`, `nativeLaterOwner.ts`, `nativeRoomNotesOwner.ts` | Native pin/later/notes/jump owners | Wired on the selected presenter; live authenticated proof unclaimed | Live proof for pin/unpin, Later/notes, jump-to-latest |
 
 ## 4. Native IPC already present (`matrix_timeline_*`)
@@ -77,6 +77,15 @@ Related non-`timeline` owners used by the presenter: `matrix_composer_{set,clear
   Selection was a single cutover (C1), not a toggle.
 - **Rewriting notifications** off `getLatestRoomTimeline` — residual; not this PR's full rewrite.
 - **product.rs** — out of scope for C2.
+
+## 5a. Related landed / in-flight (truth at tip `1695b9f7`)
+
+- **V-SEND.R-FORWARD #296 — LANDED** at tip. Legacy `MessageForwardItem` + `utils/forward.ts` deleted;
+  native `matrix_timeline_forward_*` is the sole forward path. Production import files **163**.
+- **V-SEND.R-PACK-READ #297 — NOT merged** (open at this tip). Native image-pack snapshot get +
+  `useImagePacks` fail-closed; do **not** claim it landed until the tip shows it. It owns
+  `image_packs.rs`, `nativeImagePack*`, `useImagePacks.ts`, and the `product.rs` pack commands —
+  out of scope here.
 
 ## 6. Self-eval confidence
 
