@@ -18,7 +18,8 @@ pub use error::AccountDataError;
 pub use image_packs::{
     set_global_image_packs, set_room_image_pack, set_user_image_pack, snapshot_global_image_packs,
     snapshot_room_image_packs, snapshot_user_image_pack, NativeGlobalImagePacksSnapshot,
-    NativeImagePack, NativeRoomImagePacksSnapshot, NativeUserImagePackSnapshot,
+    NativeImagePack, NativeImagePackOwner, NativeRoomImagePacksSnapshot,
+    NativeUserImagePackSnapshot, IMAGE_PACKS_UPDATED_EVENT,
 };
 pub use index::{
     AccountDataEntry, AccountDataIndex, MAX_CONTENT_FIELDS, MAX_GLOBAL_TYPES, MAX_KEY_LEN,
