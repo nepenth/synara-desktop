@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `95a6a71b` — after #288 scoreboard; #287 pack-read inventory; #284 CI; #240 contract; #279 loginUtil
-| Active work        | **#283** edit (CI); **this #285** C1 + **#289** C2; #290/#291 inventories landed; next pack-read implement + C3–C5
+| Integration tip    | `ab2169a5` — after #292 pack-write inventory; #291 avatar; #290 forward; #288 scoreboard; #287 pack-read; #284 CI; #240 contract; #279 loginUtil
+| Active work        | **#283** edit (CI); **this #285** C1 + **#289** C2; next pack-read implement + C3–C5
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | Desktop production import files **165** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
@@ -32,10 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip after #291** avatar inventory. **This PR #285** V-TIMELINE.C1 NativeTimelinePresenter owns RoomView. #283 edit CI; #289 C2 stacked. Next: C3–C5, pack-read implement. #39 gated. |
-| **Tip**        | after #291 |
+| **Now**        | **Tip `ab2169a5`**. **This PR #285** V-TIMELINE.C1 NativeTimelinePresenter owns RoomView. Landed #291 avatar + #292 pack-write. #283 edit CI; #289 C2 stacked. Next: C3–C5, pack-read implement. #39 gated. |
+| **Tip**        | `ab2169a5` |
 | **Active PRs** | [#283](https://github.com/nepenth/synara-desktop/pull/283) edit; **this** [#285](https://github.com/nepenth/synara-desktop/pull/285) C1; [#289](https://github.com/nepenth/synara-desktop/pull/289) C2. |
-| **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
@@ -70,6 +69,12 @@ Update rules:
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
 | current | **V-TIMELINE.C1** | **This PR** | `RoomView` mounts `NativeTimelinePresenter` only (sole owner). #289 C2 deletes `RoomTimeline`. dual_backend forbidden. |
+
+### 2026-08-01 — V-SEND.R-PACK-WRITE residual inventory
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.R-PACK-WRITE** | **Merged #292** | Docs-only inventory of sticker/emoji pack **write** residual (send native #264; read #287): pack settings write + PACK-UPLOAD. See [v-send-pack-write-residual.md](v-send-pack-write-residual.md). |
+
 ### 2026-08-01 — V-SEND.R-FORWARD residual inventory
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
