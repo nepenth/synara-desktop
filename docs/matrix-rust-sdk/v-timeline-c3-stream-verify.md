@@ -54,7 +54,9 @@ Run from the repository root before opening the desktop:
 
 ```sh
 git status --short --branch
+git branch --show-current
 git rev-parse HEAD
+git merge-base --is-ancestor 3d76402f7e8775256d4455947cba60080b9f706e HEAD
 node --version
 npm --version
 npm exec --yes --package=prettier@2.8.1 -- prettier --version
@@ -63,11 +65,12 @@ npm exec --yes --package=prettier@2.8.1 -- prettier --version
 Continue only when all of the following are true:
 
 - the proof is on `feature/matrix-rust-sdk-full-replacement` or a docs branch
-  whose checked-out base is that feature tip, never `main` or PR #39;
-- record `git rev-parse HEAD` as the **evidence tip** in the proof log (this
-  preflight was authored against `54b4dc4fa9c503fbf63d1c4fcf147299699b1477`); do not silently claim a
-  different SHA; if the branch is not based on
-  `feature/matrix-rust-sdk-full-replacement`, stop and record `Not confirmed`;
+  whose checked-out base is exactly feature tip
+  `3d76402f7e8775256d4455947cba60080b9f706e`, never `main` or PR #39. The
+  `git merge-base --is-ancestor` check must pass; if it fails, stop and record
+  `Not confirmed`;
+- record the exact output of `git rev-parse HEAD` as the **evidence head** in
+  the proof log. Do not silently substitute a different SHA or an older run;
 - the Prettier command reports `2.8.1`; and
 - the worktree has no unrelated changes that could affect the desktop run.
 
@@ -75,21 +78,47 @@ Continue only when all of the following are true:
 the current-JS Synapse control (`SYNARA_RUN_SYNAPSE_INTEGRATION=1` or
 `synara/scripts/run-synapse-two-client-integration.mjs`) as Rust live evidence.
 
-### 3.2 Homeserver and desktop launch
+### 3.2 Docker harness preflight
+
+The disposable Synapse topology is Docker-only. The checked-in
+`scripts/synapse-integration.sh` is the supported lifecycle entry point; it
+calls `docker compose` (Compose v2), starts the pinned Synapse/PostgreSQL
+containers, and waits for them to become ready. `npm run check:synapse-harness`
+checks repository invariants without Docker; it does not start Synapse and is
+not a substitute for this preflight.
+
+Install and start the Docker runtime before attempting the C3 session:
+
+- On macOS, install and launch [Docker Desktop](https://docs.docker.com/desktop/setup/install/).
+- On Linux, install [Docker Engine](https://docs.docker.com/engine/install/)
+  and the [Docker Compose plugin](https://docs.docker.com/compose/install/linux/),
+  then start the Docker daemon for the operator account.
+
+Verify the client, Compose v2, and daemon from the repository root:
+
+```sh
+command -v docker
+docker --version
+docker compose version
+docker info >/dev/null
+test -x scripts/synapse-integration.sh
+bash -n scripts/synapse-integration.sh
+```
+
+`docker compose version` must report Compose v2 and `docker info` must exit
+successfully. If `docker` is missing, Compose v2 is missing, the daemon is not
+running, or the host cannot pull the pinned images, stop before account setup;
+record the harness as `blocked` and keep C3 `Not confirmed`. Do not treat a
+Docker command-not-found error as live proof failure and do not substitute the
+current-JS integration runner.
+
+### 3.3 Homeserver and desktop launch
 
 The desktop has no `VITE_*` homeserver variable. The operator selects the
 homeserver in the auth screen. For a disposable local Synapse, use the
-checked-in harness and keep all generated credentials process-local:
-
-| Variable                                               | Example                  | Meaning and evidence rule                                                                                     |
-| ------------------------------------------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `SYNARA_PORT`                                          | `18008`                  | Non-secret loopback port used by the disposable Synapse harness; the desktop URL is `http://127.0.0.1:18008`. |
-| `SYNARA_MATRIX_HOMESERVER_URL`                         | `http://127.0.0.1:18008` | Only for explicitly gated Rust live-test commands; it is not the desktop launch input.                        |
-| `SYNARA_RUN_MATRIX_RUST_AUTH_LIVE`                     | `1`                      | Only enables the Rust auth-test gate; it does not prove the selected desktop presenter.                       |
-| `SYNARA_POSTGRES_PASSWORD`, `SYNARA_UID`, `SYNARA_GID` | generated                | Written to the ignored runtime file by the harness. Never set, print, commit, or paste their values.          |
-
-Start the disposable homeserver, create two test accounts through the normal
-harness command, and verify service state:
+checked-in harness only and keep all generated credentials process-local. Run
+the lifecycle commands in this order; `up` creates the ignored runtime state,
+and `status` must show both services before the desktop is opened:
 
 ```sh
 SYNARA_PORT=18008 scripts/synapse-integration.sh reset
@@ -98,6 +127,24 @@ scripts/synapse-integration.sh status
 scripts/synapse-integration.sh create-user  # primary desktop account
 scripts/synapse-integration.sh create-user  # second-client account
 ```
+
+The first `up` may pull the pinned images. Save only sanitized command results
+(`up`/`status` exit state, service state, loopback port, and cleanup state),
+never raw environment files, passwords, tokens, or full Docker paths.
+
+The runtime file retains the selected port after `up`; use the value printed by
+the harness as the authoritative homeserver port if it differs from the
+example. The harness owns generated files under
+`integration/synapse/runtime/`; do not edit or commit them.
+
+The supported variable surface is:
+
+| Variable                                               | Example                  | Meaning and evidence rule                                                                                     |
+| ------------------------------------------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `SYNARA_PORT`                                          | `18008`                  | Non-secret loopback port used by the disposable Synapse harness; the desktop URL is `http://127.0.0.1:18008`. |
+| `SYNARA_MATRIX_HOMESERVER_URL`                         | `http://127.0.0.1:18008` | Only for explicitly gated Rust live-test commands; it is not the desktop launch input.                        |
+| `SYNARA_RUN_MATRIX_RUST_AUTH_LIVE`                     | `1`                      | Only enables the Rust auth-test gate; it does not prove the selected desktop presenter.                       |
+| `SYNARA_POSTGRES_PASSWORD`, `SYNARA_UID`, `SYNARA_GID` | generated                | Written to the ignored runtime file by the harness. Never set, print, commit, or paste their values.          |
 
 Use the primary account in the Synara desktop. Create or select a disposable
 room, invite the second account through the normal Matrix UI, and authenticate
@@ -109,6 +156,11 @@ attempt, including a failed attempt:
 ```sh
 scripts/synapse-integration.sh reset
 ```
+
+If `up`, `status`, account creation, desktop launch, or the proof itself fails,
+run `reset` in a finally/cleanup step. A failed or skipped reset invalidates
+the attempt’s live evidence; it does not justify a retry with a different
+backend or a different base tip.
 
 Launch the desktop from the repository root:
 
@@ -123,7 +175,7 @@ that URL is the app shell, not the Matrix homeserver. After login, open
 `Settings → Diagnostics`, enable `Diagnostic Capture` and `Room State and
 Positioning` before opening the proof room, then return to the room.
 
-### 3.3 UI action to checklist mapping
+### 3.4 UI action to checklist mapping
 
 The visible labels below are the selected `NativeTimelinePresenter` controls.
 The UI is useful result corroboration; it does not by itself prove listener
@@ -156,7 +208,7 @@ native readbacks for `matrix_timeline_pin`/`unpin`, `matrix_later_*`,
 `matrix_room_notes_*`, and the stream swap. C5 also remains `Not confirmed`
 unless its own checklist is fully run.
 
-### 3.4 Evidence to paste
+### 3.5 Evidence to paste
 
 Paste one sanitized block per attempt. Keep the verdict conservative; do not
 replace `Not confirmed` with `Confirmed` from screenshots, unit tests, a
@@ -166,10 +218,19 @@ generated success label, or a retry that lacks the complete route chronology.
 proof: V-TIMELINE.C3
 verdict: Not confirmed | Failed | Confirmed
 base: feature/matrix-rust-sdk-full-replacement
-head: e4cf1a5f1d4c6127afd34f2b2f23d93400a03d45
+base-tip: 3d76402f7e8775256d4455947cba60080b9f706e
+head: <exact output of git rev-parse HEAD>
 operator: <name or team alias>
 platform: <macOS/Linux + desktop build or dev run>
-homeserver: http://127.0.0.1:18008
+docker: <client version, or missing>
+docker-compose: <Compose v2 version, or missing>
+docker-daemon: pass | fail | not run
+harness-script: pass | fail
+harness-up: pass | fail | blocked | not run
+harness-status: pass | fail | not run
+harness-reset: pass | fail | not run
+harness-port: <loopback port only>
+homeserver: loopback:<port>
 room: <redacted room alias>
 primary/second client: <redacted aliases and device labels>
 launch: pass | fail
@@ -186,6 +247,14 @@ native trace: <sanitized ordered events, revisions, and stream aliases>
 deviations: none | <exact deviation; any fallback/retry/manual correction is disqualifying>
 cleanup: pass | fail
 ```
+
+The Docker and harness fields prove only that the disposable test topology was
+available and cleaned up; they do not prove the native timeline route. The
+native trace and authoritative second-client readback must still cover the
+required S1–S7 chronology. Use `blocked` for an environment preflight that
+never reached the harness; use `Failed` only when the attempted C3 route
+produced a disqualifying observation. In either case, do not mark C3
+`Confirmed`.
 
 The exported Diagnostics report is privacy-filtered corroboration. Review it
 before sharing; it intentionally excludes secrets, server URLs, and Matrix
