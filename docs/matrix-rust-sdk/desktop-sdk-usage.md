@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |          153 |                2 |                   3 |
+| production |          152 |                2 |                   3 |
 | test       |           10 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |      **166** |                  |                     |
+| **total**  |      **165** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |   153 |
+| Production import files |   152 |
 | Test import files       |    10 |
-| Total import files      |   163 |
+| Total import files      |   162 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 153)
+- Production match: **no** (found 152)
 - Test match: **no** (found 10)
 
 ### Production files by bucket (desktop runtime only)
@@ -48,7 +48,7 @@ Expected **220** production and **12** test import files.
 | ---------------- | ----: |
 | client-lifecycle |     2 |
 | component        |    22 |
-| feature          |    54 |
+| feature          |    53 |
 | hook             |    43 |
 | media-boundary   |     1 |
 | page             |     8 |
@@ -59,13 +59,13 @@ Expected **220** production and **12** test import files.
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 153. Files with any finding: 155.
+Scope: **production only**. Import files: 152. Files with any finding: 154.
 
 ### Imported modules
 
 | Module path                                           | Import sites | Files |
 | ----------------------------------------------------- | -----------: | ----: |
-| `matrix-js-sdk`                                       |          147 |   147 |
+| `matrix-js-sdk`                                       |          146 |   146 |
 | `matrix-js-sdk/lib/types`                             |            9 |     9 |
 | `matrix-js-sdk/lib/matrixrtc/CallMembership`          |            4 |     4 |
 | `matrix-js-sdk/lib/models/relations`                  |            4 |     4 |
@@ -89,7 +89,7 @@ Scope: **production only**. Import files: 153. Files with any finding: 155.
 | `MatrixEvent`               |      27 |    23 |         4 |    27 |
 | `MatrixError`               |      21 |    21 |         0 |    21 |
 | `JoinRule`                  |      17 |    17 |         0 |    17 |
-| `RoomMember`                |      12 |    12 |         0 |    12 |
+| `RoomMember`                |      11 |    11 |         0 |    11 |
 | `ClientEvent`               |       8 |     8 |         0 |     8 |
 | `RoomEvent`                 |       8 |     8 |         0 |     8 |
 | `EventType`                 |       7 |     7 |         0 |     7 |
@@ -138,7 +138,7 @@ Scope: **production only**. Import files: 153. Files with any finding: 155.
 | `MatrixEvent`          |    27 |                 27 |
 | `Relations`            |     4 |                  4 |
 | `Room`                 |    73 |                 73 |
-| `RoomMember`           |    12 |                 12 |
+| `RoomMember`           |    11 |                 11 |
 | `RoomState`            |     2 |                  2 |
 | `createClient`         |     1 |                  1 |
 
@@ -443,7 +443,6 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `synara/src/app/features/common-settings/general/RoomProfile.tsx`                                                             | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/features/common-settings/general/RoomPublish.tsx`                                                             | production | yes     | feature          | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/types`                                                                                                                                |
 | `synara/src/app/features/common-settings/general/RoomUpgrade.tsx`                                                             | production | yes     | feature          | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/types`                                                                                                                                |
-| `synara/src/app/features/common-settings/members/Members.tsx`                                                                 | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/features/create-chat/CreateChat.tsx`                                                                          | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/features/create-room/CreateRoom.tsx`                                                                          | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/features/create-space/CreateSpace.tsx`                                                                        | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                           |

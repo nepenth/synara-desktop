@@ -6,8 +6,8 @@
 | Measured tip           | `3d76402f7e8775256d4455947cba60080b9f706e`                                        |
 | Base                   | `feature/matrix-rust-sdk-full-replacement`                                        |
 | Scope                  | Production `matrix-js-sdk` importers under `synara/src`                           |
-| Current importers      | **153**                                                                           |
-| P1.6 allowlist entries | **153**                                                                           |
+| Current importers      | **152**                                                                           |
+| P1.6 allowlist entries | **152**                                                                           |
 | Policy                 | Full replacement; `dual_backend` forbidden; fail-closed                           |
 | V-BURN                 | **Not started**; `active_slice` must not be `V-BURN`                              |
 | Hold                   | **V-BURN HOLD** (blockers #355); do not claim V-BURN-ready; **#39 remains gated** |
@@ -22,9 +22,9 @@ does not prove that the selected desktop route is currently using the JS SDK.
 The counts are taken from the generated [desktop SDK usage inventory](desktop-sdk-usage.md)
 and checked against a direct source import scan at the measured tip:
 
-- 153 production importer files under `synara/src`;
+- 152 production importer files under `synara/src`;
 - 10 test importer files under `synara/src` (not in this taxonomy);
-- 153 paths in [`p1.6-js-sdk-import-allowlist.json`](p1.6-js-sdk-import-allowlist.json);
+- 152 paths in [`p1.6-js-sdk-import-allowlist.json`](p1.6-js-sdk-import-allowlist.json);
 - the current production importer set exactly matches the allowlist.
 
 The generated inventory reports 155 production-role files because it also
@@ -32,7 +32,7 @@ records two production files with no SDK import. They are not counted here.
 
 ## Exhaustive primary path buckets
 
-These buckets are mutually exclusive and sum to all 153 current production
+These buckets are mutually exclusive and sum to all 152 current production
 importers. They are intentionally path-oriented; the semantic residual overlay
 below records the ownership that matters for migration sequencing.
 
@@ -48,7 +48,7 @@ below records the ownership that matters for migration sequencing.
 | `shared-type`      |       1 | Shared Matrix content/type constants                                                  |
 | `state`            |       5 | Room-list activity, drafts, and upload state                                          |
 | `utility`          |      10 | Matrix, notification, room, sync, timeline, and sorting helpers                       |
-| **Total**          | **153** | **Current production importer files**                                                 |
+| **Total**          | **152** | **Current production importer files**                                                 |
 
 ### `client-lifecycle` — 2
 
