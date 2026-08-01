@@ -40,6 +40,7 @@ import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useAlive } from '../../../hooks/useAlive';
 import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
 import { resolveMatrixThumbnailUrl, resolveOptionalMatrixMediaUrl } from '../../../matrix/media';
+import { setRoomAvatarNative, setRoomNameNative, setRoomTopicNative } from './nativeRoomProfile';
 
 type RoomProfileEditProps = {
   canEditAvatar: boolean;
@@ -90,16 +91,28 @@ export function RoomProfileEdit({
   const [submitState, submit] = useAsyncCallback(
     useCallback(
       async (roomAvatarMxc?: string | null, roomName?: string, roomTopic?: string) => {
+        // R-ROOM-PROFILE: native room name/topic/avatar writes are fail-closed
+        // on desktop. The JS mx.sendStateEvent paths are only for non-native web.
         if (roomAvatarMxc !== undefined) {
-          await mx.sendStateEvent(room.roomId, StateEvent.RoomAvatar as any, {
-            url: roomAvatarMxc,
-          });
+          const mxc = roomAvatarMxc || '';
+          const result = await setRoomAvatarNative(room.roomId, mxc);
+          if (result === 'legacy') {
+            await mx.sendStateEvent(room.roomId, StateEvent.RoomAvatar as any, {
+              url: roomAvatarMxc,
+            });
+          }
         }
         if (roomName !== undefined) {
-          await mx.sendStateEvent(room.roomId, StateEvent.RoomName as any, { name: roomName });
+          const result = await setRoomNameNative(room.roomId, roomName);
+          if (result === 'legacy') {
+            await mx.sendStateEvent(room.roomId, StateEvent.RoomName as any, { name: roomName });
+          }
         }
         if (roomTopic !== undefined) {
-          await mx.sendStateEvent(room.roomId, StateEvent.RoomTopic as any, { topic: roomTopic });
+          const result = await setRoomTopicNative(room.roomId, roomTopic);
+          if (result === 'legacy') {
+            await mx.sendStateEvent(room.roomId, StateEvent.RoomTopic as any, { topic: roomTopic });
+          }
         }
       },
       [mx, room.roomId]
