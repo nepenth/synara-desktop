@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Updated | 2026-08-01 |
-| Tip | `cd895575` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip | `324c40a4` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **159** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
 | Umbrella #39 | **Do not merge** without explicit user approval |
@@ -28,13 +28,14 @@
 | V-TIMELINE.C2 | **#289** delete `RoomTimeline` (imports **165→164**, allowlist **169→168**) |
 | V-SEND.R-FORWARD | **#296** legacy MessageForwardItem + forward.ts deleted |
 | V-TIMELINE residual truth | **#298** C1/C2 done notes |
-| V-SEND.R-PACK-READ | **#297** snapshot get + hooks fail-closed; **#318** live subscribe (`NativeImagePackOwner` → `matrix-image-packs-updated` re-snapshot; JS utils/room-resolution residual) |
+| V-SEND.R-PACK-READ | **#297** snapshot; **#318** subscribe; **#320** room ids without `mx.getRoom` (imports **163→159**, allowlist **167→163**); JS utils delete remains V-BURN-gated |
 | V-SEND.R-AVATAR-UPLOAD | **#303** native `matrix_upload_media` + set own avatar/display name; Profile.tsx fail-closed |
 | V-SEND.R-PACK-WRITE personal | **#306** `matrix_set_user_image_pack` + UserImagePack fail-closed |
 | V-SEND.R-PACK-WRITE global | **#309** `matrix_set_global_image_packs` + GlobalPacks fail-closed |
 | V-SEND.R-PACK-WRITE room | **#310** `matrix_set_room_image_pack` + RoomPacks/RoomImagePack fail-closed |
 | V-SEND.R-ROOM-PROFILE | **#313** `matrix_set_room_name`/`matrix_set_room_topic`/`matrix_set_room_avatar` + RoomProfile.tsx fail-closed |
 | V-SEND.R-PACK-UPLOAD | **#314** reuses `matrix_upload_media` via CompactUploadCardRenderer fail-closed (pack + compact image uploads) |
+| V-SEND.R-CALL-UPLOAD | **#328** `CallWidgetDriver.uploadFile` → `uploadCallWidgetFileWithNativeOwner` / `matrix_upload_media` fail-closed |
 | V-SEND.R-DEVTOOL | [Docs-only inventory](v-send-devtool-inventory.md): all three developer-tools runtime files still use the JS client; implementation remains low priority |
 | CI | Parallel Validate #284 |
 
@@ -42,8 +43,8 @@
 
 | PR | What |
 |----|------|
-| **#320 (this PR)** | Room→pack-room ids without `mx.getRoom`; inventory **163→159**, allowlist **167→163** |
-| (docs) | Next: pack-read **JS utils delete** remains gated on the non-native web fallback; **C3–C5** live verify |
+| **#325 (open)** | Video thumbnail upload via `uploadMediaNative` (msgContent belt-and-suspenders) |
+| (docs) | Next: pack-read **JS utils delete** (V-BURN-gated); **C3–C5** live verify; **R-GIF-PACK** |
 
 ## Left (ordered)
 
@@ -56,10 +57,10 @@
 
 ### Send / media residuals (inventories done; implement remains)
 - ~~**V-SEND.R-FORWARD**~~ **#296**
-- ~~**V-SEND.R-PACK-READ** snapshot~~ **#297**; ~~**subscribe**~~ **#318**; **#320 this PR** room-resolution by room id (JS utils deletion remains gated on the non-native web fallback)
+- ~~**V-SEND.R-PACK-READ** snapshot~~ **#297**; ~~**subscribe**~~ **#318**; ~~**room ids**~~ **#320** (JS utils deletion remains gated on the non-native web fallback)
 - ~~**V-SEND.R-PACK-WRITE** personal~~ **#306**; ~~**global**~~ **#309**; ~~**room**~~ **#310**; ~~**PACK-UPLOAD**~~ **#314** (reuses `matrix_upload_media` #303 via CompactUploadCardRenderer)
 - ~~**V-SEND.R-AVATAR-UPLOAD** user profile~~ **#303**; ~~**R-ROOM-PROFILE**~~ **#313** (room-avatar media upload covered by #314 CompactUploadCardRenderer path)
-- **V-SEND.R-CALL-UPLOAD** / **R-GIF-PACK** — [upload call-site audit](v-send-upload-residual-audit.md); composer/thumbnail usages are legacy-web fallbacks
+- ~~**V-SEND.R-CALL-UPLOAD**~~ **#328**; **R-GIF-PACK** remains; composer/thumbnail legacy-web fallbacks — [upload call-site audit](v-send-upload-residual-audit.md); **#325** open hardens msgContent thumbnails
 - **V-SEND.R-DEVTOOL** (implementation remains low priority; [inventory complete](v-send-devtool-inventory.md))
 
 ### Convergence
