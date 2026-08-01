@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `06709d31` — after #294 C3 checklist; #283 edit; #292 pack-write; #291 avatar; #290 forward; #288 scoreboard; #287 pack-read; #284 CI; #240 contract; #279 loginUtil
-| Active work        | **#285** C1 (CI) + **#289** C2 (draft stacked); next pack-read implement + C4–C5 live
+| Integration tip    | `1c514ecb` — after #293 scoreboard; #294 C3 checklist; #283 edit; #292 pack-write; #291 avatar; #290 forward
+| Active work        | **this #285** C1 + **#289** C2 (draft stacked); next pack-read implement + C4–C5 live
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | Desktop production import files **165** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `06709d31`**. Landed #283 edit + #290–#292 inventories + #294 C3 checklist. **This PR** scoreboard honesty. In flight: #285 C1 + #289 C2. Next: pack-read implement, C4–C5. #39 gated. |
-| **Tip**        | `06709d31` |
-| **Active PRs** | [#285](https://github.com/nepenth/synara-desktop/pull/285) C1 (ready/CI); [#289](https://github.com/nepenth/synara-desktop/pull/289) C2 draft; **this** scoreboard docs. |
+| **Now**        | **Tip `1c514ecb`**. **This PR #285** V-TIMELINE.C1 NativeTimelinePresenter owns RoomView. Landed #283 edit + #293 scoreboard + #294 C3 checklist. #289 C2 stacked. Next: pack-read implement, C4–C5. #39 gated. |
+| **Tip**        | `1c514ecb` |
+| **Active PRs** | **this** [#285](https://github.com/nepenth/synara-desktop/pull/285) C1; [#289](https://github.com/nepenth/synara-desktop/pull/289) C2 draft. |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
@@ -63,7 +63,7 @@ Update rules:
 ### 2026-08-01 — scoreboard after #290–#292 inventories
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| current | **Scoreboard** | **This PR** | Docs-only SCOREBOARD/PROGRESS honesty after forward #290, avatar #291, pack-write #292 inventories. Tip after #294 C3 checklist; production import files **165**. In flight: #285 C1, #289 C2. #39 still gated. |
+| current | **Scoreboard** | **Merged #293** | Docs-only SCOREBOARD/PROGRESS honesty after inventories + #283/#294 tip. Production import files **165**. In flight: #285 C1, #289 C2. #39 still gated. |
 
 ### 2026-08-01 — V-TIMELINE.C3 stream verify checklist
 | When (UTC) | Item | Result | Notes |
@@ -75,6 +75,11 @@ Update rules:
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
 | current | **V-SEND.R-AVATAR-UPLOAD** | **#291 merged** | Docs-only inventory of user + room avatar **upload** residual (grouped with R-ROOM-PROFILE): `Profile.tsx` (`mx.setAvatarUrl`/`mx.setDisplayName`), `RoomProfile.tsx` (`mx.sendStateEvent` m.room.avatar/name/topic), shared `state/upload.ts` + `utils/matrix.ts` `uploadContent` → `mx.uploadContent`. No native avatar IPC; native media upload only inside `matrix_send_attachment`. See [v-send-avatar-residual.md](v-send-avatar-residual.md). |
+
+### 2026-08-01 — V-TIMELINE.C1 presenter cutover
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-TIMELINE.C1** | **This PR** | `RoomView` mounts `NativeTimelinePresenter` only (sole owner). #289 C2 deletes `RoomTimeline`. dual_backend forbidden. |
 
 ### 2026-08-01 — V-SEND.R-PACK-WRITE residual inventory
 | When (UTC) | Item | Result | Notes |
