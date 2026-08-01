@@ -54,8 +54,8 @@ use crate::matrix::account_data::{
     add_room_to_mdirect, clear_completed_later_live, complete_later_item_live,
     complete_room_todo_item_live, delete_room_note_item_live, mark_later_reminded_live,
     move_room_todo_item_live, remove_room_from_mdirect, set_global_image_packs,
-    set_user_image_pack, snapshot_global_image_packs, snapshot_later, snapshot_mdirect,
-    snapshot_room_image_packs, snapshot_room_notes, snapshot_user_image_pack,
+    set_room_image_pack, set_user_image_pack, snapshot_global_image_packs, snapshot_later,
+    snapshot_mdirect, snapshot_room_image_packs, snapshot_room_notes, snapshot_user_image_pack,
     snooze_later_item_live, upsert_later_item, upsert_room_note_item,
     NativeGlobalImagePacksSnapshot, NativeLaterSnapshot, NativeMDirectMutationResult,
     NativeMDirectSnapshot, NativeRoomImagePacksSnapshot, NativeRoomNotesSnapshot,
@@ -1629,6 +1629,28 @@ pub async fn matrix_set_global_image_packs(
         active.client.clone()
     };
     set_global_image_packs(&client, content)
+        .await
+        .map_err(map_pack_write_error)?;
+    Ok(MatrixProfileWriteResult { status: "ok" })
+}
+
+/// V-SEND.R-PACK-WRITE — create/update/delete a `im.ponies.room_emotes` state
+/// pack for a room. Empty `{}` content deletes the state event. Fail-closed:
+/// when a native session is live this command is the only path; the JS
+/// `mx.sendStateEvent(PoniesRoomEmotes)` must not be used as a fallback.
+#[tauri::command]
+pub async fn matrix_set_room_image_pack(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    state_key: String,
+    content: serde_json::Value,
+) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
+    let client = {
+        let session = state.session.lock().await;
+        let active = require_session(session.as_ref())?;
+        active.client.clone()
+    };
+    set_room_image_pack(&client, &room_id, &state_key, content)
         .await
         .map_err(map_pack_write_error)?;
     Ok(MatrixProfileWriteResult { status: "ok" })

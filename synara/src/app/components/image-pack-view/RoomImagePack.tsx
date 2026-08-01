@@ -9,6 +9,7 @@ import { useRoomImagePack } from '../../hooks/useImagePacks';
 import { randomStr } from '../../utils/common';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
+import { setRoomImagePackNative } from '../../features/room/nativeImagePack';
 
 type RoomImagePackProps = {
   room: Room;
@@ -42,12 +43,18 @@ export function RoomImagePack({ room, stateKey }: RoomImagePackProps) {
       const { address } = imagePack;
       if (!address) return;
 
-      await mx.sendStateEvent(
-        address.roomId,
-        StateEvent.PoniesRoomEmotes as any,
-        packContent,
-        address.stateKey
-      );
+      // V-SEND.R-PACK-WRITE: native room-pack update is fail-closed on desktop.
+      // The JS mx.sendStateEvent(PoniesRoomEmotes) path is only for non-native
+      // web.
+      const result = await setRoomImagePackNative(address.roomId, address.stateKey, packContent);
+      if (result === 'legacy') {
+        await mx.sendStateEvent(
+          address.roomId,
+          StateEvent.PoniesRoomEmotes as any,
+          packContent,
+          address.stateKey
+        );
+      }
     },
     [mx, imagePack]
   );
