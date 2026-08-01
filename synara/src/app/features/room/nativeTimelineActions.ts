@@ -3,7 +3,8 @@
  *
  * Reply/rich send use `matrix_send_text` (optional `formattedBody` + `replyTo`).
  * Reactions use the merged V-SEND.2 owner (`nativeReactionOwner`). These helpers
- * do not select NativeTimelinePresenter or delete RoomTimeline.
+ * are consumed by NativeTimelinePresenter after V-TIMELINE.C1/C2 cutover
+ * (JS RoomTimeline deleted).
  */
 
 import type { DesktopInvokeResult } from '../../utils/desktop';

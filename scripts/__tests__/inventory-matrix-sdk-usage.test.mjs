@@ -81,7 +81,7 @@ test("classifies modules, buckets, roles, and runtime paths", () => {
   assert.equal(isMatrixSdkModule("not-matrix-js-sdk"), false);
 
   assert.equal(
-    classifyBucket("synara/src/app/features/room/RoomTimeline.tsx"),
+    classifyBucket("synara/src/app/features/room/RoomView.tsx"),
     "feature"
   );
   assert.equal(classifyBucket("synara/src/app/hooks/useCall.ts"), "hook");
@@ -479,15 +479,15 @@ test("repository inventory includes tooling dynamic import and records the curre
 
   assert.equal(
     baseline.productionImportFiles,
-    165,
-    `expected 165 desktop runtime production import files, found ${baseline.productionImportFiles}`
+    164,
+    `expected 164 desktop runtime production import files, found ${baseline.productionImportFiles}`
   );
   assert.equal(
     baseline.testImportFiles,
     10,
     `expected 10 desktop runtime test import files, found ${baseline.testImportFiles}`
   );
-  assert.equal(baseline.buckets.feature, 56);
+  assert.equal(baseline.buckets.feature, 55);
   assert.equal(baseline.buckets.hook, 45);
   assert.equal(baseline.buckets.component, 28);
   assert.equal(baseline.buckets.page, 8);

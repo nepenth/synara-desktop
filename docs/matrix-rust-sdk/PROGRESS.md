@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `1c514ecb` — after #293 scoreboard; #294 C3 checklist; #283 edit; #292 pack-write; #291 avatar; #290 forward
-| Active work        | **this #285** C1 + **#289** C2 (draft stacked); next pack-read implement + C4–C5 live
+| Integration tip    | `0c021419` — after #285 C1 cutover; #293 scoreboard; #294 C3 checklist; #283 edit
+| Active work        | **this #289** C2 delete RoomTimeline (after #285 C1); next pack-read implement + C3–C5 live proof
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | Desktop production import files **165** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `1c514ecb`**. **This PR #285** V-TIMELINE.C1 NativeTimelinePresenter owns RoomView. Landed #283 edit + #293 scoreboard + #294 C3 checklist. #289 C2 stacked. Next: pack-read implement, C4–C5. #39 gated. |
-| **Tip**        | `1c514ecb` |
-| **Active PRs** | **this** [#285](https://github.com/nepenth/synara-desktop/pull/285) C1; [#289](https://github.com/nepenth/synara-desktop/pull/289) C2 draft. |
+| **Now**        | **Tip `0c021419`**. **This PR #289** V-TIMELINE.C2: delete `RoomTimeline` after C1 (#285). C3 checklist #294. Next: pack-read implement, C3–C5 live. #39 gated. |
+| **Tip**        | `0c021419` |
+| **Active PRs** | **this** [#289](https://github.com/nepenth/synara-desktop/pull/289) C2. |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
@@ -60,10 +60,14 @@ Update rules:
 
 ## Work log (newest first)
 
+### 2026-08-01 — V-TIMELINE.C2 delete RoomTimeline
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-TIMELINE.C2** | **This PR** | Delete `RoomTimeline.tsx`/`RoomTimeline.css.ts` after C1 sole owner; allowlist/import ratchet. dual_backend forbidden. |
 ### 2026-08-01 — scoreboard after #290–#292 inventories
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| current | **Scoreboard** | **Merged #293** | Docs-only SCOREBOARD/PROGRESS honesty after inventories + #283/#294 tip. Production import files **165**. In flight: #285 C1, #289 C2. #39 still gated. |
+| current | **Scoreboard** | **Merged #293** | Docs-only SCOREBOARD/PROGRESS honesty after inventories + #283/#294 tip. Production import files **165**. In flight: #289 C2 (C1 #285 merged). #39 still gated. |
 
 ### 2026-08-01 — V-TIMELINE.C3 stream verify checklist
 | When (UTC) | Item | Result | Notes |
@@ -79,7 +83,7 @@ Update rules:
 ### 2026-08-01 — V-TIMELINE.C1 presenter cutover
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| current | **V-TIMELINE.C1** | **This PR** | `RoomView` mounts `NativeTimelinePresenter` only (sole owner). #289 C2 deletes `RoomTimeline`. dual_backend forbidden. |
+| current | **V-TIMELINE.C1** | **Merged #285** | `RoomView` mounts `NativeTimelinePresenter` only (sole owner). C2 deletes `RoomTimeline`. dual_backend forbidden. |
 
 ### 2026-08-01 — V-SEND.R-PACK-WRITE residual inventory
 | When (UTC) | Item | Result | Notes |
