@@ -102,7 +102,6 @@ import { settingsAtom } from '../../state/settings';
 import {
   getAudioMsgContent,
   getFileMsgContent,
-  getGifMsgContent,
   getImageMsgContent,
   getVideoMsgContent,
 } from './msgContent';
@@ -131,7 +130,7 @@ import {
   readPlatformClipboardImage,
   readPlatformClipboardText,
 } from '../../platform';
-import { fetchGifForUpload, gifPickerEnabled, gifSearchAvailable } from '../../utils/gifProvider';
+import { gifPickerEnabled, gifSearchAvailable } from '../../utils/gifProvider';
 import type { GifResult } from '../../utils/gifProvider';
 import { GifPicker } from './gif/GifPicker';
 import { clearRoomDraft, loadRoomDraft, saveRoomDraft } from '../../utils/drafts';
@@ -569,10 +568,10 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         if (!fileItem) throw new Error('Broken upload');
 
         if (fileItem.file.type.startsWith('image')) {
-          return getImageMsgContent(mx, fileItem, upload.mxc);
+          return getImageMsgContent(fileItem, upload.mxc);
         }
         if (fileItem.file.type.startsWith('video')) {
-          return getVideoMsgContent(mx, fileItem, upload.mxc);
+          return getVideoMsgContent(fileItem, upload.mxc);
         }
         if (fileItem.file.type.startsWith('audio')) {
           return getAudioMsgContent(fileItem, upload.mxc);
@@ -896,32 +895,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           ? replyDraft.relation.event_id
           : undefined;
       try {
-        const nativeOwner = await sendComposerGifWithNativeOwner(roomId, gif, replyTo, threadRoot);
-        if (nativeOwner === 'native') {
-          setReplyDraft(undefined);
-          setGifPickerAnchor(undefined);
-          return;
-        }
-
-        // Legacy web path — only when no native Matrix session is live.
-        const { blob, fileName } = await fetchGifForUpload(gif);
-        const gifFile = new File([blob], fileName, { type: 'image/gif' });
-        const encrypted = room.hasEncryptionStateEvent() ? await encryptFile(gifFile) : undefined;
-        const uploadFile = encrypted?.file ?? gifFile;
-        const upload = await mx.uploadContent(uploadFile, {
-          name: fileName,
-          type: 'image/gif',
-          includeFilename: true,
-        });
-        const mxc = upload.content_uri;
-        if (!mxc) throw new Error('Failed to upload GIF.');
-        await mx.sendMessage(
-          roomId,
-          addReplyRelationToContent(
-            getGifMsgContent(gif, mxc, blob.size, fileName, encrypted?.encInfo)
-          ) as any
-        );
-        clearReplyDraft();
+        await sendComposerGifWithNativeOwner(roomId, gif, replyTo, threadRoot);
+        setReplyDraft(undefined);
         setGifPickerAnchor(undefined);
       } catch (err) {
         setGifSendError(err instanceof Error ? err.message : 'Failed to send GIF.');

@@ -59,9 +59,9 @@ test('native logged-in session owns GIF send via matrix_send_attachment', async 
   assert.deepEqual(attachCall?.args?.bytes, Array.from(gifBytes));
 });
 
-test('web and logged-out sessions retain the legacy GIF owner', async () => {
-  assert.equal(
-    await sendGifWithNativeOwner(
+test('web and logged-out sessions fail closed without a legacy GIF owner', async () => {
+  await assert.rejects(
+    sendGifWithNativeOwner(
       { roomId: '!room:example.org', gif: sampleGif },
       false,
       async () => {
@@ -71,10 +71,10 @@ test('web and logged-out sessions retain the legacy GIF owner', async () => {
         throw new Error('fetch should not be called');
       }
     ),
-    'legacy'
+    /Native Matrix GIF send is unavailable/
   );
-  assert.equal(
-    await sendGifWithNativeOwner(
+  await assert.rejects(
+    sendGifWithNativeOwner(
       { roomId: '!room:example.org', gif: sampleGif },
       true,
       async () => ({ available: true, value: { status: 'logged_out' } }),
@@ -82,7 +82,7 @@ test('web and logged-out sessions retain the legacy GIF owner', async () => {
         throw new Error('fetch should not be called');
       }
     ),
-    'legacy'
+    /Native Matrix GIF send is unavailable/
   );
 });
 
