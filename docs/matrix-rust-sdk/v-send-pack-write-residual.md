@@ -119,13 +119,14 @@ implementation with a full `grep -rn "setAccountData\|sendStateEvent\|uploadCont
 over `custom-emoji`, `image-pack-view`, and the emoji/sticker settings dirs.
 
 
-## Implementation (personal pack slice)
+## Implementation (pack-write slices)
 
 Landed:
-- `matrix_set_user_image_pack` (native `im.ponies.user_emotes` write)
-- `UserImagePack.tsx` fail-closed via `setUserImagePackNative`
+- `matrix_set_user_image_pack` (native `im.ponies.user_emotes` write) — **#306**
+- `UserImagePack.tsx` fail-closed via `setUserImagePackNative` — **#306**
+- `matrix_set_global_image_packs` (native `im.ponies.emote_rooms` write) — **#309**
+- `GlobalPacks.tsx` fail-closed via `setGlobalImagePacksNative` — **#309**
 
 Remaining:
-- Global pack enable/disable (`PoniesEmoteRooms`) — `set_global_image_packs` helper exists in Rust but no IPC yet
-- Room pack create/update (`PoniesRoomEmotes`)
+- Room pack create/update/delete (`PoniesRoomEmotes` via `sendStateEvent`) — `RoomPacks.tsx` / `RoomImagePack.tsx` still on live JS client; no `matrix_set_room_image_pack` IPC yet
 - Pack image upload (PACK-UPLOAD)
