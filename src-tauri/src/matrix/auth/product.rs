@@ -5331,8 +5331,14 @@ mod tests {
         assert_eq!(parse_display_name("").unwrap(), None);
         assert_eq!(parse_display_name("   ").unwrap(), None);
         // Non-empty → trimmed Some.
-        assert_eq!(parse_display_name("  Alice  ").unwrap(), Some("Alice".to_owned()));
-        assert_eq!(parse_display_name("Alice").unwrap(), Some("Alice".to_owned()));
+        assert_eq!(
+            parse_display_name("  Alice  ").unwrap(),
+            Some("Alice".to_owned())
+        );
+        assert_eq!(
+            parse_display_name("Alice").unwrap(),
+            Some("Alice".to_owned())
+        );
     }
 
     #[test]
@@ -5361,7 +5367,9 @@ mod tests {
             "v-send.r-avatar-invalid-mxc"
         );
         assert_eq!(
-            parse_avatar_mxc("https://example.org/x.png").unwrap_err().diagnostic_id,
+            parse_avatar_mxc("https://example.org/x.png")
+                .unwrap_err()
+                .diagnostic_id,
             "v-send.r-avatar-invalid-mxc"
         );
     }
@@ -5381,7 +5389,9 @@ mod tests {
             "image/webp"
         );
         assert_eq!(
-            validate_avatar_mime("text/plain").unwrap_err().diagnostic_id,
+            validate_avatar_mime("text/plain")
+                .unwrap_err()
+                .diagnostic_id,
             "v-send.r-avatar-upload-invalid-mime"
         );
         assert_eq!(
