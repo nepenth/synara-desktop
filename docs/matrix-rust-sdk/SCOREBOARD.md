@@ -3,7 +3,7 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `1c9653b2` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip                                                    | `5d1fc28b` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **152** (plan baseline was **220**)                      |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
@@ -64,7 +64,8 @@ run passes the relevant checklist.
 
 | PR     | What                                                                                           |
 | ------ | ---------------------------------------------------------------------------------------------- |
-| (draft) | **CallWidget media config/download IPC** is in flight from packet #396; members-drawer residual is the next native read slice. This docs-only update claims no product implementation. |
+| [#405](https://github.com/nepenth/synara-desktop/pull/405) | **Members drawer/lobby/mentions native member wiring** — `ACCEPT_NITS` and CI are in flight; not merged at this tip. |
+| [#407](https://github.com/nepenth/synara-desktop/pull/407) | **CallWidget media config/download IPC** — review `REJECT` fix is in flight; not merged at this tip. |
 
 ## Left (finish-line order)
 
@@ -73,7 +74,8 @@ run passes the relevant checklist.
    invite/kick/ban/unban/setPowerLevel **#375 merged**; members-read first slice
    **#395** (`matrix_room_members_snapshot` + Members settings native). Residual:
    Room/MembersDrawer/Lobby/UserMentionAutocomplete member reads, power-level/creator
-   reads, and powers-bulk writes (packet **#388**). See
+   reads, and powers-bulk writes (packet **#388**). **#405** remains in flight
+   (`ACCEPT_NITS` + CI); its product wiring is not landed here. See
    [read residual inventory](v-rooms-members-read-residual.md),
    [P4.6 members](p4.6-members.md) and [P4.3 membership](p4.3-membership-unread.md).
 2. **V-TIMELINE.C3–C5 — live proofs.** All three remain **Not confirmed**
@@ -84,7 +86,7 @@ run passes the relevant checklist.
 3. **V-SEND.R-DEVTOOL — native full vertical.** Inventory remains; implement
    after C3–C5 live or explicit reorder. See
    [implementation gate](v-send-devtool-inventory.md#implementation-gate).
-4. **CallWidget media config/download IPC** (**implementation in flight**).
+4. **CallWidget media config/download IPC** (**#407 review `REJECT` fix in flight**).
    **#362** closed `getKnownRooms`
    natively and fail-closed the rest; **#387** docs scan of media download reuse
    landed. Still need native `getMediaConfig` / `downloadFile` owners (not JS
