@@ -110,4 +110,6 @@ pub fn matrix_auth_markers() -> &'static str {
 }
 
 #[cfg(test)]
+mod live_synapse_proof;
+#[cfg(test)]
 mod tests;
