@@ -23,7 +23,6 @@ import {
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
 import { useAtomValue } from 'jotai';
-import { Room } from 'matrix-js-sdk';
 import { useGlobalImagePacks, useRoomsImagePacks } from '../../../hooks/useImagePacks';
 import { SequenceCardStyle } from '../styles.css';
 import { SequenceCard } from '../../../components/sequence-card';
@@ -258,15 +257,8 @@ export function GlobalPacks({ onViewPack }: GlobalPacksProps) {
   const [menuCords, setMenuCords] = useState<RectCords>();
 
   const roomIds = useAtomValue(allRoomsAtom);
-  const rooms = useMemo(() => {
-    const rs: Room[] = [];
-    roomIds.forEach((rId) => {
-      const r = mx.getRoom(rId);
-      if (r) rs.push(r);
-    });
-    return rs;
-  }, [mx, roomIds]);
-  const roomsImagePack = useRoomsImagePacks(rooms);
+  // V-SEND.R-PACK-READ: pack loads by room id (native get); no mx.getRoom list.
+  const roomsImagePack = useRoomsImagePacks(roomIds);
   const nonGlobalPacks = useMemo(
     () =>
       roomsImagePack.filter(

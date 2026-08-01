@@ -280,41 +280,48 @@ export const useRoomImagePacks = (room: Room): ImagePack[] => {
   return roomPacks;
 };
 
-export const useRoomsImagePacks = (rooms: Room[]) => {
+export const useRoomsImagePacks = (roomIds: string[]) => {
   const mx = useMatrixClient();
-  const roomKey = rooms.map((r) => r.roomId).join(',');
-  const [roomPacks, setRoomPacks] = useState<ImagePack[]>(() =>
-    isSynaraDesktop() ? [] : rooms.flatMap(getRoomImagePacks)
-  );
+  const roomKey = roomIds.join(',');
+  const [roomPacks, setRoomPacks] = useState<ImagePack[]>(() => {
+    if (isSynaraDesktop()) return [];
+    return roomIds.flatMap((id) => {
+      const room = mx.getRoom(id);
+      return room ? getRoomImagePacks(room) : [];
+    });
+  });
   const [nativeActive, setNativeActive] = useState(false);
   const refreshToken = useNativeImagePackRefreshToken(nativeActive);
+
+  const loadLegacyPacks = useCallback(() => {
+    return roomIds.flatMap((id) => {
+      const room = mx.getRoom(id);
+      return room ? getRoomImagePacks(room) : [];
+    });
+  }, [mx, roomIds]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       if (!isSynaraDesktop()) {
         setNativeActive(false);
-        setRoomPacks(rooms.flatMap(getRoomImagePacks));
+        setRoomPacks(loadLegacyPacks());
         return;
       }
       try {
         const all: ImagePack[] = [];
-        let anyNative = false;
-        for (const room of rooms) {
-          const result = await getRoomImagePacksNative(room.roomId);
+        for (const roomId of roomIds) {
+          const result = await getRoomImagePacksNative(roomId);
           if (result === 'legacy') {
             setNativeActive(false);
-            setRoomPacks(rooms.flatMap(getRoomImagePacks));
+            setRoomPacks(loadLegacyPacks());
             return;
           }
-          anyNative = true;
           all.push(...result);
         }
         if (cancelled) return;
-        if (anyNative) {
-          setNativeActive(true);
-          setRoomPacks(all);
-        }
+        setNativeActive(true);
+        setRoomPacks(all);
       } catch {
         if (!cancelled) {
           setNativeActive(true);
@@ -325,7 +332,7 @@ export const useRoomsImagePacks = (rooms: Room[]) => {
     return () => {
       cancelled = true;
     };
-  }, [mx, roomKey, rooms, refreshToken]);
+  }, [mx, roomKey, roomIds, refreshToken, loadLegacyPacks]);
 
   useStateEventCallback(
     mx,
@@ -333,23 +340,24 @@ export const useRoomsImagePacks = (rooms: Room[]) => {
       (mEvent) => {
         if (nativeActive) return;
         if (
-          rooms.find((room) => room.roomId === mEvent.getRoomId()) &&
+          roomIds.includes(mEvent.getRoomId() ?? '') &&
           mEvent.getType() === StateEvent.PoniesRoomEmotes
         ) {
-          setRoomPacks(rooms.flatMap(getRoomImagePacks));
+          setRoomPacks(loadLegacyPacks());
         }
       },
-      [rooms, nativeActive]
+      [roomIds, nativeActive, loadLegacyPacks]
     )
   );
 
   return roomPacks;
 };
 
-export const useRelevantImagePacks = (usage: ImageUsage, rooms: Room[]): ImagePack[] => {
+/** roomIds: current room + parent space ids (from useImagePackRooms). */
+export const useRelevantImagePacks = (usage: ImageUsage, roomIds: string[]): ImagePack[] => {
   const userPack = useUserImagePack();
   const globalPacks = useGlobalImagePacks();
-  const roomsPacks = useRoomsImagePacks(rooms);
+  const roomsPacks = useRoomsImagePacks(roomIds);
 
   const relevantPacks = useMemo(() => {
     const packs = userPack ? [userPack] : [];
