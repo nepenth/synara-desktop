@@ -279,9 +279,12 @@ pub enum MatrixRoomCreateVisibility {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MatrixRoomCreatePreset {
-    PrivateChat,
-    PublicChat,
-    TrustedPrivateChat,
+    #[serde(rename = "private_chat")]
+    Private,
+    #[serde(rename = "public_chat")]
+    Public,
+    #[serde(rename = "trusted_private_chat")]
+    TrustedPrivate,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -4188,9 +4191,9 @@ fn build_room_create_request(
         Some(MatrixRoomCreateVisibility::Private) | None => Visibility::Private,
     };
     request.preset = preset.map(|preset| match preset {
-        MatrixRoomCreatePreset::PrivateChat => RoomPreset::PrivateChat,
-        MatrixRoomCreatePreset::PublicChat => RoomPreset::PublicChat,
-        MatrixRoomCreatePreset::TrustedPrivateChat => RoomPreset::TrustedPrivateChat,
+        MatrixRoomCreatePreset::Private => RoomPreset::PrivateChat,
+        MatrixRoomCreatePreset::Public => RoomPreset::PublicChat,
+        MatrixRoomCreatePreset::TrustedPrivate => RoomPreset::TrustedPrivateChat,
     });
     request.creation_content = creation_content;
     request.initial_state = initial_state;
@@ -6200,7 +6203,7 @@ mod tests {
             is_direct: false,
             invite: vec!["@alice:example.org".into()],
             visibility: Some(MatrixRoomCreateVisibility::Public),
-            preset: Some(MatrixRoomCreatePreset::PublicChat),
+            preset: Some(MatrixRoomCreatePreset::Public),
             creation_content: Some(MatrixRoomCreateContent {
                 room_type: Some("m.space".into()),
                 federate: Some(false),
