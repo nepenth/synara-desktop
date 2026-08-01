@@ -12,8 +12,7 @@ import { UnreadBadge } from '../../../components/unread-badge';
 import { allInvitesAtom } from '../../../state/room-list/inviteList';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
-import { useAccountData } from '../../../hooks/useAccountData';
-import { AccountDataEvent, SynaraLaterContent } from '../../../../types/matrix/accountData';
+import { laterContentAtom } from '../../../state/laterList';
 import { getLaterDueSummary } from '../../../utils/later';
 
 function InvitesNavItem() {
@@ -49,9 +48,7 @@ function InvitesNavItem() {
 
 function LaterNavItem() {
   const laterSelected = useInboxLaterSelected();
-  const laterContent = useAccountData(AccountDataEvent.SynaraLater)?.getContent() as
-    | SynaraLaterContent
-    | undefined;
+  const laterContent = useAtomValue(laterContentAtom);
   const laterSummary = getLaterDueSummary(laterContent);
   const laterCount = laterSummary.active;
   const dueLabel = [

@@ -178,7 +178,7 @@ async fn wait_for_target_in_open_timeline(
         sync_briefly(client).await;
         // Cold event-cache rooms need a /messages page before the target appears.
         let _ = registry
-            .paginate(client, room_id, NativeTimelineDirection::Backwards)
+            .paginate_legacy(client, room_id, NativeTimelineDirection::Backwards)
             .await;
         let snapshot = registry
             .snapshot(client, room_id)

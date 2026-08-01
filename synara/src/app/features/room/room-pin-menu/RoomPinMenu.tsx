@@ -1,7 +1,6 @@
 /* eslint-disable react/destructuring-assignment */
 import React, { forwardRef, MouseEventHandler, useCallback, useMemo, useRef } from 'react';
 import { MatrixEvent, Room } from 'matrix-js-sdk';
-import { RoomPinnedEventsEventContent } from 'matrix-js-sdk/lib/types';
 import {
   Avatar,
   Box,
@@ -43,13 +42,9 @@ import {
 import { UserAvatar } from '../../../components/user-avatar';
 import { getMxIdLocalPart } from '../../../utils/matrix';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import {
-  getEditedEvent,
-  getMemberAvatarMxc,
-  getMemberDisplayName,
-  getStateEvent,
-} from '../../../utils/room';
+import { getEditedEvent, getMemberAvatarMxc, getMemberDisplayName } from '../../../utils/room';
 import { GetContentCallback, MessageEvent, StateEvent } from '../../../../types/matrix/room';
+import { unpinWithNativeTimelineAction } from '../nativeTimelineAction';
 import { useMentionClickHandler } from '../../../hooks/useMentionClickHandler';
 import { useSpoilerClickHandler } from '../../../hooks/useSpoilerClickHandler';
 import {
@@ -117,15 +112,10 @@ function PinnedMessage({
   const mx = useMatrixClient();
 
   const [unpinState, unpin] = useAsyncCallback(
-    useCallback(() => {
-      const pinEvent = getStateEvent(room, StateEvent.RoomPinnedEvents);
-      const content = pinEvent?.getContent<RoomPinnedEventsEventContent>() ?? { pinned: [] };
-      const newContent: RoomPinnedEventsEventContent = {
-        pinned: content.pinned.filter((id) => id !== eventId),
-      };
-
-      return mx.sendStateEvent(room.roomId, StateEvent.RoomPinnedEvents as any, newContent);
-    }, [room, eventId, mx])
+    useCallback(
+      () => unpinWithNativeTimelineAction({ roomId: room.roomId, eventId }),
+      [room.roomId, eventId]
+    )
   );
 
   const handleOpenClick: MouseEventHandler = (evt) => {

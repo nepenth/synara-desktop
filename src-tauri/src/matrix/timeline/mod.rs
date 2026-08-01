@@ -17,17 +17,35 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+mod actions;
+mod composer;
 mod delta;
 mod error;
 mod focus;
 mod live;
+mod media;
 mod pagination;
 mod projection;
 mod registry;
 mod utd;
+mod view;
 
 #[cfg(test)]
 mod live_synapse_proof;
+
+pub use actions::{
+    format_forwarded_media_body, format_forwarded_plain_body, should_attach_formatted_body,
+    NativeTimelineActionKind, NativeTimelineActionReadback, NativeTimelineCallDeclineRequest,
+    NativeTimelineEditTextRequest, NativeTimelineForwardMediaRequest,
+    NativeTimelineForwardTextRequest, NativeTimelinePinRequest, NativeTimelinePollVoteRequest,
+    NativeTimelineRedactRequest, NativeTimelineReportRequest,
+    NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+};
+pub use composer::{
+    reply_draft_readback, ComposerDraftRegistry, NativeComposerReplyDraft,
+    NativeComposerReplyDraftReadback, NativeComposerReplyDraftRoomRequest,
+    NativeComposerSetReplyDraftRequest, NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION,
+};
 
 pub use delta::{TimelineDeltaBatch, TimelineDeltaOp, TimelineSnapshot};
 pub use error::TimelineError;
@@ -36,9 +54,17 @@ pub use focus::{
 };
 pub use live::{
     NativeDecryptionState, NativeReactionMutation, NativeReactionMutationResult,
-    NativeTimelineDirection, NativeTimelineEventReadback, NativeTimelineItem,
-    NativeTimelineReaction, NativeTimelineReactionSender, NativeTimelineRegistry,
-    NativeTimelineSnapshot, NativeUtdPhase, NativeUtdStatus,
+    NativeTimelineCloseRequest, NativeTimelineDirection, NativeTimelineEventReadback,
+    NativeTimelineItem, NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition,
+    NativeTimelineOpenReadback, NativeTimelineOpenRequest, NativeTimelineReaction,
+    NativeTimelineReactionSender, NativeTimelineReadAction, NativeTimelineReadStateReadback,
+    NativeTimelineReadStateRequest, NativeTimelineRegistry, NativeTimelineSnapshot,
+    NativeTimelineViewPaginationRequest, NativeTimelineViewportHint, NativeUtdPhase,
+    NativeUtdStatus, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
+};
+pub use media::{
+    is_timeline_media_handle, TimelineMediaRegistry, TimelineMediaSource,
+    TIMELINE_MEDIA_HANDLE_PREFIX,
 };
 pub use pagination::{
     DirectionStatus, PaginationDirection, PaginationOutcome, PaginationPhase, PaginationRequest,
@@ -47,6 +73,17 @@ pub use pagination::{
 pub use projection::{reconstruct, TimelineProjection};
 pub use registry::{TimelineEntry, TimelineKey, TimelineLifecycle, TimelineRegistry};
 pub use utd::{UtdEntry, UtdIndex, UtdPhase, UtdReasonCode, UtdUpdate, MAX_UTD_ENTRIES};
+pub use view::{
+    project_event_row, project_event_row_base, project_timeline_diffs,
+    project_timeline_diffs_with_media, project_timeline_item, project_timeline_item_with_media,
+    TimelineCallRow, TimelineEncryptedUnavailableRow, TimelineEventRowBase, TimelineMediaHandle,
+    TimelineMembershipRow, TimelineMessageRow, TimelineOtherRow, TimelinePageState,
+    TimelinePaginationState, TimelinePollRow, TimelineReaction, TimelineReadState,
+    TimelineRedactedRow, TimelineReplyPreview, TimelineRowCapabilities, TimelineStateRow,
+    TimelineThreadSummary, TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewDeltaOp,
+    TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot,
+    NATIVE_TIMELINE_VIEW_UPDATED_EVENT, TIMELINE_VIEW_SCHEMA_VERSION,
+};
 
 /// Static marker for link / schema smoke.
 pub const MATRIX_TIMELINE_MARKER: &str =

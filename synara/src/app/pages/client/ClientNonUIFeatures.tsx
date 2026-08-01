@@ -28,9 +28,8 @@ import { getMxIdLocalPart } from '../../utils/matrix';
 import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
-import { useAccountData } from '../../hooks/useAccountData';
-import { AccountDataEvent, SynaraLaterContent } from '../../../types/matrix/accountData';
-import { getSortedLaterItems, updateLaterContent } from '../../utils/later';
+import { getSortedLaterItems } from '../../utils/later';
+import { laterContentAtom } from '../../state/laterList';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { PerformanceDebugOverlay } from '../../components/performance/PerformanceDebugOverlay';
 import {
@@ -66,6 +65,7 @@ import {
 import { getLoadedLiveTimelineEvents } from '../../utils/timelineLifecycle';
 import { DesktopUpdaterProvider } from '../../features/desktop-updater/DesktopUpdaterProvider';
 import { ensureReactionWithNativeOwner } from '../../features/room/nativeReactionOwner';
+import { markLaterRemindedWithNativeOwner } from '../../features/room/nativeLaterOwner';
 
 const RECENT_AGENT_APPROVAL_MS = AGENT_APPROVAL_NATIVE_ACTION_TTL_MS;
 
@@ -241,8 +241,7 @@ function TrayDoNotDisturbSync() {
 function PlatformBadgeAndTrayUpdater() {
   const roomToUnread = useAtomValue(roomToUnreadAtom);
   const invites = useAtomValue(allInvitesAtom);
-  const laterEvent = useAccountData(AccountDataEvent.SynaraLater);
-  const laterContent = laterEvent?.getContent() as SynaraLaterContent | undefined;
+  const laterContent = useAtomValue(laterContentAtom);
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
 
   useEffect(() => {
@@ -753,8 +752,7 @@ function AgentApprovalNotifications() {
 function LaterReminderNotifications() {
   const mx = useMatrixClient();
   const { navigateRoom } = useRoomNavigate();
-  const laterEvent = useAccountData(AccountDataEvent.SynaraLater);
-  const laterContent = laterEvent?.getContent() as SynaraLaterContent | undefined;
+  const laterContent = useAtomValue(laterContentAtom);
   const reminders = useMemo(
     () => getSortedLaterItems(laterContent).filter((item) => item.kind === 'reminder'),
     [laterContent]
@@ -811,15 +809,8 @@ function LaterReminderNotifications() {
           notify('A saved reminder is due.', dueReminder.roomId, openEventId);
         }
       });
-      updateLaterContent(mx, (current) => {
-        const items = { ...(current.items ?? {}) };
-        dueReminders.forEach((dueReminder) => {
-          const item = items[dueReminder.id];
-          if (item?.kind === 'reminder' && item.dueTs === dueReminder.dueTs && !item.remindedAt) {
-            items[dueReminder.id] = { ...item, remindedAt: now };
-          }
-        });
-        return { ...current, items };
+      dueReminders.forEach((dueReminder) => {
+        void markLaterRemindedWithNativeOwner(dueReminder.id, now).catch(() => undefined);
       });
     };
 
