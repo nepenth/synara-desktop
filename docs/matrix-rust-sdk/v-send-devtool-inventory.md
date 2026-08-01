@@ -55,6 +55,18 @@ add an explicit native owner and fail closed on a live native session before
 removing these JS-client calls; it must not add a backend selector or a
 dual-client fallback.
 
+## Implementation gate
+
+R-DEVTOOL may start only after **V-TIMELINE.C3–C5 have confirmed live proofs**;
+it does not wait for V-BURN preparation, and it is not product work to start
+now. Keep **#327 V-BURN** on hold. When scheduled, implement the complete
+UI → Tauri IPC → live `matrix-sdk` vertical: room-state/account-data reads and
+subscriptions, raw state/timeline event reads and writes, and the existing
+permission/error semantics must all be native-owned. On a native session, a
+missing or failed native command, readback, session, or live Matrix client must
+fail closed in the UI; there must be no `matrix-js-sdk` fallback, backend
+selector, or dual backend.
+
 ## Documentation reconciliation
 
 - `docs/matrix-rust-sdk/v-send-residual-inventory.md` previously named only
