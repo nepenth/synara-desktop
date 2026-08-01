@@ -11,31 +11,31 @@
 >
 > [docs/matrix-rust-sdk/PROGRESS.md](https://github.com/nepenth/synara-desktop/blob/feature/matrix-rust-sdk-full-replacement/docs/matrix-rust-sdk/PROGRESS.md)
 
-| Field              | Value                                                                                                                                                                                                                                                                 |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Last updated (UTC) | **2026-08-01**
-| Integration tip    | `c22515fa` — after #331 GIF-PACK NOOP; #325 thumbnails; #320 pack room ids (159); #328 call-upload
-| Active work        | Next: pack-read JS utils (V-BURN); C3–C5 live; R-DEVTOOL low-pri
-| Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
-| Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
-| Import accounting  | Desktop production import files **159** on tip (plan baseline was 220). Allowlist **163**.
-| Dual backend       | **`false`** (forbidden forever)                                                                                                                                                                                                                                       |
-| Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                                                                                                                                                              |
-| Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                                                                                                                                                  |
-| Program index | [README.md](README.md)                                                                                                                                                                                                                                    |
-| Residual queue     | [d0-residual-completion.md](d0-residual-completion.md)                                                                                                                                                                                                                |
-| Umbrella → main    | [PR #39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without explicit user approval**                                                                                                                                                         |
+| Field              | Value                                                                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Last updated (UTC) | **2026-08-01**                                                                                                                       |
+| Integration tip    | `e38bfdab` — after #332 tip-honesty docs; #331 GIF-PACK NOOP; #325 thumbnails; #320 pack room ids (159); #328 call-upload            |
+| Active work        | Next: pack-read JS utils (V-BURN); C3–C5 live; R-DEVTOOL low-pri                                                                     |
+| Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
+| Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                         |
+| Import accounting  | Desktop production import files **159** on tip (plan baseline was 220). Allowlist **163**.                                           |
+| Dual backend       | **`false`** (forbidden forever)                                                                                                      |
+| Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                             |
+| Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                 |
+| Program index      | [README.md](README.md)                                                                                                               |
+| Residual queue     | [d0-residual-completion.md](d0-residual-completion.md)                                                                               |
+| Umbrella → main    | [PR #39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without explicit user approval**                        |
 
 ---
 
 ## Snapshot (read this first)
 
-|                |                                                                                                                                                                                                                                                                                                                                 |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `c22515fa`**. Landed #331 GIF-PACK NOOP, #325 thumbnails, #320 pack room ids (**159**), #328 call-upload. Next: JS utils delete (V-BURN); C3–C5 live. #39 gated. |
-| **Tip**        | `c22515fa` |
-| **Active PRs** | #327 V-BURN readiness docs (hold — late only). |
-| **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
+|                |                                                                                                                                                                                                        |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Now**        | **Tip `e38bfdab`**. Landed #332 tip-honesty docs after #331 GIF-PACK NOOP, #325 thumbnails, #320 pack room ids (**159**), and #328 call-upload. Next: JS utils delete (V-BURN); C3–C5 live. #39 gated. |
+| **Tip**        | `e38bfdab`                                                                                                                                                                                             |
+| **Active PRs** | this PR (CallWidgetDriver residual inventory); #327 V-BURN readiness docs (hold — late only).                                                                                                          |
+| **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked).                       |
 
 ---
 
@@ -60,323 +60,352 @@ Update rules:
 
 ## Work log (newest first)
 
+### 2026-08-01 — V-SEND.R-CALL-UPLOAD residual inventory after #328
+
+| When (UTC) | Item                             | Result                  | Notes                                                                                                                                                                                                                                                               |
+| ---------- | -------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **CallWidgetDriver JS surfaces** | **Docs-only inventory** | #328 upload is native-first/fail-closed through `matrix_upload_media`; `getMediaConfig`, `downloadFile`, and `getKnownRooms` remain JS widget-adjacent. No call-specific `createClient` path. See [v-send-call-widget-residual.md](v-send-call-widget-residual.md). |
+
 ### 2026-08-01 — V-SEND.R-GIF-PACK residual check
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-SEND.R-GIF-PACK** | **NOOP (docs-only)** | `gifProvider.ts:3-22,175-239` and `GifPicker.tsx:38-60,148-171` provide provider search/selection/download only; selected GIF send is native via `nativeSendGifOwner.ts:17-52` and `RoomInput.tsx:899-923`. No GIF pack/collection surface exists. #39 remains gated. |
+
+| When (UTC) | Item                  | Result               | Notes                                                                                                                                                                                                                                                                 |
+| ---------- | --------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-SEND.R-GIF-PACK** | **NOOP (docs-only)** | `gifProvider.ts:3-22,175-239` and `GifPicker.tsx:38-60,148-171` provide provider search/selection/download only; selected GIF send is native via `nativeSendGifOwner.ts:17-52` and `RoomInput.tsx:899-923`. No GIF pack/collection surface exists. #39 remains gated. |
 
 ### 2026-08-01 — scoreboard after #320 pack room ids + #328 call-upload
 
-| Field | Value |
-|-------|-------|
+| Field   | Value                  |
+| ------- | ---------------------- | ----------- | ------------------------------------------------------------------------------------------------- |
 | current | **Scoreboard honesty** | **This PR** | Tip `324c40a4`. Imports **159**. #320 room ids + #328 R-CALL-UPLOAD landed. #325 open. #39 gated. |
 
-
 ### 2026-08-01 — scoreboard after #318 pack-read subscribe
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **Scoreboard** | **This PR** | Honesty after #318 pack-read subscribe. Tip `95ad2656`. JS utils / useImagePackRooms residual. #39 gated. |
+
+| When (UTC) | Item           | Result      | Notes                                                                                                     |
+| ---------- | -------------- | ----------- | --------------------------------------------------------------------------------------------------------- |
+| current    | **Scoreboard** | **This PR** | Honesty after #318 pack-read subscribe. Tip `95ad2656`. JS utils / useImagePackRooms residual. #39 gated. |
 
 ### 2026-08-01 — V-SEND.R-PACK-READ subscribe
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-SEND.R-PACK-READ** | **Merged #318** | Session `NativeImagePackOwner` listens for ponies account-data/state; emits `matrix-image-packs-updated`; hooks re-snapshot via existing get IPC (fail-closed). No dual_backend. |
+
+| When (UTC) | Item                   | Result          | Notes                                                                                                                                                                            |
+| ---------- | ---------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-SEND.R-PACK-READ** | **Merged #318** | Session `NativeImagePackOwner` listens for ponies account-data/state; emits `matrix-image-packs-updated`; hooks re-snapshot via existing get IPC (fail-closed). No dual_backend. |
 
 ### 2026-08-01 — scoreboard after #314 PACK-UPLOAD
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **Scoreboard** | **This PR** | Honesty after #314 PACK-UPLOAD. Tip `25bfa150`. CompactUploadCardRenderer reuses `matrix_upload_media` fail-closed; pack-read subscribe residual. #39 gated. |
+
+| When (UTC) | Item           | Result      | Notes                                                                                                                                                        |
+| ---------- | -------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| current    | **Scoreboard** | **This PR** | Honesty after #314 PACK-UPLOAD. Tip `25bfa150`. CompactUploadCardRenderer reuses `matrix_upload_media` fail-closed; pack-read subscribe residual. #39 gated. |
 
 ### 2026-08-01 — V-SEND.R-PACK-UPLOAD
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-SEND.R-PACK-UPLOAD** | **Merged #314** | Desktop compact media upload (pack images/avatars + RoomProfile/PowersEditor) fail-closed via `matrix_upload_media`; never falls through to `mx.uploadContent` on native session. |
+
+| When (UTC) | Item                     | Result          | Notes                                                                                                                                                                             |
+| ---------- | ------------------------ | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-SEND.R-PACK-UPLOAD** | **Merged #314** | Desktop compact media upload (pack images/avatars + RoomProfile/PowersEditor) fail-closed via `matrix_upload_media`; never falls through to `mx.uploadContent` on native session. |
 
 ### 2026-08-01 — scoreboard after R-ROOM-PROFILE #313
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **Scoreboard** | **This PR** | Honesty after R-ROOM-PROFILE #313. Tip `4ce64909`. Room name/topic/avatar native fail-closed; pack-write personal #306 + global #309 + room #310 landed. **PACK-UPLOAD** residual remains (open **#314**). #39 gated. |
+
+| When (UTC) | Item           | Result      | Notes                                                                                                                                                                                                                 |
+| ---------- | -------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Scoreboard** | **This PR** | Honesty after R-ROOM-PROFILE #313. Tip `4ce64909`. Room name/topic/avatar native fail-closed; pack-write personal #306 + global #309 + room #310 landed. **PACK-UPLOAD** residual remains (open **#314**). #39 gated. |
 
 ### 2026-08-01 — V-SEND.R-ROOM-PROFILE room profile
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-SEND.R-ROOM-PROFILE** | **Merged #313** | Native `matrix_set_room_name`/`matrix_set_room_topic`/`matrix_set_room_avatar` + RoomProfile.tsx fail-closed on desktop; JS `sendStateEvent` only for non-native web. Room-avatar media upload residual remains (PACK-UPLOAD-adjacent). |
+
+| When (UTC) | Item                      | Result          | Notes                                                                                                                                                                                                                                   |
+| ---------- | ------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-SEND.R-ROOM-PROFILE** | **Merged #313** | Native `matrix_set_room_name`/`matrix_set_room_topic`/`matrix_set_room_avatar` + RoomProfile.tsx fail-closed on desktop; JS `sendStateEvent` only for non-native web. Room-avatar media upload residual remains (PACK-UPLOAD-adjacent). |
 
 ### 2026-08-01 — scoreboard after #310 room pack-write
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **Scoreboard** | **This PR** | Honesty after #310 room pack-write. Tip `980231f7`. Personal #306 + global #309 + room #310 landed; **PACK-UPLOAD** residual. #39 gated. |
+
+| When (UTC) | Item           | Result      | Notes                                                                                                                                    |
+| ---------- | -------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Scoreboard** | **This PR** | Honesty after #310 room pack-write. Tip `980231f7`. Personal #306 + global #309 + room #310 landed; **PACK-UPLOAD** residual. #39 gated. |
 
 ### 2026-08-01 — V-SEND.R-PACK-WRITE room packs
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-SEND.R-PACK-WRITE** | **Merged #310** | Native `matrix_set_room_image_pack` (`im.ponies.room_emotes`) + RoomPacks/RoomImagePack fail-closed on desktop; PACK-UPLOAD residual remains. |
+
+| When (UTC) | Item                    | Result          | Notes                                                                                                                                         |
+| ---------- | ----------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-SEND.R-PACK-WRITE** | **Merged #310** | Native `matrix_set_room_image_pack` (`im.ponies.room_emotes`) + RoomPacks/RoomImagePack fail-closed on desktop; PACK-UPLOAD residual remains. |
 
 ### 2026-08-01 — scoreboard after #309 global pack-write
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **Scoreboard** | **This PR** | Honesty after #309 global pack-write. Tip `de13b048`. Personal #306 + global #309 landed; room/PACK-UPLOAD residual. #39 gated. |
+
+| When (UTC) | Item           | Result      | Notes                                                                                                                           |
+| ---------- | -------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Scoreboard** | **This PR** | Honesty after #309 global pack-write. Tip `de13b048`. Personal #306 + global #309 landed; room/PACK-UPLOAD residual. #39 gated. |
 
 ### 2026-08-01 — V-SEND.R-PACK-WRITE global packs
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-SEND.R-PACK-WRITE** | **Merged #309** | Native `matrix_set_global_image_packs` (`im.ponies.emote_rooms`) + GlobalPacks.tsx fail-closed on desktop; room pack write residual remains. |
+
+| When (UTC) | Item                    | Result          | Notes                                                                                                                                        |
+| ---------- | ----------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-SEND.R-PACK-WRITE** | **Merged #309** | Native `matrix_set_global_image_packs` (`im.ponies.emote_rooms`) + GlobalPacks.tsx fail-closed on desktop; room pack write residual remains. |
 
 ### 2026-08-01 — scoreboard after #306 pack-write personal
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **Scoreboard** | **This PR** | Honesty after #306 personal pack-write. Tip `b21578e9`. Global/room/PACK-UPLOAD residual. #39 gated. |
+
+| When (UTC) | Item           | Result      | Notes                                                                                                |
+| ---------- | -------------- | ----------- | ---------------------------------------------------------------------------------------------------- |
+| current    | **Scoreboard** | **This PR** | Honesty after #306 personal pack-write. Tip `b21578e9`. Global/room/PACK-UPLOAD residual. #39 gated. |
 
 ### 2026-08-01 — V-SEND.R-PACK-WRITE personal pack
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-SEND.R-PACK-WRITE** | **Merged #306** | Native `matrix_set_user_image_pack` + UserImagePack.tsx fail-closed; global/room pack write residual remains. |
+
+| When (UTC) | Item                    | Result          | Notes                                                                                                         |
+| ---------- | ----------------------- | --------------- | ------------------------------------------------------------------------------------------------------------- |
+| current    | **V-SEND.R-PACK-WRITE** | **Merged #306** | Native `matrix_set_user_image_pack` + UserImagePack.tsx fail-closed; global/room pack write residual remains. |
 
 ### 2026-08-01 — scoreboard after #303 avatar
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **Scoreboard** | **This PR** | Honesty after #303 V-SEND.R-AVATAR-UPLOAD user profile. Tip `c42b93c5`. R-ROOM-PROFILE residual. Next: pack-write / subscribe. #39 gated. |
 
+| When (UTC) | Item           | Result      | Notes                                                                                                                                     |
+| ---------- | -------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Scoreboard** | **This PR** | Honesty after #303 V-SEND.R-AVATAR-UPLOAD user profile. Tip `c42b93c5`. R-ROOM-PROFILE residual. Next: pack-write / subscribe. #39 gated. |
 
 ### 2026-08-01 — V-SEND.R-AVATAR-UPLOAD user profile writes
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-SEND.R-AVATAR-UPLOAD** | **This PR** | Native `matrix_upload_media` + `matrix_set_own_avatar` + `matrix_set_own_display_name`; Profile.tsx fail-closed on desktop; room profile residual remains. |
+
+| When (UTC) | Item                       | Result      | Notes                                                                                                                                                      |
+| ---------- | -------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-SEND.R-AVATAR-UPLOAD** | **This PR** | Native `matrix_upload_media` + `matrix_set_own_avatar` + `matrix_set_own_display_name`; Profile.tsx fail-closed on desktop; room profile residual remains. |
 
 ### 2026-08-01 — V-SEND.R-PACK-READ residual truth-up after #297
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-SEND.R-PACK-READ** | **This PR** | Docs-only residual truth-up after #297 snapshot. Snapshot get DONE; remaining: `matrix_subscribe_image_packs` live push, physical delete of read-only `custom-emoji/utils.ts` helpers (write side #292 unaffected), JS `useImagePackRooms` room resolution. See [v-send-pack-read-residual.md](v-send-pack-read-residual.md). |
 
+| When (UTC) | Item                   | Result      | Notes                                                                                                                                                                                                                                                                                                                         |
+| ---------- | ---------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-SEND.R-PACK-READ** | **This PR** | Docs-only residual truth-up after #297 snapshot. Snapshot get DONE; remaining: `matrix_subscribe_image_packs` live push, physical delete of read-only `custom-emoji/utils.ts` helpers (write side #292 unaffected), JS `useImagePackRooms` room resolution. See [v-send-pack-read-residual.md](v-send-pack-read-residual.md). |
 
 ### 2026-08-01 — scoreboard after #297 pack-read
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **Scoreboard** | **This PR** | Honesty after #297 pack-read snapshot + #298 residual truth + #296 forward. Tip `83adef68`. Imports **163**. Next: pack-write / subscribe / avatar. #39 gated. |
 
+| When (UTC) | Item           | Result      | Notes                                                                                                                                                          |
+| ---------- | -------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Scoreboard** | **This PR** | Honesty after #297 pack-read snapshot + #298 residual truth + #296 forward. Tip `83adef68`. Imports **163**. Next: pack-write / subscribe / avatar. #39 gated. |
 
 ### 2026-08-01 — V-SEND.R-PACK-READ implement
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-SEND.R-PACK-READ** | **Merged #297** | Native `matrix_get_*_image_packs` + TS owner + `useImagePacks` fail-closed. Subscribe residual remains. dual_backend forbidden. |
 
+| When (UTC) | Item                   | Result          | Notes                                                                                                                           |
+| ---------- | ---------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-SEND.R-PACK-READ** | **Merged #297** | Native `matrix_get_*_image_packs` + TS owner + `useImagePacks` fail-closed. Subscribe residual remains. dual_backend forbidden. |
 
 ### 2026-08-01 — V-SEND.R-FORWARD residual close
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-SEND.R-FORWARD** | **This PR** | Delete legacy `MessageForwardItem` + `utils/forward.ts` after C1/C2; native presenter forward sole product path; allowlist **168→167**; prod import files **164→163**. |
+
+| When (UTC) | Item                 | Result      | Notes                                                                                                                                                                  |
+| ---------- | -------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-SEND.R-FORWARD** | **This PR** | Delete legacy `MessageForwardItem` + `utils/forward.ts` after C1/C2; native presenter forward sole product path; allowlist **168→167**; prod import files **164→163**. |
 
 ### 2026-08-01 — scoreboard after C1+C2
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **Scoreboard** | **This PR** | Honesty after #285 C1 + #289 C2. Tip `8995add1`. Production import files **164**. Next: pack-read implement / R-FORWARD. #39 gated. |
 
+| When (UTC) | Item           | Result      | Notes                                                                                                                               |
+| ---------- | -------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Scoreboard** | **This PR** | Honesty after #285 C1 + #289 C2. Tip `8995add1`. Production import files **164**. Next: pack-read implement / R-FORWARD. #39 gated. |
 
 ### 2026-08-01 — V-TIMELINE.C2 delete RoomTimeline
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-TIMELINE.C2** | **Merged #289** | Delete `RoomTimeline.tsx`/`RoomTimeline.css.ts` after C1 sole owner; allowlist 169→168; imports 165→164. dual_backend forbidden. |
+
+| When (UTC) | Item              | Result          | Notes                                                                                                                            |
+| ---------- | ----------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-TIMELINE.C2** | **Merged #289** | Delete `RoomTimeline.tsx`/`RoomTimeline.css.ts` after C1 sole owner; allowlist 169→168; imports 165→164. dual_backend forbidden. |
+
 ### 2026-08-01 — scoreboard after #290–#292 inventories
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **Scoreboard** | **Merged #293** | Docs-only SCOREBOARD/PROGRESS honesty after inventories + #283/#294 tip. Production import files **165**. In flight: #289 C2 (C1 #285 merged). #39 still gated. |
+
+| When (UTC) | Item           | Result          | Notes                                                                                                                                                           |
+| ---------- | -------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Scoreboard** | **Merged #293** | Docs-only SCOREBOARD/PROGRESS honesty after inventories + #283/#294 tip. Production import files **165**. In flight: #289 C2 (C1 #285 merged). #39 still gated. |
 
 ### 2026-08-01 — V-TIMELINE.C3 stream verify checklist
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-TIMELINE.C3** | **Merged #294** | Docs-only re-verify checklist for native stream/delta after C1/C2: S1–S7. See [v-timeline-c3-stream-verify.md](v-timeline-c3-stream-verify.md). |
+
+| When (UTC) | Item              | Result          | Notes                                                                                                                                           |
+| ---------- | ----------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-TIMELINE.C3** | **Merged #294** | Docs-only re-verify checklist for native stream/delta after C1/C2: S1–S7. See [v-timeline-c3-stream-verify.md](v-timeline-c3-stream-verify.md). |
 
 ### 2026-08-01 — V-TIMELINE.C4/C5 verify checklists
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-TIMELINE.C4/C5** | **Docs-only checklists** | C4 media/render parity + C5 pins/notes/jump live-proof checklists mirroring C3. No product code; live proof still unclaimed. See [v-timeline-c4-media-render-verify.md](v-timeline-c4-media-render-verify.md) and [v-timeline-c5-pins-notes-jump-verify.md](v-timeline-c5-pins-notes-jump-verify.md). |
 
+| When (UTC) | Item                 | Result                   | Notes                                                                                                                                                                                                                                                                                                 |
+| ---------- | -------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-TIMELINE.C4/C5** | **Docs-only checklists** | C4 media/render parity + C5 pins/notes/jump live-proof checklists mirroring C3. No product code; live proof still unclaimed. See [v-timeline-c4-media-render-verify.md](v-timeline-c4-media-render-verify.md) and [v-timeline-c5-pins-notes-jump-verify.md](v-timeline-c5-pins-notes-jump-verify.md). |
 
 ### 2026-08-01 — V-SEND.R-AVATAR-UPLOAD residual inventory
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-SEND.R-AVATAR-UPLOAD** | **#291 merged** | Docs-only inventory of user + room avatar **upload** residual (grouped with R-ROOM-PROFILE): `Profile.tsx` (`mx.setAvatarUrl`/`mx.setDisplayName`), `RoomProfile.tsx` (`mx.sendStateEvent` m.room.avatar/name/topic), shared `state/upload.ts` + `utils/matrix.ts` `uploadContent` → `mx.uploadContent`. No native avatar IPC; native media upload only inside `matrix_send_attachment`. See [v-send-avatar-residual.md](v-send-avatar-residual.md). |
+
+| When (UTC) | Item                       | Result          | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ---------- | -------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-SEND.R-AVATAR-UPLOAD** | **#291 merged** | Docs-only inventory of user + room avatar **upload** residual (grouped with R-ROOM-PROFILE): `Profile.tsx` (`mx.setAvatarUrl`/`mx.setDisplayName`), `RoomProfile.tsx` (`mx.sendStateEvent` m.room.avatar/name/topic), shared `state/upload.ts` + `utils/matrix.ts` `uploadContent` → `mx.uploadContent`. No native avatar IPC; native media upload only inside `matrix_send_attachment`. See [v-send-avatar-residual.md](v-send-avatar-residual.md). |
 
 ### 2026-08-01 — V-TIMELINE.C1 presenter cutover
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-TIMELINE.C1** | **Merged #285** | `RoomView` mounts `NativeTimelinePresenter` only (sole owner). C2 deletes `RoomTimeline`. dual_backend forbidden. |
+
+| When (UTC) | Item              | Result          | Notes                                                                                                             |
+| ---------- | ----------------- | --------------- | ----------------------------------------------------------------------------------------------------------------- |
+| current    | **V-TIMELINE.C1** | **Merged #285** | `RoomView` mounts `NativeTimelinePresenter` only (sole owner). C2 deletes `RoomTimeline`. dual_backend forbidden. |
 
 ### 2026-08-01 — V-SEND.R-PACK-WRITE residual inventory
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-SEND.R-PACK-WRITE** | **Merged #292** | Docs-only inventory of sticker/emoji pack **write** residual (send native #264; read #287): pack settings write + PACK-UPLOAD. See [v-send-pack-write-residual.md](v-send-pack-write-residual.md). |
+
+| When (UTC) | Item                    | Result          | Notes                                                                                                                                                                                              |
+| ---------- | ----------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-SEND.R-PACK-WRITE** | **Merged #292** | Docs-only inventory of sticker/emoji pack **write** residual (send native #264; read #287): pack settings write + PACK-UPLOAD. See [v-send-pack-write-residual.md](v-send-pack-write-residual.md). |
 
 ### 2026-08-01 — V-SEND.R-FORWARD residual inventory
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-SEND.R-FORWARD** | **#290 merged** | Docs-only inventory of message **forward** residual: send is already native (`matrix_timeline_forward_text`/`matrix_timeline_forward_media`); residual is the legacy `MessageForwardItem` dialog in `Message.tsx` + `utils/forward.ts` read helpers on live JS client. See [v-send-forward-residual.md](v-send-forward-residual.md). |
+
+| When (UTC) | Item                 | Result          | Notes                                                                                                                                                                                                                                                                                                                                |
+| ---------- | -------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| current    | **V-SEND.R-FORWARD** | **#290 merged** | Docs-only inventory of message **forward** residual: send is already native (`matrix_timeline_forward_text`/`matrix_timeline_forward_media`); residual is the legacy `MessageForwardItem` dialog in `Message.tsx` + `utils/forward.ts` read helpers on live JS client. See [v-send-forward-residual.md](v-send-forward-residual.md). |
 
 ### 2026-08-01 — progress honesty scoreboard
 
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **Integration tip** | `310f4487` | After #291 avatar + #290 forward inventory; #288 scoreboard |
-| current | **Auth residual** | **loginUtil DONE #279**; UIA multi-stage non-retention #280; discovery #276 | Desktop password fail-closed native-only |
-| current | **V-TIMELINE** | Contract **#240** merged; cutover map **#286**; C1 **#285** + C2 **#289** in flight | C3–C5 residual after C1/C2 land |
-| current | **V-SEND residual** | Poll-thread #282 DONE; edit #283 in flight; pack-read #287; forward #290; avatar #291 | Pack-read implement + avatar upload implement still open |
-| current | **CI** | Parallel Validate Rust∥Node **#284** | Path scopes; quality gates preserved |
-| current | **Import files (prod)** | **165** under synara/src | Down from plan 220 |
+| When (UTC) | Item                    | Result                                                                                | Notes                                                       |
+| ---------- | ----------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| current    | **Integration tip**     | `310f4487`                                                                            | After #291 avatar + #290 forward inventory; #288 scoreboard |
+| current    | **Auth residual**       | **loginUtil DONE #279**; UIA multi-stage non-retention #280; discovery #276           | Desktop password fail-closed native-only                    |
+| current    | **V-TIMELINE**          | Contract **#240** merged; cutover map **#286**; C1 **#285** + C2 **#289** in flight   | C3–C5 residual after C1/C2 land                             |
+| current    | **V-SEND residual**     | Poll-thread #282 DONE; edit #283 in flight; pack-read #287; forward #290; avatar #291 | Pack-read implement + avatar upload implement still open    |
+| current    | **CI**                  | Parallel Validate Rust∥Node **#284**                                                  | Path scopes; quality gates preserved                        |
+| current    | **Import files (prod)** | **165** under synara/src                                                              | Down from plan 220                                          |
 
 ### 2026-07-31 — V-SEND.R-PACK-READ residual inventory
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-SEND.R-PACK-READ** | **This PR** | Docs-only inventory of sticker/emoji pack **read** residual (send is native #264): `custom-emoji/utils.ts`, `useImagePacks.ts`, `useImagePackRooms.ts` + consumers read `PoniesEmoteRooms`/`PoniesRoomEmotes`/`PoniesUserEmotes` on live JS client. See [v-send-pack-read-residual.md](v-send-pack-read-residual.md). |
+
+| When (UTC) | Item                   | Result      | Notes                                                                                                                                                                                                                                                                                                                 |
+| ---------- | ---------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-SEND.R-PACK-READ** | **This PR** | Docs-only inventory of sticker/emoji pack **read** residual (send is native #264): `custom-emoji/utils.ts`, `useImagePacks.ts`, `useImagePackRooms.ts` + consumers read `PoniesEmoteRooms`/`PoniesRoomEmotes`/`PoniesUserEmotes` on live JS client. See [v-send-pack-read-residual.md](v-send-pack-read-residual.md). |
 
 ### 2026-07-31 — V-TIMELINE cutover approved + CI parallel Validate
 
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-TIMELINE cutover policy** | **Approved** | User: full steam js-sdk replacement; select presenter + delete RoomTimeline allowed; break/fix-forward OK. #39 still gated. |
-| current | **CI Validate** | **This PR** | Split Validate into parallel `validate-rust` + `validate-frontend` (same gates; less wall-clock). Path scopes for rust-only / frontend-only PRs. |
-| current | **Active product** | #279 loginUtil, #283 edit, #240 tip-merge | Serial `product.rs` residuals preferred after edit. |
-
+| When (UTC) | Item                          | Result                                    | Notes                                                                                                                                            |
+| ---------- | ----------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| current    | **V-TIMELINE cutover policy** | **Approved**                              | User: full steam js-sdk replacement; select presenter + delete RoomTimeline allowed; break/fix-forward OK. #39 still gated.                      |
+| current    | **CI Validate**               | **This PR**                               | Split Validate into parallel `validate-rust` + `validate-frontend` (same gates; less wall-clock). Path scopes for rust-only / frontend-only PRs. |
+| current    | **Active product**            | #279 loginUtil, #283 edit, #240 tip-merge | Serial `product.rs` residuals preferred after edit.                                                                                              |
 
 ### 2026-07-31 — tip after #282 V-SEND.R-POLL-THREAD
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **Password loginUtil residual** | **Active this PR** [#279](https://github.com/nepenth/synara-desktop/pull/279) | Desktop password login is **only** `matrix_login_password`; delete js `createClient`/`loginRequest` fallback from `loginUtil.ts`; SDK-neutralize `PasswordLoginForm`/`loginUtil`; allowlist **171→169**; production import files **169→167**. Tip base `f4addd6f` after #280. [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. See [v-auth-password-loginutil.md](v-auth-password-loginutil.md). |
-| current | **V-AUTH.3b login UIA stages** | **DONE #280** at `f4addd6f` | Product non-retention; no invented `matrix_uia_*`. See [v-auth-3b-uia-login-stage.md](v-auth-3b-uia-login-stage.md). |
-| current | **V-SEND.R-POLL-THREAD** | **DONE #282** at `42ef9127` | Native poll `threadRoot`/`replyTo`. |
-| current | **V-AUTH.3 loginFlows** | **DONE #276** at `4d33227f` | Native discovery; allowlist **175→171**. Stage residual closed as non-retention in #280. |
-| current | **V-TIMELINE** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | No cutover. |
+
+| When (UTC) | Item                            | Result                                                                        | Notes                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------- | ------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Password loginUtil residual** | **Active this PR** [#279](https://github.com/nepenth/synara-desktop/pull/279) | Desktop password login is **only** `matrix_login_password`; delete js `createClient`/`loginRequest` fallback from `loginUtil.ts`; SDK-neutralize `PasswordLoginForm`/`loginUtil`; allowlist **171→169**; production import files **169→167**. Tip base `f4addd6f` after #280. [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. See [v-auth-password-loginutil.md](v-auth-password-loginutil.md). |
+| current    | **V-AUTH.3b login UIA stages**  | **DONE #280** at `f4addd6f`                                                   | Product non-retention; no invented `matrix_uia_*`. See [v-auth-3b-uia-login-stage.md](v-auth-3b-uia-login-stage.md).                                                                                                                                                                                                                                                                                             |
+| current    | **V-SEND.R-POLL-THREAD**        | **DONE #282** at `42ef9127`                                                   | Native poll `threadRoot`/`replyTo`.                                                                                                                                                                                                                                                                                                                                                                              |
+| current    | **V-AUTH.3 loginFlows**         | **DONE #276** at `4d33227f`                                                   | Native discovery; allowlist **175→171**. Stage residual closed as non-retention in #280.                                                                                                                                                                                                                                                                                                                         |
+| current    | **V-TIMELINE**                  | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240)           | No cutover.                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 ### 2026-07-31 — tip after #276 V-AUTH.3
 
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| prior | **V-AUTH.3 loginFlows** | **DONE #276** at `4d33227f` | Native `matrix_login_flows` + `HttpLoginFlowTransport`; AuthFlowsLoader live `createClient`/`loginFlows()` deleted; allowlist **175→171**; production import files **172→169**. Residual: UIA stage execution for login; password `loginUtil` non-native fallback. |
-| prior | **V-TIMELINE** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | No cutover. |
-| prior | **Next free slot** | **password loginUtil / UIA stage** | Per residual execution order after discovery. |
+| When (UTC) | Item                    | Result                                                              | Notes                                                                                                                                                                                                                                                              |
+| ---------- | ----------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| prior      | **V-AUTH.3 loginFlows** | **DONE #276** at `4d33227f`                                         | Native `matrix_login_flows` + `HttpLoginFlowTransport`; AuthFlowsLoader live `createClient`/`loginFlows()` deleted; allowlist **175→171**; production import files **172→169**. Residual: UIA stage execution for login; password `loginUtil` non-native fallback. |
+| prior      | **V-TIMELINE**          | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | No cutover.                                                                                                                                                                                                                                                        |
+| prior      | **Next free slot**      | **password loginUtil / UIA stage**                                  | Per residual execution order after discovery.                                                                                                                                                                                                                      |
 
 ### 2026-07-31 — tip after #274 docs
 
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **Docs progress** | **Merged** [#274](https://github.com/nepenth/synara-desktop/pull/274) | Tip `48991e77` tracking after #266; free slot **V-AUTH.3**; #240 HOLD. |
-| current | **V-AUTH.4b register** | **DONE #266** at `bc9aa283` | Native registration; allowlist **191→175**. |
+| When (UTC) | Item                   | Result                                                                | Notes                                                                  |
+| ---------- | ---------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| current    | **Docs progress**      | **Merged** [#274](https://github.com/nepenth/synara-desktop/pull/274) | Tip `48991e77` tracking after #266; free slot **V-AUTH.3**; #240 HOLD. |
+| current    | **V-AUTH.4b register** | **DONE #266** at `bc9aa283`                                           | Native registration; allowlist **191→175**.                            |
 
 ### 2026-07-31 — tip after #266 V-AUTH.4b
 
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-AUTH.3 loginFlows** | **Active this PR** | Native `matrix_login_flows` + `HttpLoginFlowTransport`; `AuthFlowsLoader` deletes live `createClient`/`loginFlows()`; SDK-neutral login DTOs; allowlist **175→171**; production import files **172→169**. Residual: UIA stage execution for login (follow-on). See [v-auth-3-login-flows.md](v-auth-3-login-flows.md). |
-| current | Integration tip base | `48991e77` | After [#274](https://github.com/nepenth/synara-desktop/pull/274) docs; product tip after #266 was lagging in older progress rows. |
-| current | **V-TIMELINE** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | No cutover. |
+| When (UTC) | Item                    | Result                                                              | Notes                                                                                                                                                                                                                                                                                                                  |
+| ---------- | ----------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-AUTH.3 loginFlows** | **Active this PR**                                                  | Native `matrix_login_flows` + `HttpLoginFlowTransport`; `AuthFlowsLoader` deletes live `createClient`/`loginFlows()`; SDK-neutral login DTOs; allowlist **175→171**; production import files **172→169**. Residual: UIA stage execution for login (follow-on). See [v-auth-3-login-flows.md](v-auth-3-login-flows.md). |
+| current    | Integration tip base    | `48991e77`                                                          | After [#274](https://github.com/nepenth/synara-desktop/pull/274) docs; product tip after #266 was lagging in older progress rows.                                                                                                                                                                                      |
+| current    | **V-TIMELINE**          | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | No cutover.                                                                                                                                                                                                                                                                                                            |
 
 ### 2026-07-31 — tip after #266 V-AUTH.4b / #274 docs
 
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| prior | **V-AUTH.4b register** | **DONE #266** | Native `matrix_register` / `matrix_register_flows` / `matrix_register_request_email_token`; allowlist **191→175**; production import files **172**. Docs tip-fix [#274](https://github.com/nepenth/synara-desktop/pull/274) → `48991e77`. |
-| prior | **V-AUTH.3** | Was free-slot residual | inventory [#273](https://github.com/nepenth/synara-desktop/pull/273); now active implementation. |
-| prior | **V-TIMELINE** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | No cutover. |
+| When (UTC) | Item                   | Result                                                              | Notes                                                                                                                                                                                                                                     |
+| ---------- | ---------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| prior      | **V-AUTH.4b register** | **DONE #266**                                                       | Native `matrix_register` / `matrix_register_flows` / `matrix_register_request_email_token`; allowlist **191→175**; production import files **172**. Docs tip-fix [#274](https://github.com/nepenth/synara-desktop/pull/274) → `48991e77`. |
+| prior      | **V-AUTH.3**           | Was free-slot residual                                              | inventory [#273](https://github.com/nepenth/synara-desktop/pull/273); now active implementation.                                                                                                                                          |
+| prior      | **V-TIMELINE**         | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | No cutover.                                                                                                                                                                                                                               |
 
 ### 2026-07-31 — tip after #273 V-AUTH.3 inventory
 
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| prior | **V-AUTH.3 inventory** | **Merged** [#273](https://github.com/nepenth/synara-desktop/pull/273) | Integration tip was `04e63444`; docs-only UIA/login-flow inventory + slice plan. Implementation residual remains free slot. |
-| prior | **V-AUTH.4b register** | **Was active** [#266](https://github.com/nepenth/synara-desktop/pull/266) | Tip-merged through `04e63444`; now **DONE** at `bc9aa283`. |
-| prior | **V-TIMELINE** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | No cutover. |
+| When (UTC) | Item                   | Result                                                                    | Notes                                                                                                                       |
+| ---------- | ---------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| prior      | **V-AUTH.3 inventory** | **Merged** [#273](https://github.com/nepenth/synara-desktop/pull/273)     | Integration tip was `04e63444`; docs-only UIA/login-flow inventory + slice plan. Implementation residual remains free slot. |
+| prior      | **V-AUTH.4b register** | **Was active** [#266](https://github.com/nepenth/synara-desktop/pull/266) | Tip-merged through `04e63444`; now **DONE** at `bc9aa283`.                                                                  |
+| prior      | **V-TIMELINE**         | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240)       | No cutover.                                                                                                                 |
 
 ### 2026-07-31 — tip after #268 V-ROOMS.2c
 
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| prior | **V-ROOMS.2c** | **Merged** [#268](https://github.com/nepenth/synara-desktop/pull/268) | Integration tip was `ac6ae435`; native space children snapshot/set/remove/reparent; JS SpaceChild writers deleted; inventory **flat 184/197**; live proof unclaimed. #267 partial CLOSED in favor of #268. |
-| prior | **V-AUTH.4b register** | **Active** [#266](https://github.com/nepenth/synara-desktop/pull/266) | Still open; body keeps **V-AUTH.3** loginFlows residual. |
-| prior | **V-TIMELINE** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | No cutover. |
-| prior | **Next free slot** | **V-AUTH.3** | loginFlows / AuthFlowsLoader still js. |
+| When (UTC) | Item                   | Result                                                                | Notes                                                                                                                                                                                                      |
+| ---------- | ---------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| prior      | **V-ROOMS.2c**         | **Merged** [#268](https://github.com/nepenth/synara-desktop/pull/268) | Integration tip was `ac6ae435`; native space children snapshot/set/remove/reparent; JS SpaceChild writers deleted; inventory **flat 184/197**; live proof unclaimed. #267 partial CLOSED in favor of #268. |
+| prior      | **V-AUTH.4b register** | **Active** [#266](https://github.com/nepenth/synara-desktop/pull/266) | Still open; body keeps **V-AUTH.3** loginFlows residual.                                                                                                                                                   |
+| prior      | **V-TIMELINE**         | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240)   | No cutover.                                                                                                                                                                                                |
+| prior      | **Next free slot**     | **V-AUTH.3**                                                          | loginFlows / AuthFlowsLoader still js.                                                                                                                                                                     |
 
 ### 2026-07-31 — V-ROOMS.2c after #264/#270
 
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| prior | **V-ROOMS.2c** | **Was active** [#268](https://github.com/nepenth/synara-desktop/pull/268) | Local space graph + mutations; tip-merged after sticker/GIF + docs #270; now merged at `ac6ae435`. |
-| prior | **V-SEND sticker/GIF** | **Merged** [#264](https://github.com/nepenth/synara-desktop/pull/264) | Tip product `706bf608`; docs [#270](https://github.com/nepenth/synara-desktop/pull/270) → `00fb7788`. |
-| prior | **Next free slot** | **V-AUTH.3** | loginFlows / AuthFlowsLoader still js. |
+| When (UTC) | Item                   | Result                                                                    | Notes                                                                                                 |
+| ---------- | ---------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| prior      | **V-ROOMS.2c**         | **Was active** [#268](https://github.com/nepenth/synara-desktop/pull/268) | Local space graph + mutations; tip-merged after sticker/GIF + docs #270; now merged at `ac6ae435`.    |
+| prior      | **V-SEND sticker/GIF** | **Merged** [#264](https://github.com/nepenth/synara-desktop/pull/264)     | Tip product `706bf608`; docs [#270](https://github.com/nepenth/synara-desktop/pull/270) → `00fb7788`. |
+| prior      | **Next free slot**     | **V-AUTH.3**                                                              | loginFlows / AuthFlowsLoader still js.                                                                |
 
 ### 2026-07-31 — active residuals after #265
 
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **Docs progress** | **Merged** [#265](https://github.com/nepenth/synara-desktop/pull/265) | Tip `a677a80b832cbb79879da1b3dab1b9dd257df4d2` tracking after #263. |
-| current | **V-ROOMS.2c** | **Active drafts** [#268](https://github.com/nepenth/synara-desktop/pull/268) full / [#267](https://github.com/nepenth/synara-desktop/pull/267) writers-partial | Prefer #268 full vertical; close #267 when #268 lands. |
-| current | **V-AUTH.4b register** | **Active draft** [#266](https://github.com/nepenth/synara-desktop/pull/266) | CI: guardrail restore_session fix in flight. |
-| current | **V-SEND sticker/GIF** | **Active draft** [#264](https://github.com/nepenth/synara-desktop/pull/264) | rustfmt fix pushed. |
-| current | **V-TIMELINE** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | No cutover. |
+| When (UTC) | Item                   | Result                                                                                                                                                         | Notes                                                               |
+| ---------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| current    | **Docs progress**      | **Merged** [#265](https://github.com/nepenth/synara-desktop/pull/265)                                                                                          | Tip `a677a80b832cbb79879da1b3dab1b9dd257df4d2` tracking after #263. |
+| current    | **V-ROOMS.2c**         | **Active drafts** [#268](https://github.com/nepenth/synara-desktop/pull/268) full / [#267](https://github.com/nepenth/synara-desktop/pull/267) writers-partial | Prefer #268 full vertical; close #267 when #268 lands.              |
+| current    | **V-AUTH.4b register** | **Active draft** [#266](https://github.com/nepenth/synara-desktop/pull/266)                                                                                    | CI: guardrail restore_session fix in flight.                        |
+| current    | **V-SEND sticker/GIF** | **Active draft** [#264](https://github.com/nepenth/synara-desktop/pull/264)                                                                                    | rustfmt fix pushed.                                                 |
+| current    | **V-TIMELINE**         | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240)                                                                                            | No cutover.                                                         |
 
 ### 2026-07-31 — tip after #263
 
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-AUTH.4a password reset** | **Merged** [#263](https://github.com/nepenth/synara-desktop/pull/263) | Integration `5ae9da2f2cdc9fc9767f65f8e2a4cf48e5f13653`; native email-token + UIAA password change; JS owners deleted; inventory **187→184** / allowlist **194→191**. **V-AUTH.4b** registration remains residual. |
-| current | **V-AUTH.2 token login** | **Merged** [#262](https://github.com/nepenth/synara-desktop/pull/262) | Product non-retention close. |
-| current | **V-TIMELINE** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | Tip-merge OK; no presenter cutover / RoomTimeline deletion. |
+| When (UTC) | Item                         | Result                                                                | Notes                                                                                                                                                                                                             |
+| ---------- | ---------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-AUTH.4a password reset** | **Merged** [#263](https://github.com/nepenth/synara-desktop/pull/263) | Integration `5ae9da2f2cdc9fc9767f65f8e2a4cf48e5f13653`; native email-token + UIAA password change; JS owners deleted; inventory **187→184** / allowlist **194→191**. **V-AUTH.4b** registration remains residual. |
+| current    | **V-AUTH.2 token login**     | **Merged** [#262](https://github.com/nepenth/synara-desktop/pull/262) | Product non-retention close.                                                                                                                                                                                      |
+| current    | **V-TIMELINE**               | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240)   | Tip-merge OK; no presenter cutover / RoomTimeline deletion.                                                                                                                                                       |
 
 ### 2026-07-31 — tip after #262
 
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-AUTH.2 token login** | **Merged** [#262](https://github.com/nepenth/synara-desktop/pull/262) | Integration `56d1544e5473764f9aaed64e98e074c15aa3b105`; product non-retention. |
-| current | **V-AUTH.4a password reset** | **This PR** [#263](https://github.com/nepenth/synara-desktop/pull/263) | Native password reset; 4b residual. |
+| When (UTC) | Item                         | Result                                                                 | Notes                                                                          |
+| ---------- | ---------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| current    | **V-AUTH.2 token login**     | **Merged** [#262](https://github.com/nepenth/synara-desktop/pull/262)  | Integration `56d1544e5473764f9aaed64e98e074c15aa3b105`; product non-retention. |
+| current    | **V-AUTH.4a password reset** | **This PR** [#263](https://github.com/nepenth/synara-desktop/pull/263) | Native password reset; 4b residual.                                            |
 
 ### 2026-07-31 — tip after #258
 
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **V-SEND.5 threads** | **Merged** [#258](https://github.com/nepenth/synara-desktop/pull/258) | Integration `5c6e6e87eb5520e1a5953f06a03d9c4b26fbb7bf`; native composer thread send; Synapse thread-send proof Confirmed. |
-| current | **Docs remove handoffs** | **Merged** [#261](https://github.com/nepenth/synara-desktop/pull/261) | Public handoff docs removed. |
+| When (UTC) | Item                     | Result                                                                | Notes                                                                                                                     |
+| ---------- | ------------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-SEND.5 threads**     | **Merged** [#258](https://github.com/nepenth/synara-desktop/pull/258) | Integration `5c6e6e87eb5520e1a5953f06a03d9c4b26fbb7bf`; native composer thread send; Synapse thread-send proof Confirmed. |
+| current    | **Docs remove handoffs** | **Merged** [#261](https://github.com/nepenth/synara-desktop/pull/261) | Public handoff docs removed.                                                                                              |
 
 ### 2026-07-31 — tip after #261
 
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **Docs remove handoffs** | **Merged** [#261](https://github.com/nepenth/synara-desktop/pull/261) | Integration `d080156e30b28901959853e46b766deb56185619`; public SESSION-HANDOFF/CONTINUATION/implementation-handoff/orchestrator-loop removed. |
-| current | **V-SEND.5 threads** | **This PR** [#258](https://github.com/nepenth/synara-desktop/pull/258) | Native composer thread send; tip-merged after #261. |
-| current | **V-ROOMS.2b hierarchy** | **Merged** [#254](https://github.com/nepenth/synara-desktop/pull/254) | Integration `9c0b51e`; native lobby hierarchy summaries. |
+| When (UTC) | Item                     | Result                                                                 | Notes                                                                                                                                         |
+| ---------- | ------------------------ | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Docs remove handoffs** | **Merged** [#261](https://github.com/nepenth/synara-desktop/pull/261)  | Integration `d080156e30b28901959853e46b766deb56185619`; public SESSION-HANDOFF/CONTINUATION/implementation-handoff/orchestrator-loop removed. |
+| current    | **V-SEND.5 threads**     | **This PR** [#258](https://github.com/nepenth/synara-desktop/pull/258) | Native composer thread send; tip-merged after #261.                                                                                           |
+| current    | **V-ROOMS.2b hierarchy** | **Merged** [#254](https://github.com/nepenth/synara-desktop/pull/254)  | Integration `9c0b51e`; native lobby hierarchy summaries.                                                                                      |
 
 ### 2026-07-31 — tip sync at `9c0b51e` (after #254)
 
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| current | **Tip after #254** | **Merged** [#254](https://github.com/nepenth/synara-desktop/pull/254) | Integration `9c0b51e4d0706e7ad6cafe82172e3c9e8406fcea` — V-ROOMS.2b native hierarchy summaries. |
-| current | **Tip after #260** | **Merged** [#260](https://github.com/nepenth/synara-desktop/pull/260) | Integration `8accf77c548ec21c3c08ed457c878f6656bd0778` — gitignore local AI/agent operator tooling. |
-| current | **Docs handoff hygiene** | **Merged** [#256](https://github.com/nepenth/synara-desktop/pull/256) then removed in [#261](https://github.com/nepenth/synara-desktop/pull/261) | #256 briefly added Grok session handoff after #253; #261 removes public agent/session handoffs; program index is README + residual + PROGRESS only. |
-| current | **V-SEND.4 rich messages** | **Merged** [#253](https://github.com/nepenth/synara-desktop/pull/253) | Integration `b558344ee0f998ffb21edad13c6cb6806bd2d010`; native emote/notice/HTML/mentions/reply via `matrix_send_text`; not in flight. |
-| current | **V-ROOMS.5r m.direct users** | **Merged** [#252](https://github.com/nepenth/synara-desktop/pull/252) | Integration `9579ea4462cfce5b6974ff046c547d090866fc98`; native `userIds` owns `mDirectUsersAtom`; importers **187→187**. |
-| current | **V-SEND.3 polls** | **Merged** [#250](https://github.com/nepenth/synara-desktop/pull/250) | Integration `88ed14308227b2eec2bed4fc33d97cfa0a2270f3`; reviewed head `761d2ef`; Synapse native poll proof Confirmed. |
-| current | **V-ROOMS.2b hierarchy** | **Merged** [#254](https://github.com/nepenth/synara-desktop/pull/254) | Integration `9c0b51e4d0706e7ad6cafe82172e3c9e8406fcea`; native lobby hierarchy summaries; JS getRoomHierarchy/IHierarchyRoom deleted. |
-| current | **V-SEND.5 threads** | **Active draft** [#258](https://github.com/nepenth/synara-desktop/pull/258) | Tip-merged after #254; re-run CI then undraft/merge when green. |
-| current | **V-AUTH.2 token login** | **Active draft** [#262](https://github.com/nepenth/synara-desktop/pull/262) | Product non-retention close (not re-home). |
-| current | **V-AUTH.4a password reset** | **Active draft** [#263](https://github.com/nepenth/synara-desktop/pull/263) | Native password reset; **V-AUTH.4b** registration remains residual. |
-| current | **V-TIMELINE boundary** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | Implement/tip-merge OK; **do not claim cutover**; presenter unselected; no `RoomTimeline` deletion. |
-| current | **Docs remove handoffs** | **This PR** [#261](https://github.com/nepenth/synara-desktop/pull/261) | Public hygiene + progress/residual tip honesty. |
-| current | **D0.6 / L1 foundations** | **HOLD** | #221 plateau; parked L1 PRs; umbrella #39. |
+| When (UTC) | Item                          | Result                                                                                                                                           | Notes                                                                                                                                               |
+| ---------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Tip after #254**            | **Merged** [#254](https://github.com/nepenth/synara-desktop/pull/254)                                                                            | Integration `9c0b51e4d0706e7ad6cafe82172e3c9e8406fcea` — V-ROOMS.2b native hierarchy summaries.                                                     |
+| current    | **Tip after #260**            | **Merged** [#260](https://github.com/nepenth/synara-desktop/pull/260)                                                                            | Integration `8accf77c548ec21c3c08ed457c878f6656bd0778` — gitignore local AI/agent operator tooling.                                                 |
+| current    | **Docs handoff hygiene**      | **Merged** [#256](https://github.com/nepenth/synara-desktop/pull/256) then removed in [#261](https://github.com/nepenth/synara-desktop/pull/261) | #256 briefly added Grok session handoff after #253; #261 removes public agent/session handoffs; program index is README + residual + PROGRESS only. |
+| current    | **V-SEND.4 rich messages**    | **Merged** [#253](https://github.com/nepenth/synara-desktop/pull/253)                                                                            | Integration `b558344ee0f998ffb21edad13c6cb6806bd2d010`; native emote/notice/HTML/mentions/reply via `matrix_send_text`; not in flight.              |
+| current    | **V-ROOMS.5r m.direct users** | **Merged** [#252](https://github.com/nepenth/synara-desktop/pull/252)                                                                            | Integration `9579ea4462cfce5b6974ff046c547d090866fc98`; native `userIds` owns `mDirectUsersAtom`; importers **187→187**.                            |
+| current    | **V-SEND.3 polls**            | **Merged** [#250](https://github.com/nepenth/synara-desktop/pull/250)                                                                            | Integration `88ed14308227b2eec2bed4fc33d97cfa0a2270f3`; reviewed head `761d2ef`; Synapse native poll proof Confirmed.                               |
+| current    | **V-ROOMS.2b hierarchy**      | **Merged** [#254](https://github.com/nepenth/synara-desktop/pull/254)                                                                            | Integration `9c0b51e4d0706e7ad6cafe82172e3c9e8406fcea`; native lobby hierarchy summaries; JS getRoomHierarchy/IHierarchyRoom deleted.               |
+| current    | **V-SEND.5 threads**          | **Active draft** [#258](https://github.com/nepenth/synara-desktop/pull/258)                                                                      | Tip-merged after #254; re-run CI then undraft/merge when green.                                                                                     |
+| current    | **V-AUTH.2 token login**      | **Active draft** [#262](https://github.com/nepenth/synara-desktop/pull/262)                                                                      | Product non-retention close (not re-home).                                                                                                          |
+| current    | **V-AUTH.4a password reset**  | **Active draft** [#263](https://github.com/nepenth/synara-desktop/pull/263)                                                                      | Native password reset; **V-AUTH.4b** registration remains residual.                                                                                 |
+| current    | **V-TIMELINE boundary**       | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240)                                                                              | Implement/tip-merge OK; **do not claim cutover**; presenter unselected; no `RoomTimeline` deletion.                                                 |
+| current    | **Docs remove handoffs**      | **This PR** [#261](https://github.com/nepenth/synara-desktop/pull/261)                                                                           | Public hygiene + progress/residual tip honesty.                                                                                                     |
+| current    | **D0.6 / L1 foundations**     | **HOLD**                                                                                                                                         | #221 plateau; parked L1 PRs; umbrella #39.                                                                                                          |
 
 ### 2026-07-31 — public hygiene
 
-| When (UTC) | Item | Result | Notes |
-| --- | --- | --- | --- |
-| — | Remove agent/session handoff docs | **This PR** | SESSION-HANDOFF, CONTINUATION, implementation-handoff, orchestrator-loop, r0.2-e1-handoff removed; program index README.md |
+| When (UTC) | Item                              | Result      | Notes                                                                                                                      |
+| ---------- | --------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
+| —          | Remove agent/session handoff docs | **This PR** | SESSION-HANDOFF, CONTINUATION, implementation-handoff, orchestrator-loop, r0.2-e1-handoff removed; program index README.md |
 
 ### 2026-07-31 (UTC) — tip audit / residual close (historical)
 
-| When (UTC) | Item | Result | Notes |
-| ---------- | ---- | ------ | ----- |
-| earlier | **V-SEND.4 rich composer messages** | **Merged** [#253](https://github.com/nepenth/synara-desktop/pull/253) | Superseded in-flight claim; see tip-sync row above. |
-| earlier | **V-SEND.3 polls** | **Merged** [#250](https://github.com/nepenth/synara-desktop/pull/250) | Integration merge before #253; reviewed head `761d2ef`; Synapse native poll proof Confirmed. |
-| earlier | **V-ROOMS.5w m.direct writers** | **Merged** [#251](https://github.com/nepenth/synara-desktop/pull/251) | Integration `0fb0fe425ae932e27445b8054f3a14d628e5a869`; candidate `e4e2639` required CI green. Native add/remove own DM writers; JS helpers deleted; importers **187→187**. See [v-rooms-5w-mdirect-writers.md](v-rooms-5w-mdirect-writers.md). |
-| earlier | **V-ROOMS.5 m.direct read** | **Merged** [#249](https://github.com/nepenth/synara-desktop/pull/249) | Integration `d17ab2c0d72b129189a80d03bd0c1b56d6c230d6`; candidate `708aef7`. Production **189→187**, repository-wide **202→200**. |
-| earlier | **Docs/tracking audit** | **Merged** [#243](https://github.com/nepenth/synara-desktop/pull/243) | Tracking rewritten onto tip after #251; handoff docs later removed in #261. |
-| earlier | **V-TIMELINE boundary** | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240) | Incomplete contract; presenter unselected; no cutover. |
-| earlier | **D0.6 / L1 foundations** | **HOLD** | #221 plateau; parked L1 PRs #109/#193/#196/#198/#199/#201/#203/#204/#207/#208/#209; umbrella #39. |
+| When (UTC) | Item                                | Result                                                                | Notes                                                                                                                                                                                                                                           |
+| ---------- | ----------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| earlier    | **V-SEND.4 rich composer messages** | **Merged** [#253](https://github.com/nepenth/synara-desktop/pull/253) | Superseded in-flight claim; see tip-sync row above.                                                                                                                                                                                             |
+| earlier    | **V-SEND.3 polls**                  | **Merged** [#250](https://github.com/nepenth/synara-desktop/pull/250) | Integration merge before #253; reviewed head `761d2ef`; Synapse native poll proof Confirmed.                                                                                                                                                    |
+| earlier    | **V-ROOMS.5w m.direct writers**     | **Merged** [#251](https://github.com/nepenth/synara-desktop/pull/251) | Integration `0fb0fe425ae932e27445b8054f3a14d628e5a869`; candidate `e4e2639` required CI green. Native add/remove own DM writers; JS helpers deleted; importers **187→187**. See [v-rooms-5w-mdirect-writers.md](v-rooms-5w-mdirect-writers.md). |
+| earlier    | **V-ROOMS.5 m.direct read**         | **Merged** [#249](https://github.com/nepenth/synara-desktop/pull/249) | Integration `d17ab2c0d72b129189a80d03bd0c1b56d6c230d6`; candidate `708aef7`. Production **189→187**, repository-wide **202→200**.                                                                                                               |
+| earlier    | **Docs/tracking audit**             | **Merged** [#243](https://github.com/nepenth/synara-desktop/pull/243) | Tracking rewritten onto tip after #251; handoff docs later removed in #261.                                                                                                                                                                     |
+| earlier    | **V-TIMELINE boundary**             | **HOLD** [#240](https://github.com/nepenth/synara-desktop/pull/240)   | Incomplete contract; presenter unselected; no cutover.                                                                                                                                                                                          |
+| earlier    | **D0.6 / L1 foundations**           | **HOLD**                                                              | #221 plateau; parked L1 PRs #109/#193/#196/#198/#199/#201/#203/#204/#207/#208/#209; umbrella #39.                                                                                                                                               |
 
 ### 2026-07-30 (UTC) — active replacement queue
 
