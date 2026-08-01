@@ -2,8 +2,8 @@
 
 | Field          | Value                                                                 |
 | -------------- | --------------------------------------------------------------------- |
-| Status         | Candidate draft — not yet merged or runtime-proven                    |
-| Queue position | Residual after V-SEND.1 / V-SEND.5                                    |
+| Status         | **Merged #264** — live Synapse sticker/GIF proof remains pending         |
+| Queue position | Landed after V-SEND.1 / V-SEND.5                                      |
 | Owner          | `matrix_send_sticker` (`m.sticker`) + GIF via `matrix_send_attachment` |
 | JS fallback    | None once a native Matrix session is logged in                        |
 
@@ -26,6 +26,8 @@ Out of this slice (residuals):
 
 - emoji/sticker **pack settings** (`RoomPacks` / `GlobalPacks` account-data and
   state writes) — not send;
+- GIF provider search/selection has no pack or collection-management surface;
+  **V-SEND.R-GIF-PACK is a NOOP** on this tip;
 - native media **display** / authenticated media download for pack previews
   (V-TIMELINE / media);
 - poll-in-thread, avatar/profile/call/forward upload paths;
@@ -54,6 +56,9 @@ send APIs.
   `matrix_send_sticker`.
 - Injectable frontend owner-route tests prove no legacy fallback when native.
 - Rust unit tests for sticker content (MXC validation, info, reply/thread).
+- Native GIF owner tests prove `image/gif` bytes reach
+  `matrix_send_attachment`, and native command failure does not fall through
+  to JS upload/send.
 - Direct `matrix-js-sdk` importer delta expected **zero** (inline RoomInput
   owners; pack settings retain JS). Scoped method residual: `sendEvent` /
   `uploadContent` / `sendMessage` still appear for legacy web + other

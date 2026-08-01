@@ -72,16 +72,17 @@ download / V-TIMELINE). The pack **read/write** residuals above are the
 account-data/state-event owners; the actual media bytes for previews belong to
 the media vertical (V-TIMELINE / #240 HOLD).
 
-### 3.2 GIF — send native, display/pack residual
+### 3.2 GIF — send native, picker is search-only
 
 GIF **send** is native (#264, `image/gif` bytes over `matrix_send_attachment`).
-The residual is **display** (GIF playback in timeline) and any GIF **pack**
-management, both media-adjacent.
+The picker is provider-backed search plus one-shot download; the audit found no
+GIF pack or collection-management product surface. See
+[v-send-gif-pack-audit.md](v-send-gif-pack-audit.md).
 
 | Path | Current owner | Native gap | Proposed residual ID |
 |------|---------------|------------|----------------------|
 | Timeline GIF rendering | `RoomTimeline` / media renderers (V-TIMELINE scope) | GIF playback/display not on native DTO path | **V-TIMELINE** (do not edit #240) |
-| GIF picker pack/collection management | `gifProvider` / picker | No native GIF collection ownership (send-only is native) | **V-SEND.R-GIF-PACK** |
+| GIF picker search/download | `gifProvider` / `GifPicker` | No Matrix collection state or mutation exists; send ownership is already native | **NOOP** — [audit](v-send-gif-pack-audit.md) |
 
 ### 3.3 Avatar upload (user + room) — fully residual
 
@@ -146,7 +147,7 @@ methods that remain reachable on a native session are the residuals in §3.3–�
 | **V-SEND.R-PACK-READ** | Sticker/emoji pack read + subscription (`PoniesEmoteRooms` / `PoniesRoomEmotes` / `PoniesUserEmotes`) | `custom-emoji/utils.ts`, `useImagePacks.ts`, `EmojiBoard.tsx` | No native pack-read projection/subscription |
 | **V-SEND.R-PACK-WRITE** | Sticker/emoji pack settings writes (add/remove/enable/update) | `RoomPacks.tsx`, `GlobalPacks.tsx`, `UserPack.tsx`, `RoomImagePack.tsx`, `UserImagePack.tsx` | No native `PoniesRoomEmotes` / `PoniesEmoteRooms` / `PoniesUserEmotes` writes |
 | **V-SEND.R-PACK-UPLOAD** | Pack image/avatar byte upload | `ImageTile.tsx`, `PackMeta.tsx` via `state/upload.ts` → `mx.uploadContent` | No native pack-media upload |
-| **V-SEND.R-GIF-PACK** | GIF picker pack/collection management (send is native) | `gifProvider` / picker | No native GIF collection ownership |
+| **V-SEND.R-GIF-PACK** | Historical GIF picker pack/collection label | None — no GIF collection surface exists on the measured tip | **NOOP** — [audit](v-send-gif-pack-audit.md) |
 | **V-SEND.R-AVATAR-UPLOAD** | User avatar upload + profile read | `Profile.tsx`, `useUserProfile.ts` | No native `setAvatarUrl` / profile read |
 | **V-SEND.R-ROOM-PROFILE** | Room avatar/name/topic writes | `RoomProfile.tsx` | No native `RoomAvatar`/`RoomName`/`RoomTopic` state writes |
 | **V-SEND.R-CALL-UPLOAD** | Call widget media upload/download | `CallWidgetDriver.ts` | No native widget media upload |
@@ -176,10 +177,13 @@ methods that remain reachable on a native session are the residuals in §3.3–�
 **Confidence: high** for the inventory. I traced every `RoomInput` send path
 (text/attachment/sticker/GIF/poll) and confirmed each is native-first with a
 fail-closed legacy branch. I enumerated the remaining send/media-adjacent
-residuals: pack settings/preview (read/write/upload), GIF display/pack, avatar
+residuals: pack settings/preview (read/write/upload), GIF display, avatar
 upload (user + room), call-widget upload, message forward, poll-in-thread, and
 message edit. I verified there is **no** native avatar/profile/room-profile
 write command on tip, so those residuals are fully on the live JS client.
+The separate [GIF-pack audit](v-send-gif-pack-audit.md) found no GIF
+collection-management surface, so it is a documentation NOOP rather than a
+native residual.
 
 **Possible missed files:**
 - `synara/src/app/state/upload.ts` — the shared `uploadContent` wrapper used by

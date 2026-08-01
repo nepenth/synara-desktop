@@ -20,6 +20,7 @@ native happy path.
 | ---- | -------------- |
 | Composer text (incl. emote/notice/rich HTML) | `RoomInput` → `sendPlainTextWithNativeOwner` → `matrix_send_text` (`replyTo` + `threadRoot`) → `message_content` → `Relation::Thread(Thread::reply\|without_fallback)` → `Room::send` |
 | Composer attachments | `RoomInput` → `sendComposerAttachmentsWithNativeOwner` → `matrix_send_attachment` (`replyTo` + `threadRoot`) → `EnforceThread::Threaded(ReplyWithinThread::Yes)` when `threadRoot` is set |
+| Composer GIF | `RoomInput` → `sendComposerGifWithNativeOwner` → `fetchGifForUpload` → `matrix_send_attachment` (`image/gif`, `replyTo` + `threadRoot`) |
 
 On a desktop **native logged-in** session, command absence or failure is
 terminal and never falls through to `mx.sendMessage` / JS relation construction
@@ -52,24 +53,24 @@ No tokens, keys, ciphertext, or raw SDK errors cross IPC. Results remain
 
 ## Superseded JS ownership
 
-For **composer text and attachment** on a native session, the authoritative
+For **composer text, attachment, and GIF** on a native session, the authoritative
 relation write is Rust. The legacy `getReplyRelation` / `content['m.relates_to']`
 path remains **only** for:
 
 1. Web / native-logged-out sessions (legacy owner retained), and
-2. Residual composers not yet on native send (stickers, GIFs).
+2. Other explicitly inventoried residual product paths.
 
 This slice does **not** delete whole `matrix-js-sdk` importer files: the same
-`RoomInput` file still uses the JS client for stickers/GIFs and for non-native
-sessions. Physical owner deletion for this capability is the native-session
-fail-closed route plus IPC ownership of `m.thread` for text/attachment.
+`RoomInput` file still uses the JS client for legacy web sessions and other
+residual paths. Physical owner deletion for this capability is the
+native-session fail-closed route plus IPC ownership of `m.thread` for each
+native composer sender.
 
 ## Out of scope / residual (named)
 
 | Residual | Owner / follow-up |
 | -------- | ----------------- |
-| Sticker send with thread/reply relation (`mx.sendEvent` + `addReplyRelationToContent`) | Future sticker/media vertical |
-| GIF send with thread/reply (`mx.uploadContent` + `mx.sendMessage`) | Future GIF vertical / V-SEND media residual |
+| GIF picker pack/collection management | **NOOP** — no such product surface exists on this tip; selected GIF send is native (#264) |
 | Poll start/response in a thread | V-SEND.3 residual if product adds draft threading to polls |
 | Thread list / summary SDK subscription & UI | P5.8 harness only today; timeline/list vertical |
 | Thread-focused timeline / open-thread view cutover | V-TIMELINE (do not edit #240) |
