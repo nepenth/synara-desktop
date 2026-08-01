@@ -270,7 +270,6 @@ pub async fn set_global_image_packs(
     Ok(())
 }
 
-
 /// Pure guard extracted from `set_user_image_pack` so the fail-closed content
 /// check is unit-testable without a live client.
 fn set_user_image_pack_content_guard(content: &JsonValue) -> Result<(), &'static str> {
