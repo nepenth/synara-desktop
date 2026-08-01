@@ -8,14 +8,15 @@ desktop Matrix client ownership with the Rust Matrix SDK on branch
 
 ## Start here
 
-| Doc | Role |
-| --- | --- |
-| [program-status.md](program-status.md) | Generated machine ledger (do not hand-edit) |
-| [full-vertical-policy.md](full-vertical-policy.md) | Complete replacement acceptance (no dual-backend, no plateau) |
-| [d0-residual-completion.md](d0-residual-completion.md) | Residual capability queue |
-| [PROGRESS.md](PROGRESS.md) | Human-readable progress log |
-| [cutover-operating-model.md](cutover-operating-model.md) | Cutover / operating model |
-| [../matrix-rust-sdk-full-replacement-plan.md](../matrix-rust-sdk-full-replacement-plan.md) | Authoritative plan |
+| Doc                                                                                        | Role                                                                   |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| [program-status.md](program-status.md)                                                     | Generated machine ledger (do not hand-edit)                            |
+| [full-vertical-policy.md](full-vertical-policy.md)                                         | Complete replacement acceptance (no dual-backend, no plateau)          |
+| [d0-residual-completion.md](d0-residual-completion.md)                                     | Residual capability queue                                              |
+| [PROGRESS.md](PROGRESS.md)                                                                 | Human-readable progress log                                            |
+| [cutover-operating-model.md](cutover-operating-model.md)                                   | Cutover / operating model                                              |
+| [v-burn-importer-taxonomy.md](v-burn-importer-taxonomy.md)                                 | Exhaustive 159-file importer taxonomy and residual overlay (docs only) |
+| [../matrix-rust-sdk-full-replacement-plan.md](../matrix-rust-sdk-full-replacement-plan.md) | Authoritative plan                                                     |
 
 ## Not published here
 
