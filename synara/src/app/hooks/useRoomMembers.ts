@@ -1,10 +1,49 @@
-import { MatrixClient, MatrixEvent, RoomMember, RoomMemberEvent } from 'matrix-js-sdk';
+import {
+  MatrixClient,
+  MatrixEvent,
+  RoomMember as MatrixRoomMember,
+  RoomMemberEvent,
+} from 'matrix-js-sdk';
 import { useEffect, useState } from 'react';
+import { readRoomMembersWithNativeOwner } from './nativeRoomMembersOwner';
+import type { RoomMember as NativeRoomMember } from '../features/matrix-dto/member';
 
-export const useRoomMembers = (mx: MatrixClient, roomId: string): RoomMember[] => {
-  const [members, setMembers] = useState<RoomMember[]>([]);
+export type RoomMemberListItem = MatrixRoomMember | NativeRoomMember;
+
+export function useRoomMembers(mx: MatrixClient, roomId: string): MatrixRoomMember[];
+export function useRoomMembers(
+  mx: MatrixClient,
+  roomId: string,
+  nativeSession: boolean
+): RoomMemberListItem[] | null;
+
+export function useRoomMembers(
+  mx: MatrixClient,
+  roomId: string,
+  nativeSession = false
+): RoomMemberListItem[] | null {
+  const [members, setMembers] = useState<MatrixRoomMember[]>([]);
+  const [nativeMembers, setNativeMembers] = useState<NativeRoomMember[] | null>(null);
 
   useEffect(() => {
+    if (nativeSession) {
+      let disposed = false;
+      setNativeMembers([]);
+      void readRoomMembersWithNativeOwner(roomId, true)
+        .then((nextMembers) => {
+          if (!disposed && nextMembers) setNativeMembers(nextMembers);
+        })
+        .catch(() => {
+          // Native ownership is fail-closed. Keep the list empty instead of
+          // falling through to mx.getRoom().getMembers().
+          if (!disposed) setNativeMembers([]);
+        });
+
+      return () => {
+        disposed = true;
+      };
+    }
+
     const room = mx.getRoom(roomId);
     let loadingMembers = true;
     let disposed = false;
@@ -31,7 +70,7 @@ export const useRoomMembers = (mx: MatrixClient, roomId: string): RoomMember[] =
       mx.removeListener(RoomMemberEvent.Membership, updateMemberList);
       mx.removeListener(RoomMemberEvent.PowerLevel, updateMemberList);
     };
-  }, [mx, roomId]);
+  }, [mx, roomId, nativeSession]);
 
-  return members;
-};
+  return nativeSession ? nativeMembers : members;
+}

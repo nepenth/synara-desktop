@@ -18,6 +18,7 @@ import {
   RoomMember,
 } from 'matrix-js-sdk';
 import { AccountDataEvent, MarkedUnreadContent } from '../../types/matrix/accountData';
+import type { RoomMember as NativeRoomMember } from '../features/matrix-dto/member';
 import {
   IRoomCreateContent,
   Membership,
@@ -355,13 +356,18 @@ export const getMemberDisplayName = (room: Room, userId: string): string | undef
 };
 
 export const getMemberSearchStr = (
-  member: RoomMember,
+  member: RoomMember | NativeRoomMember,
   query: string,
   mxIdToName: (mxId: string) => string
-): string[] => [
-  member.rawDisplayName === member.userId ? mxIdToName(member.userId) : member.rawDisplayName,
-  query.startsWith('@') || query.indexOf(':') > -1 ? member.userId : mxIdToName(member.userId),
-];
+): string[] => {
+  const displayName = !('getMxcAvatarUrl' in member)
+    ? member.displayName ?? member.userId
+    : member.rawDisplayName;
+  return [
+    displayName === member.userId ? mxIdToName(member.userId) : displayName,
+    query.startsWith('@') || query.indexOf(':') > -1 ? member.userId : mxIdToName(member.userId),
+  ];
+};
 
 export const getMemberAvatarMxc = (room: Room, userId: string): string | undefined => {
   const member = room.getMember(userId);

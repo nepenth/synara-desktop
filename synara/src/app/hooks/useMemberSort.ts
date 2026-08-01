@@ -1,18 +1,27 @@
-import { RoomMember } from 'matrix-js-sdk';
+import { RoomMember as MatrixRoomMember } from 'matrix-js-sdk';
 import { useCallback, useMemo } from 'react';
+import type { RoomMember as NativeRoomMember } from '../features/matrix-dto/member';
+
+type RoomMemberListItem = MatrixRoomMember | NativeRoomMember;
+
+const getMemberName = (member: RoomMemberListItem): string =>
+  !('getMxcAvatarUrl' in member) ? member.displayName ?? member.userId : member.name;
+
+const getMemberEventTs = (member: RoomMemberListItem): number =>
+  !('getMxcAvatarUrl' in member) ? 0 : member.events.member?.getTs() ?? 0;
 
 export const MemberSort = {
-  Ascending: (a: RoomMember, b: RoomMember) =>
-    a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1,
-  Descending: (a: RoomMember, b: RoomMember) =>
-    a.name.toLowerCase() > b.name.toLowerCase() ? -1 : 1,
-  NewestFirst: (a: RoomMember, b: RoomMember) =>
-    (b.events.member?.getTs() ?? 0) - (a.events.member?.getTs() ?? 0),
-  Oldest: (a: RoomMember, b: RoomMember) =>
-    (a.events.member?.getTs() ?? 0) - (b.events.member?.getTs() ?? 0),
+  Ascending: (a: RoomMemberListItem, b: RoomMemberListItem) =>
+    getMemberName(a).toLowerCase() < getMemberName(b).toLowerCase() ? -1 : 1,
+  Descending: (a: RoomMemberListItem, b: RoomMemberListItem) =>
+    getMemberName(a).toLowerCase() > getMemberName(b).toLowerCase() ? -1 : 1,
+  NewestFirst: (a: RoomMemberListItem, b: RoomMemberListItem) =>
+    getMemberEventTs(b) - getMemberEventTs(a),
+  Oldest: (a: RoomMemberListItem, b: RoomMemberListItem) =>
+    getMemberEventTs(a) - getMemberEventTs(b),
 };
 
-export type MemberSortFn = (a: RoomMember, b: RoomMember) => number;
+export type MemberSortFn = (a: RoomMemberListItem, b: RoomMemberListItem) => number;
 
 export type MemberSortItem = {
   name: string;
