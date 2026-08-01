@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import { ImagePack } from '../../../plugins/custom-emoji/ImagePack';
 import {
   getGlobalImagePacksWithNativeOwner,
@@ -6,6 +7,7 @@ import {
   getUserImagePackWithNativeOwner,
   imagePackFromNativeDto,
   isNativePackReadSession,
+  setUserImagePackWithNativeOwner,
   type NativeInvoke,
 } from '../nativeImagePackOwner';
 
@@ -61,6 +63,9 @@ const loggedInInvoke: NativeInvoke = async (command) => {
       },
     };
   }
+  if (command === 'matrix_set_user_image_pack') {
+    return { available: true, value: { status: 'ok' } };
+  }
   return { available: false };
 };
 
@@ -71,7 +76,7 @@ const failClosedInvoke: NativeInvoke = async (command) => {
   return { available: false };
 };
 
-export async function testLegacyWhenNotDesktop() {
+test('legacy when not desktop for pack read', async () => {
   assert.equal(await isNativePackReadSession(false, loggedInInvoke), false);
   assert.equal(await getUserImagePackWithNativeOwner(false, loggedInInvoke), 'legacy');
   assert.equal(await getGlobalImagePacksWithNativeOwner(false, loggedInInvoke), 'legacy');
@@ -79,16 +84,16 @@ export async function testLegacyWhenNotDesktop() {
     await getRoomImagePacksWithNativeOwner('!r:example.org', false, loggedInInvoke),
     'legacy'
   );
-}
+});
 
-export async function testNativeUserPack() {
+test('native user pack read', async () => {
   const pack = await getUserImagePackWithNativeOwner(true, loggedInInvoke);
   assert.ok(pack instanceof ImagePack);
   assert.equal((pack as ImagePack).id, '@u:example.org');
   assert.equal((pack as ImagePack).meta.name, 'Me');
-}
+});
 
-export async function testNativeRoomAndGlobalPacks() {
+test('native room and global pack read', async () => {
   const room = await getRoomImagePacksWithNativeOwner('!r:example.org', true, loggedInInvoke);
   assert.ok(Array.isArray(room));
   assert.equal((room as ImagePack[]).length, 1);
@@ -98,9 +103,9 @@ export async function testNativeRoomAndGlobalPacks() {
   assert.ok(Array.isArray(global));
   assert.equal((global as ImagePack[]).length, 1);
   assert.equal((global as ImagePack[])[0].address?.stateKey, 'global');
-}
+});
 
-export async function testFailClosedWhenCommandMissing() {
+test('pack read fail-closed when command missing', async () => {
   await assert.rejects(
     () => getUserImagePackWithNativeOwner(true, failClosedInvoke),
     /unavailable/i
@@ -109,9 +114,37 @@ export async function testFailClosedWhenCommandMissing() {
     () => getGlobalImagePacksWithNativeOwner(true, failClosedInvoke),
     /unavailable/i
   );
-}
+});
 
-export function testDtoToImagePackAddress() {
+test('user pack write legacy when not desktop', async () => {
+  assert.equal(
+    await setUserImagePackWithNativeOwner({ pack: {}, images: {} }, false, loggedInInvoke),
+    'legacy'
+  );
+});
+
+test('user pack write native ok', async () => {
+  const result = await setUserImagePackWithNativeOwner(
+    { pack: { display_name: 'Me' }, images: {} },
+    true,
+    loggedInInvoke
+  );
+  assert.equal(result, 'native');
+});
+
+test('user pack write fail-closed when command missing', async () => {
+  await assert.rejects(
+    () =>
+      setUserImagePackWithNativeOwner(
+        { pack: { display_name: 'Me' }, images: {} },
+        true,
+        failClosedInvoke
+      ),
+    /unavailable/i
+  );
+});
+
+test('dto to ImagePack address', () => {
   const pack = imagePackFromNativeDto({
     id: '$e',
     roomId: '!r:example.org',
@@ -120,4 +153,4 @@ export function testDtoToImagePackAddress() {
   });
   assert.equal(pack.address?.roomId, '!r:example.org');
   assert.equal(pack.address?.stateKey, 'key');
-}
+});

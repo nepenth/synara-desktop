@@ -4,6 +4,7 @@ import { ImagePack, PackContent } from '../../plugins/custom-emoji';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { AccountDataEvent } from '../../../types/matrix/accountData';
 import { useUserImagePack } from '../../hooks/useImagePacks';
+import { setUserImagePackNative } from '../../features/room/nativeImagePack';
 
 export function UserImagePack() {
   const mx = useMatrixClient();
@@ -13,7 +14,12 @@ export function UserImagePack() {
 
   const handleUpdate = useCallback(
     async (packContent: PackContent) => {
-      await mx.setAccountData(AccountDataEvent.PoniesUserEmotes as any, packContent as any);
+      // V-SEND.R-PACK-WRITE: native personal-pack write is fail-closed on
+      // desktop. The JS mx.setAccountData path is only for non-native web.
+      const result = await setUserImagePackNative(packContent);
+      if (result === 'legacy') {
+        await mx.setAccountData(AccountDataEvent.PoniesUserEmotes as any, packContent as any);
+      }
     },
     [mx]
   );
