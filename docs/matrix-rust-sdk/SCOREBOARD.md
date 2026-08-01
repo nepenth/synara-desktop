@@ -3,7 +3,7 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `5d1fc28b` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip                                                    | `8330c56b` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **152** (plan baseline was **220**)                      |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
@@ -64,8 +64,8 @@ run passes the relevant checklist.
 
 | PR     | What                                                                                           |
 | ------ | ---------------------------------------------------------------------------------------------- |
-| [#405](https://github.com/nepenth/synara-desktop/pull/405) | **Members drawer/lobby/mentions native member wiring** — `ACCEPT_NITS` and CI are in flight; not merged at this tip. |
-| [#407](https://github.com/nepenth/synara-desktop/pull/407) | **CallWidget media config/download IPC** — review `REJECT` fix is in flight; not merged at this tip. |
+| [#405](https://github.com/nepenth/synara-desktop/pull/405) | **Members drawer/lobby/mentions native member wiring** — **`ACCEPT`**; CI may re-run; not merged at this tip. |
+| [#407](https://github.com/nepenth/synara-desktop/pull/407) | **CallWidget media config/download IPC** — **`ACCEPT_WITH_NITS`**; full-green proof at [`cd07f4fc`](https://github.com/nepenth/synara-desktop/commit/cd07f4fc), which is behind this tip; parent merge pending. |
 
 ## Left (finish-line order)
 
@@ -74,8 +74,8 @@ run passes the relevant checklist.
    invite/kick/ban/unban/setPowerLevel **#375 merged**; members-read first slice
    **#395** (`matrix_room_members_snapshot` + Members settings native). Residual:
    Room/MembersDrawer/Lobby/UserMentionAutocomplete member reads, power-level/creator
-   reads, and powers-bulk writes (packet **#388**). **#405** remains in flight
-   (`ACCEPT_NITS` + CI); its product wiring is not landed here. See
+   reads, and powers-bulk writes (packet **#388**). **#405** is **`ACCEPT`**;
+   CI may re-run, but its product wiring is not landed in this tip. See
    [read residual inventory](v-rooms-members-read-residual.md),
    [P4.6 members](p4.6-members.md) and [P4.3 membership](p4.3-membership-unread.md).
 2. **V-TIMELINE.C3–C5 — live proofs.** All three remain **Not confirmed**
@@ -86,11 +86,13 @@ run passes the relevant checklist.
 3. **V-SEND.R-DEVTOOL — native full vertical.** Inventory remains; implement
    after C3–C5 live or explicit reorder. See
    [implementation gate](v-send-devtool-inventory.md#implementation-gate).
-4. **CallWidget media config/download IPC** (**#407 review `REJECT` fix in flight**).
-   **#362** closed `getKnownRooms`
-   natively and fail-closed the rest; **#387** docs scan of media download reuse
-   landed. Still need native `getMediaConfig` / `downloadFile` owners (not JS
-   fallthrough). Implement packet frozen:
+4. **CallWidget media config/download IPC** (**#407 `ACCEPT_WITH_NITS`**).
+   The full-green proof is at [`cd07f4fc`](https://github.com/nepenth/synara-desktop/commit/cd07f4fc),
+   but that commit is behind this tip and its parent merge is pending. At this
+   base tip, **#362** closed `getKnownRooms` natively and fail-closed the rest;
+   **#387** docs scan of media download reuse landed. The native
+   `getMediaConfig` / `downloadFile` owners are therefore not yet present in
+   this tip. Implement packet frozen:
    [v-send-call-widget-media-implement-packet.md](v-send-call-widget-media-implement-packet.md).
    See [CallWidget residual](v-send-call-widget-residual.md).
 5. **V-BURN.1 — no live `createClient`/`startClient` on desktop.** Not
