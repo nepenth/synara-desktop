@@ -1956,6 +1956,28 @@ pub async fn matrix_invites_decline(
     .map_err(map_invite_error)
 }
 
+/// V-ROOMS room membership: leave the selected room through the native SDK.
+/// Fail-closed: the desktop product must not use `mx.leave` when a native
+/// Matrix session owns the room lifecycle.
+#[tauri::command]
+pub async fn matrix_room_leave(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+) -> Result<(), MatrixAuthCommandError> {
+    let room_id = parse_room_leave_id(&room_id)?;
+    let room = {
+        let session = state.session.lock().await;
+        let active = require_session(session.as_ref())?;
+        active
+            .client
+            .get_room(&room_id)
+            .ok_or_else(|| map_room_leave_error("v-rooms-room-leave-room-not-found"))?
+    };
+    room.leave()
+        .await
+        .map_err(|_| map_room_leave_error("v-rooms-room-leave-failed"))
+}
+
 #[tauri::command]
 pub async fn matrix_invites_report_spam(
     state: State<'_, MatrixAuthState>,
@@ -3890,6 +3912,27 @@ fn map_invite_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
 
+fn map_room_leave_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    let (code, message) = match diagnostic_id {
+        "v-rooms-room-leave-invalid-room" => (
+            "InvalidRequest",
+            "The native Matrix room leave request is invalid.",
+        ),
+        "v-rooms-room-leave-room-not-found" => {
+            ("NotFound", "The native Matrix room is not available.")
+        }
+        _ => ("Unknown", "The native Matrix room could not be left."),
+    };
+    MatrixAuthCommandError::new(code, message, diagnostic_id)
+}
+
+fn parse_room_leave_id(room_id: &str) -> Result<OwnedRoomId, MatrixAuthCommandError> {
+    room_id
+        .trim()
+        .parse()
+        .map_err(|_| map_room_leave_error("v-rooms-room-leave-invalid-room"))
+}
+
 async fn native_invite_target(
     active: &mut ManagedMatrixSession,
     room_id: &str,
@@ -5661,5 +5704,42 @@ mod tests {
             "InvalidRequest"
         );
         assert_eq!(map_avatar_error("unknown").code, "Unknown");
+    }
+
+    #[test]
+    fn room_leave_validates_ids_and_maps_errors() {
+        assert_eq!(
+            parse_room_leave_id("not-a-room").unwrap_err().diagnostic_id,
+            "v-rooms-room-leave-invalid-room"
+        );
+        assert_eq!(
+            parse_room_leave_id("  !room:example.org  ")
+                .unwrap()
+                .to_string(),
+            "!room:example.org"
+        );
+        assert_eq!(
+            map_room_leave_error("v-rooms-room-leave-room-not-found").code,
+            "NotFound"
+        );
+        assert_eq!(
+            map_room_leave_error("v-rooms-room-leave-failed").code,
+            "Unknown"
+        );
+    }
+
+    #[test]
+    fn room_leave_command_owns_sdk_leave_without_a_js_fallback() {
+        let product = include_str!("product.rs");
+        let command = product
+            .split("pub async fn matrix_room_leave")
+            .nth(1)
+            .expect("room leave command");
+        let command = command
+            .split("#[tauri::command]")
+            .next()
+            .expect("room leave command body");
+        assert!(command.contains("room.leave()"));
+        assert!(!command.contains("mx.leave"));
     }
 }
