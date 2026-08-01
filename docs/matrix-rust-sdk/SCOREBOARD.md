@@ -3,8 +3,8 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `4eeefa11` on `feature/matrix-rust-sdk-full-replacement` |
-| Production `matrix-js-sdk` import files (`synara/src`) | **159** (plan baseline was **220**)                      |
+| Tip                                                    | `d9a1b819` on `feature/matrix-rust-sdk-full-replacement` |
+| Production `matrix-js-sdk` import files (`synara/src`) | **157** (plan baseline was **220**)                      |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
 
@@ -57,41 +57,35 @@ run passes the relevant checklist.
 
 | PR     | What                                                                                                                                                                                                                                                                                                                                                         |
 | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| (docs) | **User-authorized finish-line order (2026-08-01):** execute [Left](#left-finish-line-order) in order **1→9**. This is an active queue, not a product-idle status; item 1 is unblocked now. Every product slice remains UI → Tauri IPC → live `matrix-sdk`, fail-closed on native failure, with the superseded JS owner physically deleted in the same slice. |
+| (product) | Finish-line **#1 pack get* delete (this PR)**; next **#2 room leave/join/create** native vertical. V-BURN HOLD. |
 
 ## Left (finish-line order)
 
-1. **V-SEND.R-PACK-READ — delete the `get*` helpers now.** This is
-   **unblocked**: Synara does not ship a separate browser product, so the
-   read-only JS `get*` helpers and web-only fallback/listener path can be
-   physically deleted. Retain `packAddressEqual`, `imageUsageEqual`, and
-   `packMetaEqual`. See the [pack-read residual](v-send-pack-read-residual.md)
-   and [importer taxonomy](v-burn-importer-taxonomy.md).
-2. **Room leave/join/create lifecycle — native full vertical.** Re-home the
+1. **Room leave/join/create lifecycle — native full vertical.** Re-home the
    UI through Tauri IPC to the live `matrix-sdk`, fail closed on native command
    absence/failure, and delete the superseded JS owner in the same slice. See
    [P6.9 room ops](p6.9-room-ops.md) and [P2.6 lifecycle](p2.6-destructive-lifecycle.md).
-3. **Members/power — native full vertical.** Re-home member and power-level
+2. **Members/power — native full vertical.** Re-home member and power-level
    reads/writes through the native route, with physical JS-owner deletion and
    fail-closed desktop behavior. See [P4.6 members](p4.6-members.md) and
    [P4.3 membership](p4.3-membership-unread.md).
-4. **V-TIMELINE.C3–C5 — live proofs.** All three remain **Not confirmed**;
+3. **V-TIMELINE.C3–C5 — live proofs.** All three remain **Not confirmed**;
    use the operator index: [C3](v-timeline-c3-stream-verify.md),
    [C4](v-timeline-c4-media-render-verify.md), and
    [C5](v-timeline-c5-pins-notes-jump-verify.md).
-5. **V-SEND.R-DEVTOOL — native full vertical.** The inventory remains
+4. **V-SEND.R-DEVTOOL — native full vertical.** The inventory remains
    docs-only; start only after C3–C5 live proofs confirm. Follow the
    [implementation gate](v-send-devtool-inventory.md#implementation-gate).
-6. **CallWidget residual — native widget vertical.** The upload owner is
+5. **CallWidget residual — native widget vertical.** The upload owner is
    closed by #328, but `getMediaConfig`, `downloadFile`, and `getKnownRooms`
    remain documented JS residuals. See the [CallWidget residual inventory](v-send-call-widget-residual.md).
-7. **V-BURN.1 — no live `createClient`/`startClient` on desktop.** Final
+6. **V-BURN.1 — no live `createClient`/`startClient` on desktop.** Final
    convergence proof only; this is **not complete**. See the [V-BURN
    completion gates](d0-residual-completion.md) and [blocker snapshot](v-burn-readiness-snapshot.md).
-8. **V-BURN.2 — zero production importers.** Final repository-wide importer
+7. **V-BURN.2 — zero production importers.** Final repository-wide importer
    audit remains **left**; current production importers are **159**. See the
    [importer taxonomy](v-burn-importer-taxonomy.md) and [blocker snapshot](v-burn-readiness-snapshot.md).
-9. **V-BURN.3 — drop npm and obsolete JS bootstrap/store code.** Remove the
+8. **V-BURN.3 — drop npm and obsolete JS bootstrap/store code.** Remove the
    `matrix-js-sdk` package, lockfile entries, startup/store/service-worker
    residue, and migration allowlist only after V-BURN.1/.2 are proven. See the
    [V-BURN completion gates](d0-residual-completion.md) and [blocker snapshot](v-burn-readiness-snapshot.md).

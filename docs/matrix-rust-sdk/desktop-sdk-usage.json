@@ -25,7 +25,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 93,
+          "fileCount": 91,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -88,14 +88,14 @@
         },
         "room_lists": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 38,
+          "fileCount": 36,
           "listenerCandidateOccurrences": 10,
-          "methodCandidateOccurrences": 91,
+          "methodCandidateOccurrences": 88,
           "networkingOccurrences": 0
         },
         "room_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 80,
+          "fileCount": 78,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -144,17 +144,17 @@
         },
         "uia_auth": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 45,
+          "fileCount": 44,
           "listenerCandidateOccurrences": 2,
-          "methodCandidateOccurrences": 90,
+          "methodCandidateOccurrences": 89,
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 161,
-      "importFileCount": 159,
+      "fileCount": 159,
+      "importFileCount": 157,
       "methodCandidateFrequencies": [
         {
-          "count": 65,
+          "count": 62,
           "name": "getRoom"
         },
         {
@@ -162,7 +162,7 @@
           "name": "getSafeUserId"
         },
         {
-          "count": 27,
+          "count": 26,
           "name": "getUserId"
         },
         {
@@ -360,24 +360,24 @@
           "importOccurrences": 1
         },
         "MatrixClient": {
-          "fileCount": 43,
-          "importOccurrences": 43
+          "fileCount": 42,
+          "importOccurrences": 42
         },
         "MatrixError": {
           "fileCount": 26,
           "importOccurrences": 26
         },
         "MatrixEvent": {
-          "fileCount": 28,
-          "importOccurrences": 28
+          "fileCount": 27,
+          "importOccurrences": 27
         },
         "Relations": {
           "fileCount": 4,
           "importOccurrences": 4
         },
         "Room": {
-          "fileCount": 77,
-          "importOccurrences": 77
+          "fileCount": 75,
+          "importOccurrences": 75
         },
         "RoomMember": {
           "fileCount": 12,
@@ -398,8 +398,8 @@
       },
       "modules": [
         {
-          "fileCount": 153,
-          "importCount": 153,
+          "fileCount": 151,
+          "importCount": 151,
           "path": "matrix-js-sdk"
         },
         {
@@ -494,25 +494,25 @@
       "scope": "role",
       "symbols": [
         {
-          "fileCount": 77,
-          "importCount": 77,
+          "fileCount": 75,
+          "importCount": 75,
           "name": "Room",
           "typeImports": 2,
-          "valueImports": 75
+          "valueImports": 73
         },
         {
-          "fileCount": 43,
-          "importCount": 43,
+          "fileCount": 42,
+          "importCount": 42,
           "name": "MatrixClient",
           "typeImports": 4,
-          "valueImports": 39
+          "valueImports": 38
         },
         {
-          "fileCount": 28,
-          "importCount": 28,
+          "fileCount": 27,
+          "importCount": 27,
           "name": "MatrixEvent",
           "typeImports": 4,
-          "valueImports": 24
+          "valueImports": 23
         },
         {
           "fileCount": 26,
@@ -1216,7 +1216,7 @@
           "fileCount": 8,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
-          "networkingOccurrences": 30
+          "networkingOccurrences": 50
         },
         "event_emitters_listeners": {
           "constructorCandidateOccurrences": 0,
@@ -1317,7 +1317,7 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 18,
+      "fileCount": 20,
       "importFileCount": 10,
       "methodCandidateFrequencies": [
         {
@@ -1476,61 +1476,181 @@
         {
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_literal",
-          "line": 131,
-          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/versions",
-          "kind": "matrix_cs_path_template",
-          "line": 131,
+          "line": 133,
           "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
         },
         {
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_literal",
-          "line": 134,
+          "line": 133,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 133,
           "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
         },
         {
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_template",
-          "line": 134,
+          "line": 133,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 133,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 133,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 136,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 136,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 136,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 136,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 136,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 136,
           "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
         },
         {
           "indicator": "/_matrix/client/v1/media/download",
           "kind": "matrix_cs_path_literal",
-          "line": 288,
+          "line": 292,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/v1/media/download",
+          "kind": "matrix_cs_path_literal",
+          "line": 292,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/v1/media/download",
+          "kind": "matrix_cs_path_literal",
+          "line": 292,
           "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
         },
         {
           "indicator": "/_matrix/client/v1/media/download",
           "kind": "matrix_cs_path_template",
-          "line": 288,
+          "line": 292,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/v1/media/download",
+          "kind": "matrix_cs_path_template",
+          "line": 292,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/v1/media/download",
+          "kind": "matrix_cs_path_template",
+          "line": 292,
           "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
         },
         {
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_literal",
-          "line": 289,
+          "line": 293,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 293,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 293,
           "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
         },
         {
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_template",
-          "line": 289,
+          "line": 293,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 293,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 293,
           "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
         },
         {
           "indicator": "/_matrix/client/v3/sync",
           "kind": "matrix_cs_path_literal",
-          "line": 315,
+          "line": 319,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/v3/sync",
+          "kind": "matrix_cs_path_literal",
+          "line": 319,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/v3/sync",
+          "kind": "matrix_cs_path_literal",
+          "line": 319,
           "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
         },
         {
           "indicator": "/_matrix/client/v3/sync",
           "kind": "matrix_cs_path_template",
-          "line": 315,
+          "line": 319,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/v3/sync",
+          "kind": "matrix_cs_path_template",
+          "line": 319,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/v3/sync",
+          "kind": "matrix_cs_path_template",
+          "line": 319,
           "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
         },
         {
@@ -1583,7 +1703,7 @@
         }
       ],
       "networkingFileCount": 8,
-      "networkingFindingCount": 30,
+      "networkingFindingCount": 50,
       "role": "test",
       "scope": "role",
       "symbols": [
@@ -2171,61 +2291,209 @@
           "description": "String literal containing a /_matrix/ client-server or media path",
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_literal",
-          "line": 131
+          "line": 133
         },
         {
           "description": "Template literal containing a /_matrix/ client-server or media path",
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_template",
-          "line": 131
+          "line": 133
         },
         {
           "description": "String literal containing a /_matrix/ client-server or media path",
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_literal",
-          "line": 134
+          "line": 136
         },
         {
           "description": "Template literal containing a /_matrix/ client-server or media path",
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_template",
-          "line": 134
+          "line": 136
         },
         {
           "description": "String literal containing a /_matrix/ client-server or media path",
           "indicator": "/_matrix/client/v1/media/download",
           "kind": "matrix_cs_path_literal",
-          "line": 288
+          "line": 292
         },
         {
           "description": "Template literal containing a /_matrix/ client-server or media path",
           "indicator": "/_matrix/client/v1/media/download",
           "kind": "matrix_cs_path_template",
-          "line": 288
+          "line": 292
         },
         {
           "description": "String literal containing a /_matrix/ client-server or media path",
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_literal",
-          "line": 289
+          "line": 293
         },
         {
           "description": "Template literal containing a /_matrix/ client-server or media path",
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_template",
-          "line": 289
+          "line": 293
         },
         {
           "description": "String literal containing a /_matrix/ client-server or media path",
           "indicator": "/_matrix/client/v3/sync",
           "kind": "matrix_cs_path_literal",
-          "line": 315
+          "line": 319
         },
         {
           "description": "Template literal containing a /_matrix/ client-server or media path",
           "indicator": "/_matrix/client/v3/sync",
           "kind": "matrix_cs_path_template",
-          "line": 315
+          "line": 319
+        }
+      ],
+      "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs",
+      "role": "test"
+    },
+    {
+      "bucket": null,
+      "categories": ["direct_matrix_networking"],
+      "constructorCandidates": [],
+      "desktopRuntime": false,
+      "imports": [],
+      "listenerCandidates": [],
+      "methodCandidates": [],
+      "modelCoupling": [],
+      "networking": [
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 133
+        },
+        {
+          "description": "Template literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 133
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 136
+        },
+        {
+          "description": "Template literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 136
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v1/media/download",
+          "kind": "matrix_cs_path_literal",
+          "line": 292
+        },
+        {
+          "description": "Template literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v1/media/download",
+          "kind": "matrix_cs_path_template",
+          "line": 292
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 293
+        },
+        {
+          "description": "Template literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 293
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v3/sync",
+          "kind": "matrix_cs_path_literal",
+          "line": 319
+        },
+        {
+          "description": "Template literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v3/sync",
+          "kind": "matrix_cs_path_template",
+          "line": 319
+        }
+      ],
+      "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs",
+      "role": "test"
+    },
+    {
+      "bucket": null,
+      "categories": ["direct_matrix_networking"],
+      "constructorCandidates": [],
+      "desktopRuntime": false,
+      "imports": [],
+      "listenerCandidates": [],
+      "methodCandidates": [],
+      "modelCoupling": [],
+      "networking": [
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 133
+        },
+        {
+          "description": "Template literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 133
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 136
+        },
+        {
+          "description": "Template literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 136
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v1/media/download",
+          "kind": "matrix_cs_path_literal",
+          "line": 292
+        },
+        {
+          "description": "Template literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v1/media/download",
+          "kind": "matrix_cs_path_template",
+          "line": 292
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 293
+        },
+        {
+          "description": "Template literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 293
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v3/sync",
+          "kind": "matrix_cs_path_literal",
+          "line": 319
+        },
+        {
+          "description": "Template literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v3/sync",
+          "kind": "matrix_cs_path_template",
+          "line": 319
         }
       ],
       "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs",
@@ -6932,50 +7200,6 @@
     },
     {
       "bucket": "hook",
-      "categories": ["client_methods", "room_methods", "room_lists"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "Room"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 289,
-          "name": "getRoom"
-        },
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 298,
-          "name": "getRoom"
-        }
-      ],
-      "modelCoupling": ["Room"],
-      "networking": [],
-      "path": "synara/src/app/hooks/useImagePacks.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "hook",
       "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -10003,65 +10227,6 @@
     },
     {
       "bucket": "plugin",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "room_lists",
-        "uia_auth"
-      ],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixClient"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixEvent"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "Room"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 64,
-          "name": "getRoom"
-        },
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 81,
-          "name": "getUserId"
-        }
-      ],
-      "modelCoupling": ["MatrixClient", "MatrixEvent", "Room"],
-      "networking": [],
-      "path": "synara/src/app/plugins/custom-emoji/utils.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "plugin",
       "categories": ["client_methods", "room_lists", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -12382,10 +12547,10 @@
         "client-lifecycle": 2,
         "component": 26,
         "feature": 54,
-        "hook": 44,
+        "hook": 43,
         "media-boundary": 1,
         "page": 8,
-        "plugin": 8,
+        "plugin": 7,
         "shared-type": 1,
         "state": 5,
         "utility": 10
@@ -12396,22 +12561,22 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 159,
+      "productionImportFiles": 157,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 169
+      "totalImportFiles": 167
     },
     "repositoryWide": {
-      "productionImportFiles": 159,
+      "productionImportFiles": 157,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
       "testNetworkingFiles": 8,
-      "testNetworkingFindings": 30,
+      "testNetworkingFindings": 50,
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 172
+      "totalImportFiles": 170
     }
   }
 }
