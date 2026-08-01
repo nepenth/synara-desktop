@@ -5,7 +5,7 @@
 | Status   | **Implementation packet** — this packet is docs-only; it does not claim the vertical is implemented                                                |
 | Residual | **V-SEND.R-DEVTOOL**                                                                                                                               |
 | Priority | Low; user-reordered finish-line item                                                                                                               |
-| Base     | `feature/matrix-rust-sdk-full-replacement` at `1c9653b25ac3dd97c91f57de8eec3f0fb9586a65`                                                           |
+| Base     | `feature/matrix-rust-sdk-full-replacement` at `8330c56bbb74b45ef01ad1f8be137b54caa2f568`                                                           |
 | PR shape | Focused **draft** PR targeting `feature/matrix-rust-sdk-full-replacement`                                                                          |
 | Gate     | Start only after V-TIMELINE.C3–C5 have confirmed live proofs                                                                                       |
 | Policy   | [full-vertical-policy.md](full-vertical-policy.md): complete UI → Tauri IPC → live `matrix-sdk` vertical, with JS-owner deletion in the same slice |
