@@ -8,6 +8,8 @@
 | Related  | #375 / adjacent commit `7eb5bc3d` (`matrix_room_set_power_level`); room-member moderation is separate                                |
 | Policy   | [full-vertical-policy.md](full-vertical-policy.md) — UI → Tauri IPC → live `matrix-sdk`, physical JS-owner deletion, no dual backend |
 
+**Implementation packet:** [v-rooms-power-levels-implement-packet.md](v-rooms-power-levels-implement-packet.md)
+
 > **Scope guard.** This inventory is based only on tip `3d76402f`. It does not
 > use `main`, #39, or claim V-BURN complete. The adjacent #375 commit is used
 > only to define the single-user comparison boundary; it is not present in the
