@@ -30,7 +30,7 @@ test('native logged-in session is the sole message-edit owner', async () => {
           status: 'sent',
         },
       };
-    }
+    },
   );
 
   assert.equal(owner, 'native');
@@ -63,9 +63,9 @@ test('web and native logged-out sessions retain the legacy edit owner', async ()
       false,
       async () => {
         throw new Error('invoke should not be called');
-      }
+      },
     ),
-    'legacy'
+    'legacy',
   );
 });
 
@@ -81,9 +81,9 @@ test('native edit command failure never falls through to legacy sendMessage', as
       async (command) =>
         command === 'matrix_session_snapshot'
           ? { available: true, value: { status: 'logged_in' } }
-          : { available: false }
+          : { available: false },
     ),
-    /Native Matrix message edit is unavailable/
+    /Native Matrix message edit is unavailable/,
   );
 });
 
@@ -102,8 +102,8 @@ test('native edit non-sent status throws (fail-closed)', async () => {
           : {
               available: true,
               value: { roomId: '!room:example.org', eventId: '', localTxnId: '', status: 'failed' },
-            }
+            },
     ),
-    /Native Matrix message edit is unavailable/
+    /Native Matrix message edit is unavailable/,
   );
 });
