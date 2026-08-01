@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | **Inventory (docs only)** — no product code in this PR |
+| Status | **Implement PR** — native snapshot get commands + hooks fail-closed; subscribe residual remains |
 | Tip SHA | `76f10138a629b3aaef2c0f37bf1ccdbaf793c892` (merge #286 V-TIMELINE cutover residual map) |
 | Base | `feature/matrix-rust-sdk-full-replacement` |
 | Policy | [full-vertical-policy.md](full-vertical-policy.md) — physical deletion inside each owning slice |
@@ -110,3 +110,11 @@ native (#264); only the pack **read** projection is residual. Possible missed
 files: any pack-read helper re-exported behind a barrel in the emoji/pack trees
 — verify during implementation with a full `grep -rn "matrix-js-sdk"` over
 `custom-emoji`, `image-pack-view`, and the emoji/sticker settings dirs.
+
+
+## 7. Implementation close (this PR)
+
+- Rust: `matrix_get_user_image_pack` / `matrix_get_room_image_packs` / `matrix_get_global_image_packs`
+- TS: `nativeImagePackOwner` + `useImagePacks` native path (fail-closed on desktop)
+- Residual follow-on: `matrix_subscribe_image_packs` live push; physical delete of JS pack-read helpers once subscribe lands
+- dual_backend false; pack-write/upload out of scope

@@ -53,10 +53,12 @@ use super::{
 use crate::matrix::account_data::{
     add_room_to_mdirect, clear_completed_later_live, complete_later_item_live,
     complete_room_todo_item_live, delete_room_note_item_live, mark_later_reminded_live,
-    move_room_todo_item_live, remove_room_from_mdirect, snapshot_later, snapshot_mdirect,
-    snapshot_room_notes, snooze_later_item_live, upsert_later_item, upsert_room_note_item,
-    NativeLaterSnapshot, NativeMDirectMutationResult, NativeMDirectSnapshot,
-    NativeRoomNotesSnapshot, RoomNoteMoveDirection, SynaraLaterItem, SynaraRoomNoteItem,
+    move_room_todo_item_live, remove_room_from_mdirect, snapshot_global_image_packs,
+    snapshot_later, snapshot_mdirect, snapshot_room_image_packs, snapshot_room_notes,
+    snapshot_user_image_pack, snooze_later_item_live, upsert_later_item, upsert_room_note_item,
+    NativeGlobalImagePacksSnapshot, NativeLaterSnapshot, NativeMDirectMutationResult,
+    NativeMDirectSnapshot, NativeRoomImagePacksSnapshot, NativeRoomNotesSnapshot,
+    NativeUserImagePackSnapshot, RoomNoteMoveDirection, SynaraLaterItem, SynaraRoomNoteItem,
 };
 use crate::matrix::backup::live::{
     self as live_backup, NativeBackupOperationResult, NativeBackupStatus,
@@ -1531,6 +1533,43 @@ pub async fn matrix_mdirect_snapshot(
     snapshot_mdirect(&active.client, active.sync.session_generation())
         .await
         .map_err(map_mdirect_error)
+}
+
+/// V-SEND.R-PACK-READ: personal `im.ponies.user_emotes` account-data pack.
+#[tauri::command]
+pub async fn matrix_get_user_image_pack(
+    state: State<'_, MatrixAuthState>,
+) -> Result<NativeUserImagePackSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    snapshot_user_image_pack(&active.client, active.sync.session_generation())
+        .await
+        .map_err(map_pack_read_error)
+}
+
+/// V-SEND.R-PACK-READ: `im.ponies.room_emotes` state packs for a room.
+#[tauri::command]
+pub async fn matrix_get_room_image_packs(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+) -> Result<NativeRoomImagePacksSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    snapshot_room_image_packs(&active.client, active.sync.session_generation(), &room_id)
+        .await
+        .map_err(map_pack_read_error)
+}
+
+/// V-SEND.R-PACK-READ: global packs enabled via `im.ponies.emote_rooms`.
+#[tauri::command]
+pub async fn matrix_get_global_image_packs(
+    state: State<'_, MatrixAuthState>,
+) -> Result<NativeGlobalImagePacksSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    snapshot_global_image_packs(&active.client, active.sync.session_generation())
+        .await
+        .map_err(map_pack_read_error)
 }
 
 #[tauri::command]
@@ -3343,6 +3382,25 @@ fn map_mdirect_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
         _ => (
             "Unknown",
             "The native Matrix direct-room map is unavailable.",
+        ),
+    };
+    MatrixAuthCommandError::new(code, message, diagnostic_id)
+}
+
+fn map_pack_read_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    let (code, message) = match diagnostic_id {
+        "v-send.r-pack-read-invalid-room" => (
+            "InvalidRequest",
+            "The native Matrix image-pack request is invalid.",
+        ),
+        "v-send.r-pack-read-room-missing" => (
+            "NotFound",
+            "The native Matrix image-pack room was not found.",
+        ),
+        "v-send.r-pack-read-no-user" => ("Forbidden", "No native Matrix session is active."),
+        _ => (
+            "Unknown",
+            "The native Matrix image-pack projection is unavailable.",
         ),
     };
     MatrixAuthCommandError::new(code, message, diagnostic_id)
