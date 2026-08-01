@@ -3,7 +3,7 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `c0d5ec40` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip                                                    | `96015ccd` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **153** (plan baseline was **220**)                      |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
@@ -50,6 +50,7 @@ run passes the relevant checklist.
 | V-SEND.R-GIF-PACK               | **NOOP** — `GifPicker` exposes provider search/selection only; selected GIF send is native via #264 and no GIF pack/collection owner exists                                                      |
 | Room leave vertical             | **#364** `matrix_room_leave` + LeaveRoom/LeaveSpace native owner                                                                                                                                 |
 | Room create vertical            | **#372** `matrix_room_create` + native owner; CreateRoom/Space/Chat + `/startdm` fail-closed (imports **154→153**)                                                                               |
+| Room moderation writes          | **#375** native invite/kick/ban/unban/setPowerLevel writes; moderation write product vertical merged                                                                                             |
 | /leave command                  | **#371** useCommands Leave → leaveRoomWithNativeOwner                                                                                                                                            |
 | Room join vertical              | **#369** `matrix_room_join` + native owner; all production `joinRoom` sites fail-closed (imports **155→154**)                                                                                    |
 | Composer GIF/upload fallbacks   | **#363** RoomInput GIF + msgContent thumbnail JS upload fallbacks deleted                                                                                                                        |
@@ -67,8 +68,8 @@ run passes the relevant checklist.
 ## Left (finish-line order)
 
 1. **Members/power — native full vertical.** Leave/join/create closed
-   (**#364/#369/#372**); `/leave` command **#371**. Re-home invite/kick/ban/
-   unban/setPowerLevel writes first (**#375** open/draft), then member list/power
+   (**#364/#369/#372**); `/leave` command **#371**; moderation writes
+   invite/kick/ban/unban/setPowerLevel **#375 merged**. Next: member list/power
    reads ([read residual inventory](v-rooms-members-read-residual.md)). See
    [P4.6 members](p4.6-members.md) and [P4.3 membership](p4.3-membership-unread.md).
 2. **V-TIMELINE.C3–C5 — live proofs.** All three remain **Not confirmed**
@@ -80,8 +81,9 @@ run passes the relevant checklist.
    after C3–C5 live or explicit reorder. See
    [implementation gate](v-send-devtool-inventory.md#implementation-gate).
 4. **CallWidget media config/download IPC.** **#362** closed `getKnownRooms`
-   natively and fail-closed the rest; still need native `getMediaConfig` /
-   `downloadFile` owners (not JS fallthrough). See
+   natively and fail-closed the rest; **#387** docs scan of media download reuse
+   landed. Still need native `getMediaConfig` / `downloadFile` owners (not JS
+   fallthrough). See
    [CallWidget residual](v-send-call-widget-residual.md).
 5. **V-BURN.1 — no live `createClient`/`startClient` on desktop.** Not
    complete. See [V-BURN gates](d0-residual-completion.md) and

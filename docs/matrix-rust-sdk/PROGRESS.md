@@ -14,7 +14,7 @@
 | Field              | Value                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**                                                                                                                       |
-| Integration tip    | `c0d5ec40` — after #375 moderation writes — after #364 leave, #362 CallWidget, #363 composer fallbacks, #365 pack get\* delete       | — after #372 create, #371 /leave, #369 join, #364 leave |
+| Integration tip    | `96015ccd` — after #387 CallWidget media scan — after #386 tip honesty, #375 moderation writes, #364 leave, #362 CallWidget, #363 composer fallbacks, #365 pack get\* delete       | — after #372 create, #371 /leave, #369 join, #364 leave |
 | Active work        | Next: members moderation / power vertical; C3–C5 live proofs; members/power. R-DEVTOOL gated; V-BURN HOLD                            |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
@@ -32,8 +32,8 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `c0d5ec40`**. #375 moderation writes landed. Next: members-read product; powers-bulk. #39 gated.                                                                                                                                 |
-| **Tip**        | `c0d5ec40`                                                                                                                                                                                                                             |
+| **Now**        | **Tip `96015ccd`**. #375 moderation writes landed; #386/#387 docs honesty merged. Next: members-read product; powers-bulk. #39 gated.                                                                                                                                |
+| **Tip**        | `96015ccd`                                                                                                                                                                                                                             |
 | **Active PRs** | none (V-BURN HOLD; no product PR).                                                                                                                                                                                                     |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
@@ -59,6 +59,16 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — tip `96015ccd` — docs honesty after #375/#386/#387
+
+| When (UTC) | Item                     | Result          | Notes                                                                                                                          |
+| ---------- | ------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| current    | **Integration tip**      | **This PR**     | Tip `96015ccd` on `feature/matrix-rust-sdk-full-replacement`. Imports/allowlist **153**.                                       |
+| current    | **Moderation writes**    | **Merged #375** | Native invite/kick/ban/unban/setPowerLevel write vertical landed; marked done on scoreboard.                                   |
+| current    | **Tip honesty**          | **Merged #386** | Scoreboard honesty after moderation writes #375.                                                                               |
+| current    | **CallWidget media scan**| **Merged #387** | Docs scan of CallWidget media download reuse landed; product `getMediaConfig`/`downloadFile` IPC remains residual.             |
+| current    | **Next**                 | **members-read**| members-read product (#385 inventory); powers-bulk; CallWidget media IPC; C3–C5 live proofs. V-BURN HOLD; #39 gated.           |
 
 ### 2026-08-01 — tip `a53f14fa` — room create #372
 
