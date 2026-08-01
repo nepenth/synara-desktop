@@ -843,6 +843,12 @@
           "markdownDescription": "Enables the matrix_room_key_transfer_status command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_room_leave command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-leave",
+          "markdownDescription": "Enables the matrix_room_leave command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_room_list_snapshot command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-room-list-snapshot",
@@ -1681,6 +1687,12 @@
           "type": "string",
           "const": "deny-matrix-room-key-transfer-status",
           "markdownDescription": "Denies the matrix_room_key_transfer_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_leave command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-leave",
+          "markdownDescription": "Denies the matrix_room_leave command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_room_list_snapshot command without any pre-configured scope.",

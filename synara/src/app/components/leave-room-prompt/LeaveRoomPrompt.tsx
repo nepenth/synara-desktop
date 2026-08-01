@@ -16,10 +16,10 @@ import {
   Button,
   Spinner,
 } from 'folds';
-import { MatrixError } from 'matrix-js-sdk';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { stopPropagation } from '../../utils/keyboard';
+import { leaveRoomWithNativeOwner } from '../nativeRoomLeaveOwner';
 
 type LeaveRoomPromptProps = {
   roomId: string;
@@ -27,12 +27,11 @@ type LeaveRoomPromptProps = {
   onCancel: () => void;
 };
 export function LeaveRoomPrompt({ roomId, onDone, onCancel }: LeaveRoomPromptProps) {
-  const mx = useMatrixClient();
-
-  const [leaveState, leaveRoom] = useAsyncCallback<undefined, MatrixError, []>(
-    useCallback(async () => {
-      mx.leave(roomId);
-    }, [mx, roomId])
+  const [leaveState, leaveRoom] = useAsyncCallback<void, Error, []>(
+    useCallback(
+      () => leaveRoomWithNativeOwner(roomId, isSynaraDesktop(), invokeDesktopWithAvailability),
+      [roomId]
+    )
   );
 
   const handleLeave = () => {
