@@ -275,15 +275,13 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           const users = parseUsers(content);
           const flagToContent = parseFlags(flags);
           const reason = flagToContent.r;
-          await Promise.all(
-            users.map((id) =>
-              inviteUserWithNativeOwner(
-                room.roomId,
-                id,
-                reason,
-                isSynaraDesktop(),
-                invokeDesktopWithAvailability
-              )
+          await rateLimitedActions(users, (id) =>
+            inviteUserWithNativeOwner(
+              room.roomId,
+              id,
+              reason,
+              isSynaraDesktop(),
+              invokeDesktopWithAvailability
             )
           );
         },
@@ -296,15 +294,13 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           const users = parseUsers(content);
           const flagToContent = parseFlags(flags);
           const reason = flagToContent.r;
-          await Promise.all(
-            users.map((id) =>
-              kickUserWithNativeOwner(
-                room.roomId,
-                id,
-                reason,
-                isSynaraDesktop(),
-                invokeDesktopWithAvailability
-              )
+          await rateLimitedActions(users, (id) =>
+            kickUserWithNativeOwner(
+              room.roomId,
+              id,
+              reason,
+              isSynaraDesktop(),
+              invokeDesktopWithAvailability
             )
           );
         },
@@ -330,15 +326,13 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
             });
           }
 
-          await Promise.all(
-            users.map((id) =>
-              kickUserWithNativeOwner(
-                room.roomId,
-                id,
-                reason,
-                isSynaraDesktop(),
-                invokeDesktopWithAvailability
-              )
+          await rateLimitedActions(users, (id) =>
+            kickUserWithNativeOwner(
+              room.roomId,
+              id,
+              reason,
+              isSynaraDesktop(),
+              invokeDesktopWithAvailability
             )
           );
         },
@@ -362,15 +356,13 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
             });
           }
 
-          await Promise.all(
-            users.map((id) =>
-              banUserWithNativeOwner(
-                room.roomId,
-                id,
-                reason,
-                isSynaraDesktop(),
-                invokeDesktopWithAvailability
-              )
+          await rateLimitedActions(users, (id) =>
+            banUserWithNativeOwner(
+              room.roomId,
+              id,
+              reason,
+              isSynaraDesktop(),
+              invokeDesktopWithAvailability
             )
           );
         },
@@ -381,14 +373,12 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         exe: async (payload) => {
           const rawIds = splitWithSpace(payload);
           const users = rawIds.filter((id) => isUserId(id));
-          await Promise.all(
-            users.map((id) =>
-              unbanUserWithNativeOwner(
-                room.roomId,
-                id,
-                isSynaraDesktop(),
-                invokeDesktopWithAvailability
-              )
+          await rateLimitedActions(users, (id) =>
+            unbanUserWithNativeOwner(
+              room.roomId,
+              id,
+              isSynaraDesktop(),
+              invokeDesktopWithAvailability
             )
           );
         },
