@@ -16,6 +16,7 @@ import {
 } from '../../utils/dom';
 import { encryptFile, getImageInfo, getThumbnailContent, getVideoInfo } from '../../utils/matrix';
 import { TUploadItem } from '../../state/room/roomInputDrafts';
+import { uploadMediaNative } from '../../state/nativeMediaUpload';
 import { encodeBlurHash } from '../../utils/blurHash';
 import { scaleYDimension } from '../../utils/common';
 import type { GifResult } from '../../utils/gifProvider';
@@ -32,8 +33,10 @@ const generateThumbnailContent = async (
   const thumbnailFile = encThumbData?.file ?? thumbnail;
   if (!thumbnailFile) throw new Error('Can not create thumbnail!');
 
-  const data = await mx.uploadContent(thumbnailFile);
-  const thumbMxc = data?.content_uri;
+  const bytes = Array.from(new Uint8Array(await thumbnailFile.arrayBuffer()));
+  const uploaded = await uploadMediaNative(thumbnailFile.type || 'application/octet-stream', bytes);
+  const thumbMxc =
+    uploaded === 'legacy' ? (await mx.uploadContent(thumbnailFile))?.content_uri : uploaded.mxc;
   if (!thumbMxc) throw new Error('Failed when uploading thumbnail!');
   const thumbnailContent = getThumbnailContent({
     thumbnail: thumbnailFile,
