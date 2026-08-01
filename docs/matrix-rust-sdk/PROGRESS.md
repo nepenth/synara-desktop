@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**                                                                                                                       |
-| Integration tip    | `22f1f06d` — after #395 members-read first slice — after #396 CallWidget media scan, #394 tip honesty, #375 moderation writes, #364 leave, #362 CallWidget, #363 composer fallbacks, #365 pack get\* delete       | — after #372 create, #371 /leave, #369 join, #364 leave |
-| Active work        | Next: powers-bulk or CallWidget media IPC; members-read residual (drawer/lobby/mentions + power reads); C3–C5 live proofs. R-DEVTOOL gated; V-BURN HOLD                            |
+| Integration tip    | `1c9653b2` — after #397 tip honesty and #398 importer taxonomy alignment — after #395 members-read first slice, #396 CallWidget media scan, #394 tip honesty, #375 moderation writes, #364 leave, #362 CallWidget, #363 composer fallbacks, #365 pack get\* delete       | — after #372 create, #371 /leave, #369 join, #364 leave |
+| Active work        | **CallWidget media IPC in flight** (packet #396); next: members-drawer residual (Room/MembersDrawer/Lobby/UserMentionAutocomplete + power reads). C3–C5 live proofs; R-DEVTOOL gated; V-BURN HOLD |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
 | Import accounting  | Desktop production import files **152** on tip (plan baseline was 220). Allowlist **152** (ratcheted after #395 Members.tsx drop).       |
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `22f1f06d`**. #395 members-read first slice landed (Members settings native). Next: powers-bulk or CallWidget media IPC; members-read residual. #39 gated.                                                                                                                                |
-| **Tip**        | `22f1f06d`                                                                                                                                                                                                                             |
-| **Active PRs** | none (V-BURN HOLD; no product PR).                                                                                                                                                                                                     |
+| **Now**        | **Tip `1c9653b2`**. #397/#398 docs merged after #395; imports remain 152. CallWidget media IPC is in flight; members-drawer residual is next. #39 gated.                                                                                                                                |
+| **Tip**        | `1c9653b2`                                                                                                                                                                                                                             |
+| **Active PRs** | CallWidget media IPC implementation **in flight (draft)**; this docs-only update does not claim product code.                                                                                                                                                                                                     |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
 ---
@@ -59,6 +59,15 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — tip `1c9653b2` — docs after #397/#398
+
+| When (UTC) | Item                          | Result          | Notes                                                                                                                                    |
+| ---------- | ----------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**           | **This PR**     | Tip `1c9653b2` on `feature/matrix-rust-sdk-full-replacement`; #397 tip honesty and #398 importer taxonomy alignment are merged.        |
+| current    | **Import accounting**         | **152**         | Production import files and allowlist remain **152**; taxonomy measurement remains anchored to the #395 product tip.                  |
+| current    | **CallWidget media IPC**      | **In flight**   | Native `getMediaConfig`/`downloadFile` implementation follows packet #396; this PR is docs-only and edits no `product.rs`.             |
+| current    | **Members-drawer residual**   | **Next**        | Room/MembersDrawer/Lobby/UserMentionAutocomplete member reads plus power-level/creator reads remain residual after #395.               |
 
 ### 2026-08-01 — tip `22f1f06d` — members-read first slice #395
 

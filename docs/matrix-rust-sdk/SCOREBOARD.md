@@ -3,7 +3,7 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `22f1f06d` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip                                                    | `1c9653b2` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **152** (plan baseline was **220**)                      |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
@@ -64,7 +64,7 @@ run passes the relevant checklist.
 
 | PR     | What                                                                                           |
 | ------ | ---------------------------------------------------------------------------------------------- |
-| (none) | Next: **powers-bulk** or CallWidget media IPC; members-read residual (drawer/lobby/mentions + power reads); C3–C5. |
+| (draft) | **CallWidget media config/download IPC** is in flight from packet #396; members-drawer residual is the next native read slice. This docs-only update claims no product implementation. |
 
 ## Left (finish-line order)
 
@@ -84,7 +84,8 @@ run passes the relevant checklist.
 3. **V-SEND.R-DEVTOOL — native full vertical.** Inventory remains; implement
    after C3–C5 live or explicit reorder. See
    [implementation gate](v-send-devtool-inventory.md#implementation-gate).
-4. **CallWidget media config/download IPC.** **#362** closed `getKnownRooms`
+4. **CallWidget media config/download IPC** (**implementation in flight**).
+   **#362** closed `getKnownRooms`
    natively and fail-closed the rest; **#387** docs scan of media download reuse
    landed. Still need native `getMediaConfig` / `downloadFile` owners (not JS
    fallthrough). Implement packet frozen:
