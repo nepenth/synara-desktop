@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Status | **Docs-only audit** — no product code changed |
-| Measured tip | \`e38bfdab\` on \`feature/matrix-rust-sdk-full-replacement\` |
+| Measured tip | `e38bfdab` on `feature/matrix-rust-sdk-full-replacement` |
 | Scope | Production `mx.uploadContent` / `uploadContent(mx, …)` usages under `synara/src`, excluding the `CompactUploadCardRenderer` native path from #314 |
 | Guard | Do not touch `main` or umbrella PR **#39** |
 
