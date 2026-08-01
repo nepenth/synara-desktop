@@ -60,6 +60,7 @@ const tests = [
   'src/app/state/__tests__/nativeMediaUploadOwner.test.ts',
   'src/app/features/settings/account/__tests__/nativeProfileOwner.test.ts',
   'src/app/features/common-settings/general/__tests__/nativeRoomProfileOwner.test.ts',
+  'src/app/components/__tests__/nativeRoomLeaveOwner.test.ts',
   'src/app/features/room/__tests__/nativeEditMessageOwner.test.ts',
   'src/app/features/room/__tests__/nativeReactionOwner.test.ts',
   'src/app/features/room/__tests__/nativeTimelineActions.test.ts',
