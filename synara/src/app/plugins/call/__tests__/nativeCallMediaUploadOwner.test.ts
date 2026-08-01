@@ -78,6 +78,28 @@ test('native call media upload fails closed without legacy fallback', async () =
   assert.equal(legacyUploads, 0);
 });
 
+test('native call media upload fails closed on an invalid native response', async () => {
+  let legacyUploads = 0;
+  const invalidResponseInvoke: NativeInvoke = async (command) =>
+    command === 'matrix_session_snapshot'
+      ? { available: true, value: { status: 'logged_in' } }
+      : { available: true, value: {} };
+
+  await assert.rejects(
+    uploadCallWidgetFileWithNativeOwner(
+      new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }),
+      true,
+      invalidResponseInvoke,
+      async () => {
+        legacyUploads += 1;
+        return { content_uri: 'mxc://example.org/legacy-call-media' };
+      }
+    ),
+    /Native Matrix media upload is unavailable/
+  );
+  assert.equal(legacyUploads, 0);
+});
+
 test('native call media upload rejects unsupported widget bodies', async () => {
   await assert.rejects(
     uploadCallWidgetFileWithNativeOwner('not-a-binary-upload', true, loggedInInvoke, async () => {
