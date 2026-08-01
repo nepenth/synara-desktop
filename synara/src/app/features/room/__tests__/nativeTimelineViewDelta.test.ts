@@ -1,0 +1,124 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import {
+  applyNativeTimelineViewDelta,
+  filterNativeForwardTargets,
+  isNativeTimelineEventPinned,
+  nativeThreadFocusEventId,
+  needsNativeForwardEncryptionConfirm,
+  shouldAttachFormattedBody,
+  type NativeTimelineViewSnapshot,
+} from '../nativeTimelineView';
+
+const baseSnapshot = (): NativeTimelineViewSnapshot => ({
+  schemaVersion: 1,
+  sessionGeneration: 2,
+  roomId: '!room:example.org',
+  revision: 3,
+  position: { kind: 'live_bottom' },
+  pagination: { backward: 'available', forward: 'available' },
+  readState: { isMarkedUnread: true },
+  pinnedEventIds: ['$already-pinned:example.org'],
+  rows: [],
+  capabilities: {
+    markRead: true,
+    markUnread: true,
+    paginateBackward: true,
+    paginateForward: true,
+  },
+});
+
+test('applies metadata-only read-frontier deltas without row ops', () => {
+  const next = applyNativeTimelineViewDelta(baseSnapshot(), {
+    schemaVersion: 1,
+    sessionGeneration: 2,
+    streamId: 'live:!room:example.org:1',
+    roomId: '!room:example.org',
+    revision: 4,
+    ops: [],
+    readState: {
+      ownReadEventId: '$frontier:example.org',
+      isMarkedUnread: false,
+    },
+  });
+  assert.ok(next);
+  assert.equal(next.revision, 4);
+  assert.equal(next.readState.ownReadEventId, '$frontier:example.org');
+  assert.equal(next.readState.isMarkedUnread, false);
+  assert.equal(next.pagination.backward, 'available');
+});
+
+test('applies pagination and pin-list metadata and rejects empty batches', () => {
+  const next = applyNativeTimelineViewDelta(baseSnapshot(), {
+    schemaVersion: 1,
+    sessionGeneration: 2,
+    streamId: 'live:!room:example.org:1',
+    roomId: '!room:example.org',
+    revision: 4,
+    ops: [],
+    pagination: { backward: 'exhausted', forward: 'available' },
+  });
+  assert.ok(next);
+  assert.equal(next.pagination.backward, 'exhausted');
+
+  const pinned = applyNativeTimelineViewDelta(baseSnapshot(), {
+    schemaVersion: 1,
+    sessionGeneration: 2,
+    streamId: 'live:!room:example.org:1',
+    roomId: '!room:example.org',
+    revision: 4,
+    ops: [],
+    pinnedEventIds: ['$new-pin:example.org'],
+  });
+  assert.ok(pinned);
+  assert.deepEqual(pinned.pinnedEventIds, ['$new-pin:example.org']);
+
+  assert.equal(
+    applyNativeTimelineViewDelta(baseSnapshot(), {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 4,
+      ops: [],
+    }),
+    undefined
+  );
+});
+
+test('pin and forward pure helpers gate unselected presenter UX', () => {
+  assert.equal(isNativeTimelineEventPinned(['$a'], '$a'), true);
+  assert.equal(isNativeTimelineEventPinned(['$a'], '$b'), false);
+  assert.equal(isNativeTimelineEventPinned(undefined, '$a'), false);
+
+  assert.equal(shouldAttachFormattedBody('hello', '<p>hello</p>'), true);
+  assert.equal(shouldAttachFormattedBody('hello', 'hello'), false);
+  assert.equal(shouldAttachFormattedBody('hello', '  '), false);
+
+  assert.equal(
+    nativeThreadFocusEventId({
+      rootEventId: '$root',
+      replyCount: 2,
+      latestEventId: '$latest',
+    }),
+    '$latest'
+  );
+  assert.equal(nativeThreadFocusEventId({ rootEventId: '$root', replyCount: 0 }), '$root');
+
+  const targets = filterNativeForwardTargets(
+    [
+      { roomId: '!source:example.org', name: 'Source', isSpace: false },
+      { roomId: '!space:example.org', name: 'Space', isSpace: true },
+      { roomId: '!target:example.org', name: 'Target room', isEncrypted: false },
+      { roomId: '!secure:example.org', name: 'Secure', isEncrypted: true },
+    ],
+    '!source:example.org',
+    'target'
+  );
+  assert.equal(targets.length, 1);
+  assert.equal(targets[0]?.roomId, '!target:example.org');
+  assert.equal(needsNativeForwardEncryptionConfirm(true, false), true);
+  assert.equal(needsNativeForwardEncryptionConfirm(true, true), false);
+  assert.equal(needsNativeForwardEncryptionConfirm(false, false), false);
+});

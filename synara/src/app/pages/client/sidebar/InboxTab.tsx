@@ -20,8 +20,7 @@ import { useInboxSelected } from '../../../hooks/router/useInbox';
 import { UnreadBadge } from '../../../components/unread-badge';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { useNavToActivePathAtom } from '../../../state/hooks/navToActivePath';
-import { useAccountData } from '../../../hooks/useAccountData';
-import { AccountDataEvent, SynaraLaterContent } from '../../../../types/matrix/accountData';
+import { laterContentAtom } from '../../../state/laterList';
 import { getLaterDueSummary } from '../../../utils/later';
 
 export function InboxTab() {
@@ -31,9 +30,7 @@ export function InboxTab() {
   const inboxSelected = useInboxSelected();
   const allInvites = useAtomValue(allInvitesAtom);
   const inviteCount = allInvites.length;
-  const laterContent = useAccountData(AccountDataEvent.SynaraLater)?.getContent() as
-    | SynaraLaterContent
-    | undefined;
+  const laterContent = useAtomValue(laterContentAtom);
   const laterSummary = getLaterDueSummary(laterContent);
   const laterCount = laterSummary.active;
   const badgeCount = inviteCount + laterCount;

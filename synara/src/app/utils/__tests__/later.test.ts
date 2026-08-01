@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  createLaterItem,
   clearCompletedLaterItems,
   completeLaterItem,
   getLaterDueSummary,
@@ -11,7 +10,6 @@ import {
   putLaterItem,
   removeLaterItem,
   snoozeLaterItem,
-  setLaterItem,
 } from '../later';
 
 test('later items use stable room/event anchors', () => {
@@ -44,21 +42,20 @@ test('putLaterItem, removeLaterItem, and sorting preserve the latest queue state
   assert.deepEqual(Object.keys(removeLaterItem(content, 'reminder').items ?? {}), ['saved']);
 });
 
-test('createLaterItem stores only room/event anchors', () => {
-  const room = { roomId: '!room:example.org' } as any;
-  const event = {
-    getId: () => '$event',
-    getSender: () => '@alice:example.org',
-    getType: () => 'm.room.message',
-    getContent: () => ({ msgtype: 'm.text', body: 'Review this' }),
-  } as any;
+test('later item ids remain room/event anchors without plaintext fields', () => {
+  const item = {
+    id: getLaterItemId('!room:example.org', '$event'),
+    kind: 'reminder' as const,
+    roomId: '!room:example.org',
+    eventId: '$event',
+    createdAt: 1,
+    dueTs: 2_000,
+  };
 
-  const item = createLaterItem(room, event, 'reminder', 2_000);
-
-  assert.equal(item?.id, '!room:example.org\n$event');
-  assert.equal('sender' in (item as Record<string, unknown>), false);
-  assert.equal('body' in (item as Record<string, unknown>), false);
-  assert.equal(item?.dueTs, 2_000);
+  assert.equal(item.id, '!room:example.org\n$event');
+  assert.equal('sender' in item, false);
+  assert.equal('body' in item, false);
+  assert.equal(item.dueTs, 2_000);
 });
 
 test('normalizeLaterContent strips legacy plaintext preview fields', () => {
@@ -132,40 +129,6 @@ test('normalizeLaterContent drops malformed items and non-finite optional timest
     createdAt: 1,
     dueTs: 2,
   });
-});
-
-test('setLaterItem serializes same-client account-data writes', async () => {
-  let accountData: any = { version: 1, items: {} };
-  const mx = {
-    getAccountData: () => ({
-      getContent: () => accountData,
-    }),
-    setAccountData: async (_type: string, next: unknown) => {
-      await new Promise((resolve) => {
-        setTimeout(resolve, 0);
-      });
-      accountData = next;
-    },
-  } as any;
-
-  await Promise.all([
-    setLaterItem(mx, {
-      id: 'a',
-      kind: 'saved',
-      roomId: '!room',
-      eventId: '$a',
-      createdAt: 1,
-    }),
-    setLaterItem(mx, {
-      id: 'b',
-      kind: 'saved',
-      roomId: '!room',
-      eventId: '$b',
-      createdAt: 2,
-    }),
-  ]);
-
-  assert.deepEqual(Object.keys(accountData.items).sort(), ['a', 'b']);
 });
 
 test('later helpers complete, snooze, clear completed, and summarize due items', () => {

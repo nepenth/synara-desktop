@@ -111,6 +111,7 @@ import * as css from './RoomTimeline.css';
 import { timeDayMonthYear, today, yesterday } from '../../utils/time';
 import { createMentionElement, isEmptyEditor, moveCursor } from '../../components/editor';
 import { roomIdToReplyDraftAtomFamily } from '../../state/room/roomInputDrafts';
+import { mapNativeReplyDraftToJs, setNativeComposerReplyDraft } from './nativeComposerDraft';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
 import { GetContentCallback, MessageEvent, StateEvent } from '../../../types/matrix/room';
 import { useKeyDown } from '../../hooks/useKeyDown';
@@ -137,11 +138,14 @@ import { useAccessiblePowerTagColors, useGetMemberPowerTag } from '../../hooks/u
 import { useTheme } from '../../hooks/useTheme';
 import { useRoomCreatorsTag } from '../../hooks/useRoomCreatorsTag';
 import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
-import { createLaterItem, setLaterItem } from '../../utils/later';
 import { useAccountData } from '../../hooks/useAccountData';
 import { AccountDataEvent, SynaraUnreadAnchorContent } from '../../../types/matrix/accountData';
 import { parsePollStartContent } from '../../utils/polls';
-import { addRoomNoteItemAccountData, createMessageRoomNoteItem } from '../../utils/roomNotes';
+import { createLaterItemFromIds, upsertLaterWithNativeOwner } from './nativeLaterOwner';
+import {
+  createMessageRoomNoteItemFromIds,
+  upsertRoomNoteWithNativeOwner,
+} from './nativeRoomNotesOwner';
 import { isPerformanceDebugEnabled, perfLog } from '../../utils/performance';
 import { recordFoundationDiagnostic } from '../../utils/foundationDiagnostics';
 import { isClientDiagnosticEnabled, recordClientDiagnostic } from '../../utils/clientDiagnostics';
@@ -2602,28 +2606,44 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const handleSaveLater = useCallback(
     (targetEventId: string) => {
       const targetEvent = room.findEventById(targetEventId);
-      const item = targetEvent && createLaterItem(room, targetEvent, 'saved');
-      if (item) setLaterItem(mx, item);
+      const resolvedEventId = targetEvent?.getId();
+      if (!resolvedEventId) return;
+      void upsertLaterWithNativeOwner(
+        createLaterItemFromIds(room.roomId, resolvedEventId, 'saved')
+      ).catch(() => undefined);
     },
-    [mx, room]
+    [room]
   );
 
   const handleAddToNotes = useCallback(
     (targetEventId: string) => {
       const targetEvent = room.findEventById(targetEventId);
-      const item = targetEvent && createMessageRoomNoteItem(room, targetEvent);
-      if (item) addRoomNoteItemAccountData(mx, item);
+      const resolvedEventId = targetEvent?.getId();
+      if (!resolvedEventId) return;
+      const content = targetEvent?.getContent() as { body?: unknown } | undefined;
+      void upsertRoomNoteWithNativeOwner(
+        createMessageRoomNoteItemFromIds({
+          roomId: room.roomId,
+          eventId: resolvedEventId,
+          body: typeof content?.body === 'string' ? content.body : undefined,
+          eventTs: targetEvent?.getTs(),
+          sender: targetEvent?.getSender() ?? undefined,
+        })
+      ).catch(() => undefined);
     },
-    [mx, room]
+    [room]
   );
 
   const handleRemindLater = useCallback(
     (targetEventId: string, dueTs: number) => {
       const targetEvent = room.findEventById(targetEventId);
-      const item = targetEvent && createLaterItem(room, targetEvent, 'reminder', dueTs);
-      if (item) setLaterItem(mx, item);
+      const resolvedEventId = targetEvent?.getId();
+      if (!resolvedEventId) return;
+      void upsertLaterWithNativeOwner(
+        createLaterItemFromIds(room.roomId, resolvedEventId, 'reminder', dueTs)
+      ).catch(() => undefined);
     },
-    [mx, room]
+    [room]
   );
 
   const handleOpenReply: MouseEventHandler = useCallback(
@@ -2682,25 +2702,41 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         console.warn('Button should have "data-event-id" attribute!');
         return;
       }
-      const replyEvt = room.findEventById(replyId);
-      if (!replyEvt) return;
-      const editedReply = getEditedEvent(replyId, replyEvt, room.getUnfilteredTimelineSet());
-      const content: IContent = editedReply?.getContent()['m.new_content'] ?? replyEvt.getContent();
-      const { body, formatted_body: formattedBody } = content;
-      const { 'm.relates_to': relation } = startThread
-        ? { 'm.relates_to': { rel_type: 'm.thread', event_id: replyId } }
-        : replyEvt.getWireContent();
-      const senderId = replyEvt.getSender();
-      if (senderId && typeof body === 'string') {
-        setReplyDraft({
-          userId: senderId,
-          eventId: replyId,
-          body,
-          formattedBody,
-          relation,
-        });
-        setTimeout(() => ReactEditor.focus(editor), 100);
-      }
+      const applyLegacyReplyDraft = () => {
+        const replyEvt = room.findEventById(replyId);
+        if (!replyEvt) return;
+        const editedReply = getEditedEvent(replyId, replyEvt, room.getUnfilteredTimelineSet());
+        const content: IContent =
+          editedReply?.getContent()['m.new_content'] ?? replyEvt.getContent();
+        const { body, formatted_body: formattedBody } = content;
+        const { 'm.relates_to': relation } = startThread
+          ? { 'm.relates_to': { rel_type: 'm.thread', event_id: replyId } }
+          : replyEvt.getWireContent();
+        const senderId = replyEvt.getSender();
+        if (senderId && typeof body === 'string') {
+          setReplyDraft({
+            userId: senderId,
+            eventId: replyId,
+            body,
+            formattedBody,
+            relation,
+          });
+          setTimeout(() => ReactEditor.focus(editor), 100);
+        }
+      };
+
+      void setNativeComposerReplyDraft({
+        roomId: room.roomId,
+        eventId: replyId,
+        startThread,
+      }).then((readback) => {
+        if (readback !== 'unavailable' && readback.status === 'set' && readback.draft) {
+          setReplyDraft(mapNativeReplyDraftToJs(readback.draft));
+          setTimeout(() => ReactEditor.focus(editor), 100);
+          return;
+        }
+        applyLegacyReplyDraft();
+      });
     },
     [room, setReplyDraft, editor]
   );

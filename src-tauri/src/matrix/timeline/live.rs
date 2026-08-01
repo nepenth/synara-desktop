@@ -5,14 +5,19 @@
 //! event types, timestamps, and safe display text.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
+use eyeball_im::VectorDiff;
+use futures_util::{stream, StreamExt};
 use matrix_sdk::{
+    event_cache::PaginationStatus,
     ruma::{
+        api::client::receipt::create_receipt::v3::ReceiptType,
         events::{reaction::ReactionEventContent, relation::Annotation},
-        OwnedEventId, OwnedRoomId,
+        OwnedEventId, OwnedRoomId, OwnedUserId, UserId,
     },
-    Client,
+    Client, Room,
 };
 use matrix_sdk_crypto::types::events::UtdCause;
 use matrix_sdk_ui::timeline::{
@@ -21,25 +26,145 @@ use matrix_sdk_ui::timeline::{
     TimelineItemContent as SdkTimelineItemContent,
 };
 use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter};
+use tokio::{sync::Mutex as AsyncMutex, task::JoinHandle};
 
 use crate::matrix::{
     dto::TimelineEncryptedUnavailableItem,
     utd_recovery::{UtdRecoveryCoordinator, UtdRecoveryKind},
 };
 
-use super::{UtdIndex, UtdPhase, UtdReasonCode};
+use super::{
+    project_timeline_diffs_with_media, project_timeline_item_with_media, TimelineMediaRegistry,
+    TimelineMediaSource, TimelinePageState, TimelinePaginationState, TimelineReadState,
+    TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewPosition, TimelineViewSnapshot,
+    UtdIndex, UtdPhase, UtdReasonCode, NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
+    TIMELINE_VIEW_SCHEMA_VERSION,
+};
 
 const PAGINATION_BATCH_SIZE: u16 = 30;
 const REDACTED_PLACEHOLDER: &str = "Message removed";
 const UTD_PLACEHOLDER: &str = "Unable to decrypt this message";
 const UNSUPPORTED_PLACEHOLDER: &str = "Unsupported event";
 const MAX_FOCUSED_EVENT_READBACKS: usize = 256;
+const FOCUSED_CONTEXT_EVENT_COUNT: u16 = 25;
+
+/// Version of the bounded native timeline-open contract.
+///
+/// This is an implementation foundation for the full V-TIMELINE DTO boundary;
+/// it is not a claim that the flat legacy snapshot is the final presenter
+/// payload.
+pub const NATIVE_TIMELINE_OPEN_SCHEMA_VERSION: u32 = 1;
+pub const NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS: u64 = 10 * 60 * 1000;
+
+/// Requested initial position for one native timeline view.
+///
+/// `Normal` is the native owner route for an ordinary room open. It resolves
+/// shared unread state before considering the optional, UI-held restore hint;
+/// the hint is neither sync state nor a server-side viewport command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct NativeTimelineViewportHint {
+    #[serde(default)]
+    pub at_bottom: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restored_anchor_event_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub live_tail_event_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum NativeTimelineOpenPosition {
+    Normal {
+        #[serde(flatten, default)]
+        viewport: NativeTimelineViewportHint,
+    },
+    LiveBottom,
+    Unread,
+    Focused {
+        event_id: String,
+    },
+}
+
+/// Typed input for the native timeline-open owner.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineOpenRequest {
+    pub room_id: String,
+    pub position: NativeTimelineOpenPosition,
+}
+
+/// Bounded authoritative result of opening the requested native timeline
+/// position. This is the versioned, SDK-neutral view boundary; it has no
+/// active React consumer until the complete presenter cutover is ready.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineOpenReadback {
+    pub schema_version: u32,
+    /// Opaque identifier carried by every delta from this exact opened view.
+    pub stream_id: String,
+    /// Native-selected placement after resolving the request. In particular,
+    /// a normal open can select unread, restored, or live-bottom placement.
+    pub position: TimelineViewPosition,
+    pub snapshot: TimelineViewSnapshot,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeTimelineDirection {
     Backwards,
     Forwards,
+}
+
+/// A pagination request addresses the exact opened view, rather than assuming
+/// a room has only one timeline. `stream_id` comes from `matrix_timeline_open`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineViewPaginationRequest {
+    pub stream_id: String,
+    pub direction: NativeTimelineDirection,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineCloseRequest {
+    pub stream_id: String,
+}
+
+/// Rebind one opened view to the live bottom without a JS timeline fetch.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineJumpLatestRequest {
+    pub stream_id: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeTimelineReadAction {
+    MarkRead,
+    MarkUnread,
+}
+
+/// A read-state transition always targets one opened native timeline view.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineReadStateRequest {
+    pub stream_id: String,
+    pub action: NativeTimelineReadAction,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineReadStateReadback {
+    pub action: NativeTimelineReadAction,
+    /// `None` for an account-data unread-flag change; otherwise whether the
+    /// SDK actually sent a private read receipt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receipt_sent: Option<bool>,
+    pub snapshot: TimelineViewSnapshot,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -151,10 +276,22 @@ struct LiveTimelineEntry {
     hit_start: bool,
 }
 
+struct ViewStreamEntry {
+    room_id: String,
+    timeline: Arc<Timeline>,
+    position: TimelineViewPosition,
+    hit_start: Arc<AtomicBool>,
+    media: Arc<AsyncMutex<TimelineMediaRegistry>>,
+}
+
 pub struct NativeTimelineRegistry {
     session_generation: u64,
     entries: HashMap<String, LiveTimelineEntry>,
     focused_entries: HashMap<(String, String), Arc<Timeline>>,
+    view_streams: HashMap<String, ViewStreamEntry>,
+    view_update_tasks: HashMap<String, JoinHandle<()>>,
+    view_revisions: HashMap<String, Arc<AtomicU64>>,
+    next_view_stream_id: u64,
     utd_index: UtdIndex,
     utd_recovery: UtdRecoveryCoordinator,
 }
@@ -165,6 +302,10 @@ impl NativeTimelineRegistry {
             session_generation,
             entries: HashMap::new(),
             focused_entries: HashMap::new(),
+            view_streams: HashMap::new(),
+            view_update_tasks: HashMap::new(),
+            view_revisions: HashMap::new(),
+            next_view_stream_id: 0,
             utd_index: UtdIndex::new(session_generation),
             utd_recovery: UtdRecoveryCoordinator::new(session_generation),
         }
@@ -202,6 +343,314 @@ impl NativeTimelineRegistry {
         self.snapshot(client, &room_id_string).await
     }
 
+    /// Open the requested view from the native timeline owner without
+    /// collapsing an event-link focus into the live-bottom route.
+    pub async fn open_at(
+        &mut self,
+        app: AppHandle,
+        client: &Client,
+        request: NativeTimelineOpenRequest,
+    ) -> Result<NativeTimelineOpenReadback, &'static str> {
+        let room_id = parse_room_id(&request.room_id)?;
+        let room_id_string = room_id.to_string();
+        let requested_position = request.position;
+        let (timeline, view_position, pagination) = match &requested_position {
+            NativeTimelineOpenPosition::Normal { viewport } => {
+                let room = client
+                    .get_room(&room_id)
+                    .ok_or("v-timeline-normal-room-not-found")?;
+                let has_unread = room.is_marked_unread()
+                    || room.num_unread_messages() > 0
+                    || room.num_unread_notifications() > 0
+                    || room.num_unread_mentions() > 0;
+                // Live-tail matching for unread+at_bottom restore needs the
+                // live timeline's current tip before placement is chosen.
+                let current_live_tail = if viewport.at_bottom && has_unread {
+                    self.open(client, &room_id_string).await?;
+                    self.live_tail_event_id(&room_id_string).await
+                } else {
+                    None
+                };
+                let now_ms = unix_time_ms();
+                let selected_position = resolve_normal_open_position(
+                    has_unread,
+                    room.fully_read_event_id()
+                        .map(|event_id| event_id.to_string()),
+                    current_live_tail.as_deref(),
+                    now_ms,
+                    viewport,
+                )?;
+                match selected_position {
+                    TimelineViewPosition::LiveBottom => {
+                        self.open(client, &room_id_string).await?;
+                        let entry = self
+                            .entries
+                            .get(&room_id_string)
+                            .expect("live timeline inserted by open");
+                        (
+                            entry.timeline.clone(),
+                            TimelineViewPosition::LiveBottom,
+                            TimelinePaginationState {
+                                backward: if entry.hit_start {
+                                    TimelinePageState::Exhausted
+                                } else {
+                                    TimelinePageState::Available
+                                },
+                                forward: TimelinePageState::Available,
+                            },
+                        )
+                    }
+                    TimelineViewPosition::Unread {
+                        ref anchor_event_id,
+                    }
+                    | TimelineViewPosition::Restored {
+                        anchor_event_id: Some(ref anchor_event_id),
+                    } => {
+                        let event_id = parse_event_id(anchor_event_id)
+                            .map_err(|_| "v-timeline-normal-anchor-invalid")?;
+                        let key = (room_id_string.clone(), event_id.to_string());
+                        if !self.focused_entries.contains_key(&key) {
+                            if self.focused_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
+                                if let Some(oldest_key) =
+                                    self.focused_entries.keys().next().cloned()
+                                {
+                                    self.focused_entries.remove(&oldest_key);
+                                }
+                            }
+                            let timeline = TimelineBuilder::new(&room)
+                                .with_focus(TimelineFocus::Event {
+                                    target: event_id.clone(),
+                                    num_context_events: FOCUSED_CONTEXT_EVENT_COUNT,
+                                    thread_mode: TimelineEventFocusThreadMode::Automatic {
+                                        hide_threaded_events: false,
+                                    },
+                                })
+                                .build()
+                                .await
+                                .map_err(|_| "v-timeline-normal-open-failed")?;
+                            self.focused_entries.insert(key.clone(), Arc::new(timeline));
+                        }
+                        let timeline = self
+                            .focused_entries
+                            .get(&key)
+                            .expect("normal focused timeline present")
+                            .clone();
+                        (
+                            timeline,
+                            selected_position,
+                            TimelinePaginationState {
+                                backward: TimelinePageState::Available,
+                                forward: TimelinePageState::Available,
+                            },
+                        )
+                    }
+                    TimelineViewPosition::Focused { .. }
+                    | TimelineViewPosition::Restored {
+                        anchor_event_id: None,
+                    } => unreachable!("normal open only selects live, unread, or anchored restore"),
+                }
+            }
+            NativeTimelineOpenPosition::LiveBottom => {
+                self.open(client, &room_id_string).await?;
+                let entry = self
+                    .entries
+                    .get(&room_id_string)
+                    .expect("live timeline inserted by open");
+                (
+                    entry.timeline.clone(),
+                    TimelineViewPosition::LiveBottom,
+                    TimelinePaginationState {
+                        backward: if entry.hit_start {
+                            TimelinePageState::Exhausted
+                        } else {
+                            TimelinePageState::Available
+                        },
+                        forward: TimelinePageState::Available,
+                    },
+                )
+            }
+            NativeTimelineOpenPosition::Focused { event_id } => {
+                let event_id = parse_event_id(event_id)?;
+                let key = (room_id_string.clone(), event_id.to_string());
+                let room = client
+                    .get_room(&room_id)
+                    .ok_or("v-timeline-focused-room-not-found")?;
+                if !self.focused_entries.contains_key(&key) {
+                    if self.focused_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
+                        if let Some(oldest_key) = self.focused_entries.keys().next().cloned() {
+                            self.focused_entries.remove(&oldest_key);
+                        }
+                    }
+                    let timeline = TimelineBuilder::new(&room)
+                        .with_focus(TimelineFocus::Event {
+                            target: event_id.clone(),
+                            num_context_events: FOCUSED_CONTEXT_EVENT_COUNT,
+                            thread_mode: TimelineEventFocusThreadMode::Automatic {
+                                hide_threaded_events: false,
+                            },
+                        })
+                        .build()
+                        .await
+                        .map_err(|_| "v-timeline-focused-open-failed")?;
+                    self.focused_entries.insert(key.clone(), Arc::new(timeline));
+                }
+                let timeline = self
+                    .focused_entries
+                    .get(&key)
+                    .expect("focused timeline present")
+                    .clone();
+                (
+                    timeline,
+                    TimelineViewPosition::Focused {
+                        target_event_id: event_id.to_string(),
+                    },
+                    TimelinePaginationState {
+                        backward: TimelinePageState::Available,
+                        forward: TimelinePageState::Available,
+                    },
+                )
+            }
+            NativeTimelineOpenPosition::Unread => {
+                let room = client
+                    .get_room(&room_id)
+                    .ok_or("v-timeline-unread-room-not-found")?;
+                let has_unread = room.is_marked_unread()
+                    || room.num_unread_messages() > 0
+                    || room.num_unread_notifications() > 0
+                    || room.num_unread_mentions() > 0;
+                if !has_unread {
+                    return Err("v-timeline-unread-open-no-unread");
+                }
+                let anchor_event_id = room
+                    .fully_read_event_id()
+                    .ok_or("v-timeline-unread-frontier-unavailable")?;
+                let key = (room_id_string.clone(), anchor_event_id.to_string());
+                if !self.focused_entries.contains_key(&key) {
+                    if self.focused_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
+                        if let Some(oldest_key) = self.focused_entries.keys().next().cloned() {
+                            self.focused_entries.remove(&oldest_key);
+                        }
+                    }
+                    let timeline = TimelineBuilder::new(&room)
+                        .with_focus(TimelineFocus::Event {
+                            target: anchor_event_id.clone(),
+                            num_context_events: FOCUSED_CONTEXT_EVENT_COUNT,
+                            thread_mode: TimelineEventFocusThreadMode::Automatic {
+                                hide_threaded_events: false,
+                            },
+                        })
+                        .build()
+                        .await
+                        .map_err(|_| "v-timeline-unread-open-failed")?;
+                    self.focused_entries.insert(key.clone(), Arc::new(timeline));
+                }
+                let timeline = self
+                    .focused_entries
+                    .get(&key)
+                    .expect("unread frontier timeline present")
+                    .clone();
+                (
+                    timeline,
+                    TimelineViewPosition::Unread {
+                        anchor_event_id: anchor_event_id.to_string(),
+                    },
+                    TimelinePaginationState {
+                        backward: TimelinePageState::Available,
+                        forward: TimelinePageState::Available,
+                    },
+                )
+            }
+        };
+        let own_user_id = client.user_id().map(ToOwned::to_owned);
+        self.next_view_stream_id = self.next_view_stream_id.saturating_add(1);
+        let subscription_key = format!(
+            "{}:{}",
+            view_subscription_key(&room_id_string, &view_position),
+            self.next_view_stream_id
+        );
+        let revision = Arc::new(AtomicU64::new(0));
+        self.view_revisions
+            .insert(subscription_key.clone(), revision.clone());
+        let hit_start = Arc::new(AtomicBool::new(matches!(
+            pagination.backward,
+            TimelinePageState::Exhausted
+        )));
+        self.view_streams.insert(
+            subscription_key.clone(),
+            ViewStreamEntry {
+                room_id: room_id_string.clone(),
+                timeline: timeline.clone(),
+                position: view_position.clone(),
+                hit_start: hit_start.clone(),
+                media: Arc::new(AsyncMutex::new(TimelineMediaRegistry::new(
+                    self.session_generation,
+                    subscription_key.clone(),
+                ))),
+            },
+        );
+        let media = self
+            .view_streams
+            .get(&subscription_key)
+            .expect("view stream inserted before projection")
+            .media
+            .clone();
+        // Subscribe before materializing the initial rows so no SDK update can
+        // fall into a snapshot-to-stream gap. Every open owns a distinct
+        // stream, revision counter, update task, and media registry.
+        let (items, updates) = timeline.subscribe().await;
+        let item_ids: Vec<String> = items
+            .iter()
+            .map(|item| item.unique_id().0.clone())
+            .collect();
+        let rows = {
+            let mut registry = media.lock().await;
+            items
+                .iter()
+                .map(|item| {
+                    project_timeline_item_with_media(item, own_user_id.as_deref(), &mut registry)
+                })
+                .collect()
+        };
+        let snapshot = view_snapshot_from_items(
+            TimelineViewSnapshotInput {
+                session_generation: self.session_generation,
+                room_id: room_id_string.clone(),
+                position: view_position.clone(),
+                pagination,
+                own_user_id: own_user_id.clone(),
+                revision: revision.load(Ordering::Acquire),
+            },
+            &timeline,
+            rows,
+        )
+        .await;
+        self.view_update_tasks.insert(
+            subscription_key.clone(),
+            spawn_view_update_owner(
+                ViewUpdateOwnerInput {
+                    app,
+                    session_generation: self.session_generation,
+                    stream_id: subscription_key.clone(),
+                    room_id: room_id_string.clone(),
+                    own_user_id,
+                    revision,
+                    media,
+                    item_ids,
+                    timeline: timeline.clone(),
+                    position: view_position.clone(),
+                    hit_start,
+                },
+                updates,
+            ),
+        );
+        Ok(NativeTimelineOpenReadback {
+            schema_version: NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
+            stream_id: subscription_key,
+            position: view_position,
+            snapshot,
+        })
+    }
+
     pub async fn snapshot(
         &mut self,
         client: &Client,
@@ -223,6 +672,199 @@ impl NativeTimelineRegistry {
     }
 
     pub async fn paginate(
+        &mut self,
+        client: &Client,
+        request: NativeTimelineViewPaginationRequest,
+    ) -> Result<TimelineViewSnapshot, &'static str> {
+        let (room_id, timeline, position, pagination, media) = {
+            let stream = self
+                .view_streams
+                .get_mut(&request.stream_id)
+                .ok_or("v-timeline-view-not-open")?;
+            let reached_end = match request.direction {
+                NativeTimelineDirection::Backwards => stream
+                    .timeline
+                    .paginate_backwards(PAGINATION_BATCH_SIZE)
+                    .await
+                    .map_err(|_| "v-timeline-view-paginate-backwards-failed")?,
+                NativeTimelineDirection::Forwards => stream
+                    .timeline
+                    .paginate_forwards(PAGINATION_BATCH_SIZE)
+                    .await
+                    .map_err(|_| "v-timeline-view-paginate-forwards-failed")?,
+            };
+            if request.direction == NativeTimelineDirection::Backwards {
+                stream.hit_start.store(reached_end, Ordering::Release);
+            }
+            (
+                stream.room_id.clone(),
+                stream.timeline.clone(),
+                stream.position.clone(),
+                TimelinePaginationState {
+                    backward: if stream.hit_start.load(Ordering::Acquire) {
+                        TimelinePageState::Exhausted
+                    } else {
+                        TimelinePageState::Available
+                    },
+                    forward: TimelinePageState::Available,
+                },
+                stream.media.clone(),
+            )
+        };
+        let revision = self
+            .view_revisions
+            .get(&request.stream_id)
+            .ok_or("v-timeline-view-revision-missing")?
+            .load(Ordering::Acquire);
+        Ok(view_snapshot_from_timeline(
+            TimelineViewSnapshotInput {
+                session_generation: self.session_generation,
+                room_id,
+                position,
+                pagination,
+                own_user_id: client.user_id().map(ToOwned::to_owned),
+                revision,
+            },
+            &timeline,
+            media,
+        )
+        .await)
+    }
+
+    pub async fn set_read_state(
+        &mut self,
+        client: &Client,
+        request: NativeTimelineReadStateRequest,
+    ) -> Result<NativeTimelineReadStateReadback, &'static str> {
+        let timeline = self
+            .view_streams
+            .get(&request.stream_id)
+            .ok_or("v-timeline-view-not-open")?
+            .timeline
+            .clone();
+        let receipt_sent = match request.action {
+            NativeTimelineReadAction::MarkRead => Some(
+                timeline
+                    .mark_as_read(ReceiptType::ReadPrivate)
+                    .await
+                    .map_err(|_| "v-timeline-view-mark-read-failed")?,
+            ),
+            NativeTimelineReadAction::MarkUnread => {
+                timeline
+                    .room()
+                    .set_unread_flag(true)
+                    .await
+                    .map_err(|_| "v-timeline-view-mark-unread-failed")?;
+                None
+            }
+        };
+        let snapshot = self
+            .view_snapshot_for_stream(client, &request.stream_id)
+            .await?;
+        Ok(NativeTimelineReadStateReadback {
+            action: request.action,
+            receipt_sent,
+            snapshot,
+        })
+    }
+
+    async fn view_snapshot_for_stream(
+        &self,
+        client: &Client,
+        stream_id: &str,
+    ) -> Result<TimelineViewSnapshot, &'static str> {
+        let stream = self
+            .view_streams
+            .get(stream_id)
+            .ok_or("v-timeline-view-not-open")?;
+        let revision = self
+            .view_revisions
+            .get(stream_id)
+            .ok_or("v-timeline-view-revision-missing")?
+            .load(Ordering::Acquire);
+        Ok(view_snapshot_from_timeline(
+            TimelineViewSnapshotInput {
+                session_generation: self.session_generation,
+                room_id: stream.room_id.clone(),
+                position: stream.position.clone(),
+                pagination: TimelinePaginationState {
+                    backward: if stream.hit_start.load(Ordering::Acquire) {
+                        TimelinePageState::Exhausted
+                    } else {
+                        TimelinePageState::Available
+                    },
+                    forward: TimelinePageState::Available,
+                },
+                own_user_id: client.user_id().map(ToOwned::to_owned),
+                revision,
+            },
+            &stream.timeline,
+            stream.media.clone(),
+        )
+        .await)
+    }
+
+    pub fn close_view(&mut self, request: NativeTimelineCloseRequest) -> bool {
+        let removed = self.view_streams.remove(&request.stream_id).is_some();
+        self.view_revisions.remove(&request.stream_id);
+        if let Some(task) = self.view_update_tasks.remove(&request.stream_id) {
+            task.abort();
+        }
+        removed
+    }
+
+    /// Rebind an opened stream to the live bottom and return a fresh stream
+    /// ownership packet. The previous stream is closed; the caller must adopt
+    /// the new stream id from readback.
+    pub async fn jump_latest(
+        &mut self,
+        app: AppHandle,
+        client: &Client,
+        request: NativeTimelineJumpLatestRequest,
+    ) -> Result<NativeTimelineOpenReadback, &'static str> {
+        let room_id = self
+            .view_streams
+            .get(&request.stream_id)
+            .ok_or("v-timeline-view-not-open")?
+            .room_id
+            .clone();
+        self.close_view(NativeTimelineCloseRequest {
+            stream_id: request.stream_id,
+        });
+        self.open_at(
+            app,
+            client,
+            NativeTimelineOpenRequest {
+                room_id,
+                position: NativeTimelineOpenPosition::LiveBottom,
+            },
+        )
+        .await
+    }
+
+    async fn live_tail_event_id(&self, room_id: &str) -> Option<String> {
+        let entry = self.entries.get(room_id)?;
+        let items = entry.timeline.items().await;
+        items.iter().rev().find_map(|item| {
+            item.as_event()
+                .and_then(|event| event.event_id().map(|event_id| event_id.to_string()))
+        })
+    }
+
+    pub async fn resolve_media(&self, handle_id: &str) -> Option<TimelineMediaSource> {
+        for stream in self.view_streams.values() {
+            let registry = stream.media.lock().await;
+            if registry.session_generation() != self.session_generation {
+                continue;
+            }
+            if let Some(source) = registry.resolve(handle_id) {
+                return Some(source.clone());
+            }
+        }
+        None
+    }
+
+    pub async fn paginate_legacy(
         &mut self,
         client: &Client,
         room_id: &str,
@@ -644,6 +1286,438 @@ impl NativeTimelineRegistry {
     }
 }
 
+impl Drop for NativeTimelineRegistry {
+    fn drop(&mut self) {
+        for (_, task) in self.view_update_tasks.drain() {
+            task.abort();
+        }
+    }
+}
+
+fn unix_time_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+fn should_restore_viewport(
+    has_unread: bool,
+    now_ms: u64,
+    current_live_tail_event_id: Option<&str>,
+    viewport: &NativeTimelineViewportHint,
+) -> bool {
+    if has_unread {
+        return viewport.at_bottom
+            && viewport.live_tail_event_id.as_deref().is_some()
+            && current_live_tail_event_id.is_some()
+            && viewport.live_tail_event_id.as_deref() == current_live_tail_event_id;
+    }
+    if viewport.at_bottom {
+        return true;
+    }
+    let Some(updated_at_ms) = viewport.updated_at_ms else {
+        return false;
+    };
+    if now_ms.saturating_sub(updated_at_ms) > NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS {
+        return false;
+    }
+    viewport
+        .restored_anchor_event_id
+        .as_deref()
+        .and_then(|event_id| parse_event_id(event_id).ok())
+        .is_some()
+}
+
+fn resolve_normal_open_position(
+    has_unread: bool,
+    fully_read_event_id: Option<String>,
+    current_live_tail_event_id: Option<&str>,
+    now_ms: u64,
+    viewport: &NativeTimelineViewportHint,
+) -> Result<TimelineViewPosition, &'static str> {
+    let can_restore =
+        should_restore_viewport(has_unread, now_ms, current_live_tail_event_id, viewport);
+    if can_restore && viewport.at_bottom {
+        return Ok(TimelineViewPosition::LiveBottom);
+    }
+    if has_unread {
+        let anchor_event_id =
+            fully_read_event_id.ok_or("v-timeline-normal-unread-frontier-unavailable")?;
+        return Ok(TimelineViewPosition::Unread { anchor_event_id });
+    }
+    if can_restore {
+        if let Some(anchor_event_id) = viewport
+            .restored_anchor_event_id
+            .as_deref()
+            .and_then(|event_id| parse_event_id(event_id).ok())
+            .map(|event_id| event_id.to_string())
+        {
+            return Ok(TimelineViewPosition::Restored {
+                anchor_event_id: Some(anchor_event_id),
+            });
+        }
+    }
+    Ok(TimelineViewPosition::LiveBottom)
+}
+
+fn view_subscription_key(room_id: &str, position: &TimelineViewPosition) -> String {
+    match position {
+        TimelineViewPosition::LiveBottom => format!("live:{room_id}"),
+        TimelineViewPosition::Unread { .. } => format!("unread:{room_id}"),
+        TimelineViewPosition::Focused { target_event_id } => {
+            format!("focused:{room_id}:{target_event_id}")
+        }
+        TimelineViewPosition::Restored {
+            anchor_event_id: Some(anchor_event_id),
+        } => format!("restored:{room_id}:{anchor_event_id}"),
+        TimelineViewPosition::Restored {
+            anchor_event_id: None,
+        } => format!("restored:{room_id}:none"),
+    }
+}
+
+struct ViewUpdateOwnerInput {
+    app: AppHandle,
+    session_generation: u64,
+    stream_id: String,
+    room_id: String,
+    own_user_id: Option<OwnedUserId>,
+    revision: Arc<AtomicU64>,
+    media: Arc<AsyncMutex<TimelineMediaRegistry>>,
+    item_ids: Vec<String>,
+    timeline: Arc<Timeline>,
+    position: TimelineViewPosition,
+    hit_start: Arc<AtomicBool>,
+}
+fn spawn_view_update_owner(
+    input: ViewUpdateOwnerInput,
+    updates: impl futures_util::Stream<Item = Vec<VectorDiff<Arc<SdkTimelineItem>>>> + Send + 'static,
+) -> JoinHandle<()> {
+    let ViewUpdateOwnerInput {
+        app,
+        session_generation,
+        stream_id,
+        room_id,
+        own_user_id,
+        revision,
+        media,
+        mut item_ids,
+        timeline,
+        position,
+        hit_start,
+    } = input;
+    tokio::spawn(async move {
+        let emitter = ViewDeltaEmitter {
+            app,
+            session_generation,
+            stream_id,
+            room_id,
+            revision,
+        };
+        let mut last_read_state =
+            project_live_read_state(&timeline, &position, own_user_id.as_deref()).await;
+        let mut last_pagination =
+            pagination_state_from_hit_start(hit_start.load(Ordering::Acquire));
+        let mut last_pinned_event_ids = project_pinned_event_ids(timeline.room());
+
+        let mut room_info = timeline.room().subscribe_info();
+        let mut read_receipts = timeline.subscribe_own_user_read_receipts_changed().await;
+        let mut pagination_updates: std::pin::Pin<
+            Box<dyn futures_util::Stream<Item = PaginationStatus> + Send>,
+        > = match timeline.live_back_pagination_status().await {
+            Some((current, stream)) => {
+                last_pagination = pagination_state_from_status(current, &hit_start);
+                Box::pin(stream)
+            }
+            None => Box::pin(stream::pending()),
+        };
+
+        futures_util::pin_mut!(updates);
+
+        loop {
+            tokio::select! {
+                Some(diffs) = updates.next() => {
+                    apply_item_id_diffs(&mut item_ids, &diffs);
+                    let ops = {
+                        let mut registry = media.lock().await;
+                        registry.retain_items(item_ids.iter().map(String::as_str));
+                        project_timeline_diffs_with_media(
+                            &diffs,
+                            own_user_id.as_deref(),
+                            &mut registry,
+                        )
+                    };
+                    if ops.is_empty() {
+                        continue;
+                    }
+                    emitter.emit(ops, None, None, None);
+                }
+                Some(_) = room_info.next() => {
+                    let read_state =
+                        project_live_read_state(&timeline, &position, own_user_id.as_deref()).await;
+                    let pinned_event_ids = project_pinned_event_ids(timeline.room());
+                    let read_changed = read_state != last_read_state;
+                    let pins_changed = pinned_event_ids != last_pinned_event_ids;
+                    if !read_changed && !pins_changed {
+                        continue;
+                    }
+                    if read_changed {
+                        last_read_state = read_state.clone();
+                    }
+                    if pins_changed {
+                        last_pinned_event_ids = pinned_event_ids.clone();
+                    }
+                    emitter.emit(
+                        Vec::new(),
+                        read_changed.then_some(read_state),
+                        None,
+                        pins_changed.then_some(pinned_event_ids),
+                    );
+                }
+                Some(()) = read_receipts.next() => {
+                    let read_state =
+                        project_live_read_state(&timeline, &position, own_user_id.as_deref()).await;
+                    if read_state == last_read_state {
+                        continue;
+                    }
+                    last_read_state = read_state.clone();
+                    emitter.emit(Vec::new(), Some(read_state), None, None);
+                }
+                Some(status) = pagination_updates.next() => {
+                    let pagination = pagination_state_from_status(status, &hit_start);
+                    if pagination == last_pagination {
+                        continue;
+                    }
+                    last_pagination = pagination.clone();
+                    emitter.emit(Vec::new(), None, Some(pagination), None);
+                }
+                else => break,
+            }
+        }
+    })
+}
+
+struct ViewDeltaEmitter {
+    app: AppHandle,
+    session_generation: u64,
+    stream_id: String,
+    room_id: String,
+    revision: Arc<AtomicU64>,
+}
+
+impl ViewDeltaEmitter {
+    fn emit(
+        &self,
+        ops: Vec<super::TimelineViewDeltaOp>,
+        read_state: Option<TimelineReadState>,
+        pagination: Option<TimelinePaginationState>,
+        pinned_event_ids: Option<Vec<String>>,
+    ) {
+        if ops.is_empty()
+            && read_state.is_none()
+            && pagination.is_none()
+            && pinned_event_ids.is_none()
+        {
+            return;
+        }
+        let next_revision = self
+            .revision
+            .fetch_add(1, Ordering::AcqRel)
+            .saturating_add(1);
+        let _ = self.app.emit(
+            NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
+            TimelineViewDeltaBatch {
+                schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+                session_generation: self.session_generation,
+                stream_id: self.stream_id.clone(),
+                room_id: self.room_id.clone(),
+                revision: next_revision,
+                ops,
+                read_state,
+                pagination,
+                pinned_event_ids,
+            },
+        );
+    }
+}
+
+fn pagination_state_from_hit_start(hit_start: bool) -> TimelinePaginationState {
+    TimelinePaginationState {
+        backward: if hit_start {
+            TimelinePageState::Exhausted
+        } else {
+            TimelinePageState::Available
+        },
+        forward: TimelinePageState::Available,
+    }
+}
+
+fn pagination_state_from_status(
+    status: PaginationStatus,
+    hit_start: &AtomicBool,
+) -> TimelinePaginationState {
+    let backward = match status {
+        PaginationStatus::Paginating => TimelinePageState::Loading,
+        PaginationStatus::Idle {
+            hit_timeline_start: true,
+        } => {
+            hit_start.store(true, Ordering::Release);
+            TimelinePageState::Exhausted
+        }
+        PaginationStatus::Idle {
+            hit_timeline_start: false,
+        } => {
+            if hit_start.load(Ordering::Acquire) {
+                TimelinePageState::Exhausted
+            } else {
+                TimelinePageState::Available
+            }
+        }
+    };
+    TimelinePaginationState {
+        backward,
+        forward: TimelinePageState::Available,
+    }
+}
+
+async fn project_live_read_state(
+    timeline: &Timeline,
+    position: &TimelineViewPosition,
+    own_user_id: Option<&UserId>,
+) -> TimelineReadState {
+    let unread_anchor_event_id = match position {
+        TimelineViewPosition::Unread { anchor_event_id } => Some(anchor_event_id.clone()),
+        _ => None,
+    };
+    let own_read_event_id = match timeline.room().fully_read_event_id() {
+        Some(event_id) => Some(event_id.to_string()),
+        None => match own_user_id {
+            Some(user_id) => timeline
+                .latest_user_read_receipt_timeline_event_id(user_id)
+                .await
+                .map(|event_id| event_id.to_string()),
+            None => None,
+        },
+    };
+    TimelineReadState {
+        own_read_event_id,
+        unread_anchor_event_id,
+        is_marked_unread: timeline.room().is_marked_unread(),
+    }
+}
+
+/// Build the currently available native view snapshot from the SDK owner.
+///
+/// `revision` is zero until the native delta subscriber owns monotonically
+/// advancing revisions. Treating repeated snapshot reads as deltas would hide
+/// the missing owner boundary, so this contract makes that absence explicit.
+async fn view_snapshot_from_timeline(
+    input: TimelineViewSnapshotInput,
+    timeline: &Timeline,
+    media: Arc<AsyncMutex<TimelineMediaRegistry>>,
+) -> TimelineViewSnapshot {
+    let (items, _updates) = timeline.subscribe().await;
+    let rows = {
+        let mut registry = media.lock().await;
+        registry.retain_items(items.iter().map(|item| item.unique_id().0.as_str()));
+        items
+            .iter()
+            .map(|item| {
+                project_timeline_item_with_media(item, input.own_user_id.as_deref(), &mut registry)
+            })
+            .collect()
+    };
+    view_snapshot_from_items(input, timeline, rows).await
+}
+
+fn apply_item_id_diffs(item_ids: &mut Vec<String>, diffs: &[VectorDiff<Arc<SdkTimelineItem>>]) {
+    for diff in diffs {
+        match diff {
+            VectorDiff::Append { values } => {
+                item_ids.extend(values.iter().map(|item| item.unique_id().0.clone()))
+            }
+            VectorDiff::Clear => item_ids.clear(),
+            VectorDiff::PushFront { value } => item_ids.insert(0, value.unique_id().0.clone()),
+            VectorDiff::PushBack { value } => item_ids.push(value.unique_id().0.clone()),
+            VectorDiff::PopFront => {
+                if !item_ids.is_empty() {
+                    item_ids.remove(0);
+                }
+            }
+            VectorDiff::PopBack => {
+                item_ids.pop();
+            }
+            VectorDiff::Insert { index, value } => {
+                if *index <= item_ids.len() {
+                    item_ids.insert(*index, value.unique_id().0.clone());
+                }
+            }
+            VectorDiff::Set { index, value } => {
+                if let Some(item_id) = item_ids.get_mut(*index) {
+                    *item_id = value.unique_id().0.clone();
+                }
+            }
+            VectorDiff::Remove { index } => {
+                if *index < item_ids.len() {
+                    item_ids.remove(*index);
+                }
+            }
+            VectorDiff::Truncate { length } => item_ids.truncate(*length),
+            VectorDiff::Reset { values } => {
+                *item_ids = values
+                    .iter()
+                    .map(|item| item.unique_id().0.clone())
+                    .collect();
+            }
+        }
+    }
+}
+
+struct TimelineViewSnapshotInput {
+    session_generation: u64,
+    room_id: String,
+    position: TimelineViewPosition,
+    pagination: TimelinePaginationState,
+    own_user_id: Option<OwnedUserId>,
+    revision: u64,
+}
+
+async fn view_snapshot_from_items(
+    input: TimelineViewSnapshotInput,
+    timeline: &Timeline,
+    rows: Vec<super::TimelineViewRow>,
+) -> TimelineViewSnapshot {
+    let read_state =
+        project_live_read_state(timeline, &input.position, input.own_user_id.as_deref()).await;
+    TimelineViewSnapshot {
+        schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+        session_generation: input.session_generation,
+        room_id: input.room_id,
+        revision: input.revision,
+        position: input.position,
+        pagination: input.pagination,
+        read_state,
+        pinned_event_ids: project_pinned_event_ids(timeline.room()),
+        rows,
+        capabilities: TimelineViewCapabilities {
+            mark_read: true,
+            mark_unread: true,
+            paginate_backward: true,
+            paginate_forward: true,
+        },
+    }
+}
+
+/// Project the room's current `m.room.pinned_events` list as product event ids.
+fn project_pinned_event_ids(room: &Room) -> Vec<String> {
+    room.pinned_event_ids()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|event_id| event_id.to_string())
+        .collect()
+}
+
 fn reaction_contains_event_id(
     reaction: &NativeTimelineReaction,
     reaction_event_id: &OwnedEventId,
@@ -935,6 +2009,321 @@ mod tests {
             "v-crypto.6-invalid-event-id"
         );
         assert!(parse_event_id("$event:example.org").is_ok());
+    }
+
+    #[test]
+    fn focused_open_request_keeps_the_event_link_at_the_native_boundary() {
+        let request: NativeTimelineOpenRequest = serde_json::from_value(serde_json::json!({
+            "roomId": "!room:example.org",
+            "position": { "kind": "focused", "event_id": "$event:example.org" }
+        }))
+        .unwrap();
+        assert_eq!(request.room_id, "!room:example.org");
+        assert_eq!(
+            request.position,
+            NativeTimelineOpenPosition::Focused {
+                event_id: "$event:example.org".into()
+            }
+        );
+    }
+    #[test]
+    fn unread_open_request_stays_distinct_from_live_bottom() {
+        let request: NativeTimelineOpenRequest = serde_json::from_value(serde_json::json!({
+            "roomId": "!room:example.org",
+            "position": { "kind": "unread" }
+        }))
+        .unwrap();
+        assert_eq!(request.position, NativeTimelineOpenPosition::Unread);
+    }
+
+    #[test]
+    fn normal_open_request_keeps_the_ui_restore_hint_typed_at_the_native_boundary() {
+        let request: NativeTimelineOpenRequest = serde_json::from_value(serde_json::json!({
+            "roomId": "!room:example.org",
+            "position": {
+                "kind": "normal",
+                "restored_anchor_event_id": "$restore:example.org",
+                "at_bottom": false,
+                "live_tail_event_id": "$tail:example.org",
+                "updated_at_ms": 1_700_000_000_000_u64
+            }
+        }))
+        .unwrap();
+        assert_eq!(
+            request.position,
+            NativeTimelineOpenPosition::Normal {
+                viewport: NativeTimelineViewportHint {
+                    at_bottom: false,
+                    restored_anchor_event_id: Some("$restore:example.org".into()),
+                    live_tail_event_id: Some("$tail:example.org".into()),
+                    updated_at_ms: Some(1_700_000_000_000),
+                },
+            }
+        );
+    }
+
+    #[test]
+    fn normal_open_prefers_native_unread_frontier_over_a_restored_anchor() {
+        let selected = resolve_normal_open_position(
+            true,
+            Some("$fully-read:example.org".into()),
+            None,
+            1_700_000_000_000,
+            &NativeTimelineViewportHint {
+                restored_anchor_event_id: Some("$restored:example.org".into()),
+                updated_at_ms: Some(1_700_000_000_000),
+                ..NativeTimelineViewportHint::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            selected,
+            TimelineViewPosition::Unread {
+                anchor_event_id: "$fully-read:example.org".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn normal_open_uses_a_validated_restored_anchor_only_when_no_unread_frontier_exists() {
+        assert_eq!(
+            resolve_normal_open_position(
+                false,
+                None,
+                None,
+                1_700_000_000_000,
+                &NativeTimelineViewportHint {
+                    restored_anchor_event_id: Some("$restored:example.org".into()),
+                    updated_at_ms: Some(1_700_000_000_000),
+                    ..NativeTimelineViewportHint::default()
+                },
+            )
+            .unwrap(),
+            TimelineViewPosition::Restored {
+                anchor_event_id: Some("$restored:example.org".into()),
+            }
+        );
+        assert_eq!(
+            resolve_normal_open_position(
+                false,
+                None,
+                None,
+                1_700_000_000_000,
+                &NativeTimelineViewportHint {
+                    restored_anchor_event_id: Some("not-an-event".into()),
+                    updated_at_ms: Some(1_700_000_000_000),
+                    ..NativeTimelineViewportHint::default()
+                },
+            )
+            .unwrap(),
+            TimelineViewPosition::LiveBottom
+        );
+    }
+
+    #[test]
+    fn normal_open_rejects_unread_without_a_native_frontier() {
+        assert_eq!(
+            resolve_normal_open_position(
+                true,
+                None,
+                None,
+                1_700_000_000_000,
+                &NativeTimelineViewportHint {
+                    restored_anchor_event_id: Some("$restored:example.org".into()),
+                    updated_at_ms: Some(1_700_000_000_000),
+                    ..NativeTimelineViewportHint::default()
+                },
+            ),
+            Err("v-timeline-normal-unread-frontier-unavailable")
+        );
+    }
+
+    #[test]
+    fn normal_open_restores_live_bottom_when_unread_tip_still_matches() {
+        assert_eq!(
+            resolve_normal_open_position(
+                true,
+                Some("$fully-read:example.org".into()),
+                Some("$tail:example.org"),
+                1_700_000_000_000,
+                &NativeTimelineViewportHint {
+                    at_bottom: true,
+                    live_tail_event_id: Some("$tail:example.org".into()),
+                    ..NativeTimelineViewportHint::default()
+                },
+            )
+            .unwrap(),
+            TimelineViewPosition::LiveBottom
+        );
+    }
+
+    #[test]
+    fn normal_open_ignores_stale_historical_restore_hints() {
+        let now = 1_700_000_000_000_u64;
+        assert_eq!(
+            resolve_normal_open_position(
+                false,
+                None,
+                None,
+                now,
+                &NativeTimelineViewportHint {
+                    restored_anchor_event_id: Some("$restored:example.org".into()),
+                    updated_at_ms: Some(now - NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS - 1),
+                    ..NativeTimelineViewportHint::default()
+                },
+            )
+            .unwrap(),
+            TimelineViewPosition::LiveBottom
+        );
+    }
+
+    #[test]
+    fn jump_latest_request_addresses_the_exact_opened_stream() {
+        let request: NativeTimelineJumpLatestRequest = serde_json::from_value(serde_json::json!({
+            "streamId": "live:!room:example.org:1"
+        }))
+        .unwrap();
+        assert_eq!(request.stream_id, "live:!room:example.org:1");
+    }
+
+    #[test]
+    fn typed_open_readback_uses_the_versioned_view_boundary() {
+        let readback = NativeTimelineOpenReadback {
+            schema_version: NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
+            stream_id: "live:!room:example.org".into(),
+            position: TimelineViewPosition::LiveBottom,
+            snapshot: TimelineViewSnapshot {
+                schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+                session_generation: 7,
+                room_id: "!room:example.org".into(),
+                revision: 0,
+                position: TimelineViewPosition::LiveBottom,
+                pagination: TimelinePaginationState {
+                    backward: TimelinePageState::Available,
+                    forward: TimelinePageState::Available,
+                },
+                read_state: TimelineReadState {
+                    own_read_event_id: None,
+                    unread_anchor_event_id: None,
+                    is_marked_unread: false,
+                },
+                pinned_event_ids: vec!["$pinned:example.org".into()],
+                rows: Vec::new(),
+                capabilities: TimelineViewCapabilities {
+                    mark_read: false,
+                    mark_unread: false,
+                    paginate_backward: true,
+                    paginate_forward: true,
+                },
+            },
+        };
+        let json = serde_json::to_value(readback).unwrap();
+        let snapshot = &json["snapshot"];
+        assert_eq!(snapshot["schemaVersion"], TIMELINE_VIEW_SCHEMA_VERSION);
+        assert_eq!(snapshot["roomId"], "!room:example.org");
+        assert!(snapshot.get("isEncrypted").is_none());
+        assert!(snapshot.get("items").is_none());
+        assert_eq!(snapshot["readState"]["isMarkedUnread"], false);
+        assert_eq!(snapshot["pinnedEventIds"][0], "$pinned:example.org");
+        assert_eq!(json["position"]["kind"], "live_bottom");
+    }
+
+    #[test]
+    fn view_delta_batch_can_carry_live_read_and_pagination_metadata() {
+        let batch = TimelineViewDeltaBatch {
+            schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+            session_generation: 3,
+            stream_id: "live:!room:example.org:1".into(),
+            room_id: "!room:example.org".into(),
+            revision: 4,
+            ops: Vec::new(),
+            read_state: Some(TimelineReadState {
+                own_read_event_id: Some("$read:example.org".into()),
+                unread_anchor_event_id: None,
+                is_marked_unread: false,
+            }),
+            pagination: Some(TimelinePaginationState {
+                backward: TimelinePageState::Exhausted,
+                forward: TimelinePageState::Available,
+            }),
+            pinned_event_ids: Some(vec!["$pin:example.org".into()]),
+        };
+        let json = serde_json::to_value(&batch).unwrap();
+        assert_eq!(json["revision"], 4);
+        assert!(json["ops"].as_array().unwrap().is_empty());
+        assert_eq!(json["readState"]["ownReadEventId"], "$read:example.org");
+        assert_eq!(json["pagination"]["backward"], "exhausted");
+
+        let hit_start = AtomicBool::new(false);
+        assert_eq!(
+            pagination_state_from_status(
+                PaginationStatus::Idle {
+                    hit_timeline_start: true
+                },
+                &hit_start
+            ),
+            TimelinePaginationState {
+                backward: TimelinePageState::Exhausted,
+                forward: TimelinePageState::Available,
+            }
+        );
+        assert!(hit_start.load(Ordering::Acquire));
+        assert_eq!(
+            pagination_state_from_status(PaginationStatus::Paginating, &hit_start).backward,
+            TimelinePageState::Loading
+        );
+    }
+
+    #[test]
+    fn view_subscription_keys_keep_focuses_isolated_from_live_timeline() {
+        assert_eq!(
+            view_subscription_key("!room:example.org", &TimelineViewPosition::LiveBottom),
+            "live:!room:example.org"
+        );
+        assert_eq!(
+            view_subscription_key(
+                "!room:example.org",
+                &TimelineViewPosition::Focused {
+                    target_event_id: "$one:example.org".into()
+                }
+            ),
+            "focused:!room:example.org:$one:example.org"
+        );
+        assert_eq!(
+            view_subscription_key(
+                "!room:example.org",
+                &TimelineViewPosition::Unread {
+                    anchor_event_id: "$one:example.org".into(),
+                }
+            ),
+            "unread:!room:example.org"
+        );
+    }
+
+    #[test]
+    fn pagination_request_targets_the_opened_stream_not_a_room() {
+        let request: NativeTimelineViewPaginationRequest =
+            serde_json::from_value(serde_json::json!({
+                "streamId": "focused:!room:example.org:$one:example.org",
+                "direction": "backwards"
+            }))
+            .unwrap();
+        assert_eq!(
+            request.stream_id,
+            "focused:!room:example.org:$one:example.org"
+        );
+        assert_eq!(request.direction, NativeTimelineDirection::Backwards);
+    }
+
+    #[test]
+    fn read_state_request_targets_the_opened_stream_and_action() {
+        let request: NativeTimelineReadStateRequest = serde_json::from_value(serde_json::json!({
+            "streamId": "live:!room:example.org",
+            "action": "mark_unread"
+        }))
+        .unwrap();
+        assert_eq!(request.stream_id, "live:!room:example.org");
+        assert_eq!(request.action, NativeTimelineReadAction::MarkUnread);
     }
 
     #[test]

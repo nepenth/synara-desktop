@@ -1,14 +1,17 @@
-//! P6.7 account-data foundation + V-ROOMS.5 live `m.direct` ownership.
+//! P6.7 account-data foundation + live Synara account-data owners.
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p6.7-account-data.md`
-//! Product vertical: `docs/matrix-rust-sdk/v-rooms-5-mdirect.md`
+//! Product verticals: `docs/matrix-rust-sdk/v-rooms-5-mdirect.md`,
+//! `docs/matrix-rust-sdk/v-timeline-full-replacement-contract.md` (later/notes).
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
 mod error;
 mod index;
+pub mod later;
 pub mod live;
+pub mod room_notes;
 
 pub use error::AccountDataError;
 pub use index::{
@@ -16,9 +19,19 @@ pub use index::{
     MAX_ROOMS_WITH_ACCOUNT_DATA, MAX_ROOM_TYPES, MAX_VALUE_LEN, TYPE_DIRECT, TYPE_FULLY_READ,
     TYPE_IGNORED_USER_LIST, TYPE_PUSH_RULES, TYPE_TAG,
 };
+pub use later::{
+    clear_completed_later_live, complete_later_item_live, mark_later_reminded_live, snapshot_later,
+    snooze_later_item_live, upsert_later_item, NativeLaterSnapshot, SynaraLaterContent,
+    SynaraLaterItem, SynaraLaterItemKind,
+};
 pub use live::{
     add_room_to_mdirect, remove_room_from_mdirect, snapshot_mdirect, NativeMDirectMutationResult,
     NativeMDirectSnapshot,
+};
+pub use room_notes::{
+    complete_room_todo_item_live, delete_room_note_item_live, move_room_todo_item_live,
+    snapshot_room_notes, upsert_room_note_item, NativeRoomNotesSnapshot, RoomNoteMoveDirection,
+    SynaraRoomNoteItem, SynaraRoomNoteItemKind, SynaraRoomNotesContent,
 };
 
 /// Static marker for link / schema smoke.
