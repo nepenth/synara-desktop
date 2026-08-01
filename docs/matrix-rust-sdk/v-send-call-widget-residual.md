@@ -2,10 +2,16 @@
 
 | Field    | Value                                                                                                                   |
 | -------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Status   | **Native room-list reuse + fail-closed media boundary; #378 media IPC design + reuse scan**                             |
-| Base tip | `c0d5ec40` on `feature/matrix-rust-sdk-full-replacement`                                                                |
+| Status   | **Native room-list reuse + fail-closed media boundary; #378 media IPC design + reuse scan; implement packet frozen**     |
+| Base tip | `b87f3a87` on `feature/matrix-rust-sdk-full-replacement`                                                                |
 | Scope    | `CallWidgetDriver` upload, media-config, media-download, and known-room methods                                         |
 | Guard    | Never touch `main` or umbrella PR **#39**; `dual_backend` is forbidden; **#327 remains HOLD and V-BURN is not started** |
+
+> **Implement packet.** The frozen IPC contract, JS-owner deletion list,
+> fail-closed rules, and test plan for the media config/download vertical live
+> in [v-send-call-widget-media-implement-packet.md](v-send-call-widget-media-implement-packet.md).
+> This residual records the inventory and the #387 reuse scan; the packet is the
+> handoff for the next product vertical after members-read (**#395**).
 
 ## Finding
 
