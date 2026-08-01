@@ -3,7 +3,7 @@
 | Field        | Value                                                                                                                   |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | Status       | **Docs-only audit** — no product code changed                                                                           |
-| Measured tip | `3a71f482f7b21cdcc946896677b74ce77ddd5b43` on `feature/matrix-rust-sdk-full-replacement`                                |
+| Measured tip | `9eb4689b` on `feature/matrix-rust-sdk-full-replacement` |
 | Scope        | `CallWidgetDriver` upload, media-config, media-download, and known-room methods                                         |
 | Guard        | Never touch `main` or umbrella PR **#39**; `dual_backend` is forbidden; **#327 remains HOLD and V-BURN is not started** |
 
