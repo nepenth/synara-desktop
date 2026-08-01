@@ -13,7 +13,6 @@ import { useRoom } from '../../hooks/useRoom';
 import { useKeyDown } from '../../hooks/useKeyDown';
 import { markAsReadInBackground } from '../../utils/notifications';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
-import { useRoomMembers } from '../../hooks/useRoomMembers';
 import { CallView } from '../call/CallView';
 import { RoomViewHeader } from './RoomViewHeader';
 import { callChatAtom } from '../../state/callEmbed';
@@ -30,7 +29,6 @@ export function Room() {
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const screenSize = useScreenSizeContext();
   const powerLevels = usePowerLevels(room);
-  const members = useRoomMembers(mx, room.roomId);
   const chat = useAtomValue(callChatAtom);
 
   useKeyDown(
@@ -99,7 +97,7 @@ export function Room() {
           <>
             <Line variant="Background" direction="Vertical" size="300" />
             {activeSidePanel === 'members' ? (
-              <MembersDrawer key={room.roomId} room={room} members={members} />
+              <MembersDrawer key={room.roomId} room={room} />
             ) : (
               <RoomSidePanel
                 key={`${room.roomId}-${activeSidePanel}`}
