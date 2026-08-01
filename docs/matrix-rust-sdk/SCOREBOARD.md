@@ -3,7 +3,7 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `52953091` docs base on `feature/matrix-rust-sdk-full-replacement`; #405 product head `cd2d57b4` is the post-merge input |
+| Tip                                                    | `b0fd4241` on `feature/matrix-rust-sdk-full-replacement`; #407 CallWidget media config/download is merged                  |
 | Production `matrix-js-sdk` import files (`synara/src`) | **152** (plan baseline was **220**)                      |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
@@ -55,7 +55,7 @@ run passes the relevant checklist.
 | /leave command                  | **#371** useCommands Leave → leaveRoomWithNativeOwner                                                                                                                                            |
 | Room join vertical              | **#369** `matrix_room_join` + native owner; all production `joinRoom` sites fail-closed (imports **155→154**)                                                                                    |
 | Composer GIF/upload fallbacks   | **#363** RoomInput GIF + msgContent thumbnail JS upload fallbacks deleted                                                                                                                        |
-| V-SEND.R-CALL-UPLOAD            | **#328** native upload; [CallWidgetDriver residual](v-send-call-widget-residual.md) · [media IPC implement packet](v-send-call-widget-media-implement-packet.md) |
+| V-SEND.R-CALL-UPLOAD            | **#328** native upload; **#362** native known rooms; **#407** native media config/download; [CallWidget residual](v-send-call-widget-residual.md) is closed for the inventoried native desktop surfaces |
 | Composer thumbnail (msgContent) | **#325** video thumbnails via `uploadMediaNative` / `matrix_upload_media` fail-closed                                                                                                            |
 | V-SEND.R-DEVTOOL                | [Docs-only inventory](v-send-devtool-inventory.md) · [implementation gate](v-send-devtool-inventory.md#implementation-gate): JS client remains; start only after C3–C5 live proofs; low priority |
 | CI                              | Parallel Validate #284                                                                                                                                                                           |
@@ -65,7 +65,7 @@ run passes the relevant checklist.
 | PR     | What                                                                                           |
 | ------ | ---------------------------------------------------------------------------------------------- |
 | [#405](https://github.com/nepenth/synara-desktop/pull/405) | **Members drawer/lobby/mentions native member wiring** — **`ACCEPT`** at product head [`cd2d57b4`](https://github.com/nepenth/synara-desktop/commit/cd2d57b4); pending merge into this docs base. |
-| [#407](https://github.com/nepenth/synara-desktop/pull/407) | **CallWidget media config/download IPC** — **`ACCEPT_WITH_NITS`**; full-green proof at [`cd07f4fc`](https://github.com/nepenth/synara-desktop/commit/cd07f4fc), which is behind this tip; parent merge pending. |
+| (none) | #407 CallWidget media config/download is merged at this tip; no active CallWidget product PR. |
 
 ## Left (finish-line order)
 
@@ -87,21 +87,12 @@ run passes the relevant checklist.
 3. **V-SEND.R-DEVTOOL — native full vertical.** Inventory remains; implement
    after C3–C5 live or explicit reorder. See
    [implementation gate](v-send-devtool-inventory.md#implementation-gate).
-4. **CallWidget media config/download IPC** (**#407 `ACCEPT_WITH_NITS`**).
-   The full-green proof is at [`cd07f4fc`](https://github.com/nepenth/synara-desktop/commit/cd07f4fc),
-   but that commit is behind this tip and its parent merge is pending. At this
-   base tip, **#362** closed `getKnownRooms` natively and fail-closed the rest;
-   **#387** docs scan of media download reuse landed. The native
-   `getMediaConfig` / `downloadFile` owners are therefore not yet present in
-   this tip. Implement packet frozen:
-   [v-send-call-widget-media-implement-packet.md](v-send-call-widget-media-implement-packet.md).
-   See [CallWidget residual](v-send-call-widget-residual.md).
-5. **V-BURN.1 — no live `createClient`/`startClient` on desktop.** Not
+4. **V-BURN.1 — no live `createClient`/`startClient` on desktop.** Not
    complete. See [V-BURN gates](d0-residual-completion.md) and
    [blockers](v-burn-readiness-snapshot.md).
-6. **V-BURN.2 — zero production importers.** Current production importers
+5. **V-BURN.2 — zero production importers.** Current production importers
    **152**. See [taxonomy](v-burn-importer-taxonomy.md).
-7. **V-BURN.3 — drop npm and obsolete JS bootstrap/store code.** After
+6. **V-BURN.3 — drop npm and obsolete JS bootstrap/store code.** After
    V-BURN.1/.2. See the
    [V-BURN completion gates](d0-residual-completion.md) and [blocker snapshot](v-burn-readiness-snapshot.md).
 

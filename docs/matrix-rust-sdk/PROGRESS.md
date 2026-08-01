@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**                                                                                                                       |
-| Integration tip    | `52953091` — docs-only base; post-#405 residual refresh uses product head `cd2d57b4` as a pending merge input |
-| Active work        | **#405 members drawer/lobby/mentions wiring — `ACCEPT` at `cd2d57b4`, pending merge; this draft narrows the after-#405 residual to power-level/creator reads**. #407 CallWidget media IPC — `ACCEPT_WITH_NITS`, full-green proof at `cd07f4fc` behind tip, parent merge pending. C3–C5 live proofs; R-DEVTOOL gated; V-BURN HOLD |
+| Integration tip    | `b0fd4241` — #407 CallWidget media config/download merged; post-#405 residual refresh remains in the docs base |
+| Active work        | **#405 members drawer/lobby/mentions wiring — `ACCEPT` at `cd2d57b4`, pending merge; this draft narrows the after-#405 residual to power-level/creator reads**. CallWidget media config/download is closed by #407. C3–C5 live proofs; R-DEVTOOL gated; V-BURN HOLD |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
 | Import accounting  | Desktop production import files **152** on tip (plan baseline was 220). Allowlist **152** (ratcheted after #395 Members.tsx drop).       |
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Docs base `52953091`**. The post-#405 target closes drawer/lobby/mention member enumeration after #405 merges; power-level/creator reads remain residual. #407 CallWidget media IPC is **`ACCEPT_WITH_NITS`** with full-green proof at `cd07f4fc`, behind this tip, parent merge pending. Imports remain 152; this draft claims no product merge. #39 gated. |
-| **Tip**        | `52953091`                                                                                                                                                                                                                             |
-| **Active PRs** | [#405](https://github.com/nepenth/synara-desktop/pull/405) `ACCEPT` at [`cd2d57b4`](https://github.com/nepenth/synara-desktop/commit/cd2d57b4), pending merge; [#407](https://github.com/nepenth/synara-desktop/pull/407) `ACCEPT_WITH_NITS`, full green at [`cd07f4fc`](https://github.com/nepenth/synara-desktop/commit/cd07f4fc), behind tip, parent merge pending. This docs-only draft claims no product code. |
+| **Now**        | **Tip `b0fd4241`**. #407 CallWidget media config/download is merged with native command/owner/test coverage; #405 remains the pending members-drawer merge input. Imports remain 152; C3–C5 and R-DEVTOOL remain gated. #39 gated. |
+| **Tip**        | `b0fd4241`                                                                                                                                                                                                                             |
+| **Active PRs** | [#405](https://github.com/nepenth/synara-desktop/pull/405) `ACCEPT` at [`cd2d57b4`](https://github.com/nepenth/synara-desktop/commit/cd2d57b4), pending merge. #407 is merged; this follow-up is docs-only. |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
 ---
@@ -59,6 +59,15 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — tip `b0fd4241` — #407 CallWidget media merged
+
+| When (UTC) | Item                     | Result          | Notes                                                                                                                                    |
+| ---------- | ------------------------ | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**      | **This draft**  | Docs-only truth-up at `b0fd4241` on `feature/matrix-rust-sdk-full-replacement`; `main` and #39 remain untouched.                         |
+| current    | **CallWidget media IPC** | **Merged #407** | `matrix_call_media_config` and `matrix_media_download` use the live native Matrix SDK client; typed owner, source guard, contract tests, and gated Synapse proof are present. |
+| current    | **CallWidget residual**  | **Closed**      | #328 upload, #362 known rooms, and #407 media config/download close the inventoried native desktop surfaces; broader MatrixRTC parity is out of scope. |
+| current    | **Policy**               | **Held**        | `dual_backend=false`; V-BURN remains **HOLD** and not started.                                                                                 |
 
 ### 2026-08-01 — docs base `52953091` — post-#405 residual boundary
 
