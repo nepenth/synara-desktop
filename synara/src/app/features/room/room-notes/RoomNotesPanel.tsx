@@ -17,21 +17,16 @@ import {
   color,
   toRem,
 } from 'folds';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { useAccountData } from '../../../hooks/useAccountData';
+import { useAtomValue } from 'jotai';
+import { SynaraRoomNoteItem } from '../../../../types/matrix/accountData';
+import { createManualRoomNoteItem, getRoomNoteItems } from '../../../utils/roomNotes';
+import { roomNotesContentAtom } from '../../../state/roomNotesList';
 import {
-  AccountDataEvent,
-  SynaraRoomNoteItem,
-  SynaraRoomNotesContent,
-} from '../../../../types/matrix/accountData';
-import {
-  addRoomNoteItemAccountData,
-  completeRoomTodoItemAccountData,
-  createManualRoomNoteItem,
-  deleteRoomNoteItemAccountData,
-  getRoomNoteItems,
-  moveRoomTodoItemAccountData,
-} from '../../../utils/roomNotes';
+  completeRoomTodoWithNativeOwner,
+  deleteRoomNoteWithNativeOwner,
+  moveRoomTodoWithNativeOwner,
+  upsertRoomNoteWithNativeOwner,
+} from '../nativeRoomNotesOwner';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
 import { getMemberDisplayName } from '../../../utils/room';
 import { getMxIdLocalPart } from '../../../utils/matrix';
@@ -58,16 +53,24 @@ type RoomNoteItemProps = {
 };
 
 function RoomNoteItem({ room, item, canMoveUp, canMoveDown }: RoomNoteItemProps) {
-  const mx = useMatrixClient();
   const { navigateRoom } = useRoomNavigate();
   const senderName =
     item.sender && (getMemberDisplayName(room, item.sender) ?? getMxIdLocalPart(item.sender));
 
-  const handleDelete = () => deleteRoomNoteItemAccountData(mx, room.roomId, item.id);
-  const handleToggleTodo = () =>
-    completeRoomTodoItemAccountData(mx, room.roomId, item.id, !item.completedAt);
-  const handleMoveUp = () => moveRoomTodoItemAccountData(mx, room.roomId, item.id, 'up');
-  const handleMoveDown = () => moveRoomTodoItemAccountData(mx, room.roomId, item.id, 'down');
+  const handleDelete = () => {
+    void deleteRoomNoteWithNativeOwner(room.roomId, item.id).catch(() => undefined);
+  };
+  const handleToggleTodo = () => {
+    void completeRoomTodoWithNativeOwner(room.roomId, item.id, !item.completedAt).catch(
+      () => undefined
+    );
+  };
+  const handleMoveUp = () => {
+    void moveRoomTodoWithNativeOwner(room.roomId, item.id, 'up').catch(() => undefined);
+  };
+  const handleMoveDown = () => {
+    void moveRoomTodoWithNativeOwner(room.roomId, item.id, 'down').catch(() => undefined);
+  };
   const handleOpenMessage = () => {
     if (item.eventId) navigateRoom(room.roomId, item.eventId);
   };
@@ -182,13 +185,11 @@ const getTodoOrderState = (
 };
 
 export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelProps) {
-  const mx = useMatrixClient();
   const [kind, setKind] = useState<'note' | 'todo'>('note');
   const [body, setBody] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
-  const notesEvent = useAccountData(AccountDataEvent.SynaraRoomNotes);
-  const notesContent = notesEvent?.getContent() as SynaraRoomNotesContent | undefined;
+  const notesContent = useAtomValue(roomNotesContentAtom);
   const roomItems = useMemo(
     () => getRoomNoteItems(notesContent, room.roomId),
     [notesContent, room.roomId]
@@ -200,7 +201,7 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
     if (!item || saving) return;
     setSaving(true);
     setError(undefined);
-    addRoomNoteItemAccountData(mx, item)
+    void upsertRoomNoteWithNativeOwner(item)
       .then(() => setBody(''))
       .catch(() => setError('Could not save this item.'))
       .finally(() => setSaving(false));

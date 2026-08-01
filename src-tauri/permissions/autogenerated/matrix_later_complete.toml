@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-later-complete"
+description = "Enables the matrix_later_complete command without any pre-configured scope."
+commands.allow = ["matrix_later_complete"]
+
+[[permission]]
+identifier = "deny-matrix-later-complete"
+description = "Denies the matrix_later_complete command without any pre-configured scope."
+commands.deny = ["matrix_later_complete"]
