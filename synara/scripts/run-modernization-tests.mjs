@@ -56,6 +56,7 @@ const tests = [
   'src/app/features/room/__tests__/nativeMDirectOwner.test.ts',
   'src/app/features/room/__tests__/nativePollOwner.test.ts',
   'src/app/features/room/__tests__/nativeImagePackOwner.test.ts',
+  'src/app/state/__tests__/nativeMediaUploadOwner.test.ts',
   'src/app/features/settings/account/__tests__/nativeProfileOwner.test.ts',
   'src/app/features/room/__tests__/nativeEditMessageOwner.test.ts',
   'src/app/features/room/__tests__/nativeReactionOwner.test.ts',
