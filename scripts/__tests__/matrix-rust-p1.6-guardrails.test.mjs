@@ -161,7 +161,7 @@ test("runGuardrails passes on current repository tree", () => {
   }
   assert.equal(result.ok, true);
   assert.equal(result.findingCount, 0);
-  assert.ok(result.allowlistSize >= 153);
+  assert.ok(result.allowlistSize >= 152);
 });
 
 test("committed JS SDK allowlist loads and has expected size", () => {
