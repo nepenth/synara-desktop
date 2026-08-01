@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |          159 |                2 |                   3 |
-| test       |           10 |                8 |                  30 |
+| production |          157 |                2 |                   3 |
+| test       |           10 |                8 |                  50 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |      **172** |                  |                     |
+| **total**  |      **170** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |   159 |
+| Production import files |   157 |
 | Test import files       |    10 |
-| Total import files      |   169 |
+| Total import files      |   167 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 159)
+- Production match: **no** (found 157)
 - Test match: **no** (found 10)
 
 ### Production files by bucket (desktop runtime only)
@@ -49,23 +49,23 @@ Expected **220** production and **12** test import files.
 | client-lifecycle |     2 |
 | component        |    26 |
 | feature          |    54 |
-| hook             |    44 |
+| hook             |    43 |
 | media-boundary   |     1 |
 | page             |     8 |
-| plugin           |     8 |
+| plugin           |     7 |
 | shared-type      |     1 |
 | state            |     5 |
 | utility          |    10 |
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 159. Files with any finding: 161.
+Scope: **production only**. Import files: 157. Files with any finding: 159.
 
 ### Imported modules
 
 | Module path                                           | Import sites | Files |
 | ----------------------------------------------------- | -----------: | ----: |
-| `matrix-js-sdk`                                       |          153 |   153 |
+| `matrix-js-sdk`                                       |          151 |   151 |
 | `matrix-js-sdk/lib/types`                             |           10 |    10 |
 | `matrix-js-sdk/lib/matrixrtc/CallMembership`          |            4 |     4 |
 | `matrix-js-sdk/lib/models/relations`                  |            4 |     4 |
@@ -84,9 +84,9 @@ Scope: **production only**. Import files: 159. Files with any finding: 161.
 
 | Symbol                      | Imports | Value | Type-only | Files |
 | --------------------------- | ------: | ----: | --------: | ----: |
-| `Room`                      |      77 |    75 |         2 |    77 |
-| `MatrixClient`              |      43 |    39 |         4 |    43 |
-| `MatrixEvent`               |      28 |    24 |         4 |    28 |
+| `Room`                      |      75 |    73 |         2 |    75 |
+| `MatrixClient`              |      42 |    38 |         4 |    42 |
+| `MatrixEvent`               |      27 |    23 |         4 |    27 |
 | `MatrixError`               |      26 |    26 |         0 |    26 |
 | `JoinRule`                  |      18 |    18 |         0 |    18 |
 | `RoomMember`                |      12 |    12 |         0 |    12 |
@@ -133,11 +133,11 @@ Scope: **production only**. Import files: 159. Files with any finding: 161.
 | `EventTimeline`        |     4 |                  4 |
 | `IndexedDBCryptoStore` |     1 |                  1 |
 | `IndexedDBStore`       |     1 |                  1 |
-| `MatrixClient`         |    43 |                 43 |
+| `MatrixClient`         |    42 |                 42 |
 | `MatrixError`          |    26 |                 26 |
-| `MatrixEvent`          |    28 |                 28 |
+| `MatrixEvent`          |    27 |                 27 |
 | `Relations`            |     4 |                  4 |
-| `Room`                 |    77 |                 77 |
+| `Room`                 |    75 |                 75 |
 | `RoomMember`           |    12 |                 12 |
 | `RoomState`            |     2 |                  2 |
 | `createClient`         |     1 |                  1 |
@@ -146,8 +146,8 @@ Scope: **production only**. Import files: 159. Files with any finding: 161.
 
 | Category                       | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
 | ------------------------------ | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
-| `client_methods`               |    93 |                 0 |                   0 |                      0 |          0 |
-| `room_methods`                 |    80 |                 0 |                   0 |                      0 |          0 |
+| `client_methods`               |    91 |                 0 |                   0 |                      0 |          0 |
+| `room_methods`                 |    78 |                 0 |                   0 |                      0 |          0 |
 | `event_emitters_listeners`     |    21 |                 0 |                 104 |                      0 |          0 |
 | `sync_lifecycle`               |    12 |                11 |                   6 |                      0 |          0 |
 | `crypto_verification_recovery` |     3 |                 3 |                   0 |                      0 |          0 |
@@ -155,14 +155,14 @@ Scope: **production only**. Import files: 159. Files with any finding: 161.
 | `authenticated_media`          |     6 |                 7 |                   0 |                      0 |          0 |
 | `matrixrtc_calls`              |     4 |                 0 |                   8 |                      0 |          0 |
 | `account_data`                 |     7 |                12 |                   2 |                      0 |          0 |
-| `room_lists`                   |    38 |                91 |                  10 |                      0 |          0 |
+| `room_lists`                   |    36 |                88 |                  10 |                      0 |          0 |
 | `timelines`                    |    27 |                23 |                  40 |                      0 |          0 |
 | `searches`                     |     3 |                 3 |                   0 |                      0 |          0 |
 | `spaces`                       |    11 |                26 |                   0 |                      0 |          0 |
 | `threads`                      |     1 |                 1 |                   0 |                      0 |          0 |
 | `receipts`                     |     4 |                 4 |                   2 |                      0 |          0 |
 | `notifications_push_rules`     |     8 |                10 |                   0 |                      0 |          0 |
-| `uia_auth`                     |    45 |                90 |                   2 |                      0 |          0 |
+| `uia_auth`                     |    44 |                89 |                   2 |                      0 |          0 |
 | `custom_raw_event_sends`       |    12 |                21 |                   0 |                      0 |          0 |
 | `direct_matrix_networking`     |     2 |                 0 |                   0 |                      0 |          3 |
 | `client_events`                |     5 |                 0 |                  16 |                      0 |          0 |
@@ -171,9 +171,9 @@ Scope: **production only**. Import files: 159. Files with any finding: 161.
 
 | Method name                | Candidate occurrences |
 | -------------------------- | --------------------: |
-| `getRoom`                  |                    65 |
+| `getRoom`                  |                    62 |
 | `getSafeUserId`            |                    51 |
-| `getUserId`                |                    27 |
+| `getUserId`                |                    26 |
 | `isSpaceRoom`              |                    26 |
 | `sendStateEvent`           |                    18 |
 | `findEventById`            |                     8 |
@@ -222,7 +222,7 @@ Scope: **production only**. Import files: 159. Files with any finding: 161.
 
 ## Aggregates: test
 
-Scope: **test only**. Import files: 10. Files with any finding: 18.
+Scope: **test only**. Import files: 10. Files with any finding: 20.
 
 ### Imported modules
 
@@ -273,7 +273,7 @@ Scope: **test only**. Import files: 10. Files with any finding: 18.
 | `timelines`                |     2 |                 0 |                   0 |                      0 |          0 |
 | `receipts`                 |     2 |                 0 |                   0 |                      0 |          0 |
 | `uia_auth`                 |     1 |                 3 |                   0 |                      0 |          0 |
-| `direct_matrix_networking` |     8 |                 0 |                   0 |                      0 |         30 |
+| `direct_matrix_networking` |     8 |                 0 |                   0 |                      0 |         50 |
 
 ### Top method-name candidates (not type-proven)
 
@@ -297,16 +297,36 @@ Scope: **test only**. Import files: 10. Files with any finding: 18.
 | `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  361 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
 | `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  361 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/thumbnail`         |
 | `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  365 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  131 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  131 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  134 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  134 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  288 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  288 | `matrix_cs_path_template` | `/_matrix/client/v1/media/download`          |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  289 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  289 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  315 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  315 | `matrix_cs_path_template` | `/_matrix/client/v3/sync`                    |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  133 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  133 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  133 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  133 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  133 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  133 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  136 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  136 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  136 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  136 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  136 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  136 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  292 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  292 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  292 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  292 | `matrix_cs_path_template` | `/_matrix/client/v1/media/download`          |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  292 | `matrix_cs_path_template` | `/_matrix/client/v1/media/download`          |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  292 | `matrix_cs_path_template` | `/_matrix/client/v1/media/download`          |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  293 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  293 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  293 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  293 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  293 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  293 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  319 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  319 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  319 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  319 | `matrix_cs_path_template` | `/_matrix/client/v3/sync`                    |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  319 | `matrix_cs_path_template` | `/_matrix/client/v3/sync`                    |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  319 | `matrix_cs_path_template` | `/_matrix/client/v3/sync`                    |
 | `scripts/__tests__/synapse-two-client-integration.test.mjs`     |   40 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
 | `synara/src/app/matrix/__tests__/media.test.ts`                 |   14 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
 | `synara/src/app/matrix/__tests__/media.test.ts`                 |   27 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
@@ -397,6 +417,8 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `scripts/__tests__/check-matrix-rust-sdk-guardrails.test.mjs`                                                                 | test       | no      | —                | —            | —                                                                                                                                                                         |
 | `scripts/__tests__/feature-parity-audit-normalization.test.mjs`                                                               | test       | no      | —                | —            | —                                                                                                                                                                         |
 | `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`                                                                       | test       | no      | —                | —            | —                                                                                                                                                                         |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`                                                                      | test       | no      | —                | —            | —                                                                                                                                                                         |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`                                                                      | test       | no      | —                | —            | —                                                                                                                                                                         |
 | `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`                                                                      | test       | no      | —                | —            | —                                                                                                                                                                         |
 | `scripts/__tests__/synapse-two-client-integration.test.mjs`                                                                   | test       | no      | —                | —            | —                                                                                                                                                                         |
 | `scripts/audit-matrix-public.mjs`                                                                                             | tooling    | no      | —                | —            | —                                                                                                                                                                         |
@@ -493,7 +515,6 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `synara/src/app/hooks/useCapabilities.ts`                                                                                     | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/hooks/useCommands.ts`                                                                                         | production | yes     | hook             | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/types`                                                                                                                                |
 | `synara/src/app/hooks/useGetRoom.ts`                                                                                          | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/hooks/useImagePacks.ts`                                                                                       | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/hooks/useLocalRoomSummary.ts`                                                                                 | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/hooks/useMatrixClient.ts`                                                                                     | production | yes     | hook             | static       | `matrix-js-sdk/lib/client`                                                                                                                                                |
 | `synara/src/app/hooks/useMemberEventParser.tsx`                                                                               | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
@@ -544,7 +565,6 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `synara/src/app/plugins/call/CallWidgetDriver.ts`                                                                             | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/plugins/call/utils.ts`                                                                                        | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/plugins/custom-emoji/ImagePack.ts`                                                                            | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/plugins/custom-emoji/utils.ts`                                                                                | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/plugins/react-custom-html-parser.tsx`                                                                         | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/plugins/recent-emoji.ts`                                                                                      | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/plugins/via-servers.ts`                                                                                       | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                                                                                                           |
