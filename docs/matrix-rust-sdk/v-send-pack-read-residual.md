@@ -2,8 +2,8 @@
 
 | Field | Value |
 |-------|-------|
-| Status | **Snapshot DONE #297** — native `matrix_get_*_image_packs` + hooks fail-closed landed; **subscribe residual remains** (live push + physical delete + JS room resolution) |
-| Tip SHA | `dc5c414d` (after #297 pack-read snapshot + #300 scoreboard) |
+| Status | **Snapshot #297 + subscribe #318 DONE** — live signal re-snapshot landed; **residual:** physical delete of JS read helpers (web fallback) + `useImagePackRooms` JS room resolution |
+| Tip SHA | `95ad2656` (after #318 pack-read subscribe) |
 | Base | `feature/matrix-rust-sdk-full-replacement` |
 | Policy | [full-vertical-policy.md](full-vertical-policy.md) — physical deletion inside each owning slice |
 | Related | V-SEND sticker/GIF **#264** (native send), V-SEND residual inventory, V-SEND.R-PACK-WRITE **#292** (write owners), V-TIMELINE #240 (HOLD) |
@@ -158,9 +158,14 @@ trees — verify during implementation with a full `grep -rn "matrix-js-sdk"` ov
 - Rust: `matrix_get_user_image_pack` / `matrix_get_room_image_packs` / `matrix_get_global_image_packs`
 - TS: `nativeImagePackOwner` + `nativeImagePack` + `useImagePacks` native path (fail-closed on desktop)
 
+**Landed #318 (subscribe):**
+- Rust: session-scoped `NativeImagePackOwner` (account-data + room state handlers)
+- Signal: Tauri `matrix-image-packs-updated` (sessionGeneration only; re-snapshot via get IPC)
+- TS: `useImagePacks` native refresh token listen (fail-closed desktop)
+
 **Residual follow-on (this doc):**
-- `matrix_subscribe_image_packs` live push (native reactive updates)
 - Physical delete of JS pack-read helpers (`custom-emoji/utils.ts` read-only
-  owners) + `useImagePacks.ts` web-fallback listeners + `useImagePackRooms.ts`
-  once subscribe lands and web fallback is dropped — write side (#292) unaffected
-- dual_backend false; pack-write/upload out of scope
+  owners) + `useImagePacks.ts` web-fallback listeners once non-native web path is
+  retired — write side unaffected
+- `useImagePackRooms.ts` JS `mx.getRoom` + `getAllParents` room→pack-room resolution
+- dual_backend false
