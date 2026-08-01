@@ -60,6 +60,11 @@ Update rules:
 
 ## Work log (newest first)
 
+### 2026-07-31 — V-SEND.R-PACK-READ residual inventory
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.R-PACK-READ** | **This PR** | Docs-only inventory of sticker/emoji pack **read** residual (send is native #264): `custom-emoji/utils.ts`, `useImagePacks.ts`, `useImagePackRooms.ts` + consumers read `PoniesEmoteRooms`/`PoniesRoomEmotes`/`PoniesUserEmotes` on live JS client. See [v-send-pack-read-residual.md](v-send-pack-read-residual.md). |
+
 ### 2026-07-31 — V-TIMELINE cutover approved + CI parallel Validate
 
 | When (UTC) | Item | Result | Notes |
