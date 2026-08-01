@@ -68,7 +68,8 @@ run passes the relevant checklist.
 
 1. **Members/power — native full vertical.** Leave/join/create closed
    (**#364/#369/#372**); `/leave` command **#371**. Re-home invite/kick/ban/
-   unban/setPowerLevel writes first, then member list/power reads. See
+   unban/setPowerLevel writes first (**#375** open/draft), then member list/power
+   reads ([read residual inventory](v-rooms-members-read-residual.md)). See
    [P4.6 members](p4.6-members.md) and [P4.3 membership](p4.3-membership-unread.md).
 2. **V-TIMELINE.C3–C5 — live proofs.** All three remain **Not confirmed**
    (C3 blocked without Docker Synapse harness in agent env). Operator index:
