@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Updated | 2026-08-01 |
-| Tip | `95ad2656` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip | `8940f6ea` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **163** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
 | Umbrella #39 | **Do not merge** without explicit user approval |
@@ -42,7 +42,8 @@
 
 | PR | What |
 |----|------|
-| (none product) | Next: pack-read **JS utils delete** / **useImagePackRooms** resolution; **C3–C5** live verify |
+| **#320 (open)** | Room→pack-room resolution without `mx.getRoom`; not landed, so the production inventory remains **163** |
+| (docs) | Next: pack-read **JS utils delete** remains gated on the non-native web fallback; **C3–C5** live verify |
 
 ## Left (ordered)
 
@@ -55,7 +56,7 @@
 
 ### Send / media residuals (inventories done; implement remains)
 - ~~**V-SEND.R-FORWARD**~~ **#296**
-- ~~**V-SEND.R-PACK-READ** snapshot~~ **#297**; ~~**subscribe**~~ **#318** (JS utils + `useImagePackRooms` residual for web/desktop room resolution)
+- ~~**V-SEND.R-PACK-READ** snapshot~~ **#297**; ~~**subscribe**~~ **#318**; **#320 open** room-resolution follow-on (JS utils deletion remains gated on the non-native web fallback)
 - ~~**V-SEND.R-PACK-WRITE** personal~~ **#306**; ~~**global**~~ **#309**; ~~**room**~~ **#310**; ~~**PACK-UPLOAD**~~ **#314** (reuses `matrix_upload_media` #303 via CompactUploadCardRenderer)
 - ~~**V-SEND.R-AVATAR-UPLOAD** user profile~~ **#303**; ~~**R-ROOM-PROFILE**~~ **#313** (room-avatar media upload covered by #314 CompactUploadCardRenderer path)
 - **V-SEND.R-CALL-UPLOAD** / **R-GIF-PACK** — [upload call-site audit](v-send-upload-residual-audit.md); composer/thumbnail usages are legacy-web fallbacks
