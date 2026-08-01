@@ -14,10 +14,10 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `39714e87` — after #334 C3–C5 operator index; #333 residual Left; #331 GIF NOOP; #325 thumbnails; #320 pack room ids (159)
-| Active work        | Next: pack-read JS utils (V-BURN); C3–C5 live; R-DEVTOOL low-pri
+| Integration tip    | `3a71f482` — after #343 upload audit; #342 residual queue; #341 DevTool gate; imports **159**, allowlist **163**
+| Active work        | C3–C5 live-proof verification; R-DEVTOOL remains gated; V-BURN not started; #327 HOLD forever this cycle
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
-| Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
+| Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                                                                                                                                                         |
 | Import accounting  | Desktop production import files **159** on tip (plan baseline was 220). Allowlist **163**.
 | Dual backend       | **`false`** (forbidden forever)                                                                                                                                                                                                                                       |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                                                                                                                                                              |
@@ -32,10 +32,10 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `39714e87`**. #334 C3–C5 operator index (live proofs Not confirmed). Residual Left honesty #333. Next: pack-read JS utils (V-BURN); C3–C5 live run. #39 gated. |
-| **Tip**        | `39714e87` |
-| **Active PRs** | #327 V-BURN readiness (hold — late only). |
-| **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
+| **Now**        | **Tip `3a71f482`**. #341 DevTool gate, #342 narrowed residual queue, and #343 upload audit are merged. C3–C5 live proofs remain **Not confirmed**; R-DEVTOOL is gated. #327 V-BURN is **HOLD forever this cycle**; no V-BURN start. #39 gated. |
+| **Tip**        | `3a71f482` |
+| **Active PRs** | #327 V-BURN readiness — **HOLD forever this cycle**; not active work. |
+| **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; #327 V-BURN forever this cycle; umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
 ---
 
@@ -59,6 +59,15 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — tip `3a71f482` after #341–#343
+
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **Integration tip** | **This PR** | Tip `3a71f482`. #341 DevTool implementation gate, #342 narrowed residual queue, and #343 upload audit reconciliation are merged on `feature/matrix-rust-sdk-full-replacement`. Imports **159**; allowlist **163**. |
+| current | **V-SEND.R-DEVTOOL** | **Merged #341 — gate only** | Start only after V-TIMELINE.C3–C5 live proofs are confirmed. Native implementation must be UI → Tauri IPC → live `matrix-sdk`, fail-closed on missing/failed native state, and never add a backend selector or dual backend. |
+| current | **Residual queue** | **Narrowed #342** | Pack-read JS helper deletion remains V-BURN-gated; C3–C5 live proofs remain **Not confirmed**; R-DEVTOOL remains gated. #327 V-BURN stays **HOLD forever this cycle** and is not started. |
+| current | **V-SEND upload audit** | **Reconciled #343** | The audit records native-first, fail-closed upload owners and fallback-only JS reachability; it opens no new native-session residual. Audit measured tip remains `4d1240e3`; this progress log is current at `3a71f482`. |
 
 ### 2026-08-01 — tip honesty after #331 GIF-PACK NOOP (#332)
 
