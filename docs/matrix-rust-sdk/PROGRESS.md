@@ -63,7 +63,13 @@ Update rules:
 ### 2026-08-01 — scoreboard after #290–#292 inventories
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| current | **Scoreboard** | **This PR** | Docs-only SCOREBOARD/PROGRESS honesty after forward #290, avatar #291, pack-write #292 inventories landed. Tip `ab2169a5`; production import files **165** (verified via `inventory-matrix-sdk-usage.mjs`). In flight: #283 edit, #285 C1, #289 C2 (draft stacked). #39 still gated. |
+| current | **Scoreboard** | **This PR** | Docs-only SCOREBOARD/PROGRESS honesty after forward #290, avatar #291, pack-write #292 inventories. Tip after #294 C3 checklist; production import files **165**. In flight: #285 C1, #289 C2. #39 still gated. |
+
+### 2026-08-01 — V-TIMELINE.C3 stream verify checklist
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-TIMELINE.C3** | **Merged #294** | Docs-only re-verify checklist for native stream/delta after C1/C2: S1–S7. See [v-timeline-c3-stream-verify.md](v-timeline-c3-stream-verify.md). |
+
 
 ### 2026-08-01 — V-SEND.R-AVATAR-UPLOAD residual inventory
 | When (UTC) | Item | Result | Notes |
