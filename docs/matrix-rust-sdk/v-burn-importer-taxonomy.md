@@ -1,15 +1,15 @@
 # V-BURN importer taxonomy — Matrix Rust full replacement
 
-| Field                  | Value                                                                    |
-| ---------------------- | ------------------------------------------------------------------------ |
-| Status                 | **Docs-only taxonomy**; no product code changed                          |
-| Measured tip           | `3502125ae2f529ae66c403efe9b79ae734c1c464`                               |
-| Base                   | `feature/matrix-rust-sdk-full-replacement`                               |
-| Scope                  | Production `matrix-js-sdk` importers under `synara/src`                  |
-| Current importers      | **159**                                                                  |
-| P1.6 allowlist entries | **163**                                                                  |
-| Policy                 | Full replacement; `dual_backend` forbidden; fail-closed                  |
-| V-BURN                 | **Not started**; `active_slice` must not be `V-BURN`                     |
+| Field                  | Value                                                                             |
+| ---------------------- | --------------------------------------------------------------------------------- |
+| Status                 | **Docs-only taxonomy**; no product code changed                                   |
+| Measured tip           | `3d76402f7e8775256d4455947cba60080b9f706e`                                        |
+| Base                   | `feature/matrix-rust-sdk-full-replacement`                                        |
+| Scope                  | Production `matrix-js-sdk` importers under `synara/src`                           |
+| Current importers      | **153**                                                                           |
+| P1.6 allowlist entries | **153**                                                                           |
+| Policy                 | Full replacement; `dual_backend` forbidden; fail-closed                           |
+| V-BURN                 | **Not started**; `active_slice` must not be `V-BURN`                              |
 | Hold                   | **V-BURN HOLD** (blockers #355); do not claim V-BURN-ready; **#39 remains gated** |
 
 This is a classification snapshot, not a cutover plan or readiness claim. An
@@ -22,38 +22,33 @@ does not prove that the selected desktop route is currently using the JS SDK.
 The counts are taken from the generated [desktop SDK usage inventory](desktop-sdk-usage.md)
 and checked against a direct source import scan at the measured tip:
 
-- 159 production importer files under `synara/src`;
+- 153 production importer files under `synara/src`;
 - 10 test importer files under `synara/src` (not in this taxonomy);
-- 163 paths in [`p1.6-js-sdk-import-allowlist.json`](p1.6-js-sdk-import-allowlist.json);
-- no current production importer is outside the allowlist;
-- four allowlist paths are historical and no longer import the SDK:
-  `synara/src/app/pages/client/inbox/Invites.tsx`,
-  `synara/src/app/state/room-list/inviteList.ts`,
-  `synara/src/app/utils/later.ts`, and
-  `synara/src/app/utils/roomNotes.ts`.
+- 153 paths in [`p1.6-js-sdk-import-allowlist.json`](p1.6-js-sdk-import-allowlist.json);
+- the current production importer set exactly matches the allowlist.
 
-The generated inventory reports 161 production-role files because it also
+The generated inventory reports 155 production-role files because it also
 records two production files with no SDK import. They are not counted here.
 
 ## Exhaustive primary path buckets
 
-These buckets are mutually exclusive and sum to all 159 current production
+These buckets are mutually exclusive and sum to all 153 current production
 importers. They are intentionally path-oriented; the semantic residual overlay
 below records the ownership that matters for migration sequencing.
 
 | Primary bucket     |   Count | Migration reading                                                                     |
 | ------------------ | ------: | ------------------------------------------------------------------------------------- |
 | `client-lifecycle` |       2 | Bootstrap, live JS client construction, and crypto-store continuity                   |
-| `component`        |      26 | Renderers, room/member controls, editor and pack UI boundaries                        |
+| `component`        |      22 | Renderers, room/member controls, editor and pack UI boundaries                        |
 | `feature`          |      54 | Room, space, lobby, settings, search, call, developer-tool, and notification surfaces |
-| `hook`             |      44 | SDK model adapters, listeners, room/space state, and client context                   |
+| `hook`             |      43 | SDK model adapters, listeners, room/space state, and client context                   |
 | `media-boundary`   |       1 | Authenticated MXC/media URL and download boundary                                     |
 | `page`             |       8 | Client boot/status, space, inbox, and sidebar consumers                               |
-| `plugin`           |       8 | Call/widget, pack, HTML, emoji, and via-server integrations                           |
+| `plugin`           |       7 | Call/widget, pack, HTML, emoji, and via-server integrations                           |
 | `shared-type`      |       1 | Shared Matrix content/type constants                                                  |
 | `state`            |       5 | Room-list activity, drafts, and upload state                                          |
 | `utility`          |      10 | Matrix, notification, room, sync, timeline, and sorting helpers                       |
-| **Total**          | **159** | **Current production importer files**                                                 |
+| **Total**          | **153** | **Current production importer files**                                                 |
 
 ### `client-lifecycle` — 2
 
@@ -62,7 +57,7 @@ synara/src/client/cryptoStoreContinuity.ts
 synara/src/client/initMatrix.ts
 ```
 
-### `component` — 26
+### `component` — 22
 
 ```text
 synara/src/app/components/AccountDataEditor.tsx
@@ -72,7 +67,6 @@ synara/src/app/components/RenderMessageContent.tsx
 synara/src/app/components/RoomSummaryLoader.tsx
 synara/src/app/components/ServerConfigsLoader.tsx
 synara/src/app/components/create-room/CreateRoomAliasInput.tsx
-synara/src/app/components/create-room/utils.ts
 synara/src/app/components/editor/autocomplete/RoomMentionAutocomplete.tsx
 synara/src/app/components/editor/autocomplete/UserMentionAutocomplete.tsx
 synara/src/app/components/editor/output.ts
@@ -80,15 +74,12 @@ synara/src/app/components/emoji-board/components/Item.tsx
 synara/src/app/components/event-readers/EventReaders.tsx
 synara/src/app/components/image-pack-view/RoomImagePack.tsx
 synara/src/app/components/invite-user-prompt/InviteUserPrompt.tsx
-synara/src/app/components/leave-room-prompt/LeaveRoomPrompt.tsx
-synara/src/app/components/leave-space-prompt/LeaveSpacePrompt.tsx
 synara/src/app/components/member-tile/MemberTile.tsx
 synara/src/app/components/message/MsgTypeRenderers.tsx
 synara/src/app/components/message/Reaction.tsx
 synara/src/app/components/message/Reply.tsx
 synara/src/app/components/message/content/PollContent.tsx
 synara/src/app/components/room-avatar/RoomAvatar.tsx
-synara/src/app/components/room-card/RoomCard.tsx
 synara/src/app/components/room-intro/RoomIntro.tsx
 synara/src/app/components/user-profile/UserChips.tsx
 ```
@@ -152,7 +143,7 @@ synara/src/app/features/settings/notifications/SystemNotification.tsx
 synara/src/app/features/space-settings/SpaceSettings.tsx
 ```
 
-### `hook` — 44
+### `hook` — 43
 
 ```text
 synara/src/app/hooks/types.ts
@@ -163,7 +154,6 @@ synara/src/app/hooks/useCallEmbed.ts
 synara/src/app/hooks/useCapabilities.ts
 synara/src/app/hooks/useCommands.ts
 synara/src/app/hooks/useGetRoom.ts
-synara/src/app/hooks/useImagePacks.ts
 synara/src/app/hooks/useLocalRoomSummary.ts
 synara/src/app/hooks/useMatrixClient.ts
 synara/src/app/hooks/useMemberEventParser.tsx
@@ -216,12 +206,11 @@ synara/src/app/pages/client/sidebar/SpaceTabs.tsx
 synara/src/app/pages/client/space/Space.tsx
 synara/src/app/pages/client/syncStatusCopy.ts
 
-plugin (8):
+plugin (7):
 synara/src/app/plugins/call/CallEmbed.ts
 synara/src/app/plugins/call/CallWidgetDriver.ts
 synara/src/app/plugins/call/utils.ts
 synara/src/app/plugins/custom-emoji/ImagePack.ts
-synara/src/app/plugins/custom-emoji/utils.ts
 synara/src/app/plugins/react-custom-html-parser.tsx
 synara/src/app/plugins/recent-emoji.ts
 synara/src/app/plugins/via-servers.ts
@@ -255,18 +244,18 @@ They are an overlay, so one source file may appear in more than one row when it
 bridges a shared SDK model and a named feature. The exhaustive, non-overlapping
 accounting is the primary path taxonomy above.
 
-| Residual category                                           | Importer surface at this tip                                                                                                                                                                                                                                                      | Current disposition and gate                                                                                                                                                                                                                                                          |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bootstrap / `initMatrix` / live client construction         | `synara/src/client/initMatrix.ts`; `synara/src/client/cryptoStoreContinuity.ts`                                                                                                                                                                                                   | Hard migration owner. `initMatrix.ts` constructs the live JS client and IndexedDB/crypto continuity; the continuity file is type/compatibility coupling. No V-BURN work is implied.                                                                                                   |
-| Web-only / legacy fallback: composer upload and pack `get*` | `features/room/RoomInput.tsx`, `features/room/msgContent.ts`, `state/upload.ts`, `utils/matrix.ts`, `hooks/useImagePacks.ts`, and `plugins/custom-emoji/utils.ts`                                                                                                                 | Desktop native paths are fail-closed where already landed; JS callbacks remain for non-native web/legacy operation. The `custom-emoji/utils.ts` `getGlobalImagePacks` / `getRoomImagePack(s)` / `getUserImagePack` helpers are the physical-delete residual and are **V-BURN-gated**. |
-| Authenticated media / C4 boundary                           | `synara/src/app/matrix/media.ts` plus the shared media functions in `synara/src/app/utils/matrix.ts`                                                                                                                                                                              | JS MXC conversion/download remains a media boundary for the current renderer and web path. **C4 is Not confirmed**; this taxonomy does not claim media cutover.                                                                                                                       |
-| CallWidget-adjacent, post-#359                              | `features/call-status/**` (4), `features/call/CallMemberCard.tsx`, `plugins/call/**` (3), `hooks/useCall.ts`, and `hooks/useCallEmbed.ts` — 10 importers                                                                                                                          | #328 closes the native upload owner. `CallWidgetDriver.getKnownRooms` now consumes the native room-list snapshot; `getMediaConfig` and `downloadFile` fail closed because no owning native IPC exists. See [the CallWidget residual](v-send-call-widget-residual.md).                 |
-| Developer-tools / **V-SEND.R-DEVTOOL**                      | Direct importers `features/common-settings/developer-tools/SendRoomEvent.tsx` and `StateEventEditor.tsx`; `DevelopTools.tsx` is an indirect SDK-backed consumer                                                                                                                   | Raw room state/account-data and event writes remain a deliberate developer surface. The implementation gate is after **C3–C5 live proofs**, not now; see [the developer-tools inventory](v-send-devtool-inventory.md).                                                                |
-| Pack read / **V-SEND.R-PACK-READ**                          | `hooks/useImagePacks.ts`, `plugins/custom-emoji/ImagePack.ts`, `plugins/custom-emoji/utils.ts`, `components/image-pack-view/RoomImagePack.tsx`, `features/common-settings/emojis-stickers/RoomPacks.tsx`, and pack consumers such as `components/emoji-board/components/Item.tsx` | Native snapshot and subscription work is landed; the remaining JS read-helper deletion is gated on retiring the non-native web fallback. Keep pack model/render code until its consumers leave the JS owner. See [the pack-read residual](v-send-pack-read-residual.md).              |
-| Pack write/upload / named send residuals                    | `features/common-settings/emojis-stickers/RoomPacks.tsx`, `components/image-pack-view/RoomImagePack.tsx`, `state/upload.ts`, `utils/matrix.ts`, and their pack/media consumers                                                                                                    | Native desktop write/upload owners are fail-closed where landed; legacy web branches remain. This is not permission to delete shared upload/model code or to start V-BURN.                                                                                                            |
-| Timeline / **V-TIMELINE.C3–C5**                             | Room feature/message paths, `components/message/**`, timeline/room hooks, `state/room-list/**`, and `utils/timeline*.ts`                                                                                                                                                          | These importers include the active JS model/listener boundary and media/action consumers. C3, C4, and C5 remain **Not confirmed**; do not infer V-BURN readiness from the native presenter work.                                                                                      |
-| Room, space, lobby, membership, search, and notifications   | `features/lobby/**`, create/space/room settings, room/member hooks and components, message search, and `features/settings/notifications/**`                                                                                                                                       | These are remaining SDK model/read/listener consumers or shared adapters without a single new residual claim in this document. The generated inventory's category counts are candidate usage classifications, not proof of native ownership.                                          |
-| Types / unused-looking residual                             | Type-only or representation-heavy coupling includes `client/cryptoStoreContinuity.ts`, `app/hooks/types.ts`, `app/hooks/useMatrixClient.ts`, `app/matrix/media.ts`, `app/utils/polls.ts`, `app/components/message/content/PollContent.tsx`, and `types/matrix/common.ts`          | Do not equate type-only imports with safe deletion: `useMatrixClient`, `PollContent`, and shared content constants still participate in runtime contracts. Remove only with a complete owning-path proof.                                                                             |
+| Residual category                                         | Importer surface at this tip                                                                                                                                                                                                                                             | Current disposition and gate                                                                                                                                                                                                                                          |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bootstrap / `initMatrix` / live client construction       | `synara/src/client/initMatrix.ts`; `synara/src/client/cryptoStoreContinuity.ts`                                                                                                                                                                                          | Hard migration owner. `initMatrix.ts` constructs the live JS client and IndexedDB/crypto continuity; the continuity file is type/compatibility coupling. No V-BURN work is implied.                                                                                   |
+| Composer/media boundary and legacy web compatibility      | `features/room/RoomInput.tsx`, `features/room/msgContent.ts`, `state/upload.ts`, and `utils/matrix.ts`                                                                                                                                                                   | Native desktop upload paths are fail-closed where already landed. Remaining shared/media imports are not proof of desktop JS ownership or V-BURN readiness.                                                                                                           |
+| Authenticated media / C4 boundary                         | `synara/src/app/matrix/media.ts` plus the shared media functions in `synara/src/app/utils/matrix.ts`                                                                                                                                                                     | JS MXC conversion/download remains a media boundary for the current renderer and web path. **C4 is Not confirmed**; this taxonomy does not claim media cutover.                                                                                                       |
+| CallWidget-adjacent, post-#359                            | `features/call-status/**` (4), `features/call/CallMemberCard.tsx`, `plugins/call/**` (3), `hooks/useCall.ts`, and `hooks/useCallEmbed.ts` — 10 importers                                                                                                                 | #328 closes the native upload owner. `CallWidgetDriver.getKnownRooms` now consumes the native room-list snapshot; `getMediaConfig` and `downloadFile` fail closed because no owning native IPC exists. See [the CallWidget residual](v-send-call-widget-residual.md). |
+| Developer-tools / **V-SEND.R-DEVTOOL**                    | Direct importers `features/common-settings/developer-tools/SendRoomEvent.tsx` and `StateEventEditor.tsx`; `DevelopTools.tsx` is an indirect SDK-backed consumer                                                                                                          | Raw room state/account-data and event writes remain a deliberate developer surface. The implementation gate is after **C3–C5 live proofs**, not now; see [the developer-tools inventory](v-send-devtool-inventory.md).                                                |
+| Pack read / **V-SEND.R-PACK-READ**                        | `plugins/custom-emoji/ImagePack.ts`, `components/image-pack-view/RoomImagePack.tsx`, `features/common-settings/emojis-stickers/RoomPacks.tsx`, and pack consumers such as `components/emoji-board/components/Item.tsx`                                                   | Native snapshot, subscription, room-ID resolution, and JS read-owner deletion are landed. Remaining pack model/render imports do not imply a JS account-data owner; pack write/upload remains separate. See [the pack-read residual](v-send-pack-read-residual.md).   |
+| Pack write/upload / named send residuals                  | `features/common-settings/emojis-stickers/RoomPacks.tsx`, `components/image-pack-view/RoomImagePack.tsx`, `state/upload.ts`, `utils/matrix.ts`, and their pack/media consumers                                                                                           | Native desktop write/upload owners are fail-closed where landed; legacy web branches remain. This is not permission to delete shared upload/model code or to start V-BURN.                                                                                            |
+| Timeline / **V-TIMELINE.C3–C5**                           | Room feature/message paths, `components/message/**`, timeline/room hooks, `state/room-list/**`, and `utils/timeline*.ts`                                                                                                                                                 | These importers include the active JS model/listener boundary and media/action consumers. C3, C4, and C5 remain **Not confirmed**; do not infer V-BURN readiness from the native presenter work.                                                                      |
+| Room, space, lobby, membership, search, and notifications | `features/lobby/**`, create/space/room settings, room/member hooks and components, message search, and `features/settings/notifications/**`                                                                                                                              | These are remaining SDK model/read/listener consumers or shared adapters without a single new residual claim in this document. The generated inventory's category counts are candidate usage classifications, not proof of native ownership.                          |
+| Types / unused-looking residual                           | Type-only or representation-heavy coupling includes `client/cryptoStoreContinuity.ts`, `app/hooks/types.ts`, `app/hooks/useMatrixClient.ts`, `app/matrix/media.ts`, `app/utils/polls.ts`, `app/components/message/content/PollContent.tsx`, and `types/matrix/common.ts` | Do not equate type-only imports with safe deletion: `useMatrixClient`, `PollContent`, and shared content constants still participate in runtime contracts. Remove only with a complete owning-path proof.                                                             |
 
 ## Queue and operator constraints
 
