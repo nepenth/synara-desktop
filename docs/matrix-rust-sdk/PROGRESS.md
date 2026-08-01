@@ -15,7 +15,7 @@
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
 | Integration tip    | `83adef68` — after #297 pack-read; #298 residual truth; #296 forward; #289 C2; #285 C1; #283 edit
-| Active work        | Next pack-write / pack-read subscribe / avatar; C3–C5 live proof remaining
+| Active work        | **this** V-SEND.R-AVATAR user profile writes; room profile residual; pack-write next
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | Desktop production import files **163** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
@@ -59,6 +59,11 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — V-SEND.R-AVATAR-UPLOAD user profile writes
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.R-AVATAR-UPLOAD** | **This PR** | Native `matrix_upload_media` + `matrix_set_own_avatar` + `matrix_set_own_display_name`; Profile.tsx fail-closed on desktop; room profile residual remains. |
 
 ### 2026-08-01 — V-SEND.R-PACK-READ residual truth-up after #297
 | When (UTC) | Item | Result | Notes |

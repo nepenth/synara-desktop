@@ -117,3 +117,11 @@ surface re-exported behind a barrel in the settings tree, and the `useCapabiliti
 context provider wiring — verify during implementation with a full
 `grep -rn "setAvatarUrl\|setDisplayName\|sendStateEvent\|uploadContent"` over
 `synara/src/app/features` and `synara/src/app/state`.
+
+
+## Implementation (user profile slice)
+
+Landed native IPC + desktop Profile.tsx wiring:
+- `matrix_upload_media` / `matrix_set_own_avatar` / `matrix_set_own_display_name`
+- Fail-closed on native logged-in desktop sessions
+- Room profile (m.room.avatar/name/topic) remains residual **R-ROOM-PROFILE**
