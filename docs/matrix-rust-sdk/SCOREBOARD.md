@@ -3,7 +3,7 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `96015ccd` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip                                                    | `83112c9b` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **153** (plan baseline was **220**)                      |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
@@ -54,7 +54,7 @@ run passes the relevant checklist.
 | /leave command                  | **#371** useCommands Leave → leaveRoomWithNativeOwner                                                                                                                                            |
 | Room join vertical              | **#369** `matrix_room_join` + native owner; all production `joinRoom` sites fail-closed (imports **155→154**)                                                                                    |
 | Composer GIF/upload fallbacks   | **#363** RoomInput GIF + msgContent thumbnail JS upload fallbacks deleted                                                                                                                        |
-| V-SEND.R-CALL-UPLOAD            | **#328** native upload; [CallWidgetDriver residual](v-send-call-widget-residual.md)                                                                                                              |
+| V-SEND.R-CALL-UPLOAD            | **#328** native upload; [CallWidgetDriver residual](v-send-call-widget-residual.md) · [media IPC implement packet](v-send-call-widget-media-implement-packet.md) |
 | Composer thumbnail (msgContent) | **#325** video thumbnails via `uploadMediaNative` / `matrix_upload_media` fail-closed                                                                                                            |
 | V-SEND.R-DEVTOOL                | [Docs-only inventory](v-send-devtool-inventory.md) · [implementation gate](v-send-devtool-inventory.md#implementation-gate): JS client remains; start only after C3–C5 live proofs; low priority |
 | CI                              | Parallel Validate #284                                                                                                                                                                           |
@@ -83,8 +83,9 @@ run passes the relevant checklist.
 4. **CallWidget media config/download IPC.** **#362** closed `getKnownRooms`
    natively and fail-closed the rest; **#387** docs scan of media download reuse
    landed. Still need native `getMediaConfig` / `downloadFile` owners (not JS
-   fallthrough). See
-   [CallWidget residual](v-send-call-widget-residual.md).
+   fallthrough). Implement packet frozen:
+   [v-send-call-widget-media-implement-packet.md](v-send-call-widget-media-implement-packet.md).
+   See [CallWidget residual](v-send-call-widget-residual.md).
 5. **V-BURN.1 — no live `createClient`/`startClient` on desktop.** Not
    complete. See [V-BURN gates](d0-residual-completion.md) and
    [blockers](v-burn-readiness-snapshot.md).
