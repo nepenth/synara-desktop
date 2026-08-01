@@ -113,3 +113,31 @@ export async function getGlobalImagePacksWithNativeOwner(
   }
   return snapshot.packs.map(imagePackFromNativeDto);
 }
+
+export type NativePackWriteResult = {
+  status: 'ok';
+};
+
+/**
+ * V-SEND.R-PACK-WRITE: sole personal-pack write owner when a native Matrix
+ * session is live. Fail-closed — never falls through to
+ * mx.setAccountData(PoniesUserEmotes).
+ */
+export async function setUserImagePackWithNativeOwner(
+  content: PackContent,
+  desktopAvailable: boolean,
+  invoke: NativeInvoke
+): Promise<'native' | 'legacy'> {
+  if (!(await isNativePackReadSession(desktopAvailable, invoke))) {
+    return 'legacy';
+  }
+  const result = await invoke('matrix_set_user_image_pack', { content });
+  if (!result.available) {
+    throw new Error('Native Matrix image pack write is unavailable.');
+  }
+  const body = result.value as NativePackWriteResult | undefined;
+  if (body?.status !== 'ok') {
+    throw new Error('Native Matrix image pack write is unavailable.');
+  }
+  return 'native';
+}

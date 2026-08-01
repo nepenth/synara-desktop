@@ -117,3 +117,15 @@ Possible missed files: any other consumer of `createUploadAtom` / `uploadContent
 for pack media, or a barrel re-export in the emoji/pack trees — verify during
 implementation with a full `grep -rn "setAccountData\|sendStateEvent\|uploadContent"`
 over `custom-emoji`, `image-pack-view`, and the emoji/sticker settings dirs.
+
+
+## Implementation (personal pack slice)
+
+Landed:
+- `matrix_set_user_image_pack` (native `im.ponies.user_emotes` write)
+- `UserImagePack.tsx` fail-closed via `setUserImagePackNative`
+
+Remaining:
+- Global pack enable/disable (`PoniesEmoteRooms`) — `set_global_image_packs` helper exists in Rust but no IPC yet
+- Room pack create/update (`PoniesRoomEmotes`)
+- Pack image upload (PACK-UPLOAD)

@@ -8,12 +8,14 @@ use std::collections::BTreeMap;
 use matrix_sdk::{
     deserialized_responses::RawAnySyncOrStrippedState,
     ruma::{
-        events::{GlobalAccountDataEventType, StateEventType},
+        events::{AnyGlobalAccountDataEventContent, GlobalAccountDataEventType, StateEventType},
+        serde::Raw,
         OwnedRoomId, RoomId,
     },
     Client,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::value::to_raw_value;
 use serde_json::Value as JsonValue;
 
 pub const USER_EMOTES_EVENT_TYPE: &str = "im.ponies.user_emotes";
@@ -232,6 +234,60 @@ pub async fn snapshot_global_image_packs(
     })
 }
 
+/// V-SEND.R-PACK-WRITE — replace the personal `im.ponies.user_emotes`
+/// account-data pack content. Fail-closed: this is the sole native owner for
+/// the personal pack write; the JS `mx.setAccountData(PoniesUserEmotes)` must
+/// not be used as a fallback on a native session.
+pub async fn set_user_image_pack(client: &Client, content: JsonValue) -> Result<(), &'static str> {
+    set_user_image_pack_content_guard(&content)?;
+    let raw_value = to_raw_value(&content).map_err(|_| "v-send.r-pack-write-serialize-failed")?;
+    let raw = Raw::<AnyGlobalAccountDataEventContent>::from_json(raw_value);
+    client
+        .account()
+        .set_account_data_raw(user_emotes_type(), raw)
+        .await
+        .map_err(|_| "v-send.r-pack-write-set-failed")?;
+    Ok(())
+}
+
+/// V-SEND.R-PACK-WRITE — replace the global `im.ponies.emote_rooms` account-data
+/// content (add/remove/enable global pack references). Fail-closed: this is the
+/// sole native owner for the global-pack write; the JS
+/// `mx.setAccountData(PoniesEmoteRooms)` must not be used as a fallback on a
+/// native session.
+pub async fn set_global_image_packs(
+    client: &Client,
+    content: JsonValue,
+) -> Result<(), &'static str> {
+    set_global_image_packs_content_guard(&content)?;
+    let raw_value = to_raw_value(&content).map_err(|_| "v-send.r-pack-write-serialize-failed")?;
+    let raw = Raw::<AnyGlobalAccountDataEventContent>::from_json(raw_value);
+    client
+        .account()
+        .set_account_data_raw(emote_rooms_type(), raw)
+        .await
+        .map_err(|_| "v-send.r-pack-write-set-failed")?;
+    Ok(())
+}
+
+/// Pure guard extracted from `set_user_image_pack` so the fail-closed content
+/// check is unit-testable without a live client.
+fn set_user_image_pack_content_guard(content: &JsonValue) -> Result<(), &'static str> {
+    if !content.is_object() {
+        return Err("v-send.r-pack-write-invalid-content");
+    }
+    Ok(())
+}
+
+/// Pure guard extracted from `set_global_image_packs` so the fail-closed content
+/// check is unit-testable without a live client.
+fn set_global_image_packs_content_guard(content: &JsonValue) -> Result<(), &'static str> {
+    if !content.is_object() {
+        return Err("v-send.r-pack-write-invalid-content");
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -272,5 +328,21 @@ mod tests {
         assert_eq!(err, "v-send.r-pack-read-invalid-room");
         assert!(!err.contains('@'));
         assert!(!err.contains('!'));
+    }
+
+    #[test]
+    fn set_user_image_pack_rejects_non_object_content() {
+        // Fail-closed: a non-object body is rejected before any SDK call.
+        let err = set_user_image_pack_content_guard(&JsonValue::Array(vec![])).unwrap_err();
+        assert_eq!(err, "v-send.r-pack-write-invalid-content");
+        assert!(set_user_image_pack_content_guard(&json!({ "pack": {} })).is_ok());
+    }
+
+    #[test]
+    fn set_global_image_packs_rejects_non_object_content() {
+        // Fail-closed: a non-object body is rejected before any SDK call.
+        let err = set_global_image_packs_content_guard(&JsonValue::String("x".into())).unwrap_err();
+        assert_eq!(err, "v-send.r-pack-write-invalid-content");
+        assert!(set_global_image_packs_content_guard(&json!({ "rooms": {} })).is_ok());
     }
 }
