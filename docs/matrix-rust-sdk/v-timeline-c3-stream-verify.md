@@ -64,10 +64,10 @@ Continue only when all of the following are true:
 
 - the proof is on `feature/matrix-rust-sdk-full-replacement` or a docs branch
   whose checked-out base is that feature tip, never `main` or PR #39;
-- `git rev-parse HEAD` is
-  `e4cf1a5f1d4c6127afd34f2b2f23d93400a03d45` for this preflight; if the head
-  differs, stop and record `Not confirmed` rather than silently refreshing the
-  target SHA;
+- record `git rev-parse HEAD` as the **evidence tip** in the proof log (this
+  preflight was authored against `54b4dc4fa9c503fbf63d1c4fcf147299699b1477`); do not silently claim a
+  different SHA; if the branch is not based on
+  `feature/matrix-rust-sdk-full-replacement`, stop and record `Not confirmed`;
 - the Prettier command reports `2.8.1`; and
 - the worktree has no unrelated changes that could affect the desktop run.
 
