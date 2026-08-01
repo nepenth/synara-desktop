@@ -3,10 +3,22 @@
 | Field | Value |
 |-------|-------|
 | Updated | 2026-08-01 |
-| Tip | `e38bfdab` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip | `27dd03f6` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **159** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
 | Umbrella #39 | **Do not merge** without explicit user approval |
+
+## Operator index — timeline live proofs
+
+These are docs-only operator checklists for the selected native desktop path.
+All three live proofs remain **Not confirmed** until an authenticated desktop
+run passes the relevant checklist.
+
+| Proof                         | Operator checklist                                                                 | Live proof        |
+| ----------------------------- | ---------------------------------------------------------------------------------- | ----------------- |
+| V-TIMELINE.C3 stream/delta    | [v-timeline-c3-stream-verify.md](v-timeline-c3-stream-verify.md)                   | **Not confirmed** |
+| V-TIMELINE.C4 media/render    | [v-timeline-c4-media-render-verify.md](v-timeline-c4-media-render-verify.md)       | **Not confirmed** |
+| V-TIMELINE.C5 pins/notes/jump | [v-timeline-c5-pins-notes-jump-verify.md](v-timeline-c5-pins-notes-jump-verify.md) | **Not confirmed** |
 
 ## Done (high level)
 
