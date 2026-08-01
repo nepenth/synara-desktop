@@ -15,7 +15,7 @@
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
 | Integration tip    | `95a6a71b` — after #288 scoreboard; #287 pack-read inventory; #284 CI; #240 contract; #279 loginUtil
-| Active work        | **#283** edit (CI); **this #285** C1 + **#289** C2 timeline cutover; #290 forward inventory landed; next pack-read implement + C3–C5
+| Active work        | **#283** edit (CI); **this #285** C1 + **#289** C2; #290/#291 inventories landed; next pack-read implement + C3–C5
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | Desktop production import files **165** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
@@ -32,9 +32,10 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip after #290** forward inventory. **This PR #285** V-TIMELINE.C1 NativeTimelinePresenter owns RoomView. #283 edit in CI; #289 C2 delete RoomTimeline stacked. Next: C3–C5, pack-read implement, avatar. #39 gated. |
-| **Tip**        | after #290 (merge `ed60226b` base) |
+| **Now**        | **Tip after #291** avatar inventory. **This PR #285** V-TIMELINE.C1 NativeTimelinePresenter owns RoomView. #283 edit CI; #289 C2 stacked. Next: C3–C5, pack-read implement. #39 gated. |
+| **Tip**        | after #291 |
 | **Active PRs** | [#283](https://github.com/nepenth/synara-desktop/pull/283) edit; **this** [#285](https://github.com/nepenth/synara-desktop/pull/285) C1; [#289](https://github.com/nepenth/synara-desktop/pull/289) C2. |
+| **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
@@ -59,6 +60,11 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — V-SEND.R-AVATAR-UPLOAD residual inventory
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.R-AVATAR-UPLOAD** | **Merged #291** | Avatar residual inventory on tip. |
 
 ### 2026-08-01 — V-TIMELINE.C1 presenter cutover
 | When (UTC) | Item | Result | Notes |
