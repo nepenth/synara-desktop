@@ -2,8 +2,8 @@
  * SDK-neutral owner for native composer reply-draft state.
  *
  * Message body drafts remain local (Slate / localStorage). Reply transport
- * remains `matrix_send_text` with `replyTo`. This owner does not select
- * NativeTimelinePresenter or delete RoomTimeline.
+ * remains `matrix_send_text` with `replyTo`. Used with NativeTimelinePresenter
+ * after V-TIMELINE.C1/C2 cutover (JS RoomTimeline deleted).
  */
 
 import type { DesktopInvokeResult } from '../../utils/desktop';

@@ -1,6 +1,6 @@
 /**
  * Desktop wrappers for native timeline action owners.
- * Does not select NativeTimelinePresenter or delete RoomTimeline.
+ * Used by NativeTimelinePresenter after V-TIMELINE.C1/C2 cutover.
  */
 
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';

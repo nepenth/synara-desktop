@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Updated | 2026-08-01 |
-| Tip | `06709d31` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip | `0c021419` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **165** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
 | Umbrella #39 | **Do not merge** without explicit approval |
@@ -22,14 +22,14 @@
 | Send residual inventories | forward #290; avatar #291; pack-write #292 (docs only) |
 | V-SEND.R-EDIT | **#283** native `m.replace` merged |
 | V-TIMELINE.C3 checklist | **#294** docs-only stream verify checklist |
+| V-TIMELINE.C1 | **#285** NativeTimelinePresenter owns RoomView |
 | CI | Parallel Validate #284 |
 
 ## In flight
 
 | PR | What |
 |----|------|
-| #285 | V-TIMELINE.C1 select NativeTimelinePresenter in RoomView (ready; CI) |
-| #289 | V-TIMELINE.C2 delete RoomTimeline (draft, stacked on #285) |
+| #289 | V-TIMELINE.C2 delete RoomTimeline (this PR; after #285 C1) |
 
 ## Left (ordered)
 
