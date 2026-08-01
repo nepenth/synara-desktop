@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `25bfa150` — after #314 PACK-UPLOAD; #315 scoreboard; #313 R-ROOM-PROFILE; #310 room pack-write
-| Active work        | Next: pack-read subscribe; C3–C5 live
+| Integration tip    | `95ad2656` — after #318 pack-read subscribe; #317 scoreboard; #314 PACK-UPLOAD; #313 R-ROOM-PROFILE
+| Active work        | Next: pack-read JS utils / useImagePackRooms; C3–C5 live
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | Desktop production import files **163** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `25bfa150`**. Landed pack-write #306/#309/#310, R-ROOM-PROFILE #313, **PACK-UPLOAD #314** (CompactUploadCardRenderer → `matrix_upload_media` fail-closed). Next: pack-read subscribe; C3–C5 live. #39 gated. |
-| **Tip**        | `25bfa150` |
-| **Active PRs** | none product open after PACK-UPLOAD #314. |
+| **Now**        | **Tip `95ad2656`**. Landed pack-read **subscribe #318** (`NativeImagePackOwner` signal → re-snapshot). Snapshot #297 + write #306/#309/#310 + upload #314 + room profile #313. Next: JS pack-read utils/`useImagePackRooms` residual; C3–C5 live. #39 gated. |
+| **Tip**        | `95ad2656` |
+| **Active PRs** | none product open after pack-read subscribe #318. |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
@@ -59,6 +59,16 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — scoreboard after #318 pack-read subscribe
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **Scoreboard** | **This PR** | Honesty after #318 pack-read subscribe. Tip `95ad2656`. JS utils / useImagePackRooms residual. #39 gated. |
+
+### 2026-08-01 — V-SEND.R-PACK-READ subscribe
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.R-PACK-READ** | **Merged #318** | Session `NativeImagePackOwner` listens for ponies account-data/state; emits `matrix-image-packs-updated`; hooks re-snapshot via existing get IPC (fail-closed). No dual_backend. |
 
 ### 2026-08-01 — scoreboard after #314 PACK-UPLOAD
 | When (UTC) | Item | Result | Notes |
