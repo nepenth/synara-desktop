@@ -15,7 +15,7 @@
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
 | Integration tip    | `c42b93c5` — after #303 avatar user profile; #302 C4/C5 checklists; #301 pack-read residual; #297 pack-read snapshot
-| Active work        | Next: pack-write / pack-read subscribe / R-ROOM-PROFILE; C3–C5 live proof remaining
+| Active work        | **this** personal pack-write; global/room pack-write residual; pack-read subscribe residual
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | Desktop production import files **163** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
@@ -59,6 +59,11 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — V-SEND.R-PACK-WRITE personal pack
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-SEND.R-PACK-WRITE** | **This PR** | Native `matrix_set_user_image_pack` + UserImagePack.tsx fail-closed; global/room pack write residual remains. |
 
 ### 2026-08-01 — scoreboard after #303 avatar
 | When (UTC) | Item | Result | Notes |
