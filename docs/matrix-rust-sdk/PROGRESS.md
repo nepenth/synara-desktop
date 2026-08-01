@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**
-| Integration tip    | `c42b93c5` — after #303 avatar user profile; #302 C4/C5 checklists; #301 pack-read residual; #297 pack-read snapshot
-| Active work        | **this** personal pack-write; global/room pack-write residual; pack-read subscribe residual
+| Integration tip    | `b21578e9` — after #306 personal pack-write; #304 scoreboard; #303 avatar; #302 C4/C5
+| Active work        | Next: pack-write global/room + PACK-UPLOAD; pack-read subscribe; R-ROOM-PROFILE; C3–C5 live
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices                                                                                                                                  |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-sol`, medium                                                                                                                                                                                          |
 | Import accounting  | Desktop production import files **163** on tip (plan baseline was 220). Allowlist/import ratchet continues per residual. Auth SSO/token/register/loginUtil largely closed; timeline cutover in flight.
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `c42b93c5`**. Landed #303 V-SEND.R-AVATAR-UPLOAD user profile (`matrix_upload_media` + set avatar/display name). R-ROOM-PROFILE residual. Next: pack-write / pack-read subscribe. C3–C5 live proof remaining. #39 gated. |
-| **Tip**        | `c42b93c5` |
-| **Active PRs** | none product open after #303. Pack-write implement in flight. |
+| **Now**        | **Tip `b21578e9`**. Landed #306 personal pack-write (`matrix_set_user_image_pack`). Global/room/PACK-UPLOAD residual. Next serial: pack-write remainder or pack-read subscribe. #39 gated. |
+| **Tip**        | `b21578e9` |
+| **Active PRs** | none product open after #306. |
 | **Blocked**    | Umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval; V-BURN until residual owners clear. Timeline cutover is **approved** (not blocked). |
 
 ---
@@ -60,10 +60,15 @@ Update rules:
 
 ## Work log (newest first)
 
+### 2026-08-01 — scoreboard after #306 pack-write personal
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **Scoreboard** | **This PR** | Honesty after #306 personal pack-write. Tip `b21578e9`. Global/room/PACK-UPLOAD residual. #39 gated. |
+
 ### 2026-08-01 — V-SEND.R-PACK-WRITE personal pack
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| current | **V-SEND.R-PACK-WRITE** | **This PR** | Native `matrix_set_user_image_pack` + UserImagePack.tsx fail-closed; global/room pack write residual remains. |
+| current | **V-SEND.R-PACK-WRITE** | **Merged #306** | Native `matrix_set_user_image_pack` + UserImagePack.tsx fail-closed; global/room pack write residual remains. |
 
 ### 2026-08-01 — scoreboard after #303 avatar
 | When (UTC) | Item | Result | Notes |
