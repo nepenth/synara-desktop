@@ -1,12 +1,13 @@
 {
   "schema_version": 1,
-  "as_of_date": "2026-07-31",
+  "as_of_date": "2026-08-01",
   "source_of_truth": "Original-plan inventory, strict gates, release runtime, and current full-vertical product execution. Dated evidence and audit artifacts remain historical sources.",
   "integration_branch": "feature/matrix-rust-sdk-full-replacement",
   "audited_snapshot": {
-    "sha": "0fb0fe425ae932e27445b8054f3a14d628e5a869",
+    "sha": "5116c9dae7fb98e6801cd493e1c4d609cf580fa3",
     "review": "docs/matrix-rust-sdk/review-2026-07-25.md"
   },
+  "recent_merged_prs": [333, 334, 335, 336, 337, 338],
   "original_plan": {
     "path": "docs/matrix-rust-sdk-full-replacement-plan.md",
     "task_count": 112,
@@ -97,8 +98,8 @@
   "vertical_execution": {
     "policy": "full-vertical-delete-per-vertical",
     "integration_product_state": "capability-cutover-in-progress",
-    "active_slice": "V-SEND.4",
-    "active_pr": 253,
+    "active_slice": "V-BURN.1",
+    "active_pr": 327,
     "completed_slices": [
       "V-CRYPTO.1",
       "V-CRYPTO.2",
@@ -125,21 +126,7 @@
       "V-ROOMS.2",
       "V-SEND.5"
     ],
-    "held_prs": [
-      221,
-      240,
-      109,
-      193,
-      196,
-      198,
-      199,
-      201,
-      203,
-      204,
-      207,
-      208,
-      209
-    ],
+    "held_prs": [327],
     "completion_evidence": {
       "capability_owner_delta": "negative",
       "global_direct_import_delta": "recorded-non-increasing"
@@ -150,9 +137,10 @@
         "import_lines": 292
       },
       "current": {
-        "files": 200,
-        "import_lines": 244
-      }
+        "files": 159,
+        "import_lines": 187
+      },
+      "allowlist_paths": 163
     }
   },
   "current_execution": {

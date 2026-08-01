@@ -3,11 +3,11 @@
 > Generated from `program-status.json` by `scripts/check-matrix-rust-sdk-program-status.mjs`.
 > Do not hand-edit. Dated task evidence and the independent review remain historical records.
 
-As of: 2026-07-31
+As of: 2026-08-01
 
 Integration branch: `feature/matrix-rust-sdk-full-replacement`
 
-Audited snapshot: `0fb0fe425ae932e27445b8054f3a14d628e5a869`
+Audited snapshot: `5116c9dae7fb98e6801cd493e1c4d609cf580fa3`
 
 ## Original-plan foundation queue
 
@@ -29,13 +29,13 @@ These release/main fields do not describe partial product wiring on the integrat
 
 - Policy: `full-vertical-delete-per-vertical`
 - Integration product state: `capability-cutover-in-progress`
-- Active slice: **V-SEND.4** (PR #253)
+- Active slice: **V-BURN.1** (PR #327)
 - Wired / deletion open: None
 - Completed under full policy: `V-CRYPTO.1`, `V-CRYPTO.2`, `V-CRYPTO.3`, `V-CRYPTO.4`, `V-CRYPTO.5`, `V-CRYPTO.6`, `V-CRYPTO.7`, `V-AUTH.1`, `V-ROOMS.1`, `V-ROOMS.3`, `V-ROOMS.4`, `V-SEND.1`, `V-SEND.2`, `V-ROOMS.5`, `V-SEND.3`
 - Next slices: `V-TIMELINE.1` → `V-AUTH.2` → `V-AUTH.3` → `V-AUTH.4` → `V-ROOMS.2` → `V-SEND.5`
-- Held PRs: #221, #240, #109, #193, #196, #198, #199, #201, #203, #204, #207, #208, #209
+- Held PRs: #327
 - Completion evidence: negative capability-owner/file deletion delta; global direct-import delta recorded and non-increasing
-- matrix-js-sdk inventory: **200 files / 244 import lines current**; baseline **232 / 292**
+- matrix-js-sdk inventory: **159 files / 187 import lines current**; baseline **232 / 292**
 
 ## Phase gates
 
