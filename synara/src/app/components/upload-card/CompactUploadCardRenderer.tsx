@@ -1,9 +1,14 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { Chip, Icon, IconButton, Icons, Text, color } from 'folds';
-import { MatrixError } from 'matrix-js-sdk';
 import { useAtom } from 'jotai';
 import { UploadCard, UploadCardError, CompactUploadCardProgress } from './UploadCard';
-import { TUploadAtom, UploadStatus, UploadSuccess, useBindUploadAtom } from '../../state/upload';
+import {
+  TUploadAtom,
+  UploadStatus,
+  UploadSuccess,
+  useBindUploadAtom,
+  makeUploadError,
+} from '../../state/upload';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { TUploadContent } from '../../utils/matrix';
 import { bytesToSize, getFileTypeIcon } from '../../utils/common';
@@ -52,7 +57,7 @@ export function CompactUploadCardRenderer({
         e instanceof Error && typeof e.message === 'string'
           ? e.message
           : 'Native Matrix media upload is unavailable.';
-      setUpload({ error: new MatrixError({ error: message }) });
+      setUpload({ error: makeUploadError(message) });
     }
   }, [file, setUpload]);
 
