@@ -60,7 +60,9 @@ test('native room moderation invokes the registered Rust mutations with reasons'
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
   const invoke: NativeInvoke = async (command, args) => {
     calls.push({ command, args });
-    return command === 'matrix_session_snapshot' ? loggedInSession : { available: true };
+    return command === 'matrix_session_snapshot'
+      ? loggedInSession
+      : { available: true, value: undefined };
   };
 
   await inviteUserWithNativeOwner(
