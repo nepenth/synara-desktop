@@ -1,24 +1,15 @@
-import { Room } from 'matrix-js-sdk';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AccountDataEvent } from '../../types/matrix/accountData';
-import { StateEvent } from '../../types/matrix/room';
-import {
-  getGlobalImagePacks,
-  getRoomImagePack,
-  getRoomImagePacks,
-  getUserImagePack,
-  ImagePack,
-  ImageUsage,
-} from '../plugins/custom-emoji';
+import { useEffect, useMemo, useState } from 'react';
+import { ImagePack, ImageUsage } from '../plugins/custom-emoji';
 import {
   getGlobalImagePacksNative,
   getRoomImagePacksNative,
   getUserImagePackNative,
 } from '../features/room/nativeImagePack';
-import { isSynaraDesktop, listen } from '../utils/desktop';
-import { useMatrixClient } from './useMatrixClient';
-import { useAccountDataCallback } from './useAccountDataCallback';
-import { useStateEventCallback } from './useStateEventCallback';
+import { listen } from '../utils/desktop';
+
+type RoomWithId = {
+  roomId: string;
+};
 
 /** Must match Rust IMAGE_PACKS_UPDATED_EVENT. Signal only; re-snapshot via get*Native. */
 const IMAGE_PACKS_UPDATED_EVENT = 'matrix-image-packs-updated';
@@ -26,13 +17,12 @@ const IMAGE_PACKS_UPDATED_EVENT = 'matrix-image-packs-updated';
 /**
  * V-SEND.R-PACK-READ subscribe: when native session is active, listen for
  * pack-change signals and bump a refresh token so snapshot effects re-run.
- * Web fallback keeps useAccountDataCallback / useStateEventCallback.
  */
 function useNativeImagePackRefreshToken(nativeActive: boolean): number {
   const [token, setToken] = useState(0);
 
   useEffect(() => {
-    if (!nativeActive || !isSynaraDesktop()) return;
+    if (!nativeActive) return;
     let cancelled = false;
     let unlisten: (() => void | Promise<void>) | undefined;
 
@@ -59,14 +49,10 @@ function useNativeImagePackRefreshToken(nativeActive: boolean): number {
 /**
  * V-SEND.R-PACK-READ: when desktop native session is live, pack reads use
  * matrix_get_*_image_packs (fail-closed) with live subscribe refresh via
- * matrix-image-packs-updated. JS account-data/state callbacks stay for
- * non-native (web) sessions only.
+ * matrix-image-packs-updated. There is no JS account-data/state fallback.
  */
 export const useUserImagePack = (): ImagePack | undefined => {
-  const mx = useMatrixClient();
-  const [userPack, setUserPack] = useState<ImagePack | undefined>(() =>
-    isSynaraDesktop() ? undefined : getUserImagePack(mx)
-  );
+  const [userPack, setUserPack] = useState<ImagePack | undefined>();
   const [nativeActive, setNativeActive] = useState(false);
   const refreshToken = useNativeImagePackRefreshToken(nativeActive);
 
@@ -75,16 +61,11 @@ export const useUserImagePack = (): ImagePack | undefined => {
     (async () => {
       const result = await getUserImagePackNative();
       if (cancelled) return;
-      if (result === 'legacy') {
-        setNativeActive(false);
-        setUserPack(getUserImagePack(mx));
-        return;
-      }
       setNativeActive(true);
-      setUserPack(result);
+      setUserPack(result === 'legacy' ? undefined : result);
     })().catch(() => {
-      if (!cancelled && isSynaraDesktop()) {
-        // Fail-closed: leave empty rather than silent JS fallthrough on desktop.
+      if (!cancelled) {
+        // Fail-closed: leave empty rather than falling through to JS reads.
         setNativeActive(true);
         setUserPack(undefined);
       }
@@ -92,29 +73,13 @@ export const useUserImagePack = (): ImagePack | undefined => {
     return () => {
       cancelled = true;
     };
-  }, [mx, refreshToken]);
-
-  useAccountDataCallback(
-    mx,
-    useCallback(
-      (mEvent) => {
-        if (nativeActive) return;
-        if (mEvent.getType() === AccountDataEvent.PoniesUserEmotes) {
-          setUserPack(getUserImagePack(mx));
-        }
-      },
-      [mx, nativeActive]
-    )
-  );
+  }, [refreshToken]);
 
   return userPack;
 };
 
 export const useGlobalImagePacks = (): ImagePack[] => {
-  const mx = useMatrixClient();
-  const [globalPacks, setGlobalPacks] = useState<ImagePack[]>(() =>
-    isSynaraDesktop() ? [] : getGlobalImagePacks(mx)
-  );
+  const [globalPacks, setGlobalPacks] = useState<ImagePack[]>([]);
   const [nativeActive, setNativeActive] = useState(false);
   const refreshToken = useNativeImagePackRefreshToken(nativeActive);
 
@@ -123,15 +88,10 @@ export const useGlobalImagePacks = (): ImagePack[] => {
     (async () => {
       const result = await getGlobalImagePacksNative();
       if (cancelled) return;
-      if (result === 'legacy') {
-        setNativeActive(false);
-        setGlobalPacks(getGlobalImagePacks(mx));
-        return;
-      }
       setNativeActive(true);
-      setGlobalPacks(result);
+      setGlobalPacks(result === 'legacy' ? [] : result);
     })().catch(() => {
-      if (!cancelled && isSynaraDesktop()) {
+      if (!cancelled) {
         setNativeActive(true);
         setGlobalPacks([]);
       }
@@ -139,51 +99,13 @@ export const useGlobalImagePacks = (): ImagePack[] => {
     return () => {
       cancelled = true;
     };
-  }, [mx, refreshToken]);
-
-  useAccountDataCallback(
-    mx,
-    useCallback(
-      (mEvent) => {
-        if (nativeActive) return;
-        if (mEvent.getType() === AccountDataEvent.PoniesEmoteRooms) {
-          setGlobalPacks(getGlobalImagePacks(mx));
-        }
-      },
-      [mx, nativeActive]
-    )
-  );
-
-  useStateEventCallback(
-    mx,
-    useCallback(
-      (mEvent) => {
-        if (nativeActive) return;
-        const eventType = mEvent.getType();
-        const roomId = mEvent.getRoomId();
-        const stateKey = mEvent.getStateKey();
-        if (eventType === StateEvent.PoniesRoomEmotes && roomId && typeof stateKey === 'string') {
-          const global = !!globalPacks.find(
-            (pack) =>
-              pack.address && pack.address.roomId === roomId && pack.address.stateKey === stateKey
-          );
-          if (global) {
-            setGlobalPacks(getGlobalImagePacks(mx));
-          }
-        }
-      },
-      [mx, globalPacks, nativeActive]
-    )
-  );
+  }, [refreshToken]);
 
   return globalPacks;
 };
 
-export const useRoomImagePack = (room: Room, stateKey: string): ImagePack | undefined => {
-  const mx = useMatrixClient();
-  const [roomPack, setRoomPack] = useState<ImagePack | undefined>(() =>
-    isSynaraDesktop() ? undefined : getRoomImagePack(room, stateKey)
-  );
+export const useRoomImagePack = (room: RoomWithId, stateKey: string): ImagePack | undefined => {
+  const [roomPack, setRoomPack] = useState<ImagePack | undefined>();
   const [nativeActive, setNativeActive] = useState(false);
   const refreshToken = useNativeImagePackRefreshToken(nativeActive);
 
@@ -192,15 +114,12 @@ export const useRoomImagePack = (room: Room, stateKey: string): ImagePack | unde
     (async () => {
       const result = await getRoomImagePacksNative(room.roomId);
       if (cancelled) return;
-      if (result === 'legacy') {
-        setNativeActive(false);
-        setRoomPack(getRoomImagePack(room, stateKey));
-        return;
-      }
       setNativeActive(true);
-      setRoomPack(result.find((p) => p.address?.stateKey === stateKey));
+      setRoomPack(
+        result === 'legacy' ? undefined : result.find((p) => p.address?.stateKey === stateKey)
+      );
     })().catch(() => {
-      if (!cancelled && isSynaraDesktop()) {
+      if (!cancelled) {
         setNativeActive(true);
         setRoomPack(undefined);
       }
@@ -208,33 +127,13 @@ export const useRoomImagePack = (room: Room, stateKey: string): ImagePack | unde
     return () => {
       cancelled = true;
     };
-  }, [mx, room, stateKey, refreshToken]);
-
-  useStateEventCallback(
-    mx,
-    useCallback(
-      (mEvent) => {
-        if (nativeActive) return;
-        if (
-          mEvent.getRoomId() === room.roomId &&
-          mEvent.getType() === StateEvent.PoniesRoomEmotes &&
-          mEvent.getStateKey() === stateKey
-        ) {
-          setRoomPack(getRoomImagePack(room, stateKey));
-        }
-      },
-      [room, stateKey, nativeActive]
-    )
-  );
+  }, [room.roomId, stateKey, refreshToken]);
 
   return roomPack;
 };
 
-export const useRoomImagePacks = (room: Room): ImagePack[] => {
-  const mx = useMatrixClient();
-  const [roomPacks, setRoomPacks] = useState<ImagePack[]>(() =>
-    isSynaraDesktop() ? [] : getRoomImagePacks(room)
-  );
+export const useRoomImagePacks = (room: RoomWithId): ImagePack[] => {
+  const [roomPacks, setRoomPacks] = useState<ImagePack[]>([]);
   const [nativeActive, setNativeActive] = useState(false);
   const refreshToken = useNativeImagePackRefreshToken(nativeActive);
 
@@ -243,15 +142,10 @@ export const useRoomImagePacks = (room: Room): ImagePack[] => {
     (async () => {
       const result = await getRoomImagePacksNative(room.roomId);
       if (cancelled) return;
-      if (result === 'legacy') {
-        setNativeActive(false);
-        setRoomPacks(getRoomImagePacks(room));
-        return;
-      }
       setNativeActive(true);
-      setRoomPacks(result);
+      setRoomPacks(result === 'legacy' ? [] : result);
     })().catch(() => {
-      if (!cancelled && isSynaraDesktop()) {
+      if (!cancelled) {
         setNativeActive(true);
         setRoomPacks([]);
       }
@@ -259,62 +153,29 @@ export const useRoomImagePacks = (room: Room): ImagePack[] => {
     return () => {
       cancelled = true;
     };
-  }, [mx, room, refreshToken]);
-
-  useStateEventCallback(
-    mx,
-    useCallback(
-      (mEvent) => {
-        if (nativeActive) return;
-        if (
-          mEvent.getRoomId() === room.roomId &&
-          mEvent.getType() === StateEvent.PoniesRoomEmotes
-        ) {
-          setRoomPacks(getRoomImagePacks(room));
-        }
-      },
-      [room, nativeActive]
-    )
-  );
+  }, [room.roomId, refreshToken]);
 
   return roomPacks;
 };
 
 export const useRoomsImagePacks = (roomIds: string[]) => {
-  const mx = useMatrixClient();
   const roomKey = roomIds.join(',');
-  const [roomPacks, setRoomPacks] = useState<ImagePack[]>(() => {
-    if (isSynaraDesktop()) return [];
-    return roomIds.flatMap((id) => {
-      const room = mx.getRoom(id);
-      return room ? getRoomImagePacks(room) : [];
-    });
-  });
+  const [roomPacks, setRoomPacks] = useState<ImagePack[]>([]);
   const [nativeActive, setNativeActive] = useState(false);
   const refreshToken = useNativeImagePackRefreshToken(nativeActive);
-
-  const loadLegacyPacks = useCallback(() => {
-    return roomIds.flatMap((id) => {
-      const room = mx.getRoom(id);
-      return room ? getRoomImagePacks(room) : [];
-    });
-  }, [mx, roomIds]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!isSynaraDesktop()) {
-        setNativeActive(false);
-        setRoomPacks(loadLegacyPacks());
-        return;
-      }
       try {
         const all: ImagePack[] = [];
         for (const roomId of roomIds) {
           const result = await getRoomImagePacksNative(roomId);
           if (result === 'legacy') {
-            setNativeActive(false);
-            setRoomPacks(loadLegacyPacks());
+            if (!cancelled) {
+              setNativeActive(true);
+              setRoomPacks([]);
+            }
             return;
           }
           all.push(...result);
@@ -332,23 +193,7 @@ export const useRoomsImagePacks = (roomIds: string[]) => {
     return () => {
       cancelled = true;
     };
-  }, [mx, roomKey, roomIds, refreshToken, loadLegacyPacks]);
-
-  useStateEventCallback(
-    mx,
-    useCallback(
-      (mEvent) => {
-        if (nativeActive) return;
-        if (
-          roomIds.includes(mEvent.getRoomId() ?? '') &&
-          mEvent.getType() === StateEvent.PoniesRoomEmotes
-        ) {
-          setRoomPacks(loadLegacyPacks());
-        }
-      },
-      [roomIds, nativeActive, loadLegacyPacks]
-    )
-  );
+  }, [roomKey, roomIds, refreshToken]);
 
   return roomPacks;
 };
