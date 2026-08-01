@@ -3,8 +3,8 @@
 | Field | Value |
 |-------|-------|
 | Updated | 2026-08-01 |
-| Tip | `0c021419` on `feature/matrix-rust-sdk-full-replacement` |
-| Production `matrix-js-sdk` import files (`synara/src`) | **165** (plan baseline was **220**) |
+| Tip | `8995add1` on `feature/matrix-rust-sdk-full-replacement` |
+| Production `matrix-js-sdk` import files (`synara/src`) | **164** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
 | Umbrella #39 | **Do not merge** without explicit approval |
 
@@ -23,27 +23,28 @@
 | V-SEND.R-EDIT | **#283** native `m.replace` merged |
 | V-TIMELINE.C3 checklist | **#294** docs-only stream verify checklist |
 | V-TIMELINE.C1 | **#285** NativeTimelinePresenter owns RoomView |
+| V-TIMELINE.C2 | **#289** delete `RoomTimeline` (imports **165→164**, allowlist **169→168**) |
 | CI | Parallel Validate #284 |
 
 ## In flight
 
 | PR | What |
 |----|------|
-| #289 | V-TIMELINE.C2 delete RoomTimeline (this PR; after #285 C1) |
+| (none product) | Next: **V-SEND.R-PACK-READ** implement (inventory #287) or **V-SEND.R-FORWARD** TS dialog residual (#290) |
 
 ## Left (ordered)
 
 ### Timeline cutover
-1. **C1** land #285 (presenter selection)
-2. **C2** delete RoomTimeline.tsx when unmounted + clean dead imports/comments
-3. **C3** live re-verify stream deltas after C1 (checklist #294; map claims no gap)
+1. ~~**C1** land #285~~ ✅
+2. ~~**C2** delete RoomTimeline~~ ✅ #289
+3. **C3** live re-verify stream deltas (checklist #294; map claims no gap)
 4. **C4** media/render parity on selected presenter
 5. **C5** pins/notes/jump live proof
 
 ### Send / media residuals (inventories done; implement remains)
-- **V-SEND.R-PACK-READ** implement (inventory #287) — next product after edit
-- **V-SEND.R-PACK-WRITE** / **PACK-UPLOAD** implement (inventory #292)
+- **V-SEND.R-PACK-READ** implement (inventory #287) — preferred next on `product.rs`
 - **V-SEND.R-FORWARD** implement (inventory #290; native send exists; TS dialog residual)
+- **V-SEND.R-PACK-WRITE** / **PACK-UPLOAD** implement (inventory #292)
 - **V-SEND.R-AVATAR-UPLOAD** / **R-ROOM-PROFILE** implement (inventory #291)
 - **V-SEND.R-CALL-UPLOAD** / **R-GIF-PACK**
 - **V-SEND.R-DEVTOOL** (low priority)
