@@ -951,6 +951,12 @@
           "markdownDescription": "Enables the matrix_set_own_display_name command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_set_room_image_pack command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-set-room-image-pack",
+          "markdownDescription": "Enables the matrix_set_room_image_pack command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_set_user_image_pack command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-set-user-image-pack",
@@ -1765,6 +1771,12 @@
           "type": "string",
           "const": "deny-matrix-set-own-display-name",
           "markdownDescription": "Denies the matrix_set_own_display_name command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_set_room_image_pack command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-set-room-image-pack",
+          "markdownDescription": "Denies the matrix_set_room_image_pack command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_set_user_image_pack command without any pre-configured scope.",

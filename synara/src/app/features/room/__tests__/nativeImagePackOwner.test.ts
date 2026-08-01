@@ -8,6 +8,7 @@ import {
   imagePackFromNativeDto,
   isNativePackReadSession,
   setGlobalImagePacksWithNativeOwner,
+  setRoomImagePackWithNativeOwner,
   setUserImagePackWithNativeOwner,
   type NativeInvoke,
 } from '../nativeImagePackOwner';
@@ -68,6 +69,9 @@ const loggedInInvoke: NativeInvoke = async (command) => {
     return { available: true, value: { status: 'ok' } };
   }
   if (command === 'matrix_set_global_image_packs') {
+    return { available: true, value: { status: 'ok' } };
+  }
+  if (command === 'matrix_set_room_image_pack') {
     return { available: true, value: { status: 'ok' } };
   }
   return { available: false };
@@ -167,6 +171,55 @@ test('global pack write native ok', async () => {
 test('global pack write fail-closed when command missing', async () => {
   await assert.rejects(
     () => setGlobalImagePacksWithNativeOwner({ rooms: {} }, true, failClosedInvoke),
+    /unavailable/i
+  );
+});
+
+test('room pack write legacy when not desktop', async () => {
+  assert.equal(
+    await setRoomImagePackWithNativeOwner(
+      '!r:example.org',
+      'key',
+      { pack: {}, images: {} },
+      false,
+      loggedInInvoke
+    ),
+    'legacy'
+  );
+});
+
+test('room pack write native ok', async () => {
+  const result = await setRoomImagePackWithNativeOwner(
+    '!r:example.org',
+    'key',
+    { pack: { display_name: 'Room' }, images: {} },
+    true,
+    loggedInInvoke
+  );
+  assert.equal(result, 'native');
+});
+
+test('room pack write delete empty content native ok', async () => {
+  const result = await setRoomImagePackWithNativeOwner(
+    '!r:example.org',
+    'key',
+    {},
+    true,
+    loggedInInvoke
+  );
+  assert.equal(result, 'native');
+});
+
+test('room pack write fail-closed when command missing', async () => {
+  await assert.rejects(
+    () =>
+      setRoomImagePackWithNativeOwner(
+        '!r:example.org',
+        'key',
+        { pack: { display_name: 'Room' }, images: {} },
+        true,
+        failClosedInvoke
+      ),
     /unavailable/i
   );
 });

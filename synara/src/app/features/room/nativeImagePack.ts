@@ -6,6 +6,7 @@ import {
   getRoomImagePacksWithNativeOwner,
   getUserImagePackWithNativeOwner,
   setGlobalImagePacksWithNativeOwner,
+  setRoomImagePackWithNativeOwner,
   setUserImagePackWithNativeOwner,
 } from './nativeImagePackOwner';
 
@@ -28,3 +29,10 @@ export const setGlobalImagePacksNative = (
   content: EmoteRoomsContent
 ): Promise<'native' | 'legacy'> =>
   setGlobalImagePacksWithNativeOwner(content, isSynaraDesktop(), invoke);
+
+export const setRoomImagePackNative = (
+  roomId: string,
+  stateKey: string,
+  content: PackContent
+): Promise<'native' | 'legacy'> =>
+  setRoomImagePackWithNativeOwner(roomId, stateKey, content, isSynaraDesktop(), invoke);
