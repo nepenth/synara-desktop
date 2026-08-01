@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Updated | 2026-08-01 |
-| Tip | `0152c460` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip | `ab2169a5` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **165** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
 | Umbrella #39 | **Do not merge** without explicit approval |
@@ -19,6 +19,7 @@
 | Poll-in-thread | #282 |
 | Timeline contract | #240 native DTO/stream/actions + presenter code |
 | Cutover policy | Approved; residual map #286; pack-read inventory #287 |
+| Send residual inventories | forward #290; avatar #291; pack-write #292 (docs only) |
 | CI | Parallel Validate #284 |
 
 ## In flight
@@ -26,8 +27,8 @@
 | PR | What |
 |----|------|
 | #283 | V-SEND.R-EDIT native `m.replace` |
-| #285 | V-TIMELINE.C1 select NativeTimelinePresenter in RoomView |
-| #288 | This scoreboard docs PR |
+| #285 | V-TIMELINE.C1 select NativeTimelinePresenter in RoomView (draft) |
+| #289 | V-TIMELINE.C2 delete RoomTimeline (draft, stacked on #285) |
 
 ## Left (ordered)
 
@@ -38,11 +39,11 @@
 4. **C4** media/render parity on selected presenter
 5. **C5** pins/notes/jump live proof
 
-### Send / media residuals
+### Send / media residuals (inventories done; implement remains)
 - **V-SEND.R-PACK-READ** implement (inventory #287)
-- **V-SEND.R-PACK-WRITE** / **PACK-UPLOAD**
-- **V-SEND.R-FORWARD**
-- **V-SEND.R-AVATAR-UPLOAD** / **R-ROOM-PROFILE**
+- **V-SEND.R-PACK-WRITE** / **PACK-UPLOAD** implement (inventory #292)
+- **V-SEND.R-FORWARD** implement (inventory #290)
+- **V-SEND.R-AVATAR-UPLOAD** / **R-ROOM-PROFILE** implement (inventory #291)
 - **V-SEND.R-CALL-UPLOAD** / **R-GIF-PACK**
 - **V-SEND.R-DEVTOOL** (low priority)
 
