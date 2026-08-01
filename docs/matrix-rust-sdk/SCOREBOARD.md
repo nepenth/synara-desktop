@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Updated | 2026-08-01 |
-| Tip | `25bfa150` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip | `95ad2656` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **163** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
 | Umbrella #39 | **Do not merge** without explicit user approval |
@@ -28,7 +28,7 @@
 | V-TIMELINE.C2 | **#289** delete `RoomTimeline` (imports **165→164**, allowlist **169→168**) |
 | V-SEND.R-FORWARD | **#296** legacy MessageForwardItem + forward.ts deleted |
 | V-TIMELINE residual truth | **#298** C1/C2 done notes |
-| V-SEND.R-PACK-READ | **#297** native snapshot get + hooks fail-closed (subscribe residual remains) |
+| V-SEND.R-PACK-READ | **#297** snapshot get + hooks fail-closed; **#318** live subscribe (`NativeImagePackOwner` → `matrix-image-packs-updated` re-snapshot; JS utils/room-resolution residual) |
 | V-SEND.R-AVATAR-UPLOAD | **#303** native `matrix_upload_media` + set own avatar/display name; Profile.tsx fail-closed |
 | V-SEND.R-PACK-WRITE personal | **#306** `matrix_set_user_image_pack` + UserImagePack fail-closed |
 | V-SEND.R-PACK-WRITE global | **#309** `matrix_set_global_image_packs` + GlobalPacks fail-closed |
@@ -41,7 +41,7 @@
 
 | PR | What |
 |----|------|
-| (none product) | Next: pack-read **subscribe**; **C3–C5** live verify |
+| (none product) | Next: pack-read **JS utils delete** / **useImagePackRooms** resolution; **C3–C5** live verify |
 
 ## Left (ordered)
 
@@ -54,7 +54,7 @@
 
 ### Send / media residuals (inventories done; implement remains)
 - ~~**V-SEND.R-FORWARD**~~ **#296**
-- ~~**V-SEND.R-PACK-READ** snapshot~~ **#297** (subscribe residual remains)
+- ~~**V-SEND.R-PACK-READ** snapshot~~ **#297**; ~~**subscribe**~~ **#318** (JS utils + `useImagePackRooms` residual for web/desktop room resolution)
 - ~~**V-SEND.R-PACK-WRITE** personal~~ **#306**; ~~**global**~~ **#309**; ~~**room**~~ **#310**; ~~**PACK-UPLOAD**~~ **#314** (reuses `matrix_upload_media` #303 via CompactUploadCardRenderer)
 - ~~**V-SEND.R-AVATAR-UPLOAD** user profile~~ **#303**; ~~**R-ROOM-PROFILE**~~ **#313** (room-avatar media upload covered by #314 CompactUploadCardRenderer path)
 - **V-SEND.R-CALL-UPLOAD** / **R-GIF-PACK**
