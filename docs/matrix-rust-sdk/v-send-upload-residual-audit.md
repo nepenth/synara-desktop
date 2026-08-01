@@ -3,7 +3,7 @@
 | Field        | Value                                                                                                                                             |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Status       | **Docs-only audit** — no product code changed                                                                                                     |
-| Measured tip | `5116c9da` on `feature/matrix-rust-sdk-full-replacement`                                                                                          |
+| Measured tip | `93281bac` on `feature/matrix-rust-sdk-full-replacement` |
 | Scope        | Production `mx.uploadContent` / `uploadContent(mx, …)` usages under `synara/src`, excluding the `CompactUploadCardRenderer` native path from #314 |
 | Guard        | Do not touch `main` or umbrella PR **#39**                                                                                                        |
 
