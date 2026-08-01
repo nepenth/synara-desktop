@@ -2,7 +2,7 @@
 
 | Field   | Value                                                                                                                                                                             |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status  | **Inventory (docs only)** — no product code in this PR                                                                                                                            |
+| Status  | **Partial product (first slice)** — `matrix_room_members_snapshot` + Members settings UI native; drawer/lobby/mentions + power-level reads remain residual |
 | Tip SHA | `3d76402f` (merge #374 scoreboard honesty; after create #372)                                                                                                                     |
 | Base    | `feature/matrix-rust-sdk-full-replacement`                                                                                                                                        |
 | Policy  | [full-vertical-policy.md](full-vertical-policy.md) — physical deletion inside each owning slice                                                                                   |
@@ -13,6 +13,16 @@
 > **#39** (umbrella), or any timeline/send slice. No cutover.
 
 ---
+
+## Progress (first slice / #395)
+
+Landed on the product branch:
+
+- IPC `matrix_room_members_snapshot` (live matrix-sdk `Room::members`) + Tauri ACL/build registration
+- Fail-closed `nativeRoomMembersOwner` and `useRoomMembers(..., nativeSession)` for **Members.tsx** settings
+- **Still residual on desktop native:** `Room.tsx` / `MembersDrawer` / `Lobby.tsx` / `UserMentionAutocomplete` (still default JS `useRoomMembers` path), plus all power-level/creator read owners
+
+This is a scoped first slice, not dual_backend: native session does not fall through to JS for the wired Members settings screen; remaining call sites stay residual until a follow-up PR.
 
 ## 1. What this residual covers
 
