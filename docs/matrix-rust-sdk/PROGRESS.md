@@ -32,8 +32,7 @@
 
 |                |                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `f4addd6f`** after [#280](https://github.com/nepenth/synara-desktop/pull/280)/[#282](https://github.com/nepenth/synara-desktop/pull/282). **This PR** [#279](https://github.com/nepenth/synara-desktop/pull/279) password loginUtil fail-closed native-only; [#283](https://github.com/nepenth/synara-desktop/pull/283) edit; #240 HOLD. |
-| **Policy**     | [full-vertical-policy.md](full-vertical-policy.md) |
+| **Now**        | **Tip after #280.** Cutover for V-TIMELINE **approved**. In flight: #279 password loginUtil, #283 edit, #240 tip-merge/cutover. CI: parallel Validate Rust/Node. #39 still needs explicit merge approval. || **Policy**     | [full-vertical-policy.md](full-vertical-policy.md) |
 | **Tip**        | `f4addd6f` merge [#280](https://github.com/nepenth/synara-desktop/pull/280) V-AUTH.3b UIA non-retention. |
 | **Active PRs** | **This PR** [#279](https://github.com/nepenth/synara-desktop/pull/279); [#283](https://github.com/nepenth/synara-desktop/pull/283); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. |
 | **Blocked**    | Merging plateau D0.6 (#221); claiming V-TIMELINE cutover (#240 HOLD); starting new media/widgets/etc before residual queue; merging L1 foundations; umbrella #39. |
@@ -61,8 +60,16 @@ Update rules:
 
 ## Work log (newest first)
 
-### 2026-07-31 — desktop password login fail-closed (this PR)
+### 2026-07-31 — V-TIMELINE cutover approved + CI parallel Validate
 
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| current | **V-TIMELINE cutover policy** | **Approved** | User: full steam js-sdk replacement; select presenter + delete RoomTimeline allowed; break/fix-forward OK. #39 still gated. |
+| current | **CI Validate** | **This PR** | Split Validate into parallel `validate-rust` + `validate-frontend` (same gates; less wall-clock). Path scopes for rust-only / frontend-only PRs. |
+| current | **Active product** | #279 loginUtil, #283 edit, #240 tip-merge | Serial `product.rs` residuals preferred after edit. |
+
+
+### 2026-07-31 — tip after #282 V-SEND.R-POLL-THREAD
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
 | current | **Password loginUtil residual** | **Active this PR** [#279](https://github.com/nepenth/synara-desktop/pull/279) | Desktop password login is **only** `matrix_login_password`; delete js `createClient`/`loginRequest` fallback from `loginUtil.ts`; SDK-neutralize `PasswordLoginForm`/`loginUtil`; allowlist **171→169**; production import files **169→167**. Tip base `f4addd6f` after #280. [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD. See [v-auth-password-loginutil.md](v-auth-password-loginutil.md). |
