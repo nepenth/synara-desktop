@@ -146,7 +146,7 @@ Scope: **production only**. Import files: 153. Files with any finding: 155.
 
 | Category                       | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
 | ------------------------------ | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
-| `client_methods`               |    83 |                 0 |                   0 |                      0 |          0 |
+| `client_methods`               |    82 |                 0 |                   0 |                      0 |          0 |
 | `room_methods`                 |    76 |                 0 |                   0 |                      0 |          0 |
 | `event_emitters_listeners`     |    21 |                 0 |                 104 |                      0 |          0 |
 | `sync_lifecycle`               |    12 |                11 |                   6 |                      0 |          0 |
@@ -155,7 +155,7 @@ Scope: **production only**. Import files: 153. Files with any finding: 155.
 | `authenticated_media`          |     4 |                 5 |                   0 |                      0 |          0 |
 | `matrixrtc_calls`              |     4 |                 0 |                   8 |                      0 |          0 |
 | `account_data`                 |     7 |                12 |                   2 |                      0 |          0 |
-| `room_lists`                   |    29 |                73 |                  10 |                      0 |          0 |
+| `room_lists`                   |    27 |                71 |                  10 |                      0 |          0 |
 | `timelines`                    |    27 |                22 |                  40 |                      0 |          0 |
 | `searches`                     |     3 |                 3 |                   0 |                      0 |          0 |
 | `spaces`                       |    10 |                25 |                   0 |                      0 |          0 |
@@ -194,7 +194,6 @@ Scope: **production only**. Import files: 153. Files with any finding: 155.
 | `getCapabilities`          |                     2 |
 | `getCrypto`                |                     2 |
 | `getDeviceId`              |                     2 |
-| `invite`                   |                     2 |
 | `redactEvent`              |                     2 |
 | `retryImmediately`         |                     2 |
 | `search`                   |                     2 |
@@ -211,6 +210,7 @@ Scope: **production only**. Import files: 153. Files with any finding: 155.
 | `searchUserDirectory`      |                     1 |
 | `sendReadReceipt`          |                     1 |
 | `setRoomAccountData`       |                     1 |
+| `setRoomReadMarkers`       |                     1 |
 
 ### Direct Matrix networking findings
 
