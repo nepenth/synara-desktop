@@ -83,7 +83,7 @@ Update rules:
 ### 2026-08-01 — V-TIMELINE.C1 presenter cutover
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| current | **V-TIMELINE.C1** | **This PR** | `RoomView` mounts `NativeTimelinePresenter` only (sole owner). #289 C2 deletes `RoomTimeline`. dual_backend forbidden. |
+| current | **V-TIMELINE.C1** | **Merged #285** | `RoomView` mounts `NativeTimelinePresenter` only (sole owner). C2 deletes `RoomTimeline`. dual_backend forbidden. |
 
 ### 2026-08-01 — V-SEND.R-PACK-WRITE residual inventory
 | When (UTC) | Item | Result | Notes |
