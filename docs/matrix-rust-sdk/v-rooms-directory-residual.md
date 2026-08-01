@@ -2,16 +2,25 @@
 
 | Field            | Value                                                                          |
 | ---------------- | ------------------------------------------------------------------------------ |
-| Status           | **Inventory only** — no product implementation in this document                |
-| Measured tip     | `8330c56bbb74b45ef01ad1f8be137b54caa2f568`                                     |
-| Base             | `feature/matrix-rust-sdk-full-replacement`                                     |
+| Status           | **Inventory only / product-readiness hold** — no product implementation in this document |
+| Measured tip     | `b0fd42413a76b1000d1fab23ea225309ca62f82e`                                     |
+| Base             | `feature/matrix-rust-sdk-full-replacement` at `b0fd4241`                         |
 | Policy           | Full vertical: UI → Tauri IPC → live Matrix Rust SDK; one owner per capability |
 | Desktop fallback | **Fail closed** when native Matrix IPC is unavailable                          |
 | Dual backend     | **Forbidden**                                                                  |
+| V-BURN           | **HOLD** — no preparation or completion claim                                  |
 
 This is the residual map for the desktop `/explore/` route, server-scoped public
 room discovery, featured-room previews, and the public-room join path. It does
 not claim V-BURN completion, a cutover, or live authenticated proof.
+
+> **Product-readiness gate at `b0fd4241`.** The powers-bulk product PR owns the
+> serial slot for `src-tauri/src/matrix/auth/product.rs` until that PR lands. The
+> room-directory product slice must wait until `product.rs` is free; this
+> residual remains an inventory and preflight record, not permission to start
+> directory product work. No directory product implementation is present at
+> this tip. `dual_backend` remains forbidden, V-BURN remains **HOLD**, and
+> `main` / umbrella PR **#39** remain out of scope.
 
 ## Current ownership
 
@@ -128,7 +137,9 @@ a V-BURN report:
 ## Explicit non-goals
 
 - No product implementation or `product.rs` change in this inventory.
+- No directory product start while powers-bulk owns `product.rs`; revalidate the
+  serial boundary after that product PR lands.
 - No raw Matrix HTTP retention in the eventual native slice.
 - No dual backend, SDK selector, or desktop JS fallback.
 - No umbrella `#39` / `main` merge.
-- No V-BURN completion claim.
+- No V-BURN work or completion claim; V-BURN is **HOLD**.
