@@ -819,6 +819,12 @@
           "markdownDescription": "Enables the matrix_restricted_join_reparent command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_room_create command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-create",
+          "markdownDescription": "Enables the matrix_room_create command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_room_join command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-room-join",
@@ -1669,6 +1675,12 @@
           "type": "string",
           "const": "deny-matrix-restricted-join-reparent",
           "markdownDescription": "Denies the matrix_restricted_join_reparent command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_create command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-create",
+          "markdownDescription": "Denies the matrix_room_create command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_room_join command without any pre-configured scope.",

@@ -62,6 +62,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_invites_snapshot",
     "matrix_invites_accept",
     "matrix_invites_decline",
+    "matrix_room_create",
     "matrix_room_leave",
     "matrix_room_join",
     "matrix_invites_report_spam",

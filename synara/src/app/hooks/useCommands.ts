@@ -1,13 +1,4 @@
-import {
-  Direction,
-  IContextResponse,
-  MatrixClient,
-  Method,
-  Preset,
-  Room,
-  RoomMember,
-  Visibility,
-} from 'matrix-js-sdk';
+import { Direction, IContextResponse, MatrixClient, Method, Room, RoomMember } from 'matrix-js-sdk';
 import { RoomServerAclEventContent } from 'matrix-js-sdk/lib/types';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,11 +16,11 @@ import { useRoomNavigate } from './useRoomNavigate';
 import { Membership, StateEvent } from '../../types/matrix/room';
 import { getStateEvent } from '../utils/room';
 import { splitWithSpace } from '../utils/common';
-import { createRoomEncryptionState } from '../components/create-room';
 import { sendPollWithNativeDesktopOwner } from '../features/room/nativePoll';
 import { parsePollCommand } from '../utils/polls';
 import { getRoomCurrentState } from '../utils/timelineLifecycle';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../utils/desktop';
+import { createRoomWithNativeOwner } from '../components/nativeRoomCreateOwner';
 import { joinRoomWithNativeOwner } from '../components/nativeRoomJoinOwner';
 import { leaveRoomWithNativeOwner } from '../components/nativeRoomLeaveOwner';
 
@@ -220,15 +211,19 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
               return;
             }
           }
-          const result = await mx.createRoom({
-            is_direct: true,
-            invite: userIds,
-            visibility: Visibility.Private,
-            preset: Preset.TrustedPrivateChat,
-            initial_state: [createRoomEncryptionState()],
-          });
-          await addRoomIdToMDirect(result.room_id, userIds[0]);
-          navigateRoom(result.room_id);
+          const roomId = await createRoomWithNativeOwner(
+            {
+              isDirect: true,
+              invite: userIds,
+              visibility: 'private',
+              preset: 'trusted_private_chat',
+              encryption: true,
+            },
+            isSynaraDesktop(),
+            (command, args) => invokeDesktopWithAvailability(command, args)
+          );
+          await addRoomIdToMDirect(roomId, userIds[0]);
+          navigateRoom(roomId);
         },
       },
       [Command.Join]: {
