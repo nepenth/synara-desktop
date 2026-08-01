@@ -4,9 +4,9 @@
       "categories": {
         "account_data": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 8,
+          "fileCount": 7,
           "listenerCandidateOccurrences": 2,
-          "methodCandidateOccurrences": 14,
+          "methodCandidateOccurrences": 12,
           "networkingOccurrences": 0
         },
         "authenticated_media": {
@@ -25,7 +25,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 95,
+          "fileCount": 93,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -88,14 +88,14 @@
         },
         "room_lists": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 40,
+          "fileCount": 38,
           "listenerCandidateOccurrences": 10,
-          "methodCandidateOccurrences": 96,
+          "methodCandidateOccurrences": 91,
           "networkingOccurrences": 0
         },
         "room_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 83,
+          "fileCount": 80,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -150,11 +150,11 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 164,
-      "importFileCount": 162,
+      "fileCount": 161,
+      "importFileCount": 159,
       "methodCandidateFrequencies": [
         {
-          "count": 70,
+          "count": 65,
           "name": "getRoom"
         },
         {
@@ -183,23 +183,23 @@
         },
         {
           "count": 7,
-          "name": "getAccountData"
+          "name": "refreshToken"
         },
         {
-          "count": 7,
-          "name": "refreshToken"
+          "count": 6,
+          "name": "getAccountData"
         },
         {
           "count": 6,
           "name": "joinRoom"
         },
         {
-          "count": 6,
-          "name": "setAccountData"
+          "count": 5,
+          "name": "getLiveTimeline"
         },
         {
           "count": 5,
-          "name": "getLiveTimeline"
+          "name": "setAccountData"
         },
         {
           "count": 4,
@@ -376,8 +376,8 @@
           "importOccurrences": 4
         },
         "Room": {
-          "fileCount": 80,
-          "importOccurrences": 80
+          "fileCount": 77,
+          "importOccurrences": 77
         },
         "RoomMember": {
           "fileCount": 12,
@@ -398,8 +398,8 @@
       },
       "modules": [
         {
-          "fileCount": 156,
-          "importCount": 156,
+          "fileCount": 153,
+          "importCount": 153,
           "path": "matrix-js-sdk"
         },
         {
@@ -494,11 +494,11 @@
       "scope": "role",
       "symbols": [
         {
-          "fileCount": 80,
-          "importCount": 80,
+          "fileCount": 77,
+          "importCount": 77,
           "name": "Room",
           "typeImports": 2,
-          "valueImports": 78
+          "valueImports": 75
         },
         {
           "fileCount": 43,
@@ -2914,35 +2914,6 @@
     },
     {
       "bucket": "component",
-      "categories": ["room_methods"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 4,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "Room"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["Room"],
-      "networking": [],
-      "path": "synara/src/app/components/editor/autocomplete/EmoticonAutocomplete.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "component",
       "categories": ["client_methods", "room_lists", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -3107,64 +3078,6 @@
       "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/components/editor/output.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "component",
-      "categories": ["client_methods", "room_methods", "room_lists"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 15,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "Room"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 92,
-          "name": "getRoom"
-        },
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 120,
-          "name": "getRoom"
-        },
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 203,
-          "name": "getRoom"
-        },
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 267,
-          "name": "getRoom"
-        }
-      ],
-      "modelCoupling": ["Room"],
-      "networking": [],
-      "path": "synara/src/app/components/emoji-board/EmojiBoard.tsx",
       "role": "production"
     },
     {
@@ -6202,62 +6115,6 @@
       "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/features/search/Search.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "feature",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "account_data",
-        "room_lists"
-      ],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 26,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "Room"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 139,
-          "name": "getRoom"
-        },
-        {
-          "category": "account_data",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 301,
-          "name": "getAccountData"
-        },
-        {
-          "category": "account_data",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 323,
-          "name": "setAccountData"
-        }
-      ],
-      "modelCoupling": ["Room"],
-      "networking": [],
-      "path": "synara/src/app/features/settings/emojis-stickers/GlobalPacks.tsx",
       "role": "production"
     },
     {
@@ -12523,8 +12380,8 @@
     "desktopRuntimeBaseline": {
       "buckets": {
         "client-lifecycle": 2,
-        "component": 28,
-        "feature": 55,
+        "component": 26,
+        "feature": 54,
         "hook": 44,
         "media-boundary": 1,
         "page": 8,
@@ -12539,13 +12396,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 162,
+      "productionImportFiles": 159,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 172
+      "totalImportFiles": 169
     },
     "repositoryWide": {
-      "productionImportFiles": 162,
+      "productionImportFiles": 159,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -12554,7 +12411,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 175
+      "totalImportFiles": 172
     }
   }
 }
