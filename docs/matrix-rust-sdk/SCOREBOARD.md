@@ -3,10 +3,10 @@
 | Field | Value |
 |-------|-------|
 | Updated | 2026-08-01 |
-| Tip | `1695b9f7` on `feature/matrix-rust-sdk-full-replacement` |
+| Tip | `83adef68` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **163** (plan baseline was **220**) |
 | Dual backend | **false** (forbidden) |
-| Umbrella #39 | **Do not merge** without explicit approval |
+| Umbrella #39 | **Do not merge** without explicit user approval |
 
 ## Done (high level)
 
@@ -25,26 +25,28 @@
 | V-TIMELINE.C1 | **#285** NativeTimelinePresenter owns RoomView |
 | V-TIMELINE.C2 | **#289** delete `RoomTimeline` (imports **165→164**, allowlist **169→168**) |
 | V-SEND.R-FORWARD | **#296** legacy MessageForwardItem + forward.ts deleted |
+| V-TIMELINE residual truth | **#298** C1/C2 done notes |
+| V-SEND.R-PACK-READ | **#297** native snapshot get + hooks fail-closed (subscribe residual remains) |
 | CI | Parallel Validate #284 |
 
 ## In flight
 
 | PR | What |
 |----|------|
-| **This PR** | V-SEND.R-PACK-READ implement (native snapshot get + hooks) |
+| (none product) | Next: **V-SEND.R-PACK-WRITE** / pack-read **subscribe** / avatar implement |
 
 ## Left (ordered)
 
 ### Timeline cutover
 1. ~~**C1** land #285~~ ✅
 2. ~~**C2** delete RoomTimeline~~ ✅ #289
-3. **C3** live re-verify stream deltas (checklist #294; map claims no gap)
+3. **C3** live re-verify stream deltas (checklist #294; residual truth #298)
 4. **C4** media/render parity on selected presenter
 5. **C5** pins/notes/jump live proof
 
 ### Send / media residuals (inventories done; implement remains)
-- ~~**V-SEND.R-FORWARD**~~ **#296** (dialog deleted; native presenter sole path)
-- **V-SEND.R-PACK-READ** **this PR** (inventory #287; subscribe residual remains)
+- ~~**V-SEND.R-FORWARD**~~ **#296**
+- ~~**V-SEND.R-PACK-READ** snapshot~~ **#297** (subscribe residual remains)
 - **V-SEND.R-PACK-WRITE** / **PACK-UPLOAD** implement (inventory #292)
 - **V-SEND.R-AVATAR-UPLOAD** / **R-ROOM-PROFILE** implement (inventory #291)
 - **V-SEND.R-CALL-UPLOAD** / **R-GIF-PACK**
