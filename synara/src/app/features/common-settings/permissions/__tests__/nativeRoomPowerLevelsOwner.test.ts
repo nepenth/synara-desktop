@@ -102,6 +102,12 @@ test('tag owner preserves icon metadata and supports create, edit, delete, and e
     true,
     invoke
   );
+  await setRoomPowerLevelTagsWithNativeOwner(
+    '!room:example.org',
+    { '75': { name: 'Support', color: undefined, icon: undefined } },
+    true,
+    invoke
+  );
   await setRoomPowerLevelTagsWithNativeOwner('!room:example.org', {}, true, invoke);
 
   assert.deepEqual(
@@ -109,6 +115,7 @@ test('tag owner preserves icon metadata and supports create, edit, delete, and e
     [
       { roomId: '!room:example.org', content: completeTags },
       { roomId: '!room:example.org', content: { '100': { name: 'Owner', color: '#ff0000' } } },
+      { roomId: '!room:example.org', content: { '75': { name: 'Support' } } },
       { roomId: '!room:example.org', content: {} },
     ]
   );
@@ -129,6 +136,27 @@ test('power-level owner is fail-closed before any native write on unavailable de
     setRoomPowerLevelsWithNativeOwner(
       '!room:example.org',
       { ...completeRoomPolicy, users: { '@alice:example.org': 1.5 } },
+      true,
+      invoke
+    ),
+    /unavailable/i
+  );
+  await assert.rejects(
+    setRoomPowerLevelTagsWithNativeOwner(
+      '!room:example.org',
+      { '100': { name: 'Owner', color: 42 } } as unknown as Record<string, { name: string }>,
+      true,
+      invoke
+    ),
+    /unavailable/i
+  );
+  await assert.rejects(
+    setRoomPowerLevelTagsWithNativeOwner(
+      '!room:example.org',
+      { '100': { name: 'Owner', icon: 'not-an-icon' } } as unknown as Record<
+        string,
+        { name: string }
+      >,
       true,
       invoke
     ),

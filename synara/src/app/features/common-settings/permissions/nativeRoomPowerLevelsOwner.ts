@@ -103,6 +103,26 @@ const isPowerLevelTagsContent = (value: unknown): value is PowerLevelTagsContent
   });
 };
 
+const normalizePowerLevelTagsContent = (value: PowerLevelTagsContent): PowerLevelTagsContent => {
+  if (!isRecord(value)) return value;
+
+  return Object.fromEntries(
+    Object.entries(value).map(([power, tag]) => {
+      if (!isRecord(tag)) return [power, tag];
+
+      return [
+        power,
+        Object.fromEntries(
+          Object.entries(tag).filter(
+            ([key, fieldValue]) =>
+              !(fieldValue === undefined && (key === 'color' || key === 'icon'))
+          )
+        ),
+      ];
+    })
+  ) as PowerLevelTagsContent;
+};
+
 const canonicalJson = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(canonicalJson);
   if (!isRecord(value)) return value;
@@ -198,7 +218,7 @@ export function setRoomPowerLevelTagsWithNativeOwner(
 ): Promise<NativePowerLevelWriteResult<PowerLevelTagsContent>> {
   return writePowerLevelState(
     roomId,
-    content,
+    normalizePowerLevelTagsContent(content),
     'in.synara.room.power_level_tags',
     'matrix_room_set_power_level_tags',
     desktopAvailable,
