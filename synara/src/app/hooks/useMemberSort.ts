@@ -1,8 +1,5 @@
-import { RoomMember as MatrixRoomMember } from 'matrix-js-sdk';
 import { useCallback, useMemo } from 'react';
-import type { RoomMember as NativeRoomMember } from '../features/matrix-dto/member';
-
-type RoomMemberListItem = MatrixRoomMember | NativeRoomMember;
+import type { RoomMemberListItem } from './useRoomMembers';
 
 const getMemberName = (member: RoomMemberListItem): string =>
   !('getMxcAvatarUrl' in member) ? member.displayName ?? member.userId : member.name;
