@@ -407,6 +407,8 @@ pub fn run() {
             matrix::auth::product::matrix_room_ban,
             matrix::auth::product::matrix_room_unban,
             matrix::auth::product::matrix_room_set_power_level,
+            matrix::auth::product::matrix_room_set_power_levels,
+            matrix::auth::product::matrix_room_set_power_level_tags,
             matrix::auth::product::matrix_invites_report_spam,
             matrix::auth::product::matrix_invites_block_sender,
             matrix::auth::product::matrix_space_parents_snapshot,

@@ -22,6 +22,7 @@ use matrix_sdk::{
                 create_room::{self, v3::RoomPreset},
                 Visibility,
             },
+            state::get_state_event_for_key,
             uiaa,
         },
         events::{
@@ -39,7 +40,7 @@ use matrix_sdk::{
             },
             sticker::StickerEventContent,
             AnyInitialStateEvent, AnyMessageLikeEventContent, AnySyncMessageLikeEvent,
-            AnySyncTimelineEvent, Mentions,
+            AnySyncTimelineEvent, Mentions, StateEventType,
         },
         serde::Raw,
         EventId, Int, MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId,
@@ -161,6 +162,8 @@ pub enum MatrixSessionSnapshot {
         user_id: String,
         device_id: String,
         homeserver_url: String,
+        #[serde(rename = "sessionGeneration")]
+        session_generation: u64,
     },
 }
 
@@ -255,6 +258,18 @@ pub struct MatrixProfileWriteResult {
 #[serde(rename_all = "camelCase")]
 pub struct MatrixUploadMediaResult {
     pub mxc: String,
+}
+
+/// V-ROOMS.R-POWERS-BULK — acknowledged complete state replacement.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativePowerLevelWriteResult {
+    pub status: &'static str,
+    pub room_id: String,
+    pub event_type: &'static str,
+    pub state_key: &'static str,
+    pub session_generation: u64,
+    pub content: serde_json::Value,
 }
 
 /// V-SEND.R-CALL-MEDIA — the exact config shape required by the widget API.
@@ -353,6 +368,12 @@ const MAX_CALL_WIDGET_MEDIA_DOWNLOAD_BYTES: usize = MAX_ATTACHMENT_IPC_BYTES;
 /// Avatars are small images; 8 MiB is generous and keeps the webview buffer
 /// bounded (well under the 32 MiB attachment cap).
 const MAX_AVATAR_IPC_BYTES: usize = 8 * 1024 * 1024;
+
+/// Power-level state is a JSON state event, so it uses the normal bounded
+/// Matrix IPC payload policy rather than an unbounded serde_json value.
+const MAX_POWER_LEVEL_CONTENT_JSON_BYTES: usize =
+    crate::matrix::ipc::MAX_ENVELOPE_PAYLOAD_JSON_BYTES;
+const MAX_POWER_LEVEL_TEXT_BYTES: usize = 4 * 1024;
 
 impl MatrixAuthCommandError {
     pub(crate) fn new(
@@ -2272,6 +2293,108 @@ pub async fn matrix_room_set_power_level(
         .await
         .map(|_| ())
         .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-power-level-failed"))
+}
+
+/// V-ROOMS.R-POWERS-BULK — replace the complete `m.room.power_levels` state
+/// event through the one managed native Matrix SDK client. This is deliberately
+/// not implemented as repeated `matrix_room_set_power_level` calls.
+#[tauri::command]
+pub async fn matrix_room_set_power_levels(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    content: serde_json::Value,
+) -> Result<NativePowerLevelWriteResult, MatrixAuthCommandError> {
+    set_room_power_level_state(
+        state,
+        room_id,
+        content,
+        ROOM_POWER_LEVELS_EVENT_TYPE,
+        validate_room_power_levels_content,
+    )
+    .await
+}
+
+/// V-ROOMS.R-POWERS-BULK — replace the complete
+/// `in.synara.room.power_level_tags` state event through the one managed native
+/// Matrix SDK client. Empty `{}` is a valid tag state and represents deletion
+/// of all custom tags.
+#[tauri::command]
+pub async fn matrix_room_set_power_level_tags(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    content: serde_json::Value,
+) -> Result<NativePowerLevelWriteResult, MatrixAuthCommandError> {
+    set_room_power_level_state(
+        state,
+        room_id,
+        content,
+        POWER_LEVEL_TAGS_EVENT_TYPE,
+        validate_power_level_tags_content,
+    )
+    .await
+}
+
+const ROOM_POWER_LEVELS_EVENT_TYPE: &str = "m.room.power_levels";
+const POWER_LEVEL_TAGS_EVENT_TYPE: &str = "in.synara.room.power_level_tags";
+
+async fn set_room_power_level_state(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    content: serde_json::Value,
+    event_type: &'static str,
+    validate_content: fn(&serde_json::Value) -> Result<(), MatrixAuthCommandError>,
+) -> Result<NativePowerLevelWriteResult, MatrixAuthCommandError> {
+    let room_id = parse_power_level_room_id(&room_id)?;
+    validate_content(&content)?;
+    let state_event_type = StateEventType::from(event_type);
+
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    let session_generation = active.sync.session_generation();
+    let room = active
+        .client
+        .get_room(&room_id)
+        .ok_or_else(|| map_power_level_write_error("v-rooms-power-levels-room-not-found"))?;
+
+    room.send_state_event_raw(event_type, "", content.clone())
+        .await
+        .map_err(|_| map_power_level_write_error("v-rooms-power-levels-send-failed"))?;
+
+    // The PUT response only acknowledges an event ID. Read the accepted state
+    // back from the homeserver before reporting success; the request body is
+    // never returned as an optimistic echo.
+    let readback = active
+        .client
+        .send(get_state_event_for_key::v3::Request::new(
+            room_id.clone(),
+            state_event_type,
+            String::new(),
+        ))
+        .await
+        .map_err(|_| map_power_level_write_error("v-rooms-power-levels-readback-failed"))?
+        .into_content()
+        .deserialize_as_unchecked::<serde_json::Value>()
+        .map_err(|_| map_power_level_write_error("v-rooms-power-levels-readback-malformed"))?;
+
+    if active.sync.session_generation() != session_generation {
+        return Err(map_power_level_write_error(
+            "v-rooms-power-levels-stale-session-generation",
+        ));
+    }
+    if readback != content {
+        return Err(map_power_level_write_error(
+            "v-rooms-power-levels-readback-mismatch",
+        ));
+    }
+
+    Ok(NativePowerLevelWriteResult {
+        status: "ok",
+        room_id: room_id.to_string(),
+        event_type,
+        state_key: "",
+        session_generation,
+        content: readback,
+    })
 }
 
 #[tauri::command]
@@ -4376,6 +4499,240 @@ fn map_room_moderation_error(diagnostic_id: &'static str) -> MatrixAuthCommandEr
     MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
 
+fn map_power_level_write_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    let (code, message) = match diagnostic_id {
+        "v-rooms-power-levels-invalid-room"
+        | "v-rooms-power-levels-invalid-content"
+        | "v-rooms-power-levels-invalid-power"
+        | "v-rooms-power-levels-invalid-power-map"
+        | "v-rooms-power-levels-invalid-tag-key"
+        | "v-rooms-power-levels-invalid-tag"
+        | "v-rooms-power-levels-invalid-tag-name"
+        | "v-rooms-power-levels-invalid-tag-color"
+        | "v-rooms-power-levels-invalid-icon"
+        | "v-rooms-power-levels-invalid-icon-info"
+        | "v-rooms-power-levels-invalid-icon-field"
+        | "v-rooms-power-levels-content-too-large" => (
+            "InvalidRequest",
+            "The native Matrix power-level write request is invalid.",
+        ),
+        "v-rooms-power-levels-room-not-found" => (
+            "NotFound",
+            "The native Matrix power-level room is not available.",
+        ),
+        "v-rooms-power-levels-stale-session-generation" => (
+            "StaleSessionGeneration",
+            "The native Matrix session changed during the power-level write.",
+        ),
+        _ => (
+            "Unknown",
+            "The native Matrix power-level write could not be completed.",
+        ),
+    };
+    MatrixAuthCommandError::new(code, message, diagnostic_id)
+}
+
+fn parse_power_level_room_id(room_id: &str) -> Result<OwnedRoomId, MatrixAuthCommandError> {
+    if room_id.is_empty() || room_id.trim() != room_id {
+        return Err(map_power_level_write_error(
+            "v-rooms-power-levels-invalid-room",
+        ));
+    }
+    room_id
+        .parse()
+        .map_err(|_| map_power_level_write_error("v-rooms-power-levels-invalid-room"))
+}
+
+fn validate_power_level_payload_size(
+    content: &serde_json::Value,
+) -> Result<(), MatrixAuthCommandError> {
+    let byte_len = serde_json::to_vec(content)
+        .map_err(|_| map_power_level_write_error("v-rooms-power-levels-invalid-content"))?
+        .len();
+    if byte_len > MAX_POWER_LEVEL_CONTENT_JSON_BYTES {
+        return Err(map_power_level_write_error(
+            "v-rooms-power-levels-content-too-large",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_matrix_power_level(value: &serde_json::Value) -> Result<(), MatrixAuthCommandError> {
+    let valid = value
+        .as_i64()
+        .is_some_and(|value| value.unsigned_abs() <= MAX_WIRE_COUNTER)
+        || value
+            .as_u64()
+            .is_some_and(|value| value <= MAX_WIRE_COUNTER);
+    if valid {
+        Ok(())
+    } else {
+        Err(map_power_level_write_error(
+            "v-rooms-power-levels-invalid-power",
+        ))
+    }
+}
+
+fn validate_power_level_map(value: &serde_json::Value) -> Result<(), MatrixAuthCommandError> {
+    let Some(map) = value.as_object() else {
+        return Err(map_power_level_write_error(
+            "v-rooms-power-levels-invalid-power-map",
+        ));
+    };
+    for value in map.values() {
+        validate_matrix_power_level(value)?;
+    }
+    Ok(())
+}
+
+fn validate_room_power_levels_content(
+    content: &serde_json::Value,
+) -> Result<(), MatrixAuthCommandError> {
+    validate_power_level_payload_size(content)?;
+    let Some(content) = content.as_object() else {
+        return Err(map_power_level_write_error(
+            "v-rooms-power-levels-invalid-content",
+        ));
+    };
+
+    const POWER_LEVEL_FIELDS: &[&str] = &[
+        "ban",
+        "events_default",
+        "historical",
+        "invite",
+        "kick",
+        "redact",
+        "state_default",
+        "users_default",
+    ];
+    for field in POWER_LEVEL_FIELDS {
+        if let Some(value) = content.get(*field) {
+            validate_matrix_power_level(value)?;
+        }
+    }
+    for field in ["events", "notifications", "users"] {
+        if let Some(value) = content.get(field) {
+            validate_power_level_map(value)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_bounded_text(
+    value: &serde_json::Value,
+    diagnostic_id: &'static str,
+    required: bool,
+) -> Result<(), MatrixAuthCommandError> {
+    let Some(value) = value.as_str() else {
+        return Err(map_power_level_write_error(diagnostic_id));
+    };
+    if value.len() > MAX_POWER_LEVEL_TEXT_BYTES || (required && value.is_empty()) {
+        return Err(map_power_level_write_error(diagnostic_id));
+    }
+    Ok(())
+}
+
+fn validate_power_level_tag_icon(value: &serde_json::Value) -> Result<(), MatrixAuthCommandError> {
+    let Some(icon) = value.as_object() else {
+        return Err(map_power_level_write_error(
+            "v-rooms-power-levels-invalid-icon",
+        ));
+    };
+    for field in icon.keys() {
+        if field != "key" && field != "info" {
+            return Err(map_power_level_write_error(
+                "v-rooms-power-levels-invalid-icon-field",
+            ));
+        }
+    }
+    if let Some(key) = icon.get("key") {
+        validate_bounded_text(key, "v-rooms-power-levels-invalid-icon", false)?;
+    }
+    if let Some(info) = icon.get("info") {
+        let Some(info) = info.as_object() else {
+            return Err(map_power_level_write_error(
+                "v-rooms-power-levels-invalid-icon-info",
+            ));
+        };
+        for (field, value) in info {
+            match field.as_str() {
+                "w" | "h" | "size" => {
+                    let valid = value
+                        .as_u64()
+                        .is_some_and(|value| value <= MAX_WIRE_COUNTER);
+                    if !valid {
+                        return Err(map_power_level_write_error(
+                            "v-rooms-power-levels-invalid-icon-info",
+                        ));
+                    }
+                }
+                "mimetype" | "xyz.amorgan.blurhash" => {
+                    validate_bounded_text(value, "v-rooms-power-levels-invalid-icon-info", false)?;
+                }
+                _ => {
+                    return Err(map_power_level_write_error(
+                        "v-rooms-power-levels-invalid-icon-field",
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_power_level_tags_content(
+    content: &serde_json::Value,
+) -> Result<(), MatrixAuthCommandError> {
+    validate_power_level_payload_size(content)?;
+    let Some(tags) = content.as_object() else {
+        return Err(map_power_level_write_error(
+            "v-rooms-power-levels-invalid-content",
+        ));
+    };
+    for (power, value) in tags {
+        let parsed_power = power
+            .parse::<i64>()
+            .ok()
+            .filter(|value| value.unsigned_abs() <= MAX_WIRE_COUNTER);
+        if parsed_power.map(|value| value.to_string()).as_deref() != Some(power.as_str()) {
+            return Err(map_power_level_write_error(
+                "v-rooms-power-levels-invalid-tag-key",
+            ));
+        }
+
+        let Some(tag) = value.as_object() else {
+            return Err(map_power_level_write_error(
+                "v-rooms-power-levels-invalid-tag",
+            ));
+        };
+        let Some(name) = tag.get("name") else {
+            return Err(map_power_level_write_error(
+                "v-rooms-power-levels-invalid-tag-name",
+            ));
+        };
+        if name.as_str().is_none_or(|name| name.trim().is_empty()) {
+            return Err(map_power_level_write_error(
+                "v-rooms-power-levels-invalid-tag-name",
+            ));
+        }
+        validate_bounded_text(name, "v-rooms-power-levels-invalid-tag-name", true)?;
+        for field in tag.keys() {
+            if field != "name" && field != "color" && field != "icon" {
+                return Err(map_power_level_write_error(
+                    "v-rooms-power-levels-invalid-tag",
+                ));
+            }
+        }
+        if let Some(color) = tag.get("color") {
+            validate_bounded_text(color, "v-rooms-power-levels-invalid-tag-color", false)?;
+        }
+        if let Some(icon) = tag.get("icon") {
+            validate_power_level_tag_icon(icon)?;
+        }
+    }
+    Ok(())
+}
+
 fn map_room_create_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     let (code, message) = match diagnostic_id {
         "v-rooms-room-create-invalid-name"
@@ -5526,6 +5883,7 @@ fn snapshot(session: Option<&ManagedMatrixSession>) -> MatrixSessionSnapshot {
             user_id: active.identity.user_id.clone(),
             device_id: active.identity.device_id.clone(),
             homeserver_url: active.identity.homeserver_url.clone(),
+            session_generation: active.sync.session_generation(),
         },
     }
 }
@@ -5956,6 +6314,7 @@ mod tests {
             user_id: identity.user_id.clone(),
             device_id: identity.device_id.clone(),
             homeserver_url: identity.homeserver_url.clone(),
+            session_generation: 1,
         })
         .unwrap();
         for json in [identity_json, snapshot_json] {
@@ -6920,6 +7279,124 @@ mod tests {
             assert!(command.contains(sdk_method), "{command_name} SDK method");
             assert!(!command.contains("mx."), "{command_name} JS fallback");
         }
+    }
+
+    #[test]
+    fn power_level_write_result_serializes_exact_wire_shape() {
+        let result = NativePowerLevelWriteResult {
+            status: "ok",
+            room_id: "!room:example.org".to_owned(),
+            event_type: ROOM_POWER_LEVELS_EVENT_TYPE,
+            state_key: "",
+            session_generation: 7,
+            content: serde_json::json!({
+                "users": { "@alice:example.org": 100 },
+                "historical": 0,
+                "retained": { "value": true },
+            }),
+        };
+        assert_eq!(
+            serde_json::to_value(result).unwrap(),
+            serde_json::json!({
+                "status": "ok",
+                "roomId": "!room:example.org",
+                "eventType": "m.room.power_levels",
+                "stateKey": "",
+                "sessionGeneration": 7,
+                "content": {
+                    "users": { "@alice:example.org": 100 },
+                    "historical": 0,
+                    "retained": { "value": true },
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn power_level_content_validation_preserves_complete_policy_maps() {
+        let content = serde_json::json!({
+            "ban": 50,
+            "historical": 0,
+            "users_default": 0,
+            "users": { "@alice:example.org": 100, "@bob:example.org": 25 },
+            "events": { "m.room.name": 50 },
+            "notifications": { "room": 50 },
+            "unknown_policy_member": { "keep": ["all", "values"] },
+        });
+        assert!(validate_room_power_levels_content(&content).is_ok());
+        assert_eq!(content["users"]["@alice:example.org"], 100);
+        assert_eq!(content["unknown_policy_member"]["keep"][0], "all");
+
+        assert!(validate_room_power_levels_content(&serde_json::json!({
+            "users": { "@alice:example.org": 1.5 },
+        }))
+        .is_err());
+        assert!(validate_room_power_levels_content(&serde_json::json!({
+            "events": [],
+        }))
+        .is_err());
+        assert!(validate_room_power_levels_content(&serde_json::json!({
+            "ban": 9_007_199_254_740_992_i64,
+        }))
+        .is_err());
+    }
+
+    #[test]
+    fn power_level_tag_validation_preserves_icon_association_and_empty_delete_state() {
+        let content = serde_json::json!({
+            "100": {
+                "name": "Admin",
+                "color": "#0088ff",
+                "icon": {
+                    "key": "mxc://example.org/admin",
+                    "info": {
+                        "w": 32,
+                        "h": 32,
+                        "mimetype": "image/png",
+                        "size": 512,
+                        "xyz.amorgan.blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj",
+                    },
+                },
+            },
+        });
+        assert!(validate_power_level_tags_content(&content).is_ok());
+        assert_eq!(content["100"]["icon"]["key"], "mxc://example.org/admin");
+        assert!(validate_power_level_tags_content(&serde_json::json!({})).is_ok());
+        assert!(validate_power_level_tags_content(&serde_json::json!({
+            "01": { "name": "Invalid key" },
+        }))
+        .is_err());
+        assert!(validate_power_level_tags_content(&serde_json::json!({
+            "100": { "name": "   " },
+        }))
+        .is_err());
+        assert!(validate_power_level_tags_content(&serde_json::json!({
+            "100": { "name": "Invalid icon", "icon": { "info": [] } },
+        }))
+        .is_err());
+    }
+
+    #[test]
+    fn power_level_commands_are_registered_and_have_no_bulk_single_user_loop() {
+        let product = include_str!("product.rs");
+        let lib = include_str!("../../lib.rs");
+        let build = include_str!("../../../build.rs");
+        for command in [
+            "matrix_room_set_power_levels",
+            "matrix_room_set_power_level_tags",
+        ] {
+            assert!(product.contains(&format!("pub async fn {command}")));
+            assert!(lib.contains(command));
+            assert!(build.contains(&format!("\"{command}\"")));
+        }
+        let bulk_command = product
+            .split("pub async fn matrix_room_set_power_levels")
+            .nth(1)
+            .expect("bulk power-level command")
+            .split("#[tauri::command]")
+            .next()
+            .expect("bulk power-level command body");
+        assert!(!bulk_command.contains("update_power_levels"));
     }
 
     #[test]
