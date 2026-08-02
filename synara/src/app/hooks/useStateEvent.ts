@@ -5,7 +5,7 @@ import { useForceUpdate } from './useForceUpdate';
 import { getStateEvent } from '../utils/room';
 import { StateEvent } from '../../types/matrix/room';
 
-export const useStateEvent = (room: Room, eventType: StateEvent, stateKey = '') => {
+export const useStateEvent = (room: Room, eventType: StateEvent, stateKey = '', enabled = true) => {
   const [updateCount, forceUpdate] = useForceUpdate();
 
   useStateEventCallback(
@@ -13,6 +13,7 @@ export const useStateEvent = (room: Room, eventType: StateEvent, stateKey = '') 
     useCallback(
       (event) => {
         if (
+          enabled &&
           event.getRoomId() === room.roomId &&
           event.getType() === eventType &&
           event.getStateKey() === stateKey
@@ -20,13 +21,13 @@ export const useStateEvent = (room: Room, eventType: StateEvent, stateKey = '') 
           forceUpdate();
         }
       },
-      [room, eventType, stateKey, forceUpdate]
+      [room, eventType, stateKey, enabled, forceUpdate]
     )
   );
 
   return useMemo(
-    () => getStateEvent(room, eventType, stateKey),
+    () => (enabled ? getStateEvent(room, eventType, stateKey) : undefined),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [room, eventType, stateKey, updateCount]
+    [room, eventType, stateKey, enabled, updateCount]
   );
 };

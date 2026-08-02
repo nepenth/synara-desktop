@@ -28,6 +28,12 @@ const PRODUCT_SOURCE: &str = concat!(
     include_str!("product.rs"),
 );
 
+// Auth commands live in the extracted product_commands.rs module. Source
+// guards for the password-only product boundary must inspect that owner
+// directly rather than the product.rs module wrapper.
+const AUTH_PRODUCT_COMMANDS_SOURCE: &str = include_str!("product_commands.rs");
+const DEVICE_PRODUCT_COMMANDS_SOURCE: &str = include_str!("../devices/product_commands.rs");
+
 fn room_key_selection(selection_id: u64, label: &str) -> SelectedRoomKeyImport {
     SelectedRoomKeyImport {
         selection_id,
@@ -172,8 +178,7 @@ fn map_login_flows_auth_error_is_privacy_safe() {
 
 #[test]
 fn v_auth_3_product_registers_login_flows_command() {
-    let product_src = PRODUCT_SOURCE;
-    let product_prod = product_src
+    let product_prod = AUTH_PRODUCT_COMMANDS_SOURCE
         .split("#[cfg(test)]")
         .next()
         .expect("product production section");
@@ -226,8 +231,7 @@ fn v_auth_3b_product_has_no_matrix_uia_login_stage_commands() {
     // (V-AUTH.3b). Password login remains single-shot; register/reset/device
     // delete keep specialized native stage/UIAA owners. Do not invent unused
     // matrix_uia_* session IPC for a non-product login surface.
-    let product_src = PRODUCT_SOURCE;
-    let product_prod = product_src
+    let product_prod = AUTH_PRODUCT_COMMANDS_SOURCE
         .split("#[cfg(test)]")
         .next()
         .expect("product production section");
@@ -260,7 +264,7 @@ fn v_auth_3b_product_has_no_matrix_uia_login_stage_commands() {
         "password-reset owner must remain"
     );
     assert!(
-        product_prod.contains("pub async fn matrix_device_delete_password"),
+        DEVICE_PRODUCT_COMMANDS_SOURCE.contains("pub async fn matrix_device_delete_password"),
         "device-delete password UIAA owner must remain"
     );
     // Login maps UIAA to fail-closed InteractiveAuthRequired — no stage loop.
@@ -285,8 +289,7 @@ fn v_auth_2_product_has_no_token_login_command_or_login_token_sdk_call() {
     //
     // Read only production sections (exclude this tests module) so the
     // negative assertions below do not match their own string literals.
-    let product_src = PRODUCT_SOURCE;
-    let product_prod = product_src
+    let product_prod = AUTH_PRODUCT_COMMANDS_SOURCE
         .split("#[cfg(test)]")
         .next()
         .expect("product production section");
@@ -1087,6 +1090,141 @@ fn room_members_snapshot_owns_live_sdk_members_without_js_fallback() {
     assert!(command.contains("members(RoomMemberships::empty())"));
     assert!(!command.contains("getMembers"));
     assert!(!command.contains("matrix-js-sdk"));
+}
+
+#[test]
+fn power_level_and_creator_snapshots_have_fixed_wire_shapes() {
+    let power_levels = NativeRoomPowerLevelsSnapshot {
+        status: "ok",
+        session_generation: 7,
+        room_id: "!room:example.org".to_owned(),
+        event_type: "m.room.power_levels",
+        state_key: "",
+        content: serde_json::json!({
+            "users_default": 0,
+            "users": { "@alice:example.org": 100 },
+            "retained": { "value": true },
+        }),
+    };
+    assert_eq!(
+        serde_json::to_value(power_levels).unwrap(),
+        serde_json::json!({
+            "status": "ok",
+            "sessionGeneration": 7,
+            "roomId": "!room:example.org",
+            "eventType": "m.room.power_levels",
+            "stateKey": "",
+            "content": {
+                "users_default": 0,
+                "users": { "@alice:example.org": 100 },
+                "retained": { "value": true },
+            },
+        })
+    );
+
+    let creators = NativeRoomCreatorsSnapshot {
+        status: "ok",
+        session_generation: 7,
+        room_id: "!room:example.org".to_owned(),
+        event_type: "m.room.create",
+        state_key: "",
+        creators: vec!["@alice:example.org".to_owned()],
+    };
+    assert_eq!(
+        serde_json::to_value(creators).unwrap(),
+        serde_json::json!({
+            "status": "ok",
+            "sessionGeneration": 7,
+            "roomId": "!room:example.org",
+            "eventType": "m.room.create",
+            "stateKey": "",
+            "creators": ["@alice:example.org"],
+        })
+    );
+}
+
+#[test]
+fn creator_projection_preserves_supported_room_creator_semantics() {
+    let event = serde_json::json!({
+        "sender": "@alice:example.org",
+        "content": {
+            "room_version": "12",
+            "additional_creators": [
+                "@bob:example.org",
+                "@alice:example.org",
+            ],
+        },
+    });
+    assert_eq!(
+        project_room_creators(&event).unwrap(),
+        vec!["@alice:example.org", "@bob:example.org"]
+    );
+
+    let legacy_event = serde_json::json!({
+        "sender": "@alice:example.org",
+        "content": { "room_version": "11" },
+    });
+    assert!(project_room_creators(&legacy_event).unwrap().is_empty());
+
+    let malformed = serde_json::json!({
+        "sender": "not-a-user",
+        "content": { "room_version": "12" },
+    });
+    assert!(project_room_creators(&malformed).is_err());
+}
+
+#[test]
+fn power_level_snapshot_validation_preserves_unknown_fields_and_rejects_bad_maps() {
+    let content = serde_json::json!({
+        "users_default": 0,
+        "events": { "m.room.name": 50 },
+        "notifications": { "room": 50 },
+        "retained": { "value": [true, "unchanged"] },
+    });
+    assert!(validate_power_levels_snapshot_content(&content).is_ok());
+    assert_eq!(content["retained"]["value"][1], "unchanged");
+
+    assert!(validate_power_levels_snapshot_content(&serde_json::json!({
+        "users": { "@alice:example.org": 1.5 },
+    }))
+    .is_err());
+    assert!(validate_power_levels_snapshot_content(&serde_json::json!({
+        "events": [],
+    }))
+    .is_err());
+    assert!(validate_power_levels_snapshot_content(&serde_json::json!({
+        "ban": 9_007_199_254_740_992_i64,
+    }))
+    .is_err());
+}
+
+#[test]
+fn power_read_commands_are_registered_and_use_live_room_state() {
+    let product = PRODUCT_SOURCE;
+    let lib = include_str!("../../lib.rs");
+    let build = include_str!("../../../build.rs");
+    let capability = include_str!("../../../capabilities/main.json");
+    for command in [
+        "matrix_room_power_levels_snapshot",
+        "matrix_room_creators_snapshot",
+    ] {
+        let capability_id = command.replace('_', "-");
+        assert!(product.contains(&format!("pub async fn {command}")));
+        assert!(lib.contains(command));
+        assert!(build.contains(&format!("\"{command}\"")));
+        assert!(capability.contains(&format!("allow-{capability_id}")));
+    }
+    let power_command = product
+        .split("pub async fn matrix_room_power_levels_snapshot")
+        .nth(1)
+        .expect("power-level read command")
+        .split("#[tauri::command]")
+        .next()
+        .expect("power-level read command body");
+    assert!(power_command.contains("read_room_state_content"));
+    assert!(product.contains("get_state_event(StateEventType::from(event_type), \"\")"));
+    assert!(!power_command.contains("send_state_event"));
+    assert!(!power_command.contains("matrix-js-sdk"));
 }
 
 #[test]

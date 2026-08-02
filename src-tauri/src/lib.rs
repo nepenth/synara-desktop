@@ -396,6 +396,8 @@ pub fn run() {
             matrix::auth::product::matrix_device_delete_cancel,
             matrix::auth::product::matrix_room_list_snapshot,
             matrix::auth::product::matrix_room_members_snapshot,
+            matrix::auth::product::matrix_room_power_levels_snapshot,
+            matrix::auth::product::matrix_room_creators_snapshot,
             matrix::auth::product::matrix_invites_snapshot,
             matrix::auth::product::matrix_invites_accept,
             matrix::auth::product::matrix_invites_decline,

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-room-power-levels-snapshot"
+description = "Enables the matrix_room_power_levels_snapshot command without any pre-configured scope."
+commands.allow = ["matrix_room_power_levels_snapshot"]
+
+[[permission]]
+identifier = "deny-matrix-room-power-levels-snapshot"
+description = "Denies the matrix_room_power_levels_snapshot command without any pre-configured scope."
+commands.deny = ["matrix_room_power_levels_snapshot"]

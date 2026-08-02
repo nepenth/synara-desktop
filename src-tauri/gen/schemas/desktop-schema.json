@@ -843,6 +843,12 @@
           "markdownDescription": "Enables the matrix_room_create command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_room_creators_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-creators-snapshot",
+          "markdownDescription": "Enables the matrix_room_creators_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_room_invite command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-room-invite",
@@ -931,6 +937,12 @@
           "type": "string",
           "const": "allow-matrix-room-notes-upsert",
           "markdownDescription": "Enables the matrix_room_notes_upsert command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_power_levels_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-power-levels-snapshot",
+          "markdownDescription": "Enables the matrix_room_power_levels_snapshot command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_room_set_power_level command without any pre-configured scope.",
@@ -1761,6 +1773,12 @@
           "markdownDescription": "Denies the matrix_room_create command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_room_creators_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-creators-snapshot",
+          "markdownDescription": "Denies the matrix_room_creators_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_room_invite command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-room-invite",
@@ -1849,6 +1867,12 @@
           "type": "string",
           "const": "deny-matrix-room-notes-upsert",
           "markdownDescription": "Denies the matrix_room_notes_upsert command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_power_levels_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-power-levels-snapshot",
+          "markdownDescription": "Denies the matrix_room_power_levels_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_room_set_power_level command without any pre-configured scope.",
