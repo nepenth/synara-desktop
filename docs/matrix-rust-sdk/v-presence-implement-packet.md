@@ -5,8 +5,9 @@
 | Status     | **First slice merged (#458); full V-PRESENCE.USER remains open** — this docs-only refresh records the residual; live proof and acceptance are **Not confirmed** |
 | Residual   | **V-PRESENCE.USER**                                                                                                        |
 | Source     | [v-presence-typing-residual.md](v-presence-typing-residual.md) from #384                                                   |
-| Base       | `feature/matrix-rust-sdk-full-replacement` at `c1e9c3be2b8ff13da42853913b30493cb030e6ec`                                   |
-| PR shape   | Focused **draft** docs PR targeting `feature/matrix-rust-sdk-full-replacement`; #458 is merged at this base               |
+| Base       | `feature/matrix-rust-sdk-full-replacement` at `c1e9c3be2b8ff13da42853913b30493cb030e6ec` — #458 implementation/merge base |
+| Docs tip   | `27a854d8f72deb1a74be35705d54ce5af9ec90e6` — docs-only refresh; no product code changed after the #458 base             |
+| PR shape   | Focused **draft** docs PR targeting `feature/matrix-rust-sdk-full-replacement`; #458 is merged at the Base               |
 | Scope      | Desktop user presence (`m.presence`) in the user-room profile; typing and MatrixRTC call membership are separate residuals |
 | Policy     | [full-vertical-policy.md](full-vertical-policy.md): one UI → Tauri IPC → live `matrix-sdk` owner, with JS-owner deletion   |
 | Guard      | Never `main`, umbrella PR **#39**, or V-BURN; #458 presence and #461 directory slices are merged; `dual_backend` is forbidden; native failure is fail-closed |
@@ -17,13 +18,15 @@ the first native presence slice landed by #458 and the evidence still required
 before the full user-presence residual can be accepted. It does not implement
 product code, update generated status, or claim V-BURN completion.
 
-> **Post-merge note at `c1e9c3be`.** #458 is merged at this integration tip.
+> **Post-merge note at implementation base `c1e9c3be`; docs refresh at `27a854d8`.** #458 is merged at the implementation tip.
 > Its first slice lands the native snapshot/subscription route, profile binding,
 > JavaScript presence-owner deletion, and focused local evidence. #461's
-> room-directory slice is also merged at this tip, but does not close presence.
+> room-directory slice is also merged at the implementation tip, but does not
+> close presence. No product code changed between the implementation base and
+> this docs tip.
 > Authenticated live proof and full closure evidence remain **Not confirmed**.
 
-## Current state at the merge tip
+## Current state at the #458 merge tip
 
 ### Landed in #458
 
@@ -35,15 +38,16 @@ product code, update generated status, or claim V-BURN completion.
 - `UserRoomProfile` uses `useNativeUserPresence`; the profile presentation is
   SDK-neutral; and the former `useUserPresence` JavaScript owner is deleted.
 - Focused Rust, wire/source, frontend-owner, and source-absence tests are
-  present. The desktop production importer inventory is **150** at this tip.
+  present. The desktop production importer inventory is **150** at the #458
+  merge tip.
 
 ### Still open for V-PRESENCE.USER closure
 
 - The authenticated two-client desktop proof in Section 6 has not been run or
   retained here; its status is **Not confirmed**.
 - The complete lifecycle/error matrix and independent acceptance review must be
-  retained against `c1e9c3be`; local tests and source guards do not substitute
-  for the product proof.
+  retained against the `c1e9c3be` implementation base and this `27a854d8` docs
+  tip; local tests and source guards do not substitute for the product proof.
 - Room typing, MatrixRTC call-membership presence, and V-BURN remain separate
   residuals and are not closed by #458.
 
@@ -106,8 +110,10 @@ typing polling/projection residual, or MatrixRTC call-membership presence.
 
 Before claiming V-PRESENCE.USER closure, the writer must verify:
 
-1. `HEAD` is `c1e9c3be2b8ff13da42853913b30493cb030e6ec` and the docs PR
-   target is `feature/matrix-rust-sdk-full-replacement`;
+1. `HEAD` is the docs refresh tip `27a854d8f72deb1a74be35705d54ce5af9ec90e6`,
+   whose #458 implementation base is
+   `c1e9c3be2b8ff13da42853913b30493cb030e6ec`; the docs PR target is
+   `feature/matrix-rust-sdk-full-replacement`;
 2. the managed native session is authenticated, has a live sync path, and has
    a supported session-generation-bound capability boundary for presence;
 3. the pinned SDK evidence in Section 7 still matches the dependency actually
