@@ -47,7 +47,11 @@ export function General({ requestClose }: GeneralProps) {
               <Box direction="Column" gap="100">
                 <Text size="L400">Options</Text>
                 <RoomJoinRules permissions={permissions} />
-                <RoomPublish permissions={permissions} />
+                <RoomPublish
+                  permissions={permissions}
+                  roomId={room.roomId}
+                  isSpace={room.isSpaceRoom()}
+                />
               </Box>
               <Box direction="Column" gap="100">
                 <Text size="L400">Addresses</Text>
