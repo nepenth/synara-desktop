@@ -419,10 +419,7 @@ export function Lobby() {
     <PowerLevelsContextProvider value={spacePowerLevels}>
       <Box grow="Yes">
         <Page>
-          <LobbyHeader
-            showProfile={!onTop}
-            powerLevels={spacePowerLevels}
-          />
+          <LobbyHeader showProfile={!onTop} powerLevels={spacePowerLevels} />
           <Box style={{ position: 'relative' }} grow="Yes">
             <Scroll ref={scrollRef} hideTrack visibility="Hover">
               <PageContent>
