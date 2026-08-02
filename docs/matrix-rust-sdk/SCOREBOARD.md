@@ -3,7 +3,7 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-02                                               |
-| Tip                                                    | `a9098bd7` on `feature/matrix-rust-sdk-full-replacement`; the merged #481–#488 wave is present at this docs-only tip; presence and room directory remain first-slice/WIP only, C3–C5 are **Not confirmed**, V-BURN remains **HOLD / Not ready**, and production importers remain **150** |
+| Tip                                                    | `d3b7871f` on `feature/matrix-rust-sdk-full-replacement`; the merged #481–#488 docs wave is present, followed by docs-only refreshes for C3–C5, V-BURN, Members READ, presence, and CallWidget residuals; presence and room directory remain first-slice/WIP only, C3–C5 are **Not confirmed**, V-BURN remains **HOLD / Not ready**, and production importers remain **150** |
 | Production `matrix-js-sdk` import files (`synara/src`) | **150** (plan baseline was **220**)                      |
 | Product command layout                                  | **#446 merged** — domain `product_commands.rs` modules are available for parallel follow-on lanes |
 | Dual backend                                           | **false** (forbidden)                                    |

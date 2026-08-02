@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-02**                                                                                                                       |
-| Integration tip    | `a9098bd7` — the merged #481–#488 wave is present at this docs-only tip; #458 presence and #461 room-directory remain first-slice/WIP only; C3–C5 live proofs remain **Not confirmed**; V-BURN remains **HOLD / Not ready** |
-| Active work        | **#481–#488 are merged; #458 presence first slice and #461 room-directory first slice remain WIP only**; native power/creator reads are closed for migrated owners, while custom power-level tags and direct helper/plugin readers remain residual; imports remain **150**; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD / Not ready |
+| Integration tip    | `d3b7871f` — the merged #481–#488 docs wave is present, followed by docs-only refreshes for C3–C5, V-BURN, Members READ, presence, and CallWidget residuals; the full #458/#461 verticals remain WIP |
+| Active work        | **#481–#488 are merged; the requested tip carries docs-only refreshes for C3–C5, V-BURN, Members READ, presence, and CallWidget residuals; #458 presence first slice and #461 room-directory first slice remain WIP only**; native power/creator reads are closed for migrated owners, while custom power-level tags and direct helper/plugin readers remain residual; imports remain **150**; R-DEVTOOL gated; V-BURN HOLD / Not ready |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
 | Import accounting  | Desktop production import files **150** on tip (plan baseline was 220). Allowlist **150** after the #458/#461 owner ratchets.       |
@@ -33,9 +33,9 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `a9098bd7`** carries the merged #481–#488 wave; #458 presence and #461 room-directory remain first-slice/WIP only. Custom power-level tags and direct helper/plugin reads remain residual. Imports are **150**; C3–C5 are Not confirmed; V-BURN HOLD / Not ready; #39 gated. |
-| **Tip**        | `a9098bd7`                                                                                                                                                                                                                             |
-| **Active PRs** | #481–#488 are merged at this tip. This follow-up is a docs-only draft; no product implementation, `main`, or umbrella #39 state is changed. |
+| **Now**        | **Tip `d3b7871f`** carries the merged #481–#488 docs wave and subsequent docs-only refreshes for C3–C5, V-BURN, Members READ, presence, and CallWidget residuals; #458 presence and #461 room-directory remain first-slice/WIP only. Custom power-level tags and direct helper/plugin reads remain residual. Imports are **150**; C3–C5 are Not confirmed; V-BURN HOLD / Not ready; #39 gated. |
+| **Tip**        | `d3b7871f`                                                                                                                                                                                                                             |
+| **Active PRs** | #490 merged with stale `a9098bd7` wording; this focused draft corrects SCOREBOARD/PROGRESS to `d3b7871f`; sibling docs-only drafts #496–#497 remain open. No product implementation, `main`, or umbrella #39 state is changed. |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); full #458/#461 vertical acceptance remains open; umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) remains gated without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
 ---
@@ -60,6 +60,14 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-02 — tip `d3b7871f` — scoreboard/progress tip honesty correction
+
+| When (UTC) | Item                           | Result                | Notes                                                                                                                                                                                                                          |
+| ---------- | ------------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| current    | **Requested reference tip**    | **Pinned**            | `d3b7871f` is the requested integration/product reference; later feature-branch commits are docs-only and do not change the recorded product state. `main` and #39 remain out of scope.                                    |
+| current    | **Scoreboard / progress**      | **Correction**       | #490 merged with stale `a9098bd7` wording; this focused draft re-pins `SCOREBOARD.md` and `PROGRESS.md` to `d3b7871f` without changing product or generated-ledger state.              |
+| current    | **Proof / burn / merge gates** | **Held**              | #458 presence and #461 room-directory remain first-slice/WIP; C3–C5 remain **Not confirmed**; V-BURN remains **HOLD / Not ready**; `dual_backend` remains forbidden.                                  |
 
 ### 2026-08-02 — tip `27a854d8` — directory packet tip honesty
 
