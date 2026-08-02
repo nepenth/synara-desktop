@@ -139,34 +139,32 @@ export async function readNativeRoomDirectorySession(
   return session;
 }
 
-const validateSearchInput = (request: NativeRoomDirectorySearchRequest): void => {
+const normalizeOptional = (value: string | undefined, maxChars: number): string | undefined => {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') throw unavailable();
+  const normalized = value.trim();
+  if (normalized.length === 0) return undefined;
+  if ([...normalized].length > maxChars) throw unavailable();
+  return normalized;
+};
+
+const validateSearchInput = (
+  request: NativeRoomDirectorySearchRequest
+): NativeRoomDirectorySearchRequest => {
+  if (typeof request.serverName !== 'string') throw unavailable();
+  const serverName = request.serverName.trim();
   if (
-    typeof request.serverName !== 'string' ||
-    request.serverName.trim() !== request.serverName ||
-    request.serverName.length === 0 ||
-    request.serverName.length > 256 ||
+    serverName.length === 0 ||
+    [...serverName].length > 256 ||
     !Number.isSafeInteger(request.limit) ||
     request.limit < 1 ||
     request.limit > 100
   ) {
     throw unavailable();
   }
-  for (const value of [request.term, request.thirdPartyInstanceId]) {
-    if (
-      value !== undefined &&
-      (value.trim() !== value || value.length === 0 || value.length > 256)
-    ) {
-      throw unavailable();
-    }
-  }
-  if (
-    request.since !== undefined &&
-    (request.since.trim() !== request.since ||
-      request.since.length === 0 ||
-      request.since.length > 512)
-  ) {
-    throw unavailable();
-  }
+  const term = normalizeOptional(request.term, 256);
+  const thirdPartyInstanceId = normalizeOptional(request.thirdPartyInstanceId, 256);
+  const since = normalizeOptional(request.since, 512);
   if (
     request.roomType !== undefined &&
     request.roomType !== 'room' &&
@@ -174,6 +172,7 @@ const validateSearchInput = (request: NativeRoomDirectorySearchRequest): void =>
   ) {
     throw unavailable();
   }
+  return { ...request, serverName, term, thirdPartyInstanceId, since };
 };
 
 export type NativeRoomDirectoryOwner = {
@@ -216,7 +215,7 @@ export function createNativeRoomDirectoryOwner(
 
   const search = async (request: NativeRoomDirectorySearchRequest): Promise<DirectoryPage> => {
     if (disposed) throw unavailable();
-    validateSearchInput(request);
+    const normalizedRequest = validateSearchInput(request);
     const requestId = ++nextRequestId;
     const previous = active;
     active = { requestId };
@@ -231,12 +230,14 @@ export function createNativeRoomDirectoryOwner(
       {
         sessionGeneration: session.sessionGeneration,
         requestId,
-        serverName: request.serverName,
-        term: request.term,
-        roomType: request.roomType,
-        thirdPartyInstanceId: request.thirdPartyInstanceId,
-        limit: request.limit,
-        since: request.since,
+        serverName: normalizedRequest.serverName,
+        limit: normalizedRequest.limit,
+        ...(normalizedRequest.term ? { term: normalizedRequest.term } : {}),
+        ...(normalizedRequest.roomType ? { roomType: normalizedRequest.roomType } : {}),
+        ...(normalizedRequest.thirdPartyInstanceId
+          ? { thirdPartyInstanceId: normalizedRequest.thirdPartyInstanceId }
+          : {}),
+        ...(normalizedRequest.since ? { since: normalizedRequest.since } : {}),
       },
       invoke
     );
