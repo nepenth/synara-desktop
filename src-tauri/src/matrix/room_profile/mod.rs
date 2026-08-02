@@ -10,12 +10,17 @@
 
 mod error;
 mod index;
+pub mod live;
 
 pub use error::RoomProfileError;
 pub use index::{
     DirectoryVisibility, HistoryVisibility, JoinRule, RoomProfile, RoomProfileIndex,
     MAX_ALIAS_CHARS, MAX_ALT_ALIASES, MAX_AVATAR_URL_CHARS, MAX_CACHED_ROOMS, MAX_NAME_CHARS,
     MAX_TOPIC_CHARS,
+};
+pub use live::{
+    project_join_rule, NativeRoomJoinRuleOwner, NativeRoomJoinRuleUpdate,
+    ROOM_JOIN_RULE_UPDATED_EVENT,
 };
 
 /// Static marker for link / schema smoke.

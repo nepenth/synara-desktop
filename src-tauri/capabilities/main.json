@@ -142,6 +142,7 @@
     "allow-matrix-set-room-avatar",
     "allow-matrix-get-room-directory-visibility",
     "allow-matrix-set-room-directory-visibility",
+    "allow-matrix-room-join-rule-snapshot",
     "allow-matrix-get-room-image-packs",
     "allow-matrix-get-global-image-packs",
     "allow-matrix-later-snapshot",
