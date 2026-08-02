@@ -52,6 +52,8 @@ const tests = [
   'src/app/features/matrix-ipc/__tests__/matrixIpcContract.test.ts',
   'src/app/features/matrix-dto/__tests__/matrixDto.test.ts',
   'src/app/features/matrix-presence/__tests__/nativePresence.test.ts',
+  'src/app/pages/client/explore/__tests__/nativeRoomDirectoryOwner.test.ts',
+  'src/app/pages/client/explore/__tests__/roomDirectorySourceGuard.test.ts',
   'src/app/features/lobby/__tests__/nativeSpaceHierarchyOwner.test.ts',
   'src/app/features/room/__tests__/nativeSendText.test.ts',
   'src/app/features/room/__tests__/nativeSendAttachmentOwner.test.ts',

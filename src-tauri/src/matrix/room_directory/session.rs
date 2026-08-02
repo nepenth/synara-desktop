@@ -14,6 +14,17 @@ pub const MAX_TEXT_CHARS: usize = 256;
 /// Soft cap on alias length (chars).
 pub const MAX_ALIAS_CHARS: usize = 255;
 
+/// Soft cap on opaque Matrix directory pagination tokens.
+pub const MAX_BATCH_CHARS: usize = 512;
+
+/// Product-owned room discriminator. The Matrix default room has no
+/// `m.room.create.type` value and is represented explicitly as `Room` here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DirectoryRoomType {
+    Room,
+    Space,
+}
+
 /// Lifecycle of one directory search.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DirectorySearchState {
@@ -36,6 +47,7 @@ pub struct DirectoryRoomHit {
     pub num_joined_members: u32,
     pub world_readable: bool,
     pub guest_can_join: bool,
+    pub room_type: DirectoryRoomType,
 }
 
 /// Session-generation-stamped room directory session.
@@ -49,6 +61,7 @@ pub struct RoomDirectorySession {
     server_name: Option<String>,
     hits: Vec<DirectoryRoomHit>,
     next_batch: Option<String>,
+    prev_batch: Option<String>,
     failure_diagnostic_id: Option<&'static str>,
 }
 
@@ -62,6 +75,7 @@ impl RoomDirectorySession {
             server_name: None,
             hits: Vec::new(),
             next_batch: None,
+            prev_batch: None,
             failure_diagnostic_id: None,
         }
     }
@@ -92,6 +106,10 @@ impl RoomDirectorySession {
 
     pub fn next_batch(&self) -> Option<&str> {
         self.next_batch.as_deref()
+    }
+
+    pub fn prev_batch(&self) -> Option<&str> {
+        self.prev_batch.as_deref()
     }
 
     pub fn failure_diagnostic_id(&self) -> Option<&'static str> {
@@ -131,6 +149,7 @@ impl RoomDirectorySession {
         self.query = query;
         self.hits.clear();
         self.next_batch = None;
+        self.prev_batch = None;
         self.failure_diagnostic_id = None;
         Ok(self.request_id)
     }
@@ -140,6 +159,19 @@ impl RoomDirectorySession {
         &mut self,
         request_id: u64,
         page: Vec<DirectoryRoomHit>,
+        next_batch: Option<String>,
+        replace: bool,
+    ) -> Result<(), RoomDirectoryError> {
+        self.apply_page_with_batches(request_id, page, None, next_batch, replace)
+    }
+
+    /// Apply a page with both Matrix pagination tokens. Stale request ids are
+    /// ignored before any response content is projected.
+    pub fn apply_page_with_batches(
+        &mut self,
+        request_id: u64,
+        page: Vec<DirectoryRoomHit>,
+        prev_batch: Option<String>,
         next_batch: Option<String>,
         replace: bool,
     ) -> Result<(), RoomDirectoryError> {
@@ -173,7 +205,8 @@ impl RoomDirectorySession {
         if self.hits.len() > MAX_DIRECTORY_HITS {
             self.hits.truncate(MAX_DIRECTORY_HITS);
         }
-        self.next_batch = next_batch;
+        self.prev_batch = validate_batch(prev_batch)?;
+        self.next_batch = validate_batch(next_batch)?;
         self.state = DirectorySearchState::Ready;
         self.failure_diagnostic_id = None;
         Ok(())
@@ -212,6 +245,7 @@ impl RoomDirectorySession {
         self.server_name = None;
         self.hits.clear();
         self.next_batch = None;
+        self.prev_batch = None;
         self.failure_diagnostic_id = None;
     }
 
@@ -263,4 +297,20 @@ fn validate_hit(hit: &DirectoryRoomHit) -> Result<(), RoomDirectoryError> {
         }
     }
     Ok(())
+}
+
+fn validate_batch(batch: Option<String>) -> Result<Option<String>, RoomDirectoryError> {
+    let Some(batch) = batch else { return Ok(None) };
+    let batch = batch.trim().to_owned();
+    if batch.is_empty() || batch.chars().count() > MAX_BATCH_CHARS {
+        return Err(RoomDirectoryError::Invalid {
+            diagnostic_id: "p6.10-invalid-batch",
+        });
+    }
+    if batch.contains("access_token") || batch.contains("refresh_token") {
+        return Err(RoomDirectoryError::Invalid {
+            diagnostic_id: "p6.10-forbidden-batch",
+        });
+    }
+    Ok(Some(batch))
 }
