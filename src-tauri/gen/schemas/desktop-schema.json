@@ -867,6 +867,24 @@
           "markdownDescription": "Enables the matrix_room_creators_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_room_directory_cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-directory-cancel",
+          "markdownDescription": "Enables the matrix_room_directory_cancel command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_directory_protocols command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-directory-protocols",
+          "markdownDescription": "Enables the matrix_room_directory_protocols command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_directory_search command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-directory-search",
+          "markdownDescription": "Enables the matrix_room_directory_search command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_room_invite command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-room-invite",
@@ -1813,6 +1831,24 @@
           "type": "string",
           "const": "deny-matrix-room-creators-snapshot",
           "markdownDescription": "Denies the matrix_room_creators_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_directory_cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-directory-cancel",
+          "markdownDescription": "Denies the matrix_room_directory_cancel command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_directory_protocols command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-directory-protocols",
+          "markdownDescription": "Denies the matrix_room_directory_protocols command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_directory_search command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-directory-search",
+          "markdownDescription": "Denies the matrix_room_directory_search command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_room_invite command without any pre-configured scope.",

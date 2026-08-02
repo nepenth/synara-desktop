@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-room-directory-cancel"
+description = "Enables the matrix_room_directory_cancel command without any pre-configured scope."
+commands.allow = ["matrix_room_directory_cancel"]
+
+[[permission]]
+identifier = "deny-matrix-room-directory-cancel"
+description = "Denies the matrix_room_directory_cancel command without any pre-configured scope."
+commands.deny = ["matrix_room_directory_cancel"]

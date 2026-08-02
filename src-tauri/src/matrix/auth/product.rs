@@ -639,6 +639,8 @@ mod media;
 mod members;
 #[path = "../presence/product_commands.rs"]
 mod presence;
+#[path = "../room_directory/product_commands.rs"]
+mod room_directory;
 #[path = "../room_keys/product_commands.rs"]
 mod room_keys;
 #[path = "../room_list/product_commands.rs"]
@@ -672,6 +674,7 @@ pub use devices::*;
 pub use media::*;
 pub use members::*;
 pub use presence::*;
+pub use room_directory::*;
 pub use room_keys::*;
 pub use room_list::*;
 pub use room_ops::*;
