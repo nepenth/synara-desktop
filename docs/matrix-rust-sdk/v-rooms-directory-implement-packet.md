@@ -9,7 +9,7 @@
 | Policy          | Complete UI → Tauri IPC → live `matrix-sdk` owner; superseded JS directory network is deleted in the same implementation slice |
 | Desktop failure | **Fail closed** when the native Matrix session, command, response, or generation is unavailable                                |
 | Prettier        | `2.8.1`                                                                                                                        |
-| Guard           | Never `main`, umbrella PR **#39**, or `product.rs`; #461 directory and #458 presence slices are merged; `dual_backend` and a JS fallback are forbidden |
+| Guard           | Never `main`, umbrella PR **#39**, or V-BURN; #461 directory and #458 presence slices are merged; this docs update changes no product code; `dual_backend` and a JS fallback are forbidden |
 
 The source of truth for the measured residual is
 [v-rooms-directory-residual.md](v-rooms-directory-residual.md). This packet
@@ -97,18 +97,18 @@ The implementation slice owns these paths and boundaries:
   directory DTO parsing and bounded validation;
 - `src-tauri/src/matrix/room_directory/` — the live typed request/projection
   owner added beside the existing `RoomDirectorySession` foundation;
-- `src-tauri/src/lib.rs` — registration of only the exact directory commands
-  in Section 3 and their desktop capability wiring, if required by the current
-  Tauri setup;
+- `src-tauri/src/lib.rs`, the thin `src-tauri/src/matrix/auth/product.rs`
+  re-export, and generated capability/ACL/schema artifacts — registration of
+  only the exact directory commands in Section 3;
 - focused frontend, DTO/IPC, Rust, source-absence, and guardrail evidence; and
 - the authenticated disposable-homeserver proof described in Section 6.
 
-The native Rust owner must be module-owned under
+The native Rust owner is module-owned under
 `src-tauri/src/matrix/room_directory/` (for example, `live.rs`). This packet
-does not authorize any `src-tauri/src/matrix/auth/product.rs` edit. If the
-existing managed-session access boundary cannot be reused from the room
-directory module, implementation stops and reports that missing authority;
-adding a second client or editing `product.rs` is not an allowed workaround.
+records the thin `product.rs` re-export used by #461 but does not authorize a
+broad auth/product refactor. The existing managed-session access boundary is
+the sole authority; adding a second client, selector, or fallback remains
+forbidden.
 
 ### Out of scope
 
@@ -125,8 +125,8 @@ adding a second client or editing `product.rs` is not an allowed workaround.
 - Matrix user-directory search, message search, local search, or widget-only
   user search;
 - V-BURN preparation or completion;
-- any `product.rs` change, generated product command relocation, or broad auth
-  refactor;
+- any additional `product.rs` change, generated product command relocation, or
+  broad auth refactor;
 - any change to `main`, PR `#39`, or unrelated residuals.
 
 Before claiming V-ROOMS.R-DIRECTORY closure, the writer must verify:
@@ -243,11 +243,11 @@ The approved SDK evidence is Matrix Rust SDK `0.18.0`, tag commit
 These links establish API shape only. They do not establish a live homeserver,
 product, privacy, or UI result.
 
-## 4. Physical JS-owner deletion and route boundary
+## 4. Landed physical JS-owner deletion and route boundary
 
-The merged implementation removes the directory-specific JS owner in this
-slice. Shared card behavior is a named later residual and must not be mixed in
-as incidental cleanup.
+The merged #461 slice removes the directory-specific JS owner in the same
+slice. Shared card behavior is a named later residual and was not mixed in as
+incidental cleanup.
 
 | Path                                                              | Remove from this slice                                                                                                                                                                               | Retain or replace with                                                                                                                            |
 | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -261,21 +261,22 @@ page while `V-ROOMS.R-DIRECTORY-CARD` remains open. This packet must not add a
 second directory fetch, preserve the removed directory HTTP owner through a
 hidden helper, or claim that the shared card/preview residual is closed.
 
-The implementation must include a negative source scan over the changed
+The landed implementation includes a negative source scan over the changed
 Explore directory route proving absence of `matrix-js-sdk`, `useMatrixClient`,
 `mx.http`, `mx.publicRooms`, `mx.getThirdpartyProtocols`,
 `authedRequest`, `Method.Post`, and raw `/publicRooms` calls. The scan is
 route-scoped; unrelated open Matrix JS owners elsewhere in the repository are
 not silently reclassified as this residual.
 
-## 5. Required focused tests
+## 5. Landed focused tests and remaining evidence
 
-Test names may be expanded, but the following cases and boundaries are
-required.
+The following focused checks landed with #461. They establish the typed,
+fail-closed product path; they do not establish authenticated homeserver
+behavior.
 
 ### Frontend owner tests
 
-Add
+Landed:
 `synara/src/app/pages/client/explore/__tests__/nativeRoomDirectoryOwner.test.ts`
 with an injected invoke harness. Assert exact command names and arguments for:
 
@@ -293,7 +294,7 @@ with an injected invoke harness. Assert exact command names and arguments for:
    owner must reject or expose unavailable state, never return a `legacy`
    sentinel.
 
-Add
+Landed:
 `synara/src/app/pages/client/explore/__tests__/roomDirectorySourceGuard.test.ts`
 or an equivalent repository guard. It must scan `Server.tsx` and `Explore.tsx`
 for the route-scoped negative requirements in Section 4 and must not assert
@@ -301,7 +302,7 @@ that unrelated Matrix JS imports have reached zero.
 
 ### DTO and IPC contract tests
 
-Extend the existing focused suites:
+Landed in the existing focused suites:
 
 - `synara/src/app/features/matrix-dto/__tests__/matrixDto.test.ts` for strict
   directory page/hit/protocol parsing, room/space discriminators, bounds,
@@ -314,8 +315,7 @@ Extend the existing focused suites:
 
 ### Rust room-directory tests
 
-Extend `src-tauri/src/matrix/room_directory/tests.rs` and keep the tests next
-to the live module. Cover:
+`src-tauri/src/matrix/room_directory/tests.rs` and the live module cover:
 
 - typed request construction for server, term, default-room, space, and
   third-party filters;
@@ -329,11 +329,11 @@ to the live module. Cover:
 - diagnostic/error strings that contain neither credentials nor raw room
   response content.
 
-Do not run a full workspace build merely to author or review this packet. The
-focused Rust room-directory filter, frontend owner/DTO/IPC tests, route source
-guard, and existing Matrix guardrails are the required implementation evidence;
-any closure rerun should remain targeted. `npm ci` and a full workspace build
-are not required unless a targeted failure proves one essential.
+The #461 merge record reports the focused Rust/frontend/DTO/source-guard and
+Matrix checks green, plus `cargo test --manifest-path src-tauri/Cargo.toml`
+with 801 passed, `npm run test:modernization` with 647 passed, typecheck, and
+build. These results remain automated evidence only; they do not replace the
+live proof below.
 
 ## 6. Authenticated disposable-homeserver proof
 
@@ -341,7 +341,7 @@ After the focused automated checks pass, record a two-client proof using the
 repository's [test-matrix-synapse-topology.md](test-matrix-synapse-topology.md)
 topology with a populated public directory. The proof must name the exact
 native commands and remain marked **not run**, **failed**, or **passed** with
-retained evidence.
+retained evidence. At `c1e9c3be`, this proof is **Not confirmed**.
 
 1. Log in through the existing native session and open Explore for a server.
    Confirm `matrix_session_snapshot` and
@@ -369,30 +369,21 @@ retained evidence.
 This proof establishes only `V-ROOMS.R-DIRECTORY`. It does not prove preview
 resolution, card projection/navigation, join mutation, V-BURN, or PR `#39`.
 
-## 7. Implementation record and closure work
+## 7. Post-landing proof and closure work
 
-1. Reconfirm the exact base SHA, integration target, managed-session authority,
-   and the no-`product.rs` boundary. Stop on any mismatch.
-2. Freeze the Synara-owned DTOs, request bounds, request/generation correlation,
-   and exact command names in Section 3. Do not add aliases.
-3. Add the module-owned live room-directory request/projection path beside the
-   existing session foundation. Use the typed Matrix SDK/Ruma requests and the
-   managed authenticated client; keep secrets and SDK objects inside Rust.
-4. Register only the three directory commands in the existing Tauri handler and
-   capability surface. Do not add a product.rs command or a second session
-   accessor/client.
-5. Implement the frontend owner and strict DTO parser, then rewire Server and
-   Explore. Preserve the existing UI states and route parameters while making
-   native failure terminal for this desktop route.
-6. Physically remove the route-scoped JS directory calls and the unused Add
-   Server probe. Do not modify the separate preview/card/join residuals.
-7. Retain the focused frontend, DTO/IPC, Rust, source-absence, Prettier
-   `2.8.1`, and Matrix guardrail checks. Then run and record the
-   disposable-homeserver proof.
-8. Review the diff for accidental `product.rs`, `main`, `#39`, V-BURN,
-   unrelated-vertical, fallback, selector, retry-as-proof, or `dual_backend`
-   changes. Keep any closure docs/PR focused; do not treat the merged slice as
-   live-proof acceptance.
+1. Reconfirm the exact merged tip, integration target, managed-session
+   authority, and the no-broad-`product.rs`-refactor boundary. Stop on any
+   mismatch.
+2. Preserve the frozen DTOs, request bounds, request/generation correlation,
+   and exact command names in Section 3. Do not add aliases, selectors,
+   retries-as-proof, or a JS fallback.
+3. Run the authenticated disposable-homeserver proof and retain the exact
+   command/network evidence. Record missing third-party fixtures instead of
+   silently treating that filter as passed.
+4. Keep preview resolution, directory-card/navigation, and join proof in their
+   separate residual packets.
+5. Review the docs-only diff for accidental product, `main`, `#39`, V-BURN,
+   unrelated-vertical, fallback, selector, or `dual_backend` changes.
 
 ## 8. Acceptance statement
 
@@ -410,11 +401,13 @@ resolution, card projection/navigation, join mutation, V-BURN, or PR `#39`.
   absent, and the source guard proves their absence;
 - focused automated checks and the authenticated proof pass, with any missing
   third-party fixture explicitly recorded rather than silently waived;
-- no `product.rs` file change, second Matrix client, SDK selector, raw Matrix
-  HTTP, token, credential, or unbounded room payload is introduced; and
+- no additional broad `product.rs` change, second Matrix client, SDK selector,
+  raw Matrix HTTP, token, credential, or unbounded room payload is introduced;
+  and
 - the residual ledger still names `V-ROOMS.R-EXPLORE-PREVIEW`,
   `V-ROOMS.R-DIRECTORY-CARD`, and `V-ROOMS.R-JOIN-PROOF` as separate work.
 
-This statement applies only to `V-ROOMS.R-DIRECTORY`. It must not be used to
-claim the entire Explore residual, V-BURN, or PR `#39` complete, and it never
-authorizes a merge to `main`.
+The #461 merge is therefore a **first-slice landed** status, not this final
+acceptance statement. This statement applies only to `V-ROOMS.R-DIRECTORY`.
+It must not be used to claim the entire Explore residual, V-BURN, or PR `#39`
+complete, and it never authorizes a merge to `main`.

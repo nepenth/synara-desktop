@@ -8,6 +8,7 @@
 | Policy           | Full vertical: UI → Tauri IPC → live Matrix Rust SDK; one owner per capability |
 | Desktop fallback | **Fail closed** when native Matrix IPC is unavailable                          |
 | Dual backend     | **Forbidden**                                                                  |
+| V-BURN           | **HOLD** — no preparation or completion claim                                  |
 
 This is the residual map for the desktop `/explore/` route, server-scoped public
 room discovery, featured-room previews, and the public-room join path. It does
@@ -75,7 +76,7 @@ the sole mutation owner.
 
 ## Proposed directory contract
 
-The first slice should carry product-owned DTOs, not SDK or Ruma object graphs:
+The landed first slice carries product-owned DTOs, not SDK or Ruma object graphs:
 
 ```text
 DirectorySearchRequest {
@@ -137,6 +138,8 @@ are implementation evidence, not a substitute for authenticated product proof:
 
 - No further product implementation or `product.rs` change is made by this
   inventory; #461's merged implementation is recorded, not changed here.
+- No claim that focused automated checks substitute for authenticated live
+  directory proof or independent acceptance.
 - No raw Matrix HTTP retention in the eventual native slice.
 - No claim that #461's merge closes live proof, independent acceptance, preview,
   card/navigation, or join proof.
