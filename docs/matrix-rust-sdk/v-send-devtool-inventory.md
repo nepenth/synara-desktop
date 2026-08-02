@@ -3,10 +3,12 @@
 | Field | Value |
 |-------|-------|
 | Status | **Docs-only inventory** — no product code changed |
-| Measured tip | `206d24f36fae8cd9cf6f061be887cb955df0842b` (`feature/matrix-rust-sdk-full-replacement`) |
+| Measured tip | `60141c8bb96c4f4be4578c367cbae116a2e81990` (`feature/matrix-rust-sdk-full-replacement`) |
 | Scope | `synara/src/app/features/common-settings/developer-tools/` and its SDK-bound hooks |
 | Residual | **V-SEND.R-DEVTOOL** |
-| Guard | Do not touch `main` or umbrella PR **#39** |
+| Gate | **Held** — V-TIMELINE.C3–C5 live proofs remain unconfirmed; this residual remains open |
+| Policy | Native desktop is fail-closed; `dual_backend=false` |
+| Guard | Draft PR may target `feature/matrix-rust-sdk-full-replacement` only; do not touch `main` or umbrella PR **#39** |
 
 ## Finding
 
