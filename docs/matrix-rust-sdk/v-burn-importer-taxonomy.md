@@ -3,7 +3,7 @@
 | Field                  | Value                                                                             |
 | ---------------------- | --------------------------------------------------------------------------------- |
 | Status                 | **Docs-only taxonomy**; no product code changed                                   |
-| Measured tip           | `27a854d8f72deb1a74be35705d54ce5af9ec90e6`                                        |
+| Measured tip           | `095dadb9a6c129a56cedd3e5d4346df4d3d702d4`                                        |
 | Base                   | `feature/matrix-rust-sdk-full-replacement`                                        |
 | Scope                  | Production `matrix-js-sdk` importers under `synara/src`                           |
 | Current importers      | **150**                                                                           |
@@ -38,7 +38,7 @@ Product #450 is merged in this base at `103a653f`; its native power/creator
 READ implementation is included in the current source inventory. The #458 and
 #461 slices are also present, accounting for the two-file ratchet from 152 to
 150. The docs-only #451/#452/#453/#456/#465/#469/#478 commits add no importer
-evidence.
+evidence. The intervening docs-only #489–#495 wave adds no importer evidence.
 
 ## Exhaustive primary path buckets
 
