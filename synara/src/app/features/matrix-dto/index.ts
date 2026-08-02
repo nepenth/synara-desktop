@@ -29,3 +29,4 @@ export * from './space';
 export * from './thread';
 export * from './widget';
 export * from './roomDirectory';
+export * from './roomJoinRule';
