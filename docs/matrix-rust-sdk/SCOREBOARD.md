@@ -3,8 +3,9 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `52953091` docs base on `feature/matrix-rust-sdk-full-replacement`; #405 product head `cd2d57b4` is the post-merge input |
+| Tip                                                    | `9fb341af` on `feature/matrix-rust-sdk-full-replacement`; #439 powers-bulk and #446 product-command fan-out are merged |
 | Production `matrix-js-sdk` import files (`synara/src`) | **152** (plan baseline was **220**)                      |
+| Product command layout                                  | **#446 merged** — domain `product_commands.rs` modules are available for parallel follow-on lanes |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
 
@@ -51,51 +52,51 @@ run passes the relevant checklist.
 | Room leave vertical             | **#364** `matrix_room_leave` + LeaveRoom/LeaveSpace native owner                                                                                                                                 |
 | Room create vertical            | **#372** `matrix_room_create` + native owner; CreateRoom/Space/Chat + `/startdm` fail-closed (imports **154→153**)                                                                               |
 | Room moderation writes          | **#375** native invite/kick/ban/unban/setPowerLevel writes; moderation write product vertical merged                                                                                             |
-| Members-read member surfaces    | **#395** `matrix_room_members_snapshot` + Members settings native fail-closed; **#405** wires drawer/lobby/mentions member snapshots (post-merge target); power-level/creator reads and powers-bulk writes remain residual |
+| Members-read member surfaces    | **#395** `matrix_room_members_snapshot` + Members settings native fail-closed; **#405 merged** wires drawer/lobby/mentions member snapshots; **#439 merged** adds native powers-bulk writes; power-level/creator reads remain residual |
 | /leave command                  | **#371** useCommands Leave → leaveRoomWithNativeOwner                                                                                                                                            |
 | Room join vertical              | **#369** `matrix_room_join` + native owner; all production `joinRoom` sites fail-closed (imports **155→154**)                                                                                    |
 | Composer GIF/upload fallbacks   | **#363** RoomInput GIF + msgContent thumbnail JS upload fallbacks deleted                                                                                                                        |
-| V-SEND.R-CALL-UPLOAD            | **#328** native upload; [CallWidgetDriver residual](v-send-call-widget-residual.md) · [media IPC implement packet](v-send-call-widget-media-implement-packet.md) |
+| V-SEND.R-CALL-UPLOAD            | **#328** native upload; **#362** native known rooms; **#407** native media config/download; inventoried CallWidget native desktop surfaces are closed ([residual](v-send-call-widget-residual.md)) |
+| Product lane protocol            | **#438 merged** docs-only single-owner protocol for `product.rs`; **#439 merged** powers-bulk; **#446 merged** domain command fan-out |
 | Composer thumbnail (msgContent) | **#325** video thumbnails via `uploadMediaNative` / `matrix_upload_media` fail-closed                                                                                                            |
 | V-SEND.R-DEVTOOL                | [Docs-only inventory](v-send-devtool-inventory.md) · [implementation gate](v-send-devtool-inventory.md#implementation-gate): JS client remains; start only after C3–C5 live proofs; low priority |
 | CI                              | Parallel Validate #284                                                                                                                                                                           |
 
-## In flight
+## Next module fan-out
 
-| PR     | What                                                                                           |
-| ------ | ---------------------------------------------------------------------------------------------- |
-| [#405](https://github.com/nepenth/synara-desktop/pull/405) | **Members drawer/lobby/mentions native member wiring** — **`ACCEPT`** at product head [`cd2d57b4`](https://github.com/nepenth/synara-desktop/commit/cd2d57b4); pending merge into this docs base. |
-| [#407](https://github.com/nepenth/synara-desktop/pull/407) | **CallWidget media config/download IPC** — **`ACCEPT_WITH_NITS`**; full-green proof at [`cd07f4fc`](https://github.com/nepenth/synara-desktop/commit/cd07f4fc), which is behind this tip; parent merge pending. |
+| Slice | Boundary |
+| ----- | -------- |
+| [Power-level READ](v-rooms-power-levels-implement-packet.md) | Next native slice: power-level/creator reads remain after #439 writes; module-scoped after #446 |
+| [Presence](v-presence-implement-packet.md) | Parallel module lane; no shared `product.rs` ownership required |
+| [Room directory](v-rooms-directory-implement-packet.md) | Parallel module lane; keep native ownership fail-closed and record deletion/import deltas |
+| Other domain slices | Parallel module fan-out is available; each implementation must stay within its owning module |
 
 ## Left (finish-line order)
 
-1. **Members/power — native full vertical.** Leave/join/create closed
+1. **Parallel module fan-out — power-level READ, presence, room directory, and other domain slices.**
+   **#439** powers-bulk writes and **#446** product-command fan-out are merged;
+   power-level/creator reads remain residual. Each follow-on lane is module-scoped;
+   do not reopen the shared `product.rs` chokepoint. See
+   [power-level READ](v-rooms-power-levels-implement-packet.md),
+   [presence](v-presence-implement-packet.md), and
+   [room directory](v-rooms-directory-implement-packet.md).
+2. **Members — native full vertical.** Leave/join/create closed
    (**#364/#369/#372**); `/leave` command **#371**; moderation writes
    invite/kick/ban/unban/setPowerLevel **#375 merged**; members-read first slice
-   **#395** (`matrix_room_members_snapshot` + Members settings native). The
-   post-#405 target closes Room/MembersDrawer/Lobby/UserMentionAutocomplete
-   member enumeration on native desktop; the residual after that merge is
-   power-level/creator reads plus powers-bulk writes (packet **#388**). **#405**
-   is **`ACCEPT`** at `cd2d57b4` and pending merge into this docs base. See
+   **#395** (`matrix_room_members_snapshot` + Members settings native). **#405**
+   is merged at this tip and closes Room/MembersDrawer/Lobby/UserMentionAutocomplete
+   member enumeration on native desktop. **#439** powers-bulk is also merged;
+   power-level/creator reads remain residual. See
    [read residual inventory](v-rooms-members-read-residual.md),
    [P4.6 members](p4.6-members.md) and [P4.3 membership](p4.3-membership-unread.md).
-2. **V-TIMELINE.C3–C5 — live proofs.** All three remain **Not confirmed**
+3. **V-TIMELINE.C3–C5 — live proofs.** All three remain **Not confirmed**
    (C3 blocked without Docker Synapse harness in agent env). Operator index:
    [C3](v-timeline-c3-stream-verify.md),
    [C4](v-timeline-c4-media-render-verify.md),
    [C5](v-timeline-c5-pins-notes-jump-verify.md).
-3. **V-SEND.R-DEVTOOL — native full vertical.** Inventory remains; implement
+4. **V-SEND.R-DEVTOOL — native full vertical.** Inventory remains; implement
    after C3–C5 live or explicit reorder. See
    [implementation gate](v-send-devtool-inventory.md#implementation-gate).
-4. **CallWidget media config/download IPC** (**#407 `ACCEPT_WITH_NITS`**).
-   The full-green proof is at [`cd07f4fc`](https://github.com/nepenth/synara-desktop/commit/cd07f4fc),
-   but that commit is behind this tip and its parent merge is pending. At this
-   base tip, **#362** closed `getKnownRooms` natively and fail-closed the rest;
-   **#387** docs scan of media download reuse landed. The native
-   `getMediaConfig` / `downloadFile` owners are therefore not yet present in
-   this tip. Implement packet frozen:
-   [v-send-call-widget-media-implement-packet.md](v-send-call-widget-media-implement-packet.md).
-   See [CallWidget residual](v-send-call-widget-residual.md).
 5. **V-BURN.1 — no live `createClient`/`startClient` on desktop.** Not
    complete. See [V-BURN gates](d0-residual-completion.md) and
    [blockers](v-burn-readiness-snapshot.md).
