@@ -97,6 +97,21 @@ fn status_msg_cap() {
 }
 
 #[test]
+fn timestamp_must_be_safe_for_ipc() {
+    let mut idx = PresenceIndex::new(1);
+    let err = idx
+        .set(
+            "@a:example.org",
+            PresenceState::Online,
+            false,
+            Some(MAX_PRESENCE_TIMESTAMP_MS + 1),
+            None,
+        )
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p4.7-last-active-ts-invalid");
+}
+
+#[test]
 fn user_cap_enforced() {
     let mut idx = PresenceIndex::new(1);
     for i in 0..MAX_PRESENCE_USERS {
