@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |          149 |                2 |                   3 |
+| production |          147 |                2 |                   3 |
 | test       |           10 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |      **162** |                  |                     |
+| **total**  |      **160** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |   149 |
+| Production import files |   147 |
 | Test import files       |    10 |
-| Total import files      |   159 |
+| Total import files      |   157 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 149)
+- Production match: **no** (found 147)
 - Test match: **no** (found 10)
 
 ### Production files by bucket (desktop runtime only)
@@ -49,7 +49,7 @@ Expected **220** production and **12** test import files.
 | client-lifecycle |     2 |
 | component        |    21 |
 | feature          |    53 |
-| hook             |    42 |
+| hook             |    40 |
 | media-boundary   |     1 |
 | page             |     7 |
 | plugin           |     7 |
@@ -59,13 +59,13 @@ Expected **220** production and **12** test import files.
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 149. Files with any finding: 151.
+Scope: **production only**. Import files: 147. Files with any finding: 149.
 
 ### Imported modules
 
 | Module path                                           | Import sites | Files |
 | ----------------------------------------------------- | -----------: | ----: |
-| `matrix-js-sdk`                                       |          143 |   143 |
+| `matrix-js-sdk`                                       |          141 |   141 |
 | `matrix-js-sdk/lib/types`                             |            9 |     9 |
 | `matrix-js-sdk/lib/matrixrtc/CallMembership`          |            4 |     4 |
 | `matrix-js-sdk/lib/models/relations`                  |            4 |     4 |
@@ -89,10 +89,10 @@ Scope: **production only**. Import files: 149. Files with any finding: 151.
 | `MatrixEvent`               |      27 |    23 |         4 |    27 |
 | `MatrixError`               |      21 |    21 |         0 |    21 |
 | `JoinRule`                  |      17 |    17 |         0 |    17 |
-| `RoomMember`                |       9 |     9 |         0 |     9 |
 | `ClientEvent`               |       8 |     8 |         0 |     8 |
 | `RoomEvent`                 |       8 |     8 |         0 |     8 |
 | `EventType`                 |       7 |     7 |         0 |     7 |
+| `RoomMember`                |       7 |     7 |         0 |     7 |
 | `Direction`                 |       6 |     6 |         0 |     6 |
 | `IContent`                  |       6 |     4 |         2 |     6 |
 | `IPushRules`                |       6 |     6 |         0 |     6 |
@@ -138,7 +138,7 @@ Scope: **production only**. Import files: 149. Files with any finding: 151.
 | `MatrixEvent`          |    27 |                 27 |
 | `Relations`            |     4 |                  4 |
 | `Room`                 |    72 |                 72 |
-| `RoomMember`           |     9 |                  9 |
+| `RoomMember`           |     7 |                  7 |
 | `RoomState`            |     2 |                  2 |
 | `createClient`         |     1 |                  1 |
 
@@ -490,9 +490,7 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `synara/src/app/hooks/useLocalRoomSummary.ts`                                                                                 | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/hooks/useMatrixClient.ts`                                                                                     | production | yes     | hook             | static       | `matrix-js-sdk/lib/client`                                                                                                                                                |
 | `synara/src/app/hooks/useMemberEventParser.tsx`                                                                               | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/hooks/useMemberFilter.ts`                                                                                     | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/hooks/useMemberPowerTag.ts`                                                                                   | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/hooks/useMemberSort.ts`                                                                                       | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/hooks/useMembership.ts`                                                                                       | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/hooks/useNotificationMode.ts`                                                                                 | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/hooks/usePowerLevelTags.ts`                                                                                   | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
