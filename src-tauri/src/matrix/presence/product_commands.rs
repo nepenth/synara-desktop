@@ -50,7 +50,48 @@ pub(super) fn map_presence_error(diagnostic_id: &'static str) -> MatrixAuthComma
             "The native Matrix presence request is invalid.",
         ),
         "v-presence-user-owner-missing" => ("Forbidden", "No native Matrix session is active."),
+        "v-presence-session-not-live" => (
+            "Forbidden",
+            "The native Matrix presence session is no longer live.",
+        ),
+        "v-presence-stale-session-generation" => (
+            "StaleSessionGeneration",
+            "The native Matrix presence session changed.",
+        ),
         _ => ("Unknown", "Native Matrix presence is unavailable."),
     };
     MatrixAuthCommandError::new(code, message, diagnostic_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lifecycle_and_failure_diagnostics_use_privacy_safe_categories() {
+        let cases = [
+            ("v-presence-invalid-user-id", "InvalidRequest"),
+            ("v-presence-invalid-subscription-id", "InvalidRequest"),
+            ("v-presence-user-owner-missing", "Forbidden"),
+            ("v-presence-session-not-live", "Forbidden"),
+            (
+                "v-presence-stale-session-generation",
+                "StaleSessionGeneration",
+            ),
+            ("v-presence-store-read-failed", "Unknown"),
+            ("v-presence-event-deserialize-failed", "Unknown"),
+            ("v-presence-state-unsupported", "Unknown"),
+            ("p4.7-status-msg-cap", "Unknown"),
+            ("p4.7-last-active-ts-invalid", "Unknown"),
+        ];
+
+        for (diagnostic_id, expected_code) in cases {
+            let error = map_presence_error(diagnostic_id);
+            assert_eq!(error.code, expected_code);
+            assert_eq!(error.diagnostic_id, diagnostic_id);
+            assert!(!error.message.contains("@"));
+            assert!(!error.message.contains("status"));
+            assert!(!error.message.contains("token"));
+        }
+    }
 }

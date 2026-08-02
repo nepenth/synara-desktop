@@ -17,6 +17,10 @@ pub const MAX_PRESENCE_USERS: usize = 512;
 /// Soft cap on optional status message length (chars).
 pub const MAX_STATUS_MSG_CHARS: usize = 256;
 
+/// Largest millisecond timestamp that can cross the IPC boundary without
+/// losing integer precision in JavaScript.
+pub const MAX_PRESENCE_TIMESTAMP_MS: u64 = 9_007_199_254_740_991;
+
 /// Matrix-aligned presence availability (product projection).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PresenceState {
@@ -95,6 +99,15 @@ impl PresenceIndex {
         Ok(())
     }
 
+    fn validate_last_active_ts(last_active_ts: Option<u64>) -> Result<(), PresenceError> {
+        if last_active_ts.is_some_and(|timestamp| timestamp > MAX_PRESENCE_TIMESTAMP_MS) {
+            return Err(PresenceError::Invalid {
+                diagnostic_id: "p4.7-last-active-ts-invalid",
+            });
+        }
+        Ok(())
+    }
+
     /// Upsert presence for a user. Returns the stored snapshot.
     pub fn set(
         &mut self,
@@ -107,6 +120,7 @@ impl PresenceIndex {
         let user_id = user_id.into().trim().to_owned();
         Self::validate_user(&user_id)?;
         Self::validate_status_msg(&status_msg)?;
+        Self::validate_last_active_ts(last_active_ts)?;
         if !self.by_user.contains_key(&user_id) && self.by_user.len() >= MAX_PRESENCE_USERS {
             return Err(PresenceError::Invalid {
                 diagnostic_id: "p4.7-presence-user-cap",

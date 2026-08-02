@@ -14,7 +14,8 @@ pub mod live;
 
 pub use error::PresenceError;
 pub use index::{
-    PresenceIndex, PresenceSnapshot, PresenceState, MAX_PRESENCE_USERS, MAX_STATUS_MSG_CHARS,
+    PresenceIndex, PresenceSnapshot, PresenceState, MAX_PRESENCE_TIMESTAMP_MS, MAX_PRESENCE_USERS,
+    MAX_STATUS_MSG_CHARS,
 };
 pub use live::{
     NativePresenceOwner, NativePresenceSnapshot, NativePresenceSnapshotResult, NativePresenceState,
