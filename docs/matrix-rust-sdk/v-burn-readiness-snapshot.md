@@ -8,7 +8,7 @@
 | ----------------------- | -------------------------------------------------------------------------------- |
 | Readiness               | **Not ready**                                                                    |
 | Runtime proof           | **Not confirmed**                                                                |
-| Source tip              | `5d1fc28b3efbc494b4362ce2af65ca5f4c22eaff`                                       |
+| Source tip              | `9fb341af8032f1f5186345a92b12e77715c0ce95`                                       |
 | Base                    | `feature/matrix-rust-sdk-full-replacement` only                                  |
 | Scope                   | Docs only; no product code or cutover state change                               |
 | `dual_backend`          | **Forbidden**; this snapshot does not enable or claim it                         |
@@ -16,6 +16,7 @@
 | Prettier                | `2.8.1`                                                                          |
 | Production import files | **152** under `synara/src/`                                                      |
 | P1.6 allowlist entries  | **152**                                                                          |
+| Post-#446 state         | Behavior-preserving `product.rs` extract/split landed; no V-BURN start or readiness claim |
 | V-BURN                  | **HOLD** — not started; do not claim ready                                       |
 | #39 / `main`            | **Gated** — do not merge                                                         |
 
@@ -38,6 +39,11 @@ These facts alone prevent a zero-live-client or zero-import V-BURN conclusion.
 The allowlist is inventory policy during migration; it is not evidence that the
 remaining importers are acceptable at final convergence.
 
+The pinned tip includes #446's behavior-preserving `product.rs` extract/split.
+That structural product-lane work does not remove the live JS client, the npm
+dependency, or the 152 production import files, and it does not start V-BURN.
+This docs-only snapshot does not edit `product.rs` or claim burn readiness.
+
 ## Residual Left at the tip
 
 1. **Pack read `get*` helpers — V-BURN-gated.** Delete the remaining JS read
@@ -56,7 +62,7 @@ remaining importers are acceptable at final convergence.
 The current residual queue is summarized in [`SCOREBOARD.md`](SCOREBOARD.md).
 Its tip field is intentionally not changed by this snapshot; the source
 evidence above is pinned explicitly to
-`5d1fc28b3efbc494b4362ce2af65ca5f4c22eaff`.
+`9fb341af8032f1f5186345a92b12e77715c0ce95`.
 
 ## Bottom line
 
