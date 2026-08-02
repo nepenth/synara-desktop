@@ -3,7 +3,7 @@
 | Field            | Value                                                                          |
 | ---------------- | ------------------------------------------------------------------------------ |
 | Status           | **Inventory only** — no product implementation in this document                |
-| Measured tip     | `8330c56bbb74b45ef01ad1f8be137b54caa2f568`                                     |
+| Measured tip     | `206d24f36fae8cd9cf6f061be887cb955df0842b`                                     |
 | Base             | `feature/matrix-rust-sdk-full-replacement`                                     |
 | Policy           | Full vertical: UI → Tauri IPC → live Matrix Rust SDK; one owner per capability |
 | Desktop fallback | **Fail closed** when native Matrix IPC is unavailable                          |
@@ -12,6 +12,11 @@
 This is the residual map for the desktop `/explore/` route, server-scoped public
 room discovery, featured-room previews, and the public-room join path. It does
 not claim V-BURN completion, a cutover, or live authenticated proof.
+
+> **Parallel WIP note at `206d24f3`.** #446 extracted the product command
+> ownership boundary. The public-room directory product vertical is WIP in a
+> parallel module lane; this residual remains open and does not count packet
+> extraction as product wiring, JS-owner deletion, proof, or acceptance.
 
 ## Current ownership
 
