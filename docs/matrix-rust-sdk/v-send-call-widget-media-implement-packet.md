@@ -4,7 +4,8 @@
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | Status   | **Implemented by #407** — this docs-only update records the merged media IPC vertical and does not change product code               |
 | Residual | **V-SEND.R-CALL-UPLOAD** media-config/download closed by #407; [residual record](v-send-call-widget-residual.md)                  |
-| Base tip | `206d24f3` on `feature/matrix-rust-sdk-full-replacement`                                                                               |
+| Measured tip | `103a653f` on `feature/matrix-rust-sdk-full-replacement`                                                                           |
+| #407 delivery tip | `206d24f3` on `feature/matrix-rust-sdk-full-replacement`                                                                       |
 | PR shape | Focused **draft docs-only** truth-up targeting `feature/matrix-rust-sdk-full-replacement`                                              |
 | Policy   | [full-vertical-policy.md](full-vertical-policy.md): native UI → Tauri IPC → live `matrix-sdk`, physical JS-owner deletion, fail-closed |
 | Guard    | Never `main`, umbrella **#39**, or V-BURN/#327; `dual_backend` is forbidden; #407 is merged and this update changes docs only         |
@@ -67,8 +68,9 @@ full MatrixRTC/CallWidget parity or V-BURN readiness.
 
 Before product implementation started, #407 verified:
 
-1. The implementation landed at the approved integration tip now recorded as
-   `206d24f3`.
+1. The implementation was present at the approved #407 delivery tip
+   `206d24f3`; this docs-only record is revalidated at measured tip
+   `103a653f`.
 2. The PR target is `feature/matrix-rust-sdk-full-replacement`, never `main` or #39.
 3. The managed native session exposes one live `matrix-sdk` client for the
    current session; no second Matrix client or selector is introduced.
