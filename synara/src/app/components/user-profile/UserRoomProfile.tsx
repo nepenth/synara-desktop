@@ -8,7 +8,7 @@ import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { useRoom } from '../../hooks/useRoom';
-import { useUserPresence } from '../../hooks/useUserPresence';
+import { useNativeUserPresence } from '../../features/matrix-presence/nativePresence';
 import { IgnoredUserAlert, MutualRoomsChip, OptionsChip, ServerChip, ShareChip } from './UserChips';
 import { useCloseUserRoomProfile } from '../../state/hooks/userRoomProfile';
 import { PowerChip } from './PowerChip';
@@ -60,7 +60,7 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
     ? resolveMatrixThumbnailUrl(mx, avatarMxc, 96, { useAuthentication })
     : undefined;
 
-  const presence = useUserPresence(userId);
+  const presence = useNativeUserPresence(userId);
 
   const handleMessage = () => {
     closeUserRoomProfile();

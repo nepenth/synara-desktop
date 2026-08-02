@@ -12,7 +12,7 @@ import {
 } from 'folds';
 import React, { ReactNode, useId } from 'react';
 import * as css from './styles.css';
-import { Presence, usePresenceLabel } from '../../hooks/useUserPresence';
+import { Presence, usePresenceLabel } from '../../features/matrix-presence/nativePresence';
 
 const PresenceToColor: Record<Presence, MainColor> = {
   [Presence.Online]: 'Success',

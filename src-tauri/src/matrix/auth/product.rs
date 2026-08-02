@@ -93,6 +93,7 @@ use crate::matrix::lifecycle::{
     clear_session_material, persist_session_after_login, restore_session_from_vault,
     restore_session_onto_client, KeyringSessionMaterialVault, SessionMaterial,
 };
+use crate::matrix::presence::NativePresenceOwner;
 use crate::matrix::room_keys::{
     live::{
         self as live_room_keys, NativeRoomKeyFileSelection, NativeRoomKeyTransferResult,
@@ -418,6 +419,7 @@ struct ManagedMatrixSession {
     _devices: NativeDeviceOwner,
     _image_packs: NativeImagePackOwner,
     typing: NativeTypingOwner,
+    presence: NativePresenceOwner,
     pending_device_deletion: Option<PendingDeviceDeletion>,
     next_device_delete_operation_id: u64,
     pending_cross_signing_auth_session: Option<String>,
@@ -635,6 +637,8 @@ mod devices;
 mod media;
 #[path = "../members/product_commands.rs"]
 mod members;
+#[path = "../presence/product_commands.rs"]
+mod presence;
 #[path = "../room_keys/product_commands.rs"]
 mod room_keys;
 #[path = "../room_list/product_commands.rs"]
@@ -667,6 +671,7 @@ pub use cross_signing::*;
 pub use devices::*;
 pub use media::*;
 pub use members::*;
+pub use presence::*;
 pub use room_keys::*;
 pub use room_list::*;
 pub use room_ops::*;
