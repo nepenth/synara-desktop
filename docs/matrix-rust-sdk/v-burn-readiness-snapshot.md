@@ -8,7 +8,7 @@
 | ----------------------- | -------------------------------------------------------------------------------- |
 | Readiness               | **Not ready**                                                                    |
 | Runtime proof           | **Not confirmed**                                                                |
-| Source tip              | `fd0dfbf464ea59351d2cca1b746ba9d3f00923e7`                                       |
+| Source tip              | `095dadb9a6c129a56cedd3e5d4346df4d3d702d4`                                       |
 | Base                    | `feature/matrix-rust-sdk-full-replacement` only                                  |
 | Scope                   | Docs only; no product code or cutover state change                               |
 | `dual_backend`          | **Forbidden**; this snapshot does not enable or claim it                         |
@@ -53,16 +53,18 @@ remaining importers are acceptable at final convergence.
 4. **V-BURN.1–3 final convergence — still left.** Keep #327 on HOLD and keep
    #39 gated. Do not set `active_slice=V-BURN`.
 
-The source tip includes the #461 native room-directory first slice and its
-measured importer ratchet (**151 → 150**). The post-#461 #465, #469, and #478
-commits are docs-only refreshes. This remains incremental product progress, not
-V-BURN convergence: the full room-directory vertical, focused proof, live
-proof, and acceptance remain open.
+The source tip retains the #461 native room-directory first slice and its
+measured importer ratchet (**151 → 150**). The post-#461 commits through this
+tip are docs-only residual/status refreshes, including the #481–#488 wave and
+the #489–#495 follow-up wave (with scoreboard #490); they add no product code
+or cutover state change. This remains incremental product progress, not V-BURN
+convergence: the full room-directory vertical, focused proof, live proof, and
+acceptance remain open.
 
 The current residual queue is summarized in [`SCOREBOARD.md`](SCOREBOARD.md).
-Its integration-tip field is `3980f0e0` as the documentation ledger tip; this
-snapshot pins source evidence at `fd0dfbf4`. The #465, #469, and #478 refreshes
-add no product code or cutover state change.
+This snapshot pins the current docs/integration evidence at `095dadb9` on
+`feature/matrix-rust-sdk-full-replacement`; the intervening refreshes remain
+docs-only.
 
 ## Bottom line
 
