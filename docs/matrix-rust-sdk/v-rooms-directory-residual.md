@@ -3,7 +3,7 @@
 | Field            | Value                                                                              |
 | ---------------- | ---------------------------------------------------------------------------------- |
 | Status           | **First directory slice merged (#461); docs-only residual inventory remains open** |
-| Measured tip     | Current integration tip `d3b7871f2af9aafed7770780b13720c5b376afab`                 |
+| Measured tip     | Current integration tip `cf79f9751c3c6073d80dc1738de51e75297bfe54`                 |
 | Product baseline | #461 first slice at `c1e9c3be2b8ff13da42853913b30493cb030e6ec`                     |
 | Base             | `feature/matrix-rust-sdk-full-replacement`                                         |
 | Policy           | Full vertical: UI → Tauri IPC → live Matrix Rust SDK; one owner per capability     |
@@ -16,7 +16,7 @@ not claim V-BURN completion, a cutover, or live authenticated proof.
 
 > **Tip-honesty note.** #461's first slice is merged at product baseline
 > `c1e9c3be`; this residual inventory is refreshed at integration tip
-> `d3b7871f`. The first slice lands the native public-room
+> `cf79f975`. The first slice lands the native public-room
 > browse/search/filter/pagination route, bounded protocol and page DTOs,
 > route-scoped JS-owner deletion, focused evidence, and green CI. Authenticated
 > live proof and independent acceptance remain **Not confirmed**; this residual
@@ -123,7 +123,7 @@ JS/native selector, or keeping a desktop JS fallback fails this slice.
 
 Implementation acceptance remains targeted because this document is not a
 V-BURN report. #461's first slice is merged at product baseline `c1e9c3be`, and
-this inventory is refreshed at integration tip `d3b7871f`; the checks and route
+this inventory is refreshed at integration tip `cf79f975`; the checks and route
 source guard are implementation evidence, not a substitute for authenticated
 product proof:
 
