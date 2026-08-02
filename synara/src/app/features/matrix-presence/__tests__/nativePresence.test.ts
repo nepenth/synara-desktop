@@ -28,6 +28,8 @@ function harness(
   options: {
     snapshotResult?: unknown;
     subscriptionResult?: unknown;
+    invokeFailure?: string;
+    listenFailure?: boolean;
   } = {}
 ): {
   dependencies: NativePresenceDependencies;
@@ -40,6 +42,7 @@ function harness(
   let unlistened = false;
   const invoke: NativePresenceInvoke = async (command, args) => {
     calls.push({ command, args });
+    if (options.invokeFailure === command) throw new Error('native failure');
     if (command === 'matrix_presence_snapshot') {
       return {
         available: true,
@@ -64,6 +67,7 @@ function harness(
     return { available: true, value: undefined };
   };
   const listen: NativePresenceListen = async (_event, nextHandler) => {
+    if (options.listenFailure) throw new Error('listener failure');
     handler = nextHandler as unknown as (event: ReturnType<typeof eventFor>) => void;
     return () => {
       unlistened = true;
@@ -190,19 +194,27 @@ test('unknown, unavailable, malformed, and failed native results show no badge',
   );
   assert.equal(unknownValues.at(-1), undefined);
 
-  const malformed = harness({
-    snapshotResult: {
-      status: 'ready',
-      sessionGeneration: 7,
-      userId,
-      snapshot: { ...snapshot, statusMsg: 'x'.repeat(257) },
-    },
-  });
-  const malformedValues: unknown[] = [];
-  await createNativePresenceSubscription(userId, malformed.dependencies, (value) =>
-    malformedValues.push(value)
-  );
-  assert.equal(malformedValues.at(-1), undefined);
+  for (const invalidSnapshot of [
+    { ...snapshot, statusMsg: 'x'.repeat(257) },
+    { ...snapshot, lastActiveTs: -1 },
+    { ...snapshot, lastActiveTs: Number.MAX_SAFE_INTEGER + 1 },
+    { ...snapshot, lastActiveTs: Number.NaN },
+    { ...snapshot, accessToken: 'secret' },
+  ]) {
+    const malformed = harness({
+      snapshotResult: {
+        status: 'ready',
+        sessionGeneration: 7,
+        userId,
+        snapshot: invalidSnapshot,
+      },
+    });
+    const malformedValues: unknown[] = [];
+    await createNativePresenceSubscription(userId, malformed.dependencies, (value) =>
+      malformedValues.push(value)
+    );
+    assert.equal(malformedValues.at(-1), undefined);
+  }
 
   const failedSubscription = harness({
     subscriptionResult: { subscriptionId: 'presence-7-0', userId, sessionGeneration: 8 },
@@ -212,6 +224,36 @@ test('unknown, unavailable, malformed, and failed native results show no badge',
     failedValues.push(value)
   );
   assert.equal(failedValues.at(-1), undefined);
+});
+
+test('missing desktop/native bridge, invoke failure, and listener failure stay native-only', async () => {
+  const unavailable = harness();
+  unavailable.dependencies.desktopAvailable = false;
+  const unavailableValues: unknown[] = [];
+  await createNativePresenceSubscription(userId, unavailable.dependencies, (value) =>
+    unavailableValues.push(value)
+  );
+  assert.equal(unavailableValues.at(-1), undefined);
+  assert.deepEqual(unavailable.calls, []);
+
+  const invalidUser = harness();
+  const invalidValues: unknown[] = [];
+  await createNativePresenceSubscription('alice', invalidUser.dependencies, (value) =>
+    invalidValues.push(value)
+  );
+  assert.equal(invalidValues.at(-1), undefined);
+  assert.deepEqual(invalidUser.calls, []);
+
+  for (const failed of [
+    harness({ invokeFailure: 'matrix_presence_snapshot' }),
+    harness({ listenFailure: true }),
+  ]) {
+    const values: unknown[] = [];
+    await createNativePresenceSubscription(userId, failed.dependencies, (value) =>
+      values.push(value)
+    );
+    assert.equal(values.at(-1), undefined);
+  }
 });
 
 test('an unavailable native update clears an existing badge', async () => {
@@ -248,6 +290,11 @@ test('dispose unsubscribes and late events cannot update the profile', async () 
     command: 'matrix_presence_unsubscribe',
     args: { subscriptionId: 'presence-7-0' },
   });
+  dispose();
+  assert.equal(
+    testHarness.calls.filter(({ command }) => command === 'matrix_presence_unsubscribe').length,
+    1
+  );
   testHarness.emit({
     subscriptionId: 'presence-7-0',
     userId,
@@ -269,5 +316,7 @@ test('profile presence path has no JavaScript Matrix presence owner', () => {
   assert.equal(source.includes('UserEvent'), false);
   assert.equal(source.includes('useUserPresence'), false);
   assert.equal(source.includes('presenceStatusMsg'), false);
+  assert.equal(source.includes('UserEvent.Presence'), false);
+  assert.equal(source.includes('getPresence'), false);
   assert.equal(source.includes('currentlyActive'), true);
 });
