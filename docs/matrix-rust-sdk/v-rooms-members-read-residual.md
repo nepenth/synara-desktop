@@ -6,7 +6,7 @@
 | Tip SHA | `206d24f3` (current docs tip; #446 product tip is `9fb341af`, #405 landed at `176fc7c5`, and #439 at `f92a33f9`)                                                           |
 | Base    | `feature/matrix-rust-sdk-full-replacement`                                                                                                                                  |
 | Policy  | [full-vertical-policy.md](full-vertical-policy.md) — physical deletion inside each owning slice                                                                             |
-| Follow-up | **Power-level/creator READ product in flight** — no native READ snapshot command or READ ownership is claimed at this tip; #446's command fan-out is the current module boundary |
+| Follow-up | **#450 power-level/creator READ product in flight** — product head `cb8806b0` is outside this docs base; no native READ snapshot command or READ ownership is claimed at this tip; #446's command fan-out is the current module boundary |
 | Related | **#375, #405, and #439 merged** (moderation, member-enumeration, and bulk power WRITE verticals), P4.6 members index, [p4.6-members.md](p4.6-members.md), [p4.3-membership-unread.md](p4.3-membership-unread.md) |
 
 > **Scope guard.** Docs only. No product code in any Rust command module or any
@@ -44,8 +44,9 @@ Landed on the product branch in merged **#439** at `f92a33f9`:
 
 The behavior-preserving **#446** product-command fan-out is merged at `9fb341af`.
 It changes the Rust ownership/layout boundary, not the READ completion bar.
-Power-level/creator READ product work is in flight after that handoff; this
-packet records no native READ command as landed.
+Power-level/creator READ product work is in flight as **#450** after that
+handoff; its product head is outside this docs base, so this packet records no
+native READ command as landed.
 
 Still residual on desktop native:
 
@@ -73,7 +74,7 @@ change closes the power-level/creator READ residual.
 | Members settings list | Native via #395; fail-closed | None for the native member snapshot |
 | Room/lobby people drawer | Native snapshot; fail-closed | Power-level/creator reads |
 | Mention autocomplete | Native snapshot; fail-closed | None for member enumeration |
-| Power tags, permission gates, and creator short-circuits | JS state reads; READ product in flight | **Power-level/creator READ residual** |
+| Power tags, permission gates, and creator short-circuits | JS state reads; **#450** READ product in flight | **Power-level/creator READ residual** |
 
 This is the current post-#405/#439/#446 truth: drawer/lobby/mention member
 reads are closed, bulk power/tag writes are landed, and command ownership is
@@ -162,7 +163,7 @@ list. None of these native paths may fall through to
 
 ### Remaining native read commands
 
-The in-flight READ product slice must expose these reads over IPC and remove the
+The in-flight **#450 READ** product slice must expose these reads over IPC and remove the
 JS read owners from the native desktop route. No command below is present or
 claimed landed at `206d24f3`:
 
@@ -223,7 +224,7 @@ required.
 | **Typing members read**                                              | Native (typing stream) — not a residual                                             |
 | **Room membership / unread**                                         | [p4.3-membership-unread.md](p4.3-membership-unread.md) — separate                   |
 | **P4.6 member index**                                                | [p4.6-members.md](p4.6-members.md) — pure index over DTOs; no SDK member APIs       |
-| Product input                                                        | **#405 merged** at `176fc7c5`; drawer/lobby/mentions member wiring is landed. **#439** bulk powers/tag WRITE is merged at `f92a33f9`; **#446** command fan-out is merged at `9fb341af`. Power/creator READ product work is in flight and not included here. |
+| Product input                                                        | **#405 merged** at `176fc7c5`; drawer/lobby/mentions member wiring is landed. **#439** bulk powers/tag WRITE is merged at `f92a33f9`; **#446** command fan-out is merged at `9fb341af`. **#450** power/creator READ product work is in flight at head `cb8806b0` and is not included here. |
 | Product changes in this PR                                           | None; this packet is docs-only, based at `206d24f3`, and does not edit product command modules |
 | Umbrella merge to `main`                                             | **#39** — needs explicit user approval                                              |
 | Cutover / dual-backend removal                                       | #240 HOLD; no cutover                                                               |
