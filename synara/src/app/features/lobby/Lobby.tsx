@@ -421,7 +421,7 @@ export function Lobby() {
         <Page>
           <LobbyHeader
             showProfile={!onTop}
-            powerLevels={roomsPowerLevels.get(space.roomId) ?? {}}
+            powerLevels={spacePowerLevels}
           />
           <Box style={{ position: 'relative' }} grow="Yes">
             <Scroll ref={scrollRef} hideTrack visibility="Hover">

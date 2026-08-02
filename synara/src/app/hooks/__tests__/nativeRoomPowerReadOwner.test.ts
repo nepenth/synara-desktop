@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   readRoomPowerLevelsWithNativeOwner,
@@ -28,6 +29,24 @@ test('native power loading is explicitly fail-closed, including creator bypasses
   assert.equal(permissions.action('invite', '@alice:example.org'), false);
   assert.equal(permissions.notificationAction('room', '@alice:example.org'), false);
   assert.deepEqual(NATIVE_UNAVAILABLE_POWER_LEVELS, { nativeUnavailable: true });
+});
+
+test('lobby header keeps native power loading fail-closed', () => {
+  const source = readFileSync('src/app/features/lobby/Lobby.tsx', 'utf8');
+
+  assert.match(source, /<LobbyHeader\s+showProfile=\{!onTop\}\s+powerLevels=\{spacePowerLevels\}/);
+  assert.doesNotMatch(source, /roomsPowerLevels\.get\(space\.roomId\)\s*\?\?\s*\{\}/);
+});
+
+test('power-level tags never read the JS state-event backend on native sessions', () => {
+  const source = readFileSync('src/app/hooks/usePowerLevelTags.ts', 'utf8');
+
+  assert.match(source, /const nativeSession = isNativeMatrixSession\(\);/);
+  assert.match(source, /useStateEvent\(room, StateEvent\.PowerLevelTags, '', !nativeSession\)/);
+  assert.match(
+    source,
+    /const content = nativeSession \? undefined : tagsEvent\?\.getContent<PowerLevelTags>\(\)/
+  );
 });
 
 test('native power-level read owner validates the session and exact snapshot contract', async () => {

@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { IPowerLevels } from './usePowerLevels';
 import { useStateEvent } from './useStateEvent';
 import { MemberPowerTag, StateEvent } from '../../types/matrix/room';
+import { isNativeMatrixSession } from '../features/verification/nativeVerification';
 
 export type PowerLevelTags = Record<number, MemberPowerTag>;
 
@@ -88,10 +89,11 @@ const generateFallbackTag = (powerLevelTags: PowerLevelTags, power: number): Mem
 };
 
 export const usePowerLevelTags = (room: Room, powerLevels: IPowerLevels): PowerLevelTags => {
-  const tagsEvent = useStateEvent(room, StateEvent.PowerLevelTags);
+  const nativeSession = isNativeMatrixSession();
+  const tagsEvent = useStateEvent(room, StateEvent.PowerLevelTags, '', !nativeSession);
 
   const powerLevelTags: PowerLevelTags = useMemo(() => {
-    const content = tagsEvent?.getContent<PowerLevelTags>();
+    const content = nativeSession ? undefined : tagsEvent?.getContent<PowerLevelTags>();
     const powerToTags: PowerLevelTags = { ...content };
 
     const powers = getUsedPowers(powerLevels);
@@ -102,7 +104,7 @@ export const usePowerLevelTags = (room: Room, powerLevels: IPowerLevels): PowerL
     });
 
     return powerToTags;
-  }, [powerLevels, tagsEvent]);
+  }, [nativeSession, powerLevels, tagsEvent]);
 
   return powerLevelTags;
 };
