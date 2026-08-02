@@ -3,7 +3,7 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `9fb341af` on `feature/matrix-rust-sdk-full-replacement`; #439 powers-bulk and #446 product-command fan-out are merged |
+| Tip                                                    | `206d24f3` on `feature/matrix-rust-sdk-full-replacement`; #439 powers-bulk and #446 product-command fan-out are merged |
 | Production `matrix-js-sdk` import files (`synara/src`) | **152** (plan baseline was **220**)                      |
 | Product command layout                                  | **#446 merged** — domain `product_commands.rs` modules are available for parallel follow-on lanes |
 | Dual backend                                           | **false** (forbidden)                                    |
@@ -58,27 +58,28 @@ run passes the relevant checklist.
 | Composer GIF/upload fallbacks   | **#363** RoomInput GIF + msgContent thumbnail JS upload fallbacks deleted                                                                                                                        |
 | V-SEND.R-CALL-UPLOAD            | **#328** native upload; **#362** native known rooms; **#407** native media config/download; inventoried CallWidget native desktop surfaces are closed ([residual](v-send-call-widget-residual.md)) |
 | Product lane protocol            | **#438 merged** docs-only single-owner protocol for `product.rs`; **#439 merged** powers-bulk; **#446 merged** domain command fan-out |
+| Presence product vertical        | **WIP** — parallel module-scoped implementation in flight; packet, JS-owner deletion, focused proof, and acceptance remain open |
+| Room directory product vertical  | **WIP** — parallel module-scoped implementation in flight; packet, JS-owner deletion, focused proof, and acceptance remain open |
 | Composer thumbnail (msgContent) | **#325** video thumbnails via `uploadMediaNative` / `matrix_upload_media` fail-closed                                                                                                            |
 | V-SEND.R-DEVTOOL                | [Docs-only inventory](v-send-devtool-inventory.md) · [implementation gate](v-send-devtool-inventory.md#implementation-gate): JS client remains; start only after C3–C5 live proofs; low priority |
 | CI                              | Parallel Validate #284                                                                                                                                                                           |
 
-## Next module fan-out
+## In flight — parallel product verticals
 
-| Slice | Boundary |
-| ----- | -------- |
-| [Power-level READ](v-rooms-power-levels-implement-packet.md) | Next native slice: power-level/creator reads remain after #439 writes; module-scoped after #446 |
-| [Presence](v-presence-implement-packet.md) | Parallel module lane; no shared `product.rs` ownership required |
-| [Room directory](v-rooms-directory-implement-packet.md) | Parallel module lane; keep native ownership fail-closed and record deletion/import deltas |
-| Other domain slices | Parallel module fan-out is available; each implementation must stay within its owning module |
+| Slice | Status / boundary |
+| ----- | ----------------- |
+| [Presence](v-presence-implement-packet.md) | **WIP in parallel**; module-owned; no shared `product.rs` ownership required; not product-done |
+| [Room directory](v-rooms-directory-implement-packet.md) | **WIP in parallel**; module-owned; no shared `product.rs` ownership required; not product-done |
+| [Power-level READ](v-rooms-power-levels-implement-packet.md) | Next module lane: power-level/creator reads remain after #439 writes |
+| Other domain slices | Parallel fan-out is available; each implementation must stay within its owning module |
 
 ## Left (finish-line order)
 
-1. **Parallel module fan-out — power-level READ, presence, room directory, and other domain slices.**
-   **#439** powers-bulk writes and **#446** product-command fan-out are merged;
-   power-level/creator reads remain residual. Each follow-on lane is module-scoped;
-   do not reopen the shared `product.rs` chokepoint. See
-   [power-level READ](v-rooms-power-levels-implement-packet.md),
-   [presence](v-presence-implement-packet.md), and
+1. **Presence + room directory — WIP in parallel.** **#446** product-command
+   fan-out is merged, but neither product vertical is complete. Native wiring,
+   superseded JS-owner deletion, focused evidence, live proof, and acceptance
+   remain open; do not treat packet extraction as product completion. See
+   [presence](v-presence-implement-packet.md) and
    [room directory](v-rooms-directory-implement-packet.md).
 2. **Members — native full vertical.** Leave/join/create closed
    (**#364/#369/#372**); `/leave` command **#371**; moderation writes

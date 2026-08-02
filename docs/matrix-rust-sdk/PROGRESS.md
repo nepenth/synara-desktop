@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**                                                                                                                       |
-| Integration tip    | `9fb341af` — #405 members wiring, #407 CallWidget media, #438 product-lane protocol, #439 powers-bulk, and #446 product-command fan-out are merged at this tip |
-| Active work        | **Next parallel module fan-out:** power-level READ, presence, room directory, and other domain slices are now available after #446; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
+| Integration tip    | `206d24f3` — #405 members wiring, #407 CallWidget media, #438 product-lane protocol, #439 powers-bulk, and #446 product-command fan-out are merged at this tip |
+| Active work        | **Presence + room directory product verticals are WIP in parallel** after #446; no product-done claim; power-level READ remains next; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
 | Import accounting  | Desktop production import files **152** on tip (plan baseline was 220). Allowlist **152** (ratcheted after #395 Members.tsx drop).       |
@@ -33,9 +33,9 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `9fb341af`** includes merged #405 members wiring, #407 CallWidget media config/download, #438 product-lane protocol, #439 powers-bulk, and #446 product-command fan-out. Next: parallel power-level READ, presence, room-directory, and other module-scoped slices. Imports remain 152; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
-| **Tip**        | `9fb341af`                                                                                                                                                                                                                             |
-| **Active PRs** | This focused docs-only draft updates the scoreboard/progress boundary at `9fb341af`; it claims no product code. Next implementation lanes are module-scoped after #446. |
+| **Now**        | **Tip `206d24f3`** includes the merged #446 product-command extraction. Presence and room-directory product verticals are **WIP in parallel**; neither is product-done or accepted. Imports remain 152; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
+| **Tip**        | `206d24f3`                                                                                                                                                                                                                             |
+| **Active PRs** | This focused docs-only refresh records the parallel WIP boundary after #446; it changes no product code and claims no presence or directory completion. |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
 ---
@@ -60,6 +60,16 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — tip `206d24f3` — presence/directory WIP after #446 extraction
+
+| When (UTC) | Item                              | Result                   | Notes                                                                                                                                                                      |
+| ---------- | --------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**               | **This docs-only draft** | Based at `206d24f3`; #446 product-command fan-out is merged. `main` and #39 remain out of scope.                                                                         |
+| current    | **Presence product vertical**     | **WIP in parallel**      | Implementation agent is in flight; packet, product wiring, JS-owner deletion, focused proof, live proof, and acceptance remain open.                                      |
+| current    | **Room directory vertical**       | **WIP in parallel**      | Implementation agent is in flight; packet, product wiring, JS-owner deletion, focused proof, live proof, and acceptance remain open.                                      |
+| current    | **Serial/parallel boundary**      | **Parallel**             | #446 removes the shared `product.rs` fan-out chokepoint for these module-owned slices; no packet or extraction is a product-done claim.                                    |
+| current    | **Proof / burn gates**             | **Held**                 | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden.                                                                                      |
 
 ### 2026-08-01 — tip `9fb341af` — #439/#446 merged; parallel module fan-out next
 
