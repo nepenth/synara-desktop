@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Status | **Docs-only inventory** — no product code changed |
-| Measured tip | `60141c8bb96c4f4be4578c367cbae116a2e81990` (`feature/matrix-rust-sdk-full-replacement`) |
+| Measured tip | `27a854d8f72deb1a74be35705d54ce5af9ec90e6` (`feature/matrix-rust-sdk-full-replacement`) |
 | Scope | `synara/src/app/features/common-settings/developer-tools/` and its SDK-bound hooks |
 | Residual | **V-SEND.R-DEVTOOL** |
 | Gate | **Held** — V-TIMELINE.C3–C5 live proofs remain unconfirmed; this residual remains open |
