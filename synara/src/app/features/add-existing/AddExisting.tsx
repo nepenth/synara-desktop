@@ -131,8 +131,10 @@ export function AddExistingModal({ parentId, space, requestClose }: AddExistingM
   const [applyState, applyChanges] = useAsyncCallback<undefined, Error, [Room[]]>(
     useCallback(
       async (selectedRooms) => {
-        await rateLimitedActions(selectedRooms, async (room) => {
-          const via = getViaServers(room);
+        const roomsWithVia = await Promise.all(
+          selectedRooms.map(async (room) => ({ room, via: await getViaServers(room) }))
+        );
+        await rateLimitedActions(roomsWithVia, async ({ room, via }) => {
           await setSpaceChild(parentId, room.roomId, {
             suggested: false,
             via,

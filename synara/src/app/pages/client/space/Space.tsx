@@ -119,9 +119,9 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
     requestClose();
   };
 
-  const handleCopyLink = () => {
+  const handleCopyLink = async () => {
     const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, room.roomId);
-    const viaServers = isRoomAlias(roomIdOrAlias) ? undefined : getViaServers(room);
+    const viaServers = isRoomAlias(roomIdOrAlias) ? undefined : await getViaServers(room);
     copyToClipboard(getMatrixToRoom(roomIdOrAlias, viaServers));
     requestClose();
   };
@@ -314,9 +314,10 @@ export function SpaceTombstone({ roomId, replacementRoomId }: SpaceTombstoneProp
   const { navigateSpace } = useRoomNavigate();
 
   const [joinState, handleJoin] = useAsyncCallback(
-    useCallback(() => {
+    useCallback(async () => {
       const currentRoom = mx.getRoom(roomId);
-      const via = currentRoom ? getViaServers(currentRoom) : [];
+      if (!currentRoom) throw new Error('Source room is unavailable.');
+      const via = await getViaServers(currentRoom);
       return joinRoomWithNativeOwner(
         replacementRoomId,
         via,

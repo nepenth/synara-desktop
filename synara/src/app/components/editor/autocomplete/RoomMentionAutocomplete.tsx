@@ -19,7 +19,7 @@ import { factoryRoomIdByActivity } from '../../../utils/sort';
 import { RoomAvatar, RoomIcon } from '../../room-avatar';
 import { getViaServers } from '../../../plugins/via-servers';
 
-type MentionAutoCompleteHandler = (roomAliasOrId: string, name: string) => void;
+type MentionAutoCompleteHandler = (roomAliasOrId: string, name: string) => void | Promise<void>;
 
 const roomAliasFromQueryText = (mx: MatrixClient, text: string) =>
   isRoomAlias(`#${text}`)
@@ -103,9 +103,9 @@ export function RoomMentionAutocomplete({
     else resetSearch();
   }, [query.text, search, resetSearch]);
 
-  const handleAutocomplete: MentionAutoCompleteHandler = (roomAliasOrId, name) => {
+  const handleAutocomplete: MentionAutoCompleteHandler = async (roomAliasOrId, name) => {
     const mentionRoom = mx.getRoom(roomAliasOrId);
-    const viaServers = mentionRoom ? getViaServers(mentionRoom) : undefined;
+    const viaServers = mentionRoom ? await getViaServers(mentionRoom) : undefined;
     const mentionEl = createMentionElement(
       roomAliasOrId,
       name.startsWith('#') ? name : `#${name}`,
