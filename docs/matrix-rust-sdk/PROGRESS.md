@@ -13,13 +13,13 @@
 
 | Field              | Value                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| Last updated (UTC) | **2026-08-01**                                                                                                                       |
-| Integration tip    | `206d24f3` — #405 members wiring, #407 CallWidget media, #438 product-lane protocol, #439 powers-bulk, and #446 product-command fan-out are merged at this tip |
-| Active work        | **Presence + room directory product verticals are WIP in parallel** after #446; no product-done claim; power-level READ remains next; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
+| Last updated (UTC) | **2026-08-02**                                                                                                                       |
+| Integration tip    | `d82e043d` — #405 members wiring, #407 CallWidget media, #438 product-lane protocol, #439 powers-bulk, #446 product-command fan-out, #450 native power/creator READs, and the #458 native presence first slice are merged at this tip |
+| Active work        | **#458 is MERGED for the first presence slice, but the full presence vertical remains open; room directory #461 remains WIP in parallel at rebased head `d9389862`**; no presence or directory product-done claim; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
-| Import accounting  | Desktop production import files **152** on tip (plan baseline was 220). Allowlist **152** (ratcheted after #395 Members.tsx drop).       |
-| Product lane        | **#446 merged** — domain `product_commands.rs` fan-out; this docs-only draft does not touch `product.rs` |
+| Import accounting  | Desktop production import files **151** on tip (plan baseline was 220). Allowlist **151** (ratcheted after the #458 presence owner removal).       |
+| Product lane        | **#446, #450, and #458 merged** — domain command fan-out, native power/creator READs, and the first native presence slice are at the tip; this docs-only refresh does not touch `product.rs` |
 | Dual backend       | **`false`** (forbidden forever)                                                                                                      |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                             |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                 |
@@ -33,9 +33,9 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `206d24f3`** includes the merged #446 product-command extraction. Presence and room-directory product verticals are **WIP in parallel**; neither is product-done or accepted. Imports remain 152; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
-| **Tip**        | `206d24f3`                                                                                                                                                                                                                             |
-| **Active PRs** | This focused docs-only refresh records the parallel WIP boundary after #446; it changes no product code and claims no presence or directory completion. |
+| **Now**        | **Tip `d82e043d`** includes the merged #458 native presence first slice on top of #450 and #446. The full presence vertical and room-directory #461 remain **open/WIP**; #461 is rebased at **`d9389862`** and is not merged or accepted. Neither vertical is product-done. Imports are 151; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
+| **Tip**        | `d82e043d`                                                                                                                                                                                                                             |
+| **Active PRs** | [Room directory #461](https://github.com/nepenth/synara-desktop/pull/461) remains open/WIP at rebased head **`d9389862`**; native wiring, focused proof, live proof, and acceptance remain open. This focused docs-only refresh records the #458 first-slice boundary and changes no product code or completion status. |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
 ---
@@ -60,6 +60,17 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-02 — tip `d82e043d` — #458 first slice MERGED; #461 rebased and remains WIP
+
+| When (UTC) | Item                           | Result                              | Notes                                                                                                                                                                                                                                  |
+| ---------- | ------------------------------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**             | **This docs-only draft**            | Based at `d82e043d`; #458 native presence first-slice work is merged on top of #450 and the #446 command fan-out. `main` and #39 remain out of scope.                                                                                 |
+| current    | **Presence product vertical**   | **First slice merged #458 / WIP**   | The native presence snapshot/subscribe path and current profile consumers are landed, but the full vertical's remaining scope, focused proof, live proof, and acceptance are not claimed complete.                                  |
+| current    | **Room directory vertical**     | **Open #461 / WIP — rebased**      | Parallel module-scoped work remains open at rebased head `d9389862`; native wiring, JS-owner deletion, focused proof, live proof, and acceptance are not claimed complete.                                                               |
+| current    | **Power/creator READ**          | **Merged #450**                     | Native room power-level and creator snapshot owners plus fail-closed native-session wiring are present at the integration tip.                                                                                                          |
+| current    | **Import accounting**           | **151**                             | The integration tip reports 151 production `matrix-js-sdk` import files and 151 allowlist entries; #458 removes the former `useUserPresence.ts` importer.                                                                            |
+| current    | **Proof / burn gates**           | **Held**                            | C3–C5 remain **Not confirmed**; R-DEVTOOL remains **gated**; V-BURN remains **HOLD**; `dual_backend` is **false/forbidden** and `#39`/`main` remain out of scope.                                                                    |
 
 ### 2026-08-01 — tip `206d24f3` — presence/directory WIP after #446 extraction
 
