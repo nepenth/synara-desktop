@@ -2,22 +2,22 @@
 
 | Field    | Value                                                                                                                   |
 | -------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Status   | **Native room-list reuse + fail-closed media boundary at the base tip; #407 media IPC in flight with Synapse proof `cd07f4fc`; not merged/complete** |
-| Base tip | `1c9653b2` on `feature/matrix-rust-sdk-full-replacement`                                                                |
+| Status   | **Native room-list + native media boundary at the base tip; #407 media config/download is merged; this inventoried residual is closed** |
+| Base tip | `206d24f3` on `feature/matrix-rust-sdk-full-replacement`                                                                |
 | Scope    | `CallWidgetDriver` upload, media-config, media-download, and known-room methods                                         |
-| Guard    | Never touch `main` or umbrella PR **#39**; `dual_backend` is forbidden; **#327 remains HOLD and V-BURN is not started** |
+| Guard    | Never touch `main` or umbrella PR **#39**; `dual_backend` is forbidden; **V-BURN remains HOLD and is not started** |
 
-> **#407 status: in flight.** The CallWidget media IPC implementation remains
-> open. Its implementation branch includes [`cd07f4fc`](https://github.com/nepenth/synara-desktop/commit/cd07f4fc),
-> `test(matrix): prove CallWidget media against Synapse`, as media proof
-> evidence. That commit is not a merge or completion claim for **#407**; this
-> residual remains anchored to the base tip above and makes no V-BURN claim.
+> **#407 is merged at this tip.** The merged product slice adds the native
+> `matrix_call_media_config` and `matrix_media_download` commands, the typed
+> CallWidget media owner, source-absence guards, contract tests, and the gated
+> authenticated Synapse proof. The merge closes this document's
+> media-config/download residual; it does not claim full MatrixRTC/CallWidget
+> parity or start V-BURN.
 
-> **Implement packet.** The frozen IPC contract, JS-owner deletion list,
-> fail-closed rules, and test plan for the media config/download vertical live
-> in [v-send-call-widget-media-implement-packet.md](v-send-call-widget-media-implement-packet.md).
-> This residual records the inventory and the #387 reuse scan; the packet is the
-> handoff for the next product vertical after members-read (**#395**).
+> **Implementation record.** The frozen IPC contract, JS-owner deletion list,
+> fail-closed rules, and test evidence for the merged media config/download
+> vertical remain in [v-send-call-widget-media-implement-packet.md](v-send-call-widget-media-implement-packet.md).
+> This residual records the final inventory and the #387 reuse scan.
 
 ## Finding
 
@@ -28,27 +28,27 @@ widget bodies, unavailable native commands, and invalid native responses are
 terminal; the `client.uploadContent` callback is not selected on that native
 path.
 
-The remaining widget surfaces now have one of two explicit native outcomes:
+The remaining widget surfaces now have explicit native outcomes:
 `getKnownRooms` reads the latest native room-list snapshot already maintained by
-the desktop state binder, while media config/download fail closed because this
-tip has no native command for either capability. No SDK room-list, media-config,
-MXC URL, or HTTP-download fallback remains reachable from the desktop widget
-driver. This document now records the proposed native media contract and its
-implementation sequence; it does not wire that contract at this tip. This does
-not claim full call/widget cutover or start a burn slice.
+the desktop state binder, and media config/download use the dedicated #407
+native commands. No SDK room-list, media-config, MXC URL, or HTTP-download
+fallback remains reachable from the desktop widget driver on the native desktop
+path. This document records the delivered native media contract and its
+boundaries; it does not claim full call/widget cutover or start a burn slice.
 
 ## CallWidgetDriver inventory
 
 | Source                        | Production operation                                                  | Native desktop status                                                                                                           | Residual decision                                                           |
 | ----------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `CallWidgetDriver.ts:315-317` | `getMediaConfig()`                                                    | **Fail-closed**; no native call-widget media-config command is present in this tip                                              | Implement `matrix_call_media_config`; no JS fallback on native desktop      |
+| `CallWidgetDriver.ts:316-320` | `getMediaConfig()`                                                    | **Native-owned and fail-closed**; invokes `matrix_call_media_config` through the typed native media owner                           | Media-config owner closed by **#407**; no JS fallback on native desktop      |
 | `CallWidgetDriver.ts:319-327` | `uploadFile(file)` delegates to `uploadCallWidgetFileWithNativeOwner` | **Native-first and fail-closed** for a logged-in native session; uses `matrix_upload_media`                                     | Upload owner closed by **#328**; legacy callback remains for non-native use |
-| `CallWidgetDriver.ts:330-333` | `downloadFile(contentUri)`                                            | **Fail-closed**; no native call-widget media-download command is present in this tip                                            | Implement `matrix_media_download`; no JS fallback on native desktop         |
+| `CallWidgetDriver.ts:333-337` | `downloadFile(contentUri)`                                            | **Native-owned and fail-closed**; invokes `matrix_media_download` and returns validated `Uint8Array` bytes                       | Media-download owner closed by **#407**; no JS fallback on native desktop     |
 | `CallWidgetDriver.ts`         | `getKnownRooms()`                                                     | **Native snapshot-backed**; uses the cached `matrix_room_list_snapshot` readback and returns `[]` until a valid snapshot exists | Room-list owner is native; no SDK visible-room fallback                     |
 
-The media methods remain explicit blocked surfaces until the serial product
-slice lands. The room method is wired to the native snapshot owner. This slice
-does not claim full call/widget cutover or start a burn slice.
+All four inventoried surfaces now have an explicit native desktop owner. Native
+failures remain terminal and the non-native web upload callback remains outside
+this native desktop residual. This does not claim full call/widget cutover or
+start a burn slice.
 
 ## Native route evidence
 
@@ -73,17 +73,38 @@ useBindAllRoomsAtom
   → CallWidgetDriver.getKnownRooms
 ```
 
-`getMediaConfig` and `downloadFile` intentionally stop at the widget driver
-with a terminal native-capability error. The native media module at this tip is
-metadata-only queue scaffolding and exposes no production media-config or
-download command. The existing `matrix_upload_media` command is an upload
-owner, not a reusable config/download owner. Therefore this slice adds no
-speculative `product.rs` command.
+The #407 media routes are:
+
+```text
+CallWidgetDriver.getMediaConfig
+  → getMediaConfigWithNativeOwner
+  → matrix_session_snapshot
+  → matrix_call_media_config
+  → live Matrix SDK client
+  → Client::load_or_fetch_max_upload_size
+  → {"m.upload.size": number}
+
+CallWidgetDriver.downloadFile(contentUri)
+  → downloadFileWithNativeOwner
+  → matrix_session_snapshot
+  → matrix_media_download
+  → live Matrix SDK client
+  → Client::media().get_media_content(MediaFormat::File)
+  → {bytes: number[]}
+  → Uint8Array
+```
+
+The native media queue remains metadata-only scaffolding for other product
+surfaces; #407 deliberately uses dedicated product commands. The existing
+`matrix_upload_media` command remains an upload owner, not a reusable
+config/download owner.
 
 Relevant source evidence at the measured tip:
 
-- `synara/src/app/plugins/call/CallWidgetDriver.ts:317-325` selects the
-  native owner before the legacy callback.
+- `synara/src/app/plugins/call/CallWidgetDriver.ts:316-337` selects the
+  native owners for config/download; upload remains separately owned.
+- `synara/src/app/plugins/call/nativeCallWidgetMediaOwner.ts` validates the
+  native session, exact commands, response shapes, and `Uint8Array` conversion.
 - `synara/src/app/plugins/call/nativeCallMediaUploadOwner.ts:49-71` rejects
   unsupported bodies and keeps native failures terminal.
 - `synara/src/app/state/nativeMediaUploadOwner.ts:45-58` invokes
@@ -109,23 +130,23 @@ native timeline protocol; neither is a compatible CallWidget download owner.
 
 The compatible reuse is therefore limited to the native session/SDK ownership
 and the SDK `Client::media().get_media_content(...)` primitive already selected
-by #378. The CallWidget path still needs its dedicated
-`matrix_media_download` command, with bounded `mxc://` input and direct byte
-response. No JS `mxcUrlToHttp`, browser `fetch`, `synara-media` URL, P7.2 queue,
-or upload-command fallback is part of that route.
+by #378; #407 supplies the dedicated `matrix_media_download` command, with
+bounded `mxc://` input and direct byte response. No JS `mxcUrlToHttp`, browser
+`fetch`, `synara-media` URL, P7.2 queue, or upload-command fallback is part of
+that route.
 
-## Native media IPC implementation plan
+## Native media IPC delivery record
 
-### Contract decision
+### Delivered contract
 
-Add two dedicated Tauri commands in the serial product slice:
+The serial product slice delivered two dedicated Tauri commands:
 
 | Command                    | Request                  | Successful response           | Native SDK operation                     |
 | -------------------------- | ------------------------ | ----------------------------- | ---------------------------------------- |
 | `matrix_call_media_config` | no fields                | `{ "m.upload.size": number }` | `client.load_or_fetch_max_upload_size()` |
 | `matrix_media_download`    | `{ contentUri: string }` | `{ bytes: number[] }`         | `client.media().get_media_content(...)`  |
 
-The scan above confirms that no existing media IPC is suitable for direct
+The scan above confirmed that no existing media IPC was suitable for direct
 CallWidget download reuse. `matrix_upload_media` returns an upload `mxc` and
 has upload-specific validation. The `synara-media` protocol serves
 timeline-owned opaque handles, while `src-tauri/src/matrix/media` and P7.2
@@ -134,9 +155,9 @@ byte-returning command. The versioned JSON IPC envelopes and domain DTOs also
 remain metadata-only. These two commands are narrow product commands, not new
 stream topics.
 
-### Command behavior
+### Delivered command behavior
 
-`matrix_call_media_config` should:
+`matrix_call_media_config`:
 
 1. Require the live logged-in session from `MatrixAuthState`; logged-out,
    missing, or retired sessions return the existing structured native error.
@@ -148,7 +169,7 @@ stream topics.
    truncating it.
 4. Return only the config value; never return a token, URL, or SDK response.
 
-`matrix_media_download` should:
+`matrix_media_download`:
 
 1. Require the same live session and validate that `contentUri` is a bounded,
    valid `mxc://` URI. Reject `https://`, `data:`, `javascript:`, query-string
@@ -159,8 +180,8 @@ stream topics.
 3. Call `client.media().get_media_content(&request, true).await`, allowing the
    native SDK media cache to serve an already available file.
 4. Enforce an explicit response-byte ceiling before serializing the result.
-   Start with the existing 32 MiB attachment IPC ceiling as the policy target,
-   subject to #375's product-boundary review; never silently truncate.
+   Use the existing 32 MiB attachment IPC ceiling as the product boundary;
+   never silently truncate.
 5. Return `{ bytes }` through this direct Tauri command only. The bytes must
    not enter a versioned JSON envelope, persistent DTO, diagnostic, or log.
    Errors contain stable diagnostic IDs only and never echo the URI or secrets.
@@ -171,7 +192,7 @@ uses a plain MXC source. Extending this to encrypted-event media would require
 an explicit Widget API request contract for the encryption metadata; it must
 not be inferred from an untrusted string.
 
-### Full-vertical route when #375 opens the product slice
+### Delivered full-vertical route in #407
 
 ```text
 CallWidgetDriver.getMediaConfig
@@ -192,45 +213,44 @@ CallWidgetDriver.downloadFile(contentUri)
   → {file: Uint8Array}
 ```
 
-The TypeScript part must land in the same product slice as the Rust commands:
+The TypeScript and Rust parts landed in the same #407 product slice:
 
-- Add a small native owner helper (alongside the existing call-widget owner)
-  that invokes exactly these command names, checks `available`, validates the
-  response shape, and converts `bytes` to `Uint8Array`.
-- Rewire `CallWidgetDriver.getMediaConfig` and `downloadFile` to that helper
-  for the native desktop route. Native command absence, error, malformed
-  response, logout, and stale session state remain terminal; none may select
-  `this.mx.getMediaConfig`, `mxcUrlToHttp`, `downloadMedia`, or `fetch`.
-- Delete the two current fail-closed method stubs and the generic
-  `throwNativeCallWidgetCapabilityUnavailable` helper if no other caller
-  remains, in the same change that proves the replacement route.
-- Add focused tests for config success, download success, unavailable command,
-  malformed config/bytes, invalid MXC rejection, and the no-fallback invariant.
+- `nativeCallWidgetMediaOwner.ts` invokes exactly these command names, checks
+  `available`, validates response shapes, and converts `bytes` to `Uint8Array`.
+- `CallWidgetDriver.getMediaConfig` and `downloadFile` use that owner on the
+  native desktop route. Command absence, errors, malformed responses, logout,
+  and stale session state remain terminal; none select `this.mx.getMediaConfig`,
+  `mxcUrlToHttp`, `downloadMedia`, or `fetch`.
+- The two fail-closed method stubs and the unused generic
+  `throwNativeCallWidgetCapabilityUnavailable` helper were removed.
+- Focused tests cover config/download success, unavailable commands, malformed
+  config/bytes, invalid MXC rejection, and the no-fallback invariant.
 
-The Rust half belongs to `src-tauri/src/matrix/auth/product.rs` and command
-registration/permissions owned by **#375**. This docs slice intentionally does
-not edit `product.rs`, `src-tauri/src/lib.rs`, generated permissions, or add
-TypeScript stubs for commands that are not registered yet.
+The Rust command implementations now live in the module-scoped
+`src-tauri/src/matrix/widgets/product_commands.rs`, with shared product types
+and re-exports in `src-tauri/src/matrix/auth/product.rs`; they are registered
+and permissioned in the merged #407 slice. This docs truth-up does not edit
+those product files.
 
 ### Acceptance and boundaries
 
-- The UI-to-Tauri-to-live-`matrix_sdk::Client` route is exercised for both
-  methods before either fail-closed stub is removed.
+- The UI-to-Tauri-to-live-`matrix_sdk::Client` route is implemented for both
+  methods and covered by the merged focused/live-proof test paths.
 - Native failures remain terminal on desktop; no `dual_backend` flag or JS
   network fallback is introduced.
 - Config returns the widget API's exact `m.upload.size` key, and download
   returns original bytes with a hard size limit and no byte logging.
 - Focused Rust/TypeScript tests cover validation, session retirement, command
   availability, response validation, and the no-fallback invariant.
-- No V-BURN claim is made. `#327` remains HOLD and V-BURN remains not started.
+- No V-BURN claim is made. V-BURN remains HOLD and not started.
 
 ## SCOREBOARD cross-link
 
-`V-SEND.R-CALL-UPLOAD` remains closed for the **upload owner** by #328. The
-media-config/download methods are blocked native capabilities, not evidence
-that upload is still JS-backed. The scoreboard row links here so the
-distinction between upload closure and the remaining widget boundary stays
-explicit.
+`V-SEND.R-CALL-UPLOAD` is closed for the inventoried native desktop surfaces:
+the upload owner by #328, room-list owner by #362, and media config/download
+owners by #407. The scoreboard row links here so the separate legacy web upload
+callback and broader CallWidget/MatrixRTC parity are not mistaken for a native
+desktop residual.
 
 ## Verification
 
@@ -244,6 +264,6 @@ rg -n -i 'mx\.download(Media|File)|downloadMedia|downloadMatrixMedia|mxcUrlToHtt
 ```
 
 The scan found no `mx.downloadMedia`/`mx.downloadFile` call and no CallWidget
-path to the existing HTTP/Blob helpers. No Rust product command, dual-backend
-flag, V-BURN state, or #327 state was changed; this remains a docs-only
-alignment with #378.
+path to the existing HTTP/Blob helpers. #407 supplies the dedicated Rust
+product commands and native owner; this docs truth-up changes no product code,
+dual-backend flag, or V-BURN state.
