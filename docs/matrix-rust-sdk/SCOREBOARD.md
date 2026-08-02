@@ -3,7 +3,7 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `9fb341af` on `feature/matrix-rust-sdk-full-replacement`; #439 powers-bulk and #446 product-command fan-out are merged |
+| Tip                                                    | `206d24f3` on `feature/matrix-rust-sdk-full-replacement`; #448 scoreboard/progress honesty is landed; #439 powers-bulk and #446 product-command fan-out are merged |
 | Production `matrix-js-sdk` import files (`synara/src`) | **152** (plan baseline was **220**)                      |
 | Product command layout                                  | **#446 merged** — domain `product_commands.rs` modules are available for parallel follow-on lanes |
 | Dual backend                                           | **false** (forbidden)                                    |
@@ -58,29 +58,36 @@ run passes the relevant checklist.
 | Composer GIF/upload fallbacks   | **#363** RoomInput GIF + msgContent thumbnail JS upload fallbacks deleted                                                                                                                        |
 | V-SEND.R-CALL-UPLOAD            | **#328** native upload; **#362** native known rooms; **#407** native media config/download; inventoried CallWidget native desktop surfaces are closed ([residual](v-send-call-widget-residual.md)) |
 | Product lane protocol            | **#438 merged** docs-only single-owner protocol for `product.rs`; **#439 merged** powers-bulk; **#446 merged** domain command fan-out |
+| Power-level READ                 | **Draft #450** ([PR #450](https://github.com/nepenth/synara-desktop/pull/450), head `cb8806b0`) — in flight off tip; not merged or credited as complete |
+| Presence product vertical        | **WIP / stalled not confirmed** — packet-level work is recorded, but no current product PR is evidenced; native wiring, JS-owner deletion, proof, and acceptance remain open |
+| Room directory product vertical  | **WIP / stalled not confirmed** — packet-level work is recorded, but no current product PR is evidenced; native wiring, JS-owner deletion, proof, and acceptance remain open |
 | Composer thumbnail (msgContent) | **#325** video thumbnails via `uploadMediaNative` / `matrix_upload_media` fail-closed                                                                                                            |
 | V-SEND.R-DEVTOOL                | [Docs-only inventory](v-send-devtool-inventory.md) · [implementation gate](v-send-devtool-inventory.md#implementation-gate): JS client remains; start only after C3–C5 live proofs; low priority |
 | CI                              | Parallel Validate #284                                                                                                                                                                           |
 
-## Next module fan-out
+## Active / stalled module work
 
-| Slice | Boundary |
-| ----- | -------- |
-| [Power-level READ](v-rooms-power-levels-implement-packet.md) | Next native slice: power-level/creator reads remain after #439 writes; module-scoped after #446 |
-| [Presence](v-presence-implement-packet.md) | Parallel module lane; no shared `product.rs` ownership required |
-| [Room directory](v-rooms-directory-implement-packet.md) | Parallel module lane; keep native ownership fail-closed and record deletion/import deltas |
-| Other domain slices | Parallel module fan-out is available; each implementation must stay within its owning module |
+| Slice | Status / boundary |
+| ----- | ----------------- |
+| [Power-level READ](v-rooms-power-levels-implement-packet.md) | **Draft #450 in flight**; head `cb8806b0` is off-tip with merge base `9fb341af`, so the product PR is not merged into `206d24f3`; module-scoped after #446 |
+| [Presence](v-presence-implement-packet.md) | **WIP / stalled not confirmed**; no current product PR is evidenced; keep native ownership fail-closed and do not claim completion |
+| [Room directory](v-rooms-directory-implement-packet.md) | **WIP / stalled not confirmed**; no current product PR is evidenced; keep native ownership fail-closed and do not claim completion |
+| Other domain slices | Parallel fan-out remains available; each implementation must stay within its owning module |
 
 ## Left (finish-line order)
 
-1. **Parallel module fan-out — power-level READ, presence, room directory, and other domain slices.**
-   **#439** powers-bulk writes and **#446** product-command fan-out are merged;
-   power-level/creator reads remain residual. Each follow-on lane is module-scoped;
-   do not reopen the shared `product.rs` chokepoint. See
-   [power-level READ](v-rooms-power-levels-implement-packet.md),
-   [presence](v-presence-implement-packet.md), and
+1. **Power-level READ — draft #450 in flight, not merged.** **#439**
+   powers-bulk writes and **#446** product-command fan-out are merged;
+   power-level/creator reads remain residual until #450 lands and is accepted.
+   Keep the lane module-scoped; do not reopen the shared `product.rs`
+   chokepoint. See [power-level READ](v-rooms-power-levels-implement-packet.md).
+2. **Presence + room directory — WIP / stalled not confirmed.** Packet-level
+   work is recorded, but no current product PR is evidenced. Native wiring,
+   superseded JS-owner deletion, focused evidence, live proof, and acceptance
+   remain open; do not treat packet work as product completion. See
+   [presence](v-presence-implement-packet.md) and
    [room directory](v-rooms-directory-implement-packet.md).
-2. **Members — native full vertical.** Leave/join/create closed
+3. **Members — native full vertical.** Leave/join/create closed
    (**#364/#369/#372**); `/leave` command **#371**; moderation writes
    invite/kick/ban/unban/setPowerLevel **#375 merged**; members-read first slice
    **#395** (`matrix_room_members_snapshot` + Members settings native). **#405**
@@ -89,20 +96,20 @@ run passes the relevant checklist.
    power-level/creator reads remain residual. See
    [read residual inventory](v-rooms-members-read-residual.md),
    [P4.6 members](p4.6-members.md) and [P4.3 membership](p4.3-membership-unread.md).
-3. **V-TIMELINE.C3–C5 — live proofs.** All three remain **Not confirmed**
+4. **V-TIMELINE.C3–C5 — live proofs.** All three remain **Not confirmed**
    (C3 blocked without Docker Synapse harness in agent env). Operator index:
    [C3](v-timeline-c3-stream-verify.md),
    [C4](v-timeline-c4-media-render-verify.md),
    [C5](v-timeline-c5-pins-notes-jump-verify.md).
-4. **V-SEND.R-DEVTOOL — native full vertical.** Inventory remains; implement
+5. **V-SEND.R-DEVTOOL — native full vertical.** Inventory remains; implement
    after C3–C5 live or explicit reorder. See
    [implementation gate](v-send-devtool-inventory.md#implementation-gate).
-5. **V-BURN.1 — no live `createClient`/`startClient` on desktop.** Not
+6. **V-BURN.1 — no live `createClient`/`startClient` on desktop.** Not
    complete. See [V-BURN gates](d0-residual-completion.md) and
    [blockers](v-burn-readiness-snapshot.md).
-6. **V-BURN.2 — zero production importers.** Current production importers
+7. **V-BURN.2 — zero production importers.** Current production importers
    **152**. See [taxonomy](v-burn-importer-taxonomy.md).
-7. **V-BURN.3 — drop npm and obsolete JS bootstrap/store code.** After
+8. **V-BURN.3 — drop npm and obsolete JS bootstrap/store code.** After
    V-BURN.1/.2. See the
    [V-BURN completion gates](d0-residual-completion.md) and [blocker snapshot](v-burn-readiness-snapshot.md).
 

@@ -14,12 +14,12 @@
 | Field              | Value                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**                                                                                                                       |
-| Integration tip    | `9fb341af` — #405 members wiring, #407 CallWidget media, #438 product-lane protocol, #439 powers-bulk, and #446 product-command fan-out are merged at this tip |
-| Active work        | **Next parallel module fan-out:** power-level READ, presence, room directory, and other domain slices are now available after #446; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
+| Integration tip    | `206d24f3` — #448 scoreboard/progress honesty is landed on top of the #446 tip; #405 members wiring, #407 CallWidget media, #438 product-lane protocol, #439 powers-bulk, and #446 product-command fan-out are merged at this tip |
+| Active work        | **Power-level READ draft #450** is in flight off this tip and is not merged; presence and room-directory product WIP has no current product PR recorded and may be stalled; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
 | Import accounting  | Desktop production import files **152** on tip (plan baseline was 220). Allowlist **152** (ratcheted after #395 Members.tsx drop).       |
-| Product lane        | **#446 merged** — domain `product_commands.rs` fan-out; this docs-only draft does not touch `product.rs` |
+| Product lane        | **#446 merged; #448 landed** — domain `product_commands.rs` fan-out is on tip; this docs-only refresh does not touch `product.rs` or credit #450 product code |
 | Dual backend       | **`false`** (forbidden forever)                                                                                                      |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                             |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                 |
@@ -33,9 +33,9 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `9fb341af`** includes merged #405 members wiring, #407 CallWidget media config/download, #438 product-lane protocol, #439 powers-bulk, and #446 product-command fan-out. Next: parallel power-level READ, presence, room-directory, and other module-scoped slices. Imports remain 152; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
-| **Tip**        | `9fb341af`                                                                                                                                                                                                                             |
-| **Active PRs** | This focused docs-only draft updates the scoreboard/progress boundary at `9fb341af`; it claims no product code. Next implementation lanes are module-scoped after #446. |
+| **Now**        | **Tip `206d24f3`** includes landed #448 scoreboard/progress honesty on top of #446. Power-level READ is draft **#450** off-tip and not merged; presence/room-directory WIP has no current product PR recorded and may be stalled. Imports remain 152; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
+| **Tip**        | `206d24f3`                                                                                                                                                                                                                             |
+| **Active PRs** | [Power-level READ #450](https://github.com/nepenth/synara-desktop/pull/450) is a product draft at head `cb8806b0`, off-tip with merge base `9fb341af`, and not merged into `206d24f3`. Presence/directory have packet-level WIP only in the current record; this refresh claims no product code or vertical completion. |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
 ---
@@ -60,6 +60,16 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — tip `206d24f3` — #448 landed; #450 power-level READ draft in flight
+
+| When (UTC) | Item                          | Result                         | Notes                                                                                                                                                                                                                          |
+| ---------- | ----------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| current    | **Integration tip**           | **#448 landed**                | `206d24f3` is the current integration tip; #448 records scoreboard/progress honesty after #446. This refresh is docs-only and does not touch `product.rs` or any product code.                                  |
+| current    | **Power-level READ**           | **Draft #450 — not merged**    | Product head `cb8806b0` is off the integration tip. Credit native power/creator reads only after the product PR lands; no import or completion delta is credited here.                                             |
+| current    | **Presence + room directory** | **WIP / stalled not confirmed** | Packets and WIP references exist, but no current product PR is recorded. Treat native wiring, JS-owner deletion, focused proof, live proof, and acceptance as open until a product PR is evidenced.              |
+| current    | **Import accounting**          | **152**                        | The integration tip remains at 152 production `matrix-js-sdk` import files and 152 allowlist entries; the off-tip #450 draft does not change this tip accounting.                                          |
+| current    | **Proof / burn gates**          | **Held**                       | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden and `#39`/`main` remain out of scope.                                                                                      |
 
 ### 2026-08-01 — tip `9fb341af` — #439/#446 merged; parallel module fan-out next
 
