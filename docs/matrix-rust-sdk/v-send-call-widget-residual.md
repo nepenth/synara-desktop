@@ -3,9 +3,9 @@
 | Field    | Value                                                                                                                   |
 | -------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Status   | **Native room-list + native media boundary at the measured tip; #407 media config/download is merged; this inventoried residual is closed** |
-| Tip      | `27a854d8` on `feature/matrix-rust-sdk-full-replacement`                                                                |
+| Tip      | `095dadb9` on `feature/matrix-rust-sdk-full-replacement`                                                                |
 | Scope    | `CallWidgetDriver` upload, media-config, media-download, and known-room methods                                         |
-| Guard    | Never touch `main` or umbrella PR **#39**; `dual_backend` is forbidden; **V-BURN remains HOLD and is not started** |
+| Guard    | Never touch `main` or umbrella PR **#39**; `dual_backend` is forbidden and remains `false`; **V-BURN remains HOLD / Not ready and C3–C5 live proofs remain Not confirmed** |
 
 > **#407 is merged at this tip.** The merged product slice adds the native
 > `matrix_call_media_config` and `matrix_media_download` commands, the typed
@@ -14,11 +14,10 @@
 > media-config/download residual; it does not claim full MatrixRTC/CallWidget
 > parity or start V-BURN.
 
-> **Tip honesty.** This docs-only refresh updates the **#483** snapshot from its
-> `27a854d8` evidence anchor to measured tip `fd0dfbf4`. The CallWidget
-> implementation paths and focused evidence are unchanged; the post-#483
-> commits only update adjacent status documentation, so this update moves the
-> evidence anchor only.
+> **Tip honesty.** This docs-only refresh updates the prior CallWidget snapshot
+> to measured integration tip `095dadb9` after the #489–#495 documentation wave
+> and scoreboard #490. The CallWidget implementation paths and focused
+> evidence are unchanged; this update moves the evidence anchor only.
 
 > **Implementation record.** The frozen IPC contract, JS-owner deletion list,
 > fail-closed rules, and test evidence for the merged media config/download
@@ -274,7 +273,7 @@ path to the existing HTTP/Blob helpers. #407 supplies the dedicated Rust
 product commands and native owner; this docs truth-up changes no product code,
 dual-backend flag, or V-BURN state.
 
-The scan and source anchors above were revalidated at tip `fd0dfbf4`. No
-CallWidget implementation path changed between the #483 anchor `27a854d8`
-and this tip. The later status-documentation commits do not change the
+The scan and source anchors above were revalidated at tip `095dadb9`. No
+CallWidget implementation path changed between the prior snapshot and this
+tip. The #489–#495 documentation wave and scoreboard #490 do not change the
 CallWidget residual boundary.
