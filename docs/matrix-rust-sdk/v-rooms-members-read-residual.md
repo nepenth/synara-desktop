@@ -1,22 +1,27 @@
-# V-ROOMS.MEMBERS-READ — native member list / power-level read residual inventory
+# V-ROOMS.MEMBERS-READ — native member list / power-level/tag read residual inventory
 
 | Field   | Value                                                                                                                                                                       |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status  | **Active post-#405/#439/#446 READ residual** — #395/#405 close native member enumeration; #439 closes the separate bulk WRITE, #446 preserves the command split, while power-level/creator READs remain residual |
-| Tip SHA | `206d24f3` (current docs tip; #446 product tip is `9fb341af`, #405 landed at `176fc7c5`, and #439 at `f92a33f9`)                                                           |
+| Status  | **Active post-#405/#439/#446/#450/#458 READ residual** — #395/#405 close native member enumeration; #439 closes the separate bulk WRITE; #450 closes native power/creator owners, while custom tags and direct readers remain residual; #458 does not alter this boundary |
+| Tip SHA | `d82e043d` (post-#458 integration tip; #450 landed at `103a653f`, #446 at `9fb341af`, #405 at `176fc7c5`, and #439 at `f92a33f9`) |
 | Base    | `feature/matrix-rust-sdk-full-replacement`                                                                                                                                  |
 | Policy  | [full-vertical-policy.md](full-vertical-policy.md) — physical deletion inside each owning slice                                                                             |
-| Follow-up | **Power-level/creator READ product in flight** — no native READ snapshot command or READ ownership is claimed at this tip; #446's command fan-out is the current module boundary |
-| Related | **#375, #405, and #439 merged** (moderation, member-enumeration, and bulk power WRITE verticals), P4.6 members index, [p4.6-members.md](p4.6-members.md), [p4.3-membership-unread.md](p4.3-membership-unread.md) |
+| Follow-up | **Custom power-level tags + direct readers** — #450 owns native power/creator snapshots and migrated permission paths; `in.synara.room.power_level_tags`, `via-servers.ts`, and `utils/room.ts` direct reads remain explicitly open |
+| Related | **#375, #405, #439, #450, and #458 merged** (moderation, member-enumeration, bulk power WRITE, power/creator READ, and unrelated presence first-slice verticals), P4.6 members index, [p4.6-members.md](p4.6-members.md), [p4.3-membership-unread.md](p4.3-membership-unread.md) |
 
 > **Scope guard.** Docs only. No product code in any Rust command module or any
 > TS. The moderation-write vertical **#375 is already merged**; this inventory does not
 > change it. It also does not touch **#39** (umbrella) or any timeline/send
-> slice. This docs-only packet is based at `206d24f3`; #405 and #439 are already
-> merged, and #446's behavior-preserving product-command fan-out is present at
-> the product tip `9fb341af`. It does not modify product code or claim the
-> in-flight power-level/creator READ product landed. No cutover; `dual_backend=false`
-> and V-BURN remains **HOLD**.
+> slice. This docs-only packet is based at product tip `d82e043d`; #405 and #439
+> are already merged, #446's behavior-preserving product-command fan-out is
+> present at `9fb341af`, and **#450 is merged at `103a653f`** and owns
+> native power-level/creator snapshots for the migrated native paths. #458's
+> presence first slice is also in the base but does not change this residual.
+> The prior #465 head `3d7c5f42` was based at `103a653f` and conflicts in the
+> scoreboard when replayed onto `d82e043d`; this refresh records the current
+> draft tip honestly. It does not claim custom power-level-tag READ or direct
+> helper/plugin READ completion. #461 remains hot/open; hold merge. No cutover;
+> `dual_backend=false` and V-BURN remains **HOLD**.
 
 ---
 
@@ -39,18 +44,32 @@ Landed on the product branch in merged **#439** at `f92a33f9`:
 
 - Native bulk `m.room.power_levels` and `in.synara.room.power_level_tags`
   writes are owned by the native write slice
-- The WRITE completion does not provide native power-level, creator, or tag
-  READ snapshots; those remain this residual's dependency
+- The WRITE completion is separate from the READ ownership recorded below
 
 The behavior-preserving **#446** product-command fan-out is merged at `9fb341af`.
-It changes the Rust ownership/layout boundary, not the READ completion bar.
-Power-level/creator READ product work is in flight after that handoff; this
-packet records no native READ command as landed.
+It changes the Rust ownership/layout boundary. **#450** then lands at
+`103a653f` with native power-level and creator READ snapshots plus migrated
+native hook/permission ownership. The current integration tip `d82e043d`
+also contains the unrelated #458 presence first slice.
+
+Landed on the product branch in merged **#450** at `103a653f`:
+
+- `matrix_room_power_levels_snapshot` and `matrix_room_creators_snapshot` are
+  registered live-SDK commands with validated native owners
+- `usePowerLevels`, `useRoomsPowerLevels`, and `useRoomCreators` select those
+  owners on native sessions; native permission paths fail closed while loading
+  or unavailable and do not fall through to JS state reads
+- `RoomNavItem`, `Lobby`, and the native room/space permission fan-out consume
+  the native projections
 
 Still residual on desktop native:
 
-- `Members.tsx`, `MembersDrawer`, `Lobby.tsx`, and power/tag/permission consumers
-  still use JS power-level/creator read owners
+- `usePowerLevelTags` has no native `in.synara.room.power_level_tags` snapshot;
+  native sessions use generated/default tags, so persisted custom tag metadata
+  is not native-read
+- `via-servers.ts` and `utils/room.ts` retain direct `m.room.create` /
+  `m.room.power_levels` reads for via-server selection and perfect-parent
+  navigation
 - `useRoomMembers` retains its JS `getMembers` / `loadMembersIfNeeded` and
   event-listener path for the explicit non-native/web route and its legacy
   two-argument overload; native list surfaces select the three-argument owner
@@ -65,20 +84,22 @@ path is not dual-backend.
 Merged **#405** at `176fc7c5` wires the native member snapshot into
 `MembersDrawer` and `UserMentionAutocomplete`, removes the room/lobby call-site
 ownership, and adds DTO-boundary coverage. Merged **#439** adds the separate
-bulk power/tag WRITE owner. The rows below are current tip truth; neither
-change closes the power-level/creator READ residual.
+bulk power/tag WRITE owner. Merged **#450** closes native power/creator reads
+for the migrated hook and permission paths; the rows below preserve the
+remaining tag/direct-reader boundary.
 
-| Surface | Current tip (`206d24f3`; product tip `9fb341af`) | Residual after merged #405/#439/#446 |
+| Surface | Current tip (`d82e043d`) | Residual after merged #405/#439/#446/#450; #458 is unrelated |
 | ------- | ----------------------------------------------- | ------------------------------------ |
 | Members settings list | Native via #395; fail-closed | None for the native member snapshot |
-| Room/lobby people drawer | Native snapshot; fail-closed | Power-level/creator reads |
+| Room/lobby people drawer | Native member snapshot plus native power/creator projections; fail-closed | Custom power-level tags and any direct helper/plugin read used by the route |
 | Mention autocomplete | Native snapshot; fail-closed | None for member enumeration |
-| Power tags, permission gates, and creator short-circuits | JS state reads; READ product in flight | **Power-level/creator READ residual** |
+| Power tags, permission gates, and creator short-circuits | Native power/creator projections; native permission gates fail-closed; tags use generated/default values on native | **Custom power-level-tag READ; direct helper/plugin readers** |
 
-This is the current post-#405/#439/#446 truth: drawer/lobby/mention member
-reads are closed, bulk power/tag writes are landed, and command ownership is
-split, but power-level/creator reads are not. A native desktop session must
-never use the legacy member path as a fallback, and `dual_backend=false` remains
+This is the current post-#405/#439/#446/#450/#458 truth: drawer/lobby/mention member
+reads are closed, bulk power/tag writes are landed, and #450 closes the native
+power/creator owners. Custom tag metadata and the explicitly listed direct
+state readers remain open. A native desktop session must never use the legacy
+member or power/creator path as a fallback, and `dual_backend=false` remains
 the explicit policy state.
 
 ## 1. What this residual covers
@@ -91,9 +112,11 @@ PR **#375** (merged) landed the native room moderation **write** vertical:
 - **Member list _read_** — enumerating the room's members for the member list /
   people drawer. #395 owns the settings list, and merged #405 closes the native
   drawer/lobby/mention member enumeration on native desktop.
-- **Power-level / creator _read_** — reading the current `m.room.power_levels`
-  and `m.room.create` state to
-  render power tags, sort/filter by power, and gate permission-sensitive UI.
+- **Power-level / creator / tag _read_** — #450 closes the native
+  `m.room.power_levels` and `m.room.create` snapshots used by the migrated
+  power, sort, creator, and permission paths. The custom
+  `in.synara.room.power_level_tags` read and direct helper/plugin reads remain
+  residual.
 
 This inventory scopes that **read** residual as **V-ROOMS.MEMBERS-READ**. The
 write side (invite/kick/ban/unban/setPowerLevel) is **#375** — not this slice.
@@ -120,21 +143,22 @@ surface.
 | Path                                                                        | Role                                                                                                                                                                                          | Gap                                                                                                                                                 | ID                                          |
 | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
 | `synara/src/app/hooks/useRoomMembers.ts`                                    | Explicit native-session branch via `nativeRoomMembersOwner`; legacy branch uses `mx.getRoom(roomId).getMembers()`, `room.loadMembersIfNeeded()`, and membership/power listeners               | #395/#405 own the native desktop member surfaces; retain the JS branch only for an explicit non-native/web route, never as a native fallback     | **Boundary; no native fallback**            |
-| `synara/src/app/features/common-settings/members/Members.tsx`               | Full member-list page; passes `nativeSession` to `useRoomMembers`, then uses power/tag/creator hooks, filter/sort, and virtualized `MemberTile`                                               | Member list is native and fail-closed on native desktop; power tags/creator reads remain JS, and web/non-native sessions use the legacy member path | **V-ROOMS.MEMBERS-READ** (power/creator)   |
-| `synara/src/app/features/room/Room.tsx`                                     | Owns the room power-level context; after merged #405 the people drawer itself owns the native member snapshot                                                                                | Member drawer wiring is closed by #405; `usePowerLevels(room)` remains a JS state read on native desktop                                         | **V-ROOMS.MEMBERS-READ** (power-level read) |
-| `synara/src/app/features/room/MembersDrawer.tsx`                            | Native member snapshot after merged #405; `usePowerLevelsContext`, `useGetMemberPowerLevel`, `useGetMemberPowerTag`, `useRoomCreators`, filter/sort, `MemberItem`                         | Member enumeration is closed by #405; power/tag/creator reads remain residual                                                                      | **V-ROOMS.MEMBERS-READ** (power/creator)   |
-| `synara/src/app/features/lobby/Lobby.tsx`                                   | Space hierarchy power reads via `usePowerLevels(space)`, `useRoomsPowerLevels`, `getRoomPermissionsAPI`, and creator helpers; drawer member snapshot moves to #405-owned `MembersDrawer` | Member enumeration is closed by #405; per-room power-level/creator reads remain residual                                                        | **V-ROOMS.MEMBERS-READ** (power/creator)   |
+| `synara/src/app/features/common-settings/members/Members.tsx`               | Full member-list page; passes `nativeSession` to `useRoomMembers`, then uses native power/creator hooks, power/tag hooks, filter/sort, and virtualized `MemberTile` | Member list and native power/creator inputs are fail-closed on native desktop; custom tag metadata is not native-read, and web/non-native sessions retain the legacy member path | **V-ROOMS.MEMBERS-READ** (tags/direct) |
+| `synara/src/app/features/room/Room.tsx`                                     | Owns the room power-level context; after merged #405 the people drawer itself owns the native member snapshot | Member drawer and `usePowerLevels(room)` native ownership are closed; custom tags remain a separate read residual | **V-ROOMS.MEMBERS-READ** (tags) |
+| `synara/src/app/features/room/MembersDrawer.tsx`                            | Native member snapshot after merged #405; native `usePowerLevelsContext`, `useGetMemberPowerLevel`, `useGetMemberPowerTag`, `useRoomCreators`, filter/sort, `MemberItem` | Member enumeration and power/creator inputs are closed; custom power-level tags remain residual | **V-ROOMS.MEMBERS-READ** (tags) |
+| `synara/src/app/features/lobby/Lobby.tsx`                                   | Space hierarchy power reads via native `usePowerLevels(space)`, `useRoomsPowerLevels`, `useRoomCreators`, and `getRoomPermissionsAPI`; drawer member snapshot moves to #405-owned `MembersDrawer` | Member enumeration and native power/creator permission reads are closed; direct helper/plugin reads remain separately tracked | **V-ROOMS.MEMBERS-READ** (direct readers) |
 | `synara/src/app/components/editor/autocomplete/UserMentionAutocomplete.tsx` | Native member snapshot after merged #405; DTO-aware filtering/search for mention autocomplete                                                                                              | Member enumeration is closed by #405 and fail-closed on native desktop                                                                         | **Closed by #405**                          |
-| `synara/src/app/hooks/usePowerLevels.ts`                                    | `usePowerLevels` / `useRoomsPowerLevels` read `m.room.power_levels` via `getStateEvent`; `readPowerLevel`, `useGetMemberPowerLevel`, `getPermissionPower` derive per-user/event/action powers | No native power-level read; JS `getStateEvent(RoomPowerLevels)` on live client                                                                      | **V-ROOMS.MEMBERS-READ** (power-level read) |
-| `synara/src/app/hooks/usePowerLevelTags.ts`                                 | `usePowerLevelTags` reads `m.room.power_level_tags` state + derives tag labels from used powers                                                                                               | JS state read for power-tag labels                                                                                                                  | **V-ROOMS.MEMBERS-READ** (power-level read) |
-| `synara/src/app/hooks/useMemberPowerTag.ts`                                 | `useGetMemberPowerTag` / `useFlattenPowerTagMembers` group members by power tag                                                                                                               | Power tag derived from JS power-level read                                                                                                          | **V-ROOMS.MEMBERS-READ** (power-level read) |
-| `synara/src/app/hooks/useRoomCreators.ts`                                   | `useRoomCreators` / `getRoomCreatorsForRoomId` read `m.room.create` to build the creators set (creator power tag + permission short-circuit)                                                  | JS `getStateEvent(RoomCreate)` on live client                                                                                                       | **V-ROOMS.MEMBERS-READ** (power-level read) |
+| `synara/src/app/hooks/usePowerLevels.ts`                                    | Native session uses `matrix_room_power_levels_snapshot`; JS `getStateEvent`/listeners remain only for explicit non-native/web behavior; `readPowerLevel`, `useGetMemberPowerLevel`, `getPermissionPower` derive native values | Native power-level read is closed and fail-closed on native desktop | **Closed by #450** |
+| `synara/src/app/hooks/usePowerLevelTags.ts`                                 | Native session disables the JS `m.room.power_level_tags` state read and derives generated/default labels from used powers; web retains the JS read | No native custom-tag snapshot; persisted names/colors/icons remain residual | **V-ROOMS.MEMBERS-READ** (tags) |
+| `synara/src/app/hooks/useMemberPowerTag.ts`                                 | `useGetMemberPowerTag` / `useFlattenPowerTagMembers` consume native power/creator inputs and the generated/default tag map | Power calculation is native; custom tag metadata remains residual | **V-ROOMS.MEMBERS-READ** (tags) |
+| `synara/src/app/hooks/useRoomCreators.ts`                                   | `useRoomCreators` / `useRoomsCreators` use `matrix_room_creators_snapshot` on native sessions; legacy `getStateEvent(RoomCreate)` remains only for non-native/web behavior | Native hook and multi-room creator reads are closed; unrelated direct utility/plugin readers remain separate | **Closed by #450** |
 | `synara/src/app/hooks/useMemberFilter.ts`                                   | `useMembershipFilter` filters the shared member-list type by `membership` (joined/invited/left/kicked/banned)                                                                                 | #395/#405 support both native DTOs and legacy JS members; no separate native member-read gap remains in this filter                                  | **Closed for native member projection**      |
-| `synara/src/app/hooks/useMemberSort.ts`                                     | `useMemberSort` / `useMemberPowerSort` sort the shared member-list type by name / join ts / power                                                                                             | Name/join sorting is native-DTO compatible; power sort still depends on the residual JS power read                                                   | **V-ROOMS.MEMBERS-READ** (power-level read) |
-| `synara/src/app/hooks/useMemberPowerCompare.ts`                             | `useMemberPowerCompare` compares two users' power (creator short-circuit + `readPowerLevel.user`)                                                                                             | JS power-level read                                                                                                                                 | **V-ROOMS.MEMBERS-READ** (power-level read) |
-| `synara/src/app/hooks/useRoomPermissions.ts`                                | `getRoomPermissionsAPI` / `useRoomPermissions` gate permission-sensitive UI from creators + power levels                                                                                      | JS power-level read                                                                                                                                 | **V-ROOMS.MEMBERS-READ** (power-level read) |
+| `synara/src/app/hooks/useMemberSort.ts`                                     | `useMemberSort` / `useMemberPowerSort` sort the shared member-list type by name / join ts / native power | Name/join and power sorting are native-DTO compatible on native desktop | **Closed by #450** |
+| `synara/src/app/hooks/useMemberPowerCompare.ts`                             | `useMemberPowerCompare` compares two users' power (creator short-circuit + native `readPowerLevel.user`) | Native power/creator comparison is closed on native desktop | **Closed by #450** |
+| `synara/src/app/hooks/useRoomPermissions.ts`                                | `getRoomPermissionsAPI` / `useRoomPermissions` gate permission-sensitive UI from native creators + power levels, denying while native input is unavailable | Native permission gate is closed/fail-closed; non-native/web retains its legacy route | **Closed by #450** |
 | `synara/src/app/components/member-tile/MemberTile.tsx`                      | Renders a member row (name, username, avatar) from the shared JS/native member-list type                                                                                                      | #395 DTO rendering remains valid; the #405 drawer uses its DTO-aware `MemberItem` boundary                                                           | **Closed for native member list**            |
-| `synara/src/app/utils/room.ts`                                              | `getStateEvent` / `getStateEvents` (power-level + create reads), plus shared member display/avatar/search helpers                                                                              | Power-level/create state reads remain residual; unrelated member helper callers outside drawer/mentions are not closed by #405                         | **V-ROOMS.MEMBERS-READ** (power/creator)   |
+| `synara/src/app/utils/room.ts`                                              | `getAllVersionsRoomCreator` reads `m.room.create`; `guessPerfectParent` reads `m.room.power_levels` and creator users; shared member display/avatar/search helpers also live here | Direct creator/power reads remain residual outside the #450 hook owners; unrelated member helper callers outside drawer/mentions are not closed by #405 | **V-ROOMS.MEMBERS-READ** (direct readers) |
+| `synara/src/app/plugins/via-servers.ts`                                     | Direct `m.room.create` and `m.room.power_levels` reads plus JS member enumeration for via-server selection | Direct native-session reader is not migrated by #450 | **V-ROOMS.MEMBERS-READ** (direct readers) |
 | `synara/src/app/utils/matrix.ts`                                            | `getOldestMember`, DM-peer member helpers (`room.getMember(userId)`, `room.getMembers()`)                                                                                                     | JS member reads on live client                                                                                                                      | **V-ROOMS.MEMBERS-READ**                    |
 
 **Note:** `useRoomTypingMembers` / `state/typingMembers.ts` are **native** (typing
@@ -142,11 +166,12 @@ stream) and out of scope. The `applyPermissionPower` / `getPermissionPower`
 write-side helpers in `usePowerLevels.ts` are used by the **PowersEditor bulk PL
 rewrite**, which is the separate **#439 WRITE** slice and is landed at this
 tip; it is not this read slice. The read-side `readPowerLevel` /
-`getPermissionPower` remain this residual.
+`getPermissionPower` use the native projection on native desktop; custom tags
+and direct helper/plugin readers remain residual.
 
 ---
 
-## 3. Remaining slice — native power-level/creator READ (in flight)
+## 3. Remaining slice — native power-level tags and direct READ consumers
 
 ### Member wiring boundary after #405/#446
 
@@ -160,35 +185,35 @@ and treats unavailable or malformed IPC as terminal. `Members.tsx`,
 list. None of these native paths may fall through to
 `mx.getRoom().getMembers()`.
 
-### Remaining native read commands
+### Native read command status
 
-The in-flight READ product slice must expose these reads over IPC and remove the
-JS read owners from the native desktop route. No command below is present or
-claimed landed at `206d24f3`:
+Merged **#450** exposes the power-level and creator reads below over IPC and
+removes their JS read owners from the native desktop route. The power-level-tag
+read remains unimplemented:
 
-- `matrix_room_power_levels_snapshot` — return the current `m.room.power_levels`
-  content for a room (users, users_default, events, events_default, state_default,
-  actions, notifications) as a typed DTO, so power tags / permission gating /
-  power sort can be computed natively without the JS `getStateEvent` read.
-- `matrix_room_creators_snapshot` — return the room creator set (from
-  `m.room.create` + `additional_creators`) for creator power-tag / permission
-  short-circuit. (Could be folded into the power-levels snapshot; listed
-  separately for clarity.)
-- `matrix_room_power_level_tags_snapshot` — return the
+- **Landed `matrix_room_power_levels_snapshot`** — returns the current
+  `m.room.power_levels` content and feeds native power tags / permission gating /
+  power sort without a JS `getStateEvent` read.
+- **Landed `matrix_room_creators_snapshot`** — returns the room creator set from
+  `m.room.create` plus supported `additional_creators` for creator power-tag /
+  permission short-circuit.
+- **Remaining `matrix_room_power_level_tags_snapshot`** — return the
   `in.synara.room.power_level_tags` content used for named power tags. This may
   be folded into the power-level snapshot, but the native READ contract must
   own the tag state rather than leave a hidden JS state-event read.
 
 ### Consumer and deletion boundary
 
-The remaining power/creator consumers must be migrated before this residual can
-close:
+The remaining tag/direct consumers must be migrated or explicitly scoped before
+this residual can close:
 
-- Replace the JS power-level/creator reads in `usePowerLevels.ts`,
-  `usePowerLevelTags.ts`, `useMemberPowerTag.ts`, `useRoomCreators.ts`,
-  `useRoomPermissions.ts`, and `useMemberPowerCompare.ts` with the native
-  projections. Keep the PowersEditor write path scoped to its separate
-  powers-bulk slice.
+- Add a native tag projection for `usePowerLevelTags.ts` and preserve custom
+  names, colors, and icons through `useMemberPowerTag.ts`, `PermissionGroups`,
+  `Powers`, and `PowersEditor`. Keep the PowersEditor write path scoped to its
+  separate powers-bulk slice.
+- Give `via-servers.ts`, `getAllVersionsRoomCreator`, and `guessPerfectParent`
+  native owners or record an explicitly approved non-native/direct-reader
+  boundary; do not treat #450's hook migration as closure for those helpers.
 - Keep the explicit non-native web route only if that route remains supported;
   its JS member branch and unrelated member display/profile helpers are not a
   native desktop fallback and are not claimed closed by #405. Do not delete
@@ -196,19 +221,19 @@ close:
   changed.
 
 Verify that no native desktop consumer still uses the two-argument
-`useRoomMembers` path, and that all remaining `usePowerLevels` /
-`useRoomPermissions` / creator reads have a native owner before retiring the
-JS owners.
+`useRoomMembers` path, that the native power/creator hooks remain on their
+validated owners, and that no native path silently reopens a JS state-event
+fallback.
 
 **Fail-closed:** #395 already makes absence, failure, or malformed output from
 `matrix_room_members_snapshot` terminal whenever `nativeSession` is selected
 for `Members.tsx`, `MembersDrawer`, or `UserMentionAutocomplete`; those paths
 never fall through to `getMembers()`. The people-drawer/lobby/mention member
-enumeration is therefore closed by merged #405; power-level and creator reads
-remain residual. Once wired, failure of
+enumeration is therefore closed by merged #405, and #450 closes the native
+power-level/creator hook paths. Failure of
 `matrix_room_members_snapshot`, `matrix_room_power_levels_snapshot`,
-`matrix_room_creators_snapshot`, or `matrix_room_power_level_tags_snapshot` must
-be terminal on native desktop. A native
+`matrix_room_creators_snapshot`, or any future
+`matrix_room_power_level_tags_snapshot` must be terminal on native desktop. A native
 session must never select a JS fallback, and `dual_backend=false` remains
 required.
 
@@ -223,8 +248,8 @@ required.
 | **Typing members read**                                              | Native (typing stream) — not a residual                                             |
 | **Room membership / unread**                                         | [p4.3-membership-unread.md](p4.3-membership-unread.md) — separate                   |
 | **P4.6 member index**                                                | [p4.6-members.md](p4.6-members.md) — pure index over DTOs; no SDK member APIs       |
-| Product input                                                        | **#405 merged** at `176fc7c5`; drawer/lobby/mentions member wiring is landed. **#439** bulk powers/tag WRITE is merged at `f92a33f9`; **#446** command fan-out is merged at `9fb341af`. Power/creator READ product work is in flight and not included here. |
-| Product changes in this PR                                           | None; this packet is docs-only, based at `206d24f3`, and does not edit product command modules |
+| Product input                                                        | **#405 merged** at `176fc7c5`; drawer/lobby/mentions member wiring is landed. **#439** bulk powers/tag WRITE is merged at `f92a33f9`; **#446** command fan-out is merged at `9fb341af`; **#450** power/creator READ is merged at `103a653f`; **#458** presence first slice is merged at `d82e043d` but is unrelated. Custom tag/direct READ remains open. |
+| Product changes in this PR                                           | None; this packet is docs-only, based at `d82e043d`, and does not edit product command modules |
 | Umbrella merge to `main`                                             | **#39** — needs explicit user approval                                              |
 | Cutover / dual-backend removal                                       | #240 HOLD; no cutover                                                               |
 
@@ -235,18 +260,16 @@ required.
 **Confidence: high** for the inventory. I traced the member-list **read** from
 the two primary consumers (`Members.tsx`, `MembersDrawer.tsx`), the room owner
 (`Room.tsx`), the lobby (`Lobby.tsx`), and mention autocomplete back through
-`useRoomMembers`. At tip `206d24f3`, I confirmed the live native producer in
+`useRoomMembers`. At product tip `d82e043d`, I confirmed the live native producer in
 `members/product_commands.rs` after #446, the fail-closed
 `nativeRoomMembersOwner`, and the `nativeSession` wiring for `Members.tsx`,
 `MembersDrawer`, and mention autocomplete; merged #405 is recorded at
-`176fc7c5`. I also traced the power-level read (`usePowerLevels` /
-`useRoomsPowerLevels` → `getStateEvent(RoomPowerLevels)`), plus the supporting
-power-tag / creator / filter / sort / permission hooks and `MemberTile` renderer.
-Possible missed files: any other consumer of `usePowerLevels` /
-`useRoomPermissions` / creator state reads outside the listed paths (e.g. a
-barrel re-export or another permission surface) — verify during implementation
-with a full `rg` over `synara/src`. #405's member-snapshot wiring does not close
-unrelated profile, notification, call, or DM member lookups.
+`176fc7c5`. I also verified #450's native power/creator owners and traced the
+remaining tag hook plus direct `via-servers` / `utils/room.ts` readers. Possible
+missed files: any other consumer of the tag or direct state reads outside the
+listed paths (e.g. a barrel re-export or another permission surface) — verify
+with a full `rg` over `synara/src`. #405/#450 do not close unrelated profile,
+notification, call, or DM member lookups.
 
 ## Done-when
 
@@ -257,16 +280,17 @@ unrelated profile, notification, call, or DM member lookups.
   `UserMentionAutocomplete.tsx` select the same native member owner on native
   desktop; their member rows/search boundaries accept the native DTO, and
   `Room.tsx`/`Lobby.tsx` no longer own a legacy member read.
-- `matrix_room_power_levels_snapshot`, `matrix_room_creators_snapshot`, and
-  the power-level-tags projection (separate or folded into the power-level
-  snapshot) return the native power-level / creator / tag read projections.
+- `matrix_room_power_levels_snapshot` and `matrix_room_creators_snapshot` are
+  landed and back the native power/creator paths; the remaining tag projection
+  returns custom power-level tag metadata without a JS state-event fallback.
 - `Members.tsx`, `MembersDrawer.tsx`, `Lobby.tsx`, and mention member reads use
   native snapshots and fail closed on native desktop; the explicit non-native
   web route is the only remaining JS member route if web support is retained.
-- Native desktop no longer uses the JS power-level/creator reads; member
-  snapshot surfaces remain explicit-owner/fail-closed, and unrelated member
-  helper routes are not deleted merely because #405 landed. Preserve the
-  separate PowersEditor write slice.
+- Native desktop no longer uses the JS power-level/creator reads in the #450
+  hook/permission paths; custom tag and direct helper/plugin routes are either
+  native-owned or explicitly scoped, and unrelated member helper routes are not
+  deleted merely because #405 landed. Preserve the separate PowersEditor write
+  slice.
 - The future READ implementation must update production `matrix-js-sdk` import
   accounting only when native READ ownership is actually landed; this docs
   packet makes no such reduction claim.

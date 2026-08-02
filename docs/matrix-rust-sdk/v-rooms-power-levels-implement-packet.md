@@ -49,10 +49,12 @@ The implementation slice must preserve:
 - native session and command failures as visible unavailable/error states; and
 - no JS SDK write or desktop JS fallback when the native session is live.
 
-This packet closes the **write** residual only. The native power-level/tag read
-projection and native permission-gate ownership remain the named dependency of
-V-ROOMS.MEMBERS-READ. Do not delete shared read hooks or claim the whole
-V-ROOMS power vertical closed from this packet alone.
+This packet closes the **write** residual only. Merged **#450** now provides
+native power-level/creator read projection and native permission-gate ownership
+for the migrated paths. The custom power-level-tag read and direct helper/plugin
+readers remain the named dependency of V-ROOMS.MEMBERS-READ. Do not delete
+shared read hooks or claim the whole V-ROOMS power vertical closed from this
+write packet alone.
 
 ## 2. Frozen scope and prerequisites
 
