@@ -3,8 +3,8 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-02                                               |
-| Tip                                                    | `c1e9c3be` on `feature/matrix-rust-sdk-full-replacement`; #439 powers-bulk, #446 product-command fan-out, #450 native power/creator READs, #458 presence first slice, and #461 room-directory first slice are merged |
-| Production `matrix-js-sdk` import files (`synara/src`) | **151** (plan baseline was **220**)                      |
+| Tip                                                    | `60141c8b` on `feature/matrix-rust-sdk-full-replacement`; the post-#461 product state is retained and the V-BURN/C3–C5 docs refreshes are at this tip |
+| Production `matrix-js-sdk` import files (`synara/src`) | **150** (plan baseline was **220**)                      |
 | Product command layout                                  | **#446 merged** — domain `product_commands.rs` modules are available for parallel follow-on lanes |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |

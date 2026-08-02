@@ -4,7 +4,7 @@
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | Status   | **Implementation packet** — this PR is docs-only and does not claim the vertical is implemented                                        |
 | Residual | **V-ROOMS.R-POWERS-BULK** from **#377**                                                                                                |
-| Base     | Historical planning base `52953091`; current docs refresh tip `c1e9c3be` on `feature/matrix-rust-sdk-full-replacement` |
+| Base     | Historical planning base `52953091`; current docs refresh tip `60141c8b` on `feature/matrix-rust-sdk-full-replacement` |
 | PR shape | Focused **draft** PR targeting `feature/matrix-rust-sdk-full-replacement`                                                              |
 | Policy   | [full-vertical-policy.md](full-vertical-policy.md): native UI → Tauri IPC → live `matrix-sdk`, physical JS-owner deletion, fail-closed |
 | Guard    | Never `main`, umbrella **#39**, or V-BURN/#327; #407 and #439 are merged; #450 owns native power/creator READs while custom tag/direct reads remain; `dual_backend` is forbidden |
@@ -75,7 +75,7 @@ write packet alone.
 Before product implementation starts, the writer must verify:
 
 1. `HEAD` is the approved current integration tip; this refresh records
-   `c1e9c3be`, while `52953091` is historical planning metadata rather than the
+   `60141c8b`, while `52953091` is historical planning metadata rather than the
    current feature tip.
 2. The PR target is
    `feature/matrix-rust-sdk-full-replacement`, never `main` or #39.

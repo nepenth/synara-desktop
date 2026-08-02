@@ -14,11 +14,11 @@
 | Field              | Value                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-02**                                                                                                                       |
-| Integration tip    | `c1e9c3be` — #405 members wiring, #407 CallWidget media, #438 product-lane protocol, #439 powers-bulk, #446 product-command fan-out, #450 power/creator READs, #458 presence first slice, and the #461 room-directory first slice are merged at this tip |
+| Integration tip    | `60141c8b` — the post-#461 product state remains current, with the V-BURN snapshot and C3–C5 verification docs refreshed at this tip |
 | Active work        | **#458 presence first slice and #461 room-directory first slice are merged; both full verticals remain WIP**; native power/creator reads are closed for migrated owners, while custom power-level tags and direct helper/plugin readers remain residual; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
-| Import accounting  | Desktop production import files **151** on tip (plan baseline was 220). Allowlist **151** after the #458 presence importer ratchet.       |
+| Import accounting  | Desktop production import files **150** on tip (plan baseline was 220). Allowlist **150** after the #458/#461 owner ratchets.       |
 | Product lane        | **#450 merged** — native power/creator reads are landed; this docs-only draft does not touch `product.rs` or product code |
 | Dual backend       | **`false`** (forbidden forever)                                                                                                      |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                             |
@@ -33,9 +33,9 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `c1e9c3be`** includes merged #450 native power/creator reads, the #458 native presence first slice, and the #461 room-directory first slice. Full presence and directory verticals remain **WIP**; neither is product-done or accepted. Custom power-level tags and direct helper/plugin reads remain residual. Imports are **151**; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
-| **Tip**        | `c1e9c3be`                                                                                                                                                                                                                             |
-| **Active PRs** | This focused docs-only refresh is based at `c1e9c3be`. The prior #465 head `758da930` was based at `d82e043d` and conflicted in `SCOREBOARD.md` when replayed onto the merged #461 tip; this refresh records the current base and does not claim #465 merged. |
+| **Now**        | **Tip `60141c8b`** carries the merged #450 power/creator reads, #458 presence first slice, and #461 room-directory first slice from the product state below; the full #458/#461 verticals remain **WIP**. Custom power-level tags and direct helper/plugin reads remain residual. Imports are **150**; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
+| **Tip**        | `60141c8b`                                                                                                                                                                                                                             |
+| **Active PRs** | This focused docs-only refresh is rebased onto `60141c8b`. The prior rejected #465 head `28e2418d` is preserved as the source history; this refresh records the current tip and does not claim #465 merged. |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); full #458/#461 vertical acceptance remains open; umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) remains gated without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
 ---
@@ -60,6 +60,14 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-02 — tip `60141c8b` — rebase #465 onto current docs tip
+
+| When (UTC) | Item                           | Result       | Notes                                                                                                                                                                      |
+| ---------- | ------------------------------ | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**            | **Draft**    | Rebased onto `60141c8b`; the product state from `c1e9c3be` is unchanged while the V-BURN and C3–C5 docs refreshes are included. `main` and #39 remain out of scope.      |
+| current    | **#465 rejection repairs**     | **Preserved** | Section 5 is complete; the historical `52953091` planning base is labeled as historical; custom tag and direct helper/plugin READs remain residual.                       |
+| current    | **Proof / burn / merge gates** | **Held**     | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden; keep this PR draft/unmerged.                                                        |
 
 ### 2026-08-02 — tip `c1e9c3be` — rebase #465 after merged #461
 
