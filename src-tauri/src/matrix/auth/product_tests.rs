@@ -28,6 +28,12 @@ const PRODUCT_SOURCE: &str = concat!(
     include_str!("product.rs"),
 );
 
+// Auth commands live in the extracted product_commands.rs module. Source
+// guards for the password-only product boundary must inspect that owner
+// directly rather than the product.rs module wrapper.
+const AUTH_PRODUCT_COMMANDS_SOURCE: &str = include_str!("product_commands.rs");
+const DEVICE_PRODUCT_COMMANDS_SOURCE: &str = include_str!("../devices/product_commands.rs");
+
 fn room_key_selection(selection_id: u64, label: &str) -> SelectedRoomKeyImport {
     SelectedRoomKeyImport {
         selection_id,
@@ -172,8 +178,7 @@ fn map_login_flows_auth_error_is_privacy_safe() {
 
 #[test]
 fn v_auth_3_product_registers_login_flows_command() {
-    let product_src = PRODUCT_SOURCE;
-    let product_prod = product_src
+    let product_prod = AUTH_PRODUCT_COMMANDS_SOURCE
         .split("#[cfg(test)]")
         .next()
         .expect("product production section");
@@ -226,8 +231,7 @@ fn v_auth_3b_product_has_no_matrix_uia_login_stage_commands() {
     // (V-AUTH.3b). Password login remains single-shot; register/reset/device
     // delete keep specialized native stage/UIAA owners. Do not invent unused
     // matrix_uia_* session IPC for a non-product login surface.
-    let product_src = PRODUCT_SOURCE;
-    let product_prod = product_src
+    let product_prod = AUTH_PRODUCT_COMMANDS_SOURCE
         .split("#[cfg(test)]")
         .next()
         .expect("product production section");
@@ -260,7 +264,7 @@ fn v_auth_3b_product_has_no_matrix_uia_login_stage_commands() {
         "password-reset owner must remain"
     );
     assert!(
-        product_prod.contains("pub async fn matrix_device_delete_password"),
+        DEVICE_PRODUCT_COMMANDS_SOURCE.contains("pub async fn matrix_device_delete_password"),
         "device-delete password UIAA owner must remain"
     );
     // Login maps UIAA to fail-closed InteractiveAuthRequired — no stage loop.
@@ -285,8 +289,7 @@ fn v_auth_2_product_has_no_token_login_command_or_login_token_sdk_call() {
     //
     // Read only production sections (exclude this tests module) so the
     // negative assertions below do not match their own string literals.
-    let product_src = PRODUCT_SOURCE;
-    let product_prod = product_src
+    let product_prod = AUTH_PRODUCT_COMMANDS_SOURCE
         .split("#[cfg(test)]")
         .next()
         .expect("product production section");

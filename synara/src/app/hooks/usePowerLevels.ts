@@ -13,6 +13,8 @@ export type PowerLevelActions = 'invite' | 'redact' | 'kick' | 'ban' | 'historic
 export type PowerLevelNotificationsAction = 'room';
 
 export type IPowerLevels = {
+  /** Native read is not ready; permission consumers must deny all actions. */
+  nativeUnavailable?: true;
   users_default?: number;
   state_default?: number;
   events_default?: number;
@@ -27,7 +29,9 @@ export type IPowerLevels = {
   notifications?: Record<string, number>;
 };
 
-const DEFAULT_POWER_LEVELS: Required<IPowerLevels> = {
+type CompletePowerLevels = Omit<Required<IPowerLevels>, 'nativeUnavailable'>;
+
+const DEFAULT_POWER_LEVELS: CompletePowerLevels = {
   users_default: 0,
   state_default: 50,
   events_default: 0,
@@ -43,25 +47,13 @@ const DEFAULT_POWER_LEVELS: Required<IPowerLevels> = {
   },
 };
 
-const NATIVE_UNAVAILABLE_POWER_LEVELS: Required<IPowerLevels> = {
-  users_default: Number.MAX_SAFE_INTEGER,
-  state_default: Number.MAX_SAFE_INTEGER,
-  events_default: Number.MAX_SAFE_INTEGER,
-  invite: Number.MAX_SAFE_INTEGER,
-  redact: Number.MAX_SAFE_INTEGER,
-  kick: Number.MAX_SAFE_INTEGER,
-  ban: Number.MAX_SAFE_INTEGER,
-  historical: Number.MAX_SAFE_INTEGER,
-  events: {},
-  users: {},
-  notifications: {
-    room: Number.MAX_SAFE_INTEGER,
-  },
+export const NATIVE_UNAVAILABLE_POWER_LEVELS: IPowerLevels = {
+  nativeUnavailable: true,
 };
 
 const fillMissingPowers = (powerLevels: IPowerLevels): IPowerLevels =>
   produce(powerLevels, (draftPl: IPowerLevels) => {
-    const keys = Object.keys(DEFAULT_POWER_LEVELS) as unknown as (keyof IPowerLevels)[];
+    const keys = Object.keys(DEFAULT_POWER_LEVELS) as (keyof CompletePowerLevels)[];
     keys.forEach((key) => {
       if (draftPl[key] === undefined) {
         // eslint-disable-next-line no-param-reassign

@@ -8,12 +8,27 @@ import {
   readRoomCreatorsWithNativeOwner,
   type NativeRoomCreatorsInvoke,
 } from '../nativeRoomCreatorsOwner';
+import { NATIVE_UNAVAILABLE_POWER_LEVELS } from '../usePowerLevels';
+import { getRoomPermissionsAPI } from '../useRoomPermissions';
 
 const roomId = '!room:example.org';
 const loggedIn = {
   available: true as const,
   value: { status: 'logged_in', sessionGeneration: 7 },
 };
+
+test('native power loading is explicitly fail-closed, including creator bypasses', () => {
+  const permissions = getRoomPermissionsAPI(
+    new Set(['@alice:example.org']),
+    NATIVE_UNAVAILABLE_POWER_LEVELS
+  );
+
+  assert.equal(permissions.event('m.room.message', '@alice:example.org'), false);
+  assert.equal(permissions.stateEvent('m.room.name', '@alice:example.org'), false);
+  assert.equal(permissions.action('invite', '@alice:example.org'), false);
+  assert.equal(permissions.notificationAction('room', '@alice:example.org'), false);
+  assert.deepEqual(NATIVE_UNAVAILABLE_POWER_LEVELS, { nativeUnavailable: true });
+});
 
 test('native power-level read owner validates the session and exact snapshot contract', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];

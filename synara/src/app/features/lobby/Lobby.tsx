@@ -53,11 +53,12 @@ import { SpaceHierarchy } from './SpaceHierarchy';
 import { useGetRoom } from '../../hooks/useGetRoom';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { getRoomPermissionsAPI } from '../../hooks/useRoomPermissions';
-import { getRoomCreatorsForRoomId } from '../../hooks/useRoomCreators';
+import { useRoomsCreators } from '../../hooks/useRoomCreators';
 
 const useCanDropLobbyItem = (
   space: Room,
   roomsPowerLevels: Map<string, IPowerLevels>,
+  roomCreators: Map<string, Set<string>>,
   getRoom: (roomId: string) => Room | undefined
 ): CanDropCallback => {
   const mx = useMatrixClient();
@@ -72,8 +73,9 @@ const useCanDropLobbyItem = (
 
       const containerSpaceId = space.roomId;
 
-      const powerLevels = roomsPowerLevels.get(containerSpaceId) ?? {};
-      const creators = getRoomCreatorsForRoomId(mx, containerSpaceId);
+      const powerLevels = roomsPowerLevels.get(containerSpaceId);
+      if (!powerLevels) return false;
+      const creators = roomCreators.get(containerSpaceId) ?? new Set<string>();
       const permissions = getRoomPermissionsAPI(creators, powerLevels);
 
       if (
@@ -85,7 +87,7 @@ const useCanDropLobbyItem = (
 
       return true;
     },
-    [space, roomsPowerLevels, getRoom, mx]
+    [space, roomsPowerLevels, roomCreators, getRoom, mx]
   );
 
   const canDropRoom: CanDropCallback = useCallback(
@@ -99,8 +101,9 @@ const useCanDropLobbyItem = (
       // check and do not allow restricted room to be dragged outside
       // current space if can't change `m.room.join_rules` `content.allow`
       if (draggingOutsideSpace && restrictedItem) {
-        const itemPowerLevels = roomsPowerLevels.get(item.roomId) ?? {};
-        const itemCreators = getRoomCreatorsForRoomId(mx, item.roomId);
+        const itemPowerLevels = roomsPowerLevels.get(item.roomId);
+        if (!itemPowerLevels) return false;
+        const itemCreators = roomCreators.get(item.roomId) ?? new Set<string>();
         const itemPermissions = getRoomPermissionsAPI(itemCreators, itemPowerLevels);
 
         const canChangeJoinRuleAllow = itemPermissions.stateEvent(
@@ -112,8 +115,9 @@ const useCanDropLobbyItem = (
         }
       }
 
-      const powerLevels = roomsPowerLevels.get(containerSpaceId) ?? {};
-      const creators = getRoomCreatorsForRoomId(mx, containerSpaceId);
+      const powerLevels = roomsPowerLevels.get(containerSpaceId);
+      if (!powerLevels) return false;
+      const creators = roomCreators.get(containerSpaceId) ?? new Set<string>();
       const permissions = getRoomPermissionsAPI(creators, powerLevels);
       if (
         getRoom(containerSpaceId) === undefined ||
@@ -123,7 +127,7 @@ const useCanDropLobbyItem = (
       }
       return true;
     },
-    [mx, getRoom, roomsPowerLevels]
+    [mx, getRoom, roomsPowerLevels, roomCreators]
   );
 
   const canDrop: CanDropCallback = useCallback(
@@ -207,21 +211,26 @@ export function Lobby() {
   });
   const vItems = virtualizer.getVirtualItems();
 
-  const roomsPowerLevels = useRoomsPowerLevels(
-    useMemo(
-      () =>
-        hierarchy
-          .flatMap((i) => {
-            const childRooms = Array.isArray(i.rooms) ? i.rooms.map((r) => getRoom(r.roomId)) : [];
+  const powerLevelRooms = useMemo(
+    () =>
+      hierarchy
+        .flatMap((i) => {
+          const childRooms = Array.isArray(i.rooms) ? i.rooms.map((r) => getRoom(r.roomId)) : [];
 
-            return [getRoom(i.space.roomId), ...childRooms];
-          })
-          .filter((r) => !!r) as Room[],
-      [hierarchy, getRoom]
-    )
+          return [getRoom(i.space.roomId), ...childRooms];
+        })
+        .filter((r) => !!r) as Room[],
+    [hierarchy, getRoom]
   );
+  const roomsPowerLevels = useRoomsPowerLevels(powerLevelRooms);
+  const roomCreators = useRoomsCreators(powerLevelRooms);
 
-  const canDrop: CanDropCallback = useCanDropLobbyItem(space, roomsPowerLevels, getRoom);
+  const canDrop: CanDropCallback = useCanDropLobbyItem(
+    space,
+    roomsPowerLevels,
+    roomCreators,
+    getRoom
+  );
 
   const [reorderSpaceState, reorderSpace] = useAsyncCallback(
     useCallback(
@@ -259,7 +268,7 @@ export function Lobby() {
             const parentPL = roomsPowerLevels.get(reorder.item.parentId);
             if (!parentPL) return false;
 
-            const creators = getRoomCreatorsForRoomId(mx, reorder.item.parentId);
+            const creators = roomCreators.get(reorder.item.parentId) ?? new Set<string>();
             const permissions = getRoomPermissionsAPI(creators, parentPL);
             const canEdit = permissions.stateEvent(StateEvent.SpaceChild, mx.getSafeUserId());
             return canEdit && reorder.orderKey !== currentOrders[index];
@@ -275,7 +284,7 @@ export function Lobby() {
           });
         }
       },
-      [mx, hierarchy, lex, roomsPowerLevels]
+      [mx, hierarchy, lex, roomsPowerLevels, roomCreators]
     )
   );
   const reorderingSpace = reorderSpaceState.status === AsyncStatus.Loading;
@@ -466,6 +475,7 @@ export function Lobby() {
                             allJoinedRooms={allJoinedRooms}
                             mDirects={mDirects}
                             roomsPowerLevels={roomsPowerLevels}
+                            roomCreators={roomCreators}
                             categoryId={categoryId}
                             closed={
                               closedCategories.has(categoryId) ||

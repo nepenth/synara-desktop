@@ -28,7 +28,6 @@ import { useOpenRoomSettings } from '../../state/hooks/roomSettings';
 import { useSpaceOptionally } from '../../hooks/useSpace';
 import { useOpenSpaceSettings } from '../../state/hooks/spaceSettings';
 import { IPowerLevels } from '../../hooks/usePowerLevels';
-import { getRoomCreatorsForRoomId } from '../../hooks/useRoomCreators';
 import { getRoomPermissionsAPI } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 
@@ -195,6 +194,7 @@ type HierarchyItemMenuProps = {
   };
   joined: boolean;
   powerLevels?: IPowerLevels;
+  creators?: Set<string>;
   canEditChild: boolean;
   pinned?: boolean;
   onTogglePin?: (roomId: string) => void;
@@ -203,6 +203,7 @@ export function HierarchyItemMenu({
   item,
   joined,
   powerLevels,
+  creators,
   canEditChild,
   pinned,
   onTogglePin,
@@ -212,8 +213,7 @@ export function HierarchyItemMenu({
 
   const canInvite = (): boolean => {
     if (!powerLevels) return false;
-    const creators = getRoomCreatorsForRoomId(mx, item.roomId);
-    const permissions = getRoomPermissionsAPI(creators, powerLevels);
+    const permissions = getRoomPermissionsAPI(creators ?? new Set<string>(), powerLevels);
 
     return permissions.action('invite', mx.getSafeUserId());
   };
