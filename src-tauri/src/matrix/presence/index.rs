@@ -7,6 +7,7 @@
 use std::collections::HashMap;
 
 use crate::matrix::dto::UserId;
+use matrix_sdk::ruma::UserId as RumaUserId;
 
 use super::error::PresenceError;
 
@@ -45,6 +46,7 @@ impl PresenceState {
 pub struct PresenceSnapshot {
     pub user_id: UserId,
     pub state: PresenceState,
+    pub currently_active: bool,
     /// Optional last active timestamp (ms). Never a secret.
     pub last_active_ts: Option<u64>,
     /// Optional free-text status; host must not put tokens here.
@@ -79,12 +81,7 @@ impl PresenceIndex {
     }
 
     fn validate_user(user_id: &str) -> Result<(), PresenceError> {
-        if user_id.is_empty() || !user_id.starts_with('@') {
-            return Err(PresenceError::Invalid {
-                diagnostic_id: "p4.7-invalid-user-id",
-            });
-        }
-        Ok(())
+        Self::validate_user_id(user_id)
     }
 
     fn validate_status_msg(msg: &Option<String>) -> Result<(), PresenceError> {
@@ -103,6 +100,7 @@ impl PresenceIndex {
         &mut self,
         user_id: impl Into<String>,
         state: PresenceState,
+        currently_active: bool,
         last_active_ts: Option<u64>,
         status_msg: Option<String>,
     ) -> Result<PresenceSnapshot, PresenceError> {
@@ -117,11 +115,21 @@ impl PresenceIndex {
         let snap = PresenceSnapshot {
             user_id: user_id.clone(),
             state,
+            currently_active,
             last_active_ts,
             status_msg,
         };
         self.by_user.insert(user_id, snap.clone());
         Ok(snap)
+    }
+
+    /// Validate a fully-qualified Matrix user ID at the native product boundary.
+    fn validate_user_id(user_id: &str) -> Result<(), PresenceError> {
+        RumaUserId::parse(user_id)
+            .map(|_| ())
+            .map_err(|_| PresenceError::Invalid {
+                diagnostic_id: "p4.7-invalid-user-id",
+            })
     }
 
     /// Remove presence for one user (idempotent).

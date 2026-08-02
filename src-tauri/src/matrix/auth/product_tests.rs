@@ -1,8 +1,12 @@
 use super::*;
 use super::{
     account_data::*, auth_commands::*, backup::*, cross_signing::*, devices::*, media::*,
-    members::*, room_keys::*, room_ops::*, room_profile::*, secret_storage::*, send::*, spaces::*,
-    timeline::*, typing::*, user_profile::*, verification::*, widgets::*,
+    members::*, presence::*, room_keys::*, room_ops::*, room_profile::*, secret_storage::*,
+    send::*, spaces::*, timeline::*, typing::*, user_profile::*, verification::*, widgets::*,
+};
+use crate::matrix::presence::{
+    NativePresenceSnapshot, NativePresenceSnapshotResult, NativePresenceState,
+    NativePresenceUpdate, NativePresenceUpdateOutcome,
 };
 
 const PRODUCT_SOURCE: &str = concat!(
@@ -13,6 +17,7 @@ const PRODUCT_SOURCE: &str = concat!(
     include_str!("../devices/product_commands.rs"),
     include_str!("../media/product_commands.rs"),
     include_str!("../members/product_commands.rs"),
+    include_str!("../presence/product_commands.rs"),
     include_str!("../room_list/product_commands.rs"),
     include_str!("../room_ops/product_commands.rs"),
     include_str!("../room_profile/product_commands.rs"),
@@ -33,6 +38,60 @@ const PRODUCT_SOURCE: &str = concat!(
 // directly rather than the product.rs module wrapper.
 const AUTH_PRODUCT_COMMANDS_SOURCE: &str = include_str!("product_commands.rs");
 const DEVICE_PRODUCT_COMMANDS_SOURCE: &str = include_str!("../devices/product_commands.rs");
+
+#[test]
+fn v_presence_registers_the_frozen_native_surface() {
+    let presence_source = include_str!("../presence/product_commands.rs");
+    let lib_source = include_str!("../../lib.rs");
+    for command in [
+        "matrix_presence_snapshot",
+        "matrix_presence_subscribe",
+        "matrix_presence_unsubscribe",
+    ] {
+        assert!(presence_source.contains(command));
+        assert!(lib_source.contains(command));
+    }
+    let live_source = include_str!("../presence/live.rs");
+    assert!(live_source.contains("matrix-presence-updated"));
+    assert!(!live_source.contains("access_token"));
+    assert!(!live_source.contains("refresh_token"));
+}
+
+#[test]
+fn presence_wire_shapes_are_camel_case_and_privacy_safe() {
+    let snapshot = NativePresenceSnapshot {
+        user_id: "@alice:example.org".into(),
+        state: NativePresenceState::Online,
+        currently_active: true,
+        last_active_ts: Some(1_700_000_000_000),
+        status_msg: Some("coffee".into()),
+    };
+    let result = NativePresenceSnapshotResult::Ready {
+        session_generation: 4,
+        user_id: snapshot.user_id.clone(),
+        snapshot,
+    };
+    let raw = serde_json::to_string(&result).unwrap();
+    assert!(raw.contains("sessionGeneration"));
+    assert!(raw.contains("currentlyActive"));
+    assert!(raw.contains("lastActiveTs"));
+    for forbidden in ["accessToken", "refreshToken", "password", "ciphertext"] {
+        assert!(!raw.contains(forbidden));
+    }
+
+    let update = NativePresenceUpdate {
+        subscription_id: "presence-4-0".into(),
+        user_id: "@alice:example.org".into(),
+        session_generation: 4,
+        outcome: NativePresenceUpdateOutcome::Unavailable {
+            diagnostic_id: "v-presence-store-read-failed",
+        },
+    };
+    let raw_update = serde_json::to_string(&update).unwrap();
+    assert!(raw_update.contains("subscriptionId"));
+    assert!(raw_update.contains("sessionGeneration"));
+    assert!(raw_update.contains("diagnosticId"));
+}
 
 fn room_key_selection(selection_id: u64, label: &str) -> SelectedRoomKeyImport {
     SelectedRoomKeyImport {

@@ -1,7 +1,7 @@
-//! P4.7 — Presence stream index foundation (harness).
+//! P4.7 — Presence stream index and V-PRESENCE.USER native owner.
 //!
 //! Pure projection of per-user presence state. Complements P6.3 typing.
-//! No SDK presence APIs, no production Tauri commands, no dual-backend.
+//! The product owner consumes the managed SDK client's global presence stream.
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p4.7-presence.md`
 
@@ -10,10 +10,16 @@
 
 mod error;
 mod index;
+pub mod live;
 
 pub use error::PresenceError;
 pub use index::{
     PresenceIndex, PresenceSnapshot, PresenceState, MAX_PRESENCE_USERS, MAX_STATUS_MSG_CHARS,
+};
+pub use live::{
+    NativePresenceOwner, NativePresenceSnapshot, NativePresenceSnapshotResult, NativePresenceState,
+    NativePresenceSubscription, NativePresenceUpdate, NativePresenceUpdateOutcome,
+    PRESENCE_UPDATED_EVENT,
 };
 
 /// Static marker for link / schema smoke.
