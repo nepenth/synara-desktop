@@ -3,7 +3,7 @@
 | Field    | Value                                                                                                                   |
 | -------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Status   | **Native room-list + native media boundary at the measured tip; #407 media config/download is merged; this inventoried residual is closed** |
-| Tip      | `92e5b29c` on `feature/matrix-rust-sdk-full-replacement`                                                                |
+| Tip      | `27a854d8` on `feature/matrix-rust-sdk-full-replacement`                                                                |
 | Scope    | `CallWidgetDriver` upload, media-config, media-download, and known-room methods                                         |
 | Guard    | Never touch `main` or umbrella PR **#39**; `dual_backend` is forbidden; **V-BURN remains HOLD and is not started** |
 
@@ -15,7 +15,7 @@
 > parity or start V-BURN.
 
 > **Tip honesty.** This docs-only refresh updates **#476** from its `c1e9c3be`
-> evidence anchor to measured tip `92e5b29c`, which carries the later status
+> evidence anchor to measured tip `27a854d8`, which carries the later status
 > documentation after #461. The CallWidget implementation paths and focused
 > evidence are unchanged; this update moves the evidence anchor only.
 
@@ -273,7 +273,7 @@ path to the existing HTTP/Blob helpers. #407 supplies the dedicated Rust
 product commands and native owner; this docs truth-up changes no product code,
 dual-backend flag, or V-BURN state.
 
-The scan and source anchors above were revalidated at tip `92e5b29c`. No
+The scan and source anchors above were revalidated at tip `27a854d8`. No
 CallWidget implementation path changed between the #476 anchor `c1e9c3be`
 and this tip. The later status-documentation commits do not change the
 CallWidget residual boundary.
