@@ -26,3 +26,13 @@ test('native room-member hook branch is fail-closed before the JS room read', ()
   assert.match(nativeBranch[1], /readRoomMembersWithNativeOwner\(roomId, true\)/);
   assert.doesNotMatch(nativeBranch[1], /mx\.getRoom\(roomId\)/);
 });
+
+test('member projections reuse the shared room-member type without SDK imports', () => {
+  for (const path of ['src/app/hooks/useMemberFilter.ts', 'src/app/hooks/useMemberSort.ts']) {
+    const source = readSource(path);
+
+    assert.match(source, /import type \{ RoomMemberListItem \} from ['"]\.\/useRoomMembers['"]/);
+    assert.doesNotMatch(source, /matrix-js-sdk/);
+    assert.doesNotMatch(source, /MatrixRoomMember/);
+  }
+});
