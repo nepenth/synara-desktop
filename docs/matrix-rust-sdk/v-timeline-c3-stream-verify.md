@@ -1,13 +1,13 @@
 # V-TIMELINE.C3 — stream/delta re-verify after cutover
 
-| Field        | Value                                                                                                                                                            |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status       | Docs-only verification checklist — **no product code**                                                                                                           |
-| Live proof   | **Not confirmed** — #446 product-command fan-out and #448 scoreboard refresh are not C3–C5 proof; no authenticated desktop evidence is recorded for this tip     |
-| Scope        | `synara/src/app/features/room/nativeTimelineView.ts` (`useNativeTimelineView`, `applyNativeTimelineViewDelta`), `NativeTimelinePresenter.tsx` stream consumption |
-| Precondition | C1 (#285) selects `NativeTimelinePresenter` in `RoomView`; C2 (#289) deletes `RoomTimeline` + dead JS timeline path                                              |
-| Policy       | [full-vertical-policy.md](full-vertical-policy.md); [cutover-operating-model.md](cutover-operating-model.md); dual_backend **false**; **never touch #39**        |
-| Related      | [v-timeline-cutover-residual.md](v-timeline-cutover-residual.md) (C3 row), [v-timeline-full-replacement-contract.md](v-timeline-full-replacement-contract.md)    |
+| Field        | Value                                                                                                                                                                                          |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status       | Docs-only verification checklist — **no product code**                                                                                                                                         |
+| Live proof   | **Not confirmed** — #446 product-command fan-out, #448 scoreboard refresh, and #450 native power/creator reads are not C3–C5 proof; no authenticated desktop evidence is recorded for this tip |
+| Scope        | `synara/src/app/features/room/nativeTimelineView.ts` (`useNativeTimelineView`, `applyNativeTimelineViewDelta`), `NativeTimelinePresenter.tsx` stream consumption                               |
+| Precondition | C1 (#285) selects `NativeTimelinePresenter` in `RoomView`; C2 (#289) deletes `RoomTimeline` + dead JS timeline path                                                                            |
+| Policy       | [full-vertical-policy.md](full-vertical-policy.md); [cutover-operating-model.md](cutover-operating-model.md); dual_backend **false**; **never touch #39**                                      |
+| Related      | [v-timeline-cutover-residual.md](v-timeline-cutover-residual.md) (C3 row), [v-timeline-full-replacement-contract.md](v-timeline-full-replacement-contract.md)                                  |
 
 ## 1. What C3 must prove
 
@@ -57,7 +57,7 @@ Run from the repository root before opening the desktop:
 git status --short --branch
 git branch --show-current
 git rev-parse HEAD
-git merge-base --is-ancestor 206d24f36fae8cd9cf6f061be887cb955df0842b HEAD
+git merge-base --is-ancestor 103a653f256a23cdb10566684c52a759f0d542f4 HEAD
 node --version
 npm --version
 npm exec --yes --package=prettier@2.8.1 -- prettier --version
@@ -67,7 +67,7 @@ Continue only when all of the following are true:
 
 - the proof is on `feature/matrix-rust-sdk-full-replacement` or a docs branch
   whose checked-out history includes current feature tip
-  `206d24f36fae8cd9cf6f061be887cb955df0842b`, never `main` or PR #39. The
+  `103a653f256a23cdb10566684c52a759f0d542f4`, never `main` or PR #39. The
   `git merge-base --is-ancestor` check must pass; if it fails, stop and record
   `Not confirmed`;
 - record the exact output of `git rev-parse HEAD` as the **evidence head** in
@@ -219,7 +219,7 @@ generated success label, or a retry that lacks the complete route chronology.
 proof: V-TIMELINE.C3
 verdict: Not confirmed | Failed | Confirmed
 base: feature/matrix-rust-sdk-full-replacement
-base-tip: 206d24f36fae8cd9cf6f061be887cb955df0842b
+base-tip: 103a653f256a23cdb10566684c52a759f0d542f4
 head: <exact output of git rev-parse HEAD>
 operator: <name or team alias>
 platform: <macOS/Linux + desktop build or dev run>
