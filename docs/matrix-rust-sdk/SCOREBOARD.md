@@ -3,9 +3,9 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
-| Tip                                                    | `457b2760` on `feature/matrix-rust-sdk-full-replacement`; #405, #407, and #438 are merged at this tip |
+| Tip                                                    | `f92a33f9` on `feature/matrix-rust-sdk-full-replacement`; #405, #407, #438, and #439 are merged at this tip |
 | Production `matrix-js-sdk` import files (`synara/src`) | **152** (plan baseline was **220**)                      |
-| Product lane                                           | **LANE_OWNER: #439 powers-bulk** until it merges; next structural lane is the behavior-preserving `product.rs` extract |
+| Product lane                                           | **LANE_OWNER: extract-product-rs** — `product.rs` extract in flight on [`matrix-rust/v-product-rs-extract`](https://github.com/nepenth/synara-desktop/tree/matrix-rust/v-product-rs-extract); extract is not merged |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
 
@@ -52,12 +52,12 @@ run passes the relevant checklist.
 | Room leave vertical             | **#364** `matrix_room_leave` + LeaveRoom/LeaveSpace native owner                                                                                                                                 |
 | Room create vertical            | **#372** `matrix_room_create` + native owner; CreateRoom/Space/Chat + `/startdm` fail-closed (imports **154→153**)                                                                               |
 | Room moderation writes          | **#375** native invite/kick/ban/unban/setPowerLevel writes; moderation write product vertical merged                                                                                             |
-| Members-read member surfaces    | **#395** `matrix_room_members_snapshot` + Members settings native fail-closed; **#405 merged** wires drawer/lobby/mentions member snapshots; power-level/creator reads and powers-bulk writes remain residual |
+| Members-read member surfaces    | **#395** `matrix_room_members_snapshot` + Members settings native fail-closed; **#405 merged** wires drawer/lobby/mentions member snapshots; **#439 merged** adds native powers-bulk writes; power-level/creator reads remain residual |
 | /leave command                  | **#371** useCommands Leave → leaveRoomWithNativeOwner                                                                                                                                            |
 | Room join vertical              | **#369** `matrix_room_join` + native owner; all production `joinRoom` sites fail-closed (imports **155→154**)                                                                                    |
 | Composer GIF/upload fallbacks   | **#363** RoomInput GIF + msgContent thumbnail JS upload fallbacks deleted                                                                                                                        |
 | V-SEND.R-CALL-UPLOAD            | **#328** native upload; **#362** native known rooms; **#407** native media config/download; inventoried CallWidget native desktop surfaces are closed ([residual](v-send-call-widget-residual.md)) |
-| Product lane protocol            | **#438 merged** docs-only single-owner protocol for `product.rs`; #439 is the current lane owner and extract/split follows its merge |
+| Product lane protocol            | **#438 merged** docs-only single-owner protocol for `product.rs`; **#439 merged** powers-bulk; `extract-product-rs` is the current lane owner |
 | Composer thumbnail (msgContent) | **#325** video thumbnails via `uploadMediaNative` / `matrix_upload_media` fail-closed                                                                                                            |
 | V-SEND.R-DEVTOOL                | [Docs-only inventory](v-send-devtool-inventory.md) · [implementation gate](v-send-devtool-inventory.md#implementation-gate): JS client remains; start only after C3–C5 live proofs; low priority |
 | CI                              | Parallel Validate #284                                                                                                                                                                           |
@@ -66,7 +66,7 @@ run passes the relevant checklist.
 
 | PR     | What                                                                                           |
 | ------ | ---------------------------------------------------------------------------------------------- |
-| [#439](https://github.com/nepenth/synara-desktop/pull/439) | **Powers-bulk native room power-level and tag writes** — **in flight**; current `product.rs` lane owner. This tip does not contain #439, so it is not claimed merged. |
+| [`extract-product-rs`](https://github.com/nepenth/synara-desktop/tree/matrix-rust/v-product-rs-extract) | **Behavior-preserving `product.rs` extract/split** — **in flight**; current product lane owner. Do not claim the extract merged. |
 
 ## Left (finish-line order)
 
@@ -75,10 +75,10 @@ run passes the relevant checklist.
    invite/kick/ban/unban/setPowerLevel **#375 merged**; members-read first slice
    **#395** (`matrix_room_members_snapshot` + Members settings native). **#405**
    is merged at this tip and closes Room/MembersDrawer/Lobby/UserMentionAutocomplete
-   member enumeration on native desktop. The remaining power-level/creator reads
-   and powers-bulk writes are residual; **#439** powers-bulk is in flight and is
-   not merged at this tip. After #439 merges, the next structural lane is the
-   behavior-preserving `product.rs` extract/split. See
+   member enumeration on native desktop. **#439** powers-bulk is also merged;
+   power-level/creator reads remain residual. The next structural lane is the
+   behavior-preserving `product.rs` extract/split, currently in flight as
+   `extract-product-rs`. See
    [read residual inventory](v-rooms-members-read-residual.md),
    [P4.6 members](p4.6-members.md), [P4.3 membership](p4.3-membership-unread.md),
    and [product lane protocol](product-lane-protocol.md).

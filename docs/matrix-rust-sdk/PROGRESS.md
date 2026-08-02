@@ -14,12 +14,12 @@
 | Field              | Value                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**                                                                                                                       |
-| Integration tip    | `457b2760` — #405 members wiring, #407 CallWidget media, and #438 product-lane protocol are merged at this tip |
-| Active work        | **#439 powers-bulk is in flight and owns the `product.rs` lane until it merges; it is not merged at this tip**. After #439, extract/split `product.rs` as the next structural lane. C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
+| Integration tip    | `f92a33f9` — #405 members wiring, #407 CallWidget media, #438 product-lane protocol, and #439 powers-bulk are merged at this tip |
+| Active work        | **`extract-product-rs` is in flight** on [`matrix-rust/v-product-rs-extract`](https://github.com/nepenth/synara-desktop/tree/matrix-rust/v-product-rs-extract); the `product.rs` extract is not merged. C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
 | Import accounting  | Desktop production import files **152** on tip (plan baseline was 220). Allowlist **152** (ratcheted after #395 Members.tsx drop).       |
-| Product lane        | **LANE_OWNER: #439 powers-bulk** until merge; this docs-only draft does not touch `product.rs` |
+| Product lane        | **LANE_OWNER: extract-product-rs** — this docs-only draft does not touch `product.rs` |
 | Dual backend       | **`false`** (forbidden forever)                                                                                                      |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                             |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                 |
@@ -33,9 +33,9 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `457b2760`** includes merged #405 members wiring, #407 CallWidget media config/download, and #438 product-lane protocol. #439 powers-bulk is in flight but is not in this tip; power-level/creator reads remain residual. Imports remain 152; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
-| **Tip**        | `457b2760`                                                                                                                                                                                                                             |
-| **Active PRs** | [#439](https://github.com/nepenth/synara-desktop/pull/439) powers-bulk — **in flight**, sole `product.rs` lane owner until merge; #405 and #407 are merged at this tip. This docs-only draft claims no product code. |
+| **Now**        | **Tip `f92a33f9`** includes merged #405 members wiring, #407 CallWidget media config/download, #438 product-lane protocol, and #439 powers-bulk. The next structural lane, `extract-product-rs`, is in flight on `matrix-rust/v-product-rs-extract`; the extract is not merged. Imports remain 152; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
+| **Tip**        | `f92a33f9`                                                                                                                                                                                                                             |
+| **Active PRs** | [`extract-product-rs`](https://github.com/nepenth/synara-desktop/tree/matrix-rust/v-product-rs-extract) — **in flight**, current `product.rs` lane owner; #405/#407/#438/#439 are merged at this tip. This docs-only draft claims no product code. |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
 ---
@@ -60,6 +60,19 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — tip `f92a33f9` — #405/#407/#438/#439 merged; product extract in flight
+
+| When (UTC) | Item                      | Result                 | Notes                                                                                                                                                                                                 |
+| ---------- | ------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**       | **This draft**         | Docs-only refresh based at `f92a33f9`; #405, #407, #438, and #439 are present in the tip. This draft does not touch `product.rs`.                                                                    |
+| current    | **Members drawer wiring** | **Merged #405**        | Native member snapshots own Room/MembersDrawer/Lobby/UserMentionAutocomplete enumeration on the desktop route; power-level/creator reads remain residual.                                         |
+| current    | **CallWidget media IPC**  | **Merged #407**        | Native media config/download owners and their proof coverage are present at the tip; the inventoried CallWidget native desktop surfaces are closed.                                                 |
+| current    | **Product lane protocol** | **Merged #438**        | The single-owner `product.rs` protocol is operational.                                                                                                                                                |
+| current    | **Powers-bulk writes**    | **Merged #439**        | Native bulk room power-level and tag writes are present at the tip; this is not a claim that the remaining power-level/creator reads are complete.                                                    |
+| current    | **Next structural lane**  | **In flight**          | `extract-product-rs` owns the `product.rs` lane on `matrix-rust/v-product-rs-extract`; the behavior-preserving extract/split is not merged.                                                          |
+| current    | **Import accounting**     | **152**                | Production `matrix-js-sdk` import files and the allowlist remain **152** at this tip.                                                                                                               |
+| current    | **Proof / burn gates**    | **Held**               | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden and #39/main remain out of scope.                                                                                |
 
 ### 2026-08-01 — tip `457b2760` — #405/#407/#438 merged; #439 powers-bulk in flight
 
