@@ -3,14 +3,15 @@ import test from 'node:test';
 
 import {
   createNativeRoomDirectoryOwner,
+  readNativeRoomDirectorySession,
   type NativeRoomDirectoryInvoke,
 } from '../nativeRoomDirectoryOwner';
 
 const loggedIn = {
   status: 'logged_in',
-  user_id: '@alice:example.org',
-  device_id: 'DEVICE',
-  homeserver_url: 'https://example.org',
+  userId: '@alice:example.org',
+  deviceId: 'DEVICE',
+  homeserverUrl: 'https://example.org',
   sessionGeneration: 7,
 };
 
@@ -51,6 +52,36 @@ test('directory owner fails closed before native search when unavailable or logg
       : { available: false }
   );
   await assert.rejects(() => secretSession.search({ serverName: 'example.org', limit: 24 }));
+});
+
+test('session snapshot accepts the camelCase IPC shape and rejects legacy or incomplete keys', async () => {
+  const session = await readNativeRoomDirectorySession(true, async () => ({
+    available: true,
+    value: loggedIn,
+  }));
+  assert.deepEqual(session, {
+    sessionGeneration: 7,
+    userId: '@alice:example.org',
+    serverName: 'example.org',
+  });
+
+  const snakeCase = readNativeRoomDirectorySession(true, async () => ({
+    available: true,
+    value: {
+      status: 'logged_in',
+      sessionGeneration: 7,
+      user_id: '@alice:example.org',
+      device_id: 'DEVICE',
+      homeserver_url: 'https://example.org',
+    },
+  }));
+  await assert.rejects(snakeCase);
+
+  const incomplete = readNativeRoomDirectorySession(true, async () => ({
+    available: true,
+    value: { status: 'logged_in', sessionGeneration: 7, userId: '@alice:example.org' },
+  }));
+  await assert.rejects(incomplete);
 });
 
 test('directory owner uses exact native command arguments and parses the page', async () => {

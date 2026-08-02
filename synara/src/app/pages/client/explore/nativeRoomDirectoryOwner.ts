@@ -38,16 +38,24 @@ export type NativeRoomDirectorySession = {
 type NativeSessionWire = {
   status: 'logged_out' | 'logged_in';
   sessionGeneration?: unknown;
-  user_id?: unknown;
-  device_id?: unknown;
-  homeserver_url?: unknown;
+  userId?: unknown;
+  deviceId?: unknown;
+  homeserverUrl?: unknown;
 };
 
-const SESSION_WIRE_KEYS = ['status', 'sessionGeneration', 'user_id', 'device_id', 'homeserver_url'];
+const SESSION_WIRE_KEYS = [
+  'status',
+  'sessionGeneration',
+  'userId',
+  'deviceId',
+  'homeserverUrl',
+] as const;
 
 const hasExactSessionKeys = (value: Record<string, unknown>): boolean => {
   const allowed = new Set(SESSION_WIRE_KEYS);
-  return Object.keys(value).every((key) => allowed.has(key));
+  if (!Object.keys(value).every((key) => allowed.has(key))) return false;
+  if (value.status === 'logged_out') return Object.keys(value).length === 1;
+  return SESSION_WIRE_KEYS.every((key) => key in value);
 };
 
 const unavailableMessage = 'Native Matrix room directory is unavailable.';
@@ -89,8 +97,17 @@ const parseLoggedInSession = (value: unknown): NativeRoomDirectorySession | unde
   if (wire.status !== 'logged_in' || !isSafeGeneration(wire.sessionGeneration)) {
     return undefined;
   }
-  const userId = wire.user_id;
-  if (typeof userId !== 'string' || !userId.trim()) return undefined;
+  const userId = wire.userId;
+  if (
+    typeof userId !== 'string' ||
+    !userId.trim() ||
+    typeof wire.deviceId !== 'string' ||
+    !wire.deviceId.trim() ||
+    typeof wire.homeserverUrl !== 'string' ||
+    !wire.homeserverUrl.trim()
+  ) {
+    return undefined;
+  }
   const serverName = serverFromUserId(userId);
   if (!serverName) return undefined;
   return {
