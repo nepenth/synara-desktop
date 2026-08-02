@@ -5,7 +5,7 @@
 | Status          | **First slice merged (#461); V-ROOMS.R-DIRECTORY closure remains open** — this docs-only refresh records the residual; live proof and acceptance are **Not confirmed** |
 | Residual        | **V-ROOMS.R-DIRECTORY** from [#383](v-rooms-directory-residual.md)                                                                                                     |
 | Base            | #461 product baseline: `feature/matrix-rust-sdk-full-replacement` at `c1e9c3be2b8ff13da42853913b30493cb030e6ec`                                                        |
-| Refresh tip     | Current integration tip `fd0dfbf464ea59351d2cca1b746ba9d3f00923e7` on `feature/matrix-rust-sdk-full-replacement`                                                       |
+| Refresh tip     | Current integration tip `d3b7871f2af9aafed7770780b13720c5b376afab` on `feature/matrix-rust-sdk-full-replacement`                                                       |
 | PR shape        | Focused docs PR targeting `feature/matrix-rust-sdk-full-replacement`; #461 first slice is merged at the baseline                                                       |
 | Policy          | Complete UI → Tauri IPC → live `matrix-sdk` owner; superseded JS directory network is deleted in the same implementation slice                                         |
 | Desktop failure | **Fail closed** when the native Matrix session, command, response, or generation is unavailable                                                                        |
@@ -21,7 +21,7 @@ V-BURN completion claim.
 
 > **Tip-honesty note.** #461's first slice is merged at product baseline
 > `c1e9c3be`; this docs-only packet refresh is based on integration tip
-> `fd0dfbf4`. The first slice lands the native browse/search/filter/pagination
+> `d3b7871f`. The first slice lands the native browse/search/filter/pagination
 > route, protocol projection, route-scoped JS-owner deletion, strict DTO parsing,
 > and focused local/CI evidence. Authenticated live proof and full closure
 > evidence remain **Not confirmed**. The preview/card/navigation/join boundaries
@@ -135,7 +135,7 @@ Before claiming V-ROOMS.R-DIRECTORY closure, the writer must verify:
 
 1. the #461 product baseline remains `c1e9c3be2b8ff13da42853913b30493cb030e6ec`,
    while this docs-only refresh is based on integration tip
-   `fd0dfbf464ea59351d2cca1b746ba9d3f00923e7` and targets
+   `d3b7871f2af9aafed7770780b13720c5b376afab` and targets
    `feature/matrix-rust-sdk-full-replacement`;
 2. the existing managed native session is the sole authenticated Matrix SDK
    client for the desktop session;
