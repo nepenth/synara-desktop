@@ -283,16 +283,18 @@ notification, call, or DM member lookups.
   desktop; their member rows/search boundaries accept the native DTO, and
   `Room.tsx`/`Lobby.tsx` no longer own a legacy member read.
 - `matrix_room_power_levels_snapshot` and `matrix_room_creators_snapshot` are
-  landed and back the native power/creator paths; the remaining tag projection
-  returns custom power-level tag metadata without a JS state-event fallback.
+  landed and back the native power/creator paths; `usePowerLevelTags` still has
+  no native tag snapshot, so native sessions use generated/default labels and
+  do not receive persisted custom names, colors, or icons.
 - `Members.tsx`, `MembersDrawer.tsx`, `Lobby.tsx`, and mention member reads use
   native snapshots and fail closed on native desktop; the explicit non-native
   web route is the only remaining JS member route if web support is retained.
 - Native desktop no longer uses the JS power-level/creator reads in the #450
-  hook/permission paths; custom tag and direct helper/plugin routes are either
-  native-owned or explicitly scoped, and unrelated member helper routes are not
-  deleted merely because #405 landed. Preserve the separate PowersEditor write
-  slice.
+  hook/permission paths; the custom-tag projection and direct
+  `via-servers.ts` / `utils/room.ts` readers remain open residual routes pending
+  native ownership or an explicitly approved boundary. Unrelated member helper
+  routes are not deleted merely because #405 landed. Preserve the separate
+  PowersEditor write slice.
 - The future READ implementation must update production `matrix-js-sdk` import
   accounting only when native READ ownership is actually landed; this docs
   packet makes no such reduction claim.
