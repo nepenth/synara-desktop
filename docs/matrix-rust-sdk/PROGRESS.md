@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**                                                                                                                       |
-| Integration tip    | `52953091` — docs-only base; post-#405 residual refresh uses product head `cd2d57b4` as a pending merge input |
-| Active work        | **#405 members drawer/lobby/mentions wiring — `ACCEPT` at `cd2d57b4`, pending merge; this draft narrows the after-#405 residual to power-level/creator reads**. #407 CallWidget media IPC — `ACCEPT_WITH_NITS`, full-green proof at `cd07f4fc` behind tip, parent merge pending. C3–C5 live proofs; R-DEVTOOL gated; V-BURN HOLD |
+| Integration tip    | `9fb341af` — #405, #407, #438, #439, and #446 are merged at this feature tip |
+| Active work        | **Post-#446 product fan-out remains separate; this docs-only tip-honesty refresh makes no product claim or `product.rs` change.** C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
 | Import accounting  | Desktop production import files **152** on tip (plan baseline was 220). Allowlist **152** (ratcheted after #395 Members.tsx drop).       |
@@ -32,9 +32,9 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Docs base `52953091`**. The post-#405 target closes drawer/lobby/mention member enumeration after #405 merges; power-level/creator reads remain residual. #407 CallWidget media IPC is **`ACCEPT_WITH_NITS`** with full-green proof at `cd07f4fc`, behind this tip, parent merge pending. Imports remain 152; this draft claims no product merge. #39 gated. |
-| **Tip**        | `52953091`                                                                                                                                                                                                                             |
-| **Active PRs** | [#405](https://github.com/nepenth/synara-desktop/pull/405) `ACCEPT` at [`cd2d57b4`](https://github.com/nepenth/synara-desktop/commit/cd2d57b4), pending merge; [#407](https://github.com/nepenth/synara-desktop/pull/407) `ACCEPT_WITH_NITS`, full green at [`cd07f4fc`](https://github.com/nepenth/synara-desktop/commit/cd07f4fc), behind tip, parent merge pending. This docs-only draft claims no product code. |
+| **Now**        | **Tip `9fb341af`** includes merged #405 members wiring, #407 CallWidget media, #438 product-lane protocol, #439 powers-bulk, and #446's behavior-preserving `product.rs` extract/split. Subsequent product fan-out remains separate; imports remain 152; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
+| **Tip**        | `9fb341af`                                                                                                                                                                                                                             |
+| **Active PRs** | Post-#446 product fan-out remains separate from this docs-only refresh; no product code or `product.rs` is changed here. |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
 ---
@@ -59,6 +59,15 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — tip `9fb341af` — #446 merged; docs tip honesty
+
+| When (UTC) | Item                      | Result                 | Notes                                                                                                                                 |
+| ---------- | ------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**       | **This docs refresh**  | Docs-only status update based at `9fb341af`; #405, #407, #438, #439, and #446 are present in the feature tip.                          |
+| current    | **Product lane**          | **Separate fan-out**   | Subsequent product fan-out is not edited, rebased, or claimed complete by this PR.                                                  |
+| current    | **Members / power**       | **Residual narrowed**  | Native member enumeration and powers-bulk writes are landed; power-level/creator reads remain residual and unimplemented.              |
+| current    | **Proof / burn gates**    | **Held**               | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden and #39/main remain out of scope.               |
 
 ### 2026-08-01 — docs base `52953091` — post-#405 residual boundary
 
