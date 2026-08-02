@@ -478,8 +478,8 @@ test("repository inventory includes tooling dynamic import and records the curre
   const rw = inventory.summary.repositoryWide;
 
   assert.equal(
-    baseline.productionImportFiles, 147,
-    `expected 147 desktop runtime production import files, found ${baseline.productionImportFiles}`
+    baseline.productionImportFiles, 146,
+    `expected 146 desktop runtime production import files, found ${baseline.productionImportFiles}`
   );
   assert.equal(
     baseline.testImportFiles,
@@ -492,7 +492,7 @@ test("repository inventory includes tooling dynamic import and records the curre
   assert.equal(baseline.buckets.page, 7);
   assert.equal(baseline.buckets.utility, 10);
   assert.equal(baseline.buckets.state, 5);
-  assert.equal(baseline.buckets.plugin, 7);
+  assert.equal(baseline.buckets.plugin, 6);
   assert.equal(baseline.buckets["client-lifecycle"], 2);
   assert.equal(baseline.buckets["media-boundary"], 1);
   assert.equal(baseline.buckets["shared-type"], 1);
