@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { Avatar, Box, config, Icon, IconButton, Icons, IconSrc, MenuItem, Text } from 'folds';
-import { JoinRule } from 'matrix-js-sdk';
 import { PageNav, PageNavContent, PageNavHeader, PageRoot } from '../../components/page';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -17,6 +16,8 @@ import { Permissions } from './permissions';
 import { RoomSettingsPage } from '../../state/roomSettings';
 import { useRoom } from '../../hooks/useRoom';
 import { DeveloperTools } from '../common-settings/developer-tools';
+import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
+import type { JoinRule } from 'matrix-js-sdk';
 
 type RoomSettingsMenuItem = {
   page: RoomSettingsPage;
@@ -69,6 +70,7 @@ export function RoomSettings({ initialPage, requestClose }: RoomSettingsProps) {
   const roomAvatar = useRoomAvatar(room, mDirects.has(room.roomId));
   const roomName = useRoomName(room);
   const joinRuleContent = useRoomJoinRule(room);
+  const rawJoinRule: JoinRule | undefined = joinRuleContent?.join_rule;
 
   const avatarUrl = roomAvatar
     ? resolveMatrixThumbnailUrl(mx, roomAvatar, 96, { useAuthentication })
@@ -105,7 +107,7 @@ export function RoomSettings({ initialPage, requestClose }: RoomSettingsProps) {
                       <RoomIcon
                         size="50"
                         roomType={room.getType()}
-                        joinRule={joinRuleContent?.join_rule ?? JoinRule.Invite}
+                        joinRule={normalizeRoomJoinRulePresentation(rawJoinRule)}
                         filled
                       />
                     )}

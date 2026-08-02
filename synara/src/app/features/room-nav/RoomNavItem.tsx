@@ -53,6 +53,7 @@ import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { useRoomName } from '../../hooks/useRoomMeta';
+import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 import { useCallMembers, useCallSession } from '../../hooks/useCall';
 import { useCallEmbed, useCallStart } from '../../hooks/useCallEmbed';
 import { callChatAtom } from '../../state/callEmbed';
@@ -353,7 +354,7 @@ function RoomNavItemImpl({
                   }}
                   filled={selected}
                   size="100"
-                  joinRule={room.getJoinRule()}
+                  joinRule={normalizeRoomJoinRulePresentation(room.getJoinRule())}
                   roomType={room.getType()}
                 />
               )}

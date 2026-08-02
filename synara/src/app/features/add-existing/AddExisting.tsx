@@ -54,6 +54,7 @@ import { getViaServers } from '../../plugins/via-servers';
 import { setSpaceChild } from '../lobby/nativeSpaceChild';
 import { rateLimitedActions } from '../../utils/matrix';
 import { useAlive } from '../../hooks/useAlive';
+import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 
 const SEARCH_OPTS: UseAsyncSearchOptions = {
   limit: 500,
@@ -288,7 +289,9 @@ export function AddExistingModal({ parentId, space, requestClose }: AddExistingM
                                   ) : (
                                     <RoomIcon
                                       size="200"
-                                      joinRule={room.getJoinRule()}
+                                      joinRule={normalizeRoomJoinRulePresentation(
+                                        room.getJoinRule()
+                                      )}
                                       roomType={room.getType()}
                                     />
                                   )}

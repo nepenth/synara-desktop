@@ -15,14 +15,7 @@ import {
   toRem,
 } from 'folds';
 import { useSearchParams } from 'react-router-dom';
-import {
-  INotification,
-  INotificationsResponse,
-  IRoomEvent,
-  JoinRule,
-  Method,
-  Room,
-} from 'matrix-js-sdk';
+import { INotification, INotificationsResponse, IRoomEvent, Method, Room } from 'matrix-js-sdk';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { HTMLReactParserOptions } from 'html-react-parser';
 import { Opts as LinkifyOpts } from 'linkifyjs';
@@ -101,6 +94,7 @@ import {
 import { useRoomCreatorsTag } from '../../../hooks/useRoomCreatorsTag';
 import { useRoomCreators } from '../../../hooks/useRoomCreators';
 import { RoomNotificationModeSwitcher } from '../../../components/RoomNotificationSwitcher';
+import { normalizeRoomJoinRulePresentation } from '../../../features/matrix-dto/roomJoinRule';
 import {
   getRoomNotificationModeIcon,
   useRoomNotificationPreference,
@@ -436,7 +430,7 @@ function RoomNotificationsGroupComp({
                 <RoomIcon
                   size="50"
                   roomType={room.getType()}
-                  joinRule={room.getJoinRule() ?? JoinRule.Restricted}
+                  joinRule={normalizeRoomJoinRulePresentation(room.getJoinRule())}
                   filled
                 />
               )}

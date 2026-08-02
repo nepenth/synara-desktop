@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 146,
-      "importFileCount": 144,
+      "fileCount": 145,
+      "importFileCount": 143,
       "methodCandidateFrequencies": [
         {
           "count": 61,
@@ -378,8 +378,8 @@
       },
       "modules": [
         {
-          "fileCount": 138,
-          "importCount": 138,
+          "fileCount": 137,
+          "importCount": 137,
           "path": "matrix-js-sdk"
         },
         {
@@ -502,13 +502,6 @@
           "valueImports": 20
         },
         {
-          "fileCount": 16,
-          "importCount": 16,
-          "name": "JoinRule",
-          "typeImports": 0,
-          "valueImports": 16
-        },
-        {
           "fileCount": 8,
           "importCount": 8,
           "name": "ClientEvent",
@@ -556,6 +549,13 @@
           "name": "IPushRules",
           "typeImports": 0,
           "valueImports": 6
+        },
+        {
+          "fileCount": 6,
+          "importCount": 6,
+          "name": "JoinRule",
+          "typeImports": 2,
+          "valueImports": 4
         },
         {
           "fileCount": 6,
@@ -2743,11 +2743,6 @@
             {
               "alias": null,
               "isTypeOnly": false,
-              "name": "JoinRule"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
               "name": "MatrixClient"
             }
           ],
@@ -2760,42 +2755,42 @@
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 27,
+          "line": 28,
           "name": "getUserId"
         },
         {
           "category": "room_lists",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 88,
+          "line": 89,
           "name": "getRoom"
         },
         {
           "category": "room_lists",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 107,
+          "line": 108,
           "name": "getRoom"
         },
         {
           "category": "room_lists",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 112,
+          "line": 113,
           "name": "getRoom"
         },
         {
           "category": "room_lists",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 129,
+          "line": 130,
           "name": "getRoom"
         },
         {
           "category": "room_lists",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 141,
+          "line": 142,
           "name": "getRoom"
         }
       ],
@@ -3214,35 +3209,6 @@
     },
     {
       "bucket": "component",
-      "categories": [],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "JoinRule"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/components/room-avatar/RoomAvatar.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "component",
       "categories": ["client_methods", "room_methods", "room_lists"],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -3306,35 +3272,35 @@
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 48,
+          "line": 49,
           "name": "getSafeUserId"
         },
         {
           "category": "spaces",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 267,
+          "line": 268,
           "name": "isSpaceRoom"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 282,
+          "line": 283,
           "name": "getSafeUserId"
         },
         {
           "category": "spaces",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 302,
+          "line": 303,
           "name": "isSpaceRoom"
         },
         {
           "category": "spaces",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 311,
+          "line": 312,
           "name": "isSpaceRoom"
         }
       ],
@@ -3391,7 +3357,7 @@
           "category": "spaces",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 273,
+          "line": 274,
           "name": "isSpaceRoom"
         }
       ],
@@ -3978,11 +3944,6 @@
             {
               "alias": null,
               "isTypeOnly": false,
-              "name": "JoinRule"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
               "name": "MatrixError"
             }
           ],
@@ -3995,42 +3956,42 @@
           "category": "custom_raw_event_sends",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 100,
+          "line": 102,
           "name": "sendStateEvent"
         },
         {
           "category": "custom_raw_event_sends",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 108,
+          "line": 110,
           "name": "sendStateEvent"
         },
         {
           "category": "custom_raw_event_sends",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 114,
+          "line": 116,
           "name": "sendStateEvent"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 288,
+          "line": 291,
           "name": "getSafeUserId"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 289,
+          "line": 292,
           "name": "getSafeUserId"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 290,
+          "line": 293,
           "name": "getSafeUserId"
         }
       ],
@@ -4197,11 +4158,6 @@
             {
               "alias": null,
               "isTypeOnly": false,
-              "name": "JoinRule"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
               "name": "MatrixError"
             },
             {
@@ -4357,11 +4313,6 @@
           "line": 22,
           "module": "matrix-js-sdk",
           "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "JoinRule"
-            },
             {
               "alias": null,
               "isTypeOnly": false,
@@ -4544,28 +4495,28 @@
           "category": "room_lists",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 141,
+          "line": 142,
           "name": "getRoom"
         },
         {
           "category": "room_lists",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 261,
+          "line": 262,
           "name": "getRoom"
         },
         {
           "category": "room_lists",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 387,
+          "line": 392,
           "name": "getRooms"
         },
         {
           "category": "room_lists",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 453,
+          "line": 458,
           "name": "getRoom"
         }
       ],
@@ -4591,11 +4542,6 @@
               "alias": null,
               "isTypeOnly": false,
               "name": "IEventWithRoomId"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "JoinRule"
             },
             {
               "alias": null,
@@ -4708,21 +4654,21 @@
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 78,
+          "line": 79,
           "name": "getSafeUserId"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 267,
+          "line": 268,
           "name": "getUserId"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 300,
+          "line": 301,
           "name": "getSafeUserId"
         }
       ],
@@ -4740,13 +4686,13 @@
         {
           "defaultImport": null,
           "form": "static",
-          "isTypeOnly": false,
-          "line": 4,
+          "isTypeOnly": true,
+          "line": 20,
           "module": "matrix-js-sdk",
           "namedImports": [
             {
               "alias": null,
-              "isTypeOnly": false,
+              "isTypeOnly": true,
               "name": "JoinRule"
             }
           ],
@@ -5097,7 +5043,7 @@
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 90,
+          "line": 91,
           "name": "getSafeUserId"
         }
       ],
@@ -5577,28 +5523,28 @@
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 266,
+          "line": 267,
           "name": "getSafeUserId"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 468,
+          "line": 469,
           "name": "getSafeUserId"
         },
         {
           "category": "spaces",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 490,
+          "line": 491,
           "name": "isSpaceRoom"
         },
         {
           "category": "spaces",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 521,
+          "line": 522,
           "name": "isSpaceRoom"
         }
       ],
@@ -5851,13 +5797,13 @@
         {
           "defaultImport": null,
           "form": "static",
-          "isTypeOnly": false,
-          "line": 4,
+          "isTypeOnly": true,
+          "line": 20,
           "module": "matrix-js-sdk",
           "namedImports": [
             {
               "alias": null,
-              "isTypeOnly": false,
+              "isTypeOnly": true,
               "name": "JoinRule"
             }
           ],
@@ -6396,11 +6342,6 @@
               "alias": null,
               "isTypeOnly": false,
               "name": "HistoryVisibility"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "JoinRule"
             },
             {
               "alias": null,
@@ -7794,11 +7735,6 @@
             {
               "alias": null,
               "isTypeOnly": false,
-              "name": "JoinRule"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
               "name": "Room"
             }
           ],
@@ -7811,21 +7747,21 @@
           "category": "spaces",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 97,
+          "line": 101,
           "name": "isSpaceRoom"
         },
         {
           "category": "spaces",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 151,
+          "line": 155,
           "name": "isSpaceRoom"
         },
         {
           "category": "spaces",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 250,
+          "line": 254,
           "name": "isSpaceRoom"
         }
       ],
@@ -8510,11 +8446,6 @@
             {
               "alias": null,
               "isTypeOnly": false,
-              "name": "JoinRule"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
               "name": "Method"
             },
             {
@@ -8532,14 +8463,14 @@
           "category": "timelines",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 488,
+          "line": 482,
           "name": "findEventById"
         },
         {
           "category": "room_lists",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 764,
+          "line": 758,
           "name": "getRoom"
         }
       ],
@@ -10540,11 +10471,6 @@
             {
               "alias": null,
               "isTypeOnly": false,
-              "name": "JoinRule"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
               "name": "MatrixClient"
             },
             {
@@ -10636,42 +10562,42 @@
           "category": "authenticated_media",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 303,
+          "line": 291,
           "name": "mxcUrlToHttp"
         },
         {
           "category": "authenticated_media",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 320,
+          "line": 308,
           "name": "mxcUrlToHttp"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 427,
+          "line": 415,
           "name": "getUserId"
         },
         {
           "category": "room_lists",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 473,
+          "line": 461,
           "name": "getRoom"
         },
         {
           "category": "room_lists",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 487,
+          "line": 475,
           "name": "getRoom"
         },
         {
           "category": "room_lists",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 525,
+          "line": 513,
           "name": "getRoom"
         }
       ],
@@ -11462,7 +11388,7 @@
     "desktopRuntimeBaseline": {
       "buckets": {
         "client-lifecycle": 2,
-        "component": 21,
+        "component": 20,
         "feature": 52,
         "hook": 39,
         "media-boundary": 1,
@@ -11478,13 +11404,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 144,
+      "productionImportFiles": 143,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 154
+      "totalImportFiles": 153
     },
     "repositoryWide": {
-      "productionImportFiles": 144,
+      "productionImportFiles": 143,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -11493,7 +11419,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 157
+      "totalImportFiles": 156
     }
   }
 }

@@ -19,7 +19,7 @@ import {
   toRem,
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
-import { JoinRule, Room } from 'matrix-js-sdk';
+import { Room } from 'matrix-js-sdk';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
 import { SequenceCard } from '../../components/sequence-card';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -39,6 +39,10 @@ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { joinRoomWithNativeOwner } from '../../components/nativeRoomJoinOwner';
+import {
+  normalizeRoomJoinRulePresentation,
+  type RoomJoinRulePresentation,
+} from '../matrix-dto/roomJoinRule';
 
 type RoomJoinButtonProps = {
   roomId: string;
@@ -139,7 +143,9 @@ function RoomProfileError({ roomId, suggested, inaccessibleRoom, via }: RoomProf
           renderFallback={() => (
             <RoomIcon
               size="300"
-              joinRule={inaccessibleRoom ? JoinRule.Invite : JoinRule.Restricted}
+              joinRule={normalizeRoomJoinRulePresentation(
+                inaccessibleRoom ? 'invite' : 'restricted'
+              )}
               filled
             />
           )}
@@ -183,7 +189,7 @@ type RoomProfileProps = {
   avatarUrl?: string;
   suggested?: boolean;
   memberCount?: number;
-  joinRule?: JoinRule;
+  joinRule?: RoomJoinRulePresentation | null;
   options?: ReactNode;
 };
 function RoomProfile({
@@ -350,7 +356,7 @@ export const RoomItemCard = as<'div', RoomItemCardProps>(
                   }
                   memberCount={localSummary.memberCount}
                   suggested={content.suggested}
-                  joinRule={localSummary.joinRule}
+                  joinRule={normalizeRoomJoinRulePresentation(localSummary.joinRule)}
                   options={
                     joined ? (
                       <Box shrink="No" gap="100" alignItems="Center">
@@ -409,7 +415,7 @@ export const RoomItemCard = as<'div', RoomItemCardProps>(
                   }
                   memberCount={summary.num_joined_members}
                   suggested={content.suggested}
-                  joinRule={summary.join_rule}
+                  joinRule={normalizeRoomJoinRulePresentation(summary.join_rule)}
                   options={<RoomJoinButton roomId={roomId} via={content.via} />}
                 />
               )}

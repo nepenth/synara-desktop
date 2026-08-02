@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |          144 |                2 |                   3 |
+| production |          143 |                2 |                   3 |
 | test       |           10 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |      **157** |                  |                     |
+| **total**  |      **156** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |   144 |
+| Production import files |   143 |
 | Test import files       |    10 |
-| Total import files      |   154 |
+| Total import files      |   153 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 144)
+- Production match: **no** (found 143)
 - Test match: **no** (found 10)
 
 ### Production files by bucket (desktop runtime only)
@@ -47,7 +47,7 @@ Expected **220** production and **12** test import files.
 | Bucket           | Files |
 | ---------------- | ----: |
 | client-lifecycle |     2 |
-| component        |    21 |
+| component        |    20 |
 | feature          |    52 |
 | hook             |    39 |
 | media-boundary   |     1 |
@@ -59,13 +59,13 @@ Expected **220** production and **12** test import files.
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 144. Files with any finding: 146.
+Scope: **production only**. Import files: 143. Files with any finding: 145.
 
 ### Imported modules
 
 | Module path                                           | Import sites | Files |
 | ----------------------------------------------------- | -----------: | ----: |
-| `matrix-js-sdk`                                       |          138 |   138 |
+| `matrix-js-sdk`                                       |          137 |   137 |
 | `matrix-js-sdk/lib/types`                             |            8 |     8 |
 | `matrix-js-sdk/lib/matrixrtc/CallMembership`          |            4 |     4 |
 | `matrix-js-sdk/lib/models/relations`                  |            4 |     4 |
@@ -88,7 +88,6 @@ Scope: **production only**. Import files: 144. Files with any finding: 146.
 | `MatrixClient`              |      38 |    34 |         4 |    38 |
 | `MatrixEvent`               |      27 |    23 |         4 |    27 |
 | `MatrixError`               |      20 |    20 |         0 |    20 |
-| `JoinRule`                  |      16 |    16 |         0 |    16 |
 | `ClientEvent`               |       8 |     8 |         0 |     8 |
 | `RoomEvent`                 |       8 |     8 |         0 |     8 |
 | `EventType`                 |       7 |     7 |         0 |     7 |
@@ -96,6 +95,7 @@ Scope: **production only**. Import files: 144. Files with any finding: 146.
 | `Direction`                 |       6 |     6 |         0 |     6 |
 | `IContent`                  |       6 |     4 |         2 |     6 |
 | `IPushRules`                |       6 |     6 |         0 |     6 |
+| `JoinRule`                  |       6 |     4 |         2 |     6 |
 | `RoomEventHandlerMap`       |       6 |     6 |         0 |     6 |
 | `MsgType`                   |       5 |     5 |         0 |     5 |
 | `PushRuleKind`              |       5 |     5 |         0 |     5 |
@@ -422,7 +422,6 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `synara/src/app/components/message/Reaction.tsx`                                                                              | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/message/Reply.tsx`                                                                                 | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/message/content/PollContent.tsx`                                                                   | production | yes     | component        | static       | `matrix-js-sdk/lib/models/event`                                                                                                                                          |
-| `synara/src/app/components/room-avatar/RoomAvatar.tsx`                                                                        | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/room-intro/RoomIntro.tsx`                                                                          | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/user-profile/UserChips.tsx`                                                                        | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/cs-api.ts`                                                                                                    | production | yes     | app-other        | —            | —                                                                                                                                                                         |
