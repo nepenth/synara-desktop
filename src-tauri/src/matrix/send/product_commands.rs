@@ -1,0 +1,720 @@
+use super::*;
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
+pub async fn matrix_send_text(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    body: String,
+    msg_type: Option<String>,
+    formatted_body: Option<String>,
+    mention_user_ids: Option<Vec<String>>,
+    mention_room: Option<bool>,
+    reply_to: Option<String>,
+    // Thread root (`m.thread`). With reply_to → Thread::reply (is_falling_back false).
+    thread_root: Option<String>,
+    txn_id: Option<String>,
+) -> Result<MatrixSendTextResult, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&room_id)?;
+    let reply_to = parse_reply_event_id(reply_to)?;
+    let thread_root = parse_thread_root_event_id(thread_root)?;
+    let txn_id = parse_transaction_id(txn_id)?;
+    let content = message_content(
+        body.clone(),
+        msg_type,
+        formatted_body,
+        mention_user_ids,
+        mention_room.unwrap_or(false),
+        reply_to,
+        thread_root,
+    )?;
+    let (room, session_generation, local_txn_id) = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        let room = active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "d0.4-send-room-not-found",
+            )
+        })?;
+        let session_generation = active.sends.session_generation();
+        let item = active
+            .sends
+            .enqueue_text(room_id.to_string(), body.clone())
+            .map_err(|error| map_send_error(error.diagnostic_id()))?;
+        (room, session_generation, item.local_txn_id.clone())
+    };
+
+    let send_result = send_message_to_room(&room, content, txn_id).await;
+    let mut session = state.session.lock().await;
+    if let Some(active) = session.as_mut() {
+        if active.sends.session_generation() == session_generation {
+            if send_result.is_ok() {
+                let _ = active.sends.mark_sent(&local_txn_id);
+            } else {
+                let _ = active
+                    .sends
+                    .mark_failed(&local_txn_id, "d0.4-send-sdk-failed");
+            }
+        }
+    }
+
+    let event_id = send_result.map_err(|_| {
+        MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix message could not be sent.",
+            "d0.4-send-sdk-failed",
+        )
+    })?;
+    Ok(MatrixSendTextResult {
+        room_id: room_id.to_string(),
+        event_id,
+        local_txn_id,
+        status: "sent",
+    })
+}
+
+/// V-SEND.R-EDIT sole native message-edit owner.
+///
+/// Sends a replacement (`m.replace`) room message via the live matrix-sdk session.
+/// The new content is built with `m.new_content` semantics matching Element/Cinny
+/// (fallback body `* {plain}`; real body/html/mentions live in `m.new_content`).
+/// The JS `mx.sendMessage` edit path is only used when no native session is live;
+/// when a native session is live this command is the sole owner and failures are
+/// fail-closed (no silent fallthrough to `mx.sendMessage`).
+#[tauri::command]
+#[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
+pub async fn matrix_edit_message(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    event_id: String,
+    body: String,
+    msg_type: Option<String>,
+    formatted_body: Option<String>,
+    mention_user_ids: Option<Vec<String>>,
+    mention_room: Option<bool>,
+    txn_id: Option<String>,
+) -> Result<MatrixSendTextResult, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&room_id)?;
+    let event_id = parse_edit_event_id(event_id)?;
+    let txn_id = parse_transaction_id(txn_id)?;
+    let content = edit_message_content(
+        body.clone(),
+        msg_type,
+        formatted_body,
+        mention_user_ids,
+        mention_room.unwrap_or(false),
+        event_id,
+    )?;
+
+    let (room, session_generation, local_txn_id) = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        let room = active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-send.r-edit-room-not-found",
+            )
+        })?;
+        let session_generation = active.sends.session_generation();
+        let item = active
+            .sends
+            .enqueue_text(room_id.to_string(), body.clone())
+            .map_err(|error| map_send_error(error.diagnostic_id()))?;
+        (room, session_generation, item.local_txn_id.clone())
+    };
+
+    let send_result = send_message_to_room(&room, content, txn_id).await;
+
+    let mut session = state.session.lock().await;
+    if let Some(active) = session.as_mut() {
+        if active.sends.session_generation() == session_generation {
+            if send_result.is_ok() {
+                let _ = active.sends.mark_sent(&local_txn_id);
+            } else {
+                let _ = active
+                    .sends
+                    .mark_failed(&local_txn_id, "v-send.r-edit-sdk-failed");
+            }
+        }
+    }
+
+    let event_id = send_result.map_err(|_| {
+        MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix message edit could not be sent.",
+            "v-send.r-edit-sdk-failed",
+        )
+    })?;
+    Ok(MatrixSendTextResult {
+        room_id: room_id.to_string(),
+        event_id,
+        local_txn_id,
+        status: "sent",
+    })
+}
+
+/// V-SEND.1 sole composer attachment upload+send owner. Bytes cross IPC once;
+/// encrypted rooms are encrypted by the managed SDK (no JS dual-encrypt).
+/// V-SEND.5 extends the same command with optional `thread_root` so native
+/// sessions can start / continue threads without JS relation ownership.
+#[tauri::command]
+pub async fn matrix_send_attachment(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    filename: String,
+    mime_type: String,
+    bytes: Vec<u8>,
+    reply_to: Option<String>,
+    thread_root: Option<String>,
+) -> Result<MatrixSendAttachmentResult, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&room_id)?;
+    let reply_to = parse_reply_event_id(reply_to)?;
+    let thread_root = parse_thread_root_event_id(thread_root)?;
+    let filename = validate_attachment_filename(&filename)?;
+    let mime_type = validate_attachment_mime(&mime_type)?;
+    if bytes.is_empty() {
+        return Err(map_attachment_error("v-send.1-attachment-empty"));
+    }
+    if bytes.len() > MAX_ATTACHMENT_IPC_BYTES {
+        return Err(map_attachment_error("v-send.1-attachment-too-large"));
+    }
+    let size_bytes = bytes.len() as u64;
+    let kind = attachment_kind_for_mime(&mime_type);
+    let media_handle_id = format!("native-staged:{filename}");
+
+    let (room, session_generation, local_txn_id) = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        let room = active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-send.1-attachment-room-not-found",
+            )
+        })?;
+        let session_generation = active.attachments.session_generation();
+        let item = active
+            .attachments
+            .enqueue(AttachmentEnqueue {
+                room_id: room_id.to_string(),
+                kind,
+                media_handle_id,
+                file_name: Some(filename.clone()),
+                caption: None,
+                mime_type: Some(mime_type.to_string()),
+                size_bytes: Some(size_bytes),
+            })
+            .map_err(|error| map_attachment_error(error.diagnostic_id()))?;
+        (room, session_generation, item.local_txn_id.clone())
+    };
+
+    let send_result =
+        send_attachment_to_room(&room, &filename, &mime_type, bytes, reply_to, thread_root).await;
+
+    let mut session = state.session.lock().await;
+    if let Some(active) = session.as_mut() {
+        if active.attachments.session_generation() == session_generation {
+            if send_result.is_ok() {
+                let _ = active.attachments.mark_sent(&local_txn_id);
+            } else {
+                let _ = active
+                    .attachments
+                    .mark_failed(&local_txn_id, "v-send.1-attachment-sdk-failed");
+            }
+        }
+    }
+
+    let event_id = send_result.map_err(|_| {
+        MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix attachment could not be sent.",
+            "v-send.1-attachment-sdk-failed",
+        )
+    })?;
+    Ok(MatrixSendAttachmentResult {
+        room_id: room_id.to_string(),
+        event_id,
+        local_txn_id,
+        status: "sent",
+    })
+}
+
+/// V-SEND sticker residual — sole `m.sticker` owner for native sessions.
+/// Media is already on the homeserver as an MXC (image-pack sticker); this
+/// command does not re-upload bytes. Optional info fields preserve dimensions
+/// when the product already knows them; empty info is valid.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
+pub async fn matrix_send_sticker(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    body: String,
+    mxc: String,
+    width: Option<u64>,
+    height: Option<u64>,
+    mimetype: Option<String>,
+    size: Option<u64>,
+    reply_to: Option<String>,
+    thread_root: Option<String>,
+) -> Result<MatrixSendStickerResult, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&room_id)?;
+    let reply_to = parse_reply_event_id(reply_to)?;
+    let thread_root = parse_thread_root_event_id(thread_root)?;
+    let content = sticker_content(
+        body,
+        mxc,
+        width,
+        height,
+        mimetype,
+        size,
+        reply_to,
+        thread_root,
+    )?;
+
+    let room = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-send-sticker-room-not-found",
+            )
+        })?
+    };
+
+    let response = room.send(content).await.map_err(|_| {
+        MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix sticker could not be sent.",
+            "v-send-sticker-sdk-failed",
+        )
+    })?;
+    Ok(MatrixSendStickerResult {
+        room_id: room_id.to_string(),
+        event_id: response.response.event_id.to_string(),
+        status: "sent",
+    })
+}
+
+/// V-SEND.3 sole poll-start owner (composer board + `/poll` command).
+#[tauri::command]
+pub async fn matrix_send_poll(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    question: String,
+    answers: Vec<String>,
+    max_selections: u32,
+    // Thread root (`m.thread`). With reply_to → Thread::reply (is_falling_back false).
+    thread_root: Option<String>,
+    reply_to: Option<String>,
+) -> Result<MatrixSendPollResult, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&room_id)?;
+    let thread_root = parse_thread_root_event_id(thread_root)?;
+    let reply_to = parse_reply_event_id(reply_to)?;
+    let normalized = normalize_poll(&question, &answers, max_selections)
+        .map_err(|error| map_poll_error(error.diagnostic_id()))?;
+    let mut content =
+        poll_start_content(&normalized).map_err(|error| map_poll_error(error.diagnostic_id()))?;
+    // Relation rules match text/attachment (V-SEND.5): thread_root + reply_to →
+    // in-thread reply; thread_root only → thread without fallback; reply_to only →
+    // classic reply.
+    content.relates_to = match (thread_root, reply_to) {
+        (Some(root), Some(reply)) => Some(RelationWithoutReplacement::Thread(Thread::reply(
+            root, reply,
+        ))),
+        (Some(root), None) => Some(RelationWithoutReplacement::Thread(
+            Thread::without_fallback(root),
+        )),
+        (None, Some(reply)) => Some(RelationWithoutReplacement::Reply(Reply::with_event_id(
+            reply,
+        ))),
+        (None, None) => None,
+    };
+
+    let room = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-send.3-poll-room-not-found",
+            )
+        })?
+    };
+
+    let response = room.send(content).await.map_err(|_| {
+        MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix poll could not be sent.",
+            "v-send.3-poll-sdk-failed",
+        )
+    })?;
+
+    Ok(MatrixSendPollResult {
+        room_id: room_id.to_string(),
+        event_id: response.response.event_id.to_string(),
+        status: "sent",
+    })
+}
+
+/// V-SEND.3 sole poll-response (vote) owner.
+#[tauri::command]
+pub async fn matrix_poll_respond(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    poll_event_id: String,
+    answer_ids: Vec<String>,
+) -> Result<MatrixPollRespondResult, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&room_id)?;
+    let content = poll_response_content(&poll_event_id, &answer_ids)
+        .map_err(|error| map_poll_error(error.diagnostic_id()))?;
+
+    let room = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "v-send.3-poll-room-not-found",
+            )
+        })?
+    };
+
+    let response = room.send(content).await.map_err(|_| {
+        MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix poll response could not be sent.",
+            "v-send.3-poll-response-sdk-failed",
+        )
+    })?;
+
+    Ok(MatrixPollRespondResult {
+        room_id: room_id.to_string(),
+        poll_event_id,
+        event_id: response.response.event_id.to_string(),
+        status: "sent",
+    })
+}
+
+pub(super) fn map_poll_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    match diagnostic_id {
+        "v-send.3-poll-invalid-question"
+        | "v-send.3-poll-invalid-answers"
+        | "v-send.3-poll-invalid-max-selections"
+        | "v-send.3-poll-invalid-event-id"
+        | "v-send.3-poll-invalid-answer-ids" => MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "The native Matrix poll request is invalid.",
+            diagnostic_id,
+        ),
+        _ => MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix poll operation failed.",
+            diagnostic_id,
+        ),
+    }
+}
+
+pub(super) fn parse_thread_root_event_id(
+    thread_root: Option<String>,
+) -> Result<Option<OwnedEventId>, MatrixAuthCommandError> {
+    thread_root
+        .map(|event_id| {
+            event_id
+                .parse()
+                .map_err(|_| map_send_error("v-send.5-invalid-thread-root-event-id"))
+        })
+        .transpose()
+}
+
+pub(super) fn parse_edit_event_id(
+    event_id: String,
+) -> Result<OwnedEventId, MatrixAuthCommandError> {
+    event_id
+        .parse()
+        .map_err(|_| map_send_error("v-send.r-edit-invalid-event-id"))
+}
+
+pub(super) fn parse_transaction_id(
+    txn_id: Option<String>,
+) -> Result<Option<OwnedTransactionId>, MatrixAuthCommandError> {
+    txn_id
+        .map(|txn_id| {
+            if txn_id.is_empty() || txn_id.len() > 255 {
+                return Err(map_send_error("d0.4-send-invalid-transaction-id"));
+            }
+            Ok(OwnedTransactionId::from(txn_id))
+        })
+        .transpose()
+}
+
+pub(super) fn normalize_formatted_body(
+    body: &str,
+    formatted_body: Option<&str>,
+) -> Result<Option<String>, MatrixAuthCommandError> {
+    let Some(html) = formatted_body
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
+    };
+    if html.len() > 65_536 {
+        return Err(map_send_error("d0.4-send-formatted-body-too-large"));
+    }
+    if !should_attach_formatted_body(body, Some(html)) {
+        return Ok(None);
+    }
+    Ok(Some(html.to_owned()))
+}
+
+/// Build validated `m.sticker` content for the native sticker owner.
+///
+/// Relation rules match text/attachment (V-SEND.5):
+/// - `thread_root` + `reply_to` → `m.thread` with genuine in-thread reply
+/// - `thread_root` only → `m.thread` without in-reply fallback
+/// - `reply_to` only → classic `m.in_reply_to` reply
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn sticker_content(
+    body: String,
+    mxc: String,
+    width: Option<u64>,
+    height: Option<u64>,
+    mimetype: Option<String>,
+    size: Option<u64>,
+    reply_to: Option<OwnedEventId>,
+    thread_root: Option<OwnedEventId>,
+) -> Result<StickerEventContent, MatrixAuthCommandError> {
+    let body = body.trim();
+    if body.is_empty() || body.len() > 1024 {
+        return Err(map_send_error("v-send-sticker-invalid-body"));
+    }
+    let mxc = mxc.trim();
+    if mxc.is_empty() || mxc.len() > 1024 {
+        return Err(map_send_error("v-send-sticker-invalid-mxc"));
+    }
+    let mxc_ref: &MxcUri = mxc.into();
+    if !mxc_ref.is_valid() {
+        return Err(map_send_error("v-send-sticker-invalid-mxc"));
+    }
+    let url: OwnedMxcUri = mxc_ref.to_owned();
+
+    let mut info = ImageInfo::new();
+    info.width = width.and_then(UInt::new);
+    info.height = height.and_then(UInt::new);
+    info.size = size.and_then(UInt::new);
+    if let Some(mimetype) = mimetype {
+        let mime = mimetype.trim();
+        if !mime.is_empty() {
+            if mime.len() > 255 || !mime.chars().all(|c| c.is_ascii_graphic()) {
+                return Err(map_send_error("v-send-sticker-invalid-mimetype"));
+            }
+            info.mimetype = Some(mime.to_owned());
+        }
+    }
+
+    let mut content = StickerEventContent::new(body.to_owned(), info, url);
+    content.relates_to = match (thread_root, reply_to) {
+        (Some(root), Some(reply)) => Some(Relation::Thread(Thread::reply(root, reply))),
+        (Some(root), None) => Some(Relation::Thread(Thread::without_fallback(root))),
+        (None, Some(reply)) => Some(Relation::Reply(Reply::with_event_id(reply))),
+        (None, None) => None,
+    };
+    Ok(content)
+}
+
+/// Build validated room-message content for the native composer owner.
+///
+/// Relation rules (V-SEND.4 + V-SEND.5):
+/// - `thread_root` + `reply_to` → `m.thread` with genuine in-thread reply
+///   (`is_falling_back: false`); root and reply ids may be equal when starting
+///   a thread from the root event.
+/// - `thread_root` only → `m.thread` without in-reply fallback.
+/// - `reply_to` only → classic `m.in_reply_to` reply (no thread).
+pub(crate) fn message_content(
+    body: String,
+    msg_type: Option<String>,
+    formatted_body: Option<String>,
+    mention_user_ids: Option<Vec<String>>,
+    mention_room: bool,
+    reply_to: Option<OwnedEventId>,
+    thread_root: Option<OwnedEventId>,
+) -> Result<RoomMessageEventContent, MatrixAuthCommandError> {
+    let mut content = match (msg_type.as_deref().unwrap_or("m.text"), formatted_body) {
+        ("m.text", Some(html)) => RoomMessageEventContent::text_html(body, html),
+        ("m.text", None) => RoomMessageEventContent::text_plain(body),
+        ("m.emote", Some(html)) => RoomMessageEventContent::emote_html(body, html),
+        ("m.emote", None) => RoomMessageEventContent::emote_plain(body),
+        ("m.notice", Some(html)) => RoomMessageEventContent::notice_html(body, html),
+        ("m.notice", None) => RoomMessageEventContent::notice_plain(body),
+        _ => {
+            return Err(MatrixAuthCommandError::new(
+                "InvalidRequest",
+                "The native Matrix message type is invalid.",
+                "v-send.4-invalid-message-type",
+            ));
+        }
+    };
+    let user_ids = mention_user_ids
+        .unwrap_or_default()
+        .into_iter()
+        .map(|user_id| {
+            user_id.parse::<OwnedUserId>().map_err(|_| {
+                MatrixAuthCommandError::new(
+                    "InvalidRequest",
+                    "A native Matrix mention user ID is invalid.",
+                    "v-send.4-invalid-mention-user-id",
+                )
+            })
+        })
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    let mut mentions = Mentions::new();
+    mentions.user_ids = user_ids;
+    mentions.room = mention_room;
+    content.mentions = Some(mentions);
+    content.relates_to = match (thread_root, reply_to) {
+        (Some(root), Some(reply)) => Some(Relation::Thread(Thread::reply(root, reply))),
+        (Some(root), None) => Some(Relation::Thread(Thread::without_fallback(root))),
+        (None, Some(reply)) => Some(Relation::Reply(Reply::with_event_id(reply))),
+        (None, None) => None,
+    };
+    Ok(content)
+}
+
+/// Build validated `m.replace` replacement content for the native edit owner.
+///
+/// The new content is built via `message_content` (msg_type / formatted_body /
+/// mentions), then wrapped with `make_replacement` so the real body/html/mentions
+/// live in `m.new_content` and the fallback body is `* {plain}` (Element/Cinny
+/// style). `make_replacement` strips any reply/thread relation and sets
+/// `m.relates_to.rel_type == m.replace` with the target `event_id`.
+pub(crate) fn edit_message_content(
+    body: String,
+    msg_type: Option<String>,
+    formatted_body: Option<String>,
+    mention_user_ids: Option<Vec<String>>,
+    mention_room: bool,
+    event_id: OwnedEventId,
+) -> Result<RoomMessageEventContent, MatrixAuthCommandError> {
+    let content = message_content(
+        body,
+        msg_type,
+        formatted_body,
+        mention_user_ids,
+        mention_room,
+        None,
+        None,
+    )?;
+    let mentions = content.mentions.clone();
+    Ok(content.make_replacement(ReplacementMetadata::new(event_id, mentions)))
+}
+
+pub(super) async fn send_message_to_room(
+    room: &Room,
+    content: RoomMessageEventContent,
+    txn_id: Option<OwnedTransactionId>,
+) -> matrix_sdk::Result<String> {
+    let send = room.send(content);
+    let result = match txn_id {
+        Some(txn_id) => send.with_transaction_id(txn_id).await?,
+        None => send.await?,
+    };
+    Ok(result.response.event_id.to_string())
+}
+
+pub(super) fn map_attachment_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    match diagnostic_id {
+        "v-send.1-attachment-empty"
+        | "v-send.1-attachment-invalid-filename"
+        | "v-send.1-attachment-invalid-mime"
+        | "p7.4-invalid-room-id"
+        | "p7.4-empty-media-handle"
+        | "p7.4-file-name-cap"
+        | "p7.4-file-too-large"
+        | "p7.4-forbidden-handle-scheme"
+        | "p7.4-forbidden-handle" => MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "The native Matrix attachment request is invalid.",
+            diagnostic_id,
+        ),
+        "v-send.1-attachment-too-large" | "p7.4-active-attachment-cap" => {
+            MatrixAuthCommandError::new(
+                "InvalidRequest",
+                "The native Matrix attachment exceeds the allowed size or concurrency.",
+                diagnostic_id,
+            )
+        }
+        _ => MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix attachment could not be sent.",
+            diagnostic_id,
+        ),
+    }
+}
+
+pub(super) fn validate_attachment_filename(
+    filename: &str,
+) -> Result<String, MatrixAuthCommandError> {
+    let filename = filename.trim();
+    if filename.is_empty() || filename.chars().count() > 255 {
+        return Err(map_attachment_error("v-send.1-attachment-invalid-filename"));
+    }
+    if filename.contains('/') || filename.contains('\\') || filename.contains('\0') {
+        return Err(map_attachment_error("v-send.1-attachment-invalid-filename"));
+    }
+    Ok(filename.to_owned())
+}
+
+pub(super) fn validate_attachment_mime(mime_type: &str) -> Result<Mime, MatrixAuthCommandError> {
+    let mime_type = mime_type.trim();
+    if mime_type.is_empty() || mime_type.len() > 255 {
+        return Err(map_attachment_error("v-send.1-attachment-invalid-mime"));
+    }
+    mime_type
+        .parse::<Mime>()
+        .map_err(|_| map_attachment_error("v-send.1-attachment-invalid-mime"))
+}
+
+pub(super) fn attachment_kind_for_mime(mime: &Mime) -> AttachmentKind {
+    match mime.type_() {
+        mime::IMAGE => AttachmentKind::Image,
+        mime::VIDEO => AttachmentKind::Video,
+        mime::AUDIO => AttachmentKind::Audio,
+        _ => AttachmentKind::File,
+    }
+}
+
+pub(super) async fn send_attachment_to_room(
+    room: &Room,
+    filename: &str,
+    mime_type: &Mime,
+    data: Vec<u8>,
+    reply_to: Option<OwnedEventId>,
+    thread_root: Option<OwnedEventId>,
+) -> matrix_sdk::Result<String> {
+    let mut config = AttachmentConfig::new();
+    if let Some(event_id) = reply_to {
+        // Explicit thread root from the product draft forces a thread relation
+        // (start thread / reply in thread). Otherwise preserve the prior
+        // MaybeThreaded behavior so existing non-thread replies keep working.
+        let enforce_thread = if thread_root.is_some() {
+            EnforceThread::Threaded(ReplyWithinThread::Yes)
+        } else {
+            EnforceThread::MaybeThreaded
+        };
+        config = config.reply(Some(AttachmentReply {
+            event_id,
+            enforce_thread,
+            add_mentions: AddMentions::Yes,
+        }));
+    }
+    let response = room
+        .send_attachment(filename, mime_type, data, config)
+        .await?;
+    Ok(response.event_id.to_string())
+}
