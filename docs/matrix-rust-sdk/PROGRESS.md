@@ -14,11 +14,12 @@
 | Field              | Value                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-01**                                                                                                                       |
-| Integration tip    | `52953091` — docs-only base; post-#405 residual refresh uses product head `cd2d57b4` as a pending merge input |
-| Active work        | **#405 members drawer/lobby/mentions wiring — `ACCEPT` at `cd2d57b4`, pending merge; this draft narrows the after-#405 residual to power-level/creator reads**. #407 CallWidget media IPC — `ACCEPT_WITH_NITS`, full-green proof at `cd07f4fc` behind tip, parent merge pending. C3–C5 live proofs; R-DEVTOOL gated; V-BURN HOLD |
+| Integration tip    | `457b2760` — #405 members wiring, #407 CallWidget media, and #438 product-lane protocol are merged at this tip |
+| Active work        | **#439 powers-bulk is in flight and owns the `product.rs` lane until it merges; it is not merged at this tip**. After #439, extract/split `product.rs` as the next structural lane. C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
 | Import accounting  | Desktop production import files **152** on tip (plan baseline was 220). Allowlist **152** (ratcheted after #395 Members.tsx drop).       |
+| Product lane        | **LANE_OWNER: #439 powers-bulk** until merge; this docs-only draft does not touch `product.rs` |
 | Dual backend       | **`false`** (forbidden forever)                                                                                                      |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                             |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                 |
@@ -32,9 +33,9 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Docs base `52953091`**. The post-#405 target closes drawer/lobby/mention member enumeration after #405 merges; power-level/creator reads remain residual. #407 CallWidget media IPC is **`ACCEPT_WITH_NITS`** with full-green proof at `cd07f4fc`, behind this tip, parent merge pending. Imports remain 152; this draft claims no product merge. #39 gated. |
-| **Tip**        | `52953091`                                                                                                                                                                                                                             |
-| **Active PRs** | [#405](https://github.com/nepenth/synara-desktop/pull/405) `ACCEPT` at [`cd2d57b4`](https://github.com/nepenth/synara-desktop/commit/cd2d57b4), pending merge; [#407](https://github.com/nepenth/synara-desktop/pull/407) `ACCEPT_WITH_NITS`, full green at [`cd07f4fc`](https://github.com/nepenth/synara-desktop/commit/cd07f4fc), behind tip, parent merge pending. This docs-only draft claims no product code. |
+| **Now**        | **Tip `457b2760`** includes merged #405 members wiring, #407 CallWidget media config/download, and #438 product-lane protocol. #439 powers-bulk is in flight but is not in this tip; power-level/creator reads remain residual. Imports remain 152; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
+| **Tip**        | `457b2760`                                                                                                                                                                                                                             |
+| **Active PRs** | [#439](https://github.com/nepenth/synara-desktop/pull/439) powers-bulk — **in flight**, sole `product.rs` lane owner until merge; #405 and #407 are merged at this tip. This docs-only draft claims no product code. |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
 ---
@@ -59,6 +60,18 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-01 — tip `457b2760` — #405/#407/#438 merged; #439 powers-bulk in flight
+
+| When (UTC) | Item                     | Result                 | Notes                                                                                                                                                                                                 |
+| ---------- | ------------------------ | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**      | **This draft**         | Docs-only refresh based at `457b2760`; #405 (`176fc7c5`), #407 (`6b0d08a1`), and #438 are present in the tip. `product.rs` is untouched.                                                              |
+| current    | **Members drawer wiring** | **Merged #405**        | Native member snapshots now own Room/MembersDrawer/Lobby/UserMentionAutocomplete enumeration on the desktop route; power-level/creator reads remain residual.                                      |
+| current    | **CallWidget media IPC** | **Merged #407**        | Native `matrix_call_media_config` / `matrix_media_download` owners and their proof coverage are present at the tip; the inventoried CallWidget media residual is closed.                             |
+| current    | **Product lane protocol** | **Merged #438**        | The single-owner `product.rs` protocol is operational. **#439 powers-bulk** is the current lane owner and remains in flight; this draft does not claim its merge.                                    |
+| current    | **Next structural lane**  | **After #439**         | Perform one focused, behavior-preserving `product.rs` extract/split after powers-bulk merges; no concurrent `product.rs` lane is authorized.                                                         |
+| current    | **Import accounting**     | **152**                | Production `matrix-js-sdk` importer files and the allowlist remain **152** at this tip.                                                                                                               |
+| current    | **Proof / burn gates**     | **Held**               | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden and #39/main remain out of scope.                                                                                |
 
 ### 2026-08-01 — docs base `52953091` — post-#405 residual boundary
 
