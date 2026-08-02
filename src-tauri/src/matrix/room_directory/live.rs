@@ -222,7 +222,7 @@ fn project_hit(
     hit: matrix_sdk::ruma::directory::PublicRoomsChunk,
 ) -> Result<DirectoryRoomHit, &'static str> {
     let room_type = match hit.room_type.as_ref().map(|room_type| room_type.as_str()) {
-        None => DirectoryRoomType::Room,
+        None => return Err("v-rooms.directory-missing-room-type"),
         Some("m.space") => DirectoryRoomType::Space,
         Some(_) => return Err("v-rooms.directory-unsupported-room-type"),
     };
@@ -308,6 +308,23 @@ pub fn project_protocols(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn missing_room_type_fails_closed() {
+        let hit: matrix_sdk::ruma::directory::PublicRoomsChunk =
+            matrix_sdk::ruma::directory::PublicRoomsChunkInit {
+                num_joined_members: matrix_sdk::ruma::uint!(0),
+                room_id: matrix_sdk::ruma::room_id!("!room:example.org").to_owned(),
+                world_readable: true,
+                guest_can_join: true,
+            }
+            .into();
+
+        assert_eq!(
+            project_hit(hit).unwrap_err(),
+            "v-rooms.directory-missing-room-type"
+        );
+    }
 
     #[test]
     fn request_mapping_covers_filters_and_bounds() {

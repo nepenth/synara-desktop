@@ -593,7 +593,8 @@ export function PublicRooms() {
                       <Text size="T300">{error.message}</Text>
                     </Box>
                   )}
-                  {data &&
+                  {!error &&
+                    data &&
                     (data.chunk.length > 0 ? (
                       <>
                         <RoomCardGrid>

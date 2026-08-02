@@ -52,7 +52,7 @@ const SESSION_WIRE_KEYS = [
 ] as const;
 
 const hasExactSessionKeys = (value: Record<string, unknown>): boolean => {
-  const allowed = new Set(SESSION_WIRE_KEYS);
+  const allowed = new Set<string>(SESSION_WIRE_KEYS);
   if (!Object.keys(value).every((key) => allowed.has(key))) return false;
   if (value.status === 'logged_out') return Object.keys(value).length === 1;
   return SESSION_WIRE_KEYS.every((key) => key in value);

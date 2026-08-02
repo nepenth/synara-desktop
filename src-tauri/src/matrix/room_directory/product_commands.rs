@@ -169,6 +169,7 @@ pub async fn matrix_room_directory_protocols(
 /// client. A newer request or explicit cancellation can only suppress the
 /// result; it can never be replaced by a JS implementation.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
 pub async fn matrix_room_directory_search(
     state: State<'_, MatrixAuthState>,
     session_generation: u64,
