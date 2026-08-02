@@ -3,7 +3,7 @@
 | Field         | Value                                                                                                                     |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Status        | **First presence slice merged (#458); docs-only residual audit remains open**; no product code changed                    |
-| Measured tip  | `fd0dfbf464ea59351d2cca1b746ba9d3f00923e7` on `feature/matrix-rust-sdk-full-replacement`; #458 implementation base remains `c1e9c3be` |
+| Measured tip  | `be2be57814e0cb0a599aa5b6d98c1dbaae6064e4` on `feature/matrix-rust-sdk-full-replacement`; #458 implementation base remains `c1e9c3be` |
 | Scope         | Desktop user presence and room typing paths in `synara/src` and `src-tauri/src`                                           |
 | Policy        | Native desktop is fail-closed; `dual_backend=false`; V-BURN remains **HOLD**                                             |
 | Runtime proof | Presence live proof is **Not confirmed** after #458; typing live proof remains unclaimed; no acceptance claim is made     |
@@ -12,7 +12,7 @@ This inventory separates Matrix network ownership from the JS projection and UI
 wrappers that remain after the native typing slice. It covers user presence
 (`m.presence`-style availability), not MatrixRTC call membership presence.
 
-> **Post-merge note at implementation base `c1e9c3be`; docs refresh at `fd0dfbf4`.** #458 is merged. Its first presence slice
+> **Post-merge note at implementation base `c1e9c3be`; docs refresh at `be2be578`.** #458 is merged. Its first presence slice
 > lands the native snapshot/subscription route, profile binding, JavaScript
 > presence-owner deletion, and focused local evidence. #461 independently lands
 > the room-directory slice at the implementation base; no product code changed
@@ -109,7 +109,7 @@ native state produces no badge and does not fall back to the JavaScript SDK.
 
 The remaining presence gap is evidence, not a second backend: no authenticated
 two-client desktop proof with retained command/event readback is recorded at
-the `fd0dfbf4` docs tip for the `c1e9c3be` implementation base, and the full
+the `be2be578` docs tip for the `c1e9c3be` implementation base, and the full
 lifecycle/error acceptance matrix has not been independently accepted. The
 generic `presence` stream topic and
 `PresenceStreamBody` remain protocol/foundation shapes and are not substitutes
@@ -120,12 +120,12 @@ for the landed profile route.
 | Remaining gate            | Required evidence before claiming closure                                                                                                                                                                                                                         |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Presence live proof       | Authenticated two-client desktop run showing snapshot, subscription, remote state change, unknown/unavailable handling, teardown, and no JS fallback through the exact native commands/event; current status **Not confirmed**                                      |
-| Presence acceptance       | Rerun the focused lifecycle/error/source-absence evidence for the `c1e9c3be` implementation base, retain results at docs tip `fd0dfbf4`, and complete independent acceptance. Local tests/source guards are not live proof. |
+| Presence acceptance       | Rerun the focused lifecycle/error/source-absence evidence for the `c1e9c3be` implementation base, retain results at docs tip `be2be578`, and complete independent acceptance. Local tests/source guards are not live proof. |
 | Typing residual cleanup   | Decide and document the local-only “Drop Typing Status” behavior; keep JS timing/presentation only where it is intentionally UI-owned, or move it behind the native typing contract. Preserve the native-only network route and no-fallback behavior |
 | Typing live proof         | Authenticated two-client desktop run showing remote typing appear/clear and local compose send/clear through `matrix_typing_*`; current status **Not confirmed**                                                                                                    |
 
 This document records the #458 first slice at implementation base `c1e9c3be`
-and the honest docs refresh tip `fd0dfbf4`; it does not claim presence
+and the honest docs refresh tip `be2be578`; it does not claim presence
 acceptance, typing closure, or V-BURN completion.
 
 ## Source inspection basis

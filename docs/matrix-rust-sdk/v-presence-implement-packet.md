@@ -6,7 +6,7 @@
 | Residual   | **V-PRESENCE.USER**                                                                                                        |
 | Source     | [v-presence-typing-residual.md](v-presence-typing-residual.md) from #384                                                   |
 | Base       | `feature/matrix-rust-sdk-full-replacement` at `c1e9c3be2b8ff13da42853913b30493cb030e6ec` — #458 implementation/merge base |
-| Docs tip   | `fd0dfbf464ea59351d2cca1b746ba9d3f00923e7` — docs-only refresh; no product code changed after the #458 base             |
+| Docs tip   | `be2be57814e0cb0a599aa5b6d98c1dbaae6064e4` — docs-only #508 integration-tip refresh; no product code changed after the #458 base |
 | PR shape   | Focused **draft** docs PR targeting `feature/matrix-rust-sdk-full-replacement`; #458 is merged at the Base               |
 | Scope      | Desktop user presence (`m.presence`) in the user-room profile; typing and MatrixRTC call membership are separate residuals |
 | Policy     | [full-vertical-policy.md](full-vertical-policy.md): one UI → Tauri IPC → live `matrix-sdk` owner, with JS-owner deletion   |
@@ -18,7 +18,7 @@ the first native presence slice landed by #458 and the evidence still required
 before the full user-presence residual can be accepted. It does not implement
 product code, update generated status, or claim V-BURN completion.
 
-> **Post-merge note at implementation base `c1e9c3be`; docs refresh at `fd0dfbf4`.** #458 is merged at the implementation tip.
+> **Post-merge note at implementation base `c1e9c3be`; docs refresh at `be2be578`.** #458 is merged at the implementation tip.
 > Its first slice lands the native snapshot/subscription route, profile binding,
 > JavaScript presence-owner deletion, and focused local evidence. #461's
 > room-directory slice is also merged at the implementation tip, but does not
@@ -46,7 +46,7 @@ product code, update generated status, or claim V-BURN completion.
 - The authenticated two-client desktop proof in Section 6 has not been run or
   retained here; its status is **Not confirmed**.
 - The complete lifecycle/error matrix and independent acceptance review must be
-  retained against the `c1e9c3be` implementation base and this `fd0dfbf4` docs
+  retained against the `c1e9c3be` implementation base and this `be2be578` docs
   tip; local tests and source guards do not substitute for the product proof.
 - Room typing, MatrixRTC call-membership presence, and V-BURN remain separate
   residuals and are not closed by #458.
@@ -110,7 +110,7 @@ typing polling/projection residual, or MatrixRTC call-membership presence.
 
 Before claiming V-PRESENCE.USER closure, the writer must verify:
 
-1. `HEAD` is the docs refresh tip `fd0dfbf464ea59351d2cca1b746ba9d3f00923e7`,
+1. `HEAD` is the docs refresh tip `be2be57814e0cb0a599aa5b6d98c1dbaae6064e4`,
    whose #458 implementation base is
    `c1e9c3be2b8ff13da42853913b30493cb030e6ec`; the docs PR target is
    `feature/matrix-rust-sdk-full-replacement`;
