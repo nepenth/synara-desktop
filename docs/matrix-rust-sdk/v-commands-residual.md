@@ -2,7 +2,7 @@
 
 | Field       | Value                                                                                                                                                  |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Tip audited | `0033ac03` (`feature/matrix-rust-sdk-full-replacement`, after #453/#456 docs-only packet merges; #450 remains open and uncredited)                         |
+| Tip audited | `27a854d8f72deb1a74be35705d54ce5af9ec90e6` (`feature/matrix-rust-sdk-full-replacement`, after #450/#458/#461 and docs-only #465/#469/#478) |
 | Scope       | `synara/src/app/hooks/useCommands.ts`, `synara/src/app/features/room/CommandAutocomplete.tsx`, and the command-specific submit path in `RoomInput.tsx` |
 | Change type | Documentation only                                                                                                                                     |
 | Policy      | Native desktop is fail-closed; `dual_backend` is forbidden                                                                                             |
@@ -10,12 +10,12 @@
 
 ## Current-tip boundary
 
-This refresh is measured at `0033ac03`. The merged #446 product-command
-fan-out and docs-only #451/#452/#453/#456 do not change the UI slash-command
-owners audited here. Product PR #450 is not part of this base: its recorded
-review verdict at head `cb8806b0` was **REJECT**, with native read-loading and
-remaining JS-owner bypasses as blockers. No #450 implementation or acceptance
-is credited here, and none of the 22 command IDs is closed by that PR.
+This refresh is measured at `27a854d8`. The merged #446 product-command
+fan-out, #450 native power/creator READ slice, #458 presence slice, #461
+room-directory slice, and docs-only #451/#452/#453/#456/#465/#469/#478 do not
+change the UI slash-command owners audited here. #450 is merged in this base,
+but it does not close any of the 22 command IDs; the command residuals below
+remain open and no V-BURN readiness is implied.
 
 ## Finding
 
