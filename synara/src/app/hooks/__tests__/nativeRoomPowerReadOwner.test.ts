@@ -9,7 +9,12 @@ import {
   readRoomCreatorsWithNativeOwner,
   type NativeRoomCreatorsInvoke,
 } from '../nativeRoomCreatorsOwner';
+import {
+  readRoomPowerLevelTagsWithNativeOwner,
+  type NativeRoomPowerLevelTagsInvoke,
+} from '../nativeRoomPowerLevelTagsOwner';
 import { NATIVE_UNAVAILABLE_POWER_LEVELS } from '../usePowerLevels';
+import { NATIVE_UNAVAILABLE_POWER_LEVEL_TAGS } from '../usePowerLevelTags';
 import { getRoomPermissionsAPI } from '../useRoomPermissions';
 import {
   clearNativeRoomStateProjections,
@@ -51,10 +56,9 @@ test('power-level tags never read the JS state-event backend on native sessions'
 
   assert.match(source, /const nativeSession = isNativeMatrixSession\(\);/);
   assert.match(source, /useStateEvent\(room, StateEvent\.PowerLevelTags, '', !nativeSession\)/);
-  assert.match(
-    source,
-    /const content = nativeSession \? undefined : tagsEvent\?\.getContent<PowerLevelTags>\(\)/
-  );
+  assert.match(source, /readRoomPowerLevelTagsWithNativeOwner/);
+  assert.match(source, /NATIVE_UNAVAILABLE_POWER_LEVEL_TAGS/);
+  assert.doesNotMatch(source, /const content = nativeSession \? undefined/);
 });
 
 test('native power-level read owner validates the session and exact snapshot contract', async () => {
@@ -114,6 +118,44 @@ test('native creator read owner validates the fixed event and creator IDs', asyn
   assert.deepEqual(calls, ['matrix_session_snapshot', 'matrix_room_creators_snapshot']);
 });
 
+test('native power-level tag read owner preserves custom tag metadata', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const invoke: NativeRoomPowerLevelTagsInvoke = async (command, args) => {
+    calls.push({ command, args });
+    if (command === 'matrix_session_snapshot') return loggedIn;
+    return {
+      available: true,
+      value: {
+        status: 'ok',
+        roomId,
+        eventType: 'in.synara.room.power_level_tags',
+        stateKey: '',
+        sessionGeneration: 7,
+        content: {
+          '100': {
+            name: 'Admin',
+            color: '#0088ff',
+            icon: { key: 'mxc://example.org/admin', info: { w: 32, h: 32 } },
+          },
+        },
+      },
+    };
+  };
+
+  const snapshot = await readRoomPowerLevelTagsWithNativeOwner(roomId, true, invoke);
+  assert.deepEqual(snapshot?.content, {
+    '100': {
+      name: 'Admin',
+      color: '#0088ff',
+      icon: { key: 'mxc://example.org/admin', info: { w: 32, h: 32 } },
+    },
+  });
+  assert.deepEqual(calls, [
+    { command: 'matrix_session_snapshot', args: undefined },
+    { command: 'matrix_room_power_level_tags_snapshot', args: { roomId } },
+  ]);
+});
+
 test('native read owners fail closed on non-native, logged-out, malformed, and stale results', async () => {
   let calls = 0;
   const unavailableInvoke: NativeRoomPowerLevelsInvoke = async () => {
@@ -153,6 +195,41 @@ test('native read owners fail closed on non-native, logged-out, malformed, and s
           },
         };
   await assert.rejects(readRoomCreatorsWithNativeOwner(roomId, true, malformed), /unavailable/);
+
+  let tagCalls = 0;
+  const tagUnavailable: NativeRoomPowerLevelTagsInvoke = async () => {
+    tagCalls += 1;
+    return { available: false };
+  };
+  assert.equal(
+    await readRoomPowerLevelTagsWithNativeOwner(roomId, false, tagUnavailable),
+    undefined
+  );
+  assert.equal(tagCalls, 0);
+  await assert.rejects(
+    readRoomPowerLevelTagsWithNativeOwner(roomId, true, tagUnavailable),
+    /unavailable/
+  );
+  assert.deepEqual(NATIVE_UNAVAILABLE_POWER_LEVEL_TAGS, {});
+
+  const malformedTags: NativeRoomPowerLevelTagsInvoke = async (command) =>
+    command === 'matrix_session_snapshot'
+      ? loggedIn
+      : {
+          available: true,
+          value: {
+            status: 'ok',
+            roomId,
+            eventType: 'in.synara.room.power_level_tags',
+            stateKey: '',
+            sessionGeneration: 7,
+            content: { '100': { name: 42 } },
+          },
+        };
+  await assert.rejects(
+    readRoomPowerLevelTagsWithNativeOwner(roomId, true, malformedTags),
+    /unavailable/
+  );
 });
 
 test('native room read failures invalidate old projections after a logged-in generation change', async () => {
