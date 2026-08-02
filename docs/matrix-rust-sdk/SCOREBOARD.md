@@ -3,7 +3,7 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-02                                               |
-| Tip                                                    | `27a854d8` on `feature/matrix-rust-sdk-full-replacement`; docs-only #478 refreshes this scoreboard/progress boundary after the #469/#465 docs refreshes |
+| Tip                                                    | `27a854d8` on `feature/matrix-rust-sdk-full-replacement`; docs-only #465 members READ, #469 R-DEVTOOL, and #478 scoreboard/progress refreshes are landed after the `60141c8b` product/docs state |
 | Production `matrix-js-sdk` import files (`synara/src`) | **150** (plan baseline was **220**)                      |
 | Product command layout                                  | **#446 merged** — domain `product_commands.rs` modules are available for parallel follow-on lanes |
 | Dual backend                                           | **false** (forbidden)                                    |
