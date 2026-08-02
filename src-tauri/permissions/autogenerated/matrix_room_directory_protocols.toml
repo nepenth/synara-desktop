@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-room-directory-protocols"
+description = "Enables the matrix_room_directory_protocols command without any pre-configured scope."
+commands.allow = ["matrix_room_directory_protocols"]
+
+[[permission]]
+identifier = "deny-matrix-room-directory-protocols"
+description = "Denies the matrix_room_directory_protocols command without any pre-configured scope."
+commands.deny = ["matrix_room_directory_protocols"]

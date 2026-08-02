@@ -18,6 +18,9 @@ import {
   parseSearchResult,
   parseSecurityStatus,
   parseSessionSnapshot,
+  parseDirectoryPage,
+  parseDirectoryProtocols,
+  parseDirectorySearchResponse,
   parseSpaceSummary,
   parseThreadSummary,
   parseTimelineItem,
@@ -47,6 +50,92 @@ test('markers and policy constants', () => {
   assert.ok(FORBIDDEN_WIRE_FIELD_NAMES.length > 0);
   assert.equal(SESSION_LIFECYCLES.length, 10);
   assert.equal(TIMELINE_ITEM_KINDS.length, 9);
+});
+
+test('directory page parses bounded room and space projections', () => {
+  const page = parseDirectoryPage({
+    sessionGeneration: 4,
+    requestId: 9,
+    chunk: [
+      {
+        roomId: '!room:example.org',
+        name: 'Room',
+        topic: 'Topic',
+        canonicalAlias: '#room:example.org',
+        avatarUrl: 'mxc://example.org/avatar',
+        memberCount: 12,
+        worldReadable: true,
+        guestCanJoin: false,
+        roomType: 'room',
+      },
+      {
+        roomId: '!space:example.org',
+        memberCount: 2,
+        worldReadable: true,
+        guestCanJoin: true,
+        roomType: 'space',
+      },
+    ],
+    prevBatch: 'previous',
+    nextBatch: 'next',
+  });
+  assert.ok(page);
+  assert.equal(page.chunk[1]?.roomType, 'space');
+  assert.equal(page.prevBatch, 'previous');
+});
+
+test('directory DTOs fail closed on unknown, secret, malformed, or unsupported fields', () => {
+  const hit = {
+    roomId: '!room:example.org',
+    memberCount: 1,
+    worldReadable: true,
+    guestCanJoin: true,
+    roomType: 'room',
+  };
+  assert.equal(
+    parseDirectoryPage({ sessionGeneration: 1, requestId: 1, chunk: [hit], extra: true }),
+    null
+  );
+  assert.equal(
+    parseDirectoryPage({
+      sessionGeneration: 1,
+      requestId: 1,
+      chunk: [{ ...hit, accessToken: 'secret' }],
+    }),
+    null
+  );
+  assert.equal(
+    parseDirectoryPage({
+      sessionGeneration: 1,
+      requestId: 1,
+      chunk: [{ ...hit, roomType: 'call' }],
+    }),
+    null
+  );
+  assert.equal(
+    parseDirectoryPage({ sessionGeneration: 1, requestId: 1, chunk: [hit], nextBatch: '' }),
+    null
+  );
+  assert.equal(
+    parseDirectorySearchResponse({ sessionGeneration: 1, requestId: 1, status: 'ready' }),
+    null
+  );
+});
+
+test('directory protocol projection is strict and bounded', () => {
+  const protocols = parseDirectoryProtocols({
+    sessionGeneration: 4,
+    instances: [{ protocolId: 'irc', instanceId: 'irc-example', description: 'IRC Example' }],
+  });
+  assert.ok(protocols);
+  assert.equal(protocols.instances[0]?.instanceId, 'irc-example');
+  assert.equal(
+    parseDirectoryProtocols({
+      sessionGeneration: 4,
+      instances: [{ protocolId: 'irc', instanceId: 'irc-example', description: 'IRC', raw: {} }],
+    }),
+    null
+  );
 });
 
 test('valid_session parses; no tokens', () => {

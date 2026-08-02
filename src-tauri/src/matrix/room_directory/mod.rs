@@ -1,7 +1,7 @@
-//! P6.10 — Public room directory search session foundation (harness).
+//! P6.10 — Public room directory search and projection owner.
 //!
-//! Pure projection of directory hits with stale-request protection.
-//! No SDK directory network, no dual-backend, no tokens.
+//! The live product command module is included from the managed auth product
+//! boundary, while the typed request/projection helpers remain module-owned.
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p6.10-room-directory.md`
 
@@ -9,12 +9,19 @@
 #![allow(unused_imports)]
 
 mod error;
+mod live;
 mod session;
 
 pub use error::RoomDirectoryError;
+pub use live::{
+    build_public_rooms_request, fetch_protocols, normalize_search_input, project_protocols,
+    project_response, DirectoryProtocolInstance, DirectoryRoomHitDto, DirectoryRoomTypeFilter,
+    DirectorySearchInput, NativeRoomDirectoryPage, NativeRoomDirectoryProtocols,
+    NativeRoomDirectorySearchResponse, NormalizedDirectorySearch, MAX_PROTOCOL_INSTANCES,
+};
 pub use session::{
-    DirectoryRoomHit, DirectorySearchState, RoomDirectorySession, MAX_ALIAS_CHARS,
-    MAX_DIRECTORY_HITS, MAX_TEXT_CHARS,
+    DirectoryRoomHit, DirectoryRoomType, DirectorySearchState, RoomDirectorySession,
+    MAX_ALIAS_CHARS, MAX_BATCH_CHARS, MAX_DIRECTORY_HITS, MAX_TEXT_CHARS,
 };
 
 /// Static marker for link / schema smoke.
