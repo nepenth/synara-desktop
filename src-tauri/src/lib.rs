@@ -398,6 +398,7 @@ pub fn run() {
             matrix::auth::product::matrix_room_members_snapshot,
             matrix::auth::product::matrix_room_power_levels_snapshot,
             matrix::auth::product::matrix_room_creators_snapshot,
+            matrix::auth::product::matrix_room_power_level_tags_snapshot,
             matrix::auth::product::matrix_room_directory_protocols,
             matrix::auth::product::matrix_room_directory_search,
             matrix::auth::product::matrix_room_directory_cancel,

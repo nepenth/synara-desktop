@@ -108,6 +108,7 @@
     "allow-matrix-room-members-snapshot",
     "allow-matrix-room-power-levels-snapshot",
     "allow-matrix-room-creators-snapshot",
+    "allow-matrix-room-power-level-tags-snapshot",
     "allow-matrix-room-directory-protocols",
     "allow-matrix-room-directory-search",
     "allow-matrix-room-directory-cancel",
