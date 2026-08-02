@@ -15,7 +15,7 @@
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-02**                                                                                                                       |
 | Integration tip    | `d82e043d` — #405 members wiring, #407 CallWidget media, #438 product-lane protocol, #439 powers-bulk, #446 product-command fan-out, #450 native power/creator READs, and #458's native presence first slice are merged at this tip |
-| Active work        | **#458's first presence slice is merged; room-directory #461 is the next product candidate at `5393607e`**; #461 must rebase onto `d82e043d` before acceptance; the full presence and directory verticals remain open; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
+| Active work        | **#458's first presence slice is merged; room-directory #461 is the next product candidate at `d9389862`**; #461 is rebased onto `d82e043d` and mergeable while CI is pending; the full presence and directory verticals remain open; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
 | Import accounting  | Desktop production import files **151** on tip (plan baseline was 220). Allowlist **151** (ratcheted after the #458 presence owner removal).       |
@@ -33,9 +33,9 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `d82e043d`** includes merged #450 and #458 work. #458's first presence slice is merged; room-directory **#461** is the next product candidate at `5393607e`, still pending rebase onto this tip and acceptance. Imports are 151; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
+| **Now**        | **Tip `d82e043d`** includes merged #450 and #458 work. #458's first presence slice is merged; room-directory **#461** is the next product candidate at `d9389862`, rebased onto this tip and mergeable while CI is pending; acceptance remains held. Imports are 151; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
 | **Tip**        | `d82e043d`                                                                                                                                                                                                                             |
-| **Active PRs** | **#461** remains a draft/WIP product candidate at `5393607e`; it must rebase onto `d82e043d` and then be accepted. This focused docs-only refresh records that boundary and changes no product code. |
+| **Active PRs** | **#461** remains a draft/WIP product candidate at `d9389862`; its rebase gate is satisfied and it is mergeable, but CI is pending and explicit acceptance is still required. This focused docs-only refresh records that boundary and changes no product code. |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
 ---
@@ -61,13 +61,13 @@ Update rules:
 
 ## Work log (newest first)
 
-### 2026-08-02 — tip `d82e043d` — #458 merged; #461 next, pending rebase
+### 2026-08-02 — tip `d82e043d` — #458 merged; #461 rebased, CI/acceptance held
 
 | When (UTC) | Item                          | Result                                  | Notes                                                                                                                                                                                                                 |
 | ---------- | ----------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | current    | **Integration tip**           | **This docs-only draft**                | Based at `d82e043d`; #458's native presence first slice is merged. `main` and #39 remain out of scope.                                                                                                                 |
 | current    | **Presence product vertical** | **First slice merged #458 / WIP**      | The first native presence slice is at the integration tip; the full vertical's remaining scope, focused proof, live proof, and acceptance are not claimed complete.                                                |
-| current    | **Room directory vertical**   | **Next product #461 / pending rebase** | Candidate head `5393607e` carries the inventory **151** fix and the live mixed-case session wire (`user_id`, `device_id`, `homeserver_url`); rebase onto `d82e043d` is required before `ACCEPT`. |
+| current    | **Room directory vertical**   | **Next product #461 / rebased, CI pending** | Candidate head `d9389862` carries the inventory **151** fix and the live mixed-case session wire (`user_id`, `device_id`, `homeserver_url`); it is rebased onto `d82e043d` and mergeable, but CI and explicit `ACCEPT` remain required. |
 | current    | **Proof / burn gates**         | **Held**                                | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend=false`; #39/`main` remain out of scope.                                                                                                       |
 
 ### 2026-08-01 — tip `206d24f3` — presence/directory WIP after #446 extraction

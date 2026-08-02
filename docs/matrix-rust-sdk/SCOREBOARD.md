@@ -60,7 +60,7 @@ run passes the relevant checklist.
 | V-SEND.R-CALL-UPLOAD            | **#328** native upload; **#362** native known rooms; **#407** native media config/download; inventoried CallWidget native desktop surfaces are closed ([residual](v-send-call-widget-residual.md)) |
 | Product lane protocol            | **#438 merged** docs-only single-owner protocol for `product.rs`; **#439 merged** powers-bulk; **#446 merged** domain command fan-out |
 | Presence product vertical        | **#458 first slice merged / WIP** — native snapshot/subscribe path and current profile consumers are landed; full vertical scope, focused proof, live proof, and acceptance remain open |
-| Room directory product vertical  | **Next #461 / WIP** — candidate `5393607e` records inventory **151** and the live mixed-case session wire; it must rebase onto `d82e043d` before `ACCEPT`; JS-owner deletion, focused proof, live proof, and acceptance remain open |
+| Room directory product vertical  | **Next #461 / WIP** — candidate `d9389862` records inventory **151** and the live mixed-case session wire; it is rebased onto `d82e043d` and mergeable while CI is pending; JS-owner deletion, focused proof, live proof, and acceptance remain open |
 | Composer thumbnail (msgContent) | **#325** video thumbnails via `uploadMediaNative` / `matrix_upload_media` fail-closed                                                                                                            |
 | V-SEND.R-DEVTOOL                | [Docs-only inventory](v-send-devtool-inventory.md) · [implementation gate](v-send-devtool-inventory.md#implementation-gate): JS client remains; start only after C3–C5 live proofs; low priority |
 | CI                              | Parallel Validate #284                                                                                                                                                                           |
@@ -80,8 +80,9 @@ run passes the relevant checklist.
    native presence snapshot/subscribe wiring and current profile consumers are
    merged, but the full presence scope, focused evidence, live proof, and
    acceptance remain open. **#461** is the next directory product candidate at
-   `5393607e`; it must rebase onto `d82e043d` before acceptance. Its inventory
-   and session-wire fixes are not an acceptance or product-done claim. See
+   `d9389862`, rebased onto `d82e043d` and mergeable while CI is pending. Its
+   inventory and session-wire fixes are not an acceptance or product-done claim;
+   explicit acceptance remains held. See
    [presence](v-presence-implement-packet.md) and
    [room directory](v-rooms-directory-implement-packet.md).
 2. **Members — native full vertical.** Leave/join/create closed

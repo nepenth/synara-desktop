@@ -16,10 +16,10 @@ not claim V-BURN completion, a cutover, or live authenticated proof.
 
 > **Tip and product-readiness note at `d82e043d`.** #458's native presence
 > first slice is merged at the measured tip. The next room-directory product
-> candidate is #461 at `5393607e`; it records inventory **151** and the live
+> candidate is #461 at `d9389862`; it records inventory **151** and the live
 > mixed-case session wire (`user_id`, `device_id`, `homeserver_url` plus
-> `sessionGeneration`). That candidate is not on the measured tip: it must
-> rebase onto `d82e043d` and then be accepted. This residual remains an
+> `sessionGeneration`). It is rebased onto `d82e043d` and mergeable while CI is
+> pending, but is not accepted or on the measured tip. This residual remains an
 > inventory and readiness record, not product wiring, JS-owner deletion, proof,
 > or acceptance.
 
@@ -138,8 +138,8 @@ a V-BURN report:
 ## Explicit non-goals
 
 - No product implementation or `product.rs` change in this inventory.
-- No #461 acceptance claim before its rebase onto `d82e043d`; keep any draft PR
-  product-scoped and separate from this docs-only record.
+- No #461 acceptance claim before CI completion and explicit acceptance; keep
+  the draft PR product-scoped and separate from this docs-only record.
 - No raw Matrix HTTP retention in the eventual native slice.
 - No dual backend, SDK selector, or desktop JS fallback.
 - No umbrella `#39` / `main` merge.
