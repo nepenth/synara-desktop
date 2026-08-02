@@ -1,6 +1,8 @@
 import { invokeDesktopWithAvailability, type DesktopInvokeResult } from '../utils/desktop';
 import {
+  beginNativeRoomStateSession,
   clearNativeRoomStateProjections,
+  invalidateNativeRoomStateProjection,
   publishNativeRoomCreatorsProjection,
 } from '../features/matrix-dto/nativeRoomStateProjection';
 
@@ -57,6 +59,9 @@ const requireLoggedIn = async (invoke: NativeRoomCreatorsInvoke): Promise<number
     if (snapshot.status !== 'logged_in' || !isSafeGeneration(snapshot.sessionGeneration)) {
       throw new Error(unavailableMessage);
     }
+    if (!beginNativeRoomStateSession(snapshot.sessionGeneration)) {
+      throw new Error(unavailableMessage);
+    }
     return snapshot.sessionGeneration;
   } catch {
     clearNativeRoomStateProjections();
@@ -73,30 +78,35 @@ export async function readRoomCreatorsWithNativeOwner(
   if (!isRoomId(roomId)) throw new Error(unavailableMessage);
 
   const sessionGeneration = await requireLoggedIn(invoke);
-  const result = await invokeSafely('matrix_room_creators_snapshot', { roomId }, invoke);
-  if (!result.available || !isRecord(result.value)) throw new Error(unavailableMessage);
+  try {
+    const result = await invokeSafely('matrix_room_creators_snapshot', { roomId }, invoke);
+    if (!result.available || !isRecord(result.value)) throw new Error(unavailableMessage);
 
-  const value = result.value;
-  if (
-    value.status !== 'ok' ||
-    value.roomId !== roomId ||
-    value.eventType !== 'm.room.create' ||
-    value.stateKey !== '' ||
-    value.sessionGeneration !== sessionGeneration ||
-    !isSafeGeneration(value.sessionGeneration) ||
-    !Array.isArray(value.creators) ||
-    !value.creators.every(isUserId)
-  ) {
+    const value = result.value;
+    if (
+      value.status !== 'ok' ||
+      value.roomId !== roomId ||
+      value.eventType !== 'm.room.create' ||
+      value.stateKey !== '' ||
+      value.sessionGeneration !== sessionGeneration ||
+      !isSafeGeneration(value.sessionGeneration) ||
+      !Array.isArray(value.creators) ||
+      !value.creators.every(isUserId)
+    ) {
+      throw new Error(unavailableMessage);
+    }
+
+    const snapshot = value as NativeRoomCreatorsSnapshot;
+    publishNativeRoomCreatorsProjection(
+      snapshot.roomId,
+      snapshot.sessionGeneration,
+      snapshot.creators
+    );
+    return snapshot;
+  } catch {
+    invalidateNativeRoomStateProjection(roomId);
     throw new Error(unavailableMessage);
   }
-
-  const snapshot = value as NativeRoomCreatorsSnapshot;
-  publishNativeRoomCreatorsProjection(
-    snapshot.roomId,
-    snapshot.sessionGeneration,
-    snapshot.creators
-  );
-  return snapshot;
 }
 
 export const defaultNativeRoomCreatorsInvoke: NativeRoomCreatorsInvoke = (command, args) =>

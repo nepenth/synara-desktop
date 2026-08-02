@@ -22,6 +22,13 @@ const acceptSessionGeneration = (sessionGeneration: number): boolean => {
   return true;
 };
 
+/**
+ * Establish the session generation before issuing a room read. A newer native
+ * session invalidates every projection, even when its first room read fails.
+ */
+export const beginNativeRoomStateSession = (sessionGeneration: number): boolean =>
+  acceptSessionGeneration(sessionGeneration);
+
 export const publishNativeRoomPowerLevelsProjection = (
   roomId: string,
   sessionGeneration: number,
@@ -60,6 +67,10 @@ export const getNativeRoomStateProjection = (
   const projection = roomProjections.get(roomId);
   if (projection?.sessionGeneration !== activeSessionGeneration) return undefined;
   return projection;
+};
+
+export const invalidateNativeRoomStateProjection = (roomId: string): void => {
+  roomProjections.delete(roomId);
 };
 
 export const clearNativeRoomStateProjections = (): void => {

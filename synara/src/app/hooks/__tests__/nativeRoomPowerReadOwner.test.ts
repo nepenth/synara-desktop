@@ -155,6 +155,54 @@ test('native read owners fail closed on non-native, logged-out, malformed, and s
   await assert.rejects(readRoomCreatorsWithNativeOwner(roomId, true, malformed), /unavailable/);
 });
 
+test('native room read failures invalidate old projections after a logged-in generation change', async () => {
+  clearNativeRoomStateProjections();
+  publishNativeRoomPowerLevelsProjection(roomId, 7, {
+    users: { '@old:example.org': 100 },
+  });
+  assert.equal(getNativeRoomStateProjection(roomId)?.sessionGeneration, 7);
+
+  const unavailable: NativeRoomPowerLevelsInvoke = async (command) =>
+    command === 'matrix_session_snapshot'
+      ? { available: true, value: { status: 'logged_in', sessionGeneration: 8 } }
+      : { available: false };
+  await assert.rejects(
+    readRoomPowerLevelsWithNativeOwner(roomId, true, unavailable),
+    /unavailable/
+  );
+  assert.equal(getNativeRoomStateProjection(roomId), undefined);
+
+  publishNativeRoomCreatorsProjection(roomId, 8, ['@new:example.org']);
+  const malformed: NativeRoomCreatorsInvoke = async (command) =>
+    command === 'matrix_session_snapshot'
+      ? { available: true, value: { status: 'logged_in', sessionGeneration: 8 } }
+      : { available: true, value: { status: 'ok', roomId, creators: ['not-a-user'] } };
+  await assert.rejects(readRoomCreatorsWithNativeOwner(roomId, true, malformed), /unavailable/);
+  assert.equal(getNativeRoomStateProjection(roomId), undefined);
+
+  publishNativeRoomPowerLevelsProjection(roomId, 8, {
+    users: { '@new:example.org': 100 },
+  });
+  const stale: NativeRoomPowerLevelsInvoke = async (command) =>
+    command === 'matrix_session_snapshot'
+      ? { available: true, value: { status: 'logged_in', sessionGeneration: 8 } }
+      : {
+          available: true,
+          value: {
+            status: 'ok',
+            roomId,
+            eventType: 'm.room.power_levels',
+            stateKey: '',
+            sessionGeneration: 7,
+            content: { users: { '@old:example.org': 100 } },
+          },
+        };
+  await assert.rejects(readRoomPowerLevelsWithNativeOwner(roomId, true, stale), /unavailable/);
+  assert.equal(getNativeRoomStateProjection(roomId), undefined);
+
+  clearNativeRoomStateProjections();
+});
+
 test('native direct-reader projections consume DTOs and fail closed without them', () => {
   clearNativeRoomStateProjections();
   assert.equal(getNativeHighestPowerUserId(undefined), undefined);
