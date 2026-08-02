@@ -4,12 +4,12 @@
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | Status          | **Implementation packet** — this packet is docs-only; the directory product vertical is **WIP** and not implemented or accepted |
 | Residual        | **V-ROOMS.R-DIRECTORY** from [#383](v-rooms-directory-residual.md)                                                             |
-| Base            | `feature/matrix-rust-sdk-full-replacement` at `206d24f36fae8cd9cf6f061be887cb955df0842b`                                       |
+| Base            | `feature/matrix-rust-sdk-full-replacement` at `d82e043db25e4ec786bde103c4d457a898ef664b`                                       |
 | PR shape        | Focused **draft** PR targeting `feature/matrix-rust-sdk-full-replacement`                                                      |
 | Policy          | Complete UI → Tauri IPC → live `matrix-sdk` owner; superseded JS directory network is deleted in the same implementation slice |
 | Desktop failure | **Fail closed** when the native Matrix session, command, response, or generation is unavailable                                |
 | Prettier        | `2.8.1`                                                                                                                        |
-| Guard           | Never `main`, umbrella PR **#39**, or `product.rs`; #446 extraction is merged and this is a parallel module lane; `dual_backend` and a JS fallback are forbidden |
+| Guard           | Never `main`, umbrella PR **#39**, or `product.rs`; #458 is merged at the base and #461 remains a draft candidate pending rebase/acceptance; `dual_backend` and a JS fallback are forbidden |
 
 The source of truth for the measured residual is
 [v-rooms-directory-residual.md](v-rooms-directory-residual.md). This packet
@@ -17,11 +17,13 @@ turns only the live public-room directory slice into a bounded implementation
 contract. It does not close the related preview, card, navigation, or join
 proof slices, and it is not a V-BURN completion claim.
 
-> **Parallel WIP note at `206d24f3`.** The #446 product-command extraction is
-> merged, so the room-directory product vertical can proceed in its
-> module-owned lane without reopening the shared `product.rs` serial owner.
-> Directory implementation is in flight; this docs packet records no product
-> merge, JS-owner deletion, proof, or acceptance.
+> **Parallel WIP note at `d82e043d`.** #446's product-command extraction, #450's
+> power/creator READs, and #458's first presence slice are merged, so the
+> room-directory product vertical remains module-owned without reopening the
+> shared `product.rs` serial owner. Candidate #461 is currently at `5393607e`;
+> its inventory/session-wire fix is recorded here as pre-acceptance evidence,
+> but the candidate must rebase onto `d82e043d` before `ACCEPT`. This packet
+> records no product merge, JS-owner deletion, proof, or acceptance.
 
 ## 1. Objective and completion bar
 
@@ -104,10 +106,10 @@ adding a second client or editing `product.rs` is not an allowed workaround.
   refactor;
 - any change to `main`, PR `#39`, or unrelated residuals.
 
-Before any future product implementation starts, the writer must verify:
+Before accepting the #461 product implementation, the writer must verify:
 
-1. `HEAD` is exactly `206d24f36fae8cd9cf6f061be887cb955df0842b` and the PR
-   target is `feature/matrix-rust-sdk-full-replacement`;
+1. the candidate is rebased onto `d82e043db25e4ec786bde103c4d457a898ef664b`
+   and the PR target is `feature/matrix-rust-sdk-full-replacement`;
 2. the existing managed native session is the sole authenticated Matrix SDK
    client for the desktop session;
 3. the current Tauri capability mechanism permits the new module-owned
@@ -163,6 +165,12 @@ DirectoryRoomHit {
   roomType: "room" | "space"
 }
 ```
+
+The directory page DTO remains product-owned camelCase, but the session
+preflight consumed by this owner follows the live mixed-case wire: `status`,
+`user_id`, `device_id`, `homeserver_url`, and `sessionGeneration`. The #461
+candidate's focused tests reject the all-camelCase session shape; do not
+normalize these session keys or add a compatibility fallback.
 
 The request bounds are fixed for this slice:
 
