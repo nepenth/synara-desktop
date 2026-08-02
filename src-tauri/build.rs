@@ -73,6 +73,8 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_room_set_power_levels",
     "matrix_room_set_power_level_tags",
     "matrix_room_members_snapshot",
+    "matrix_room_power_levels_snapshot",
+    "matrix_room_creators_snapshot",
     "matrix_invites_report_spam",
     "matrix_invites_block_sender",
     "matrix_typing_snapshot",

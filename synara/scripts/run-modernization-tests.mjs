@@ -10,6 +10,7 @@ const tests = [
   'src/app/contracts/__tests__/contractSchemas.test.ts',
   'src/app/hooks/__tests__/useVirtualPaginator.test.ts',
   'src/app/hooks/__tests__/nativeRoomMembersOwner.test.ts',
+  'src/app/hooks/__tests__/nativeRoomPowerReadOwner.test.ts',
   'src/app/hooks/__tests__/roomMembersWiring.test.ts',
   'src/app/utils/__tests__/gifProvider.test.ts',
   'src/app/utils/__tests__/later.test.ts',

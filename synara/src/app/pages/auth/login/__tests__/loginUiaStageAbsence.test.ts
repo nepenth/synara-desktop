@@ -43,14 +43,23 @@ test('V-AUTH.3b: product has no generic matrix_uia_* login-stage IPC', () => {
   assert.match(libRs, /matrix_login_password/);
   assert.doesNotMatch(libRs, /matrix_uia_/);
 
-  const productRs = read(path.join(repoRoot, 'src-tauri/src/matrix/auth/product.rs'));
-  const productProd = productRs.split('#[cfg(test)]')[0] ?? productRs;
-  assert.doesNotMatch(productProd, /pub async fn matrix_uia_/);
-  assert.match(productProd, /pub async fn matrix_login_password/);
+  // Auth product commands were extracted from product.rs. Keep this guard
+  // pointed at the actual native command owner so it proves the product
+  // remains native-only instead of relying on the module wrapper.
+  const productCommandsRs = read(
+    path.join(repoRoot, 'src-tauri/src/matrix/auth/product_commands.rs')
+  );
+  const productCommandsProd = productCommandsRs.split('#[cfg(test)]')[0] ?? productCommandsRs;
+  const deviceCommandsRs = read(
+    path.join(repoRoot, 'src-tauri/src/matrix/devices/product_commands.rs')
+  );
+  const deviceCommandsProd = deviceCommandsRs.split('#[cfg(test)]')[0] ?? deviceCommandsRs;
+  assert.doesNotMatch(productCommandsProd, /pub async fn matrix_uia_/);
+  assert.match(productCommandsProd, /pub async fn matrix_login_password/);
   // Specialized native multi-stage / UIAA owners remain elsewhere.
-  assert.match(productProd, /pub async fn matrix_register/);
-  assert.match(productProd, /pub async fn matrix_password_reset_complete/);
-  assert.match(productProd, /pub async fn matrix_device_delete_password/);
+  assert.match(productCommandsProd, /pub async fn matrix_register/);
+  assert.match(productCommandsProd, /pub async fn matrix_password_reset_complete/);
+  assert.match(deviceCommandsProd, /pub async fn matrix_device_delete_password/);
 });
 
 test('V-AUTH.3b: UIA stage UI consumers are register/reset only (not login)', () => {
