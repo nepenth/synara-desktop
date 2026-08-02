@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |          151 |                2 |                   3 |
+| production |          150 |                2 |                   3 |
 | test       |           10 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |      **164** |                  |                     |
+| **total**  |      **163** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |   151 |
+| Production import files |   150 |
 | Test import files       |    10 |
-| Total import files      |   161 |
+| Total import files      |   160 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 151)
+- Production match: **no** (found 150)
 - Test match: **no** (found 10)
 
 ### Production files by bucket (desktop runtime only)
@@ -59,13 +59,13 @@ Expected **220** production and **12** test import files.
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 151. Files with any finding: 153.
+Scope: **production only**. Import files: 150. Files with any finding: 152.
 
 ### Imported modules
 
 | Module path                                           | Import sites | Files |
 | ----------------------------------------------------- | -----------: | ----: |
-| `matrix-js-sdk`                                       |          145 |   145 |
+| `matrix-js-sdk`                                       |          144 |   144 |
 | `matrix-js-sdk/lib/types`                             |            9 |     9 |
 | `matrix-js-sdk/lib/matrixrtc/CallMembership`          |            4 |     4 |
 | `matrix-js-sdk/lib/models/relations`                  |            4 |     4 |

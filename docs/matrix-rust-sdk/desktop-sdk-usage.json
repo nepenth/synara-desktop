@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 153,
-      "importFileCount": 151,
+      "fileCount": 152,
+      "importFileCount": 150,
       "methodCandidateFrequencies": [
         {
           "count": 61,
@@ -378,8 +378,8 @@
       },
       "modules": [
         {
-          "fileCount": 145,
-          "importCount": 145,
+          "fileCount": 144,
+          "importCount": 144,
           "path": "matrix-js-sdk"
         },
         {
@@ -11699,13 +11699,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 151,
+      "productionImportFiles": 150,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 161
+      "totalImportFiles": 160
     },
     "repositoryWide": {
-      "productionImportFiles": 151,
+      "productionImportFiles": 150,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -11714,7 +11714,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 164
+      "totalImportFiles": 163
     }
   }
 }

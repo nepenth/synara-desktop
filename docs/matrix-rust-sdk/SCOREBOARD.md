@@ -4,7 +4,7 @@
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-01                                               |
 | Tip                                                    | `206d24f3` on `feature/matrix-rust-sdk-full-replacement`; #439 powers-bulk and #446 product-command fan-out are merged |
-| Production `matrix-js-sdk` import files (`synara/src`) | **151** (plan baseline was **220**)                      |
+| Production `matrix-js-sdk` import files (`synara/src`) | **150** (plan baseline was **220**)                      |
 | Product command layout                                  | **#446 merged** — domain `product_commands.rs` modules are available for parallel follow-on lanes |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
@@ -102,7 +102,7 @@ run passes the relevant checklist.
    complete. See [V-BURN gates](d0-residual-completion.md) and
    [blockers](v-burn-readiness-snapshot.md).
 6. **V-BURN.2 — zero production importers.** Current production importers
-   **151**. See [taxonomy](v-burn-importer-taxonomy.md).
+   **150**. See [taxonomy](v-burn-importer-taxonomy.md).
 7. **V-BURN.3 — drop npm and obsolete JS bootstrap/store code.** After
    V-BURN.1/.2. See the
    [V-BURN completion gates](d0-residual-completion.md) and [blocker snapshot](v-burn-readiness-snapshot.md).
