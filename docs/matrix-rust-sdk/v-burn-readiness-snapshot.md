@@ -8,7 +8,7 @@
 | ----------------------- | -------------------------------------------------------------------------------- |
 | Readiness               | **Not ready**                                                                    |
 | Runtime proof           | **Not confirmed**                                                                |
-| Source tip              | `5d1fc28b3efbc494b4362ce2af65ca5f4c22eaff`                                       |
+| Source tip              | `206d24f36fae8cd9cf6f061be887cb955df0842b`                                       |
 | Base                    | `feature/matrix-rust-sdk-full-replacement` only                                  |
 | Scope                   | Docs only; no product code or cutover state change                               |
 | `dual_backend`          | **Forbidden**; this snapshot does not enable or claim it                         |
@@ -54,9 +54,10 @@ remaining importers are acceptable at final convergence.
    #39 gated. Do not set `active_slice=V-BURN`.
 
 The current residual queue is summarized in [`SCOREBOARD.md`](SCOREBOARD.md).
-Its tip field is intentionally not changed by this snapshot; the source
-evidence above is pinned explicitly to
-`5d1fc28b3efbc494b4362ce2af65ca5f4c22eaff`.
+Its integration-tip field remains `9fb341af` because the intervening #448
+scoreboard commit and this snapshot are docs-only; they add no product-runtime
+evidence. The source evidence above is pinned explicitly to
+`206d24f36fae8cd9cf6f061be887cb955df0842b`.
 
 ## Bottom line
 
