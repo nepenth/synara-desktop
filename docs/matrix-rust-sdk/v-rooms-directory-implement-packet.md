@@ -2,26 +2,51 @@
 
 | Field           | Value                                                                                                                          |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Status          | **Implementation packet** — this packet is docs-only; the directory product vertical is **WIP** and not implemented or accepted |
+| Status          | **First slice merged (#461); V-ROOMS.R-DIRECTORY closure remains open** — this docs-only refresh records the residual; live proof and acceptance are **Not confirmed** |
 | Residual        | **V-ROOMS.R-DIRECTORY** from [#383](v-rooms-directory-residual.md)                                                             |
-| Base            | `feature/matrix-rust-sdk-full-replacement` at `206d24f36fae8cd9cf6f061be887cb955df0842b`                                       |
-| PR shape        | Focused **draft** PR targeting `feature/matrix-rust-sdk-full-replacement`                                                      |
+| Base            | `feature/matrix-rust-sdk-full-replacement` at `c1e9c3be2b8ff13da42853913b30493cb030e6ec`                                       |
+| PR shape        | Focused **draft** docs PR targeting `feature/matrix-rust-sdk-full-replacement`; #461 is merged at this base                 |
 | Policy          | Complete UI → Tauri IPC → live `matrix-sdk` owner; superseded JS directory network is deleted in the same implementation slice |
 | Desktop failure | **Fail closed** when the native Matrix session, command, response, or generation is unavailable                                |
 | Prettier        | `2.8.1`                                                                                                                        |
-| Guard           | Never `main`, umbrella PR **#39**, or `product.rs`; #446 extraction is merged and this is a parallel module lane; `dual_backend` and a JS fallback are forbidden |
+| Guard           | Never `main`, umbrella PR **#39**, or `product.rs`; #461 directory and #458 presence slices are merged; `dual_backend` and a JS fallback are forbidden |
 
 The source of truth for the measured residual is
 [v-rooms-directory-residual.md](v-rooms-directory-residual.md). This packet
-turns only the live public-room directory slice into a bounded implementation
-contract. It does not close the related preview, card, navigation, or join
-proof slices, and it is not a V-BURN completion claim.
+records the first live public-room directory slice landed by #461 and the
+evidence still required before its residual can be accepted. It does not close
+the related preview, card, navigation, or join proof slices, and it is not a
+V-BURN completion claim.
 
-> **Parallel WIP note at `206d24f3`.** The #446 product-command extraction is
-> merged, so the room-directory product vertical can proceed in its
-> module-owned lane without reopening the shared `product.rs` serial owner.
-> Directory implementation is in flight; this docs packet records no product
-> merge, JS-owner deletion, proof, or acceptance.
+> **Post-merge note at `c1e9c3be`.** #461 is merged at this integration tip.
+> Its first slice lands the native browse/search/filter/pagination route,
+> protocol projection, route-scoped JS-owner deletion, strict DTO parsing, and
+> focused local/CI evidence. Authenticated live proof and full closure evidence
+> remain **Not confirmed**. The preview/card/navigation/join boundaries remain
+> separate.
+
+## Current state at the merge tip
+
+### Landed in #461
+
+- `matrix_room_directory_protocols`, `matrix_room_directory_search`, and
+  `matrix_room_directory_cancel` use the managed authenticated Matrix SDK
+  client and session/request-generation authority.
+- `Server.tsx` uses the native owner for browse, term search, room/space and
+  third-party filters, bounded limits, and both pagination directions.
+- The native page/room DTO parser, stale-result suppression, cancellation,
+  generation checks, source guard, and fail-closed unavailable behavior are
+  present; the route-scoped raw JS `/publicRooms` owner and Add Server probe are
+  deleted.
+
+### Still open for V-ROOMS.R-DIRECTORY closure
+
+- The authenticated disposable-homeserver directory proof in Section 6 has not
+  been retained here; its status is **Not confirmed**.
+- Independent acceptance must distinguish the merged implementation evidence
+  from live command/result readback; green CI does not close that proof gate.
+- Preview resolution, shared card/navigation ownership, and the existing join
+  mutation/proof remain separate residuals.
 
 ## 1. Objective and completion bar
 
@@ -104,9 +129,9 @@ adding a second client or editing `product.rs` is not an allowed workaround.
   refactor;
 - any change to `main`, PR `#39`, or unrelated residuals.
 
-Before any future product implementation starts, the writer must verify:
+Before claiming V-ROOMS.R-DIRECTORY closure, the writer must verify:
 
-1. `HEAD` is exactly `206d24f36fae8cd9cf6f061be887cb955df0842b` and the PR
+1. `HEAD` is exactly `c1e9c3be2b8ff13da42853913b30493cb030e6ec` and the docs PR
    target is `feature/matrix-rust-sdk-full-replacement`;
 2. the existing managed native session is the sole authenticated Matrix SDK
    client for the desktop session;
@@ -220,7 +245,7 @@ product, privacy, or UI result.
 
 ## 4. Physical JS-owner deletion and route boundary
 
-The implementation PR must remove the directory-specific JS owner in the same
+The merged implementation removes the directory-specific JS owner in this
 slice. Shared card behavior is a named later residual and must not be mixed in
 as incidental cleanup.
 
@@ -305,10 +330,10 @@ to the live module. Cover:
   response content.
 
 Do not run a full workspace build merely to author or review this packet. The
-future implementation PR should run the focused Rust room-directory filter,
-the focused frontend owner/DTO/IPC tests, the route source guard, and the
-existing Matrix guardrails. `npm ci` and a full workspace build are not
-required unless a targeted failure proves one essential.
+focused Rust room-directory filter, frontend owner/DTO/IPC tests, route source
+guard, and existing Matrix guardrails are the required implementation evidence;
+any closure rerun should remain targeted. `npm ci` and a full workspace build
+are not required unless a targeted failure proves one essential.
 
 ## 6. Authenticated disposable-homeserver proof
 
@@ -344,7 +369,7 @@ retained evidence.
 This proof establishes only `V-ROOMS.R-DIRECTORY`. It does not prove preview
 resolution, card projection/navigation, join mutation, V-BURN, or PR `#39`.
 
-## 7. Ordered implementation work
+## 7. Implementation record and closure work
 
 1. Reconfirm the exact base SHA, integration target, managed-session authority,
    and the no-`product.rs` boundary. Stop on any mismatch.
@@ -361,12 +386,13 @@ resolution, card projection/navigation, join mutation, V-BURN, or PR `#39`.
    native failure terminal for this desktop route.
 6. Physically remove the route-scoped JS directory calls and the unused Add
    Server probe. Do not modify the separate preview/card/join residuals.
-7. Run the focused frontend, DTO/IPC, Rust, source-absence, Prettier `2.8.1`,
-   and Matrix guardrail checks. Then run and record the disposable-homeserver
-   proof.
+7. Retain the focused frontend, DTO/IPC, Rust, source-absence, Prettier
+   `2.8.1`, and Matrix guardrail checks. Then run and record the
+   disposable-homeserver proof.
 8. Review the diff for accidental `product.rs`, `main`, `#39`, V-BURN,
    unrelated-vertical, fallback, selector, retry-as-proof, or `dual_backend`
-   changes. Keep the PR draft and focused.
+   changes. Keep any closure docs/PR focused; do not treat the merged slice as
+   live-proof acceptance.
 
 ## 8. Acceptance statement
 
