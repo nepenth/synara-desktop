@@ -2,14 +2,14 @@
 
 | Field           | Value                                                                                                                          |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Status          | **Implementation packet** — this packet is docs-only; it does not claim the vertical is implemented                            |
+| Status          | **Implementation packet / post-extract lane hold** — docs-only; the directory product slice has not started                 |
 | Residual        | **V-ROOMS.R-DIRECTORY** from [#383](v-rooms-directory-residual.md)                                                             |
-| Base            | `feature/matrix-rust-sdk-full-replacement` at `8330c56bbb74b45ef01ad1f8be137b54caa2f568`                                       |
+| Base            | `feature/matrix-rust-sdk-full-replacement` at `457b2760b64fef6e4bded9ce9b1a2ffa5eddb94b`                                       |
 | PR shape        | Focused **draft** PR targeting `feature/matrix-rust-sdk-full-replacement`                                                      |
 | Policy          | Complete UI → Tauri IPC → live `matrix-sdk` owner; superseded JS directory network is deleted in the same implementation slice |
 | Desktop failure | **Fail closed** when the native Matrix session, command, response, or generation is unavailable                                |
 | Prettier        | `2.8.1`                                                                                                                        |
-| Guard           | Never `main`, umbrella PR **#39**, or `product.rs`; `dual_backend` and a JS fallback are forbidden                             |
+| Guard           | Never `main`, umbrella PR **#39**, or `product.rs`; wait for the post-extract free module lane; `dual_backend` and a JS fallback are forbidden |
 
 The source of truth for the measured residual is
 [v-rooms-directory-residual.md](v-rooms-directory-residual.md). This packet
@@ -17,13 +17,15 @@ turns only the live public-room directory slice into a bounded implementation
 contract. It does not close the related preview, card, navigation, or join
 proof slices, and it is not a V-BURN completion claim.
 
-> **Serial ownership note at `8330c56b`.** CallWidget **#407** holds the
-> serial `src-tauri/src/matrix/auth/product.rs` owner. The room-directory
-> product slice has not started at this tip; this PR is only a docs-only draft
-> handoff. It must not edit or claim completion of `product.rs`. A future
-> directory implementation remains module-owned under
+> **Serial ownership note at `457b2760`.** The room-directory product slice has
+> not started at this tip. `powers-bulk` **#439** remains the current product
+> lane; after it lands, the behavior-preserving `product.rs` extract/split is
+> the next serial lane. Directory must remain docs-only until that extract has
+> merged and the orchestrator has assigned a free module-owned lane. This
+> packet must not edit or claim completion of `product.rs`; a future directory
+> implementation remains module-owned under
 > `src-tauri/src/matrix/room_directory/` and must revalidate the managed
-> session boundary after the serial owner moves on.
+> session boundary after the extract.
 
 ## 1. Objective and completion bar
 
@@ -108,13 +110,18 @@ adding a second client or editing `product.rs` is not an allowed workaround.
 
 Before any future product implementation starts, the writer must verify:
 
-1. `HEAD` is exactly `8330c56bbb74b45ef01ad1f8be137b54caa2f568` and the PR
+1. `HEAD` is exactly `457b2760b64fef6e4bded9ce9b1a2ffa5eddb94b` and the PR
    target is `feature/matrix-rust-sdk-full-replacement`;
-2. the existing managed native session is the sole authenticated Matrix SDK
+2. powers-bulk **#439** has landed and released the
+   `src-tauri/src/matrix/auth/product.rs` serial slot;
+3. the behavior-preserving `product.rs` extract/split has landed and the
+   orchestrator has explicitly assigned a free module-owned directory lane;
+   otherwise this slice remains held and does not start;
+4. the existing managed native session is the sole authenticated Matrix SDK
    client for the desktop session;
-3. the current Tauri capability mechanism permits the new module-owned
+5. the current Tauri capability mechanism permits the new module-owned
    commands without adding an alternate invocation path; and
-4. the requested command, response, and session-generation contract below is
+6. the requested command, response, and session-generation contract below is
    unchanged.
 
 A failed prerequisite blocks the slice. It must not be repaired by adding a
@@ -348,8 +355,10 @@ resolution, card projection/navigation, join mutation, V-BURN, or PR `#39`.
 
 ## 7. Ordered implementation work
 
-1. Reconfirm the exact base SHA, integration target, managed-session authority,
-   and the no-`product.rs` boundary. Stop on any mismatch.
+1. Reconfirm the exact base SHA, integration target, free post-extract
+   module-lane assignment, managed-session authority, and the no-`product.rs`
+   boundary. Stop on any mismatch or while the extract lane has not released a
+   directory slot.
 2. Freeze the Synara-owned DTOs, request bounds, request/generation correlation,
    and exact command names in Section 3. Do not add aliases.
 3. Add the module-owned live room-directory request/projection path beside the
@@ -374,6 +383,9 @@ resolution, card projection/navigation, join mutation, V-BURN, or PR `#39`.
 
 `V-ROOMS.R-DIRECTORY` may be marked complete only when:
 
+- powers-bulk **#439** has released the serial slot, the behavior-preserving
+  `product.rs` extract/split has merged, and a free module-owned directory lane
+  was explicitly assigned before directory product implementation began;
 - Explore public-room browse, search, room/space filtering, third-party
   instance filtering, and both pagination directions use the exact native
   command contract in Section 3;
