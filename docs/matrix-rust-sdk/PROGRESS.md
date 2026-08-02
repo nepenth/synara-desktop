@@ -14,12 +14,12 @@
 | Field              | Value                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-02**                                                                                                                       |
-| Integration tip    | `c1e9c3be` — #405 members wiring, #407 CallWidget media, #438 product-lane protocol, #439 powers-bulk, #446 command fan-out, #450 power/creator READs, #458 presence first slice, and #461 room-directory first slice are merged at this tip |
-| Active work        | **#458 and #461 implementation slices are MERGED; presence and room-directory live-proof/acceptance residuals remain open**; directory preview/card/join and typing remain separate; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
+| Integration tip    | `60141c8b` — the post-#461 product state remains current, with the V-BURN snapshot and C3–C5 verification docs refreshed at this tip |
+| Active work        | **#458 presence first slice and #461 room-directory first slice are merged; both full verticals remain WIP**; native power/creator reads are closed for migrated owners, while custom power-level tags and direct helper/plugin readers remain residual; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
-| Import accounting  | Desktop production import files **150** on tip (plan baseline was 220). Allowlist **150** (ratcheted after the #458 presence and #461 directory owner removals).       |
-| Product lane        | **#446, #450, #458, and #461 merged** — command fan-out, power/creator READs, presence first slice, and room-directory first slice are at the tip; this docs-only refresh does not touch `product.rs` |
+| Import accounting  | Desktop production import files **150** on tip (plan baseline was 220). Allowlist **150** after the #458/#461 owner ratchets.       |
+| Product lane        | **#450 merged** — native power/creator reads are landed; this docs-only draft does not touch `product.rs` or product code |
 | Dual backend       | **`false`** (forbidden forever)                                                                                                      |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                             |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                 |
@@ -33,10 +33,10 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `c1e9c3be`** includes merged #458 presence and #461 room-directory implementation slices. Their native wiring, route-scoped JS-owner deletion, focused tests, and CI are landed; authenticated live proof and independent acceptance remain **Not confirmed**. Imports are 150; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
-| **Tip**        | `c1e9c3be`                                                                                                                                                                                                                             |
-| **Active PRs** | No product PR remains pending for presence or room-directory implementation: #458 and #461 are merged at this tip. This focused docs-only refresh records the remaining proof/acceptance boundary and changes no product code. |
-| **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
+| **Now**        | **Tip `60141c8b`** carries the merged #450 power/creator reads, #458 presence first slice, and #461 room-directory first slice from the product state below; the full #458/#461 verticals remain **WIP**. Custom power-level tags and direct helper/plugin reads remain residual. Imports are **150**; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
+| **Tip**        | `60141c8b`                                                                                                                                                                                                                             |
+| **Active PRs** | This focused docs-only refresh is rebased onto `60141c8b`. The prior rejected #465 head `28e2418d` is preserved as the source history; this refresh records the current tip and does not claim #465 merged. |
+| **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); full #458/#461 vertical acceptance remains open; umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) remains gated without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
 ---
 
@@ -61,15 +61,33 @@ Update rules:
 
 ## Work log (newest first)
 
-### 2026-08-02 — tip `c1e9c3be` — #458 and #461 implementation slices MERGED
+### 2026-08-02 — tip `60141c8b` — rebase #465 onto current docs tip
 
-| When (UTC) | Item                              | Result                                      | Notes                                                                                                                                                                                                                                      |
-| ---------- | --------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| current    | **Integration tip**               | **This docs-only refresh**                  | Based at `c1e9c3be`; #458 presence and #461 room-directory first slices are merged on the integration branch. `main` and #39 remain out of scope.                                                                                       |
-| current    | **Presence product vertical**     | **#458 first slice merged / residual open** | Native snapshot/subscribe route, profile binding, JS-owner deletion, focused evidence, and CI are landed; authenticated live proof and independent acceptance remain **Not confirmed**. Typing and MatrixRTC presence remain separate. |
-| current    | **Room directory vertical**       | **#461 first slice merged / residual open** | Native browse/search/filter/pagination route, protocol projection, JS-owner deletion, focused evidence, and CI are landed; authenticated live proof and independent acceptance remain **Not confirmed**. Preview/card/join remain separate. |
-| current    | **Import accounting**              | **150**                                     | The integration tip reports 150 production `matrix-js-sdk` import files and 150 allowlist entries after the presence and directory owner removals.                                                                                       |
-| current    | **Proof / burn gates**             | **Held**                                    | Presence and directory live proofs remain **Not confirmed**; C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend=false`; #39/`main` remain out of scope.                                                          |
+| When (UTC) | Item                           | Result       | Notes                                                                                                                                                                      |
+| ---------- | ------------------------------ | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**            | **Draft**    | Rebased onto `60141c8b`; the product state from `c1e9c3be` is unchanged while the V-BURN and C3–C5 docs refreshes are included. `main` and #39 remain out of scope.      |
+| current    | **#465 rejection repairs**     | **Preserved** | Section 5 is complete; the historical `52953091` planning base is labeled as historical; custom tag and direct helper/plugin READs remain residual.                       |
+| current    | **Proof / burn / merge gates** | **Held**     | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden; keep this PR draft/unmerged.                                                        |
+
+### 2026-08-02 — tip `c1e9c3be` — rebase #465 after merged #461
+
+| When (UTC) | Item                         | Result                  | Notes                                                                                                                                                                      |
+| ---------- | ---------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**          | **This docs-only draft** | Based at `c1e9c3be`; #461's room-directory first slice is merged. `main` and #39 remain out of scope.                                                                    |
+| current    | **Members / power READ**     | **Residual boundary held** | #450 native power/creator owners remain closed for migrated paths; custom tag metadata and direct helper/plugin reads remain explicitly residual.                         |
+| current    | **#465 refresh**              | **Rebased / repair required** | Replayed the six-file docs refresh onto `c1e9c3be`; resolved the `SCOREBOARD.md` tip conflict and repaired the rejected Section 5 truncation.                           |
+| current    | **Proof / burn / merge gates** | **Held**             | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden; keep this PR draft/unmerged.                                                        |
+
+### 2026-08-02 — tip `d82e043d` — refresh after #450/#458; #465 tip honesty
+
+| When (UTC) | Item                         | Result                  | Notes                                                                                                                                                                      |
+| ---------- | ---------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**          | **This docs-only draft** | Based at `d82e043d`; #450 and #458 are merged. `main` and #39 remain out of scope.                                                                                         |
+| current    | **Power/creator READ**       | **Merged #450**         | Native power-level and creator snapshots back the migrated hook/permission paths with fail-closed native ownership; no JS state-event fallback on native sessions.       |
+| current    | **Remaining READ residual**  | **Active**              | No native `in.synara.room.power_level_tags` snapshot; custom tag metadata plus direct `via-servers` / `utils/room.ts` power/create readers remain explicitly tracked. |
+| current    | **Presence / directory**     | **#458 merged / #461 open** | #458's presence first slice is landed but not product-complete; #461 remains a hot WIP directory vertical with proof and acceptance open.                                  |
+| current    | **#465 draft tip**           | **Refresh required**    | Prior head `3d7c5f42` was based at `103a653f`; the post-#458 replay conflicts in `SCOREBOARD.md`. This branch records `d82e043d` honestly and does not claim mergeability. |
+| current    | **Proof / burn / merge gates** | **Held**             | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden; hold merge while #461 is hot.                                                   |
 
 ### 2026-08-01 — tip `206d24f3` — presence/directory WIP after #446 extraction
 
