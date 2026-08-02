@@ -53,10 +53,7 @@ const isSafeGeneration = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 
 const isSafeCount = (value: unknown, maximum: number): value is number =>
-  typeof value === 'number' &&
-  Number.isSafeInteger(value) &&
-  value >= 0 &&
-  value <= maximum;
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= maximum;
 
 const hasExactKeys = (
   value: Record<string, unknown>,
@@ -65,8 +62,7 @@ const hasExactKeys = (
 ): boolean => {
   const allowed = new Set(keys);
   return (
-    Object.keys(value).every((key) => allowed.has(key)) &&
-    requiredKeys.every((key) => key in value)
+    Object.keys(value).every((key) => allowed.has(key)) && requiredKeys.every((key) => key in value)
   );
 };
 
@@ -182,10 +178,7 @@ const parseRoom = (value: unknown): NativeSpaceHierarchyRoom => {
   };
 };
 
-const parseSnapshot = (
-  value: unknown,
-  sessionGeneration: number
-): NativeSpaceHierarchySnapshot => {
+const parseSnapshot = (value: unknown, sessionGeneration: number): NativeSpaceHierarchySnapshot => {
   if (!isObject(value) || hasForbiddenWireFields(value) || !hasExactKeys(value, SNAPSHOT_KEYS)) {
     throw new Error(unavailableMessage);
   }
