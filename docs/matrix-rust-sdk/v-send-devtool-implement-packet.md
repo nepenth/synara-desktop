@@ -5,11 +5,11 @@
 | Status   | **Implementation packet** — this packet is docs-only; it does not claim the vertical is implemented                                                |
 | Residual | **V-SEND.R-DEVTOOL**                                                                                                                               |
 | Priority | Low; user-reordered finish-line item                                                                                                               |
-| Base     | `feature/matrix-rust-sdk-full-replacement` at `206d24f36fae8cd9cf6f061be887cb955df0842b`                                                           |
+| Base     | `feature/matrix-rust-sdk-full-replacement` at `60141c8bb96c4f4be4578c367cbae116a2e81990`                                                           |
 | PR shape | Focused **draft** PR targeting `feature/matrix-rust-sdk-full-replacement`                                                                          |
-| Gate     | Start only after V-TIMELINE.C3–C5 have confirmed live proofs                                                                                       |
+| Gate     | **Held** — start only after V-TIMELINE.C3–C5 have confirmed live proofs                                                                             |
 | Policy   | [full-vertical-policy.md](full-vertical-policy.md): complete UI → Tauri IPC → live `matrix-sdk` vertical, with JS-owner deletion in the same slice |
-| Guard    | Never `main`, umbrella PR **#39**, or V-BURN/#327; `dual_backend` is forbidden                                                                     |
+| Guard    | Never `main`, umbrella PR **#39**, or V-BURN/#327; `dual_backend=false`; native failure remains fail-closed                                          |
 
 The source of truth for the residual is
 [v-send-devtool-inventory.md](v-send-devtool-inventory.md). This packet turns
