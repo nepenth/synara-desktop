@@ -1416,6 +1416,98 @@ fn room_moderation_validates_ids_and_power_levels() {
 }
 
 #[test]
+fn room_directory_visibility_commands_keep_the_native_owner_contract() {
+    assert!(PRODUCT_SOURCE.contains("matrix_get_room_directory_visibility"));
+    assert!(PRODUCT_SOURCE.contains("matrix_set_room_directory_visibility"));
+    let get_command = PRODUCT_SOURCE
+        .split("pub async fn matrix_get_room_directory_visibility")
+        .nth(1)
+        .expect("directory visibility get command")
+        .split("#[tauri::command]")
+        .next()
+        .expect("directory visibility get command body");
+    assert!(get_command.contains("get_room_visibility()"));
+    let set_command = PRODUCT_SOURCE
+        .split("pub async fn matrix_set_room_directory_visibility")
+        .nth(1)
+        .expect("directory visibility set command")
+        .split("#[tauri::command]")
+        .next()
+        .expect("directory visibility set command body");
+    assert!(!set_command.contains("get_room_visibility()"));
+    assert!(set_command.contains("update_room_visibility(native_visibility)"));
+    assert!(
+        set_command.contains("user_can_send_state(user_id, StateEventType::RoomCanonicalAlias)")
+    );
+    assert!(!set_command.contains("power_levels_or_default"));
+    assert!(!set_command.contains("RoomProfileIndex::set_directory_visibility"));
+}
+
+#[test]
+fn room_directory_visibility_parsers_and_wire_shapes_are_strict() {
+    assert_eq!(
+        parse_room_directory_visibility_room_id("!room:example.org")
+            .unwrap()
+            .to_string(),
+        "!room:example.org"
+    );
+    assert_eq!(
+        parse_room_directory_visibility_room_id("not-a-room")
+            .unwrap_err()
+            .diagnostic_id,
+        "v-send.r-room-profile-directory-visibility-invalid"
+    );
+    assert_eq!(
+        parse_room_directory_visibility("public").unwrap().1,
+        "public"
+    );
+    assert_eq!(
+        parse_room_directory_visibility("private").unwrap().1,
+        "private"
+    );
+    assert_eq!(
+        parse_room_directory_visibility("unknown")
+            .unwrap_err()
+            .diagnostic_id,
+        "v-send.r-room-profile-directory-visibility-invalid"
+    );
+
+    let read = serde_json::to_value(MatrixRoomDirectoryVisibilityResult {
+        status: "ok",
+        room_id: "!room:example.org".into(),
+        session_generation: 7,
+        visibility: "public",
+    })
+    .unwrap();
+    assert_eq!(
+        read,
+        serde_json::json!({
+            "status": "ok",
+            "roomId": "!room:example.org",
+            "sessionGeneration": 7,
+            "visibility": "public"
+        })
+    );
+
+    let write = serde_json::to_value(MatrixRoomDirectoryVisibilityWriteResult {
+        status: "ok",
+        room_id: "!room:example.org".into(),
+        session_generation: 7,
+        requested_visibility: "private",
+    })
+    .unwrap();
+    assert_eq!(
+        write,
+        serde_json::json!({
+            "status": "ok",
+            "roomId": "!room:example.org",
+            "sessionGeneration": 7,
+            "requestedVisibility": "private"
+        })
+    );
+}
+
+#[test]
 fn room_moderation_error_mapping_is_stable() {
     assert_eq!(
         map_room_moderation_error("v-rooms-members-moderation-invalid-room").code,

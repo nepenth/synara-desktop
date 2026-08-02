@@ -651,6 +651,12 @@
           "markdownDescription": "Enables the matrix_get_global_image_packs command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_get_room_directory_visibility command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-get-room-directory-visibility",
+          "markdownDescription": "Enables the matrix_get_room_directory_visibility command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_get_room_image_packs command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-get-room-image-packs",
@@ -1087,6 +1093,12 @@
           "type": "string",
           "const": "allow-matrix-set-room-avatar",
           "markdownDescription": "Enables the matrix_set_room_avatar command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_set_room_directory_visibility command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-set-room-directory-visibility",
+          "markdownDescription": "Enables the matrix_set_room_directory_visibility command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_set_room_image_pack command without any pre-configured scope.",
@@ -1623,6 +1635,12 @@
           "markdownDescription": "Denies the matrix_get_global_image_packs command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_get_room_directory_visibility command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-get-room-directory-visibility",
+          "markdownDescription": "Denies the matrix_get_room_directory_visibility command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_get_room_image_packs command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-get-room-image-packs",
@@ -2059,6 +2077,12 @@
           "type": "string",
           "const": "deny-matrix-set-room-avatar",
           "markdownDescription": "Denies the matrix_set_room_avatar command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_set_room_directory_visibility command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-set-room-directory-visibility",
+          "markdownDescription": "Denies the matrix_set_room_directory_visibility command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_set_room_image_pack command without any pre-configured scope.",
