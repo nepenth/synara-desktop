@@ -17,9 +17,10 @@ export function RoomTombstone({ roomId, body, replacementRoomId }: RoomTombstone
   const { navigateRoom } = useRoomNavigate();
 
   const [joinState, handleJoin] = useAsyncCallback(
-    useCallback(() => {
+    useCallback(async () => {
       const currentRoom = mx.getRoom(roomId);
-      const via = currentRoom ? getViaServers(currentRoom) : [];
+      if (!currentRoom) throw new Error('Source room is unavailable.');
+      const via = await getViaServers(currentRoom);
       return joinRoomWithNativeOwner(
         replacementRoomId,
         via,

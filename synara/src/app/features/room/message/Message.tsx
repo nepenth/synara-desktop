@@ -403,10 +403,11 @@ export const MessageCopyLinkItem = as<
     onClose?: () => void;
   }
 >(({ room, mEvent, onClose, ...props }, ref) => {
-  const handleCopy = () => {
+  const handleCopy = async () => {
     const eventId = mEvent.getId();
     if (!eventId) return;
-    copyToClipboard(getMatrixToRoomEvent(room.roomId, eventId, getViaServers(room)));
+    const viaServers = await getViaServers(room);
+    copyToClipboard(getMatrixToRoomEvent(room.roomId, eventId, viaServers));
     onClose?.();
   };
 
