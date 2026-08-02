@@ -10,7 +10,8 @@ use matrix_sdk::Client;
 use serde::Serialize;
 
 use super::{
-    DirectoryRoomHit, DirectoryRoomType, RoomDirectorySession, MAX_BATCH_CHARS, MAX_TEXT_CHARS,
+    DirectoryRoomHit, DirectoryRoomType, RoomDirectorySession, MAX_BATCH_CHARS, MAX_DIRECTORY_HITS,
+    MAX_TEXT_CHARS,
 };
 
 pub const MAX_PROTOCOL_INSTANCES: usize = 128;
@@ -135,14 +136,17 @@ fn normalize_optional(
     diagnostic_id: &'static str,
 ) -> Result<Option<String>, &'static str> {
     let Some(value) = value else { return Ok(None) };
-    let value = value.trim().to_owned();
-    if value.is_empty() || value.chars().count() > max_chars {
+    let value = value.trim();
+    if value.is_empty() {
+        return Ok(None);
+    }
+    if value.chars().count() > max_chars {
         return Err(diagnostic_id);
     }
     if value.contains("access_token") || value.contains("refresh_token") {
         return Err(diagnostic_id);
     }
-    Ok(Some(value))
+    Ok(Some(value.to_owned()))
 }
 
 pub fn build_public_rooms_request(
@@ -184,6 +188,9 @@ pub fn project_response(
     input: &NormalizedDirectorySearch,
     response: get_public_rooms_filtered::v3::Response,
 ) -> Result<NativeRoomDirectoryPage, &'static str> {
+    if response.chunk.len() > MAX_DIRECTORY_HITS {
+        return Err("v-rooms.directory-hit-cap");
+    }
     let hits = response
         .chunk
         .into_iter()
@@ -222,7 +229,10 @@ fn project_hit(
     hit: matrix_sdk::ruma::directory::PublicRoomsChunk,
 ) -> Result<DirectoryRoomHit, &'static str> {
     let room_type = match hit.room_type.as_ref().map(|room_type| room_type.as_str()) {
-        None => return Err("v-rooms.directory-missing-room-type"),
+        // Ruma represents the Matrix default room type by an absent
+        // `room_type`. This is the typed default discriminator, not an
+        // inference from arbitrary response data.
+        None => DirectoryRoomType::Room,
         Some("m.space") => DirectoryRoomType::Space,
         Some(_) => return Err("v-rooms.directory-unsupported-room-type"),
     };
@@ -278,16 +288,17 @@ pub fn project_protocols(
 ) -> Result<Vec<DirectoryProtocolInstance>, &'static str> {
     let mut instances = Vec::new();
     for (protocol_id, protocol) in protocols {
-        if protocol_id.chars().count() > MAX_TEXT_CHARS {
+        if protocol_id.trim().is_empty() || protocol_id.chars().count() > MAX_TEXT_CHARS {
             return Err("v-rooms.directory-protocol-id-cap");
         }
         for instance in protocol.instances {
             let Some(instance_id) = instance.instance_id else {
                 continue;
             };
-            if protocol_id.is_empty()
-                || instance_id.trim().is_empty()
+            if instance_id.trim().is_empty()
+                || instance_id.trim() != instance_id
                 || instance_id.chars().count() > MAX_TEXT_CHARS
+                || instance.desc.trim().is_empty()
                 || instance.desc.chars().count() > MAX_TEXT_CHARS
             {
                 return Err("v-rooms.directory-protocol-instance-invalid");
@@ -310,7 +321,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn missing_room_type_fails_closed() {
+    fn default_room_type_is_projected_from_ruma_default() {
         let hit: matrix_sdk::ruma::directory::PublicRoomsChunk =
             matrix_sdk::ruma::directory::PublicRoomsChunkInit {
                 num_joined_members: matrix_sdk::ruma::uint!(0),
@@ -320,9 +331,37 @@ mod tests {
             }
             .into();
 
+        assert_eq!(project_hit(hit).unwrap().room_type, DirectoryRoomType::Room);
+    }
+
+    #[test]
+    fn space_room_type_is_projected_and_custom_types_fail_closed() {
+        let mut space: matrix_sdk::ruma::directory::PublicRoomsChunk =
+            matrix_sdk::ruma::directory::PublicRoomsChunkInit {
+                num_joined_members: matrix_sdk::ruma::uint!(0),
+                room_id: matrix_sdk::ruma::room_id!("!space:example.org").to_owned(),
+                world_readable: true,
+                guest_can_join: true,
+            }
+            .into();
+        space.room_type = Some(matrix_sdk::ruma::room::RoomType::Space);
         assert_eq!(
-            project_hit(hit).unwrap_err(),
-            "v-rooms.directory-missing-room-type"
+            project_hit(space).unwrap().room_type,
+            DirectoryRoomType::Space
+        );
+
+        let mut custom: matrix_sdk::ruma::directory::PublicRoomsChunk =
+            matrix_sdk::ruma::directory::PublicRoomsChunkInit {
+                num_joined_members: matrix_sdk::ruma::uint!(0),
+                room_id: matrix_sdk::ruma::room_id!("!custom:example.org").to_owned(),
+                world_readable: true,
+                guest_can_join: true,
+            }
+            .into();
+        custom.room_type = Some(matrix_sdk::ruma::room::RoomType::from("org.example.custom"));
+        assert_eq!(
+            project_hit(custom).unwrap_err(),
+            "v-rooms.directory-unsupported-room-type"
         );
     }
 
@@ -357,5 +396,22 @@ mod tests {
         .unwrap();
         let request = build_public_rooms_request(&normalized).unwrap();
         assert_eq!(request.filter.room_types[0].as_str(), None);
+    }
+
+    #[test]
+    fn optional_inputs_are_trimmed_and_empty_values_are_omitted() {
+        let normalized = normalize_search_input(DirectorySearchInput {
+            server_name: Some("  example.org  ".into()),
+            term: Some("  ".into()),
+            third_party_instance_id: Some("  ".into()),
+            since: Some("  ".into()),
+            limit: 24,
+            ..DirectorySearchInput::default()
+        })
+        .unwrap();
+        assert_eq!(normalized.server_name.as_deref(), Some("example.org"));
+        assert_eq!(normalized.term, None);
+        assert_eq!(normalized.third_party_instance_id, None);
+        assert_eq!(normalized.since, None);
     }
 }

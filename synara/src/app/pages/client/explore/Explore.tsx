@@ -58,13 +58,6 @@ export function AddServer() {
     setDialog(false);
   };
 
-  const handleView = () => {
-    const server = getInputServer();
-    if (!server) return;
-    navigate(getExploreServerPath(server));
-    setDialog(false);
-  };
-
   return (
     <>
       <Overlay open={dialog} backdrop={<OverlayBackdrop />}>
@@ -106,7 +99,7 @@ export function AddServer() {
                   <Input ref={serverInputRef} name="serverInput" variant="Background" required />
                 </Box>
                 <Box direction="Column" gap="200">
-                  <Button type="submit" onClick={handleView} variant="Secondary" fill="Soft">
+                  <Button type="submit" variant="Secondary" fill="Soft">
                     <Text size="B400">View</Text>
                   </Button>
                 </Box>
