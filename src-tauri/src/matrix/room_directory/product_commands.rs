@@ -44,7 +44,7 @@ fn register_request(session_generation: u64, request_id: u64) -> RequestAuthorit
         return RequestAuthority::Cancelled;
     }
     match authority.current.get(&session_generation).copied() {
-        Some(current) if request_id < current => RequestAuthority::Stale,
+        Some(current) if request_id <= current => RequestAuthority::Stale,
         _ => {
             authority.current.insert(session_generation, request_id);
             while authority.current.len() > MAX_TRACKED_GENERATIONS {
@@ -270,4 +270,19 @@ pub async fn matrix_room_directory_cancel(
     }
     cancel_request(session_generation, request_id);
     Ok(cancelled_response(session_generation, request_id))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn request_authority_requires_strictly_increasing_ids() {
+        let generation = 9_000_000_000;
+        assert_eq!(register_request(generation, 1), RequestAuthority::Current);
+        assert_eq!(register_request(generation, 1), RequestAuthority::Stale);
+        assert_eq!(register_request(generation, 2), RequestAuthority::Current);
+        assert_eq!(request_authority(generation, 1), RequestAuthority::Stale);
+        assert_eq!(request_authority(generation, 2), RequestAuthority::Current);
+    }
 }

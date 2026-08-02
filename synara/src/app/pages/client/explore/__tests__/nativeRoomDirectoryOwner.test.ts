@@ -121,6 +121,35 @@ test('directory owner uses exact native command arguments and parses the page', 
   ]);
 });
 
+test('directory owner trims optional filters and omits empty optional wire fields', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const invoke: NativeRoomDirectoryInvoke = async (command, args) => {
+    calls.push({ command, args });
+    if (command === 'matrix_session_snapshot') return { available: true, value: loggedIn };
+    if (command === 'matrix_room_directory_search') return { available: true, value: readyPage };
+    throw new Error('unexpected command');
+  };
+  const owner = createNativeRoomDirectoryOwner(true, invoke);
+  await owner.search({
+    serverName: ' example.org ',
+    term: '  ',
+    thirdPartyInstanceId: '  ',
+    roomType: undefined,
+    limit: 24,
+    since: '  ',
+  });
+
+  assert.deepEqual(calls[1], {
+    command: 'matrix_room_directory_search',
+    args: {
+      sessionGeneration: 7,
+      requestId: 1,
+      serverName: 'example.org',
+      limit: 24,
+    },
+  });
+});
+
 test('protocol selector uses the native protocol command and rejects malformed DTOs', async () => {
   const calls: string[] = [];
   const invoke: NativeRoomDirectoryInvoke = async (command) => {

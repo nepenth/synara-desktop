@@ -189,9 +189,18 @@ impl RoomDirectorySession {
                 diagnostic_id: "p6.10-apply-invalid-state",
             });
         }
+        if page.len() > MAX_DIRECTORY_HITS
+            || (!replace && self.hits.len().saturating_add(page.len()) > MAX_DIRECTORY_HITS)
+        {
+            return Err(RoomDirectoryError::Invalid {
+                diagnostic_id: "p6.10-hit-cap",
+            });
+        }
         for hit in &page {
             validate_hit(hit)?;
         }
+        let prev_batch = validate_batch(prev_batch)?;
+        let next_batch = validate_batch(next_batch)?;
         if replace {
             self.hits = page;
         } else {
@@ -202,11 +211,8 @@ impl RoomDirectorySession {
                 }
             }
         }
-        if self.hits.len() > MAX_DIRECTORY_HITS {
-            self.hits.truncate(MAX_DIRECTORY_HITS);
-        }
-        self.prev_batch = validate_batch(prev_batch)?;
-        self.next_batch = validate_batch(next_batch)?;
+        self.prev_batch = prev_batch;
+        self.next_batch = next_batch;
         self.state = DirectorySearchState::Ready;
         self.failure_diagnostic_id = None;
         Ok(())
@@ -257,7 +263,10 @@ impl RoomDirectorySession {
 }
 
 fn validate_hit(hit: &DirectoryRoomHit) -> Result<(), RoomDirectoryError> {
-    if hit.room_id.is_empty() || !hit.room_id.starts_with('!') {
+    if hit.room_id.is_empty()
+        || !hit.room_id.starts_with('!')
+        || hit.room_id.chars().count() > MAX_ALIAS_CHARS
+    {
         return Err(RoomDirectoryError::Invalid {
             diagnostic_id: "p6.10-invalid-room-id",
         });
@@ -285,7 +294,11 @@ fn validate_hit(hit: &DirectoryRoomHit) -> Result<(), RoomDirectoryError> {
     }
     if let Some(ref url) = hit.avatar_url {
         let lower = url.to_ascii_lowercase();
-        if lower.starts_with("data:") || lower.starts_with("javascript:") {
+        if url.chars().count() > MAX_BATCH_CHARS
+            || (!lower.starts_with("mxc://") && !lower.starts_with("synara-media://"))
+            || lower.starts_with("data:")
+            || lower.starts_with("javascript:")
+        {
             return Err(RoomDirectoryError::Invalid {
                 diagnostic_id: "p6.10-forbidden-avatar-scheme",
             });

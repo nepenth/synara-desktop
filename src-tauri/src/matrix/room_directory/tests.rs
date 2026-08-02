@@ -152,3 +152,76 @@ fn both_pagination_tokens_are_bounded_and_projected() {
         .unwrap_err();
     assert_eq!(err.diagnostic_id(), "p6.10-invalid-batch");
 }
+
+#[test]
+fn invalid_page_metadata_does_not_partially_replace_the_current_page() {
+    let mut s = RoomDirectorySession::new(6);
+    let request_id = s.begin("", None).unwrap();
+    s.apply_page_with_batches(
+        request_id,
+        vec![hit("!old:example.org", "old")],
+        None,
+        Some("next".into()),
+        true,
+    )
+    .unwrap();
+
+    let err = s
+        .apply_page_with_batches(
+            request_id,
+            vec![hit("!new:example.org", "new")],
+            Some(" ".into()),
+            Some("new-next".into()),
+            true,
+        )
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p6.10-invalid-batch");
+    assert_eq!(s.hits()[0].room_id, "!old:example.org");
+    assert_eq!(s.next_batch(), Some("next"));
+}
+
+#[test]
+fn hit_bounds_fail_closed() {
+    let mut s = RoomDirectorySession::new(7);
+    let request_id = s.begin("", None).unwrap();
+    let too_long_room_id = format!("!{}:example.org", "r".repeat(MAX_ALIAS_CHARS));
+    let err = s
+        .apply_page(
+            request_id,
+            vec![DirectoryRoomHit {
+                room_id: too_long_room_id,
+                name: None,
+                topic: None,
+                canonical_alias: None,
+                avatar_url: Some(format!("mxc://example.org/{}", "a".repeat(600))),
+                num_joined_members: 0,
+                world_readable: false,
+                guest_can_join: false,
+                room_type: DirectoryRoomType::Room,
+            }],
+            None,
+            true,
+        )
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p6.10-invalid-room-id");
+
+    let err = s
+        .apply_page(
+            request_id,
+            vec![DirectoryRoomHit {
+                room_id: "!room:example.org".into(),
+                name: None,
+                topic: None,
+                canonical_alias: None,
+                avatar_url: Some(format!("mxc://example.org/{}", "a".repeat(600))),
+                num_joined_members: 0,
+                world_readable: false,
+                guest_can_join: false,
+                room_type: DirectoryRoomType::Room,
+            }],
+            None,
+            true,
+        )
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p6.10-forbidden-avatar-scheme");
+}
