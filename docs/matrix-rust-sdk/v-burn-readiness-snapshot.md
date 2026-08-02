@@ -8,7 +8,7 @@
 | ----------------------- | -------------------------------------------------------------------------------- |
 | Readiness               | **Not ready**                                                                    |
 | Runtime proof           | **Not confirmed**                                                                |
-| Source tip              | `c1e9c3be2b8ff13da42853913b30493cb030e6ec`                                       |
+| Source tip              | `27a854d8f72deb1a74be35705d54ce5af9ec90e6`                                       |
 | Base                    | `feature/matrix-rust-sdk-full-replacement` only                                  |
 | Scope                   | Docs only; no product code or cutover state change                               |
 | `dual_backend`          | **Forbidden**; this snapshot does not enable or claim it                         |
@@ -54,14 +54,15 @@ remaining importers are acceptable at final convergence.
    #39 gated. Do not set `active_slice=V-BURN`.
 
 The source tip includes the #461 native room-directory first slice and its
-measured importer ratchet (**151 → 150**). That is incremental product
-progress, not V-BURN convergence: the full room-directory vertical, focused
-proof, live proof, and acceptance remain open.
+measured importer ratchet (**151 → 150**). The post-#461 #465, #469, and #478
+commits are docs-only refreshes. This remains incremental product progress, not
+V-BURN convergence: the full room-directory vertical, focused proof, live
+proof, and acceptance remain open.
 
 The current residual queue is summarized in [`SCOREBOARD.md`](SCOREBOARD.md).
-Its integration-tip field remains `206d24f3` as the documentation ledger tip;
-the #461 product tip above is the source-evidence pin for this snapshot. This
-refresh adds no product code or cutover state change.
+Its integration-tip field is `3980f0e0` as the documentation ledger tip; this
+snapshot pins source evidence at `27a854d8`. The #465, #469, and #478 refreshes
+add no product code or cutover state change.
 
 ## Bottom line
 
