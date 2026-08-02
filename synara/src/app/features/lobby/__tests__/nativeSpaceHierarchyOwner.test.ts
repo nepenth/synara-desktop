@@ -37,15 +37,16 @@ const validSnapshot = {
   rooms: [validRoom],
 };
 
-const makeInvoke = (
+function makeInvoke(
   sessionValue: unknown = loggedInSession,
-  hierarchyValue: unknown = validSnapshot,
+  hierarchyValue?: unknown,
   options: {
     sessionAvailable?: boolean;
     hierarchyAvailable?: boolean;
     throwOnHierarchy?: boolean;
   } = {}
-) => {
+) {
+  const resolvedHierarchyValue = arguments.length < 2 ? validSnapshot : hierarchyValue;
   const calls: Array<[string, Record<string, unknown> | undefined]> = [];
   const invoke: NativeInvoke = async (command, args) => {
     calls.push([command, args]);
@@ -58,12 +59,15 @@ const makeInvoke = (
       if (options.throwOnHierarchy) throw new Error('command failed');
       return options.hierarchyAvailable === false
         ? { available: false }
-        : { available: true, value: hierarchyValue };
+        : {
+            available: true,
+            value: resolvedHierarchyValue,
+          };
     }
     return { available: false };
   };
   return { calls, invoke };
-};
+}
 
 test('native hierarchy read rejects non-desktop ownership', async () => {
   const { calls, invoke } = makeInvoke();
@@ -235,6 +239,29 @@ test(
 );
 
 test('native hierarchy read never returns an empty successful selected-room summary', async () => {
-  const { invoke } = makeInvoke(loggedInSession, undefined);
-  await assert.rejects(() => readSpaceHierarchyRoomWithNativeOwner(ROOM_ID, true, invoke));
+  for (const [description, hierarchyValue] of [
+    ['undefined hierarchy DTO', undefined],
+    ['null hierarchy DTO', null],
+    ['empty room list', { sessionGeneration: 9, rooms: [] }],
+    [
+      'missing selected room',
+      { sessionGeneration: 9, rooms: [{ ...validRoom, roomId: OTHER_ROOM_ID }] },
+    ],
+  ] as const) {
+    const { invoke } = makeInvoke(loggedInSession, hierarchyValue);
+    await assert.rejects(
+      () => readSpaceHierarchyRoomWithNativeOwner(ROOM_ID, true, invoke),
+      /unavailable/,
+      description
+    );
+  }
+
+  const unavailableHierarchy = makeInvoke(loggedInSession, validSnapshot, {
+    hierarchyAvailable: false,
+  });
+  await assert.rejects(
+    () => readSpaceHierarchyRoomWithNativeOwner(ROOM_ID, true, unavailableHierarchy.invoke),
+    /unavailable/,
+    'unavailable hierarchy'
+  );
 });
