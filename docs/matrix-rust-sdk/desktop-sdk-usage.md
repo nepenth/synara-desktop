@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |          150 |                2 |                   3 |
+| production |          149 |                2 |                   3 |
 | test       |           10 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |      **163** |                  |                     |
+| **total**  |      **162** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |   150 |
+| Production import files |   149 |
 | Test import files       |    10 |
-| Total import files      |   160 |
+| Total import files      |   159 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 150)
+- Production match: **no** (found 149)
 - Test match: **no** (found 10)
 
 ### Production files by bucket (desktop runtime only)
@@ -47,7 +47,7 @@ Expected **220** production and **12** test import files.
 | Bucket           | Files |
 | ---------------- | ----: |
 | client-lifecycle |     2 |
-| component        |    22 |
+| component        |    21 |
 | feature          |    53 |
 | hook             |    42 |
 | media-boundary   |     1 |
@@ -59,13 +59,13 @@ Expected **220** production and **12** test import files.
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 150. Files with any finding: 152.
+Scope: **production only**. Import files: 149. Files with any finding: 151.
 
 ### Imported modules
 
 | Module path                                           | Import sites | Files |
 | ----------------------------------------------------- | -----------: | ----: |
-| `matrix-js-sdk`                                       |          144 |   144 |
+| `matrix-js-sdk`                                       |          143 |   143 |
 | `matrix-js-sdk/lib/types`                             |            9 |     9 |
 | `matrix-js-sdk/lib/matrixrtc/CallMembership`          |            4 |     4 |
 | `matrix-js-sdk/lib/models/relations`                  |            4 |     4 |
@@ -84,8 +84,8 @@ Scope: **production only**. Import files: 150. Files with any finding: 152.
 
 | Symbol                      | Imports | Value | Type-only | Files |
 | --------------------------- | ------: | ----: | --------: | ----: |
-| `Room`                      |      73 |    71 |         2 |    73 |
-| `MatrixClient`              |      39 |    35 |         4 |    39 |
+| `Room`                      |      72 |    70 |         2 |    72 |
+| `MatrixClient`              |      38 |    34 |         4 |    38 |
 | `MatrixEvent`               |      27 |    23 |         4 |    27 |
 | `MatrixError`               |      21 |    21 |         0 |    21 |
 | `JoinRule`                  |      17 |    17 |         0 |    17 |
@@ -133,11 +133,11 @@ Scope: **production only**. Import files: 150. Files with any finding: 152.
 | `EventTimeline`        |     4 |                  4 |
 | `IndexedDBCryptoStore` |     1 |                  1 |
 | `IndexedDBStore`       |     1 |                  1 |
-| `MatrixClient`         |    39 |                 39 |
+| `MatrixClient`         |    38 |                 38 |
 | `MatrixError`          |    21 |                 21 |
 | `MatrixEvent`          |    27 |                 27 |
 | `Relations`            |     4 |                  4 |
-| `Room`                 |    73 |                 73 |
+| `Room`                 |    72 |                 72 |
 | `RoomMember`           |     9 |                  9 |
 | `RoomState`            |     2 |                  2 |
 | `createClient`         |     1 |                  1 |
@@ -146,8 +146,8 @@ Scope: **production only**. Import files: 150. Files with any finding: 152.
 
 | Category                       | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
 | ------------------------------ | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
-| `client_methods`               |    81 |                 0 |                   0 |                      0 |          0 |
-| `room_methods`                 |    76 |                 0 |                   0 |                      0 |          0 |
+| `client_methods`               |    80 |                 0 |                   0 |                      0 |          0 |
+| `room_methods`                 |    75 |                 0 |                   0 |                      0 |          0 |
 | `event_emitters_listeners`     |    20 |                 0 |                  98 |                      0 |          0 |
 | `sync_lifecycle`               |    12 |                11 |                   6 |                      0 |          0 |
 | `crypto_verification_recovery` |     3 |                 3 |                   0 |                      0 |          0 |
@@ -408,7 +408,6 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `synara/src/app/components/CapabilitiesLoader.tsx`                                                                            | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/JoinRulesSwitcher.tsx`                                                                             | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/RenderMessageContent.tsx`                                                                          | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/components/RoomSummaryLoader.tsx`                                                                             | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/ServerConfigsLoader.tsx`                                                                           | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/create-room/CreateRoomAliasInput.tsx`                                                              | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/editor/autocomplete/RoomMentionAutocomplete.tsx`                                                   | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
