@@ -106,6 +106,8 @@
     "allow-matrix-room-set-power-levels",
     "allow-matrix-room-set-power-level-tags",
     "allow-matrix-room-members-snapshot",
+    "allow-matrix-room-power-levels-snapshot",
+    "allow-matrix-room-creators-snapshot",
     "allow-matrix-invites-report-spam",
     "allow-matrix-invites-block-sender",
     "allow-matrix-typing-snapshot",
