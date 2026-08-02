@@ -3,8 +3,8 @@
 | Field                                                  | Value                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------- |
 | Updated                                                | 2026-08-02                                               |
-| Tip                                                    | `c1e9c3be` on `feature/matrix-rust-sdk-full-replacement`; #439 powers-bulk, #446 product-command fan-out, #450 power/creator READs, #458 presence first slice, and #461 room-directory first slice are merged |
-| Production `matrix-js-sdk` import files (`synara/src`) | **150** (plan baseline was **220**)                      |
+| Tip                                                    | `c1e9c3be` on `feature/matrix-rust-sdk-full-replacement`; #439 powers-bulk, #446 product-command fan-out, #450 native power/creator READs, #458 presence first slice, and #461 room-directory first slice are merged |
+| Production `matrix-js-sdk` import files (`synara/src`) | **151** (plan baseline was **220**)                      |
 | Product command layout                                  | **#446 merged** — domain `product_commands.rs` modules are available for parallel follow-on lanes |
 | Dual backend                                           | **false** (forbidden)                                    |
 | Umbrella #39                                           | **Do not merge** without explicit user approval          |
@@ -52,15 +52,14 @@ run passes the relevant checklist.
 | Room leave vertical             | **#364** `matrix_room_leave` + LeaveRoom/LeaveSpace native owner                                                                                                                                 |
 | Room create vertical            | **#372** `matrix_room_create` + native owner; CreateRoom/Space/Chat + `/startdm` fail-closed (imports **154→153**)                                                                               |
 | Room moderation writes          | **#375** native invite/kick/ban/unban/setPowerLevel writes; moderation write product vertical merged                                                                                             |
-| Members-read member surfaces    | **#395** `matrix_room_members_snapshot` + Members settings native fail-closed; **#405 merged** wires drawer/lobby/mentions member snapshots; **#439 merged** adds native powers-bulk writes; **#450 merged** adds native power-level/creator READs |
-| Power-level/creator READ        | **#450 merged** — native room power-level and creator snapshot owners are landed with fail-closed native-session wiring |
+| Members-read member surfaces    | **#395** `matrix_room_members_snapshot` + Members settings native fail-closed; **#405 merged** wires drawer/lobby/mentions member snapshots; **#439 merged** adds native powers-bulk writes; **#450 merged** adds native power/creator reads; custom tag/direct reads remain residual |
 | /leave command                  | **#371** useCommands Leave → leaveRoomWithNativeOwner                                                                                                                                            |
 | Room join vertical              | **#369** `matrix_room_join` + native owner; all production `joinRoom` sites fail-closed (imports **155→154**)                                                                                    |
 | Composer GIF/upload fallbacks   | **#363** RoomInput GIF + msgContent thumbnail JS upload fallbacks deleted                                                                                                                        |
 | V-SEND.R-CALL-UPLOAD            | **#328** native upload; **#362** native known rooms; **#407** native media config/download; inventoried CallWidget native desktop surfaces are closed ([residual](v-send-call-widget-residual.md)) |
-| Product lane protocol            | **#438 merged** docs-only single-owner protocol for `product.rs`; **#439 merged** powers-bulk; **#446 merged** domain command fan-out; #458 presence and #461 directory module slices merged |
-| Presence product vertical        | **#458 MERGED (first slice) / residual open** — native snapshot/subscribe path and JS-owner deletion are landed; live proof and independent acceptance remain **Not confirmed**; typing remains separate |
-| Room directory product vertical  | **#461 MERGED (first slice) / residual open** — native browse/search/filter/pagination path and JS-owner deletion are landed; live proof and independent acceptance remain **Not confirmed**; preview/card/join remain separate |
+| Product lane protocol            | **#438 merged** docs-only single-owner protocol for `product.rs`; **#439 merged** powers-bulk; **#446 merged** domain command fan-out |
+| Presence product vertical        | **#458 first slice merged / WIP** — native snapshot/subscribe path and current profile consumers are landed; full vertical scope, focused proof, live proof, and acceptance remain open |
+| Room directory product vertical  | **#461 first slice merged / WIP** — the full vertical remains open; remaining JS-owner deletion, focused proof, live proof, and acceptance remain open |
 | Composer thumbnail (msgContent) | **#325** video thumbnails via `uploadMediaNative` / `matrix_upload_media` fail-closed                                                                                                            |
 | V-SEND.R-DEVTOOL                | [Docs-only inventory](v-send-devtool-inventory.md) · [implementation gate](v-send-devtool-inventory.md#implementation-gate): JS client remains; start only after C3–C5 live proofs; low priority |
 | CI                              | Parallel Validate #284                                                                                                                                                                           |
@@ -69,28 +68,30 @@ run passes the relevant checklist.
 
 | Slice | Status / boundary |
 | ----- | ----------------- |
-| [Presence](v-presence-implement-packet.md) | **#458 first slice MERGED; V-PRESENCE.USER residual open** for live proof and acceptance; module-owned; no shared `product.rs` ownership required |
-| [Room directory](v-rooms-directory-implement-packet.md) | **#461 first slice MERGED; V-ROOMS.R-DIRECTORY residual open** for live proof and acceptance; module-owned; no shared `product.rs` ownership required |
-| [Power-level READ](v-rooms-power-levels-implement-packet.md) | **#450 merged** — native power-level/creator READs are landed; remaining members-read proof/residual language stays in its inventory |
+| [Presence](v-presence-implement-packet.md) | **#458 first slice landed; full vertical WIP in parallel**; module-owned; no shared `product.rs` ownership required; not product-done |
+| [Room directory](v-rooms-directory-implement-packet.md) | **#461 first slice landed; full vertical WIP in parallel**; module-owned; no shared `product.rs` ownership required; not product-done |
+| [Power-level READ](v-rooms-power-levels-read-residual.md) | **#450 merged** native power/creator reads; custom `power_level_tags` and direct helper/plugin readers remain |
 | Other domain slices | Parallel fan-out is available; each implementation must stay within its owning module |
 
 ## Left (finish-line order)
 
-1. **Presence + room directory — implementation slices merged; residual gates
-   remain.** **#458** presence and **#461** room-directory native wiring,
-   route-scoped JS-owner deletion, focused tests, and CI are merged at tip
-   `c1e9c3be`. Authenticated live proof and independent acceptance remain
-   **Not confirmed**; directory preview/card/join and typing are separate
-   residuals. Do not treat a merged implementation slice as full vertical
-   closure. See [presence](v-presence-implement-packet.md) and [room
-   directory](v-rooms-directory-implement-packet.md).
+1. **Presence #458 first slice + room directory #461 — full verticals still open.** **#458**
+   native presence snapshot/subscribe wiring and current profile consumers are
+   merged, but the full presence scope, focused evidence, live proof, and
+   acceptance remain open. **#461**'s first directory slice is also merged,
+   but superseded JS-owner deletion, focused evidence, live proof, and full
+   vertical acceptance remain open; do not treat a packet or first slice as
+   product completion. See
+   [presence](v-presence-implement-packet.md) and
+   [room directory](v-rooms-directory-implement-packet.md).
 2. **Members — native full vertical.** Leave/join/create closed
    (**#364/#369/#372**); `/leave` command **#371**; moderation writes
    invite/kick/ban/unban/setPowerLevel **#375 merged**; members-read first slice
    **#395** (`matrix_room_members_snapshot` + Members settings native). **#405**
    is merged at this tip and closes Room/MembersDrawer/Lobby/UserMentionAutocomplete
    member enumeration on native desktop. **#439** powers-bulk and **#450**
-   native power-level/creator READs are also merged. See
+   native power-level/creator READs are also merged; custom tags and direct
+   helper/plugin readers remain residual. See
    [read residual inventory](v-rooms-members-read-residual.md),
    [P4.6 members](p4.6-members.md) and [P4.3 membership](p4.3-membership-unread.md).
 3. **V-TIMELINE.C3–C5 — live proofs.** All three remain **Not confirmed**

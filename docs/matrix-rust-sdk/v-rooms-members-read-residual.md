@@ -2,26 +2,26 @@
 
 | Field   | Value                                                                                                                                                                       |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status  | **Active post-#405/#439/#446/#450/#458 READ residual** — #395/#405 close native member enumeration; #439 closes the separate bulk WRITE; #450 closes native power/creator owners, while custom tags and direct readers remain residual; #458 does not alter this boundary |
-| Tip SHA | `d82e043d` (post-#458 integration tip; #450 landed at `103a653f`, #446 at `9fb341af`, #405 at `176fc7c5`, and #439 at `f92a33f9`) |
+| Status  | **Active post-#405/#439/#446/#450/#458/#461 READ residual** — #395/#405 close native member enumeration; #439 closes the separate bulk WRITE; #450 closes native power/creator owners, while custom tags and direct readers remain residual; #458/#461 do not alter this boundary |
+| Tip SHA | `c1e9c3be` (post-#458/#461 integration tip; #450 landed at `103a653f`, #446 at `9fb341af`, #405 at `176fc7c5`, and #439 at `f92a33f9`) |
 | Base    | `feature/matrix-rust-sdk-full-replacement`                                                                                                                                  |
 | Policy  | [full-vertical-policy.md](full-vertical-policy.md) — physical deletion inside each owning slice                                                                             |
 | Follow-up | **Custom power-level tags + direct readers** — #450 owns native power/creator snapshots and migrated permission paths; `in.synara.room.power_level_tags`, `via-servers.ts`, and `utils/room.ts` direct reads remain explicitly open |
-| Related | **#375, #405, #439, #450, and #458 merged** (moderation, member-enumeration, bulk power WRITE, power/creator READ, and unrelated presence first-slice verticals), P4.6 members index, [p4.6-members.md](p4.6-members.md), [p4.3-membership-unread.md](p4.3-membership-unread.md) |
+| Related | **#375, #405, #439, #450, #458, and #461 merged** (moderation, member-enumeration, bulk power WRITE, power/creator READ, and unrelated presence/directory first-slice verticals), P4.6 members index, [p4.6-members.md](p4.6-members.md), [p4.3-membership-unread.md](p4.3-membership-unread.md) |
 
 > **Scope guard.** Docs only. No product code in any Rust command module or any
 > TS. The moderation-write vertical **#375 is already merged**; this inventory does not
 > change it. It also does not touch **#39** (umbrella) or any timeline/send
-> slice. This docs-only packet is based at product tip `d82e043d`; #405 and #439
+> slice. This docs-only packet is based at product tip `c1e9c3be`; #405 and #439
 > are already merged, #446's behavior-preserving product-command fan-out is
 > present at `9fb341af`, and **#450 is merged at `103a653f`** and owns
 > native power-level/creator snapshots for the migrated native paths. #458's
-> presence first slice is also in the base but does not change this residual.
-> The prior #465 head `3d7c5f42` was based at `103a653f` and conflicts in the
-> scoreboard when replayed onto `d82e043d`; this refresh records the current
-> draft tip honestly. It does not claim custom power-level-tag READ or direct
-> helper/plugin READ completion. #461 remains hot/open; hold merge. No cutover;
-> `dual_backend=false` and V-BURN remains **HOLD**.
+> presence first slice and #461's room-directory first slice are also in the
+> base but do not change this residual. The prior #465 head `758da930` was
+> based at `d82e043d` and conflicted in the scoreboard when replayed onto
+> `c1e9c3be`; this refresh records the current draft tip honestly. It does not
+> claim custom power-level-tag READ or direct helper/plugin READ completion.
+> No cutover; `dual_backend=false` and V-BURN remains **HOLD**.
 
 ---
 
@@ -49,8 +49,9 @@ Landed on the product branch in merged **#439** at `f92a33f9`:
 The behavior-preserving **#446** product-command fan-out is merged at `9fb341af`.
 It changes the Rust ownership/layout boundary. **#450** then lands at
 `103a653f` with native power-level and creator READ snapshots plus migrated
-native hook/permission ownership. The current integration tip `d82e043d`
-also contains the unrelated #458 presence first slice.
+native hook/permission ownership. The current integration tip `c1e9c3be`
+also contains the unrelated #458 presence first slice and #461 room-directory
+first slice.
 
 Landed on the product branch in merged **#450** at `103a653f`:
 
@@ -88,14 +89,14 @@ bulk power/tag WRITE owner. Merged **#450** closes native power/creator reads
 for the migrated hook and permission paths; the rows below preserve the
 remaining tag/direct-reader boundary.
 
-| Surface | Current tip (`d82e043d`) | Residual after merged #405/#439/#446/#450; #458 is unrelated |
+| Surface | Current tip (`c1e9c3be`) | Residual after merged #405/#439/#446/#450; #458/#461 are unrelated |
 | ------- | ----------------------------------------------- | ------------------------------------ |
 | Members settings list | Native via #395; fail-closed | None for the native member snapshot |
 | Room/lobby people drawer | Native member snapshot plus native power/creator projections; fail-closed | Custom power-level tags and any direct helper/plugin read used by the route |
 | Mention autocomplete | Native snapshot; fail-closed | None for member enumeration |
 | Power tags, permission gates, and creator short-circuits | Native power/creator projections; native permission gates fail-closed; tags use generated/default values on native | **Custom power-level-tag READ; direct helper/plugin readers** |
 
-This is the current post-#405/#439/#446/#450/#458 truth: drawer/lobby/mention member
+This is the current post-#405/#439/#446/#450/#458/#461 truth: drawer/lobby/mention member
 reads are closed, bulk power/tag writes are landed, and #450 closes the native
 power/creator owners. Custom tag metadata and the explicitly listed direct
 state readers remain open. A native desktop session must never use the legacy
@@ -248,8 +249,8 @@ required.
 | **Typing members read**                                              | Native (typing stream) — not a residual                                             |
 | **Room membership / unread**                                         | [p4.3-membership-unread.md](p4.3-membership-unread.md) — separate                   |
 | **P4.6 member index**                                                | [p4.6-members.md](p4.6-members.md) — pure index over DTOs; no SDK member APIs       |
-| Product input                                                        | **#405 merged** at `176fc7c5`; drawer/lobby/mentions member wiring is landed. **#439** bulk powers/tag WRITE is merged at `f92a33f9`; **#446** command fan-out is merged at `9fb341af`; **#450** power/creator READ is merged at `103a653f`; **#458** presence first slice is merged at `d82e043d` but is unrelated. Custom tag/direct READ remains open. |
-| Product changes in this PR                                           | None; this packet is docs-only, based at `d82e043d`, and does not edit product command modules |
+| Product input                                                        | **#405 merged** at `176fc7c5`; drawer/lobby/mentions member wiring is landed. **#439** bulk powers/tag WRITE is merged at `f92a33f9`; **#446** command fan-out is merged at `9fb341af`; **#450** power/creator READ is merged at `103a653f`; **#458** presence first slice and **#461** room-directory first slice are merged by `c1e9c3be` but are unrelated. Custom tag/direct READ remains open. |
+| Product changes in this PR                                           | None; this packet is docs-only, based at `c1e9c3be`, and does not edit product command modules |
 | Umbrella merge to `main`                                             | **#39** — needs explicit user approval                                              |
 | Cutover / dual-backend removal                                       | #240 HOLD; no cutover                                                               |
 
@@ -260,7 +261,7 @@ required.
 **Confidence: high** for the inventory. I traced the member-list **read** from
 the two primary consumers (`Members.tsx`, `MembersDrawer.tsx`), the room owner
 (`Room.tsx`), the lobby (`Lobby.tsx`), and mention autocomplete back through
-`useRoomMembers`. At product tip `d82e043d`, I confirmed the live native producer in
+`useRoomMembers`. At product tip `c1e9c3be`, I confirmed the live native producer in
 `members/product_commands.rs` after #446, the fail-closed
 `nativeRoomMembersOwner`, and the `nativeSession` wiring for `Members.tsx`,
 `MembersDrawer`, and mention autocomplete; merged #405 is recorded at

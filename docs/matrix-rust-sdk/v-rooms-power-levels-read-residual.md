@@ -3,12 +3,12 @@
 | Field | Value |
 | --- | --- |
 | Status | **Active residual after merged #450** — native power-level/creator reads are closed for the migrated native owners; custom power-level-tag reads and direct helper/plugin readers remain |
-| Base tip | `d82e043d` on `feature/matrix-rust-sdk-full-replacement` |
-| Source | #437 read-residual content, refreshed after merged #405, #439, #446, #450, and #458 |
+| Base tip | `c1e9c3be` on `feature/matrix-rust-sdk-full-replacement` |
+| Source | #437 read-residual content, refreshed after merged #405, #439, #446, #450, #458, and #461 |
 | Target | Draft PR #465 refresh targeting `feature/matrix-rust-sdk-full-replacement`; never `main` or umbrella #39 |
 | Member boundary | **#405 merged** — drawer/lobby/mention member enumeration is native; #450 closes the native power-level/creator owner paths |
 | Separate write | **#439 powers-BULK is merged** — its native writes are separate from this READ packet |
-| Product lane | **#450 merged** at `103a653f` on `matrix-rust/v-power-levels-read-impl`; the remaining READ work is custom tags plus explicitly tracked direct consumers; #458 is unrelated presence work |
+| Product lane | **#450 merged** at `103a653f` on `matrix-rust/v-power-levels-read-impl`; the remaining READ work is custom tags plus explicitly tracked direct consumers; #458/#461 are unrelated first-slice work |
 | Policy | [full-vertical-policy.md](full-vertical-policy.md) — native owner, live SDK, fail-closed; `dual_backend=false`, V-BURN **HOLD** |
 
 > **Scope guard.** This PR changes documentation only. It does not edit
@@ -17,18 +17,18 @@
 > target `main`, or touch umbrella #39. `dual_backend=false` is preserved.
 >
 > **Lane guard.** The behavior-preserving #446 `product.rs` extract/split is
-> merged at `9fb341af`, and #450 is merged at `103a653f`. The post-#458 base is
-> `d82e043d`; #458 is an unrelated presence first slice and does not close this
-> READ residual. The prior #465 head `3d7c5f42` was based at `103a653f` and
-> conflicts in `SCOREBOARD.md` when replayed onto this base. This packet records
-> the native power/creator closure without claiming a native power-level-tags
-> read or closing the remaining direct helper/plugin readers. #461 remains
-> hot/open, so hold merge. Do not touch `main` or umbrella #39.
+> merged at `9fb341af`, and #450 is merged at `103a653f`. The post-#458/#461
+> base is `c1e9c3be`; #458's presence first slice and #461's room-directory
+> first slice are unrelated and do not close this READ residual. The prior
+> #465 head `758da930` was based at `d82e043d` and conflicts in `SCOREBOARD.md`
+> when replayed onto this base. This packet records the native power/creator
+> closure without claiming a native power-level-tags read or closing the
+> remaining direct helper/plugin readers. Do not touch `main` or umbrella #39.
 
 ## 1. Residual boundary
 
 This packet records the remaining **READ** work after merged **#450** at
-`103a653f`, refreshed on current integration tip `d82e043d` after #458:
+`103a653f`, refreshed on current integration tip `c1e9c3be` after #458/#461:
 
 - `m.room.power_levels` and `m.room.create` now have native snapshots and
   fail-closed native owners in `usePowerLevels`, `useRoomsPowerLevels`, and
@@ -139,7 +139,7 @@ consumers need an explicitly owned follow-up.
 ## 4. Proposed native READ IPC
 
 The power-level and creator snapshots below are implemented by merged **#450**
-at `103a653f`; this docs packet is refreshed on `d82e043d` and does not
+at `103a653f`; this docs packet is refreshed on `c1e9c3be` and does not
 authorize any product-code edits. The
 tag snapshot remains a proposal.
 
@@ -268,12 +268,14 @@ The remaining residual may close only when it can prove:
    read owners, imports, listeners, and tests physically removed from that
    route. Unrelated state-event helpers are not deleted as collateral.
 
-#450 is merged at `103a653f`; it closes the native power-level/creator snapshot
-and permission-owner portion of this packet. The tag snapshot and direct
+**#450 is merged at `103a653f`;** it closes the native power-level/creator
+snapshot and permission-owner portion of this packet. The tag snapshot and
+direct helper/plugin readers remain open, so this residual remains active; no
+native power-level-tag read or direct-reader closure is claimed at `c1e9c3be`.
 
 ## 6. Done-when for this documentation packet
 
-- The packet is based at `d82e043d` after #458 and targets
+- The packet is based at `c1e9c3be` after #458/#461 and targets
   `feature/matrix-rust-sdk-full-replacement`.
 - It incorporates #437's read inventory while recording #405 and #450 as
   merged, distinguishing closed native power/creator owners from the remaining
