@@ -17,7 +17,7 @@ import { UserAvatar } from '../user-avatar';
 import colorMXID from '../../../util/colorMXID';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { BreakWord, LineClamp3 } from '../../styles/Text.css';
-import { UserPresence } from '../../hooks/useUserPresence';
+import { UserPresence } from '../../features/matrix-presence/nativePresence';
 import { AvatarPresence, PresenceBadge } from '../presence';
 import { ImageViewer } from '../image-viewer';
 import { stopPropagation } from '../../utils/keyboard';

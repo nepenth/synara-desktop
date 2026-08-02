@@ -107,6 +107,8 @@ pub async fn matrix_login_password(
     let image_packs = NativeImagePackOwner::start(&client, app.clone(), session_generation)
         .map_err(map_pack_read_subscribe_error)?;
     let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
+    let presence = NativePresenceOwner::start(&client, app.clone(), session_generation)
+        .map_err(map_presence_error)?;
     let sync = start_sync_owner(&client, session_generation).await?;
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
@@ -135,6 +137,7 @@ pub async fn matrix_login_password(
         _devices: devices,
         _image_packs: image_packs,
         typing,
+        presence,
         pending_device_deletion: None,
         next_device_delete_operation_id: 0,
         pending_cross_signing_auth_session: None,
@@ -335,6 +338,8 @@ pub(super) async fn install_session_from_register_secrets(
     let image_packs = NativeImagePackOwner::start(&client, app.clone(), session_generation)
         .map_err(map_pack_read_subscribe_error)?;
     let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
+    let presence = NativePresenceOwner::start(&client, app.clone(), session_generation)
+        .map_err(map_presence_error)?;
     let sync = start_sync_owner(&client, session_generation).await?;
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
@@ -363,6 +368,7 @@ pub(super) async fn install_session_from_register_secrets(
         _devices: devices,
         _image_packs: image_packs,
         typing,
+        presence,
         pending_device_deletion: None,
         next_device_delete_operation_id: 0,
         pending_cross_signing_auth_session: None,
@@ -482,6 +488,8 @@ pub async fn matrix_restore_session(
     let image_packs = NativeImagePackOwner::start(&client, app.clone(), session_generation)
         .map_err(map_pack_read_subscribe_error)?;
     let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
+    let presence = NativePresenceOwner::start(&client, app.clone(), session_generation)
+        .map_err(map_presence_error)?;
     let sync = start_sync_owner(&client, session_generation).await?;
     *session = Some(ManagedMatrixSession {
         client,
@@ -496,6 +504,7 @@ pub async fn matrix_restore_session(
         _devices: devices,
         _image_packs: image_packs,
         typing,
+        presence,
         pending_device_deletion: None,
         next_device_delete_operation_id: 0,
         pending_cross_signing_auth_session: None,
