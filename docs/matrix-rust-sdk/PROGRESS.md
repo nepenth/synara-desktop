@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-02**                                                                                                                       |
-| Integration tip    | `60141c8b` — the post-#461 product state remains current, with the V-BURN snapshot and C3–C5 verification docs refreshed at this tip |
-| Active work        | **#458 presence first slice and #461 room-directory first slice are merged; both full verticals remain WIP**; native power/creator reads are closed for migrated owners, while custom power-level tags and direct helper/plugin readers remain residual; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
+| Integration tip    | `3980f0e0` — docs-only #469 R-DEVTOOL and #465 members READ refreshes are merged after the product/docs state at `60141c8b`; the full #458/#461 verticals remain WIP |
+| Active work        | **#465 members READ and #469 R-DEVTOOL docs refreshes are merged; #458 presence first slice and #461 room-directory first slice remain WIP**; native power/creator reads are closed for migrated owners, while custom power-level tags and direct helper/plugin readers remain residual; #478 is the current scoreboard/progress docs refresh; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
 | Import accounting  | Desktop production import files **150** on tip (plan baseline was 220). Allowlist **150** after the #458/#461 owner ratchets.       |
@@ -33,9 +33,9 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `60141c8b`** carries the merged #450 power/creator reads, #458 presence first slice, and #461 room-directory first slice from the product state below; the full #458/#461 verticals remain **WIP**. Custom power-level tags and direct helper/plugin reads remain residual. Imports are **150**; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
-| **Tip**        | `60141c8b`                                                                                                                                                                                                                             |
-| **Active PRs** | This focused docs-only refresh is rebased onto `60141c8b`. The prior rejected #465 head `28e2418d` is preserved as the source history; this refresh records the current tip and does not claim #465 merged. |
+| **Now**        | **Tip `3980f0e0`** carries the docs-only #469 R-DEVTOOL and #465 members READ refreshes after the merged #450 power/creator reads, #458 presence first slice, and #461 room-directory first slice; the full #458/#461 verticals remain **WIP**. Custom power-level tags and direct helper/plugin reads remain residual. Imports are **150**; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
+| **Tip**        | `3980f0e0`                                                                                                                                                                                                                             |
+| **Active PRs** | #478 is the current docs-only scoreboard/progress refresh; #465 and #469 are merged. No product implementation, `main`, or umbrella #39 state is changed. |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); full #458/#461 vertical acceptance remains open; umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) remains gated without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
 ---
@@ -60,6 +60,14 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-02 — tip `3980f0e0` — #465 and #469 docs-only refreshes landed
+
+| When (UTC) | Item                         | Result       | Notes                                                                                                                                                                      |
+| ---------- | ---------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**          | **Current**  | #469 R-DEVTOOL landed at `8e14726a`; #465 members READ landed as squash commit `3980f0e0`. Both target `feature/matrix-rust-sdk-full-replacement`; `main` and #39 remain out of scope. |
+| current    | **Scoreboard / progress**    | **Refresh**  | #478 is replayed on the current target so `PROGRESS.md` and `SCOREBOARD.md` retain current-tip truth without overwriting the landed docs refreshes. |
+| current    | **Proof / burn / merge gates** | **Held**   | C3–C5 remain **Not confirmed**; R-DEVTOOL remains gated; V-BURN remains **HOLD**; `dual_backend` is forbidden.                                                        |
 
 ### 2026-08-02 — tip `60141c8b` — rebase #465 onto current docs tip
 
