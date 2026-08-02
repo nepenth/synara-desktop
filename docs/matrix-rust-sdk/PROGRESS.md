@@ -15,7 +15,7 @@
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-02**                                                                                                                       |
 | Integration tip    | `27a854d8` — docs-only #465 members READ, #469 R-DEVTOOL, and #478 scoreboard/progress refreshes are merged after the product/docs state at `60141c8b`; the full #458/#461 verticals remain WIP |
-| Active work        | **#465 members READ, #469 R-DEVTOOL, and #478 scoreboard/progress docs refreshes are merged; #458 presence first slice and #461 room-directory first slice remain WIP**; native power/creator reads are closed for migrated owners, while custom power-level tags and direct helper/plugin readers remain residual; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
+| Active work        | **#465 members READ, #469 R-DEVTOOL, and #478 scoreboard/progress docs refreshes are merged; #458 presence first slice and #461 room-directory first slice remain WIP**; native power/creator reads are closed for migrated owners, while custom power-level tags and direct helper/plugin readers remain residual; the directory packet refresh is docs-only; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
 | Import accounting  | Desktop production import files **150** on tip (plan baseline was 220). Allowlist **150** after the #458/#461 owner ratchets.       |
@@ -35,7 +35,7 @@
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Now**        | **Tip `27a854d8`** carries the docs-only #465 members READ, #469 R-DEVTOOL, and #478 scoreboard/progress refreshes after the merged #450 power/creator reads, #458 presence first slice, and #461 room-directory first slice; the full #458/#461 verticals remain **WIP**. Custom power-level tags and direct helper/plugin reads remain residual. Imports are **150**; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
 | **Tip**        | `27a854d8`                                                                                                                                                                                                                             |
-| **Active PRs** | #465, #469, and #478 are merged at this tip. This follow-up is docs-only; no product implementation, `main`, or umbrella #39 state is changed. |
+| **Active PRs** | #465, #469, and #478 are merged at this tip; this focused directory packet refresh is docs-only and does not change product implementation, `main`, or umbrella #39 state. |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); full #458/#461 vertical acceptance remains open; umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) remains gated without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
 ---
@@ -60,6 +60,14 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-02 — tip `27a854d8` — directory packet tip honesty
+
+| When (UTC) | Item                           | Result                | Notes                                                                                                                                                                      |
+| ---------- | ------------------------------ | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**            | **Current**           | #478 is merged at `27a854d8`; the directory packet/residual retain `c1e9c3be` as the #461 product baseline and record the current docs refresh tip. `main` and #39 remain out of scope. |
+| current    | **Directory vertical**         | **First slice / WIP** | #461's first slice remains the only directory product claim; native route wiring and route-scoped JS-owner deletion are landed, while full vertical closure remains open. |
+| current    | **Proof / burn / merge gates** | **Held**              | Directory live proof and acceptance remain **Not confirmed**; C3–C5 remain **Not confirmed**; V-BURN remains **HOLD / Not ready**; `dual_backend` is forbidden. |
 
 ### 2026-08-02 — tip `3980f0e0` — #465 and #469 docs-only refreshes landed
 
