@@ -61,7 +61,7 @@ Run from the repository root before opening the desktop:
 git status --short --branch
 git branch --show-current
 git rev-parse HEAD
-git merge-base --is-ancestor 095dadb9a6c129a56cedd3e5d4346df4d3d702d4 HEAD
+git merge-base --is-ancestor cf79f9751c3c6073d80dc1738de51e75297bfe54 HEAD
 node --version
 npm --version
 npm exec --yes --package=prettier@2.8.1 -- prettier --version
@@ -71,7 +71,7 @@ Continue only when all of the following are true:
 
 - the proof is on `feature/matrix-rust-sdk-full-replacement` or a docs branch
   whose checked-out history includes current feature tip
-  `095dadb9a6c129a56cedd3e5d4346df4d3d702d4`, never `main` or PR #39. The
+  `cf79f9751c3c6073d80dc1738de51e75297bfe54`, never `main` or PR #39. The
   `git merge-base --is-ancestor` check must pass; if it fails, stop and record
   `Not confirmed`;
 - record the exact output of `git rev-parse HEAD` as the **evidence head** in
@@ -211,7 +211,7 @@ route chronology.
 proof: V-TIMELINE.C5
 verdict: Not confirmed | Failed | Confirmed
 base: feature/matrix-rust-sdk-full-replacement
-base-tip: 095dadb9a6c129a56cedd3e5d4346df4d3d702d4
+base-tip: cf79f9751c3c6073d80dc1738de51e75297bfe54
 head: <exact output of git rev-parse HEAD>
 operator: <name or team alias>
 platform: <macOS/Linux + desktop build or dev run>
