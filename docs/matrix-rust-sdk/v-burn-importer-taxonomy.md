@@ -3,11 +3,11 @@
 | Field                  | Value                                                                             |
 | ---------------------- | --------------------------------------------------------------------------------- |
 | Status                 | **Docs-only taxonomy**; no product code changed                                   |
-| Measured tip           | `0033ac0345e46ba4d3fed3fd01362e4cc61afbc8`                                        |
+| Measured tip           | `27a854d8f72deb1a74be35705d54ce5af9ec90e6`                                        |
 | Base                   | `feature/matrix-rust-sdk-full-replacement`                                        |
 | Scope                  | Production `matrix-js-sdk` importers under `synara/src`                           |
-| Current importers      | **152**                                                                           |
-| P1.6 allowlist entries | **152**                                                                           |
+| Current importers      | **150**                                                                           |
+| P1.6 allowlist entries | **150**                                                                           |
 | Policy                 | Full replacement; `dual_backend` forbidden; fail-closed                           |
 | V-BURN                 | **Not started**; `active_slice` must not be `V-BURN`                              |
 | Hold                   | **V-BURN HOLD** (blockers #355); do not claim V-BURN-ready; **#39 remains gated** |
@@ -22,25 +22,27 @@ does not prove that the selected desktop route is currently using the JS SDK.
 The counts are taken from the generated [desktop SDK usage inventory](desktop-sdk-usage.md)
 and checked against a direct source import scan at the measured tip:
 
-- 152 production importer files under `synara/src`;
+- 150 production importer files under `synara/src`;
 - 10 test importer files under `synara/src` (not in this taxonomy);
-- 152 paths in [`p1.6-js-sdk-import-allowlist.json`](p1.6-js-sdk-import-allowlist.json);
+- 150 paths in [`p1.6-js-sdk-import-allowlist.json`](p1.6-js-sdk-import-allowlist.json);
 - the current production importer set exactly matches the allowlist.
 
-At this tip the source inventory has 155 production-role files: 152 with a
-direct SDK import and three production files with no SDK import. The latter
-are not counted here. The prior taxonomy snapshot incorrectly retained
-`features/common-settings/members/Members.tsx` in the primary importer list;
-the current P1.6 allowlist correctly excludes it after #395.
+At this tip the source inventory has 152 production-role files: 150 with a
+direct SDK import and two production files with no SDK import. The latter are
+not counted here. The current P1.6 allowlist excludes
+`features/common-settings/members/Members.tsx` after #395,
+`hooks/useUserPresence.ts` after #458, and `pages/client/explore/Server.tsx`
+after #461.
 
-Open product PR #450 is not part of this base. Its recorded review verdict at
-head `cb8806b0` was **REJECT**, so this taxonomy does not count its native
-power/creator READ implementation or imply acceptance. The docs-only
-#451/#452/#453/#456 commits likewise add no importer evidence.
+Product #450 is merged in this base at `103a653f`; its native power/creator
+READ implementation is included in the current source inventory. The #458 and
+#461 slices are also present, accounting for the two-file ratchet from 152 to
+150. The docs-only #451/#452/#453/#456/#465/#469/#478 commits add no importer
+evidence.
 
 ## Exhaustive primary path buckets
 
-These buckets are mutually exclusive and sum to all 152 current production
+These buckets are mutually exclusive and sum to all 150 current production
 importers. They are intentionally path-oriented; the semantic residual overlay
 below records the ownership that matters for migration sequencing.
 
@@ -49,14 +51,14 @@ below records the ownership that matters for migration sequencing.
 | `client-lifecycle` |       2 | Bootstrap, live JS client construction, and crypto-store continuity                   |
 | `component`        |      22 | Renderers, room/member controls, editor and pack UI boundaries                        |
 | `feature`          |      53 | Room, space, lobby, settings, search, call, developer-tool, and notification surfaces |
-| `hook`             |      43 | SDK model adapters, listeners, room/space state, and client context                   |
+| `hook`             |      42 | SDK model adapters, listeners, room/space state, and client context                   |
 | `media-boundary`   |       1 | Authenticated MXC/media URL and download boundary                                     |
-| `page`             |       8 | Client boot/status, space, inbox, and sidebar consumers                               |
+| `page`             |       7 | Client boot/status, space, inbox, and sidebar consumers                               |
 | `plugin`           |       7 | Call/widget, pack, HTML, emoji, and via-server integrations                           |
 | `shared-type`      |       1 | Shared Matrix content/type constants                                                  |
 | `state`            |       5 | Room-list activity, drafts, and upload state                                          |
 | `utility`          |      10 | Matrix, notification, room, sync, timeline, and sorting helpers                       |
-| **Total**          | **152** | **Current production importer files**                                                 |
+| **Total**          | **150** | **Current production importer files**                                                 |
 
 ### `client-lifecycle` — 2
 
@@ -92,7 +94,7 @@ synara/src/app/components/room-intro/RoomIntro.tsx
 synara/src/app/components/user-profile/UserChips.tsx
 ```
 
-### `feature` — 54
+### `feature` — 53
 
 ```text
 synara/src/app/features/add-existing/AddExisting.tsx
@@ -150,7 +152,7 @@ synara/src/app/features/settings/notifications/SystemNotification.tsx
 synara/src/app/features/space-settings/SpaceSettings.tsx
 ```
 
-### `hook` — 43
+### `hook` — 42
 
 ```text
 synara/src/app/hooks/types.ts
@@ -194,26 +196,30 @@ synara/src/app/hooks/useSpaceHierarchy.ts
 synara/src/app/hooks/useStateEvent.ts
 synara/src/app/hooks/useStateEventCallback.ts
 synara/src/app/hooks/useSyncState.ts
-synara/src/app/hooks/useUserPresence.ts
 synara/src/app/hooks/useUserProfile.ts
 ```
 
-### Remaining primary buckets
+### `media-boundary` — 1
 
 ```text
-media-boundary (1): synara/src/app/matrix/media.ts
+synara/src/app/matrix/media.ts
+```
 
-page (8):
+### `page` — 7
+
+```text
 synara/src/app/pages/client/ClientNonUIFeatures.tsx
 synara/src/app/pages/client/ClientRoot.tsx
 synara/src/app/pages/client/SyncStatus.tsx
-synara/src/app/pages/client/explore/Server.tsx
 synara/src/app/pages/client/inbox/Notifications.tsx
 synara/src/app/pages/client/sidebar/SpaceTabs.tsx
 synara/src/app/pages/client/space/Space.tsx
 synara/src/app/pages/client/syncStatusCopy.ts
+```
 
-plugin (7):
+### `plugin` — 7
+
+```text
 synara/src/app/plugins/call/CallEmbed.ts
 synara/src/app/plugins/call/CallWidgetDriver.ts
 synara/src/app/plugins/call/utils.ts
@@ -221,17 +227,27 @@ synara/src/app/plugins/custom-emoji/ImagePack.ts
 synara/src/app/plugins/react-custom-html-parser.tsx
 synara/src/app/plugins/recent-emoji.ts
 synara/src/app/plugins/via-servers.ts
+```
 
-shared-type (1): synara/src/types/matrix/common.ts
+### `shared-type` — 1
 
-state (5):
+```text
+synara/src/types/matrix/common.ts
+```
+
+### `state` — 5
+
+```text
 synara/src/app/state/hooks/roomList.ts
 synara/src/app/state/room-list/roomActivity.ts
 synara/src/app/state/room-list/utils.ts
 synara/src/app/state/room/roomInputDrafts.ts
 synara/src/app/state/upload.ts
+```
 
-utility (10):
+### `utility` — 10
+
+```text
 synara/src/app/utils/matrix.ts
 synara/src/app/utils/notifications.ts
 synara/src/app/utils/polls.ts
