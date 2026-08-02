@@ -1,5 +1,138 @@
 use super::*;
 
+const DIRECTORY_VISIBILITY_INVALID: &str = "v-send.r-room-profile-directory-visibility-invalid";
+const DIRECTORY_VISIBILITY_REQUIRES_SESSION: &str =
+    "v-send.r-room-profile-directory-visibility-requires-session";
+const DIRECTORY_VISIBILITY_STALE_GENERATION: &str =
+    "v-send.r-room-profile-directory-visibility-stale-generation";
+const DIRECTORY_VISIBILITY_ROOM_NOT_FOUND: &str =
+    "v-send.r-room-profile-directory-visibility-room-not-found";
+const DIRECTORY_VISIBILITY_PERMISSION_DENIED: &str =
+    "v-send.r-room-profile-directory-visibility-permission-denied";
+const DIRECTORY_VISIBILITY_PERMISSION_STATE_UNAVAILABLE: &str =
+    "v-send.r-room-profile-directory-visibility-permission-state-unavailable";
+const DIRECTORY_VISIBILITY_GET_SDK_FAILED: &str =
+    "v-send.r-room-profile-directory-visibility-get-sdk-failed";
+const DIRECTORY_VISIBILITY_SET_SDK_FAILED: &str =
+    "v-send.r-room-profile-directory-visibility-set-sdk-failed";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixRoomDirectoryVisibilityResult {
+    pub status: &'static str,
+    pub room_id: String,
+    pub session_generation: u64,
+    pub visibility: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixRoomDirectoryVisibilityWriteResult {
+    pub status: &'static str,
+    pub room_id: String,
+    pub session_generation: u64,
+    pub requested_visibility: &'static str,
+}
+
+/// V-SEND.R-ROOM-PROFILE-DIRECTORY-VISIBILITY — authoritative room-scoped
+/// directory visibility read through the managed native Matrix SDK client.
+#[tauri::command]
+pub async fn matrix_get_room_directory_visibility(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    session_generation: u64,
+) -> Result<MatrixRoomDirectoryVisibilityResult, MatrixAuthCommandError> {
+    let room_id = parse_room_directory_visibility_room_id(&room_id)?;
+    let session = state.session.lock().await;
+    let active = require_room_directory_visibility_session(session.as_ref())?;
+    let live_generation = active.sync.session_generation();
+    require_room_directory_visibility_generation(session_generation, live_generation)?;
+    let room = active
+        .client
+        .get_room(&room_id)
+        .ok_or_else(|| map_room_directory_visibility_error(DIRECTORY_VISIBILITY_ROOM_NOT_FOUND))?;
+    let visibility = room
+        .privacy_settings()
+        .get_room_visibility()
+        .await
+        .map_err(|_| map_room_directory_visibility_error(DIRECTORY_VISIBILITY_GET_SDK_FAILED))?;
+    let visibility = match visibility {
+        Visibility::Public => "public",
+        Visibility::Private => "private",
+        _ => {
+            return Err(map_room_directory_visibility_error(
+                DIRECTORY_VISIBILITY_GET_SDK_FAILED,
+            ));
+        }
+    };
+
+    Ok(MatrixRoomDirectoryVisibilityResult {
+        status: "ok",
+        room_id: room_id.to_string(),
+        session_generation: live_generation,
+        visibility,
+    })
+}
+
+/// V-SEND.R-ROOM-PROFILE-DIRECTORY-VISIBILITY — permission-checked room-scoped
+/// directory visibility write through the managed native Matrix SDK client.
+/// The returned value acknowledges the PUT only; the frontend must perform a
+/// fresh `matrix_get_room_directory_visibility` before displaying success.
+#[tauri::command]
+pub async fn matrix_set_room_directory_visibility(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    session_generation: u64,
+    visibility: String,
+) -> Result<MatrixRoomDirectoryVisibilityWriteResult, MatrixAuthCommandError> {
+    let room_id = parse_room_directory_visibility_room_id(&room_id)?;
+    let (native_visibility, requested_visibility) = parse_room_directory_visibility(&visibility)?;
+    let session = state.session.lock().await;
+    let active = require_room_directory_visibility_session(session.as_ref())?;
+    let live_generation = active.sync.session_generation();
+    require_room_directory_visibility_generation(session_generation, live_generation)?;
+    let room = active
+        .client
+        .get_room(&room_id)
+        .ok_or_else(|| map_room_directory_visibility_error(DIRECTORY_VISIBILITY_ROOM_NOT_FOUND))?;
+
+    // Use the strict power-level read: missing or malformed room state must
+    // fail closed before the directory PUT.
+    let Some(room_version) = room.version() else {
+        return Err(map_room_directory_visibility_error(
+            DIRECTORY_VISIBILITY_PERMISSION_STATE_UNAVAILABLE,
+        ));
+    };
+    if room_version.rules().is_none() {
+        return Err(map_room_directory_visibility_error(
+            DIRECTORY_VISIBILITY_PERMISSION_STATE_UNAVAILABLE,
+        ));
+    }
+    let power_levels = room.power_levels().await.map_err(|_| {
+        map_room_directory_visibility_error(DIRECTORY_VISIBILITY_PERMISSION_STATE_UNAVAILABLE)
+    })?;
+    let user_id = active.client.user_id().ok_or_else(|| {
+        map_room_directory_visibility_error(DIRECTORY_VISIBILITY_PERMISSION_STATE_UNAVAILABLE)
+    })?;
+    if !power_levels.user_can_send_state(user_id, StateEventType::RoomCanonicalAlias) {
+        return Err(map_room_directory_visibility_error(
+            DIRECTORY_VISIBILITY_PERMISSION_DENIED,
+        ));
+    }
+
+    room.privacy_settings()
+        .update_room_visibility(native_visibility)
+        .await
+        .map_err(|_| map_room_directory_visibility_error(DIRECTORY_VISIBILITY_SET_SDK_FAILED))?;
+
+    Ok(MatrixRoomDirectoryVisibilityWriteResult {
+        status: "ok",
+        room_id: room_id.to_string(),
+        session_generation: live_generation,
+        requested_visibility,
+    })
+}
+
 /// R-ROOM-PROFILE — sole native owner for a room's display name write.
 /// Empty/whitespace-only input clears the name (sends an empty `m.room.name`).
 /// Fail-closed: when a native session is live this command is the only path;
@@ -111,6 +244,87 @@ pub async fn matrix_set_room_avatar(
         }
     }
     Ok(MatrixProfileWriteResult { status: "ok" })
+}
+
+pub(super) fn parse_room_directory_visibility_room_id(
+    room_id: &str,
+) -> Result<OwnedRoomId, MatrixAuthCommandError> {
+    room_id
+        .parse()
+        .map_err(|_| map_room_directory_visibility_error(DIRECTORY_VISIBILITY_INVALID))
+}
+
+pub(super) fn parse_room_directory_visibility(
+    visibility: &str,
+) -> Result<(Visibility, &'static str), MatrixAuthCommandError> {
+    match visibility {
+        "public" => Ok((Visibility::Public, "public")),
+        "private" => Ok((Visibility::Private, "private")),
+        _ => Err(map_room_directory_visibility_error(
+            DIRECTORY_VISIBILITY_INVALID,
+        )),
+    }
+}
+
+fn require_room_directory_visibility_session(
+    session: Option<&ManagedMatrixSession>,
+) -> Result<&ManagedMatrixSession, MatrixAuthCommandError> {
+    session
+        .ok_or_else(|| map_room_directory_visibility_error(DIRECTORY_VISIBILITY_REQUIRES_SESSION))
+}
+
+fn require_room_directory_visibility_generation(
+    requested: u64,
+    live: u64,
+) -> Result<(), MatrixAuthCommandError> {
+    if requested == 0 || requested != live {
+        return Err(map_room_directory_visibility_error(
+            DIRECTORY_VISIBILITY_STALE_GENERATION,
+        ));
+    }
+    Ok(())
+}
+
+pub(super) fn map_room_directory_visibility_error(
+    diagnostic_id: &'static str,
+) -> MatrixAuthCommandError {
+    let (code, message) = match diagnostic_id {
+        DIRECTORY_VISIBILITY_INVALID => (
+            "InvalidRequest",
+            "The native Matrix room directory visibility request is invalid.",
+        ),
+        DIRECTORY_VISIBILITY_REQUIRES_SESSION => {
+            ("Forbidden", "No native Matrix session is active.")
+        }
+        DIRECTORY_VISIBILITY_STALE_GENERATION => (
+            "Forbidden",
+            "The native Matrix room directory visibility session is stale.",
+        ),
+        DIRECTORY_VISIBILITY_ROOM_NOT_FOUND => {
+            ("NotFound", "The native Matrix room is not available.")
+        }
+        DIRECTORY_VISIBILITY_PERMISSION_DENIED => (
+            "Forbidden",
+            "The native Matrix room directory visibility change is not permitted.",
+        ),
+        DIRECTORY_VISIBILITY_PERMISSION_STATE_UNAVAILABLE => (
+            "Unknown",
+            "The native Matrix room permissions are unavailable.",
+        ),
+        DIRECTORY_VISIBILITY_GET_SDK_FAILED => (
+            "Unknown",
+            "The native Matrix room directory visibility could not be read.",
+        ),
+        DIRECTORY_VISIBILITY_SET_SDK_FAILED => (
+            "Unknown",
+            "The native Matrix room directory visibility could not be updated.",
+        ),
+        _ => (
+            "Unknown",
+            "The native Matrix room directory visibility operation failed.",
+        ),
+    };
+    MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
 
 /// Parse and validate a room name. Empty/whitespace-only input clears the
