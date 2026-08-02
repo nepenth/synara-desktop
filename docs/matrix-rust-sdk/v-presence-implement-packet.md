@@ -2,24 +2,52 @@
 
 | Field      | Value                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Status     | **Implementation packet** — this PR is docs-only; the presence product vertical is **WIP** and not implemented or accepted |
+| Status     | **First slice merged (#458); full V-PRESENCE.USER remains open** — this PR is docs-only; live proof and acceptance are not confirmed |
 | Residual   | **V-PRESENCE.USER**                                                                                                        |
 | Source     | [v-presence-typing-residual.md](v-presence-typing-residual.md) from #384                                                   |
-| Base       | `feature/matrix-rust-sdk-full-replacement` at `206d24f36fae8cd9cf6f061be887cb955df0842b`                                   |
-| PR shape   | Focused **draft** PR targeting `feature/matrix-rust-sdk-full-replacement`                                                  |
+| Base       | `feature/matrix-rust-sdk-full-replacement` at `d82e043db25e4ec786bde103c4d457a898ef664b`                                   |
+| PR shape   | Focused **draft** docs PR targeting `feature/matrix-rust-sdk-full-replacement`; #458 is merged at this base                  |
 | Scope      | Desktop user presence (`m.presence`) in the user-room profile; typing and MatrixRTC call membership are separate residuals |
 | Policy     | [full-vertical-policy.md](full-vertical-policy.md): one UI → Tauri IPC → live `matrix-sdk` owner, with JS-owner deletion   |
-| Guard      | Never `main`, umbrella PR **#39**, or V-BURN; #446 extraction is merged and this vertical is a parallel module lane; `dual_backend` is forbidden; native failure is fail-closed |
-| Current PR | Only this packet is allowed to change; `src-tauri/src/matrix/auth/product.rs` is prohibited                                |
+| Guard      | Never `main`, umbrella PR **#39**, or V-BURN; #458 is merged; `dual_backend=false`; native failure is fail-closed; V-BURN remains **HOLD** |
+| Current PR | Docs-only update to this packet and its linked residual; `src-tauri/src/matrix/auth/product.rs` and all product files are prohibited |
 
-The source of truth for the residual is the #384 inventory. This packet turns
-the user-presence portion into a bounded implementation contract. It does not
+The source of truth for the residual is the #384 inventory. This packet now
+records the first native presence slice landed by #458 and the evidence still
+required before the full user-presence residual can be accepted. It does not
 implement product code, update generated status, or claim V-BURN completion.
 
-> **Parallel WIP note at `206d24f3`.** The #446 product-command extraction is
-> merged, so presence no longer waits on a shared `product.rs` serial owner.
-> The presence product vertical is in flight in its module-scoped lane; this
-> docs packet records no product merge, JS-owner deletion, proof, or acceptance.
+> **Post-merge note at `d82e043d`.** #458 is merged at this integration tip.
+> Its first slice lands the native snapshot/subscription route, profile binding,
+> JavaScript presence-owner deletion, and focused local evidence. The earlier
+> rebase hold in #467 is superseded. This draft docs PR may remain draft, but it makes
+> no merge-readiness or acceptance claim: authenticated live proof and full
+> closure evidence remain **Not confirmed**. `main`, #39, and V-BURN remain
+> out of scope.
+
+## Current state at the merge tip
+
+### Landed in #458
+
+- `NativePresenceOwner` consumes the managed authenticated `matrix-sdk` global
+  `PresenceEvent` stream and projects bounded Synara snapshots.
+- `matrix_presence_snapshot`, `matrix_presence_subscribe`, and
+  `matrix_presence_unsubscribe` are registered, with
+  `matrix-presence-updated` as the native update event.
+- `UserRoomProfile` uses `useNativeUserPresence`; the profile presentation is
+  SDK-neutral; and the former `useUserPresence` JavaScript owner is deleted.
+- Focused Rust, wire/source, frontend-owner, and source-absence tests are
+  present. The desktop production importer inventory is **151** at this tip.
+
+### Still open for V-PRESENCE.USER closure
+
+- The authenticated two-client desktop proof in Section 6 has not been run or
+  retained here; its status is **Not confirmed**.
+- The complete lifecycle/error matrix and independent acceptance review must
+  be rerun against `d82e043d`; local tests and source guards do not substitute
+  for the product proof.
+- Room typing, MatrixRTC call-membership presence, and the V-BURN gates remain
+  separate residuals and are not closed by #458.
 
 ## 1. Objective and completion bar
 
@@ -48,24 +76,32 @@ typing polling/projection residual, or MatrixRTC call-membership presence.
 
 ## 2. Scope and prerequisites
 
-### In scope for the future presence vertical
+### Landed first-slice scope
 
-- a Rust live presence owner under `src-tauri/src/matrix/presence/`, using the
-  managed authenticated `matrix-sdk` client and the existing session-generation
-  model;
-- Synara-owned presence DTOs and the exact commands/events frozen in Section 3;
+- Rust live presence ownership under `src-tauri/src/matrix/presence/`, using
+  the managed authenticated `matrix-sdk` client and session-generation model;
+- the Synara-owned DTOs and exact commands/events frozen in Section 3;
 - Tauri command and desktop capability registration for those exact routes;
-- an SDK-neutral frontend owner used by `UserRoomProfile` and the existing
+- the SDK-neutral frontend owner used by `UserRoomProfile` and the existing
   `UserHero` / `PresenceBadge` presentation;
-- focused Rust, DTO/IPC, frontend owner, source-absence, and live two-client
-  proof; and
-- physical removal of the user-presence JavaScript SDK owner in the same
-  product vertical.
+- focused Rust, DTO/IPC, frontend-owner, and source-absence evidence; and
+- physical removal of the user-presence JavaScript SDK owner in this product
+  path.
+
+These items are present at `d82e043d` through merged PR #458. Their presence
+is implementation evidence, not authenticated live-product acceptance.
+
+### Remaining closure scope
+
+- rerun the focused lifecycle/error/source-absence checks at this merge tip and
+  retain the result against the acceptance matrix;
+- record the authenticated two-client desktop proof in Section 6; and
+- obtain independent review and acceptance for V-PRESENCE.USER.
 
 ### Out of scope
 
 - `src-tauri/src/matrix/auth/product.rs` in this packet or in this docs PR;
-  if the future vertical cannot reach the managed session without changing
+  if follow-up closure work cannot reach the managed session without changing
   that file, stop and split an independently approved auth/session-boundary
   task rather than editing it here;
 - `synara/src/app/state/typingMembers.ts`,
@@ -78,10 +114,10 @@ typing polling/projection residual, or MatrixRTC call-membership presence.
   owner; and
 - any change to `main`, PR #39, V-BURN status, or unrelated Matrix verticals.
 
-Before a future implementation starts, the writer must verify:
+Before any follow-up proof or acceptance run, the writer must verify:
 
-1. `HEAD` equals `206d24f36fae8cd9cf6f061be887cb955df0842b` and the PR
-   target is `feature/matrix-rust-sdk-full-replacement`;
+1. `HEAD` equals `d82e043db25e4ec786bde103c4d457a898ef664b`, #458 is merged,
+   and the target is `feature/matrix-rust-sdk-full-replacement`;
 2. the managed native session is authenticated, has a live sync path, and has
    a supported session-generation-bound capability boundary for presence;
 3. the pinned SDK evidence in Section 7 still matches the dependency actually
@@ -89,13 +125,15 @@ Before a future implementation starts, the writer must verify:
 4. no JavaScript Matrix client is started as a presence fallback or second
    owner.
 
-A failed prerequisite blocks implementation. It must not be worked around by
-adding a fallback, weakening the native gate, or modifying `product.rs`.
+A failed prerequisite blocks the proof or acceptance run. It must not be
+worked around by adding a fallback, weakening the native gate, or modifying
+`product.rs`.
 
 ## 3. Frozen native IPC contract
 
-The future implementation must use these exact names. No aliases, implicit
-fallback commands, or generic untyped payloads may be added.
+The landed first slice uses these exact names. Follow-up work must preserve
+them; no aliases, implicit fallback commands, or generic untyped payloads may
+be added.
 
 | Exact command                 | Request              | Required result                                                                                                                |
 | ----------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -152,7 +190,7 @@ Rules:
 
 The existing `PresenceIndex` and `PresenceStreamBody` are reusable validation
 foundations only. Their existence is not a live owner and does not authorize
-the future implementation to emit the generic `presence` stream topic.
+the product path to emit the generic `presence` stream topic.
 
 ### Native authority and lifecycle
 
@@ -174,37 +212,40 @@ the future implementation to emit the generic `presence` stream topic.
 
 ## 4. Frontend ownership and physical deletion
 
-The future vertical must rewire the profile without retaining a JavaScript
-Matrix presence owner.
+The first slice rewires the profile without retaining a JavaScript Matrix
+presence owner. The current ownership evidence is:
 
-| Path                                                         | Required change                                                                                                                                       |
-| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `synara/src/app/components/user-profile/UserRoomProfile.tsx` | Consume the typed native owner; bind and dispose one user subscription with room/profile lifecycle; render unavailable as no badge, never JS fallback |
-| `synara/src/app/components/user-profile/UserHero.tsx`        | Keep SDK-neutral presence props/presentation; do not obtain presence from a Matrix SDK model                                                          |
-| `synara/src/app/components/presence/Presence.tsx`            | Keep labels/colors/tooltip presentation SDK-neutral; consume the bounded DTO type                                                                     |
-| `synara/src/app/hooks/useUserPresence.ts`                    | Delete the hook's `useMatrixClient`, `User`, and `UserEvent` ownership; retain/rehome only SDK-neutral label/type helpers if needed                   |
-| `synara/src/app/features/matrix-presence/`                   | Add the native invoke/listen owner, DTO parser, generation/user filtering, disposal, and unavailable-state mapping                                    |
+| Path                                                         | First-slice evidence                                                                                                                                   |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `synara/src/app/components/user-profile/UserRoomProfile.tsx` | Uses the typed native owner; binds and disposes one user subscription with profile lifecycle; unavailable state renders no badge and has no JS fallback |
+| `synara/src/app/components/user-profile/UserHero.tsx`        | Receives SDK-neutral presence props and does not obtain presence from a Matrix SDK model                                                               |
+| `synara/src/app/components/presence/Presence.tsx`            | Keeps labels/colors/tooltip presentation SDK-neutral and consumes the bounded DTO type                                                                  |
+| `synara/src/app/hooks/useUserPresence.ts`                    | Deleted; the former `useMatrixClient`/`User`/`UserEvent` presence owner is absent                                                                        |
+| `synara/src/app/features/matrix-presence/`                   | Owns native invoke/listen, DTO parsing, generation/user filtering, disposal, and unavailable-state mapping                                               |
 
-The future implementation must not leave a `useUserPresence` compatibility
-hook that calls `matrix-js-sdk`, a hidden `UserEvent` listener, an
+The landed path does not leave a `useUserPresence` compatibility hook that
+calls `matrix-js-sdk`, a hidden `UserEvent` listener, an
 `isNative ? native : js` selector, or a legacy sentinel that lets the profile
-continue with JS presence. If another consumer of `useUserPresence` is found,
-the writer must split the SDK-neutral helper from the SDK-bound owner and
-prove that the remaining consumers no longer import the Matrix SDK.
+continue with JS presence. Any future consumer discovered under this
+capability must be split into an SDK-neutral helper or a separately owned
+residual, and must not reintroduce a second presence backend.
 
 The current docs PR itself must not modify any product file. In particular,
 there must be no `product.rs` diff, no generated Tauri schema churn, and no
 frontend implementation in this packet PR.
 
-## 5. Required focused tests
+## 5. Focused evidence and remaining gaps
 
-The future implementation PR must add or extend the smallest focused evidence
-set below. This packet's docs-only PR does not claim any of these tests pass.
+PR #458 adds focused Rust projection/index tests, native wire/source tests,
+frontend owner tests, and a profile source-absence guard. These are local
+implementation evidence at `d82e043d`; they do not prove an authenticated
+desktop session or close this packet.
 
 ### Rust owner tests
 
-Place tests with the native owner under `src-tauri/src/matrix/presence/` and
-cover:
+The landed tests cover the presence index and basic native projection and
+serialization. The remaining acceptance run must confirm the full native
+owner matrix, including:
 
 - projection of `PresenceEvent` into `PresenceSnapshot` for all supported
   states, optional fields, and a missing presence record;
@@ -219,7 +260,9 @@ cover:
 
 ### DTO/IPC contract tests
 
-Extend the focused contract suites for:
+The landed contract/source tests confirm the exact command/event names,
+camelCase wire fields, and privacy-safe serialization. The remaining review
+must confirm:
 
 - snapshot, subscription, update, unknown, and unavailable shapes;
 - unknown/missing fields, wrong user/generation, invalid IDs, oversized
@@ -230,30 +273,36 @@ Extend the focused contract suites for:
 
 ### Frontend owner and source-absence tests
 
-Add a focused owner suite under
-`synara/src/app/features/matrix-presence/__tests__/` using injected
-`invoke`/`listen` functions. It must assert:
+The landed owner suite under
+`synara/src/app/features/matrix-presence/__tests__/` uses injected
+`invoke`/`listen` functions and asserts:
 
 1. snapshot and subscription commands receive the exact user ID;
 2. initial snapshot delivery and subsequent matching events update the
    profile;
-3. other-user, other-subscription, and stale-generation events are ignored
-   and produce an unavailable/resnapshot result;
+3. other-user, other-subscription, and stale-generation events are not merged
+   and fail closed to an unavailable result;
 4. unmount/profile close unsubscribes and late events do not update state;
 5. missing command, invoke rejection, malformed payload, failed subscription,
    and unavailable event produce no badge and no JS SDK call; and
 6. a source guard proves the profile path contains no `matrix-js-sdk` import,
    `useMatrixClient` presence read, `UserEvent` presence listener, or direct
-   `User` presence field access after the vertical lands.
+   `User` presence field access.
+
+The complete lifecycle/error matrix remains an acceptance item: authenticated
+session teardown, failed store reads, malformed native events, late-event
+rejection, and all required generation/subscription cases must have retained
+evidence at the merge tip. No local test result may be relabeled as live proof.
 
 The source guard must be capability-scoped. It must not assert that unrelated
 Matrix JS imports across the repository are already zero.
 
-## 6. Authenticated live proof
+## 6. Authenticated live proof — Not confirmed at `d82e043d`
 
-The future implementation must record a two-client desktop proof against the
-repository's [test-matrix-synapse-topology.md](test-matrix-synapse-topology.md)
-topology. The proof must name the exact native commands and event observed.
+No authenticated two-client desktop proof or retained logs/screenshots are
+recorded in this docs PR. Closure requires a two-client desktop proof against
+the repository's [test-matrix-synapse-topology.md](test-matrix-synapse-topology.md)
+topology, naming the exact native commands and event observed.
 
 1. Sign in client A natively and open a room profile for user B. Confirm
    `matrix_presence_snapshot` returns a generation-matched typed result.
@@ -286,38 +335,31 @@ repository:
 Relevant immutable evidence:
 
 - [`PresenceEvent` handler registration](https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/event_handler/static_events.rs#L157-L161) establishes that the pinned SDK accepts `PresenceEvent` as a sync event-handler type.
-- [`Client::add_event_handler`](https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L944-L979) establishes the client event-handler registration API used by the future native owner.
+- [`Client::add_event_handler`](https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L944-L979) establishes the client event-handler registration API used by the landed native owner.
 - [`SyncResponse` presence projection](https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/sync.rs#L40-L60) establishes that the pinned sync path carries typed `PresenceEvent` updates; the dependency's content-field shape is API-shape evidence, not live product parity.
 
-These sources do not prove that the Synara desktop route is implemented. The
-future writer must still prove the managed-client lifecycle, DTO boundary,
-physical JS-owner deletion, and authenticated UI behavior.
+These sources establish SDK API shape only. They do not prove the Synara
+desktop route's authenticated behavior; the remaining proof must still cover
+the managed-client lifecycle, DTO boundary, and UI readback.
 
-## 8. Ordered implementation work
+## 8. Ordered closure work
 
-1. Reconfirm the exact base SHA, target branch, approved SDK pin, and the
-   no-`product.rs` scope guard. Stop on any mismatch.
-2. Confirm the existing managed-session boundary can provide a live client to
-   a presence owner without a second client or a JavaScript fallback. If it
-   cannot, stop and return an auth/session-boundary escalation.
-3. Freeze and test the Synara-owned DTOs, exact command names, exact event
-   name, bounds, generation rules, and unavailable semantics in Section 3.
-4. Implement the Rust presence projection and subscription lifecycle using the
-   pinned SDK presence event handler and `PresenceIndex`; do not use raw HTTP
-   or the generic unowned stream topic.
-5. Register the exact native commands/events and implement the SDK-neutral
-   frontend owner with strict user/subscription/generation filtering.
-6. Delete the JavaScript presence owner and remove any capability-local
-   compatibility branch, while retaining only SDK-neutral presentation code.
-7. Run focused unit/contract/source-absence tests, then the authenticated
-   two-client proof. Retain exact evidence and mark every required case.
-8. Review the diff for `product.rs`, `main`, #39, V-BURN, `dual_backend`, raw
-   HTTP, hidden JS fallback, unrelated verticals, and generated-file churn.
-   Keep the implementation PR focused and draft until independently reviewed.
+1. Reconfirm `d82e043db25e4ec786bde103c4d457a898ef664b`, the target branch,
+   approved SDK pin, and the no-`product.rs` scope guard. Stop on any mismatch.
+2. Rerun the focused unit/contract/source-absence checks and fill any missing
+   lifecycle/error evidence without adding a fallback or second owner.
+3. Run the authenticated two-client proof in Section 6. Retain exact
+   command/event evidence and mark every required case.
+4. Independently review the resulting evidence and mark V-PRESENCE.USER
+   accepted only if every item in Section 9 is closed.
+5. Keep the docs PR scoped to documentation; do not alter `main`, #39,
+   V-BURN, `dual_backend`, unrelated verticals, or generated product files.
 
 ## 9. Acceptance statement
 
-V-PRESENCE.USER may be marked complete only when:
+V-PRESENCE.USER is **not accepted at `d82e043d`**. The first slice supplies
+the native route and deletes the former JavaScript presence owner, but the
+residual remains open until all of the following are evidenced:
 
 - the profile obtains user presence exclusively through the exact native
   snapshot/subscription contract;
