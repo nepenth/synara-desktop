@@ -9,9 +9,9 @@ import {
 
 const loggedIn = {
   status: 'logged_in',
-  userId: '@alice:example.org',
-  deviceId: 'DEVICE',
-  homeserverUrl: 'https://example.org',
+  user_id: '@alice:example.org',
+  device_id: 'DEVICE',
+  homeserver_url: 'https://example.org',
   sessionGeneration: 7,
 };
 
@@ -54,7 +54,7 @@ test('directory owner fails closed before native search when unavailable or logg
   await assert.rejects(() => secretSession.search({ serverName: 'example.org', limit: 24 }));
 });
 
-test('session snapshot accepts the camelCase IPC shape and rejects legacy or incomplete keys', async () => {
+test('session snapshot accepts the live mixed-case IPC shape and rejects camelCase or incomplete keys', async () => {
   const session = await readNativeRoomDirectorySession(true, async () => ({
     available: true,
     value: loggedIn,
@@ -65,17 +65,17 @@ test('session snapshot accepts the camelCase IPC shape and rejects legacy or inc
     serverName: 'example.org',
   });
 
-  const snakeCase = readNativeRoomDirectorySession(true, async () => ({
+  const camelCase = readNativeRoomDirectorySession(true, async () => ({
     available: true,
     value: {
       status: 'logged_in',
       sessionGeneration: 7,
-      user_id: '@alice:example.org',
-      device_id: 'DEVICE',
-      homeserver_url: 'https://example.org',
+      userId: '@alice:example.org',
+      deviceId: 'DEVICE',
+      homeserverUrl: 'https://example.org',
     },
   }));
-  await assert.rejects(snakeCase);
+  await assert.rejects(camelCase);
 
   const incomplete = readNativeRoomDirectorySession(true, async () => ({
     available: true,

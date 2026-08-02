@@ -127,7 +127,6 @@
     "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
     "synara/src/app/pages/client/ClientRoot.tsx",
     "synara/src/app/pages/client/SyncStatus.tsx",
-    "synara/src/app/pages/client/explore/Server.tsx",
     "synara/src/app/pages/client/inbox/Notifications.tsx",
     "synara/src/app/pages/client/sidebar/SpaceTabs.tsx",
     "synara/src/app/pages/client/space/Space.tsx",

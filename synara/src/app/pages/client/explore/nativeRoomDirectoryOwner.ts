@@ -38,17 +38,17 @@ export type NativeRoomDirectorySession = {
 type NativeSessionWire = {
   status: 'logged_out' | 'logged_in';
   sessionGeneration?: unknown;
-  userId?: unknown;
-  deviceId?: unknown;
-  homeserverUrl?: unknown;
+  user_id?: unknown;
+  device_id?: unknown;
+  homeserver_url?: unknown;
 };
 
 const SESSION_WIRE_KEYS = [
   'status',
   'sessionGeneration',
-  'userId',
-  'deviceId',
-  'homeserverUrl',
+  'user_id',
+  'device_id',
+  'homeserver_url',
 ] as const;
 
 const hasExactSessionKeys = (value: Record<string, unknown>): boolean => {
@@ -97,14 +97,14 @@ const parseLoggedInSession = (value: unknown): NativeRoomDirectorySession | unde
   if (wire.status !== 'logged_in' || !isSafeGeneration(wire.sessionGeneration)) {
     return undefined;
   }
-  const userId = wire.userId;
+  const userId = wire.user_id;
   if (
     typeof userId !== 'string' ||
     !userId.trim() ||
-    typeof wire.deviceId !== 'string' ||
-    !wire.deviceId.trim() ||
-    typeof wire.homeserverUrl !== 'string' ||
-    !wire.homeserverUrl.trim()
+    typeof wire.device_id !== 'string' ||
+    !wire.device_id.trim() ||
+    typeof wire.homeserver_url !== 'string' ||
+    !wire.homeserver_url.trim()
   ) {
     return undefined;
   }

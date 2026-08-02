@@ -285,6 +285,31 @@ fn login_identity_and_snapshot_serialization_never_have_token_fields() {
 }
 
 #[test]
+fn matrix_session_snapshot_serializes_with_the_live_wire_keys() {
+    let snapshot = MatrixSessionSnapshot::LoggedIn {
+        user_id: "@alice:example.org".into(),
+        device_id: "DEVICE".into(),
+        homeserver_url: "https://matrix.example.org".into(),
+        session_generation: 7,
+    };
+
+    assert_eq!(
+        serde_json::to_value(snapshot).unwrap(),
+        serde_json::json!({
+            "status": "logged_in",
+            "user_id": "@alice:example.org",
+            "device_id": "DEVICE",
+            "homeserver_url": "https://matrix.example.org",
+            "sessionGeneration": 7,
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(MatrixSessionSnapshot::LoggedOut).unwrap(),
+        serde_json::json!({ "status": "logged_out" })
+    );
+}
+
+#[test]
 fn v_auth_3b_product_has_no_matrix_uia_login_stage_commands() {
     // Desktop product does not retain multi-stage UIA on the login route
     // (V-AUTH.3b). Password login remains single-shot; register/reset/device
