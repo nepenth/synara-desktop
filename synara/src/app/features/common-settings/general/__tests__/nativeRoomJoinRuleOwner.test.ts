@@ -5,6 +5,7 @@ import {
   createNativeRoomJoinRuleOwner,
   parseRoomJoinRuleSnapshot,
   type NativeRoomJoinRuleDependencies,
+  type NativeRoomJoinRuleListen,
   type NativeRoomJoinRuleState,
 } from '../nativeRoomJoinRuleOwner';
 
@@ -70,9 +71,9 @@ test('native join-rule owner installs listener before session and snapshot reads
     assert.deepEqual(args, { roomId: '!room:example.org', sessionGeneration: 7 });
     return { available: true, value: readySnapshot('public') };
   };
-  const listen = async (event: string, nextHandler: (event: DesktopEvent<unknown>) => void) => {
+  const listen: NativeRoomJoinRuleListen = async (event, nextHandler) => {
     calls.push(event);
-    handler = nextHandler;
+    handler = nextHandler as (event: DesktopEvent<unknown>) => void;
     return () => undefined;
   };
   const states: NativeRoomJoinRuleState[] = [];
@@ -97,8 +98,8 @@ test('native join-rule owner installs listener before session and snapshot reads
 
 test('stale, malformed, and unavailable updates clear a previously ready gate', async () => {
   let handler: ((event: DesktopEvent<unknown>) => void) | undefined;
-  const listen = async (_event: string, nextHandler: (event: DesktopEvent<unknown>) => void) => {
-    handler = nextHandler;
+  const listen: NativeRoomJoinRuleListen = async (_event, nextHandler) => {
+    handler = nextHandler as (event: DesktopEvent<unknown>) => void;
     return () => undefined;
   };
   const invoke = async (command: string): Promise<DesktopInvokeResult<unknown>> =>
