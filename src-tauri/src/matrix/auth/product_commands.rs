@@ -109,6 +109,8 @@ pub async fn matrix_login_password(
     let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
     let presence = NativePresenceOwner::start(&client, app.clone(), session_generation)
         .map_err(map_presence_error)?;
+    let join_rules = NativeRoomJoinRuleOwner::start(&client, app.clone(), session_generation)
+        .map_err(map_room_join_rule_owner_error)?;
     let sync = start_sync_owner(&client, session_generation).await?;
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
@@ -138,6 +140,7 @@ pub async fn matrix_login_password(
         _image_packs: image_packs,
         typing,
         presence,
+        join_rules,
         pending_device_deletion: None,
         next_device_delete_operation_id: 0,
         pending_cross_signing_auth_session: None,
@@ -340,6 +343,8 @@ pub(super) async fn install_session_from_register_secrets(
     let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
     let presence = NativePresenceOwner::start(&client, app.clone(), session_generation)
         .map_err(map_presence_error)?;
+    let join_rules = NativeRoomJoinRuleOwner::start(&client, app.clone(), session_generation)
+        .map_err(map_room_join_rule_owner_error)?;
     let sync = start_sync_owner(&client, session_generation).await?;
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
@@ -369,6 +374,7 @@ pub(super) async fn install_session_from_register_secrets(
         _image_packs: image_packs,
         typing,
         presence,
+        join_rules,
         pending_device_deletion: None,
         next_device_delete_operation_id: 0,
         pending_cross_signing_auth_session: None,
@@ -430,6 +436,7 @@ pub async fn matrix_logout(
             "d0.1-remote-logout-failed",
         )
     })?;
+    active.join_rules.retire();
     active
         .sync
         .stop()
@@ -490,6 +497,8 @@ pub async fn matrix_restore_session(
     let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
     let presence = NativePresenceOwner::start(&client, app.clone(), session_generation)
         .map_err(map_presence_error)?;
+    let join_rules = NativeRoomJoinRuleOwner::start(&client, app.clone(), session_generation)
+        .map_err(map_room_join_rule_owner_error)?;
     let sync = start_sync_owner(&client, session_generation).await?;
     *session = Some(ManagedMatrixSession {
         client,
@@ -505,6 +514,7 @@ pub async fn matrix_restore_session(
         _image_packs: image_packs,
         typing,
         presence,
+        join_rules,
         pending_device_deletion: None,
         next_device_delete_operation_id: 0,
         pending_cross_signing_auth_session: None,
@@ -578,6 +588,16 @@ pub(super) fn map_sync_error(diagnostic_id: &'static str) -> MatrixAuthCommandEr
     MatrixAuthCommandError::new(
         "Unknown",
         "Native Matrix sync is unavailable.",
+        diagnostic_id,
+    )
+}
+
+pub(super) fn map_room_join_rule_owner_error(
+    diagnostic_id: &'static str,
+) -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "Unknown",
+        "Native Matrix room join-rule updates are unavailable.",
         diagnostic_id,
     )
 }

@@ -105,6 +105,7 @@ use crate::matrix::room_list::{
     snapshot_from_sync_owner, snapshot_invites, InviteAvatarHandles, NativeInvite,
     NativeInviteSnapshot, NativeRoomListSnapshot,
 };
+use crate::matrix::room_profile::NativeRoomJoinRuleOwner;
 use crate::matrix::secret_storage::live::{
     self as live_secret_storage, NativeSecretStorageOperationResult, NativeSecretStorageStatus,
 };
@@ -420,6 +421,7 @@ struct ManagedMatrixSession {
     _image_packs: NativeImagePackOwner,
     typing: NativeTypingOwner,
     presence: NativePresenceOwner,
+    join_rules: NativeRoomJoinRuleOwner,
     pending_device_deletion: Option<PendingDeviceDeletion>,
     next_device_delete_operation_id: u64,
     pending_cross_signing_auth_session: Option<String>,
