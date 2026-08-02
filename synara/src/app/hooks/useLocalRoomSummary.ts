@@ -1,6 +1,10 @@
-import { GuestAccess, HistoryVisibility, JoinRule, Room } from 'matrix-js-sdk';
+import { GuestAccess, HistoryVisibility, Room } from 'matrix-js-sdk';
 import { getStateEvent } from '../utils/room';
 import { StateEvent } from '../../types/matrix/room';
+import {
+  normalizeRoomJoinRulePresentation,
+  type RoomJoinRulePresentation,
+} from '../features/matrix-dto/roomJoinRule';
 
 export type LocalRoomSummary = {
   roomId: string;
@@ -12,7 +16,7 @@ export type LocalRoomSummary = {
   guestCanJoin?: boolean;
   memberCount?: number;
   roomType?: string;
-  joinRule?: JoinRule;
+  joinRule?: RoomJoinRulePresentation | null;
 };
 export const useLocalRoomSummary = (room: Room): LocalRoomSummary => {
   const topicEvent = getStateEvent(room, StateEvent.RoomTopic);
@@ -39,6 +43,6 @@ export const useLocalRoomSummary = (room: Room): LocalRoomSummary => {
     guestCanJoin,
     memberCount: room.getJoinedMemberCount(),
     roomType: room.getType(),
-    joinRule: room.getJoinRule(),
+    joinRule: normalizeRoomJoinRulePresentation(room.getJoinRule()),
   };
 };

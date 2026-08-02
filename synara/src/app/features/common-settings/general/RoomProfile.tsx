@@ -15,7 +15,7 @@ import React, { FormEventHandler, useCallback, useMemo, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import Linkify from 'linkify-react';
 import classNames from 'classnames';
-import { JoinRule, MatrixError } from 'matrix-js-sdk';
+import { MatrixError } from 'matrix-js-sdk';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../../room-settings/styles.css';
 import { useRoom } from '../../../hooks/useRoom';
@@ -41,6 +41,7 @@ import { useAlive } from '../../../hooks/useAlive';
 import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
 import { resolveMatrixThumbnailUrl, resolveOptionalMatrixMediaUrl } from '../../../matrix/media';
 import { setRoomAvatarNative, setRoomNameNative, setRoomTopicNative } from './nativeRoomProfile';
+import { normalizeRoomJoinRulePresentation } from '../../matrix-dto/roomJoinRule';
 
 type RoomProfileEditProps = {
   canEditAvatar: boolean;
@@ -65,6 +66,7 @@ export function RoomProfileEdit({
   const alive = useAlive();
   const useAuthentication = useMediaAuthentication();
   const joinRule = useRoomJoinRule(room);
+  const joinRulePresentation = normalizeRoomJoinRulePresentation(joinRule?.join_rule);
   const [roomAvatar, setRoomAvatar] = useState(avatar);
 
   const avatarUrl = resolveOptionalMatrixMediaUrl(mx, roomAvatar, { useAuthentication });
@@ -212,7 +214,7 @@ export function RoomProfileEdit({
                 <RoomIcon
                   roomType={room.getType()}
                   size="400"
-                  joinRule={joinRule?.join_rule ?? JoinRule.Invite}
+                  joinRule={joinRulePresentation}
                   filled
                 />
               )}
@@ -284,6 +286,7 @@ export function RoomProfile({ permissions }: RoomProfileProps) {
   const name = useRoomName(room);
   const topic = useRoomTopic(room);
   const joinRule = useRoomJoinRule(room);
+  const joinRulePresentation = normalizeRoomJoinRulePresentation(joinRule?.join_rule);
 
   const canEditAvatar = permissions.stateEvent(StateEvent.RoomAvatar, mx.getSafeUserId());
   const canEditName = permissions.stateEvent(StateEvent.RoomName, mx.getSafeUserId());
@@ -355,7 +358,7 @@ export function RoomProfile({ permissions }: RoomProfileProps) {
                     <RoomIcon
                       roomType={room.getType()}
                       size="400"
-                      joinRule={joinRule?.join_rule ?? JoinRule.Invite}
+                      joinRule={joinRulePresentation}
                       filled
                     />
                   )}

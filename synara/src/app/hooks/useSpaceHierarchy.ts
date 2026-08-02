@@ -1,6 +1,6 @@
 import { atom, useAtom } from 'jotai';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { JoinRule, Room } from 'matrix-js-sdk';
+import { Room } from 'matrix-js-sdk';
 import { useQuery } from '@tanstack/react-query';
 import { useMatrixClient } from './useMatrixClient';
 import { MSpaceChildContent } from '../../types/matrix/room';
@@ -16,6 +16,10 @@ import {
   readSpaceChildrenWithNativeOwner,
   spaceChildContentFromEdge,
 } from '../features/lobby/nativeSpaceChildOwner';
+import {
+  normalizeRoomJoinRulePresentation,
+  type RoomJoinRulePresentation,
+} from '../features/matrix-dto/roomJoinRule';
 
 export type HierarchyItemSpace = {
   roomId: string;
@@ -310,7 +314,7 @@ export type SpaceHierarchyRoom = {
   avatar_url?: string;
   room_type?: string;
   num_joined_members: number;
-  join_rule: JoinRule;
+  join_rule: RoomJoinRulePresentation | null;
   world_readable: boolean;
   guest_can_join: boolean;
 };
@@ -323,7 +327,7 @@ const toSpaceHierarchyRoom = (room: NativeSpaceHierarchyRoom): SpaceHierarchyRoo
   avatar_url: room.avatarUrl,
   room_type: room.roomType,
   num_joined_members: room.numJoinedMembers,
-  join_rule: room.joinRule as JoinRule,
+  join_rule: normalizeRoomJoinRulePresentation(room.joinRule),
   world_readable: room.worldReadable,
   guest_can_join: room.guestCanJoin,
 });

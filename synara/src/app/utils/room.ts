@@ -8,7 +8,6 @@ import {
   IPowerLevelsContent,
   IPushRule,
   IPushRules,
-  JoinRule,
   MatrixClient,
   MatrixEvent,
   MsgType,
@@ -19,6 +18,7 @@ import {
 } from 'matrix-js-sdk';
 import { AccountDataEvent, MarkedUnreadContent } from '../../types/matrix/accountData';
 import type { RoomMember as NativeRoomMember } from '../features/matrix-dto/member';
+import type { RoomJoinRulePresentation } from '../features/matrix-dto/roomJoinRule';
 import {
   IRoomCreateContent,
   Membership,
@@ -255,38 +255,26 @@ export const getUnreadInfos = (mx: MatrixClient): UnreadInfo[] => {
 export const getRoomIconSrc = (
   icons: Record<IconName, IconSrc>,
   roomType?: string,
-  joinRule?: JoinRule
+  joinRule?: RoomJoinRulePresentation | null
 ): IconSrc => {
   if (roomType === RoomType.Space) {
-    if (joinRule === JoinRule.Public) return icons.SpaceGlobe;
-    if (
-      joinRule === JoinRule.Invite ||
-      joinRule === JoinRule.Knock ||
-      joinRule === JoinRule.Private
-    ) {
+    if (joinRule === 'public') return icons.SpaceGlobe;
+    if (joinRule === 'invite' || joinRule === 'knock' || joinRule === 'private') {
       return icons.SpaceLock;
     }
     return icons.Space;
   }
 
   if (roomType === RoomType.Call) {
-    if (joinRule === JoinRule.Public) return icons.VolumeHighGlobe;
-    if (
-      joinRule === JoinRule.Invite ||
-      joinRule === JoinRule.Knock ||
-      joinRule === JoinRule.Private
-    ) {
+    if (joinRule === 'public') return icons.VolumeHighGlobe;
+    if (joinRule === 'invite' || joinRule === 'knock' || joinRule === 'private') {
       return icons.VolumeHighLock;
     }
     return icons.VolumeHigh;
   }
 
-  if (joinRule === JoinRule.Public) return icons.HashGlobe;
-  if (
-    joinRule === JoinRule.Invite ||
-    joinRule === JoinRule.Knock ||
-    joinRule === JoinRule.Private
-  ) {
+  if (joinRule === 'public') return icons.HashGlobe;
+  if (joinRule === 'invite' || joinRule === 'knock' || joinRule === 'private') {
     return icons.HashLock;
   }
   return icons.Hash;

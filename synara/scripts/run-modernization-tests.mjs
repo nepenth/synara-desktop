@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const tests = [
+  'src/app/components/__tests__/roomAvatarSourceGuard.test.ts',
   'src/app/config/__tests__/foundationFeatures.test.ts',
   'src/app/utils/__tests__/remoteContent.test.ts',
   'src/app/contracts/__tests__/contractSchemas.test.ts',
@@ -17,6 +18,7 @@ const tests = [
   'src/app/utils/__tests__/gifProvider.test.ts',
   'src/app/utils/__tests__/later.test.ts',
   'src/app/utils/__tests__/roomNotes.test.ts',
+  'src/app/utils/__tests__/roomIcon.test.ts',
   'src/app/utils/__tests__/notifications.test.ts',
   'src/app/utils/__tests__/foundationDiagnostics.test.ts',
   'src/app/utils/__tests__/clientDiagnostics.test.ts',

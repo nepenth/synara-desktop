@@ -1,7 +1,7 @@
 import React, { KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect } from 'react';
 import { Editor } from 'slate';
 import { Avatar, Icon, Icons, MenuItem, Text } from 'folds';
-import { JoinRule, MatrixClient } from 'matrix-js-sdk';
+import { MatrixClient } from 'matrix-js-sdk';
 import { useAtomValue } from 'jotai';
 
 import { createMentionElement, moveCursor, replaceWithElement } from '../utils';
@@ -18,6 +18,7 @@ import { allRoomsAtom } from '../../../state/room-list/roomList';
 import { factoryRoomIdByActivity } from '../../../utils/sort';
 import { RoomAvatar, RoomIcon } from '../../room-avatar';
 import { getViaServers } from '../../../plugins/via-servers';
+import { normalizeRoomJoinRulePresentation } from '../../../features/matrix-dto/roomJoinRule';
 
 type MentionAutoCompleteHandler = (roomAliasOrId: string, name: string) => void | Promise<void>;
 
@@ -168,14 +169,18 @@ export function RoomMentionAutocomplete({
                       renderFallback={() => (
                         <RoomIcon
                           size="50"
-                          joinRule={room.getJoinRule() ?? JoinRule.Restricted}
+                          joinRule={normalizeRoomJoinRulePresentation(room.getJoinRule())}
                           roomType={room.getType()}
                           filled
                         />
                       )}
                     />
                   ) : (
-                    <RoomIcon size="100" joinRule={room.getJoinRule()} roomType={room.getType()} />
+                    <RoomIcon
+                      size="100"
+                      joinRule={normalizeRoomJoinRulePresentation(room.getJoinRule())}
+                      roomType={room.getType()}
+                    />
                   )}
                 </Avatar>
               }

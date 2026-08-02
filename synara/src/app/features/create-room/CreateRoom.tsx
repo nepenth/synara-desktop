@@ -1,5 +1,5 @@
 import React, { FormEventHandler, useCallback, useEffect, useState } from 'react';
-import { MatrixError, Room, JoinRule } from 'matrix-js-sdk';
+import { MatrixError, Room } from 'matrix-js-sdk';
 import {
   Box,
   Button,
@@ -41,15 +41,23 @@ import {
 import { RoomType } from '../../../types/matrix/room';
 import { CreateRoomTypeSelector } from '../../components/create-room/CreateRoomTypeSelector';
 import { getRoomIconSrc } from '../../utils/room';
+import {
+  normalizeRoomJoinRulePresentation,
+  type RoomJoinRulePresentation,
+} from '../matrix-dto/roomJoinRule';
 
 const getCreateRoomAccessToIcon = (access: CreateRoomAccess, type?: CreateRoomType) => {
   const isVoiceRoom = type === CreateRoomType.VoiceRoom;
 
-  let joinRule: JoinRule = JoinRule.Public;
-  if (access === CreateRoomAccess.Restricted) joinRule = JoinRule.Restricted;
-  if (access === CreateRoomAccess.Private) joinRule = JoinRule.Knock;
+  let joinRule: RoomJoinRulePresentation = 'public';
+  if (access === CreateRoomAccess.Restricted) joinRule = 'restricted';
+  if (access === CreateRoomAccess.Private) joinRule = 'knock';
 
-  return getRoomIconSrc(Icons, isVoiceRoom ? RoomType.Call : undefined, joinRule);
+  return getRoomIconSrc(
+    Icons,
+    isVoiceRoom ? RoomType.Call : undefined,
+    normalizeRoomJoinRulePresentation(joinRule)
+  );
 };
 
 const getCreateRoomTypeToIcon = (type: CreateRoomType) => {

@@ -44,6 +44,7 @@ import { DebounceOptions, useDebounce } from '../../hooks/useDebounce';
 import { VirtualTile } from '../../components/virtualizer';
 import { stopPropagation } from '../../utils/keyboard';
 import { MessageSearchTypeFilter, parseSenderFilter } from '../../utils/messageSearchFilters';
+import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 
 type OrderButtonProps = {
   order?: string;
@@ -279,7 +280,11 @@ function SelectRoomButton({ roomList, selectedRooms, onChange }: SelectRoomButto
                             before={
                               <Icon
                                 size="50"
-                                src={getRoomIconSrc(Icons, room.getType(), room.getJoinRule())}
+                                src={getRoomIconSrc(
+                                  Icons,
+                                  room.getType(),
+                                  normalizeRoomJoinRulePresentation(room.getJoinRule())
+                                )}
                               />
                             }
                           >
@@ -460,7 +465,14 @@ export function SearchFilters({
               onClick={() => onSelectedRoomsChange(selectedRooms.filter((rId) => rId !== roomId))}
               radii="Pill"
               before={
-                <Icon size="50" src={getRoomIconSrc(Icons, room.getType(), room.getJoinRule())} />
+                <Icon
+                  size="50"
+                  src={getRoomIconSrc(
+                    Icons,
+                    room.getType(),
+                    normalizeRoomJoinRulePresentation(room.getJoinRule())
+                  )}
+                />
               }
               after={<Icon size="50" src={Icons.Cross} />}
             >
