@@ -3,9 +3,18 @@ import { IPowerLevels } from '../hooks/usePowerLevels';
 import { creatorsSupported, getMxIdServer } from '../utils/matrix';
 import { IRoomCreateContent, StateEvent } from '../../types/matrix/room';
 import { getStateEvent } from '../utils/room';
+import { isNativeMatrixSession } from '../features/verification/nativeVerification';
+import {
+  getNativeHighestPowerUserId,
+  getNativeRoomStateProjection,
+} from '../features/matrix-dto/nativeRoomStateProjection';
 
 export const getViaServers = (room: Room): string[] => {
   const getHighestPowerUserId = (): string | undefined => {
+    if (isNativeMatrixSession()) {
+      return getNativeHighestPowerUserId(getNativeRoomStateProjection(room.roomId));
+    }
+
     const creatorEvent = getStateEvent(room, StateEvent.RoomCreate);
     if (
       creatorEvent &&
