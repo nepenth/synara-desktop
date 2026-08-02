@@ -897,6 +897,12 @@
           "markdownDescription": "Enables the matrix_room_list_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_room_members_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-members-snapshot",
+          "markdownDescription": "Enables the matrix_room_members_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_room_notes_complete_todo command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-room-notes-complete-todo",
@@ -931,6 +937,18 @@
           "type": "string",
           "const": "allow-matrix-room-set-power-level",
           "markdownDescription": "Enables the matrix_room_set_power_level command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_set_power_level_tags command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-set-power-level-tags",
+          "markdownDescription": "Enables the matrix_room_set_power_level_tags command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_set_power_levels command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-set-power-levels",
+          "markdownDescription": "Enables the matrix_room_set_power_levels command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_room_unban command without any pre-configured scope.",
@@ -1797,6 +1815,12 @@
           "markdownDescription": "Denies the matrix_room_list_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_room_members_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-members-snapshot",
+          "markdownDescription": "Denies the matrix_room_members_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_room_notes_complete_todo command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-room-notes-complete-todo",
@@ -1831,6 +1855,18 @@
           "type": "string",
           "const": "deny-matrix-room-set-power-level",
           "markdownDescription": "Denies the matrix_room_set_power_level command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_set_power_level_tags command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-set-power-level-tags",
+          "markdownDescription": "Denies the matrix_room_set_power_level_tags command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_set_power_levels command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-set-power-levels",
+          "markdownDescription": "Denies the matrix_room_set_power_levels command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_room_unban command without any pre-configured scope.",

@@ -44,11 +44,13 @@ import { useFilePicker } from '../../../hooks/useFilePicker';
 import { CompactUploadCardRenderer } from '../../../components/upload-card';
 import { createUploadAtom, UploadSuccess } from '../../../state/upload';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
-import { MemberPowerTag, MemberPowerTagIcon, StateEvent } from '../../../../types/matrix/room';
+import { MemberPowerTag, MemberPowerTagIcon } from '../../../../types/matrix/room';
 import { useAlive } from '../../../hooks/useAlive';
 import { BetaNoticeBadge } from '../../../components/BetaNoticeBadge';
 import { getPowerTagIconSrc } from '../../../hooks/useMemberPowerTag';
 import { creatorsSupported } from '../../../utils/matrix';
+import { isSynaraDesktop, invokeDesktopWithAvailability } from '../../../utils/desktop';
+import { setRoomPowerLevelTagsWithNativeOwner } from './nativeRoomPowerLevelsOwner';
 
 type EditPowerProps = {
   maxPower: number;
@@ -333,8 +335,13 @@ export function PowersEditor({ powerLevels, requestClose }: PowersEditorProps) {
       deleted.forEach((power) => {
         delete content[power];
       });
-      await mx.sendStateEvent(room.roomId, StateEvent.PowerLevelTags as any, content);
-    }, [mx, room, powerLevelTags, editedPowerTags, deleted])
+      await setRoomPowerLevelTagsWithNativeOwner(
+        room.roomId,
+        content as unknown as Record<string, MemberPowerTag>,
+        isSynaraDesktop(),
+        invokeDesktopWithAvailability
+      );
+    }, [room.roomId, powerLevelTags, editedPowerTags, deleted])
   );
 
   const resetChanges = useCallback(() => {
