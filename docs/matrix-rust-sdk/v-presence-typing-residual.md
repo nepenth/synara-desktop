@@ -2,20 +2,22 @@
 
 | Field         | Value                                                                                                                     |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Status        | **Docs-only residual audit**; no product code changed                                                                     |
-| Measured tip  | `206d24f36fae8cd9cf6f061be887cb955df0842b` on `feature/matrix-rust-sdk-full-replacement`                                  |
+| Status        | **First presence slice merged (#458); docs-only residual audit remains open**; no product code changed                    |
+| Measured tip  | `c1e9c3be2b8ff13da42853913b30493cb030e6ec` on `feature/matrix-rust-sdk-full-replacement`                                  |
 | Scope         | Desktop user presence and room typing paths in `synara/src` and `src-tauri/src`                                           |
-| Policy        | Native desktop is fail-closed; `dual_backend` is forbidden                                                                |
-| Runtime proof | Typing live proof remains unclaimed; presence native proof is not applicable because no live native presence owner exists |
+| Policy        | Native desktop is fail-closed; `dual_backend=false`; V-BURN remains **HOLD**                                             |
+| Runtime proof | Presence live proof is **Not confirmed** after #458; typing live proof remains unclaimed; no acceptance claim is made     |
 
 This inventory separates Matrix network ownership from the JS projection and UI
 wrappers that remain after the native typing slice. It covers user presence
 (`m.presence`-style availability), not MatrixRTC call membership presence.
 
-> **Parallel WIP note at `206d24f3`.** #446 extracted the product command
-> ownership boundary. The presence product vertical is now WIP in a parallel
-> module lane; the residual remains open until native wiring, JS-owner deletion,
-> focused evidence, and live proof are actually complete.
+> **Post-merge note at `c1e9c3be`.** #458 is merged. Its first presence slice
+> lands the native snapshot/subscription route, profile binding, JavaScript
+> presence-owner deletion, and focused local evidence. #461 independently lands
+> the room-directory slice at this same measured tip. The presence residual
+> remains open because authenticated live proof and full acceptance evidence are
+> **Not confirmed**; this file is not a merge-readiness or completion claim.
 
 ## Conclusion at the measured tip
 
@@ -27,14 +29,20 @@ wrappers that remain after the native typing slice. It covers user presence
   owns the polling adapter, the Jotai projection cache, compose timing, room
   member-name resolution, and the typing presentation controls. These are
   residual UI/state owners, not a second Matrix typing backend.
-- **Presence remains JS-owned on desktop.** `useUserPresence` reads a
-  `matrix-js-sdk` `User` and subscribes to its presence events. The desktop
-  profile path has no native presence command or fail-closed native gate.
-- **The Rust presence code on this tip is foundation-only.** `PresenceIndex`
-  is explicitly documented as a harness with no SDK presence APIs and no
-  production Tauri commands. The generic `presence` stream topic and its
-  `PresenceStreamBody` only validate a possible wire shape; no live producer,
-  subscription, or `matrix_presence_*` command was found.
+- **The first native presence slice is merged.** `NativePresenceOwner` now
+  consumes the managed client's global `PresenceEvent` stream, projects into
+  `PresenceIndex`, and exposes `matrix_presence_snapshot`,
+  `matrix_presence_subscribe`, `matrix_presence_unsubscribe`, and the
+  `matrix-presence-updated` event. `UserRoomProfile` uses the native owner,
+  and the former `useUserPresence` JavaScript owner is deleted.
+- **Presence closure is not proven.** Focused local Rust/IPC/frontend/source
+  evidence is present, but no authenticated two-client desktop proof with
+  retained command/event evidence is recorded at this tip. The live proof and
+  independent acceptance status are **Not confirmed**.
+- **The generic stream topic is still not the product route.** `PresenceIndex`
+  is reused by the live owner, while `PresenceStreamBody` and the generic
+  `presence` topic remain protocol/foundation shapes rather than the profile's
+  subscription path.
 
 Do not describe the combined presence/typing area as fully native, and do not
 use this audit as evidence that V-BURN is complete. V-BURN remains HOLD.
@@ -47,7 +55,7 @@ use this audit as evidence that V-BURN is complete. V-BURN remains HOLD.
 | Local typing send/clear    | `src-tauri/src/matrix/auth/product.rs:1962-1973` — `matrix_typing_set` validates the active native session and calls `Room::typing_notice`; registered in `src-tauri/src/lib.rs:432-433` | `synara/src/app/hooks/useTypingStatusUpdater.ts:7-45` decides when to invoke native IPC, throttles sends, and schedules the local timeout; `RoomInput.tsx:250,630,687,810` drives it from compose events                     | Native network send; JS timing/orchestration remains                                                 |
 | Typing display identity    | Native snapshot carries room/user IDs only                                                                                                                                               | `RoomViewTyping.tsx:21-25` resolves names through the SDK-backed `Room` member map; `useRoomTypingMembers.ts` selects the JS cache                                                                                           | UI/member-read residual; not a JS typing event owner                                                 |
 | Drop-typing control        | No native command is needed to receive remote state                                                                                                                                      | `RoomViewTyping.tsx:32-41` deletes entries from the local Jotai map only; it does not call `matrix_typing_set`                                                                                                               | Explicit residual UI-only dismissal behavior; do not call it native remote-state mutation            |
-| User presence read/display | No live native presence owner. `src-tauri/src/matrix/presence/mod.rs:1-6` and `index.rs:1-5` state that the module is a harness with no SDK presence APIs or production commands         | `synara/src/app/hooks/useUserPresence.ts:18-47` reads `User` fields and subscribes to `UserEvent.Presence`, `CurrentlyActive`, and `LastPresenceTs`; `UserRoomProfile.tsx:63-79` supplies it to `UserHero` / `PresenceBadge` | JS SDK remains the desktop product owner; native fail-closed requirement is not met for this surface |
+| User presence read/display | `src-tauri/src/matrix/presence/live.rs:96-184` — `NativePresenceOwner` consumes the managed global `PresenceEvent` stream; `presence/product_commands.rs` exposes snapshot/subscribe/unsubscribe; `lib.rs` registers the commands | `UserRoomProfile.tsx` calls `useNativeUserPresence`; `nativePresence.ts` validates generation/user/subscription boundaries and maps unavailable to no badge; `useUserPresence.ts` is deleted | Native product route landed in #458; authenticated live proof and independent acceptance remain **Not confirmed** |
 
 ## Native typing path
 
@@ -79,47 +87,43 @@ There is also a `typing` topic in
 no live emitter or product subscriber for that generic route. The current
 product binding is the two `matrix_typing_*` Tauri commands above.
 
-## Presence path and gap
+## Presence path and remaining gap
 
-The native side currently has only a pure index and marker:
-
-- `src-tauri/src/matrix/presence/index.rs` stores bounded in-memory
-  `PresenceSnapshot` values.
-- `src-tauri/src/matrix/presence/mod.rs` says **no SDK presence APIs** and **no
-  production Tauri commands**.
-- `src-tauri/src/matrix/ipc/stream_body.rs:75-95` defines a typed
-  `PresenceStreamBody`, and the matching TypeScript validator accepts the
-  `presence` topic. These are protocol/foundation shapes, not a live Matrix
-  presence subscription.
-- No `matrix_presence_*` command or native presence event handler is registered
-  in `src-tauri/src/lib.rs` or `src-tauri/src/matrix/auth/product.rs`.
-
-The remaining desktop route is therefore:
+The first native presence slice now runs through this route:
 
 ```text
-UserRoomProfile
-  → useUserPresence(userId)
-  → useMatrixClient()
-  → matrix-js-sdk User presence fields/events
+Native session login/register/restore
+  → NativePresenceOwner::start
+  → managed matrix-sdk PresenceEvent → PresenceIndex
+  → matrix_presence_snapshot
+  → matrix_presence_subscribe
+  → matrix-presence-updated
+  → useNativeUserPresence
   → UserHero / PresenceBadge
 ```
 
-Because this route is not guarded by a native availability check and has no
-native replacement, it is a real desktop residual. A future presence slice
-must own the live Matrix read through Tauri/`matrix-sdk`, bind the UI to a
-typed native projection, and fail closed on missing or failed native state
-without adding a backend selector or JS fallback.
+The native route is fail-closed: unavailable, malformed, stale, or mismatched
+native state produces no badge and does not fall back to the JavaScript SDK.
+`matrix_presence_unsubscribe` is used when the profile owner is disposed.
+
+The remaining presence gap is evidence, not a second backend: no authenticated
+two-client desktop proof with retained command/event readback is recorded at
+`c1e9c3be`, and the full lifecycle/error acceptance matrix has not been
+independently accepted. The generic `presence` stream topic and
+`PresenceStreamBody` remain protocol/foundation shapes and are not substitutes
+for the landed profile route.
 
 ## Residual work boundary
 
-| Next slice               | Required evidence before claiming closure                                                                                                                                                                                                            |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Presence native vertical | UI → Tauri IPC → live `matrix-sdk` presence read/subscription, typed snapshot/delta binding, desktop fail-closed behavior, and deletion or isolation of `useUserPresence`'s JS event owner                                                           |
-| Typing residual cleanup  | Decide and document the local-only “Drop Typing Status” behavior; keep JS timing/presentation only where it is intentionally UI-owned, or move it behind the native typing contract. Preserve the native-only network route and no-fallback behavior |
-| Typing live proof        | Authenticated two-client desktop run showing remote typing appear/clear and local compose send/clear through `matrix_typing_*`; current docs claim **Not confirmed**                                                                                 |
+| Remaining gate            | Required evidence before claiming closure                                                                                                                                                                                                                         |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Presence live proof       | Authenticated two-client desktop run showing snapshot, subscription, remote state change, unknown/unavailable handling, teardown, and no JS fallback through the exact native commands/event; current status **Not confirmed**                                      |
+| Presence acceptance       | Rerun the focused lifecycle/error/source-absence evidence at `c1e9c3be`, retain results, and complete independent acceptance. Local tests/source guards are not live proof.                                                                                          |
+| Typing residual cleanup   | Decide and document the local-only “Drop Typing Status” behavior; keep JS timing/presentation only where it is intentionally UI-owned, or move it behind the native typing contract. Preserve the native-only network route and no-fallback behavior |
+| Typing live proof         | Authenticated two-client desktop run showing remote typing appear/clear and local compose send/clear through `matrix_typing_*`; current status **Not confirmed**                                                                                                    |
 
-This document does not implement any of those slices and makes no V-BURN
-completion claim.
+This document records the #458 first slice and the c1e9c3be measured tip but
+does not claim presence acceptance, typing closure, or V-BURN completion.
 
 ## Source inspection basis
 
@@ -128,10 +132,12 @@ The inventory was produced from the measured tip with focused searches over
 
 ```text
 presence, UserEvent.Presence, CurrentlyActive, LastPresenceTs,
-matrix_presence_*, matrix_typing_*, SyncTypingEvent, RoomMemberEvent.Typing,
-sendTyping, typingMembers, PresenceIndex, PresenceStreamBody
+matrix_presence_*, matrix-presence-updated, matrix_typing_*, SyncTypingEvent,
+RoomMemberEvent.Typing, sendTyping, typingMembers, PresenceIndex,
+PresenceStreamBody, NativePresenceOwner, useNativeUserPresence
 ```
 
 The existing unit tests for the typing index, native typing serialization,
-and JS snapshot conversion are contract/unit evidence only. They do not prove
-an authenticated live desktop session.
+presence owner, native presence serialization, and JS snapshot conversion are
+contract/unit evidence only. They do not prove an authenticated live desktop
+session.
