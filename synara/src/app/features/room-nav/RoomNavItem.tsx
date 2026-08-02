@@ -95,9 +95,9 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
       setInvitePrompt(true);
     };
 
-    const handleCopyLink = () => {
+    const handleCopyLink = async () => {
       const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, room.roomId);
-      const viaServers = isRoomAlias(roomIdOrAlias) ? undefined : getViaServers(room);
+      const viaServers = isRoomAlias(roomIdOrAlias) ? undefined : await getViaServers(room);
       copyToClipboard(getMatrixToRoom(roomIdOrAlias, viaServers));
       requestClose();
     };

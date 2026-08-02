@@ -313,9 +313,10 @@ test('native direct-reader projections consume DTOs and fail closed without them
 
 test('native direct readers do not reopen getStateEvent for create or power data', () => {
   const viaServers = readFileSync('src/app/plugins/via-servers.ts', 'utf8');
-  const viaNativeBranch = viaServers.match(/if \(isNativeMatrixSession\(\)\) \{([\s\S]*?)\n\s*\}/);
-  assert.ok(viaNativeBranch, 'expected an explicit native via-server branch');
-  assert.doesNotMatch(viaNativeBranch[1], /getStateEvent/);
+  const viaNativeBranch = viaServers.match(/if \(nativeSession\) \{([\s\S]*?)\n\s*\} else \{/);
+  assert.ok(viaNativeBranch, 'expected explicit native and web via-server member branches');
+  assert.match(viaNativeBranch[1], /await readNativeMembers\(room\.roomId, true\)/);
+  assert.doesNotMatch(viaNativeBranch[1], /getStateEvent|getMembers|getJoinedMembers/);
 
   const roomUtils = readFileSync('src/app/utils/room.ts', 'utf8');
   const creatorNativeBranch = roomUtils.match(
