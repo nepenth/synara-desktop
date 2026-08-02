@@ -14,8 +14,8 @@
 | Field              | Value                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-02**                                                                                                                       |
-| Integration tip    | `a9098bd7` — the merged #481–#488 wave is present at this docs-only tip; #458 presence and #461 room-directory remain first-slice/WIP only; C3–C5 live proofs remain **Not confirmed**; V-BURN remains **HOLD / Not ready** |
-| Active work        | **#481–#488 are merged; #458 presence first slice and #461 room-directory first slice remain WIP only**; native power/creator reads are closed for migrated owners, while custom power-level tags and direct helper/plugin readers remain residual; imports remain **150**; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD / Not ready |
+| Integration tip    | `cf79f975` — the docs-only #490/#496/#497 follow-up is present at this tip; #458 presence and #461 room-directory remain first-slice/WIP only; C3–C5 live proofs remain **Not confirmed**; V-BURN remains **HOLD / Not ready** |
+| Active work        | **#490, #496, and #497 docs-only refreshes are merged at this tip; #458 presence first slice and #461 room-directory first slice remain WIP only**; native power/creator reads are closed for migrated owners, while custom power-level tags and direct helper/plugin readers remain residual; imports remain **150**; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD / Not ready |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
 | Import accounting  | Desktop production import files **150** on tip (plan baseline was 220). Allowlist **150** after the #458/#461 owner ratchets.       |
@@ -33,9 +33,9 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `a9098bd7`** carries the merged #481–#488 wave; #458 presence and #461 room-directory remain first-slice/WIP only. Custom power-level tags and direct helper/plugin reads remain residual. Imports are **150**; C3–C5 are Not confirmed; V-BURN HOLD / Not ready; #39 gated. |
-| **Tip**        | `a9098bd7`                                                                                                                                                                                                                             |
-| **Active PRs** | #481–#488 are merged at this tip. This follow-up is a docs-only draft; no product implementation, `main`, or umbrella #39 state is changed. |
+| **Now**        | **Tip `cf79f975`** carries the docs-only #490/#496/#497 follow-up; #458 presence and #461 room-directory remain first-slice/WIP only. Custom power-level tags and direct helper/plugin reads remain residual. Imports are **150**; C3–C5 are Not confirmed; V-BURN HOLD / Not ready; #39 gated. |
+| **Tip**        | `cf79f975`                                                                                                                                                                                                                             |
+| **Active PRs** | #490, #496, and #497 docs-only refreshes are merged at this tip. This follow-up is a docs-only draft; no product implementation, `main`, or umbrella #39 state is changed. |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); full #458/#461 vertical acceptance remains open; umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) remains gated without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
 ---
@@ -60,6 +60,14 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-02 — tip `cf79f975` — post-#490/#496/#497 scoreboard/progress tip honesty
+
+| When (UTC) | Item                           | Result                | Notes                                                                                                                                                                      |
+| ---------- | ------------------------------ | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**            | **Current**           | The docs-only #490, #496, and #497 refreshes are present at `cf79f975` on `feature/matrix-rust-sdk-full-replacement`; `SCOREBOARD.md` and `PROGRESS.md` now pin this tip. `main` and #39 remain out of scope. |
+| current    | **Presence / directory**       | **First slice / WIP** | #458 presence and #461 room-directory remain first-slice claims only; full vertical scope, live proof, and acceptance remain open. |
+| current    | **Proof / burn / merge gates** | **Held**              | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD / Not ready**; `dual_backend` is forbidden; umbrella #39 remains gated. |
 
 ### 2026-08-02 — tip `27a854d8` — directory packet tip honesty
 
