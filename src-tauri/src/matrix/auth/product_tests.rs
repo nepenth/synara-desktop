@@ -1225,6 +1225,30 @@ fn power_level_and_creator_snapshots_have_fixed_wire_shapes() {
             "creators": ["@alice:example.org"],
         })
     );
+
+    let tags = NativeRoomPowerLevelTagsSnapshot {
+        status: "ok",
+        session_generation: 7,
+        room_id: "!room:example.org".to_owned(),
+        event_type: "in.synara.room.power_level_tags",
+        state_key: "",
+        content: serde_json::json!({
+            "100": { "name": "Admin", "color": "#0088ff" },
+        }),
+    };
+    assert_eq!(
+        serde_json::to_value(tags).unwrap(),
+        serde_json::json!({
+            "status": "ok",
+            "sessionGeneration": 7,
+            "roomId": "!room:example.org",
+            "eventType": "in.synara.room.power_level_tags",
+            "stateKey": "",
+            "content": {
+                "100": { "name": "Admin", "color": "#0088ff" },
+            },
+        })
+    );
 }
 
 #[test]
@@ -1283,6 +1307,41 @@ fn power_level_snapshot_validation_preserves_unknown_fields_and_rejects_bad_maps
 }
 
 #[test]
+fn power_level_tag_snapshot_validation_preserves_metadata_and_rejects_bad_tags() {
+    let content = serde_json::json!({
+        "100": {
+            "name": "Admin",
+            "color": "#0088ff",
+            "icon": {
+                "key": "mxc://example.org/admin",
+                "info": { "w": 32, "h": 32, "mimetype": "image/png" },
+            },
+        },
+    });
+    assert!(validate_power_level_tags_snapshot_content(&content).is_ok());
+    assert_eq!(content["100"]["icon"]["key"], "mxc://example.org/admin");
+    assert!(validate_power_level_tags_snapshot_content(&serde_json::json!({})).is_ok());
+    assert!(
+        validate_power_level_tags_snapshot_content(&serde_json::json!({
+            "01": { "name": "Invalid key" },
+        }))
+        .is_err()
+    );
+    assert!(
+        validate_power_level_tags_snapshot_content(&serde_json::json!({
+            "100": { "name": "   " },
+        }))
+        .is_err()
+    );
+    assert!(
+        validate_power_level_tags_snapshot_content(&serde_json::json!({
+            "100": { "name": "Invalid icon", "icon": { "info": [] } },
+        }))
+        .is_err()
+    );
+}
+
+#[test]
 fn power_read_commands_are_registered_and_use_live_room_state() {
     let product = PRODUCT_SOURCE;
     let lib = include_str!("../../lib.rs");
@@ -1291,6 +1350,7 @@ fn power_read_commands_are_registered_and_use_live_room_state() {
     for command in [
         "matrix_room_power_levels_snapshot",
         "matrix_room_creators_snapshot",
+        "matrix_room_power_level_tags_snapshot",
     ] {
         let capability_id = command.replace('_', "-");
         assert!(product.contains(&format!("pub async fn {command}")));
@@ -1309,6 +1369,16 @@ fn power_read_commands_are_registered_and_use_live_room_state() {
     assert!(product.contains("get_state_event(StateEventType::from(event_type), \"\")"));
     assert!(!power_command.contains("send_state_event"));
     assert!(!power_command.contains("matrix-js-sdk"));
+
+    let tags_command = product
+        .split("pub async fn matrix_room_power_level_tags_snapshot")
+        .nth(1)
+        .expect("power-level tag read command")
+        .split("#[tauri::command]")
+        .next()
+        .expect("power-level tag read command body");
+    assert!(tags_command.contains("read_room_state_content"));
+    assert!(!tags_command.contains("send_state_event"));
 }
 
 #[test]

@@ -2,6 +2,7 @@ use super::*;
 
 const ROOM_POWER_LEVELS_EVENT_TYPE: &str = "m.room.power_levels";
 const ROOM_CREATE_EVENT_TYPE: &str = "m.room.create";
+const ROOM_POWER_LEVEL_TAGS_EVENT_TYPE: &str = "in.synara.room.power_level_tags";
 
 /// V-ROOMS.MEMBERS-READ — live native room power-level projection.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -25,6 +26,18 @@ pub struct NativeRoomCreatorsSnapshot {
     pub event_type: &'static str,
     pub state_key: &'static str,
     pub creators: Vec<String>,
+}
+
+/// V-ROOMS.MEMBERS-READ — live native custom power-level tag projection.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeRoomPowerLevelTagsSnapshot {
+    pub status: &'static str,
+    pub session_generation: u64,
+    pub room_id: String,
+    pub event_type: &'static str,
+    pub state_key: &'static str,
+    pub content: serde_json::Value,
 }
 
 #[tauri::command]
@@ -123,6 +136,34 @@ pub async fn matrix_room_creators_snapshot(
         event_type: ROOM_CREATE_EVENT_TYPE,
         state_key: "",
         creators,
+    })
+}
+
+#[tauri::command]
+pub async fn matrix_room_power_level_tags_snapshot(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+) -> Result<NativeRoomPowerLevelTagsSnapshot, MatrixAuthCommandError> {
+    let room_id = parse_room_members_room_id(&room_id).map_err(map_room_members_error)?;
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    let room = active
+        .client
+        .get_room(&room_id)
+        .ok_or_else(|| map_room_members_error("v-rooms-members-read-room-not-found"))?;
+    let content = read_room_state_content(&room, ROOM_POWER_LEVEL_TAGS_EVENT_TYPE)
+        .await
+        .map_err(map_room_members_error)?
+        .unwrap_or_else(|| serde_json::json!({}));
+    validate_power_level_tags_snapshot_content(&content).map_err(map_room_members_error)?;
+
+    Ok(NativeRoomPowerLevelTagsSnapshot {
+        status: "ok",
+        session_generation: active.sync.session_generation(),
+        room_id: room_id.to_string(),
+        event_type: ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
+        state_key: "",
+        content,
     })
 }
 
@@ -238,6 +279,18 @@ pub(super) fn validate_power_levels_snapshot_content(
     Ok(())
 }
 
+pub(super) fn validate_power_level_tags_snapshot_content(
+    content: &serde_json::Value,
+) -> Result<(), &'static str> {
+    super::room_ops::validate_power_level_tags_content(content).map_err(|error| {
+        if error.diagnostic_id == "v-rooms-power-levels-content-too-large" {
+            "v-rooms-members-read-power-level-tags-too-large"
+        } else {
+            "v-rooms-members-read-power-level-tags-malformed"
+        }
+    })
+}
+
 fn validate_snapshot_power(value: &serde_json::Value) -> Result<(), &'static str> {
     let valid = value
         .as_i64()
@@ -264,6 +317,11 @@ pub(super) fn map_room_members_error(diagnostic_id: &'static str) -> MatrixAuthC
         | "v-rooms-members-read-power-levels-too-large" => (
             "Unknown",
             "The native Matrix room power levels are unavailable.",
+        ),
+        "v-rooms-members-read-power-level-tags-malformed"
+        | "v-rooms-members-read-power-level-tags-too-large" => (
+            "Unknown",
+            "The native Matrix room power-level tags are unavailable.",
         ),
         "v-rooms-members-read-creators-malformed" => (
             "Unknown",

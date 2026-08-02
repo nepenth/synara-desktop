@@ -1,11 +1,15 @@
 import { Room } from 'matrix-js-sdk';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { IPowerLevels } from './usePowerLevels';
 import { useStateEvent } from './useStateEvent';
 import { MemberPowerTag, StateEvent } from '../../types/matrix/room';
 import { isNativeMatrixSession } from '../features/verification/nativeVerification';
+import { readRoomPowerLevelTagsWithNativeOwner } from './nativeRoomPowerLevelTagsOwner';
 
 export type PowerLevelTags = Record<number, MemberPowerTag>;
+
+/** Native tag metadata is unavailable until its validated snapshot arrives. */
+export const NATIVE_UNAVAILABLE_POWER_LEVEL_TAGS: PowerLevelTags = {};
 
 const powerSortFn = (a: number, b: number) => b - a;
 const sortPowers = (powers: number[]): number[] => powers.sort(powerSortFn);
@@ -91,9 +95,58 @@ const generateFallbackTag = (powerLevelTags: PowerLevelTags, power: number): Mem
 export const usePowerLevelTags = (room: Room, powerLevels: IPowerLevels): PowerLevelTags => {
   const nativeSession = isNativeMatrixSession();
   const tagsEvent = useStateEvent(room, StateEvent.PowerLevelTags, '', !nativeSession);
+  const [nativeState, setNativeState] = useState<
+    | { roomId: string; status: 'idle' | 'loading' }
+    | { roomId: string; status: 'ready'; content: PowerLevelTags }
+    | { roomId: string; status: 'error'; error: Error }
+  >({ roomId: room.roomId, status: 'idle' });
+
+  useEffect(() => {
+    if (!nativeSession) return undefined;
+
+    let disposed = false;
+    setNativeState({ roomId: room.roomId, status: 'loading' });
+    void readRoomPowerLevelTagsWithNativeOwner(room.roomId, true)
+      .then((snapshot) => {
+        if (!disposed && snapshot) {
+          setNativeState({
+            roomId: room.roomId,
+            status: 'ready',
+            content: snapshot.content as PowerLevelTags,
+          });
+        }
+      })
+      .catch((error: unknown) => {
+        if (!disposed) {
+          setNativeState({
+            roomId: room.roomId,
+            status: 'error',
+            error:
+              error instanceof Error
+                ? error
+                : new Error('Native Matrix room power-level tags are unavailable.'),
+          });
+        }
+      });
+
+    return () => {
+      disposed = true;
+    };
+  }, [nativeSession, room.roomId]);
 
   const powerLevelTags: PowerLevelTags = useMemo(() => {
-    const content = nativeSession ? undefined : tagsEvent?.getContent<PowerLevelTags>();
+    if (nativeSession) {
+      if (nativeState.status === 'error') throw nativeState.error;
+      if (nativeState.roomId !== room.roomId || nativeState.status !== 'ready') {
+        return NATIVE_UNAVAILABLE_POWER_LEVEL_TAGS;
+      }
+    }
+
+    const content = nativeSession
+      ? nativeState.status === 'ready'
+        ? nativeState.content
+        : undefined
+      : tagsEvent?.getContent<PowerLevelTags>();
     const powerToTags: PowerLevelTags = { ...content };
 
     const powers = getUsedPowers(powerLevels);
@@ -104,7 +157,7 @@ export const usePowerLevelTags = (room: Room, powerLevels: IPowerLevels): PowerL
     });
 
     return powerToTags;
-  }, [nativeSession, powerLevels, tagsEvent]);
+  }, [nativeSession, nativeState, powerLevels, room.roomId, tagsEvent]);
 
   return powerLevelTags;
 };

@@ -975,6 +975,12 @@
           "markdownDescription": "Enables the matrix_room_notes_upsert command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_room_power_level_tags_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-power-level-tags-snapshot",
+          "markdownDescription": "Enables the matrix_room_power_level_tags_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_room_power_levels_snapshot command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-room-power-levels-snapshot",
@@ -1939,6 +1945,12 @@
           "type": "string",
           "const": "deny-matrix-room-notes-upsert",
           "markdownDescription": "Denies the matrix_room_notes_upsert command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_power_level_tags_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-power-level-tags-snapshot",
+          "markdownDescription": "Denies the matrix_room_power_level_tags_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_room_power_levels_snapshot command without any pre-configured scope.",

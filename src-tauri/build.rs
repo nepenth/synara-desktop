@@ -75,6 +75,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_room_members_snapshot",
     "matrix_room_power_levels_snapshot",
     "matrix_room_creators_snapshot",
+    "matrix_room_power_level_tags_snapshot",
     "matrix_room_directory_protocols",
     "matrix_room_directory_search",
     "matrix_room_directory_cancel",
