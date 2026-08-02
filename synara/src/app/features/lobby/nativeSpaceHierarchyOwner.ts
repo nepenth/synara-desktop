@@ -254,7 +254,7 @@ export async function readSpaceHierarchyWithNativeOwner(
   } catch {
     throw unavailable();
   }
-  if (!result.available || result.value === undefined) throw unavailable();
+  if (!result.available || result.value == null) throw unavailable();
   return parseSnapshot(result.value, sessionGeneration);
 }
 
