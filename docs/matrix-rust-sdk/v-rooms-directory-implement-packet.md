@@ -2,14 +2,14 @@
 
 | Field           | Value                                                                                                                          |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Status          | **Implementation packet** — this packet is docs-only; it does not claim the vertical is implemented                            |
+| Status          | **Implementation packet** — this packet is docs-only; the directory product vertical is **WIP** and not implemented or accepted |
 | Residual        | **V-ROOMS.R-DIRECTORY** from [#383](v-rooms-directory-residual.md)                                                             |
-| Base            | `feature/matrix-rust-sdk-full-replacement` at `8330c56bbb74b45ef01ad1f8be137b54caa2f568`                                       |
+| Base            | `feature/matrix-rust-sdk-full-replacement` at `206d24f36fae8cd9cf6f061be887cb955df0842b`                                       |
 | PR shape        | Focused **draft** PR targeting `feature/matrix-rust-sdk-full-replacement`                                                      |
 | Policy          | Complete UI → Tauri IPC → live `matrix-sdk` owner; superseded JS directory network is deleted in the same implementation slice |
 | Desktop failure | **Fail closed** when the native Matrix session, command, response, or generation is unavailable                                |
 | Prettier        | `2.8.1`                                                                                                                        |
-| Guard           | Never `main`, umbrella PR **#39**, or `product.rs`; `dual_backend` and a JS fallback are forbidden                             |
+| Guard           | Never `main`, umbrella PR **#39**, or `product.rs`; #446 extraction is merged and this is a parallel module lane; `dual_backend` and a JS fallback are forbidden |
 
 The source of truth for the measured residual is
 [v-rooms-directory-residual.md](v-rooms-directory-residual.md). This packet
@@ -17,13 +17,11 @@ turns only the live public-room directory slice into a bounded implementation
 contract. It does not close the related preview, card, navigation, or join
 proof slices, and it is not a V-BURN completion claim.
 
-> **Serial ownership note at `8330c56b`.** CallWidget **#407** holds the
-> serial `src-tauri/src/matrix/auth/product.rs` owner. The room-directory
-> product slice has not started at this tip; this PR is only a docs-only draft
-> handoff. It must not edit or claim completion of `product.rs`. A future
-> directory implementation remains module-owned under
-> `src-tauri/src/matrix/room_directory/` and must revalidate the managed
-> session boundary after the serial owner moves on.
+> **Parallel WIP note at `206d24f3`.** The #446 product-command extraction is
+> merged, so the room-directory product vertical can proceed in its
+> module-owned lane without reopening the shared `product.rs` serial owner.
+> Directory implementation is in flight; this docs packet records no product
+> merge, JS-owner deletion, proof, or acceptance.
 
 ## 1. Objective and completion bar
 
@@ -108,7 +106,7 @@ adding a second client or editing `product.rs` is not an allowed workaround.
 
 Before any future product implementation starts, the writer must verify:
 
-1. `HEAD` is exactly `8330c56bbb74b45ef01ad1f8be137b54caa2f568` and the PR
+1. `HEAD` is exactly `206d24f36fae8cd9cf6f061be887cb955df0842b` and the PR
    target is `feature/matrix-rust-sdk-full-replacement`;
 2. the existing managed native session is the sole authenticated Matrix SDK
    client for the desktop session;

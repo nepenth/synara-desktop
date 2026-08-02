@@ -3,7 +3,7 @@
 | Field         | Value                                                                                                                     |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Status        | **Docs-only residual audit**; no product code changed                                                                     |
-| Measured tip  | `e8a00f7273cb1ee8528df4fa2c3bffc455704322` on `feature/matrix-rust-sdk-full-replacement`                                  |
+| Measured tip  | `206d24f36fae8cd9cf6f061be887cb955df0842b` on `feature/matrix-rust-sdk-full-replacement`                                  |
 | Scope         | Desktop user presence and room typing paths in `synara/src` and `src-tauri/src`                                           |
 | Policy        | Native desktop is fail-closed; `dual_backend` is forbidden                                                                |
 | Runtime proof | Typing live proof remains unclaimed; presence native proof is not applicable because no live native presence owner exists |
@@ -11,6 +11,11 @@
 This inventory separates Matrix network ownership from the JS projection and UI
 wrappers that remain after the native typing slice. It covers user presence
 (`m.presence`-style availability), not MatrixRTC call membership presence.
+
+> **Parallel WIP note at `206d24f3`.** #446 extracted the product command
+> ownership boundary. The presence product vertical is now WIP in a parallel
+> module lane; the residual remains open until native wiring, JS-owner deletion,
+> focused evidence, and live proof are actually complete.
 
 ## Conclusion at the measured tip
 
