@@ -119,41 +119,36 @@ test('native hierarchy read invokes only the existing command with exact argumen
   ]);
 });
 
-test(
-  'native hierarchy read selects the requested room and maps the native view fields',
-  async () => {
-    const { invoke } = makeInvoke();
-    const room = await readSpaceHierarchyRoomWithNativeOwner(ROOM_ID, true, invoke);
-    assert.deepEqual(toRoomSummaryView(room), {
-      room_id: ROOM_ID,
-      name: 'Example room',
-      canonical_alias: '#example:example.org',
-      topic: 'A bounded topic',
-      avatar_url: 'mxc://example.org/avatar',
-      room_type: 'm.space',
-      num_joined_members: 2,
-      join_rule: 'public',
-      world_readable: true,
-      guest_can_join: false,
-    });
-  }
-);
+test('native hierarchy read selects the requested room and maps the native view fields', async () => {
+  const { invoke } = makeInvoke();
+  const room = await readSpaceHierarchyRoomWithNativeOwner(ROOM_ID, true, invoke);
+  assert.deepEqual(toRoomSummaryView(room), {
+    room_id: ROOM_ID,
+    name: 'Example room',
+    canonical_alias: '#example:example.org',
+    topic: 'A bounded topic',
+    avatar_url: 'mxc://example.org/avatar',
+    room_type: 'm.space',
+    num_joined_members: 2,
+    join_rule: 'public',
+    world_readable: true,
+    guest_can_join: false,
+  });
+});
 
 test('native hierarchy read rejects stale generations and mismatched rooms', async () => {
   const stale = makeInvoke(loggedInSession, { ...validSnapshot, sessionGeneration: 8 });
   await assert.rejects(() => readSpaceHierarchyWithNativeOwner(ROOM_ID, true, stale.invoke));
 
   const omitted = makeInvoke(loggedInSession, { sessionGeneration: 9, rooms: [] });
-  await assert.rejects(
-    () => readSpaceHierarchyRoomWithNativeOwner(ROOM_ID, true, omitted.invoke)
-  );
+  await assert.rejects(() => readSpaceHierarchyRoomWithNativeOwner(ROOM_ID, true, omitted.invoke));
 
   const different = makeInvoke(loggedInSession, {
     sessionGeneration: 9,
     rooms: [{ ...validRoom, roomId: OTHER_ROOM_ID }],
   });
-  await assert.rejects(
-    () => readSpaceHierarchyRoomWithNativeOwner(ROOM_ID, true, different.invoke)
+  await assert.rejects(() =>
+    readSpaceHierarchyRoomWithNativeOwner(ROOM_ID, true, different.invoke)
   );
 });
 
@@ -180,8 +175,8 @@ test('native hierarchy read rejects malformed or unsupported native DTOs', async
     rooms: [validRoom],
     accessToken: 'secret',
   });
-  await assert.rejects(
-    () => readSpaceHierarchyWithNativeOwner(ROOM_ID, true, invalidSnapshot.invoke)
+  await assert.rejects(() =>
+    readSpaceHierarchyWithNativeOwner(ROOM_ID, true, invalidSnapshot.invoke)
   );
 });
 
@@ -214,29 +209,24 @@ test('native hierarchy read accepts the Rust optional-null shape', async () => {
   });
 });
 
-test(
-  'native hierarchy read turns unavailable and command errors into terminal failures',
-  async () => {
-    const unavailableSession = makeInvoke(loggedInSession, validSnapshot, {
-      sessionAvailable: false,
-    });
-    await assert.rejects(
-      () => readSpaceHierarchyWithNativeOwner(ROOM_ID, true, unavailableSession.invoke)
-    );
+test('native hierarchy read turns unavailable and command errors into terminal failures', async () => {
+  const unavailableSession = makeInvoke(loggedInSession, validSnapshot, {
+    sessionAvailable: false,
+  });
+  await assert.rejects(() =>
+    readSpaceHierarchyWithNativeOwner(ROOM_ID, true, unavailableSession.invoke)
+  );
 
-    const unavailableHierarchy = makeInvoke(loggedInSession, validSnapshot, {
-      hierarchyAvailable: false,
-    });
-    await assert.rejects(
-      () => readSpaceHierarchyWithNativeOwner(ROOM_ID, true, unavailableHierarchy.invoke)
-    );
+  const unavailableHierarchy = makeInvoke(loggedInSession, validSnapshot, {
+    hierarchyAvailable: false,
+  });
+  await assert.rejects(() =>
+    readSpaceHierarchyWithNativeOwner(ROOM_ID, true, unavailableHierarchy.invoke)
+  );
 
-    const commandError = makeInvoke(loggedInSession, validSnapshot, { throwOnHierarchy: true });
-    await assert.rejects(
-      () => readSpaceHierarchyWithNativeOwner(ROOM_ID, true, commandError.invoke)
-    );
-  }
-);
+  const commandError = makeInvoke(loggedInSession, validSnapshot, { throwOnHierarchy: true });
+  await assert.rejects(() => readSpaceHierarchyWithNativeOwner(ROOM_ID, true, commandError.invoke));
+});
 
 test('native hierarchy read never returns an empty successful selected-room summary', async () => {
   for (const [description, hierarchyValue] of [
