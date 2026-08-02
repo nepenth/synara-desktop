@@ -1,4 +1,10 @@
 use super::*;
+use crate::matrix::room_profile::live::project_join_rule;
+use matrix_sdk::{
+    deserialized_responses::RawSyncOrStrippedState,
+    ruma::{events::room::join_rules::RoomJoinRulesEventContent, OwnedRoomId},
+    RoomState,
+};
 
 const DIRECTORY_VISIBILITY_INVALID: &str = "v-send.r-room-profile-directory-visibility-invalid";
 const DIRECTORY_VISIBILITY_REQUIRES_SESSION: &str =
@@ -16,6 +22,16 @@ const DIRECTORY_VISIBILITY_GET_SDK_FAILED: &str =
 const DIRECTORY_VISIBILITY_SET_SDK_FAILED: &str =
     "v-send.r-room-profile-directory-visibility-set-sdk-failed";
 
+const JOIN_RULE_INVALID: &str = "v-send.r-room-profile-join-rule-invalid";
+const JOIN_RULE_REQUIRES_SESSION: &str = "v-send.r-room-profile-join-rule-requires-session";
+const JOIN_RULE_STALE_GENERATION: &str = "v-send.r-room-profile-join-rule-stale-generation";
+const JOIN_RULE_ROOM_NOT_FOUND: &str = "v-send.r-room-profile-join-rule-room-not-found";
+const JOIN_RULE_ROOM_STATE_UNAVAILABLE: &str =
+    "v-send.r-room-profile-join-rule-room-state-unavailable";
+const JOIN_RULE_READ_SDK_FAILED: &str = "v-send.r-room-profile-join-rule-read-sdk-failed";
+const JOIN_RULE_DESERIALIZE_FAILED: &str = "v-send.r-room-profile-join-rule-deserialize-failed";
+const JOIN_RULE_UNSUPPORTED: &str = "v-send.r-room-profile-join-rule-unsupported";
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatrixRoomDirectoryVisibilityResult {
@@ -32,6 +48,64 @@ pub struct MatrixRoomDirectoryVisibilityWriteResult {
     pub room_id: String,
     pub session_generation: u64,
     pub requested_visibility: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixRoomJoinRuleSnapshot {
+    pub status: &'static str,
+    pub room_id: String,
+    pub session_generation: u64,
+    pub join_rule: &'static str,
+}
+
+/// V-SEND.R-ROOM-PROFILE-JOIN-RULE — authoritative live room-scoped join-rule
+/// read through the managed native Matrix SDK client. This is intentionally a
+/// read-only gate owner; the Join Rules writer remains a separate residual.
+#[tauri::command]
+pub async fn matrix_room_join_rule_snapshot(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    session_generation: u64,
+) -> Result<MatrixRoomJoinRuleSnapshot, MatrixAuthCommandError> {
+    let room_id = parse_room_join_rule_room_id(&room_id)?;
+    let session = state.session.lock().await;
+    let active = require_room_join_rule_session(session.as_ref())?;
+    let live_generation = active.sync.session_generation();
+    require_room_join_rule_generation(session_generation, live_generation)?;
+    let room = active
+        .client
+        .get_room(&room_id)
+        .ok_or_else(|| map_room_join_rule_error(JOIN_RULE_ROOM_NOT_FOUND))?;
+    if room.state() != RoomState::Joined {
+        return Err(map_room_join_rule_error(JOIN_RULE_ROOM_STATE_UNAVAILABLE));
+    }
+
+    let raw = room
+        .get_state_event_static::<RoomJoinRulesEventContent>()
+        .await
+        .map_err(|_| map_room_join_rule_error(JOIN_RULE_READ_SDK_FAILED))?
+        .ok_or_else(|| map_room_join_rule_error(JOIN_RULE_ROOM_STATE_UNAVAILABLE))?;
+    let event = match raw {
+        RawSyncOrStrippedState::Sync(raw) => raw
+            .deserialize()
+            .map_err(|_| map_room_join_rule_error(JOIN_RULE_DESERIALIZE_FAILED))?,
+        RawSyncOrStrippedState::Stripped(_) => {
+            return Err(map_room_join_rule_error(JOIN_RULE_ROOM_STATE_UNAVAILABLE));
+        }
+    };
+    let original = event
+        .as_original()
+        .ok_or_else(|| map_room_join_rule_error(JOIN_RULE_ROOM_STATE_UNAVAILABLE))?;
+    let join_rule = project_join_rule(&original.content.join_rule)
+        .ok_or_else(|| map_room_join_rule_error(JOIN_RULE_UNSUPPORTED))?;
+
+    Ok(MatrixRoomJoinRuleSnapshot {
+        status: "ok",
+        room_id: room_id.to_string(),
+        session_generation: live_generation,
+        join_rule,
+    })
 }
 
 /// V-SEND.R-ROOM-PROFILE-DIRECTORY-VISIBILITY — authoritative room-scoped
@@ -252,6 +326,65 @@ pub(super) fn parse_room_directory_visibility_room_id(
     room_id
         .parse()
         .map_err(|_| map_room_directory_visibility_error(DIRECTORY_VISIBILITY_INVALID))
+}
+
+pub(super) fn parse_room_join_rule_room_id(
+    room_id: &str,
+) -> Result<OwnedRoomId, MatrixAuthCommandError> {
+    if room_id.is_empty()
+        || room_id.len() > 512
+        || room_id.trim() != room_id
+        || room_id.chars().any(char::is_whitespace)
+        || !room_id.starts_with('!')
+    {
+        return Err(map_room_join_rule_error(JOIN_RULE_INVALID));
+    }
+    room_id
+        .parse()
+        .map_err(|_| map_room_join_rule_error(JOIN_RULE_INVALID))
+}
+
+fn require_room_join_rule_session(
+    session: Option<&ManagedMatrixSession>,
+) -> Result<&ManagedMatrixSession, MatrixAuthCommandError> {
+    session.ok_or_else(|| map_room_join_rule_error(JOIN_RULE_REQUIRES_SESSION))
+}
+
+fn require_room_join_rule_generation(
+    requested: u64,
+    live: u64,
+) -> Result<(), MatrixAuthCommandError> {
+    if requested == 0 || requested != live {
+        return Err(map_room_join_rule_error(JOIN_RULE_STALE_GENERATION));
+    }
+    Ok(())
+}
+
+pub(super) fn map_room_join_rule_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    let (code, message) = match diagnostic_id {
+        JOIN_RULE_INVALID => (
+            "InvalidRequest",
+            "The native Matrix room join-rule request is invalid.",
+        ),
+        JOIN_RULE_REQUIRES_SESSION => ("Forbidden", "No native Matrix session is active."),
+        JOIN_RULE_STALE_GENERATION => (
+            "Forbidden",
+            "The native Matrix room join-rule session is stale.",
+        ),
+        JOIN_RULE_ROOM_NOT_FOUND => ("NotFound", "The native Matrix room is not available."),
+        JOIN_RULE_ROOM_STATE_UNAVAILABLE
+        | JOIN_RULE_DESERIALIZE_FAILED
+        | JOIN_RULE_UNSUPPORTED
+        | JOIN_RULE_READ_SDK_FAILED => (
+            "Unknown",
+            "The native Matrix room join rule is unavailable.",
+        ),
+        _ => (
+            "Unknown",
+            "The native Matrix room join-rule operation failed.",
+        ),
+    };
+    MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
 
 pub(super) fn parse_room_directory_visibility(

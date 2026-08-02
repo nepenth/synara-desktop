@@ -112,6 +112,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_set_room_avatar",
     "matrix_get_room_directory_visibility",
     "matrix_set_room_directory_visibility",
+    "matrix_room_join_rule_snapshot",
     "matrix_get_room_image_packs",
     "matrix_get_global_image_packs",
     "matrix_later_snapshot",
