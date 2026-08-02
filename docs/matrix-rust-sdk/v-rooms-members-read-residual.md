@@ -3,7 +3,7 @@
 | Field   | Value                                                                                                                                                                       |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Status  | **Active post-#405/#439/#446/#450/#458/#461 READ residual** — #395/#405 close native member enumeration; #439 closes the separate bulk WRITE; #450 closes native power/creator owners, while custom tags and direct readers remain residual; #458/#461 do not alter this boundary |
-| Tip SHA | `27a854d8` (current docs/integration tip; post-#458/#461 product state with #450 at `103a653f`, #446 at `9fb341af`, #405 at `176fc7c5`, and #439 at `f92a33f9`) |
+| Tip SHA | `a9098bd7` (current docs/integration tip; post-#458/#461 product state with #450 at `103a653f`, #446 at `9fb341af`, #405 at `176fc7c5`, and #439 at `f92a33f9`) |
 | Base    | `feature/matrix-rust-sdk-full-replacement`                                                                                                                                  |
 | Policy  | [full-vertical-policy.md](full-vertical-policy.md) — physical deletion inside each owning slice                                                                             |
 | Follow-up | **Custom power-level tags + direct readers** — #450 owns native power/creator snapshots and migrated permission paths; `in.synara.room.power_level_tags`, `via-servers.ts`, and `utils/room.ts` direct reads remain explicitly open |
@@ -12,15 +12,16 @@
 > **Scope guard.** Docs only. No product code in any Rust command module or any
 > TS. The moderation-write vertical **#375 is already merged**; this inventory does not
 > change it. It also does not touch **#39** (umbrella) or any timeline/send
-> slice. This docs-only packet is refreshed at docs tip `27a854d8`; the product
+> slice. This docs-only packet is refreshed at docs tip `a9098bd7`; the product
 > state from `c1e9c3be` remains the basis for the merged #458/#461 slices. #405 and #439
 > are already merged, #446's behavior-preserving product-command fan-out is
 > present at `9fb341af`, and **#450 is merged at `103a653f`** and owns
 > native power-level/creator snapshots for the migrated native paths. #458's
 > presence first slice and #461's room-directory first slice are also in the
-> base but do not change this residual. The rejected #465 head `28e2418d` was
-> based at `c1e9c3be` and is now rebased onto `27a854d8`; this refresh records the
-> current draft tip honestly. It does not
+> base but do not change this residual. The accepted **#482** Members READ
+> refresh and **#486** room-directory refresh were docs-only and did not change
+> product ownership; the #481–#488 docs wave is present at this tip, and this
+> refresh records the current docs tip honestly. It does not
 > claim custom power-level-tag READ or direct helper/plugin READ completion.
 > No cutover; `dual_backend=false` and V-BURN remains **HOLD**.
 
@@ -50,7 +51,7 @@ Landed on the product branch in merged **#439** at `f92a33f9`:
 The behavior-preserving **#446** product-command fan-out is merged at `9fb341af`.
 It changes the Rust ownership/layout boundary. **#450** then lands at
 `103a653f` with native power-level and creator READ snapshots plus migrated
-native hook/permission ownership. The current docs/integration tip `27a854d8`
+native hook/permission ownership. The current docs/integration tip `a9098bd7`
 also contains the unrelated #458 presence first slice and #461 room-directory
 first slice.
 
@@ -90,7 +91,7 @@ bulk power/tag WRITE owner. Merged **#450** closes native power/creator reads
 for the migrated hook and permission paths; the rows below preserve the
 remaining tag/direct-reader boundary.
 
-| Surface | Current tip (`27a854d8`) | Residual after merged #405/#439/#446/#450; #458/#461 are unrelated |
+| Surface | Current tip (`a9098bd7`) | Residual after merged #405/#439/#446/#450; #458/#461 are unrelated |
 | ------- | ----------------------------------------------- | ------------------------------------ |
 | Members settings list | Native via #395; fail-closed | None for the native member snapshot |
 | Room/lobby people drawer | Native member snapshot plus native power/creator projections; fail-closed | Custom power-level tags and any direct helper/plugin read used by the route |
@@ -251,7 +252,7 @@ required.
 | **Room membership / unread**                                         | [p4.3-membership-unread.md](p4.3-membership-unread.md) — separate                   |
 | **P4.6 member index**                                                | [p4.6-members.md](p4.6-members.md) — pure index over DTOs; no SDK member APIs       |
 | Product input                                                        | **#405 merged** at `176fc7c5`; drawer/lobby/mentions member wiring is landed. **#439** bulk powers/tag WRITE is merged at `f92a33f9`; **#446** command fan-out is merged at `9fb341af`; **#450** power/creator READ is merged at `103a653f`; **#458** presence first slice and **#461** room-directory first slice are merged by `c1e9c3be` but are unrelated. Custom tag/direct READ remains open. |
-| Product changes in this PR                                           | None; this packet is docs-only, refreshed at `27a854d8`, and does not edit product command modules |
+| Product changes in this PR                                           | None; this packet is docs-only, refreshed at `a9098bd7`, and does not edit product command modules |
 | Umbrella merge to `main`                                             | **#39** — needs explicit user approval                                              |
 | Cutover / dual-backend removal                                       | #240 HOLD; no cutover                                                               |
 
@@ -262,7 +263,7 @@ required.
 **Confidence: high** for the inventory. I traced the member-list **read** from
 the two primary consumers (`Members.tsx`, `MembersDrawer.tsx`), the room owner
 (`Room.tsx`), the lobby (`Lobby.tsx`), and mention autocomplete back through
-`useRoomMembers`. At current docs/integration tip `27a854d8`, I confirmed the live native producer in
+`useRoomMembers`. At current docs/integration tip `a9098bd7`, I confirmed the live native producer in
 `members/product_commands.rs` after #446, the fail-closed
 `nativeRoomMembersOwner`, and the `nativeSession` wiring for `Members.tsx`,
 `MembersDrawer`, and mention autocomplete; merged #405 is recorded at
