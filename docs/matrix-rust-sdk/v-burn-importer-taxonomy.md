@@ -3,7 +3,7 @@
 | Field                  | Value                                                                             |
 | ---------------------- | --------------------------------------------------------------------------------- |
 | Status                 | **Docs-only taxonomy**; no product code changed                                   |
-| Measured tip           | `529530916aef360be2a919ad33d439b5bd6f8f45`                                        |
+| Measured tip           | `0033ac0345e46ba4d3fed3fd01362e4cc61afbc8`                                        |
 | Base                   | `feature/matrix-rust-sdk-full-replacement`                                        |
 | Scope                  | Production `matrix-js-sdk` importers under `synara/src`                           |
 | Current importers      | **152**                                                                           |
@@ -27,8 +27,16 @@ and checked against a direct source import scan at the measured tip:
 - 152 paths in [`p1.6-js-sdk-import-allowlist.json`](p1.6-js-sdk-import-allowlist.json);
 - the current production importer set exactly matches the allowlist.
 
-The generated inventory reports 155 production-role files because it also
-records two production files with no SDK import. They are not counted here.
+At this tip the source inventory has 155 production-role files: 152 with a
+direct SDK import and three production files with no SDK import. The latter
+are not counted here. The prior taxonomy snapshot incorrectly retained
+`features/common-settings/members/Members.tsx` in the primary importer list;
+the current P1.6 allowlist correctly excludes it after #395.
+
+Open product PR #450 is not part of this base. Its recorded review verdict at
+head `cb8806b0` was **REJECT**, so this taxonomy does not count its native
+power/creator READ implementation or imply acceptance. The docs-only
+#451/#452/#453/#456 commits likewise add no importer evidence.
 
 ## Exhaustive primary path buckets
 
@@ -40,7 +48,7 @@ below records the ownership that matters for migration sequencing.
 | ------------------ | ------: | ------------------------------------------------------------------------------------- |
 | `client-lifecycle` |       2 | Bootstrap, live JS client construction, and crypto-store continuity                   |
 | `component`        |      22 | Renderers, room/member controls, editor and pack UI boundaries                        |
-| `feature`          |      54 | Room, space, lobby, settings, search, call, developer-tool, and notification surfaces |
+| `feature`          |      53 | Room, space, lobby, settings, search, call, developer-tool, and notification surfaces |
 | `hook`             |      43 | SDK model adapters, listeners, room/space state, and client context                   |
 | `media-boundary`   |       1 | Authenticated MXC/media URL and download boundary                                     |
 | `page`             |       8 | Client boot/status, space, inbox, and sidebar consumers                               |
@@ -103,7 +111,6 @@ synara/src/app/features/common-settings/general/RoomJoinRules.tsx
 synara/src/app/features/common-settings/general/RoomProfile.tsx
 synara/src/app/features/common-settings/general/RoomPublish.tsx
 synara/src/app/features/common-settings/general/RoomUpgrade.tsx
-synara/src/app/features/common-settings/members/Members.tsx
 synara/src/app/features/create-chat/CreateChat.tsx
 synara/src/app/features/create-room/CreateRoom.tsx
 synara/src/app/features/create-space/CreateSpace.tsx

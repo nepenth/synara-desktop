@@ -2,11 +2,20 @@
 
 | Field       | Value                                                                                                                                                  |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Tip audited | `b11abcd8` (`feature/matrix-rust-sdk-full-replacement`, after #375 moderation and #395 members snapshot)                                                   |
+| Tip audited | `0033ac03` (`feature/matrix-rust-sdk-full-replacement`, after #453/#456 docs-only packet merges; #450 remains open and uncredited)                         |
 | Scope       | `synara/src/app/hooks/useCommands.ts`, `synara/src/app/features/room/CommandAutocomplete.tsx`, and the command-specific submit path in `RoomInput.tsx` |
 | Change type | Documentation only                                                                                                                                     |
 | Policy      | Native desktop is fail-closed; `dual_backend` is forbidden                                                                                             |
 | V-BURN      | **HOLD / not complete**                                                                                                                                |
+
+## Current-tip boundary
+
+This refresh is measured at `0033ac03`. The merged #446 product-command
+fan-out and docs-only #451/#452/#453/#456 do not change the UI slash-command
+owners audited here. Product PR #450 is not part of this base: its recorded
+review verdict at head `cb8806b0` was **REJECT**, with native read-loading and
+remaining JS-owner bypasses as blockers. No #450 implementation or acceptance
+is credited here, and none of the 22 command IDs is closed by that PR.
 
 ## Finding
 
@@ -20,9 +29,9 @@ IDs. Of those, six still have direct Matrix JS mutation owners in
 #375 moved the five moderation writes (`/invite`, `/disinvite`, `/kick`,
 `/ban`, and `/unban`) to the native moderation owner with no JS mutation
 fallback. `/kick` and `/ban` still use the SDK `Room` member list to expand
-server-name targets before calling that native owner. #395's native member
-snapshot is wired to the Members settings UI, not to this command expansion
-path.
+server-name targets before calling that native owner. #395 introduced the
+native member snapshot and merged #405 wires it to the drawer, lobby, and
+mention surfaces, but neither change supplies this command expansion path.
 
 In this document, “residual ID” means the public slash-command value (for
 example, `/invite`), not a new issue or PR identifier.
@@ -62,7 +71,7 @@ types:
 | `useCommands.ts:206-233` | `/startdm`                       | Existing-DM detection uses `getDMRoomFor(mx, ...)` and `mx.getSafeUserId`; creation uses `createRoomWithNativeOwner`, then the native `m.direct` writer | **Native create owner; retained SDK read only.** No JS create fallback. |
 | `useCommands.ts:235-253` | `/join`                          | Uses `joinRoomWithNativeOwner` and `matrix_room_join` through the desktop bridge                                                                        | **Native and fail-closed.**                                             |
 | `useCommands.ts:255-268` | `/leave`                         | Uses `leaveRoomWithNativeOwner` and `matrix_room_leave` through the desktop bridge                                                                      | **Native and fail-closed.**                                             |
-| `useCommands.ts:270-385` | `/invite`, `/disinvite`, `/kick`, `/ban`, `/unban` | Writes route through `nativeRoomModerationOwner` and `matrix_room_invite/kick/ban/unban`; `/kick` and `/ban` retain SDK `Room.getMembers()` expansion for server-name targets | **Native moderation owner; fail-closed for writes.** The member-read expansion is still JS-owned, and #395's Members snapshot is not wired into this command path. |
+| `useCommands.ts:270-385` | `/invite`, `/disinvite`, `/kick`, `/ban`, `/unban` | Writes route through `nativeRoomModerationOwner` and `matrix_room_invite/kick/ban/unban`; `/kick` and `/ban` retain SDK `Room.getMembers()` expansion for server-name targets | **Native moderation owner; fail-closed for writes.** The member-read expansion is still JS-owned, and the #395/#405 member-snapshot surfaces are not wired into this command path. |
 | `useCommands.ts:457-470` | `/converttodm`, `/converttoroom` | Writes route through `nativeMDirect`; `/converttodm` retains `mx.getSafeUserId` for user identification                                                 | **Native `m.direct` writer; retained SDK identity read only.**          |
 | `useCommands.ts:590-608` | `/poll`                          | Uses `sendPollWithNativeDesktopOwner`; the legacy result raises an error instead of sending through `mx.sendEvent`                                      | **Native and fail-closed for the command path.**                        |
 
