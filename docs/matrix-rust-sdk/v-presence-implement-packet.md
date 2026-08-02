@@ -2,24 +2,28 @@
 
 | Field      | Value                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Status     | **Implementation packet** — this PR is docs-only; the presence product vertical is **WIP** and not implemented or accepted |
+| Status     | **HOLD / implementation packet** — this PR is docs-only; #458 is rebase-in-flight and the presence product vertical is not accepted at the current tip |
 | Residual   | **V-PRESENCE.USER**                                                                                                        |
 | Source     | [v-presence-typing-residual.md](v-presence-typing-residual.md) from #384                                                   |
-| Base       | `feature/matrix-rust-sdk-full-replacement` at `206d24f36fae8cd9cf6f061be887cb955df0842b`                                   |
-| PR shape   | Focused **draft** PR targeting `feature/matrix-rust-sdk-full-replacement`                                                  |
+| Base       | `feature/matrix-rust-sdk-full-replacement` at `103a653f256a23cdb10566684c52a759f0d542f4`                                   |
+| PR shape   | Focused **draft** docs PR targeting `feature/matrix-rust-sdk-full-replacement`; implementation PR **#458** must rebase first |
 | Scope      | Desktop user presence (`m.presence`) in the user-room profile; typing and MatrixRTC call membership are separate residuals |
 | Policy     | [full-vertical-policy.md](full-vertical-policy.md): one UI → Tauri IPC → live `matrix-sdk` owner, with JS-owner deletion   |
-| Guard      | Never `main`, umbrella PR **#39**, or V-BURN; #446 extraction is merged and this vertical is a parallel module lane; `dual_backend` is forbidden; native failure is fail-closed |
+| Guard      | Never `main`, umbrella PR **#39**, or V-BURN; #458 is rebase-in-flight; any `ACCEPT@bb7140a0` record (including `ACCEPT_WITH_NITS`) is stale; **HOLD until rebased**; hold merge/rebase thrash over product; `dual_backend=false`; V-BURN **HOLD**; native failure is fail-closed |
 | Current PR | Only this packet is allowed to change; `src-tauri/src/matrix/auth/product.rs` is prohibited                                |
 
 The source of truth for the residual is the #384 inventory. This packet turns
 the user-presence portion into a bounded implementation contract. It does not
 implement product code, update generated status, or claim V-BURN completion.
 
-> **Parallel WIP note at `206d24f3`.** The #446 product-command extraction is
-> merged, so presence no longer waits on a shared `product.rs` serial owner.
-> The presence product vertical is in flight in its module-scoped lane; this
-> docs packet records no product merge, JS-owner deletion, proof, or acceptance.
+> **Rebase/acceptance hold at `103a653f`.** The #446 product-command
+> extraction and #450 power/creator READs are merged, but presence PR **#458**
+> is rebase-in-flight onto this integration tip. The prior
+> `ACCEPT@bb7140a0` record (the earlier `ACCEPT_WITH_NITS` comment) is stale
+> and must not be treated as acceptance at this tip. Keep V-PRESENCE.USER
+> **HOLD**, hold merge/rebase thrash over product, and do not treat merge churn
+> as product progress. `dual_backend=false`; V-BURN remains **HOLD**. The
+> packet records no product merge, JS-owner deletion, proof, or acceptance.
 
 ## 1. Objective and completion bar
 
@@ -80,8 +84,9 @@ typing polling/projection residual, or MatrixRTC call-membership presence.
 
 Before a future implementation starts, the writer must verify:
 
-1. `HEAD` equals `206d24f36fae8cd9cf6f061be887cb955df0842b` and the PR
-   target is `feature/matrix-rust-sdk-full-replacement`;
+1. `HEAD` equals `103a653f256a23cdb10566684c52a759f0d542f4` and the PR target is
+   `feature/matrix-rust-sdk-full-replacement`; #458 is rebased onto this tip,
+   and no prior acceptance record at `bb7140a0` is reusable;
 2. the managed native session is authenticated, has a live sync path, and has
    a supported session-generation-bound capability boundary for presence;
 3. the pinned SDK evidence in Section 7 still matches the dependency actually

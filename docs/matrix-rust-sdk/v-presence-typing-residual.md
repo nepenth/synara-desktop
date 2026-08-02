@@ -2,20 +2,25 @@
 
 | Field         | Value                                                                                                                     |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Status        | **Docs-only residual audit**; no product code changed                                                                     |
-| Measured tip  | `206d24f36fae8cd9cf6f061be887cb955df0842b` on `feature/matrix-rust-sdk-full-replacement`                                  |
+| Status        | **HOLD — docs-only residual audit**; no product code changed; #458 is rebase-in-flight                                      |
+| Measured tip  | `103a653f256a23cdb10566684c52a759f0d542f4` on `feature/matrix-rust-sdk-full-replacement`                                  |
 | Scope         | Desktop user presence and room typing paths in `synara/src` and `src-tauri/src`                                           |
-| Policy        | Native desktop is fail-closed; `dual_backend` is forbidden                                                                |
-| Runtime proof | Typing live proof remains unclaimed; presence native proof is not applicable because no live native presence owner exists |
+| Policy        | Native desktop is fail-closed; `dual_backend=false`; no merge/rebase thrash over product                                        |
+| Runtime proof | Typing live proof remains unclaimed; presence native proof is not applicable while #458 is rebase-in-flight; `ACCEPT@bb7140a0` (including the earlier `ACCEPT_WITH_NITS` comment) is stale; V-BURN **HOLD** |
 
 This inventory separates Matrix network ownership from the JS projection and UI
 wrappers that remain after the native typing slice. It covers user presence
 (`m.presence`-style availability), not MatrixRTC call membership presence.
 
-> **Parallel WIP note at `206d24f3`.** #446 extracted the product command
-> ownership boundary. The presence product vertical is now WIP in a parallel
-> module lane; the residual remains open until native wiring, JS-owner deletion,
-> focused evidence, and live proof are actually complete.
+> **Rebase/acceptance hold at `103a653f`.** #446 extracted the product command
+> ownership boundary and #450 is merged at this tip, but presence PR **#458**
+> is rebase-in-flight. The `ACCEPT@bb7140a0` record (the earlier
+> `ACCEPT_WITH_NITS` comment) is stale and does not close this residual. Keep
+> the presence vertical **HOLD** until #458 is rebased and review, focused
+> evidence, and acceptance are rerun; hold merge/rebase thrash over product and
+> do not count merge churn as product progress. `dual_backend=false`; V-BURN
+> remains **HOLD**. The residual remains open until native wiring, JS-owner
+> deletion, and live proof are actually complete.
 
 ## Conclusion at the measured tip
 
