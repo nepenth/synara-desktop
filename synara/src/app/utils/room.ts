@@ -30,6 +30,11 @@ import {
   UnreadInfo,
 } from '../../types/matrix/room';
 import { getLoadedLiveTimelineEvents, getRoomCurrentState } from './timelineLifecycle';
+import { isNativeMatrixSession } from '../features/verification/nativeVerification';
+import {
+  getNativeRoomStateProjection,
+  getNativeSpecialUsers,
+} from '../features/matrix-dto/nativeRoomStateProjection';
 
 export const getStateEvent = (
   room: Room,
@@ -487,6 +492,10 @@ export const bannedInRooms = (mx: MatrixClient, rooms: string[], otherUserId: st
   });
 
 export const getAllVersionsRoomCreator = (room: Room): Set<string> => {
+  if (isNativeMatrixSession()) {
+    return new Set(getNativeRoomStateProjection(room.roomId)?.creators ?? []);
+  }
+
   const creators = new Set<string>();
 
   const createEvent = getStateEvent(room, StateEvent.RoomCreate);
@@ -513,10 +522,14 @@ export const guessPerfectParent = (
   }
 
   const getSpecialUsers = (rId: string): string[] => {
-    const specialUsers: Set<string> = new Set();
-
     const r = mx.getRoom(rId);
     if (!r) return [];
+
+    if (isNativeMatrixSession()) {
+      return getNativeSpecialUsers(getNativeRoomStateProjection(r.roomId));
+    }
+
+    const specialUsers: Set<string> = new Set();
 
     getAllVersionsRoomCreator(r).forEach((c) => specialUsers.add(c));
 

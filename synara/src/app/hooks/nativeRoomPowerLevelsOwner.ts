@@ -1,4 +1,8 @@
 import { invokeDesktopWithAvailability, type DesktopInvokeResult } from '../utils/desktop';
+import {
+  clearNativeRoomStateProjections,
+  publishNativeRoomPowerLevelsProjection,
+} from '../features/matrix-dto/nativeRoomStateProjection';
 
 export type NativeRoomPowerLevelsContent = Record<string, unknown>;
 
@@ -79,13 +83,18 @@ const invokeSafely = async (
 };
 
 const requireLoggedIn = async (invoke: NativeRoomPowerLevelsInvoke): Promise<number> => {
-  const result = await invokeSafely('matrix_session_snapshot', undefined, invoke);
-  if (!result.available || !isRecord(result.value)) throw new Error(unavailableMessage);
-  const snapshot = result.value as NativeSessionSnapshot;
-  if (snapshot.status !== 'logged_in' || !isSafeGeneration(snapshot.sessionGeneration)) {
+  try {
+    const result = await invokeSafely('matrix_session_snapshot', undefined, invoke);
+    if (!result.available || !isRecord(result.value)) throw new Error(unavailableMessage);
+    const snapshot = result.value as NativeSessionSnapshot;
+    if (snapshot.status !== 'logged_in' || !isSafeGeneration(snapshot.sessionGeneration)) {
+      throw new Error(unavailableMessage);
+    }
+    return snapshot.sessionGeneration;
+  } catch {
+    clearNativeRoomStateProjections();
     throw new Error(unavailableMessage);
   }
-  return snapshot.sessionGeneration;
 };
 
 export async function readRoomPowerLevelsWithNativeOwner(
@@ -113,7 +122,13 @@ export async function readRoomPowerLevelsWithNativeOwner(
     throw new Error(unavailableMessage);
   }
 
-  return value as NativeRoomPowerLevelsSnapshot;
+  const snapshot = value as NativeRoomPowerLevelsSnapshot;
+  publishNativeRoomPowerLevelsProjection(
+    snapshot.roomId,
+    snapshot.sessionGeneration,
+    snapshot.content
+  );
+  return snapshot;
 }
 
 export const defaultNativeRoomPowerLevelsInvoke: NativeRoomPowerLevelsInvoke = (command, args) =>

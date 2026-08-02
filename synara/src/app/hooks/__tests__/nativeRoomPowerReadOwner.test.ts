@@ -11,6 +11,14 @@ import {
 } from '../nativeRoomCreatorsOwner';
 import { NATIVE_UNAVAILABLE_POWER_LEVELS } from '../usePowerLevels';
 import { getRoomPermissionsAPI } from '../useRoomPermissions';
+import {
+  clearNativeRoomStateProjections,
+  getNativeHighestPowerUserId,
+  getNativeRoomStateProjection,
+  getNativeSpecialUsers,
+  publishNativeRoomCreatorsProjection,
+  publishNativeRoomPowerLevelsProjection,
+} from '../../features/matrix-dto/nativeRoomStateProjection';
 
 const roomId = '!room:example.org';
 const loggedIn = {
@@ -126,7 +134,9 @@ test('native read owners fail closed on non-native, logged-out, malformed, and s
     available: true,
     value: { status: 'logged_out' },
   });
+  publishNativeRoomPowerLevelsProjection(roomId, 7, { users: { '@stale:example.org': 100 } });
   await assert.rejects(readRoomPowerLevelsWithNativeOwner(roomId, true, loggedOut), /unavailable/);
+  assert.equal(getNativeRoomStateProjection(roomId), undefined);
 
   const malformed: NativeRoomCreatorsInvoke = async (command) =>
     command === 'matrix_session_snapshot'
@@ -143,4 +153,55 @@ test('native read owners fail closed on non-native, logged-out, malformed, and s
           },
         };
   await assert.rejects(readRoomCreatorsWithNativeOwner(roomId, true, malformed), /unavailable/);
+});
+
+test('native direct-reader projections consume DTOs and fail closed without them', () => {
+  clearNativeRoomStateProjections();
+  assert.equal(getNativeHighestPowerUserId(undefined), undefined);
+  assert.deepEqual(getNativeSpecialUsers(undefined), []);
+
+  publishNativeRoomCreatorsProjection(roomId, 7, ['@creator:example.org']);
+  assert.equal(
+    getNativeHighestPowerUserId(getNativeRoomStateProjection(roomId)),
+    '@creator:example.org'
+  );
+
+  publishNativeRoomPowerLevelsProjection(roomId, 7, {
+    users_default: 0,
+    users: {
+      '@creator:example.org': 100,
+      '@moderator:example.org': 50,
+    },
+  });
+  assert.deepEqual(getNativeSpecialUsers(getNativeRoomStateProjection(roomId)), [
+    '@creator:example.org',
+    '@moderator:example.org',
+  ]);
+
+  publishNativeRoomPowerLevelsProjection('!new-room:example.org', 8, {
+    users: { '@new:example.org': 100 },
+  });
+  assert.equal(getNativeRoomStateProjection(roomId), undefined);
+  assert.deepEqual(getNativeSpecialUsers(getNativeRoomStateProjection(roomId)), []);
+  clearNativeRoomStateProjections();
+});
+
+test('native direct readers do not reopen getStateEvent for create or power data', () => {
+  const viaServers = readFileSync('src/app/plugins/via-servers.ts', 'utf8');
+  const viaNativeBranch = viaServers.match(/if \(isNativeMatrixSession\(\)\) \{([\s\S]*?)\n\s*\}/);
+  assert.ok(viaNativeBranch, 'expected an explicit native via-server branch');
+  assert.doesNotMatch(viaNativeBranch[1], /getStateEvent/);
+
+  const roomUtils = readFileSync('src/app/utils/room.ts', 'utf8');
+  const creatorNativeBranch = roomUtils.match(
+    /export const getAllVersionsRoomCreator[\s\S]*?if \(isNativeMatrixSession\(\)\) \{([\s\S]*?)\n\s*\}/
+  );
+  assert.ok(creatorNativeBranch, 'expected an explicit native creator branch');
+  assert.doesNotMatch(creatorNativeBranch[1], /getStateEvent/);
+
+  const parentNativeBranch = roomUtils.match(
+    /const getSpecialUsers = \(rId: string\): string\[\] => \{[\s\S]*?if \(isNativeMatrixSession\(\)\) \{([\s\S]*?)\n\s*\}/
+  );
+  assert.ok(parentNativeBranch, 'expected an explicit native perfect-parent branch');
+  assert.doesNotMatch(parentNativeBranch[1], /getStateEvent/);
 });

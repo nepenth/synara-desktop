@@ -1,4 +1,8 @@
 import { invokeDesktopWithAvailability, type DesktopInvokeResult } from '../utils/desktop';
+import {
+  clearNativeRoomStateProjections,
+  publishNativeRoomCreatorsProjection,
+} from '../features/matrix-dto/nativeRoomStateProjection';
 
 export type NativeRoomCreatorsSnapshot = {
   status: 'ok';
@@ -46,13 +50,18 @@ const invokeSafely = async (
 };
 
 const requireLoggedIn = async (invoke: NativeRoomCreatorsInvoke): Promise<number> => {
-  const result = await invokeSafely('matrix_session_snapshot', undefined, invoke);
-  if (!result.available || !isRecord(result.value)) throw new Error(unavailableMessage);
-  const snapshot = result.value as NativeSessionSnapshot;
-  if (snapshot.status !== 'logged_in' || !isSafeGeneration(snapshot.sessionGeneration)) {
+  try {
+    const result = await invokeSafely('matrix_session_snapshot', undefined, invoke);
+    if (!result.available || !isRecord(result.value)) throw new Error(unavailableMessage);
+    const snapshot = result.value as NativeSessionSnapshot;
+    if (snapshot.status !== 'logged_in' || !isSafeGeneration(snapshot.sessionGeneration)) {
+      throw new Error(unavailableMessage);
+    }
+    return snapshot.sessionGeneration;
+  } catch {
+    clearNativeRoomStateProjections();
     throw new Error(unavailableMessage);
   }
-  return snapshot.sessionGeneration;
 };
 
 export async function readRoomCreatorsWithNativeOwner(
@@ -81,7 +90,13 @@ export async function readRoomCreatorsWithNativeOwner(
     throw new Error(unavailableMessage);
   }
 
-  return value as NativeRoomCreatorsSnapshot;
+  const snapshot = value as NativeRoomCreatorsSnapshot;
+  publishNativeRoomCreatorsProjection(
+    snapshot.roomId,
+    snapshot.sessionGeneration,
+    snapshot.creators
+  );
+  return snapshot;
 }
 
 export const defaultNativeRoomCreatorsInvoke: NativeRoomCreatorsInvoke = (command, args) =>
