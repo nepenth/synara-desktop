@@ -14,6 +14,10 @@ test('directory visibility has one native room-profile route and no JS visibilit
 
   assert.match(hook, /getRoomDirectoryVisibilityNative/);
   assert.match(hook, /setRoomDirectoryVisibilityNative/);
+  assert.match(hook, /getActiveSession\(\)\?\.sessionGeneration/);
+  assert.match(hook, /\[roomId, sessionGeneration\]/);
+  assert.match(hook, /data\.sessionGeneration === sessionGeneration/);
+  assert.match(hook, /\{ status: AsyncStatus\.Loading \}/);
   assert.ok(
     hook.indexOf('await setRoomDirectoryVisibilityNative') <
       hook.indexOf(
