@@ -13,13 +13,13 @@
 
 | Field              | Value                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| Last updated (UTC) | **2026-08-01**                                                                                                                       |
-| Integration tip    | `206d24f3` — #405 members wiring, #407 CallWidget media, #438 product-lane protocol, #439 powers-bulk, and #446 product-command fan-out are merged at this tip |
-| Active work        | **Presence + room directory product verticals are WIP in parallel** after #446; no product-done claim; power-level READ remains next; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
+| Last updated (UTC) | **2026-08-02**                                                                                                                       |
+| Integration tip    | `103a653f` — #405 members wiring, #407 CallWidget media, #438 product-lane protocol, #439 powers-bulk, #446 product-command fan-out, and #450 native power/creator READs are merged at this tip |
+| Active work        | **Presence #458 and room directory #461 remain open/WIP in parallel**; #450 power/creator READs are landed; no presence or directory product-done claim; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD |
 | Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
 | Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
 | Import accounting  | Desktop production import files **152** on tip (plan baseline was 220). Allowlist **152** (ratcheted after #395 Members.tsx drop).       |
-| Product lane        | **#446 merged** — domain `product_commands.rs` fan-out; this docs-only draft does not touch `product.rs` |
+| Product lane        | **#446 and #450 merged** — domain `product_commands.rs` fan-out and native power/creator READs are at the integration tip; this docs-only refresh does not touch `product.rs` |
 | Dual backend       | **`false`** (forbidden forever)                                                                                                      |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                             |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                 |
@@ -33,9 +33,9 @@
 
 |                |                                                                                                                                                                                                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `206d24f3`** includes the merged #446 product-command extraction. Presence and room-directory product verticals are **WIP in parallel**; neither is product-done or accepted. Imports remain 152; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
-| **Tip**        | `206d24f3`                                                                                                                                                                                                                             |
-| **Active PRs** | This focused docs-only refresh records the parallel WIP boundary after #446; it changes no product code and claims no presence or directory completion. |
+| **Now**        | **Tip `103a653f`** includes merged #450 native power/creator READs on top of #446. Presence **#458** and room directory **#461** remain open/WIP in parallel; neither is product-done or accepted. Imports remain 152; C3–C5 are Not confirmed; V-BURN HOLD; #39 gated. |
+| **Tip**        | `103a653f`                                                                                                                                                                                                                             |
+| **Active PRs** | [Presence #458](https://github.com/nepenth/synara-desktop/pull/458) and [room directory #461](https://github.com/nepenth/synara-desktop/pull/461) remain open. This focused docs-only refresh records that boundary and changes no product code. |
 | **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
 
 ---
@@ -60,6 +60,17 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-08-02 — tip `103a653f` — #450 merged; #458/#461 remain open
+
+| When (UTC) | Item                          | Result                    | Notes                                                                                                                                                                                                                         |
+| ---------- | ----------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**           | **This docs-only draft**  | Based at `103a653f`; #450 native power/creator READs are merged on top of the #446 command fan-out. `main` and #39 remain out of scope.                                                                                   |
+| current    | **Power/creator READ**         | **Merged #450**           | Native room power-level and creator snapshot owners plus fail-closed native-session wiring are present at the integration tip.                                                                                               |
+| current    | **Presence product vertical**  | **Open #458 / WIP**       | Parallel module-scoped work remains open; native wiring, JS-owner deletion, focused proof, live proof, and acceptance are not claimed complete.                                                                                |
+| current    | **Room directory vertical**    | **Open #461 / WIP**       | Parallel module-scoped work remains open; native wiring, JS-owner deletion, focused proof, live proof, and acceptance are not claimed complete.                                                                                |
+| current    | **Import accounting**          | **152**                   | The integration tip remains at 152 production `matrix-js-sdk` import files and 152 allowlist entries; #450 does not change the accounting.                                                                                  |
+| current    | **Proof / burn gates**          | **Held**                  | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden and `#39`/`main` remain out of scope.                                                                                                  |
 
 ### 2026-08-01 — tip `206d24f3` — presence/directory WIP after #446 extraction
 
