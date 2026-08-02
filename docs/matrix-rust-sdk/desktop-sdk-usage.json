@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 148,
-      "importFileCount": 146,
+      "fileCount": 147,
+      "importFileCount": 145,
       "methodCandidateFrequencies": [
         {
           "count": 61,
@@ -378,8 +378,8 @@
       },
       "modules": [
         {
-          "fileCount": 140,
-          "importCount": 140,
+          "fileCount": 139,
+          "importCount": 139,
           "path": "matrix-js-sdk"
         },
         {
@@ -1086,13 +1086,6 @@
           "fileCount": 1,
           "importCount": 1,
           "name": "UserEventHandlerMap",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "Visibility",
           "typeImports": 0,
           "valueImports": 1
         },
@@ -7188,35 +7181,6 @@
     },
     {
       "bucket": "hook",
-      "categories": [],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "Visibility"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/hooks/useRoomDirectoryVisibility.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "hook",
       "categories": ["room_methods", "timelines"],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -11564,7 +11528,7 @@
         "client-lifecycle": 2,
         "component": 21,
         "feature": 53,
-        "hook": 40,
+        "hook": 39,
         "media-boundary": 1,
         "page": 7,
         "plugin": 6,
@@ -11578,13 +11542,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 146,
+      "productionImportFiles": 145,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 156
+      "totalImportFiles": 155
     },
     "repositoryWide": {
-      "productionImportFiles": 146,
+      "productionImportFiles": 145,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -11593,7 +11557,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 159
+      "totalImportFiles": 158
     }
   }
 }

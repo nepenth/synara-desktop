@@ -11,6 +11,7 @@ const tests = [
   'src/app/hooks/__tests__/useVirtualPaginator.test.ts',
   'src/app/hooks/__tests__/nativeRoomMembersOwner.test.ts',
   'src/app/hooks/__tests__/nativeRoomPowerReadOwner.test.ts',
+  'src/app/hooks/__tests__/roomDirectoryVisibilitySourceGuard.test.ts',
   'src/app/hooks/__tests__/roomMembersWiring.test.ts',
   'src/app/plugins/__tests__/via-servers.test.ts',
   'src/app/utils/__tests__/gifProvider.test.ts',

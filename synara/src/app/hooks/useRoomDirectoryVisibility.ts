@@ -1,16 +1,16 @@
 import { useCallback, useEffect } from 'react';
-import { Visibility } from 'matrix-js-sdk';
+import {
+  getRoomDirectoryVisibilityNative,
+  setRoomDirectoryVisibilityNative,
+} from '../features/common-settings/general/nativeRoomProfile';
 import { useAsyncCallback } from './useAsyncCallback';
-import { useMatrixClient } from './useMatrixClient';
 
 export const useRoomDirectoryVisibility = (roomId: string) => {
-  const mx = useMatrixClient();
-
   const [visibilityState, loadVisibility] = useAsyncCallback(
     useCallback(async () => {
-      const v = await mx.getRoomDirectoryVisibility(roomId);
-      return v.visibility === Visibility.Public;
-    }, [mx, roomId])
+      const result = await getRoomDirectoryVisibilityNative(roomId);
+      return result.visibility === 'public';
+    }, [roomId])
   );
 
   useEffect(() => {
@@ -19,13 +19,12 @@ export const useRoomDirectoryVisibility = (roomId: string) => {
 
   const setVisibility = useCallback(
     async (visibility: boolean) => {
-      await mx.setRoomDirectoryVisibility(
-        roomId,
-        visibility ? Visibility.Public : Visibility.Private
-      );
+      await setRoomDirectoryVisibilityNative(roomId, visibility ? 'public' : 'private');
+      // The write acknowledgement is not authoritative. Reload through the
+      // native owner so the UI only displays the homeserver's value.
       await loadVisibility();
     },
-    [mx, roomId, loadVisibility]
+    [roomId, loadVisibility]
   );
 
   return {
