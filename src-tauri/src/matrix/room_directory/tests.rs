@@ -12,6 +12,7 @@ fn hit(room_id: &str, name: &str) -> DirectoryRoomHit {
         num_joined_members: 10,
         world_readable: false,
         guest_can_join: true,
+        room_type: DirectoryRoomType::Room,
     }
 }
 
@@ -37,6 +38,7 @@ fn begin_apply_dedup_stale() {
     .unwrap();
     assert_eq!(s.hits().len(), 2);
     assert_eq!(s.next_batch(), Some("batch1"));
+    assert_eq!(s.prev_batch(), None);
     // Append with dedup
     s.apply_page(
         rid,
@@ -84,6 +86,7 @@ fn validation() {
                 num_joined_members: 0,
                 world_readable: false,
                 guest_can_join: false,
+                room_type: DirectoryRoomType::Room,
             }],
             None,
             true,
@@ -104,6 +107,7 @@ fn validation() {
                 num_joined_members: 0,
                 world_readable: false,
                 guest_can_join: false,
+                room_type: DirectoryRoomType::Room,
             }],
             None,
             true,
@@ -120,4 +124,31 @@ fn retire() {
     assert_eq!(s.session_generation(), 9);
     assert_eq!(s.state(), DirectorySearchState::Idle);
     assert!(s.hits().is_empty());
+}
+
+#[test]
+fn both_pagination_tokens_are_bounded_and_projected() {
+    let mut s = RoomDirectorySession::new(5);
+    let request_id = s.begin("", Some("example.org".into())).unwrap();
+    s.apply_page_with_batches(
+        request_id,
+        vec![hit("!a:example.org", "a")],
+        Some("previous".into()),
+        Some("next".into()),
+        true,
+    )
+    .unwrap();
+    assert_eq!(s.prev_batch(), Some("previous"));
+    assert_eq!(s.next_batch(), Some("next"));
+
+    let err = s
+        .apply_page_with_batches(
+            request_id,
+            vec![hit("!a:example.org", "a")],
+            Some(" ".into()),
+            None,
+            true,
+        )
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p6.10-invalid-batch");
 }
