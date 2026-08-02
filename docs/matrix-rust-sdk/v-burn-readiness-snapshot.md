@@ -8,7 +8,7 @@
 | ----------------------- | -------------------------------------------------------------------------------- |
 | Readiness               | **Not ready**                                                                    |
 | Runtime proof           | **Not confirmed**                                                                |
-| Source tip              | `27a854d8f72deb1a74be35705d54ce5af9ec90e6`                                       |
+| Source tip              | `fd0dfbf464ea59351d2cca1b746ba9d3f00923e7`                                       |
 | Base                    | `feature/matrix-rust-sdk-full-replacement` only                                  |
 | Scope                   | Docs only; no product code or cutover state change                               |
 | `dual_backend`          | **Forbidden**; this snapshot does not enable or claim it                         |
@@ -61,7 +61,7 @@ proof, and acceptance remain open.
 
 The current residual queue is summarized in [`SCOREBOARD.md`](SCOREBOARD.md).
 Its integration-tip field is `3980f0e0` as the documentation ledger tip; this
-snapshot pins source evidence at `27a854d8`. The #465, #469, and #478 refreshes
+snapshot pins source evidence at `fd0dfbf4`. The #465, #469, and #478 refreshes
 add no product code or cutover state change.
 
 ## Bottom line

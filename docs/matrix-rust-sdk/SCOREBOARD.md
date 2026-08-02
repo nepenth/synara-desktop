@@ -59,7 +59,7 @@ run passes the relevant checklist.
 | V-SEND.R-CALL-UPLOAD            | **#328** native upload; **#362** native known rooms; **#407** native media config/download; inventoried CallWidget native desktop surfaces are closed ([residual](v-send-call-widget-residual.md)) |
 | Product lane protocol            | **#438 merged** docs-only single-owner protocol for `product.rs`; **#439 merged** powers-bulk; **#446 merged** domain command fan-out |
 | Presence product vertical        | **#458 first slice merged / WIP** — native snapshot/subscribe path and current profile consumers are landed; full vertical scope, focused proof, live proof, and acceptance remain open |
-| Room directory product vertical  | **#461 first slice merged / WIP** — the full vertical remains open; remaining JS-owner deletion, focused proof, live proof, and acceptance remain open |
+| Room directory product vertical  | **#461 first slice merged / WIP** — native directory wiring and route-scoped JS-owner deletion are landed; full vertical scope, focused proof, live proof, and acceptance remain open |
 | Composer thumbnail (msgContent) | **#325** video thumbnails via `uploadMediaNative` / `matrix_upload_media` fail-closed                                                                                                            |
 | V-SEND.R-DEVTOOL                | [Docs-only inventory](v-send-devtool-inventory.md) · [implementation gate](v-send-devtool-inventory.md#implementation-gate): JS client remains; start only after C3–C5 live proofs; low priority |
 | CI                              | Parallel Validate #284                                                                                                                                                                           |
@@ -79,9 +79,9 @@ run passes the relevant checklist.
    native presence snapshot/subscribe wiring and current profile consumers are
    merged, but the full presence scope, focused evidence, live proof, and
    acceptance remain open. **#461**'s first directory slice is also merged,
-   but superseded JS-owner deletion, focused evidence, live proof, and full
-   vertical acceptance remain open; do not treat a packet or first slice as
-   product completion. See
+   but full vertical scope, focused evidence, live proof, and full vertical
+   acceptance remain open; do not treat a packet or first slice as product
+   completion. See
    [presence](v-presence-implement-packet.md) and
    [room directory](v-rooms-directory-implement-packet.md).
 2. **Members — native full vertical.** Leave/join/create closed

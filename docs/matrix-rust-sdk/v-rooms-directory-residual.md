@@ -3,7 +3,8 @@
 | Field            | Value                                                                          |
 | ---------------- | ------------------------------------------------------------------------------ |
 | Status           | **First directory slice merged (#461); docs-only residual inventory remains open** |
-| Measured tip     | `c1e9c3be2b8ff13da42853913b30493cb030e6ec`                                     |
+| Measured tip     | #461 product baseline `c1e9c3be2b8ff13da42853913b30493cb030e6ec`                 |
+| Docs refresh tip | `27a854d8f72deb1a74be35705d54ce5af9ec90e6` on `feature/matrix-rust-sdk-full-replacement` |
 | Base             | `feature/matrix-rust-sdk-full-replacement`                                     |
 | Policy           | Full vertical: UI → Tauri IPC → live Matrix Rust SDK; one owner per capability |
 | Desktop fallback | **Fail closed** when native Matrix IPC is unavailable                          |
@@ -13,12 +14,13 @@ This is the residual map for the desktop `/explore/` route, server-scoped public
 room discovery, featured-room previews, and the public-room join path. It does
 not claim V-BURN completion, a cutover, or live authenticated proof.
 
-> **Post-merge note at `c1e9c3be`.** #461 is merged. Its first slice lands the
-> native public-room browse/search/filter/pagination route, bounded protocol and
-> page DTOs, route-scoped JS-owner deletion, focused evidence, and green CI.
-> Authenticated live proof and independent acceptance remain **Not confirmed**;
-> this residual remains open for those gates and for the separate preview/card/
-> join residuals.
+> **Tip-honesty note.** #461's first slice is merged at product baseline
+> `c1e9c3be`; this residual inventory is refreshed at docs/integration tip
+> `27a854d8`. The first slice lands the native public-room
+> browse/search/filter/pagination route, bounded protocol and page DTOs,
+> route-scoped JS-owner deletion, focused evidence, and green CI. Authenticated
+> live proof and independent acceptance remain **Not confirmed**; this residual
+> remains open for those gates and for the separate preview/card/join residuals.
 
 ## Current ownership
 
@@ -120,8 +122,10 @@ JS/native selector, or keeping a desktop JS fallback fails this slice.
 ## Acceptance and proof queue
 
 Implementation acceptance remains targeted because this document is not a
-V-BURN report. #461 is merged at `c1e9c3be`; the checks and route source guard
-are implementation evidence, not a substitute for authenticated product proof:
+V-BURN report. #461's first slice is merged at product baseline `c1e9c3be`, and
+this inventory is refreshed at integration tip `27a854d8`; the checks and route
+source guard are implementation evidence, not a substitute for authenticated
+product proof:
 
 1. Retain the landed Rust, TypeScript, DTO, source-absence, and Matrix
    guardrail evidence; #461's CI was green before merge.
