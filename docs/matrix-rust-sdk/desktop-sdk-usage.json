@@ -95,7 +95,7 @@
         },
         "room_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 73,
+          "fileCount": 71,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 126,
-      "importFileCount": 124,
+      "fileCount": 124,
+      "importFileCount": 122,
       "methodCandidateFrequencies": [
         {
           "count": 57,
@@ -356,8 +356,8 @@
           "importOccurrences": 4
         },
         "Room": {
-          "fileCount": 71,
-          "importOccurrences": 71
+          "fileCount": 69,
+          "importOccurrences": 69
         },
         "RoomMember": {
           "fileCount": 7,
@@ -378,8 +378,8 @@
       },
       "modules": [
         {
-          "fileCount": 121,
-          "importCount": 121,
+          "fileCount": 119,
+          "importCount": 119,
           "path": "matrix-js-sdk"
         },
         {
@@ -474,11 +474,11 @@
       "scope": "role",
       "symbols": [
         {
-          "fileCount": 71,
-          "importCount": 71,
+          "fileCount": 69,
+          "importCount": 69,
           "name": "Room",
           "typeImports": 2,
-          "valueImports": 69
+          "valueImports": 67
         },
         {
           "fileCount": 36,
@@ -4655,35 +4655,6 @@
     },
     {
       "bucket": "feature",
-      "categories": ["room_methods"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "Room"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["Room"],
-      "networking": [],
-      "path": "synara/src/app/features/room/RoomViewTyping.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "feature",
       "categories": ["timelines"],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -5023,35 +4994,6 @@
       "modelCoupling": ["MatrixEvent", "Relations", "Room", "RoomMember"],
       "networking": [],
       "path": "synara/src/app/features/room/reaction-viewer/ReactionViewer.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "feature",
-      "categories": ["room_methods"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "Room"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["Room"],
-      "networking": [],
-      "path": "synara/src/app/features/room/room-notes/RoomNotesPanel.tsx",
       "role": "production"
     },
     {
@@ -10729,7 +10671,7 @@
       "buckets": {
         "client-lifecycle": 2,
         "component": 14,
-        "feature": 47,
+        "feature": 45,
         "hook": 35,
         "page": 7,
         "plugin": 6,
@@ -10742,13 +10684,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 124,
+      "productionImportFiles": 122,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 134
+      "totalImportFiles": 132
     },
     "repositoryWide": {
-      "productionImportFiles": 124,
+      "productionImportFiles": 122,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -10757,7 +10699,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 137
+      "totalImportFiles": 135
     }
   }
 }
