@@ -1,6 +1,5 @@
 import React, { CSSProperties, ReactNode } from 'react';
 import { Box, Chip, Icon, Icons, Text, toRem } from 'folds';
-import { IContent } from 'matrix-js-sdk';
 import { JUMBO_EMOJI_REG } from '../../utils/regex';
 import { trimReplyFromBody } from '../../utils/room';
 import { MessageTextBody } from './layout';
@@ -359,7 +358,9 @@ export function MFile({ content, renderFileContent, outlined }: MFileProps) {
 }
 
 type MLocationProps = {
-  content: IContent;
+  content: {
+    geo_uri?: unknown;
+  };
 };
 export function MLocation({ content }: MLocationProps) {
   const geoUri = content.geo_uri;
