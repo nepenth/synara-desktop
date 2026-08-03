@@ -12,8 +12,6 @@ import {
   Spinner,
   Text,
 } from 'folds';
-import { HistoryVisibility, MatrixError } from 'matrix-js-sdk';
-import { RoomHistoryVisibilityEventContent } from 'matrix-js-sdk/lib/types';
 import FocusTrap from 'focus-trap-react';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../../room-settings/styles.css';
@@ -25,6 +23,18 @@ import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useStateEvent } from '../../../hooks/useStateEvent';
 import { stopPropagation } from '../../../utils/keyboard';
 import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
+
+type HistoryVisibility = 'invited' | 'joined' | 'shared' | 'world_readable';
+type RoomHistoryVisibilityEventContent = {
+  history_visibility?: HistoryVisibility;
+};
+
+const HistoryVisibility = {
+  Invited: 'invited',
+  Joined: 'joined',
+  Shared: 'shared',
+  WorldReadable: 'world_readable',
+} as const satisfies Record<string, HistoryVisibility>;
 
 const useVisibilityStr = () =>
   useMemo(
@@ -156,7 +166,7 @@ export function RoomHistoryVisibility({ permissions }: RoomHistoryVisibilityProp
       >
         {submitState.status === AsyncStatus.Error && (
           <Text style={{ color: color.Critical.Main }} size="T200">
-            {(submitState.error as MatrixError).message}
+            {(submitState.error as { message: string }).message}
           </Text>
         )}
       </SettingTile>
