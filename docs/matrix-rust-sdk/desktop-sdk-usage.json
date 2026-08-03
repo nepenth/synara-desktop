@@ -25,7 +25,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 77,
+          "fileCount": 76,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 136,
-      "importFileCount": 134,
+      "fileCount": 135,
+      "importFileCount": 133,
       "methodCandidateFrequencies": [
         {
           "count": 61,
@@ -340,8 +340,8 @@
           "importOccurrences": 1
         },
         "MatrixClient": {
-          "fileCount": 38,
-          "importOccurrences": 38
+          "fileCount": 37,
+          "importOccurrences": 37
         },
         "MatrixError": {
           "fileCount": 20,
@@ -378,8 +378,8 @@
       },
       "modules": [
         {
-          "fileCount": 130,
-          "importCount": 130,
+          "fileCount": 129,
+          "importCount": 129,
           "path": "matrix-js-sdk"
         },
         {
@@ -481,10 +481,10 @@
           "valueImports": 69
         },
         {
-          "fileCount": 38,
-          "importCount": 38,
+          "fileCount": 37,
+          "importCount": 37,
           "name": "MatrixClient",
-          "typeImports": 4,
+          "typeImports": 3,
           "valueImports": 34
         },
         {
@@ -7783,35 +7783,6 @@
       "role": "test"
     },
     {
-      "bucket": "media-boundary",
-      "categories": ["client_methods"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": true,
-          "line": 2,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "MatrixClient"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["MatrixClient"],
-      "networking": [],
-      "path": "synara/src/app/matrix/media.ts",
-      "role": "production"
-    },
-    {
       "bucket": "page",
       "categories": [
         "client_methods",
@@ -11107,7 +11078,6 @@
         "component": 16,
         "feature": 50,
         "hook": 37,
-        "media-boundary": 1,
         "page": 7,
         "plugin": 6,
         "shared-type": 1,
@@ -11120,13 +11090,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 134,
+      "productionImportFiles": 133,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 144
+      "totalImportFiles": 143
     },
     "repositoryWide": {
-      "productionImportFiles": 134,
+      "productionImportFiles": 133,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -11135,7 +11105,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 147
+      "totalImportFiles": 146
     }
   }
 }
