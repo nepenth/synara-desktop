@@ -481,8 +481,8 @@ test("repository inventory includes tooling dynamic import and records the curre
     .reduce((count, file) => count + file.imports.length, 0);
 
   assert.equal(
-    baseline.productionImportFiles, 144,
-    `expected 144 desktop runtime production import files, found ${baseline.productionImportFiles}`
+    baseline.productionImportFiles, 143,
+    `expected 143 desktop runtime production import files, found ${baseline.productionImportFiles}`
   );
   assert.equal(productionImportDeclarations, 170);
   assert.equal(
