@@ -11,32 +11,31 @@
 >
 > [docs/matrix-rust-sdk/PROGRESS.md](https://github.com/nepenth/synara-desktop/blob/feature/matrix-rust-sdk-full-replacement/docs/matrix-rust-sdk/PROGRESS.md)
 
-| Field              | Value                                                                                                                                |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| Last updated (UTC) | **2026-08-02**                                                                                                                       |
-| Integration tip    | `cf79f975` — the docs-only #490/#496/#497 follow-up is present at this tip; #458 presence and #461 room-directory remain first-slice/WIP only; C3–C5 live proofs remain **Not confirmed**; V-BURN remains **HOLD / Not ready** |
-| Active work        | **#490, #496, and #497 docs-only refreshes are merged at this tip; #458 presence first slice and #461 room-directory first slice remain WIP only**; native power/creator reads are closed for migrated owners, while custom power-level tags and direct helper/plugin readers remain residual; imports remain **150**; C3–C5 live proofs remain Not confirmed; R-DEVTOOL gated; V-BURN HOLD / Not ready |
-| Product runtime    | Native owns core D0 path and the complete V-CRYPTO vertical; superseded JS implementations/imports remain in later capability slices |
-| Execution model    | Primary Codex + every implementation/review sub-agent: `gpt-5.6-luna`, xhigh                                                         |
-| Import accounting  | Desktop production import files **150** on tip (plan baseline was 220). Allowlist **150** after the #458/#461 owner ratchets.       |
-| Product lane        | **#450 merged** — native power/creator reads are landed; this docs-only draft does not touch `product.rs` or product code |
-| Dual backend       | **`false`** (forbidden forever)                                                                                                      |
-| Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                             |
-| Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                 |
-| Program index      | [README.md](README.md)                                                                                                               |
-| Residual queue     | [d0-residual-completion.md](d0-residual-completion.md)                                                                               |
-| Umbrella → main    | [PR #39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without explicit user approval**                        |
+| Field              | Value |
+| ------------------ | ----- |
+| Last updated (UTC) | **2026-08-03** |
+| Integration tip    | **`80af6ce7`** — after #538 RenderMessageContent MsgType residual-empty |
+| Active work        | **PAUSED** — no spawns; [pause-handoff-2026-08-03.md](pause-handoff-2026-08-03.md) |
+| Product runtime    | Native owns core D0 + V-CRYPTO + residual-empty slices through members/presence/directory/join-rule READ; long-tail JS importers remain |
+| Execution model    | Codex `gpt-5.6-luna` xhigh product; Grok `deepseek-v4-flash-0731` ≤2 when running |
+| Import accounting  | Desktop production import files **124** / baseline **220** (**96** removed). Allowlist **124**. |
+| Dual backend       | **`false`** (forbidden forever) |
+| Operating model    | [cutover-operating-model.md](cutover-operating-model.md) · [full-vertical-policy.md](full-vertical-policy.md) |
+| Burn board         | https://kb.whyland.com/go/synara-matrix-burn |
+| Scoreboard         | [SCOREBOARD.md](SCOREBOARD.md) |
+| Residual queue     | [d0-residual-completion.md](d0-residual-completion.md) (historical ledger; tip honesty = scoreboard + handoff) |
+| Umbrella → main    | [PR #39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without explicit user approval** |
 
 ---
 
 ## Snapshot (read this first)
 
-|                |                                                                                                                                                                                                                                        |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Tip `cf79f975`** carries the docs-only #490/#496/#497 follow-up; #458 presence and #461 room-directory remain first-slice/WIP only. Custom power-level tags and direct helper/plugin reads remain residual. Imports are **150**; C3–C5 are Not confirmed; V-BURN HOLD / Not ready; #39 gated. |
-| **Tip**        | `cf79f975`                                                                                                                                                                                                                             |
-| **Active PRs** | #490, #496, and #497 docs-only refreshes are merged at this tip. This follow-up is a docs-only draft; no product implementation, `main`, or umbrella #39 state is changed. |
-| **Blocked**    | R-DEVTOOL until C3–C5 live proofs are confirmed; V-BURN HOLD (blockers #355); full #458/#461 vertical acceptance remains open; umbrella [#39](https://github.com/nepenth/synara-desktop/pull/39) remains gated without explicit approval. Native paths remain fail-closed; dual backend is forbidden. |
+|                | |
+| -------------- | - |
+| **Now**        | **Pipeline PAUSED** for audit/docs handoff. Tip **`80af6ce7`**. Production importers **124**. Open product PRs **none**. |
+| **Tip**        | `80af6ce7` |
+| **Active PRs** | none (stale docs freezes #502–#512 closed) |
+| **Blocked**    | V-BURN HOLD; C3–C5 live Not confirmed; R-DEVTOOL gated; #39 gated; dual_backend forbidden |
 
 ---
 
@@ -56,18 +55,28 @@ Update rules:
 - Do **not** claim phase-gate acceptance unless strict acceptance really closed.
 - For every vertical, record native wiring **and** deleted JS files/import delta; “wired” is not “done.”
 - Commit as `docs(matrix): progress log — …` on a PR or as part of the landing PR.
+- Measure importers from **tip inventory**, never a stale residual worktree.
 
 ---
 
 ## Work log (newest first)
 
-### 2026-08-02 — tip `cf79f975` — post-#490/#496/#497 scoreboard/progress tip honesty
+### 2026-08-03 — tip `80af6ce7` — pause + long-tail burn audit
 
-| When (UTC) | Item                           | Result                | Notes                                                                                                                                                                      |
-| ---------- | ------------------------------ | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| current    | **Integration tip**            | **Current**           | The docs-only #490, #496, and #497 refreshes are present at `cf79f975` on `feature/matrix-rust-sdk-full-replacement`; `SCOREBOARD.md` and `PROGRESS.md` now pin this tip. `main` and #39 remain out of scope. |
-| current    | **Presence / directory**       | **First slice / WIP** | #458 presence and #461 room-directory remain first-slice claims only; full vertical scope, live proof, and acceptance remain open. |
-| current    | **Proof / burn / merge gates** | **Held**              | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD / Not ready**; `dual_backend` is forbidden; umbrella #39 remains gated. |
+| When (UTC) | Item | Result | Notes |
+| ---------- | ---- | ------ | ----- |
+| current | **Integration tip** | **`80af6ce7`** | After #538 MsgType presentation residual-empty |
+| current | **Imports / allowlist** | **124 / 124** | Baseline 220 → **96** removed (~43.6%) |
+| current | **Pipeline** | **PAUSED** | Daytime scheduler cancelled; overnight OFF; no new spawns |
+| current | **Wrap-up** | **#538 merged** | Final in-flight product; docs freezes #502–#512 closed as stale |
+| current | **Handoff** | [pause-handoff-2026-08-03.md](pause-handoff-2026-08-03.md) | Resume checklist + residual notes |
+| 2026-08-02→03 | **Product chain** | **#514–#538** | Members/tags/presence/directory natives + long-tail type/presentation kills |
+
+### 2026-08-02 — tip `cf79f975` — post-#490/#496/#497 scoreboard/progress tip honesty (superseded)
+
+| When (UTC) | Item | Result | Notes |
+| ---------- | ---- | ------ | ----- |
+| historical | **Tip pin** | **Superseded** | Historical docs-only pin; do not treat as current tip. See 2026-08-03 snapshot above. |
 
 ### 2026-08-02 — tip `27a854d8` — directory packet tip honesty
 
