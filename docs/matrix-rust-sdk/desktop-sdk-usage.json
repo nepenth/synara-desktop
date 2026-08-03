@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 138,
-      "importFileCount": 136,
+      "fileCount": 137,
+      "importFileCount": 135,
       "methodCandidateFrequencies": [
         {
           "count": 61,
@@ -378,8 +378,8 @@
       },
       "modules": [
         {
-          "fileCount": 131,
-          "importCount": 131,
+          "fileCount": 130,
+          "importCount": 130,
           "path": "matrix-js-sdk"
         },
         {
@@ -539,13 +539,6 @@
         {
           "fileCount": 6,
           "importCount": 6,
-          "name": "IContent",
-          "typeImports": 2,
-          "valueImports": 4
-        },
-        {
-          "fileCount": 6,
-          "importCount": 6,
           "name": "IPushRules",
           "typeImports": 0,
           "valueImports": 6
@@ -556,6 +549,13 @@
           "name": "RoomEventHandlerMap",
           "typeImports": 0,
           "valueImports": 6
+        },
+        {
+          "fileCount": 5,
+          "importCount": 5,
+          "name": "IContent",
+          "typeImports": 2,
+          "valueImports": 3
         },
         {
           "fileCount": 5,
@@ -2985,35 +2985,6 @@
       "modelCoupling": ["MatrixClient", "Room", "RoomMember"],
       "networking": [],
       "path": "synara/src/app/components/member-tile/MemberTile.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "component",
-      "categories": [],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IContent"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/components/message/MsgTypeRenderers.tsx",
       "role": "production"
     },
     {
@@ -11162,7 +11133,7 @@
     "desktopRuntimeBaseline": {
       "buckets": {
         "client-lifecycle": 2,
-        "component": 17,
+        "component": 16,
         "feature": 50,
         "hook": 37,
         "media-boundary": 1,
@@ -11178,13 +11149,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 136,
+      "productionImportFiles": 135,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 146
+      "totalImportFiles": 145
     },
     "repositoryWide": {
-      "productionImportFiles": 136,
+      "productionImportFiles": 135,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -11193,7 +11164,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 149
+      "totalImportFiles": 148
     }
   }
 }
