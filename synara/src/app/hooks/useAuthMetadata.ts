@@ -1,11 +1,16 @@
-import { ValidatedAuthMetadata } from 'matrix-js-sdk';
 import { createContext, useContext } from 'react';
 
-const AuthMetadataContext = createContext<ValidatedAuthMetadata | undefined>(undefined);
+/** OIDC metadata consumed by the device-management dashboard route. */
+export type AuthMetadata = Readonly<{
+  account_management_uri?: string;
+  issuer?: string;
+}>;
+
+const AuthMetadataContext = createContext<AuthMetadata | undefined>(undefined);
 
 export const AuthMetadataProvider = AuthMetadataContext.Provider;
 
-export const useAuthMetadata = (): ValidatedAuthMetadata | undefined => {
+export const useAuthMetadata = (): AuthMetadata | undefined => {
   const metadata = useContext(AuthMetadataContext);
 
   return metadata;
