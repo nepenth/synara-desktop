@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |          133 |                2 |                   3 |
+| production |          132 |                2 |                   3 |
 | test       |           10 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |      **146** |                  |                     |
+| **total**  |      **145** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |   133 |
+| Production import files |   132 |
 | Test import files       |    10 |
-| Total import files      |   143 |
+| Total import files      |   142 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 133)
+- Production match: **no** (found 132)
 - Test match: **no** (found 10)
 
 ### Production files by bucket (desktop runtime only)
@@ -52,19 +52,18 @@ Expected **220** production and **12** test import files.
 | hook             |    37 |
 | page             |     7 |
 | plugin           |     6 |
-| shared-type      |     1 |
 | state            |     5 |
 | utility          |     9 |
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 133. Files with any finding: 135.
+Scope: **production only**. Import files: 132. Files with any finding: 134.
 
 ### Imported modules
 
 | Module path                                           | Import sites | Files |
 | ----------------------------------------------------- | -----------: | ----: |
-| `matrix-js-sdk`                                       |          129 |   129 |
+| `matrix-js-sdk`                                       |          128 |   128 |
 | `matrix-js-sdk/lib/types`                             |            8 |     8 |
 | `matrix-js-sdk/lib/matrixrtc/CallMembership`          |            4 |     4 |
 | `matrix-js-sdk/lib/models/relations`                  |            4 |     4 |
@@ -94,13 +93,13 @@ Scope: **production only**. Import files: 133. Files with any finding: 135.
 | `Direction`                 |       6 |     6 |         0 |     6 |
 | `IPushRules`                |       6 |     6 |         0 |     6 |
 | `RoomEventHandlerMap`       |       6 |     6 |         0 |     6 |
-| `MsgType`                   |       5 |     5 |         0 |     5 |
 | `PushRuleKind`              |       5 |     5 |         0 |     5 |
 | `SyncState`                 |       5 |     4 |         1 |     5 |
 | `CallMembership`            |       4 |     4 |         0 |     4 |
 | `EventTimeline`             |       4 |     2 |         2 |     4 |
 | `IContent`                  |       4 |     3 |         1 |     4 |
 | `IPushRule`                 |       4 |     4 |         0 |     4 |
+| `MsgType`                   |       4 |     4 |         0 |     4 |
 | `RelationType`              |       4 |     4 |         0 |     4 |
 | `Relations`                 |       4 |     2 |         2 |     4 |
 | `ConditionKind`             |       3 |     3 |         0 |     3 |
@@ -549,7 +548,6 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `synara/src/client/cryptoStoreContinuity.ts`                                                                                  | production | yes     | client-lifecycle | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/crypto-api`                                                                                                                           |
 | `synara/src/client/initMatrix.ts`                                                                                             | production | yes     | client-lifecycle | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/http-api/interface`                                                                                                                   |
 | `synara/src/sw.ts`                                                                                                            | production | yes     | service-worker   | —            | —                                                                                                                                                                         |
-| `synara/src/types/matrix/common.ts`                                                                                           | production | yes     | shared-type      | static       | `matrix-js-sdk`                                                                                                                                                           |
 
 ## Scope notes
 
