@@ -25,7 +25,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 74,
+          "fileCount": 72,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -88,9 +88,9 @@
         },
         "room_lists": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 27,
+          "fileCount": 25,
           "listenerCandidateOccurrences": 10,
-          "methodCandidateOccurrences": 71,
+          "methodCandidateOccurrences": 66,
           "networkingOccurrences": 0
         },
         "room_methods": {
@@ -150,11 +150,11 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 132,
-      "importFileCount": 130,
+      "fileCount": 130,
+      "importFileCount": 128,
       "methodCandidateFrequencies": [
         {
-          "count": 61,
+          "count": 57,
           "name": "getRoom"
         },
         {
@@ -178,7 +178,7 @@
           "name": "findEventById"
         },
         {
-          "count": 8,
+          "count": 7,
           "name": "getRooms"
         },
         {
@@ -378,8 +378,8 @@
       },
       "modules": [
         {
-          "fileCount": 127,
-          "importCount": 127,
+          "fileCount": 125,
+          "importCount": 125,
           "path": "matrix-js-sdk"
         },
         {
@@ -652,13 +652,6 @@
           "fileCount": 3,
           "importCount": 3,
           "name": "RuleId",
-          "typeImports": 0,
-          "valueImports": 3
-        },
-        {
-          "fileCount": 3,
-          "importCount": 3,
-          "name": "SearchOrderBy",
           "typeImports": 0,
           "valueImports": 3
         },
@@ -1023,6 +1016,13 @@
           "fileCount": 1,
           "importCount": 1,
           "name": "RoomTombstoneEventContent",
+          "typeImports": 0,
+          "valueImports": 1
+        },
+        {
+          "fileCount": 1,
+          "importCount": 1,
+          "name": "SearchOrderBy",
           "typeImports": 0,
           "valueImports": 1
         },
@@ -4218,101 +4218,6 @@
       "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/features/lobby/SpaceItem.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "feature",
-      "categories": ["client_methods", "room_lists"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 7,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "SearchOrderBy"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 330,
-          "name": "getRoom"
-        }
-      ],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/features/message-search/MessageSearch.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "feature",
-      "categories": ["client_methods", "room_lists"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 31,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "SearchOrderBy"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 142,
-          "name": "getRoom"
-        },
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 262,
-          "name": "getRoom"
-        },
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 392,
-          "name": "getRooms"
-        },
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 458,
-          "name": "getRoom"
-        }
-      ],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/features/message-search/SearchFilters.tsx",
       "role": "production"
     },
     {
@@ -10947,7 +10852,7 @@
       "buckets": {
         "client-lifecycle": 2,
         "component": 16,
-        "feature": 49,
+        "feature": 47,
         "hook": 36,
         "page": 7,
         "plugin": 6,
@@ -10960,13 +10865,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 130,
+      "productionImportFiles": 128,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 140
+      "totalImportFiles": 138
     },
     "repositoryWide": {
-      "productionImportFiles": 130,
+      "productionImportFiles": 128,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -10975,7 +10880,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 143
+      "totalImportFiles": 141
     }
   }
 }

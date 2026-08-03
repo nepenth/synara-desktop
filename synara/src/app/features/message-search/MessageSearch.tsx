@@ -4,7 +4,6 @@ import { useAtomValue } from 'jotai';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { SearchOrderBy } from 'matrix-js-sdk';
 import { PageHero, PageHeroEmpty, PageHeroSection } from '../../components/page';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { _SearchPathSearchParams } from '../../pages/paths';
@@ -91,7 +90,7 @@ export function MessageSearch({
 
     return {
       term: searchPathSearchParams.term,
-      order: searchPathSearchParams.order ?? SearchOrderBy.Recent,
+      order: searchPathSearchParams.order ?? 'recent',
       rooms: searchParamRooms ?? defaultRooms,
       senders: searchParamsSenders ?? senders,
     };
