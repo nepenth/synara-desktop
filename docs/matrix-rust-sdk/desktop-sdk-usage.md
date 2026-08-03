@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |          132 |                2 |                   3 |
+| production |          131 |                2 |                   3 |
 | test       |           10 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |      **145** |                  |                     |
+| **total**  |      **144** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |   132 |
+| Production import files |   131 |
 | Test import files       |    10 |
-| Total import files      |   142 |
+| Total import files      |   141 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 132)
+- Production match: **no** (found 131)
 - Test match: **no** (found 10)
 
 ### Production files by bucket (desktop runtime only)
@@ -48,7 +48,7 @@ Expected **220** production and **12** test import files.
 | ---------------- | ----: |
 | client-lifecycle |     2 |
 | component        |    16 |
-| feature          |    50 |
+| feature          |    49 |
 | hook             |    37 |
 | page             |     7 |
 | plugin           |     6 |
@@ -57,14 +57,14 @@ Expected **220** production and **12** test import files.
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 132. Files with any finding: 134.
+Scope: **production only**. Import files: 131. Files with any finding: 133.
 
 ### Imported modules
 
 | Module path                                           | Import sites | Files |
 | ----------------------------------------------------- | -----------: | ----: |
-| `matrix-js-sdk`                                       |          128 |   128 |
-| `matrix-js-sdk/lib/types`                             |            8 |     8 |
+| `matrix-js-sdk`                                       |          127 |   127 |
+| `matrix-js-sdk/lib/types`                             |            7 |     7 |
 | `matrix-js-sdk/lib/matrixrtc/CallMembership`          |            4 |     4 |
 | `matrix-js-sdk/lib/models/relations`                  |            4 |     4 |
 | `matrix-js-sdk/lib/@types/event`                      |            3 |     3 |
@@ -85,7 +85,7 @@ Scope: **production only**. Import files: 132. Files with any finding: 134.
 | `Room`                      |      71 |    69 |         2 |    71 |
 | `MatrixClient`              |      37 |    34 |         3 |    37 |
 | `MatrixEvent`               |      25 |    22 |         3 |    25 |
-| `MatrixError`               |      20 |    20 |         0 |    20 |
+| `MatrixError`               |      19 |    19 |         0 |    19 |
 | `ClientEvent`               |       8 |     8 |         0 |     8 |
 | `RoomEvent`                 |       8 |     8 |         0 |     8 |
 | `EventType`                 |       7 |     7 |         0 |     7 |
@@ -112,7 +112,6 @@ Scope: **production only**. Import files: 132. Files with any finding: 134.
 | `Capabilities`              |       2 |     2 |         0 |     2 |
 | `ClientEventHandlerMap`     |       2 |     2 |         0 |     2 |
 | `EventTimelineSet`          |       2 |     2 |         0 |     2 |
-| `HistoryVisibility`         |       2 |     2 |         0 |     2 |
 | `IEvent`                    |       2 |     2 |         0 |     2 |
 | `IEventWithRoomId`          |       2 |     2 |         0 |     2 |
 | `IMentions`                 |       2 |     2 |         0 |     2 |
@@ -122,6 +121,7 @@ Scope: **production only**. Import files: 132. Files with any finding: 134.
 | `ReceiptType`               |       2 |     2 |         0 |     2 |
 | `RoomMemberEvent`           |       2 |     2 |         0 |     2 |
 | `RoomState`                 |       2 |     2 |         0 |     2 |
+| `UploadProgress`            |       2 |     2 |         0 |     2 |
 
 ### SDK model import coupling
 
@@ -132,7 +132,7 @@ Scope: **production only**. Import files: 132. Files with any finding: 134.
 | `IndexedDBCryptoStore` |     1 |                  1 |
 | `IndexedDBStore`       |     1 |                  1 |
 | `MatrixClient`         |    37 |                 37 |
-| `MatrixError`          |    20 |                 20 |
+| `MatrixError`          |    19 |                 19 |
 | `MatrixEvent`          |    25 |                 25 |
 | `Relations`            |     4 |                  4 |
 | `Room`                 |    71 |                 71 |
@@ -144,7 +144,7 @@ Scope: **production only**. Import files: 132. Files with any finding: 134.
 
 | Category                       | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
 | ------------------------------ | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
-| `client_methods`               |    76 |                 0 |                   0 |                      0 |          0 |
+| `client_methods`               |    75 |                 0 |                   0 |                      0 |          0 |
 | `room_methods`                 |    73 |                 0 |                   0 |                      0 |          0 |
 | `event_emitters_listeners`     |    20 |                 0 |                  98 |                      0 |          0 |
 | `sync_lifecycle`               |    12 |                11 |                   6 |                      0 |          0 |
@@ -160,8 +160,8 @@ Scope: **production only**. Import files: 132. Files with any finding: 134.
 | `threads`                      |     1 |                 1 |                   0 |                      0 |          0 |
 | `receipts`                     |     4 |                 4 |                   2 |                      0 |          0 |
 | `notifications_push_rules`     |     8 |                10 |                   0 |                      0 |          0 |
-| `uia_auth`                     |    39 |                84 |                   2 |                      0 |          0 |
-| `custom_raw_event_sends`       |    12 |                21 |                   0 |                      0 |          0 |
+| `uia_auth`                     |    38 |                83 |                   2 |                      0 |          0 |
+| `custom_raw_event_sends`       |    11 |                20 |                   0 |                      0 |          0 |
 | `direct_matrix_networking`     |     2 |                 0 |                   0 |                      0 |          3 |
 | `client_events`                |     5 |                 0 |                  16 |                      0 |          0 |
 
@@ -170,10 +170,10 @@ Scope: **production only**. Import files: 132. Files with any finding: 134.
 | Method name                | Candidate occurrences |
 | -------------------------- | --------------------: |
 | `getRoom`                  |                    61 |
-| `getSafeUserId`            |                    50 |
+| `getSafeUserId`            |                    49 |
 | `isSpaceRoom`              |                    24 |
 | `getUserId`                |                    23 |
-| `sendStateEvent`           |                    18 |
+| `sendStateEvent`           |                    17 |
 | `findEventById`            |                     8 |
 | `getRooms`                 |                     8 |
 | `refreshToken`             |                     7 |
@@ -430,7 +430,6 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `synara/src/app/features/common-settings/emojis-stickers/RoomPacks.tsx`                                                       | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/features/common-settings/general/RoomAddress.tsx`                                                             | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/features/common-settings/general/RoomEncryption.tsx`                                                          | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/features/common-settings/general/RoomHistoryVisibility.tsx`                                                   | production | yes     | feature          | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/types`                                                                                                                                |
 | `synara/src/app/features/common-settings/general/RoomJoinRules.tsx`                                                           | production | yes     | feature          | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/types`                                                                                                                                |
 | `synara/src/app/features/common-settings/general/RoomProfile.tsx`                                                             | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/features/common-settings/general/RoomUpgrade.tsx`                                                             | production | yes     | feature          | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/types`                                                                                                                                |
