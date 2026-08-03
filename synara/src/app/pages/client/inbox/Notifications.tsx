@@ -62,6 +62,7 @@ import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 import { Image } from '../../../components/media';
 import { ImageViewer } from '../../../components/image-viewer';
+import { IImageContent } from '../../../../types/matrix/common';
 import { GetContentCallback, MessageEvent, StateEvent } from '../../../../types/matrix/room';
 import { useMatrixEventRenderer } from '../../../hooks/useMatrixEventRenderer';
 import * as customHtmlCss from '../../../styles/CustomHtml.css';
@@ -72,7 +73,7 @@ import { markAsRead, markAsReadInBackground } from '../../../utils/notifications
 import { ContainerColor } from '../../../styles/ContainerColor.css';
 import { VirtualTile } from '../../../components/virtualizer';
 import { UserAvatar } from '../../../components/user-avatar';
-import { NativeEventContent } from '../../../features/room/message';
+import { NativeEventContent, type NativeEventSource } from '../../../features/room/message';
 import { useMentionClickHandler } from '../../../hooks/useMentionClickHandler';
 import { useSpoilerClickHandler } from '../../../hooks/useSpoilerClickHandler';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
@@ -304,13 +305,13 @@ function RoomNotificationsGroupComp({
         }
 
         return (
-          <NativeEventContent roomId={room.roomId} mEvent={mEvent}>
+          <NativeEventContent roomId={room.roomId} mEvent={mEvent as unknown as NativeEventSource}>
             {(resolvedEvent) => {
-              if (resolvedEvent.isRedacted()) return <RedactedContent />;
-              if (resolvedEvent.getType() === MessageEvent.Sticker)
+              if (resolvedEvent.redacted) return <RedactedContent />;
+              if (resolvedEvent.type === MessageEvent.Sticker)
                 return (
                   <MSticker
-                    content={resolvedEvent.getContent()}
+                    content={resolvedEvent.content as unknown as IImageContent}
                     renderImageContent={(props) => (
                       <ImageContent
                         {...props}
@@ -321,21 +322,26 @@ function RoomNotificationsGroupComp({
                     )}
                   />
                 );
-              if (resolvedEvent.getType() === MessageEvent.RoomMessage) {
+              if (resolvedEvent.type === MessageEvent.RoomMessage) {
                 const editedEvent = getEditedEvent(
                   evt.event_id,
                   resolvedEvent,
                   evtTimeline.getTimelineSet()
                 );
                 const getContent = (() =>
-                  editedEvent?.getContent()['m.new_content'] ??
-                  resolvedEvent.getContent()) as GetContentCallback;
+                  editedEvent?.getContent<Record<string, unknown>>()['m.new_content'] ??
+                  resolvedEvent.content) as GetContentCallback;
+
+                const msgType =
+                  typeof resolvedEvent.content.msgtype === 'string'
+                    ? resolvedEvent.content.msgtype
+                    : '';
 
                 return (
                   <RenderMessageContent
                     displayName={displayName}
-                    msgType={resolvedEvent.getContent().msgtype ?? ''}
-                    ts={resolvedEvent.getTs()}
+                    msgType={msgType}
+                    ts={resolvedEvent.originServerTs}
                     edited={!!editedEvent}
                     getContent={getContent}
                     mediaAutoLoad={mediaAutoLoad}
@@ -348,7 +354,7 @@ function RoomNotificationsGroupComp({
                   />
                 );
               }
-              if (resolvedEvent.getType() === MessageEvent.RoomMessageEncrypted)
+              if (resolvedEvent.type === MessageEvent.RoomMessageEncrypted)
                 return (
                   <Text>
                     <MessageNotDecryptedContent />

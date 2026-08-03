@@ -1,17 +1,20 @@
 import React from 'react';
 import { Box, Text, as } from 'folds';
 import classNames from 'classnames';
-import { MatrixClient, MatrixEvent, Room } from 'matrix-js-sdk';
 import * as css from './Reaction.css';
 import { getHexcodeForEmoji, getShortcodeFor } from '../../plugins/emoji';
 import { getMemberDisplayName } from '../../utils/room';
 import { eventWithShortcode, getMxIdLocalPart } from '../../utils/matrix';
 import { resolveOptionalMatrixMediaUrl } from '../../matrix/media';
 
+type ReactionMediaClient = Parameters<typeof resolveOptionalMatrixMediaUrl>[0];
+type ReactionRoom = Parameters<typeof getMemberDisplayName>[0];
+type ReactionEvent = Parameters<typeof eventWithShortcode>[0];
+
 export const Reaction = as<
   'button',
   {
-    mx: MatrixClient;
+    mx: ReactionMediaClient;
     count: number;
     reaction: string;
     useAuthentication?: boolean;
@@ -46,9 +49,9 @@ export const Reaction = as<
 ));
 
 type ReactionTooltipMsgProps = {
-  room: Room;
+  room: ReactionRoom;
   reaction: string;
-  events: MatrixEvent[];
+  events: ReactionEvent[];
 };
 
 export function ReactionTooltipMsg({ room, reaction, events }: ReactionTooltipMsgProps) {
@@ -58,7 +61,7 @@ export function ReactionTooltipMsg({ room, reaction, events }: ReactionTooltipMs
     getShortcodeFor(getHexcodeForEmoji(reaction)) ??
     reaction;
   const names = events.map(
-    (ev: MatrixEvent) =>
+    (ev: ReactionEvent) =>
       getMemberDisplayName(room, ev.getSender() ?? 'Unknown') ??
       getMxIdLocalPart(ev.getSender() ?? 'Unknown') ??
       'Unknown'

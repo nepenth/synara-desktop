@@ -1,6 +1,5 @@
-import { IEvent, MatrixEvent } from 'matrix-js-sdk';
 import React, { ReactNode, useEffect, useState } from 'react';
-import { MessageEvent } from '../../../../types/matrix/room';
+import { MessageEvent, NativeEventContentEvent } from '../../../../types/matrix/room';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../../utils/desktop';
 
 type NativeTimelineItem = {
@@ -22,34 +21,49 @@ type NativeTimelineEventReadback = {
 
 type NativeEventContentProps = {
   roomId: string;
-  mEvent: MatrixEvent;
-  children: (event: MatrixEvent) => ReactNode;
+  mEvent: NativeEventSource;
+  children: (event: NativeEventContentEvent) => ReactNode;
 };
 
-const toSafeMatrixEvent = (
-  roomId: string,
+export type NativeEventSource = {
+  getId(): string | undefined;
+  getSender(): string | undefined;
+  getType(): string;
+  getTs(): number;
+  getContent<T = Record<string, unknown>>(): T;
+  isRedacted(): boolean;
+};
+
+const toNativeEvent = (event: NativeEventSource): NativeEventContentEvent => ({
+  eventId: event.getId() ?? '',
+  sender: event.getSender() ?? '',
+  type: event.getType(),
+  originServerTs: event.getTs(),
+  content: event.getContent<Record<string, unknown>>(),
+  redacted: event.isRedacted(),
+});
+
+const toSafeNativeEvent = (
   item: NativeTimelineItem,
   unavailable: boolean
-): MatrixEvent =>
-  new MatrixEvent({
-    room_id: roomId,
-    event_id: item.eventId,
-    sender: item.sender,
-    origin_server_ts: item.originServerTs,
-    type: MessageEvent.RoomMessage,
-    unsigned: {},
-    content: {
-      msgtype: unavailable ? 'm.bad.encrypted' : 'm.text',
-      body: unavailable ? 'Unable to decrypt message' : item.body,
-    },
-  } as IEvent);
+): NativeEventContentEvent => ({
+  eventId: item.eventId,
+  sender: item.sender,
+  originServerTs: item.originServerTs,
+  type: MessageEvent.RoomMessage,
+  redacted: false,
+  content: {
+    msgtype: unavailable ? 'm.bad.encrypted' : 'm.text',
+    body: unavailable ? 'Unable to decrypt message' : item.body,
+  },
+});
 
 /** Polls a Rust-owned focused timeline only while this legacy row is UTD. */
 export function NativeEventContent({ roomId, mEvent, children }: NativeEventContentProps) {
-  const [resolvedEvent, setResolvedEvent] = useState(mEvent);
+  const [resolvedEvent, setResolvedEvent] = useState(() => toNativeEvent(mEvent));
 
   useEffect(() => {
-    setResolvedEvent(mEvent);
+    setResolvedEvent(toNativeEvent(mEvent));
     if (!isSynaraDesktop() || mEvent.getType() !== MessageEvent.RoomMessageEncrypted) return;
     const eventId = mEvent.getId();
     if (!eventId) return;
@@ -67,11 +81,11 @@ export function NativeEventContent({ roomId, mEvent, children }: NativeEventCont
       if (item.decryptionState === 'unavailable') {
         if (!unavailableShown) {
           unavailableShown = true;
-          setResolvedEvent(toSafeMatrixEvent(roomId, item, true));
+          setResolvedEvent(toSafeNativeEvent(item, true));
         }
         return;
       }
-      setResolvedEvent(toSafeMatrixEvent(roomId, item, false));
+      setResolvedEvent(toSafeNativeEvent(item, false));
       window.clearInterval(pollId);
     };
     const pollId = window.setInterval(() => void readback(), 1000);
