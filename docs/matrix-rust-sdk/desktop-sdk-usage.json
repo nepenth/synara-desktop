@@ -25,7 +25,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 79,
+          "fileCount": 78,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -130,7 +130,7 @@
         },
         "timelines": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 27,
+          "fileCount": 26,
           "listenerCandidateOccurrences": 40,
           "methodCandidateOccurrences": 22,
           "networkingOccurrences": 0
@@ -144,14 +144,14 @@
         },
         "uia_auth": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 41,
+          "fileCount": 40,
           "listenerCandidateOccurrences": 2,
-          "methodCandidateOccurrences": 86,
+          "methodCandidateOccurrences": 85,
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 142,
-      "importFileCount": 140,
+      "fileCount": 141,
+      "importFileCount": 139,
       "methodCandidateFrequencies": [
         {
           "count": 61,
@@ -163,11 +163,11 @@
         },
         {
           "count": 24,
-          "name": "getUserId"
+          "name": "isSpaceRoom"
         },
         {
-          "count": 24,
-          "name": "isSpaceRoom"
+          "count": 23,
+          "name": "getUserId"
         },
         {
           "count": 18,
@@ -348,8 +348,8 @@
           "importOccurrences": 20
         },
         "MatrixEvent": {
-          "fileCount": 27,
-          "importOccurrences": 27
+          "fileCount": 26,
+          "importOccurrences": 26
         },
         "Relations": {
           "fileCount": 4,
@@ -403,11 +403,6 @@
           "path": "matrix-js-sdk/lib/@types/event"
         },
         {
-          "fileCount": 3,
-          "importCount": 3,
-          "path": "matrix-js-sdk/lib/models/event"
-        },
-        {
           "fileCount": 2,
           "importCount": 2,
           "path": "matrix-js-sdk/lib/@types/read_receipts"
@@ -416,6 +411,11 @@
           "fileCount": 2,
           "importCount": 2,
           "path": "matrix-js-sdk/lib/client"
+        },
+        {
+          "fileCount": 2,
+          "importCount": 2,
+          "path": "matrix-js-sdk/lib/models/event"
         },
         {
           "fileCount": 1,
@@ -488,10 +488,10 @@
           "valueImports": 34
         },
         {
-          "fileCount": 27,
-          "importCount": 27,
+          "fileCount": 26,
+          "importCount": 26,
           "name": "MatrixEvent",
-          "typeImports": 4,
+          "typeImports": 3,
           "valueImports": 23
         },
         {
@@ -3139,43 +3139,6 @@
       "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/components/message/Reply.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "component",
-      "categories": ["client_methods", "timelines", "uia_auth"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": true,
-          "line": 3,
-          "module": "matrix-js-sdk/lib/models/event",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "MatrixEvent"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 30,
-          "name": "getUserId"
-        }
-      ],
-      "modelCoupling": ["MatrixEvent"],
-      "networking": [],
-      "path": "synara/src/app/components/message/content/PollContent.tsx",
       "role": "production"
     },
     {
@@ -11301,7 +11264,7 @@
     "desktopRuntimeBaseline": {
       "buckets": {
         "client-lifecycle": 2,
-        "component": 19,
+        "component": 18,
         "feature": 50,
         "hook": 39,
         "media-boundary": 1,
@@ -11317,13 +11280,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 140,
+      "productionImportFiles": 139,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 150
+      "totalImportFiles": 149
     },
     "repositoryWide": {
-      "productionImportFiles": 140,
+      "productionImportFiles": 139,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -11332,7 +11295,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 153
+      "totalImportFiles": 152
     }
   }
 }
