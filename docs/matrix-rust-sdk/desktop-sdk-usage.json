@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 144,
-      "importFileCount": 142,
+      "fileCount": 142,
+      "importFileCount": 140,
       "methodCandidateFrequencies": [
         {
           "count": 61,
@@ -378,8 +378,8 @@
       },
       "modules": [
         {
-          "fileCount": 136,
-          "importCount": 136,
+          "fileCount": 134,
+          "importCount": 134,
           "path": "matrix-js-sdk"
         },
         {
@@ -560,13 +560,6 @@
         {
           "fileCount": 5,
           "importCount": 5,
-          "name": "JoinRule",
-          "typeImports": 2,
-          "valueImports": 3
-        },
-        {
-          "fileCount": 5,
-          "importCount": 5,
           "name": "MsgType",
           "typeImports": 0,
           "valueImports": 5
@@ -631,6 +624,13 @@
           "fileCount": 3,
           "importCount": 3,
           "name": "ConditionKind",
+          "typeImports": 0,
+          "valueImports": 3
+        },
+        {
+          "fileCount": 3,
+          "importCount": 3,
+          "name": "JoinRule",
           "typeImports": 0,
           "valueImports": 3
         },
@@ -4650,35 +4650,6 @@
     },
     {
       "bucket": "feature",
-      "categories": [],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": true,
-          "line": 20,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "JoinRule"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/features/room-settings/RoomSettings.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "feature",
       "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -5757,35 +5728,6 @@
       "modelCoupling": [],
       "networking": [],
       "path": "synara/src/app/features/settings/notifications/SystemNotification.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "feature",
-      "categories": [],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": true,
-          "line": 20,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "JoinRule"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/features/space-settings/SpaceSettings.tsx",
       "role": "production"
     },
     {
@@ -11360,7 +11302,7 @@
       "buckets": {
         "client-lifecycle": 2,
         "component": 19,
-        "feature": 52,
+        "feature": 50,
         "hook": 39,
         "media-boundary": 1,
         "page": 7,
@@ -11375,13 +11317,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 142,
+      "productionImportFiles": 140,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 152
+      "totalImportFiles": 150
     },
     "repositoryWide": {
-      "productionImportFiles": 142,
+      "productionImportFiles": 140,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -11390,7 +11332,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 155
+      "totalImportFiles": 153
     }
   }
 }
