@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 127,
-      "importFileCount": 125,
+      "fileCount": 126,
+      "importFileCount": 124,
       "methodCandidateFrequencies": [
         {
           "count": 57,
@@ -378,8 +378,8 @@
       },
       "modules": [
         {
-          "fileCount": 122,
-          "importCount": 122,
+          "fileCount": 121,
+          "importCount": 121,
           "path": "matrix-js-sdk"
         },
         {
@@ -595,13 +595,6 @@
         {
           "fileCount": 4,
           "importCount": 4,
-          "name": "MsgType",
-          "typeImports": 0,
-          "valueImports": 4
-        },
-        {
-          "fileCount": 4,
-          "importCount": 4,
           "name": "RelationType",
           "typeImports": 0,
           "valueImports": 4
@@ -631,6 +624,13 @@
           "fileCount": 3,
           "importCount": 3,
           "name": "Method",
+          "typeImports": 0,
+          "valueImports": 3
+        },
+        {
+          "fileCount": 3,
+          "importCount": 3,
+          "name": "MsgType",
           "typeImports": 0,
           "valueImports": 3
         },
@@ -2488,35 +2488,6 @@
       "networking": [],
       "path": "synara/scripts/run-synapse-two-client-integration.mjs",
       "role": "tooling"
-    },
-    {
-      "bucket": "component",
-      "categories": [],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MsgType"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/components/RenderMessageContent.tsx",
-      "role": "production"
     },
     {
       "bucket": "component",
@@ -10757,7 +10728,7 @@
     "desktopRuntimeBaseline": {
       "buckets": {
         "client-lifecycle": 2,
-        "component": 15,
+        "component": 14,
         "feature": 47,
         "hook": 35,
         "page": 7,
@@ -10771,13 +10742,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 125,
+      "productionImportFiles": 124,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 135
+      "totalImportFiles": 134
     },
     "repositoryWide": {
-      "productionImportFiles": 125,
+      "productionImportFiles": 124,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -10786,7 +10757,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 138
+      "totalImportFiles": 137
     }
   }
 }
