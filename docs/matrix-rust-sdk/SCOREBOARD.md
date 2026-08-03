@@ -2,12 +2,12 @@
 
 | Field                                                  | Value                                                                       |
 | ------------------------------------------------------ | --------------------------------------------------------------------------- |
-| Updated                                                | **2026-08-03** (live-proof gate policy refresh)                             |
-| Tip                                                    | `abd736b3` on `feature/matrix-rust-sdk-full-replacement`                    |
-| Production `matrix-js-sdk` import files (`synara/src`) | **124** (plan baseline was **220**; **96 removed**, ~**43.6%**)             |
-| Allowlist `pathCount`                                  | **124** (matches `paths[]` length)                                          |
+| Updated                                                | **2026-08-03** (live-proof stack #546; 124→114)              |
+| Tip                                                    | `57ab9e64` on `feature/matrix-rust-sdk-full-replacement`     |
+| Production `matrix-js-sdk` import files (`synara/src`) | **114** (plan baseline was **220**; **106 removed**, ~**48.2%**) |
+| Allowlist `pathCount`                                  | **114** (matches `paths[]` length)                           |
 | Dual backend                                           | **false** (forbidden forever)                                               |
-| Pipeline                                               | **PAUSED** — no daytime/overnight spawns until operator resume              |
+| Pipeline                                               | **ACTIVE** residual burn; live-proof not a merge gate        |
 | Burn board                                             | https://kb.whyland.com/go/synara-matrix-burn                                |
 | Umbrella #39                                           | **Do not merge** without explicit user approval                             |
 
@@ -58,13 +58,13 @@ completion or merge hold.
 | Join-rule READ residual-empty | **#521** native snapshot + RoomPublish |
 | Join-rule presentation DTO | **#522** |
 | Long-tail residual-empty (type/presentation/orphan) | **#517–#538** (room-summary → RenderMessageContent MsgType) — see [pause handoff](pause-handoff-2026-08-03.md) |
-| Importer burn (tip inventory) | **220 → 124** production files |
+| Importer burn (tip inventory) | **220 → 114** production files (#546 live-proof stack −10) |
 
 ## In flight
 
 | Item | Status |
 | ---- | ------ |
-| Daytime / overnight pipelines | **PAUSED** (scheduler cancelled 2026-08-03) |
+| Daytime residual burn | **ACTIVE** post live-proof gate removal; #544+#546 landed |
 | Open product PRs onto full-replacement base | **one docs-only policy PR draft** (this branch) |
 | Stale tip-docs drafts #502–#512 | **Closed** as obsolete tip-SHA freezes |
 

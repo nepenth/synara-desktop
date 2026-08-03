@@ -14,11 +14,11 @@
 | Field              | Value |
 | ------------------ | ----- |
 | Last updated (UTC) | **2026-08-03** |
-| Integration tip    | **`abd736b3`** — docs policy refresh after #538 RenderMessageContent MsgType residual-empty |
-| Active work        | **Docs-only policy PR draft** — [pause-handoff-2026-08-03.md](pause-handoff-2026-08-03.md); scheduler remains paused |
+| Integration tip    | **`57ab9e64`** — after #546 live-proof residual stack (124→114) |
+| Active work        | **Beta package builds** from tip; residual-empty long-tail continues |
 | Product runtime    | Native owns core D0 + V-CRYPTO + residual-empty slices through members/presence/directory/join-rule READ; long-tail JS importers remain |
 | Execution model    | Codex `gpt-5.6-luna` xhigh product; Grok `deepseek-v4-flash-0731` ≤2 when running |
-| Import accounting  | Desktop production import files **124** / baseline **220** (**96** removed). Allowlist **124**; unchanged by this docs-only PR. |
+| Import accounting  | Desktop production import files **114** / baseline **220** (**106** removed). Allowlist **114**. |
 | Dual backend       | **`false`** (forbidden forever) |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md) · [full-vertical-policy.md](full-vertical-policy.md) |
 | Burn board         | https://kb.whyland.com/go/synara-matrix-burn |
@@ -32,9 +32,9 @@
 
 |                | |
 | -------------- | - |
-| **Now**        | **Docs-only live-proof policy refresh** on tip **`abd736b3`**. Production importers **124**. One product PR draft; no product code changed. |
-| **Tip**        | `abd736b3` |
-| **Active PRs** | one docs-only product PR draft; stale docs freezes #502–#512 remain closed |
+| **Now**        | **#544+#546 landed.** Tip **`57ab9e64`**. Production importers **114**. Desktop Beta package smoke dispatched. |
+| **Tip**        | `57ab9e64` |
+| **Active PRs** | none open product after #546 |
 | **Blocked**    | V-BURN HOLD; C3–C5 live proof optional / Not confirmed; R-DEVTOOL may start without waiting for live proof; #39 gated; dual_backend forbidden |
 
 ---
@@ -81,6 +81,16 @@ importers and carries the tip inventory's 124 files / 124 paths unchanged.
 ---
 
 ## Work log (newest first)
+
+### 2026-08-03 — tip `57ab9e64` — live-proof gate removed + stack land
+
+| When (UTC) | Item | Result | Notes |
+| ---------- | ---- | ------ | ----- |
+| current | **Integration tip** | **`57ab9e64`** | After #546 residual-empty stack |
+| current | **Imports / allowlist** | **114 / 114** | Baseline 220 → **106** removed (~48.2%) |
+| current | **#544** | **merged** | Docs: live-proof not residual-empty merge gate |
+| current | **#546** | **merged** | RoomView chrome, typing/notes, Reaction/Reply, NativeEventContent, reactions path (−10 importers); supersedes #540–#543,#545 |
+| current | **Beta builds** | **dispatched** | `desktop-package-smoke` workflow_dispatch @ tip for macOS app + Linux .deb |
 
 ### 2026-08-03 — tip `abd736b3` — remove live-proof merge gates
 
