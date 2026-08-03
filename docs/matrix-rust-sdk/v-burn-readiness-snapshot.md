@@ -46,10 +46,12 @@ remaining importers are acceptable at final convergence.
    comparison helpers called out by that residual. Native-session paths remain
    fail-closed.
 2. **V-TIMELINE.C3–C5 — Not confirmed.** The stream/delta, media/render, and
-   pins/notes/jump checklists are docs-only live-proof gates; no authenticated
-   runtime proof is claimed.
-3. **V-SEND.R-DEVTOOL — gated after C3–C5.** The inventory remains docs-only;
-   implementation may start only after all three live timeline proofs confirm.
+   pins/notes/jump checklists are docs-only optional Beta feedback; no
+   authenticated runtime proof is claimed, and HUMAN OPERATOR LIVE-PROOF is not
+   a completion or merge gate for residual-empty burns.
+3. **V-SEND.R-DEVTOOL — eligible without C3–C5 live confirmation.** The
+   inventory remains docs-only; implementation still requires native ownership,
+   fail-closed behavior, and no JS fallback. V-BURN remains HOLD.
 4. **V-BURN.1–3 final convergence — still left.** Keep #327 on HOLD and keep
    #39 gated. Do not set `active_slice=V-BURN`.
 
