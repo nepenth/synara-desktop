@@ -28,7 +28,6 @@ import {
   Badge,
   RectCords,
 } from 'folds';
-import { SearchOrderBy } from 'matrix-js-sdk';
 import { useTranslation } from 'react-i18next';
 import FocusTrap from 'focus-trap-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -52,7 +51,7 @@ type OrderButtonProps = {
 };
 function OrderButton({ order, onChange }: OrderButtonProps) {
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
-  const rankOrder = order === SearchOrderBy.Rank;
+  const rankOrder = order === 'rank';
 
   const setOrder = (o?: string) => {
     setMenuAnchor(undefined);
@@ -92,7 +91,7 @@ function OrderButton({ order, onChange }: OrderButtonProps) {
                 <Text size="T300">Recent</Text>
               </MenuItem>
               <MenuItem
-                onClick={() => setOrder(SearchOrderBy.Rank)}
+                onClick={() => setOrder('rank')}
                 variant="Surface"
                 size="300"
                 radii="300"
