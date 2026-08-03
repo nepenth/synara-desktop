@@ -2,7 +2,6 @@ import { atom } from 'jotai';
 import { atomFamily } from 'jotai/utils';
 import { Descendant } from 'slate';
 import { EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
-import { IEventRelation } from 'matrix-js-sdk';
 import { createUploadAtomFamily } from '../upload';
 import { TUploadContent } from '../../utils/matrix';
 import { createListAtom } from '../list';
@@ -41,12 +40,18 @@ export const roomIdToMsgDraftAtomFamily = atomFamily<string, TMsgDraftAtom>(() =
   createMsgDraftAtom()
 );
 
+/** Minimal Matrix relation wire shape consumed by the retained JS composer. */
+type ReplyRelation = {
+  rel_type: string;
+  event_id: string;
+};
+
 export type IReplyDraft = {
   userId: string;
   eventId: string;
   body: string;
   formattedBody?: string | undefined;
-  relation?: IEventRelation | undefined;
+  relation?: ReplyRelation | undefined;
 };
 const createReplyDraftAtom = () => atom<IReplyDraft | undefined>(undefined);
 export type TReplyDraftAtom = ReturnType<typeof createReplyDraftAtom>;
