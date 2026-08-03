@@ -2,15 +2,15 @@
 
 | Field  | Value                                                                                          |
 | ------ | ---------------------------------------------------------------------------------------------- |
-| Status | **C1 done** (#285) + **C2 done** (#289). Residuals C3–C5 remain; **C3 is checklist-only until live proof** |
-| Tip    | `1695b9f7` on `feature/matrix-rust-sdk-full-replacement` (after #296 V-SEND.R-FORWARD landed) |
-| Policy | [full-vertical-policy.md](full-vertical-policy.md); [cutover-operating-model.md](cutover-operating-model.md) |
+| Status | **C1 done** (#285) + **C2 done** (#289). C3–C5 live proof is **Not confirmed / optional Beta feedback**, not a completion or merge gate |
+| Tip    | `abd736b3` on `feature/matrix-rust-sdk-full-replacement` (after #538 and the tip-policy refresh) |
+| Policy | [full-vertical-policy.md](full-vertical-policy.md); [cutover-operating-model.md](cutover-operating-model.md); residual-empty policy below |
 | Owner  | Managed Rust `matrix-sdk-ui::Timeline` + SDK-neutral presenter (`NativeTimelinePresenter`)       |
 
 ## 1. Tip measured
 
-- **Branch:** `matrix-rust/docs-c3-c4-residual-truth` (docs-only residual truth-up)
-- **Base stack:** tip `1695b9f7` — after #285 C1, #289 C2, #294 C3 checklist, #295 scoreboard, #296 V-SEND.R-FORWARD.
+- **Branch:** `feature/matrix-rust-sdk-full-replacement` (docs-only policy refresh)
+- **Base stack:** tip `abd736b3` — after #285 C1, #289 C2, #294 C3 checklist, #295 scoreboard, #296 V-SEND.R-FORWARD, and #538 residual-empty burns.
 - **Base:** `feature/matrix-rust-sdk-full-replacement`.
 
 ## 2. Product path today (after C1 + C2)
@@ -29,7 +29,24 @@ JS `RoomTimeline.tsx` / `RoomTimeline.css.ts` are **deleted** (V-TIMELINE.C2, #2
   `getLatestRoomTimeline`, `getRoomTimelineOpenMode`, `shouldRestoreRoomTimelineViewport`, etc.
 
 Cutover is **approved** (user: full-steam js-sdk replacement; dual_backend **false**). C1+C2 land
-presenter selection + dead JS owner deletion; break/fix-forward OK.
+presenter selection + dead JS owner deletion; break/fix-forward and private Beta are accepted.
+
+### Residual-empty completion policy
+
+For a claimed file, branch completion requires the code to be on the measured
+tip, focused unit/CI checks to pass, and no `matrix-js-sdk` import to remain in
+that file. If the product path needs live Matrix state, native absence or
+failure must fail closed; no JS fallback or backend selector is permitted.
+HUMAN OPERATOR LIVE-PROOF is optional Beta feedback, not a completion or merge
+gate. C3–C5 may therefore remain **Not confirmed** while their tip + unit/CI
+engineering evidence is accepted. R-DEVTOOL may start without waiting for
+C3–C5 live confirmation.
+
+If a product change changes importer inventory, run
+`npm run inventory:matrix-sdk-usage`, ratchet the allowlist `pathCount` and
+`paths[]`, update inventory test floors for files, declarations, and buckets,
+and update the P1.6 guardrail floors. This docs-only refresh changes no
+production importers and keeps the tip inventory at 124 files / 124 paths.
 
 ## 3. Remaining cutover slices
 
@@ -37,9 +54,9 @@ presenter selection + dead JS owner deletion; break/fix-forward OK.
 | -- | ----- | ---- | ------------- | ---------- | --------- |
 | V-TIMELINE.C1 | Select presenter in RoomView | `synara/src/app/features/room/RoomView.tsx` | **DONE #285** — `NativeTimelinePresenter` | — | `RoomView` mounts `NativeTimelinePresenter` as the sole active timeline; no JS fallback route |
 | V-TIMELINE.C2 | Delete RoomTimeline + dead imports | `RoomTimeline.tsx`, `RoomTimeline.css.ts` | **DONE #289** | — | Files deleted; allowlist drop; shared notification/open utilities retained; no broken imports |
-| V-TIMELINE.C3 | Stream delta binding gaps | `synara/src/app/features/room/nativeTimelineView.ts` (`useNativeTimelineView`) | Native stream (`matrix-timeline-view-updated`) | Binding implemented: registers listener before open, keeps exact returned `streamId`, rejects revision gaps / malformed ops, aborts with session registry | **Checklist-only until live proof** — see [v-timeline-c3-stream-verify.md](v-timeline-c3-stream-verify.md) (#294). Blocked on: authenticated desktop session, C1/C2 merged (done), steps 1–6 + 8 pass live, step 7 fail-closed demonstrated once |
-| V-TIMELINE.C4 | Media / render parity gaps | `NativeTimelinePresenter.tsx` (`NativeTimelineMedia`), `nativeTimelineView.ts` (`nativeTimelineMediaSrc`) | Native media-handle registry + `synara-media` protocol | Image/audio/video/sticker/file render via opaque handles; parity with legacy renderers unproven on the selected path | Selected presenter renders every retained media/sticker row with native handles. **Unproven** — no live authenticated render proof yet; **checklist-only until live proof** — see [v-timeline-c4-media-render-verify.md](v-timeline-c4-media-render-verify.md) |
-| V-TIMELINE.C5 | Pins / notes / jump residual | `NativeTimelinePresenter.tsx`, `nativeTimelineAction.ts`, `nativeLaterOwner.ts`, `nativeRoomNotesOwner.ts` | Native pin/later/notes/jump owners | Wired on the selected presenter; live authenticated proof unclaimed | Live proof for pin/unpin, Later/notes, jump-to-latest. **Unproven** — **checklist-only until live proof** — see [v-timeline-c5-pins-notes-jump-verify.md](v-timeline-c5-pins-notes-jump-verify.md) |
+| V-TIMELINE.C3 | Stream delta binding gaps | `synara/src/app/features/room/nativeTimelineView.ts` (`useNativeTimelineView`) | Native stream (`matrix-timeline-view-updated`) | Binding implemented: registers listener before open, keeps exact returned `streamId`, rejects revision gaps / malformed ops, aborts with session registry | **Branch-complete when tip + focused unit/CI + residual-empty/fail-closed evidence pass.** Live desktop proof remains optional Beta feedback and **Not confirmed**; see [v-timeline-c3-stream-verify.md](v-timeline-c3-stream-verify.md) (#294) |
+| V-TIMELINE.C4 | Media / render parity gaps | `NativeTimelinePresenter.tsx` (`NativeTimelineMedia`), `nativeTimelineView.ts` (`nativeTimelineMediaSrc`) | Native media-handle registry + `synara-media` protocol | Image/audio/video/sticker/file render via opaque handles; native path is fail-closed where live state is required | **Branch-complete when tip + focused unit/CI + residual-empty/fail-closed evidence pass.** Live authenticated render proof is optional Beta feedback and **Not confirmed**; see [v-timeline-c4-media-render-verify.md](v-timeline-c4-media-render-verify.md) |
+| V-TIMELINE.C5 | Pins / notes / jump residual | `NativeTimelinePresenter.tsx`, `nativeTimelineAction.ts`, `nativeLaterOwner.ts`, `nativeRoomNotesOwner.ts` | Native pin/later/notes/jump owners | Wired on the selected presenter; native absence/failure must fail closed | **Branch-complete when tip + focused unit/CI + residual-empty/fail-closed evidence pass.** Live pin/unpin, Later/notes, and jump proof is optional Beta feedback and **Not confirmed**; see [v-timeline-c5-pins-notes-jump-verify.md](v-timeline-c5-pins-notes-jump-verify.md) |
 
 ## 4. Native IPC already present (`matrix_timeline_*`)
 
@@ -78,7 +95,7 @@ Related non-`timeline` owners used by the presenter: `matrix_composer_{set,clear
 - **Rewriting notifications** off `getLatestRoomTimeline` — residual; not this PR's full rewrite.
 - **product.rs** — out of scope for C2.
 
-## 5a. Related landed / in-flight (truth at tip `1695b9f7`)
+## 5a. Related landed / in-flight (historical context; current truth is tip `abd736b3`)
 
 - **V-SEND.R-FORWARD #296 — LANDED** at tip. Legacy `MessageForwardItem` + `utils/forward.ts` deleted;
   native `matrix_timeline_forward_*` is the sole forward path. Production import files **163**.
@@ -90,4 +107,4 @@ Related non-`timeline` owners used by the presenter: `matrix_composer_{set,clear
 ## 6. Self-eval confidence
 
 - **High** on C1 product path (RoomView → NativeTimelinePresenter only) and C2 file deletion + allowlist drop.
-- **Medium** on C3/C4/C5 live authenticated proof and full media/action parity (verification gates, not claims).
+- **Medium** on optional C3/C4/C5 live Beta feedback and full media/action parity; live proof is not a merge gate.

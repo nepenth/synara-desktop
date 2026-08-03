@@ -14,11 +14,11 @@
 | Field              | Value |
 | ------------------ | ----- |
 | Last updated (UTC) | **2026-08-03** |
-| Integration tip    | **`80af6ce7`** — after #538 RenderMessageContent MsgType residual-empty |
-| Active work        | **PAUSED** — no spawns; [pause-handoff-2026-08-03.md](pause-handoff-2026-08-03.md) |
+| Integration tip    | **`abd736b3`** — docs policy refresh after #538 RenderMessageContent MsgType residual-empty |
+| Active work        | **Docs-only policy PR draft** — [pause-handoff-2026-08-03.md](pause-handoff-2026-08-03.md); scheduler remains paused |
 | Product runtime    | Native owns core D0 + V-CRYPTO + residual-empty slices through members/presence/directory/join-rule READ; long-tail JS importers remain |
 | Execution model    | Codex `gpt-5.6-luna` xhigh product; Grok `deepseek-v4-flash-0731` ≤2 when running |
-| Import accounting  | Desktop production import files **124** / baseline **220** (**96** removed). Allowlist **124**. |
+| Import accounting  | Desktop production import files **124** / baseline **220** (**96** removed). Allowlist **124**; unchanged by this docs-only PR. |
 | Dual backend       | **`false`** (forbidden forever) |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md) · [full-vertical-policy.md](full-vertical-policy.md) |
 | Burn board         | https://kb.whyland.com/go/synara-matrix-burn |
@@ -32,10 +32,10 @@
 
 |                | |
 | -------------- | - |
-| **Now**        | **Pipeline PAUSED** for audit/docs handoff. Tip **`80af6ce7`**. Production importers **124**. Open product PRs **none**. |
-| **Tip**        | `80af6ce7` |
-| **Active PRs** | none (stale docs freezes #502–#512 closed) |
-| **Blocked**    | V-BURN HOLD; C3–C5 live Not confirmed; R-DEVTOOL gated; #39 gated; dual_backend forbidden |
+| **Now**        | **Docs-only live-proof policy refresh** on tip **`abd736b3`**. Production importers **124**. One product PR draft; no product code changed. |
+| **Tip**        | `abd736b3` |
+| **Active PRs** | one docs-only product PR draft; stale docs freezes #502–#512 remain closed |
+| **Blocked**    | V-BURN HOLD; C3–C5 live proof optional / Not confirmed; R-DEVTOOL may start without waiting for live proof; #39 gated; dual_backend forbidden |
 
 ---
 
@@ -57,9 +57,40 @@ Update rules:
 - Commit as `docs(matrix): progress log — …` on a PR or as part of the landing PR.
 - Measure importers from **tip inventory**, never a stale residual worktree.
 
+## Current policy — 2026-08-03
+
+HUMAN OPERATOR LIVE-PROOF is removed as a completion or merge gate for
+residual-empty `matrix-js-sdk` burns on `feature/matrix-rust-sdk-full-replacement`.
+For branch purposes, a claimed file may be accepted when the implementation is
+on the measured tip, focused unit/CI checks pass, and no `matrix-js-sdk` import
+remains in that claimed file. Any native product path that needs live Matrix
+state must fail closed. Fix-forward and private Beta are accepted.
+
+C3–C5 live desktop proof remains optional Beta feedback: **Not confirmed** means
+the session has not been recorded, not that the branch is blocked. R-DEVTOOL may
+start without waiting for C3–C5 live confirmation, subject to its native,
+fail-closed implementation contract. V-BURN remains **HOLD**, `dual_backend`
+remains **false** forever, and `main` / umbrella #39 remain out of scope.
+
+If a product change changes importers, regenerate with
+`npm run inventory:matrix-sdk-usage`; ratchet the allowlist `pathCount` and
+`paths[]`; update inventory test floors for files, declarations, and buckets;
+and update the P1.6 guardrail floors. This docs-only PR changes no production
+importers and carries the tip inventory's 124 files / 124 paths unchanged.
+
 ---
 
 ## Work log (newest first)
+
+### 2026-08-03 — tip `abd736b3` — remove live-proof merge gates
+
+| When (UTC) | Item | Result | Notes |
+| ---------- | ---- | ------ | ----- |
+| current | **Policy** | **Updated** | HUMAN OPERATOR LIVE-PROOF is optional Beta feedback, not a completion or merge gate for residual-empty burns. |
+| current | **C3–C5** | **Tip/unit/CI path accepted** | Live desktop proof may remain **Not confirmed**; it is not a hold when the engineering evidence is on tip. |
+| current | **R-DEVTOOL** | **Eligible to start** | No longer waits for C3–C5 live confirmation; native UI → Tauri IPC → live `matrix-sdk` and fail-closed rules remain mandatory. |
+| current | **Inventory** | **Unchanged** | No production code/importers changed; committed tip inventory remains 124 files / 124 allowlist paths. |
+| current | **Scope** | **Docs only** | One product PR draft; `main`, #39, `dual_backend`, and V-BURN status unchanged. |
 
 ### 2026-08-03 — tip `80af6ce7` — pause + long-tail burn audit
 

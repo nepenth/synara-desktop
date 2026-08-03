@@ -3,20 +3,20 @@
 | Field        | Value                                                                                                                                                                                                                                               |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Status       | Docs-only verification checklist — **no product code**                                                                                                                                                                                              |
-| Live proof   | **Not confirmed** — #446 product-command fan-out and #448 scoreboard refresh are not C3–C5 proof; no authenticated desktop evidence is recorded for this tip                                                                                        |
+| Live proof   | **Not confirmed / optional Beta feedback** — no authenticated desktop evidence is recorded for this tip; HUMAN OPERATOR LIVE-PROOF is not a completion or merge gate |
 | Scope        | `synara/src/app/features/room/NativeTimelinePresenter.tsx` (`NativeTimelineMedia`, `NativeTimelineRow`), `nativeTimelineView.ts` (`nativeTimelineMediaSrc`, `NativeTimelineMediaHandle`)                                                            |
 | Precondition | C1 (#285) selects `NativeTimelinePresenter` in `RoomView`; C2 (#289) deletes `RoomTimeline` + dead JS timeline path; C3 (#294) stream/delta checklist exists                                                                                        |
-| Policy       | [full-vertical-policy.md](full-vertical-policy.md); [cutover-operating-model.md](cutover-operating-model.md); dual_backend **false**; **never touch #39**                                                                                           |
+| Policy       | [full-vertical-policy.md](full-vertical-policy.md); [cutover-operating-model.md](cutover-operating-model.md); live proof optional Beta feedback, not a merge gate; dual_backend **false**; **never touch #39** |
 | Related      | [v-timeline-cutover-residual.md](v-timeline-cutover-residual.md) (C4 row), [v-timeline-full-replacement-contract.md](v-timeline-full-replacement-contract.md) (media owner route), [v-timeline-c3-stream-verify.md](v-timeline-c3-stream-verify.md) |
 
 ## 1. What C4 must prove
 
-C4 is the **live authenticated media/render parity proof** that every retained
-media/sticker row renders through the native media-handle registry and the
-shared `synara-media` protocol on the selected `NativeTimelinePresenter`. It is
-a **verification gate**, not a new implementation. The residual map records
-"unproven — no live authenticated render proof yet"; C4 closes that unclaimed
-live-proof half of the row.
+C4 is the **optional live authenticated media/render parity feedback session**
+for every retained media/sticker row rendering through the native media-handle
+registry and shared `synara-media` protocol on the selected
+`NativeTimelinePresenter`. It is optional Beta feedback, not a completion or
+merge gate and not a new implementation. The residual map records the
+engineering evidence at tip; a C4 session supplies optional live feedback.
 
 The media owner route (from the contract doc + `nativeTimelineView.ts` +
 `NativeTimelinePresenter.tsx`) that must be proven end-to-end on the selected
@@ -65,7 +65,7 @@ This section makes the C4 checklist executable for an operator. It does not
 change the C4 status and does not claim that live proof has run. Docker and
 harness readiness are prerequisites only; they are not media/render evidence.
 
-### 3.1 Policy, tip, and toolchain gate
+### 3.1 Policy, tip, and toolchain preflight
 
 Run from the repository root before opening the desktop:
 
@@ -73,7 +73,7 @@ Run from the repository root before opening the desktop:
 git status --short --branch
 git branch --show-current
 git rev-parse HEAD
-git merge-base --is-ancestor fd0dfbf464ea59351d2cca1b746ba9d3f00923e7 HEAD
+git merge-base --is-ancestor abd736b3 HEAD
 node --version
 npm --version
 npm exec --yes --package=prettier@2.8.1 -- prettier --version
@@ -83,7 +83,7 @@ Continue only when all of the following are true:
 
 - the proof is on `feature/matrix-rust-sdk-full-replacement` or a docs branch
   whose checked-out history includes current feature tip
-  `fd0dfbf464ea59351d2cca1b746ba9d3f00923e7`, never `main` or PR #39. The
+  `abd736b3`, never `main` or PR #39. The
   `git merge-base --is-ancestor` check must pass; if it fails, stop and record
   `Not confirmed`;
 - record the exact output of `git rev-parse HEAD` as the **evidence head** in
@@ -222,7 +222,7 @@ route chronology.
 proof: V-TIMELINE.C4
 verdict: Not confirmed | Failed | Confirmed
 base: feature/matrix-rust-sdk-full-replacement
-base-tip: fd0dfbf464ea59351d2cca1b746ba9d3f00923e7
+base-tip: abd736b3
 head: <exact output of git rev-parse HEAD>
 operator: <name or team alias>
 platform: <macOS/Linux + desktop build or dev run>
@@ -313,19 +313,21 @@ step with a timestamp + observed state.
   through a native owner; no JS action path remains on the selected presenter.
 - **Close on unmount.** Every opened stream is closed with its exact `streamId`;
   handles are revoked on stream close / session drop.
-- **No product code in this PR.** This doc only; C4 verification is a live
-  proof gate, not a code change.
+- **No product code in this PR.** This doc only; C4 verification is optional
+  live Beta feedback, not a completion or merge gate.
 
 ## 6. Done when
 
-- C1 (#285), C2 (#289), and C3 (#294) are merged and `NativeTimelinePresenter`
-  is the sole active timeline owner.
-- Steps 1–7 and 9 above pass on an authenticated desktop session; step 8 is
-  demonstrated at least once (dev harness acceptable).
-- Every retained media/sticker row renders via native handles / `synara-media`
-  with no JS media fallback reachable on the selected path.
-- The C4 row in [v-timeline-cutover-residual.md](v-timeline-cutover-residual.md)
-  is updated to "verified" with the live-proof evidence recorded.
+- The C4 implementation is on the measured feature tip, focused C4 unit/CI
+  checks pass, and the claimed residual-empty files contain no
+  `matrix-js-sdk` import.
+- Every retained media/sticker row uses native handles / `synara-media` on the
+  selected path; a native path that needs live Matrix state fails closed and
+  has no JS media fallback.
+- Fix-forward and private Beta are accepted. Steps 1–7 and 9 above, with step
+  8 demonstrated when available, are optional Beta feedback. If run, record
+  the evidence and update the C4 live-proof verdict; an absent session leaves
+  C4 **Not confirmed** and does not hold completion or merge.
 
 ## 7. Self-eval confidence
 
@@ -333,6 +335,6 @@ step with a timestamp + observed state.
   `NativeTimelinePresenter.tsx` (`NativeTimelineMedia`), `nativeTimelineView.ts`
   (`nativeTimelineMediaSrc`, `NativeTimelineMediaHandle`), and the contract doc's
   media owner route; unit tests already cover the pure delta/action owners.
-- **Medium** on live proof — steps require an authenticated session, real media
-  events, and the C1/C2/C3 cutover to be merged first; this doc frames the gate,
-  it does not claim the proof.
+- **Medium** on optional live Beta feedback — steps require an authenticated
+  session and real media events; this doc records the runbook but does not claim
+  that the proof ran.
