@@ -130,7 +130,7 @@
         },
         "timelines": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 26,
+          "fileCount": 25,
           "listenerCandidateOccurrences": 40,
           "methodCandidateOccurrences": 22,
           "networkingOccurrences": 0
@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 137,
-      "importFileCount": 135,
+      "fileCount": 136,
+      "importFileCount": 134,
       "methodCandidateFrequencies": [
         {
           "count": 61,
@@ -413,11 +413,6 @@
           "path": "matrix-js-sdk/lib/client"
         },
         {
-          "fileCount": 2,
-          "importCount": 2,
-          "path": "matrix-js-sdk/lib/models/event"
-        },
-        {
           "fileCount": 1,
           "importCount": 1,
           "path": "matrix-js-sdk/lib/crypto-api"
@@ -436,6 +431,11 @@
           "fileCount": 1,
           "importCount": 1,
           "path": "matrix-js-sdk/lib/matrixrtc/MatrixRTCSessionManager"
+        },
+        {
+          "fileCount": 1,
+          "importCount": 1,
+          "path": "matrix-js-sdk/lib/models/event"
         },
         {
           "fileCount": 1,
@@ -553,13 +553,6 @@
         {
           "fileCount": 5,
           "importCount": 5,
-          "name": "IContent",
-          "typeImports": 2,
-          "valueImports": 3
-        },
-        {
-          "fileCount": 5,
-          "importCount": 5,
           "name": "MsgType",
           "typeImports": 0,
           "valueImports": 5
@@ -591,6 +584,13 @@
           "name": "EventTimeline",
           "typeImports": 2,
           "valueImports": 2
+        },
+        {
+          "fileCount": 4,
+          "importCount": 4,
+          "name": "IContent",
+          "typeImports": 1,
+          "valueImports": 3
         },
         {
           "fileCount": 4,
@@ -10127,35 +10127,6 @@
     },
     {
       "bucket": "utility",
-      "categories": ["timelines"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": true,
-          "line": 1,
-          "module": "matrix-js-sdk/lib/models/event",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "IContent"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/utils/polls.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "utility",
       "categories": [
         "client_methods",
         "room_methods",
@@ -11141,7 +11112,7 @@
         "plugin": 6,
         "shared-type": 1,
         "state": 5,
-        "utility": 10
+        "utility": 9
       },
       "planComparison": {
         "expectedProductionImportFiles": 220,
@@ -11149,13 +11120,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 135,
+      "productionImportFiles": 134,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 145
+      "totalImportFiles": 144
     },
     "repositoryWide": {
-      "productionImportFiles": 135,
+      "productionImportFiles": 134,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -11164,7 +11135,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 148
+      "totalImportFiles": 147
     }
   }
 }
