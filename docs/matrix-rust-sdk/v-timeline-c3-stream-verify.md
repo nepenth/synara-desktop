@@ -3,19 +3,20 @@
 | Field        | Value                                                                                                                                                            |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Status       | Docs-only verification checklist — **no product code**                                                                                                           |
-| Live proof   | **Not confirmed** — #446 product-command fan-out and #448 scoreboard refresh are not C3–C5 proof; no authenticated desktop evidence is recorded for this tip     |
+| Live proof   | **Not confirmed / optional Beta feedback** — no authenticated desktop evidence is recorded for this tip; HUMAN OPERATOR LIVE-PROOF is not a completion or merge gate |
 | Scope        | `synara/src/app/features/room/nativeTimelineView.ts` (`useNativeTimelineView`, `applyNativeTimelineViewDelta`), `NativeTimelinePresenter.tsx` stream consumption |
 | Precondition | C1 (#285) selects `NativeTimelinePresenter` in `RoomView`; C2 (#289) deletes `RoomTimeline` + dead JS timeline path                                              |
-| Policy       | [full-vertical-policy.md](full-vertical-policy.md); [cutover-operating-model.md](cutover-operating-model.md); dual_backend **false**; **never touch #39**        |
+| Policy       | [full-vertical-policy.md](full-vertical-policy.md); [cutover-operating-model.md](cutover-operating-model.md); live proof optional Beta feedback, not a merge gate; dual_backend **false**; **never touch #39** |
 | Related      | [v-timeline-cutover-residual.md](v-timeline-cutover-residual.md) (C3 row), [v-timeline-full-replacement-contract.md](v-timeline-full-replacement-contract.md)    |
 
 ## 1. What C3 must prove
 
-C3 is the **live authenticated viewport proof** that the native stream/delta
-binding — already implemented on the unselected presenter — stays correct once
-`NativeTimelinePresenter` is the sole active timeline owner. It is a
-**re-verify gate**, not a new implementation. The residual map records "no gap
-found at tip"; C3 closes the unclaimed live-proof half of that row.
+C3 is the **optional live authenticated viewport feedback session** for the
+native stream/delta binding — already implemented on the selected presenter —
+once `NativeTimelinePresenter` is the sole active timeline owner. It is an
+optional re-verification, not a completion or merge gate and not a new
+implementation. The residual map records the engineering evidence at tip;
+the C3 session supplies optional Beta feedback on the unclaimed live behavior.
 
 The binding contract (from `nativeTimelineView.ts` + contract doc) that must be
 proven end-to-end on the selected path:
@@ -49,7 +50,7 @@ This section makes the C3 checklist executable for an operator. It does not
 change the C3 status and does not claim that live proof has run. Use the same
 preflight for C4/C5; their short UI mapping is at the end of this section.
 
-### 3.1 Policy, tip, and toolchain gate
+### 3.1 Policy, tip, and toolchain preflight
 
 Run from the repository root before opening the desktop:
 
@@ -57,7 +58,7 @@ Run from the repository root before opening the desktop:
 git status --short --branch
 git branch --show-current
 git rev-parse HEAD
-git merge-base --is-ancestor fd0dfbf464ea59351d2cca1b746ba9d3f00923e7 HEAD
+git merge-base --is-ancestor abd736b3 HEAD
 node --version
 npm --version
 npm exec --yes --package=prettier@2.8.1 -- prettier --version
@@ -67,7 +68,7 @@ Continue only when all of the following are true:
 
 - the proof is on `feature/matrix-rust-sdk-full-replacement` or a docs branch
   whose checked-out history includes current feature tip
-  `fd0dfbf464ea59351d2cca1b746ba9d3f00923e7`, never `main` or PR #39. The
+  `abd736b3`, never `main` or PR #39. The
   `git merge-base --is-ancestor` check must pass; if it fails, stop and record
   `Not confirmed`;
 - record the exact output of `git rev-parse HEAD` as the **evidence head** in
@@ -219,7 +220,7 @@ generated success label, or a retry that lacks the complete route chronology.
 proof: V-TIMELINE.C3
 verdict: Not confirmed | Failed | Confirmed
 base: feature/matrix-rust-sdk-full-replacement
-base-tip: fd0dfbf464ea59351d2cca1b746ba9d3f00923e7
+base-tip: abd736b3
 head: <exact output of git rev-parse HEAD>
 operator: <name or team alias>
 platform: <macOS/Linux + desktop build or dev run>
@@ -306,25 +307,27 @@ step with a timestamp + observed state.
   `sessionGeneration`, or `roomId` is rejected.
 - **Close on unmount.** Every opened stream is closed with its exact `streamId`;
   `disposed` guards all async callbacks.
-- **No product code in this PR.** This doc only; C3 verification is a live
-  proof gate, not a code change.
+- **No product code in this PR.** This doc only; C3 verification is optional
+  live Beta feedback, not a completion or merge gate.
 
 ## 6. Done when
 
-- C1 (#285) and C2 (#289) are merged and `NativeTimelinePresenter` is the sole
-  active timeline owner.
-- Steps 1–6 and 8 above pass on an authenticated desktop session; step 7 is
-  demonstrated at least once (dev harness acceptable).
-- No JS timeline fallback is reachable on the selected path; `RoomTimeline` is
+- The C3 implementation is on the measured feature tip, focused C3 unit/CI
+  checks pass, and the claimed residual-empty files contain no
+  `matrix-js-sdk` import.
+- `NativeTimelinePresenter` is the sole active timeline owner; no JS timeline
+  fallback is reachable on the selected native path and `RoomTimeline` is
   deleted.
-- The C3 row in [v-timeline-cutover-residual.md](v-timeline-cutover-residual.md)
-  is updated to "verified" with the live-proof evidence recorded.
+- A native path that needs live Matrix state fails closed on missing or failed
+  native state. Fix-forward and private Beta are accepted.
+- Steps 1–6 and 8 above are optional Beta feedback. If they are run, record the
+  evidence and update the C3 live-proof verdict; an absent session leaves C3
+  **Not confirmed** and does not hold completion or merge.
 
 ## 7. Self-eval confidence
 
 - **High** on the binding contract points (S1–S7) — read directly from
   `nativeTimelineView.ts` and the contract doc; unit tests already cover the
   pure delta reducer.
-- **Medium** on live proof — steps require an authenticated session and the
-  C1/C2 cutover to be merged first; this doc frames the gate, it does not claim
-  the proof.
+- **Medium** on optional live Beta feedback — steps require an authenticated
+  session; this doc records the runbook but does not claim that the proof ran.
