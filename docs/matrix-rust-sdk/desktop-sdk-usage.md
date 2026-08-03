@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |          128 |                2 |                   3 |
+| production |          127 |                2 |                   3 |
 | test       |           10 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |      **141** |                  |                     |
+| **total**  |      **140** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |   128 |
+| Production import files |   127 |
 | Test import files       |    10 |
-| Total import files      |   138 |
+| Total import files      |   137 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 128)
+- Production match: **no** (found 127)
 - Test match: **no** (found 10)
 
 ### Production files by bucket (desktop runtime only)
@@ -52,18 +52,18 @@ Expected **220** production and **12** test import files.
 | hook             |    36 |
 | page             |     7 |
 | plugin           |     6 |
-| state            |     5 |
+| state            |     4 |
 | utility          |     9 |
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 128. Files with any finding: 130.
+Scope: **production only**. Import files: 127. Files with any finding: 129.
 
 ### Imported modules
 
 | Module path                                           | Import sites | Files |
 | ----------------------------------------------------- | -----------: | ----: |
-| `matrix-js-sdk`                                       |          125 |   125 |
+| `matrix-js-sdk`                                       |          124 |   124 |
 | `matrix-js-sdk/lib/types`                             |            7 |     7 |
 | `matrix-js-sdk/lib/matrixrtc/CallMembership`          |            4 |     4 |
 | `matrix-js-sdk/lib/models/relations`                  |            4 |     4 |
@@ -524,7 +524,6 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `synara/src/app/state/room-list/__tests__/roomActivity.test.ts`                                                               | test       | yes     | state            | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/state/room-list/roomActivity.ts`                                                                              | production | yes     | state            | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/state/room-list/utils.ts`                                                                                     | production | yes     | state            | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/state/room/roomInputDrafts.ts`                                                                                | production | yes     | state            | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/state/upload.ts`                                                                                              | production | yes     | state            | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/utils/__tests__/notifications.test.ts`                                                                        | test       | yes     | utility          | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/utils/__tests__/remoteContent.test.ts`                                                                        | test       | yes     | utility          | —            | —                                                                                                                                                                         |
