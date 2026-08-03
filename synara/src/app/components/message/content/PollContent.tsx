@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge, Box, Button, Icon, Icons, ProgressBar, Text, config } from 'folds';
-import type { MatrixEvent } from 'matrix-js-sdk/lib/models/event';
 import { useTranslation } from 'react-i18next';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { respondPollWithNativeDesktopOwner } from '../../../features/room/nativePoll';
@@ -49,7 +48,7 @@ export function PollContent({ roomId, eventId, poll }: PollContentProps) {
     try {
       const relationResult = await mx.relations(roomId, eventId, 'm.reference', undefined);
       const nextResponses: Array<{ sender?: string; ts?: number; answers: string[] } | undefined> =
-        relationResult.events.map((event: MatrixEvent) => {
+        relationResult.events.map((event) => {
           const answers = parsePollResponseContent(event.getContent<Record<string, unknown>>());
           if (!answers) return undefined;
           return {
