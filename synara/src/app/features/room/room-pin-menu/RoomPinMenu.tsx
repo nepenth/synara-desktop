@@ -82,6 +82,7 @@ import {
 } from '../../../hooks/useMemberPowerTag';
 import { useRoomCreatorsTag } from '../../../hooks/useRoomCreatorsTag';
 import { resolveMatrixThumbnailUrl } from '../../../matrix/media';
+import { IImageContent } from '../../../../types/matrix/common';
 
 type PinnedMessageProps = {
   room: Room;
@@ -352,11 +353,11 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
           return (
             <NativeEventContent roomId={room.roomId} mEvent={mEvent}>
               {(resolvedEvent) => {
-                if (resolvedEvent.isRedacted()) return <RedactedContent />;
-                if (resolvedEvent.getType() === MessageEvent.Sticker)
+                if (resolvedEvent.redacted) return <RedactedContent />;
+                if (resolvedEvent.type === MessageEvent.Sticker)
                   return (
                     <MSticker
-                      content={resolvedEvent.getContent()}
+                      content={resolvedEvent.content as unknown as IImageContent}
                       renderImageContent={(props) => (
                         <ImageContent
                           {...props}
@@ -367,22 +368,27 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
                       )}
                     />
                   );
-                if (resolvedEvent.getType() === MessageEvent.RoomMessage) {
+                if (resolvedEvent.type === MessageEvent.RoomMessage) {
                   const editedEvent = getEditedEvent(
                     eventId,
                     resolvedEvent,
                     evtTimeline.getTimelineSet()
                   );
                   const getContent = (() =>
-                    editedEvent?.getContent()['m.new_content'] ??
-                    resolvedEvent.getContent()) as GetContentCallback;
+                    editedEvent?.getContent<Record<string, unknown>>()['m.new_content'] ??
+                    resolvedEvent.content) as GetContentCallback;
+
+                  const msgType =
+                    typeof resolvedEvent.content.msgtype === 'string'
+                      ? resolvedEvent.content.msgtype
+                      : '';
 
                   return (
                     <RenderMessageContent
                       displayName={displayName}
-                      msgType={resolvedEvent.getContent().msgtype ?? ''}
-                      ts={resolvedEvent.getTs()}
-                      edited={!!editedEvent || !!resolvedEvent.replacingEvent()}
+                      msgType={msgType}
+                      ts={resolvedEvent.originServerTs}
+                      edited={!!editedEvent}
                       getContent={getContent}
                       mediaAutoLoad={mediaAutoLoad}
                       htmlReactParserOptions={htmlReactParserOptions}
@@ -395,7 +401,7 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
                     />
                   );
                 }
-                if (resolvedEvent.getType() === MessageEvent.RoomMessageEncrypted)
+                if (resolvedEvent.type === MessageEvent.RoomMessageEncrypted)
                   return (
                     <Text>
                       <MessageNotDecryptedContent />

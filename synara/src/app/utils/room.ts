@@ -23,6 +23,7 @@ import {
   IRoomCreateContent,
   Membership,
   MessageEvent,
+  NativeEventContentEvent,
   NotificationType,
   RoomToParents,
   RoomType,
@@ -391,20 +392,22 @@ export const getEventEdits = (timelineSet: EventTimelineSet, eventId: string, ev
   timelineSet.relations.getChildEventsForEvent(eventId, RelationType.Replace, eventType);
 
 export const getLatestEdit = (
-  targetEvent: MatrixEvent,
+  targetEvent: MatrixEvent | NativeEventContentEvent,
   editEvents: MatrixEvent[]
 ): MatrixEvent | undefined => {
   const eventByTargetSender = (rEvent: MatrixEvent) =>
-    rEvent.getSender() === targetEvent.getSender();
+    rEvent.getSender() ===
+    ('getSender' in targetEvent ? targetEvent.getSender() : targetEvent.sender);
   return editEvents.sort((m1, m2) => m2.getTs() - m1.getTs()).find(eventByTargetSender);
 };
 
 export const getEditedEvent = (
   mEventId: string,
-  mEvent: MatrixEvent,
+  mEvent: MatrixEvent | NativeEventContentEvent,
   timelineSet: EventTimelineSet
 ): MatrixEvent | undefined => {
-  const edits = getEventEdits(timelineSet, mEventId, mEvent.getType());
+  const eventType = 'getType' in mEvent ? mEvent.getType() : mEvent.type;
+  const edits = getEventEdits(timelineSet, mEventId, eventType);
   return edits && getLatestEdit(mEvent, edits.getRelations());
 };
 
