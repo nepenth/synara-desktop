@@ -38,6 +38,7 @@ import { settingsAtom } from '../../state/settings';
 import { useSpaceOptionally } from '../../hooks/useSpace';
 import { getHomeSearchPath, getSpaceSearchPath, withSearchParam } from '../../pages/pathUtils';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
+import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 import { getCanonicalAliasOrRoomId, isRoomAlias } from '../../utils/matrix';
 import { _SearchPathSearchParams } from '../../pages/paths';
 import * as css from './RoomViewHeader.css';
@@ -376,7 +377,11 @@ export function RoomViewHeader({
                 src={avatarUrl}
                 alt={name}
                 renderFallback={() => (
-                  <RoomIcon size="200" joinRule={room.getJoinRule()} roomType={room.getType()} />
+                  <RoomIcon
+                    size="200"
+                    joinRule={normalizeRoomJoinRulePresentation(room.getJoinRule())}
+                    roomType={room.getType()}
+                  />
                 )}
               />
             </Avatar>

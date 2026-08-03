@@ -12,6 +12,7 @@ import { allRoomsAtom } from '../../state/room-list/roomList';
 import { mDirectAtom } from '../../state/mDirectList';
 import { useAllJoinedRoomsSet, useGetRoom } from '../../hooks/useGetRoom';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
+import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 
 type CallRoomNameProps = {
   room: Room;
@@ -38,7 +39,12 @@ export function CallRoomName({ room }: CallRoomNameProps) {
       variant="Background"
       radii="Pill"
       before={
-        <RoomIcon size="200" joinRule={room.getJoinRule()} roomType={room.getType()} filled />
+        <RoomIcon
+          size="200"
+          joinRule={normalizeRoomJoinRulePresentation(room.getJoinRule())}
+          roomType={room.getType()}
+          filled
+        />
       }
       onClick={() => navigateRoom(room.roomId)}
     >

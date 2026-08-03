@@ -1,6 +1,6 @@
 /* eslint-disable react/destructuring-assignment */
 import React, { MouseEventHandler, useMemo } from 'react';
-import { IEventWithRoomId, JoinRule, RelationType, Room } from 'matrix-js-sdk';
+import { IEventWithRoomId, RelationType, Room } from 'matrix-js-sdk';
 import { HTMLReactParserOptions } from 'html-react-parser';
 import { Avatar, Box, Chip, Header, Icon, Icons, Text, config } from 'folds';
 import { Opts as LinkifyOpts } from 'linkifyjs';
@@ -43,6 +43,7 @@ import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
 import { useTheme } from '../../hooks/useTheme';
+import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 import { PowerIcon } from '../../components/power';
 import colorMXID from '../../../util/colorMXID';
 import {
@@ -208,7 +209,7 @@ export function SearchResultGroup({
                 <RoomIcon
                   size="50"
                   roomType={room.getType()}
-                  joinRule={room.getJoinRule() ?? JoinRule.Restricted}
+                  joinRule={normalizeRoomJoinRulePresentation(room.getJoinRule())}
                   filled
                 />
               )}

@@ -61,6 +61,7 @@ import { useKeyDown } from '../../hooks/useKeyDown';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { KeySymbol } from '../../utils/key-symbol';
 import { isMacOS } from '../../utils/user-agent';
+import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 import {
   getExplorePath,
   getHomeCreatePath,
@@ -536,7 +537,7 @@ export function Search({ requestClose }: SearchProps) {
                                 ) : (
                                   <RoomIcon
                                     size="100"
-                                    joinRule={room.getJoinRule()}
+                                    joinRule={normalizeRoomJoinRulePresentation(room.getJoinRule())}
                                     roomType={room.getType()}
                                   />
                                 )}
