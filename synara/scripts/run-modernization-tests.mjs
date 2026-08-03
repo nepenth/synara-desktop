@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const tests = [
   'src/app/components/__tests__/roomAvatarSourceGuard.test.ts',
+  'src/app/components/__tests__/joinRulesSwitcherSourceGuard.test.ts',
   'src/app/config/__tests__/foundationFeatures.test.ts',
   'src/app/utils/__tests__/remoteContent.test.ts',
   'src/app/contracts/__tests__/contractSchemas.test.ts',
