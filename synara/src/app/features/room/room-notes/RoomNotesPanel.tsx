@@ -1,5 +1,4 @@
 import React, { FormEventHandler, useMemo, useState } from 'react';
-import { Room } from 'matrix-js-sdk';
 import {
   Box,
   Button,
@@ -28,11 +27,32 @@ import {
   upsertRoomNoteWithNativeOwner,
 } from '../nativeRoomNotesOwner';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
-import { getMemberDisplayName } from '../../../utils/room';
 import { getMxIdLocalPart } from '../../../utils/matrix';
+import { isNativeMatrixSession } from '../../verification/nativeVerification';
+import { useMatrixClient } from '../../../hooks/useMatrixClient';
+import { useRoomMembers, type RoomMemberListItem } from '../../../hooks/useRoomMembers';
+
+type RoomIdentity = {
+  roomId: string;
+  name?: string;
+};
+
+const getProjectedMemberDisplayName = (
+  member: RoomMemberListItem | undefined
+): string | undefined => {
+  if (!member) return undefined;
+  let displayName: string | undefined;
+  if ('displayName' in member && typeof member.displayName === 'string') {
+    displayName = member.displayName;
+  } else if ('rawDisplayName' in member) {
+    displayName = member.rawDisplayName;
+  }
+  if (!displayName || displayName === member.userId) return undefined;
+  return displayName;
+};
 
 type RoomNotesPanelProps = {
-  room: Room;
+  room: RoomIdentity;
   requestClose: () => void;
   embedded?: boolean;
 };
@@ -46,33 +66,39 @@ const formatNoteTime = (ts: number): string =>
   }).format(new Date(ts));
 
 type RoomNoteItemProps = {
-  room: Room;
+  roomId: string;
   item: SynaraRoomNoteItem;
+  memberDisplayNames: ReadonlyMap<string, string>;
   canMoveUp: boolean;
   canMoveDown: boolean;
 };
 
-function RoomNoteItem({ room, item, canMoveUp, canMoveDown }: RoomNoteItemProps) {
+function RoomNoteItem({
+  roomId,
+  item,
+  memberDisplayNames,
+  canMoveUp,
+  canMoveDown,
+}: RoomNoteItemProps) {
   const { navigateRoom } = useRoomNavigate();
   const senderName =
-    item.sender && (getMemberDisplayName(room, item.sender) ?? getMxIdLocalPart(item.sender));
+    item.sender &&
+    (memberDisplayNames.get(item.sender) ?? getMxIdLocalPart(item.sender) ?? item.sender);
 
   const handleDelete = () => {
-    void deleteRoomNoteWithNativeOwner(room.roomId, item.id).catch(() => undefined);
+    void deleteRoomNoteWithNativeOwner(roomId, item.id).catch(() => undefined);
   };
   const handleToggleTodo = () => {
-    void completeRoomTodoWithNativeOwner(room.roomId, item.id, !item.completedAt).catch(
-      () => undefined
-    );
+    void completeRoomTodoWithNativeOwner(roomId, item.id, !item.completedAt).catch(() => undefined);
   };
   const handleMoveUp = () => {
-    void moveRoomTodoWithNativeOwner(room.roomId, item.id, 'up').catch(() => undefined);
+    void moveRoomTodoWithNativeOwner(roomId, item.id, 'up').catch(() => undefined);
   };
   const handleMoveDown = () => {
-    void moveRoomTodoWithNativeOwner(room.roomId, item.id, 'down').catch(() => undefined);
+    void moveRoomTodoWithNativeOwner(roomId, item.id, 'down').catch(() => undefined);
   };
   const handleOpenMessage = () => {
-    if (item.eventId) navigateRoom(room.roomId, item.eventId);
+    if (item.eventId) navigateRoom(roomId, item.eventId);
   };
 
   return (
@@ -189,6 +215,17 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
   const [body, setBody] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
+  const mx = useMatrixClient();
+  const nativeSession = isNativeMatrixSession();
+  const memberSnapshot = useRoomMembers(mx, room.roomId, nativeSession);
+  const memberDisplayNames = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const member of memberSnapshot ?? []) {
+      const displayName = getProjectedMemberDisplayName(member);
+      if (displayName) names.set(member.userId, displayName);
+    }
+    return names;
+  }, [memberSnapshot]);
   const notesContent = useAtomValue(roomNotesContentAtom);
   const roomItems = useMemo(
     () => getRoomNoteItems(notesContent, room.roomId),
@@ -226,7 +263,7 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
         <Box grow="Yes" direction="Column">
           <Text size="H4">Personal Notes</Text>
           <Text size="T200" priority="300" truncate>
-            {room.name}
+            {room.name ?? room.roomId}
           </Text>
         </Box>
         <IconButton size="300" onClick={requestClose} radii="300">
@@ -304,8 +341,9 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
               return (
                 <RoomNoteItem
                   key={item.id}
-                  room={room}
+                  roomId={room.roomId}
                   item={item}
+                  memberDisplayNames={memberDisplayNames}
                   canMoveUp={todoOrderState.canMoveUp}
                   canMoveDown={todoOrderState.canMoveDown}
                 />

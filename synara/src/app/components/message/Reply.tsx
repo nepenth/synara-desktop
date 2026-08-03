@@ -1,5 +1,4 @@
 import { Box, Icon, Icons, Text, as, color, toRem } from 'folds';
-import { EventTimelineSet, Room } from 'matrix-js-sdk';
 import React, { MouseEventHandler, ReactNode, useCallback, useMemo } from 'react';
 import classNames from 'classnames';
 import { getMemberDisplayName, trimReplyFromBody } from '../../utils/room';
@@ -12,6 +11,11 @@ import { scaleSystemEmoji } from '../../plugins/react-custom-html-parser';
 import { useRoomEvent } from '../../hooks/useRoomEvent';
 import colorMXID from '../../../util/colorMXID';
 import { GetMemberPowerTag } from '../../hooks/useMemberPowerTag';
+
+type ReplyRoom = Parameters<typeof useRoomEvent>[0];
+type ReplyTimelineSet = {
+  findEventById: (eventId: string) => ReturnType<ReplyRoom['findEventById']>;
+};
 
 type ReplyLayoutProps = {
   userColor?: string;
@@ -52,8 +56,8 @@ export const ThreadIndicator = as<'div'>(({ ...props }, ref) => (
 ));
 
 type ReplyProps = {
-  room: Room;
-  timelineSet?: EventTimelineSet | undefined;
+  room: ReplyRoom;
+  timelineSet?: ReplyTimelineSet | undefined;
   replyEventId: string;
   threadRootId?: string | undefined;
   onClick?: MouseEventHandler | undefined;
