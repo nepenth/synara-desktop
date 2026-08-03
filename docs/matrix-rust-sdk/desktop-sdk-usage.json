@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 130,
-      "importFileCount": 128,
+      "fileCount": 129,
+      "importFileCount": 127,
       "methodCandidateFrequencies": [
         {
           "count": 57,
@@ -378,8 +378,8 @@
       },
       "modules": [
         {
-          "fileCount": 125,
-          "importCount": 125,
+          "fileCount": 124,
+          "importCount": 124,
           "path": "matrix-js-sdk"
         },
         {
@@ -815,13 +815,6 @@
           "name": "ICreateClientOpts",
           "typeImports": 1,
           "valueImports": 0
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "IEventRelation",
-          "typeImports": 0,
-          "valueImports": 1
         },
         {
           "fileCount": 1,
@@ -9333,35 +9326,6 @@
     },
     {
       "bucket": "state",
-      "categories": [],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 5,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IEventRelation"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/state/room/roomInputDrafts.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "state",
       "categories": ["client_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -10856,7 +10820,7 @@
         "hook": 36,
         "page": 7,
         "plugin": 6,
-        "state": 5,
+        "state": 4,
         "utility": 9
       },
       "planComparison": {
@@ -10865,13 +10829,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 128,
+      "productionImportFiles": 127,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 138
+      "totalImportFiles": 137
     },
     "repositoryWide": {
-      "productionImportFiles": 128,
+      "productionImportFiles": 127,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -10880,7 +10844,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 141
+      "totalImportFiles": 140
     }
   }
 }
