@@ -2,13 +2,17 @@
 
 <!-- matrix-rust-program-status-link -->
 
-| Field                     | Value                                                                                                                                                                                         |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status                    | **Active — tip `0152c460`; #283 edit + #285 C1 cutover in CI; pack-read inventory #287 landed; forward/avatar/pack-write residual; #39 gated** (2026-08-01) |
-| Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                            |
-| Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)                                                                                                                                     |
-| Current integration tip   | `f4addd6f` (after [#280](https://github.com/nepenth/synara-desktop/pull/280) / [#282](https://github.com/nepenth/synara-desktop/pull/282)) |
-| Active PRs                | **This PR** [#279](https://github.com/nepenth/synara-desktop/pull/279) password `loginUtil`; [#283](https://github.com/nepenth/synara-desktop/pull/283); [#240](https://github.com/nepenth/synara-desktop/pull/240) HOLD |
+> **2026-08-03 tip honesty:** Integration tip is **`80af6ce7`** with production importers **124** (baseline 220).  
+> Pipeline is **PAUSED**. Authoritative snapshot: [SCOREBOARD.md](SCOREBOARD.md) + [pause-handoff-2026-08-03.md](pause-handoff-2026-08-03.md).  
+> Rows below are a **historical residual ledger** — many verticals advanced after this table’s original tip pins; do not treat old tip SHAs or importer counts in body rows as current without re-checking tip inventory.
+
+| Field                     | Value |
+| ------------------------- | ----- |
+| Status                    | **Paused audit** — tip `80af6ce7`; importers **124**; open product PRs none; daytime/overnight OFF (2026-08-03) |
+| Policy                    | [full-vertical-policy.md](full-vertical-policy.md) |
+| Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**) |
+| Current integration tip   | **`80af6ce7`** (after #538 long-tail MsgType residual-empty) |
+| Active PRs                | **none** (pipeline paused) |
 
 ## Policy trigger
 

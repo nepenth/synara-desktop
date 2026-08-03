@@ -1,13 +1,15 @@
 # Matrix Rust full-replacement — scoreboard
 
-| Field                                                  | Value                                                    |
-| ------------------------------------------------------ | -------------------------------------------------------- |
-| Updated                                                | 2026-08-02                                               |
-| Tip                                                    | `cf79f975` on `feature/matrix-rust-sdk-full-replacement`; the docs-only #490/#496/#497 follow-up is present at this tip; presence and room directory remain first-slice/WIP only, C3–C5 are **Not confirmed**, V-BURN remains **HOLD / Not ready**, and production importers remain **150** |
-| Production `matrix-js-sdk` import files (`synara/src`) | **150** (plan baseline was **220**)                      |
-| Product command layout                                  | **#446 merged** — domain `product_commands.rs` modules are available for parallel follow-on lanes |
-| Dual backend                                           | **false** (forbidden)                                    |
-| Umbrella #39                                           | **Do not merge** without explicit user approval          |
+| Field                                                  | Value                                                                       |
+| ------------------------------------------------------ | --------------------------------------------------------------------------- |
+| Updated                                                | **2026-08-03** (pipeline pause / audit handoff)                             |
+| Tip                                                    | `80af6ce7` on `feature/matrix-rust-sdk-full-replacement`                    |
+| Production `matrix-js-sdk` import files (`synara/src`) | **124** (plan baseline was **220**; **96 removed**, ~**43.6%**)             |
+| Allowlist `pathCount`                                  | **124** (matches `paths[]` length)                                          |
+| Dual backend                                           | **false** (forbidden forever)                                               |
+| Pipeline                                               | **PAUSED** — no daytime/overnight spawns until operator resume              |
+| Burn board                                             | https://kb.whyland.com/go/synara-matrix-burn                                |
+| Umbrella #39                                           | **Do not merge** without explicit user approval                             |
 
 ## Operator index — timeline live proofs
 
@@ -23,94 +25,41 @@ run passes the relevant checklist.
 
 ## Done (high level)
 
-| Area                            | Evidence                                                                                                                                                                                         |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Crypto vertical                 | V-CRYPTO done earlier                                                                                                                                                                            |
-| Core send                       | text/attachment/reaction/poll/thread/sticker/GIF native                                                                                                                                          |
-| Rooms                           | hierarchy + space writers                                                                                                                                                                        |
-| Auth                            | SSO removed; token non-retention; register; password reset; login-flow discovery; UIA multi-stage non-retention; **loginUtil fail-closed #279**                                                  |
-| Poll-in-thread                  | #282                                                                                                                                                                                             |
-| Timeline contract               | #240 native DTO/stream/actions + presenter code                                                                                                                                                  |
-| Cutover policy                  | Approved; residual map #286; pack-read inventory #287                                                                                                                                            |
-| Send residual inventories       | forward #290; avatar #291; pack-write #292 (docs only)                                                                                                                                           |
-| V-SEND.R-EDIT                   | **#283** native `m.replace` merged                                                                                                                                                               |
-| V-TIMELINE.C3 checklist         | **#294** docs-only stream verify checklist                                                                                                                                                       |
-| V-TIMELINE.C4 checklist         | **docs-only** media/render verify checklist ([v-timeline-c4-media-render-verify.md](v-timeline-c4-media-render-verify.md))                                                                       |
-| V-TIMELINE.C5 checklist         | **docs-only** pins/notes/jump verify checklist ([v-timeline-c5-pins-notes-jump-verify.md](v-timeline-c5-pins-notes-jump-verify.md))                                                              |
-| V-TIMELINE.C1                   | **#285** NativeTimelinePresenter owns RoomView                                                                                                                                                   |
-| V-TIMELINE.C2                   | **#289** delete `RoomTimeline` (imports **165→164**, allowlist **169→168**)                                                                                                                      |
-| V-SEND.R-FORWARD                | **#296** legacy MessageForwardItem + forward.ts deleted                                                                                                                                          |
-| V-TIMELINE residual truth       | **#298** C1/C2 done notes                                                                                                                                                                        |
-| V-SEND.R-PACK-READ              | **#297** snapshot; **#318** subscribe; **#320** room ids; **#365** JS `get*` helpers + web fallbacks deleted (keep equals); imports **157→155** after #364 leave                                 |
-| V-SEND.R-AVATAR-UPLOAD          | **#303** native `matrix_upload_media` + set own avatar/display name; Profile.tsx fail-closed                                                                                                     |
-| V-SEND.R-PACK-WRITE personal    | **#306** `matrix_set_user_image_pack` + UserImagePack fail-closed                                                                                                                                |
-| V-SEND.R-PACK-WRITE global      | **#309** `matrix_set_global_image_packs` + GlobalPacks fail-closed                                                                                                                               |
-| V-SEND.R-PACK-WRITE room        | **#310** `matrix_set_room_image_pack` + RoomPacks/RoomImagePack fail-closed                                                                                                                      |
-| V-SEND.R-ROOM-PROFILE           | **#313** `matrix_set_room_name`/`matrix_set_room_topic`/`matrix_set_room_avatar` + RoomProfile.tsx fail-closed                                                                                   |
-| V-SEND.R-PACK-UPLOAD            | **#314** reuses `matrix_upload_media` via CompactUploadCardRenderer fail-closed (pack + compact image uploads)                                                                                   |
-| V-SEND.R-GIF-PACK               | **NOOP** — `GifPicker` exposes provider search/selection only; selected GIF send is native via #264 and no GIF pack/collection owner exists                                                      |
-| Room leave vertical             | **#364** `matrix_room_leave` + LeaveRoom/LeaveSpace native owner                                                                                                                                 |
-| Room create vertical            | **#372** `matrix_room_create` + native owner; CreateRoom/Space/Chat + `/startdm` fail-closed (imports **154→153**)                                                                               |
-| Room moderation writes          | **#375** native invite/kick/ban/unban/setPowerLevel writes; moderation write product vertical merged                                                                                             |
-| Members-read member surfaces    | **#395** `matrix_room_members_snapshot` + Members settings native fail-closed; **#405 merged** wires drawer/lobby/mentions member snapshots; **#439 merged** adds native powers-bulk writes; **#450 merged** adds native power/creator reads; custom tag/direct reads remain residual |
-| /leave command                  | **#371** useCommands Leave → leaveRoomWithNativeOwner                                                                                                                                            |
-| Room join vertical              | **#369** `matrix_room_join` + native owner; all production `joinRoom` sites fail-closed (imports **155→154**)                                                                                    |
-| Composer GIF/upload fallbacks   | **#363** RoomInput GIF + msgContent thumbnail JS upload fallbacks deleted                                                                                                                        |
-| V-SEND.R-CALL-UPLOAD            | **#328** native upload; **#362** native known rooms; **#407** native media config/download; inventoried CallWidget native desktop surfaces are closed ([residual](v-send-call-widget-residual.md)) |
-| Product lane protocol            | **#438 merged** docs-only single-owner protocol for `product.rs`; **#439 merged** powers-bulk; **#446 merged** domain command fan-out |
-| Presence product vertical        | **#458 first slice merged / WIP** — native snapshot/subscribe path and current profile consumers are landed; full vertical scope, focused proof, live proof, and acceptance remain open |
-| Room directory product vertical  | **#461 first slice merged / WIP** — native directory wiring and route-scoped JS-owner deletion are landed; full vertical scope, focused proof, live proof, and acceptance remain open |
-| Composer thumbnail (msgContent) | **#325** video thumbnails via `uploadMediaNative` / `matrix_upload_media` fail-closed                                                                                                            |
-| V-SEND.R-DEVTOOL                | [Docs-only inventory](v-send-devtool-inventory.md) · [implementation gate](v-send-devtool-inventory.md#implementation-gate): JS client remains; start only after C3–C5 live proofs; low priority |
-| CI                              | Parallel Validate #284                                                                                                                                                                           |
+| Area | Evidence |
+| ---- | -------- |
+| Crypto vertical | V-CRYPTO done earlier |
+| Core send | text/attachment/reaction/poll/thread/sticker/GIF native |
+| Auth | SSO out; login/UIA/register/reset; fail-closed desktop |
+| Rooms core | leave/join/create, hierarchy, DM, unread, typing |
+| Timeline shell C1/C2 | NativeTimelinePresenter; C3–C5 live **Not confirmed** |
+| Members/power (partial → residual-empty slices) | #375/#395/#405/#439/#450 powers; **#514** direct readers; **#516** tags READ; via-server **#519** |
+| Presence | first slice **#458** + full residual **#515** |
+| Directory | first **#461** + residual **#513** + visibility **#520** |
+| Product extract | **#446** domain product_commands |
+| Join-rule READ residual-empty | **#521** native snapshot + RoomPublish |
+| Join-rule presentation DTO | **#522** |
+| Long-tail residual-empty (type/presentation/orphan) | **#517–#538** (room-summary → RenderMessageContent MsgType) — see [pause handoff](pause-handoff-2026-08-03.md) |
+| Importer burn (tip inventory) | **220 → 124** production files |
 
-## In flight — parallel product verticals
+## In flight
 
-| Slice | Status / boundary |
-| ----- | ----------------- |
-| [Presence](v-presence-implement-packet.md) | **#458 first slice landed; full vertical WIP in parallel**; module-owned; no shared `product.rs` ownership required; not product-done |
-| [Room directory](v-rooms-directory-implement-packet.md) | **#461 first slice landed; full vertical WIP in parallel**; module-owned; no shared `product.rs` ownership required; not product-done |
-| [Power-level READ](v-rooms-power-levels-read-residual.md) | **#450 merged** native power/creator reads; custom `power_level_tags` and direct helper/plugin readers remain |
-| Other domain slices | Parallel fan-out is available; each implementation must stay within its owning module |
+| Item | Status |
+| ---- | ------ |
+| Daytime / overnight pipelines | **PAUSED** (scheduler cancelled 2026-08-03) |
+| Open product PRs onto full-replacement base | **none** (after #538 land + docs freezes closed) |
+| Stale tip-docs drafts #502–#512 | **Closed** as obsolete tip-SHA freezes |
 
-## Left (finish-line order)
+## Left (finish-line order after resume)
 
-1. **Presence #458 first slice + room directory #461 — full verticals still open.** **#458**
-   native presence snapshot/subscribe wiring and current profile consumers are
-   merged, but the full presence scope, focused evidence, live proof, and
-   acceptance remain open. **#461**'s first directory slice is also merged,
-   but full vertical scope, focused evidence, live proof, and full vertical
-   acceptance remain open; do not treat a packet or first slice as product
-   completion. See
-   [presence](v-presence-implement-packet.md) and
-   [room directory](v-rooms-directory-implement-packet.md).
-2. **Members — native full vertical.** Leave/join/create closed
-   (**#364/#369/#372**); `/leave` command **#371**; moderation writes
-   invite/kick/ban/unban/setPowerLevel **#375 merged**; members-read first slice
-   **#395** (`matrix_room_members_snapshot` + Members settings native). **#405**
-   is merged at this tip and closes Room/MembersDrawer/Lobby/UserMentionAutocomplete
-   member enumeration on native desktop. **#439** powers-bulk and **#450**
-   native power-level/creator READs are also merged; custom tags and direct
-   helper/plugin readers remain residual. See
-   [read residual inventory](v-rooms-members-read-residual.md),
-   [P4.6 members](p4.6-members.md) and [P4.3 membership](p4.3-membership-unread.md).
-3. **V-TIMELINE.C3–C5 — live proofs.** All three remain **Not confirmed**
-   (C3 blocked without Docker Synapse harness in agent env). Operator index:
-   [C3](v-timeline-c3-stream-verify.md),
-   [C4](v-timeline-c4-media-render-verify.md),
-   [C5](v-timeline-c5-pins-notes-jump-verify.md).
-4. **V-SEND.R-DEVTOOL — native full vertical.** Inventory remains; implement
-   after C3–C5 live or explicit reorder. See
-   [implementation gate](v-send-devtool-inventory.md#implementation-gate).
-5. **V-BURN.1 — no live `createClient`/`startClient` on desktop.** Not
-   complete. See [V-BURN gates](d0-residual-completion.md) and
-   [blockers](v-burn-readiness-snapshot.md).
-6. **V-BURN.2 — zero production importers.** Current production importers
-   **150**. See [taxonomy](v-burn-importer-taxonomy.md).
-7. **V-BURN.3 — drop npm and obsolete JS bootstrap/store code.** After
-   V-BURN.1/.2. See the
-   [V-BURN completion gates](d0-residual-completion.md) and [blocker snapshot](v-burn-readiness-snapshot.md).
+1. **Long-tail importer burn (residual-empty only).** Prefer single-file type/presentation kills with allowlist+inventory honesty; refuse freestyle multi-module thrash. Hard leftovers include `RoomJoinRules.tsx` **writer**, `useMessageSearch`, `utils/room.ts`, timeline/media listeners, CallWidget media IPC, `initMatrix`/`cryptoStoreContinuity`, R-DEVTOOL.
+2. **Members residual honesty** — via-servers closed (#519); enumeration/search/DM-peer may remain — re-open [v-rooms-members-read-residual.md](v-rooms-members-read-residual.md) only with tip-accurate residual list.
+3. **V-TIMELINE.C3–C5 live proofs** — still **Not confirmed**; operator checklists only.
+4. **V-SEND.R-DEVTOOL** — gated after C3–C5 or explicit reorder.
+5. **CallWidget media config/download** — residual still open ([v-send-call-widget-residual.md](v-send-call-widget-residual.md)).
+6. **V-BURN.1–.3** — HOLD until zero importers + drop npm criteria met.
 
-**V-BURN remains HOLD / Not ready and is not complete.** `dual_backend` remains
-**forbidden**; [#39](https://github.com/nepenth/synara-desktop/pull/39) remains
-gated and must not be merged to `main` without explicit user approval.
+**V-BURN remains HOLD.** `dual_backend` remains **forbidden**. [#39](https://github.com/nepenth/synara-desktop/pull/39) remains gated.
+
+## How to resume
+
+See [pause-handoff-2026-08-03.md](pause-handoff-2026-08-03.md) and `/tmp/synara-daytime-pipeline/PAUSE_HANDOFF.md`.
