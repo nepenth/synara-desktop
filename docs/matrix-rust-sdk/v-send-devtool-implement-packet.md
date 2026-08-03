@@ -5,9 +5,9 @@
 | Status   | **Implementation packet** — this packet is docs-only; it does not claim the vertical is implemented                                                |
 | Residual | **V-SEND.R-DEVTOOL**                                                                                                                               |
 | Priority | Low; user-reordered finish-line item                                                                                                               |
-| Base     | `feature/matrix-rust-sdk-full-replacement` at `60141c8bb96c4f4be4578c367cbae116a2e81990`                                                           |
+| Base     | `feature/matrix-rust-sdk-full-replacement` at `abd736b3`                                                                                             |
 | PR shape | Focused **draft** PR targeting `feature/matrix-rust-sdk-full-replacement`                                                                          |
-| Gate     | **Held** — start only after V-TIMELINE.C3–C5 have confirmed live proofs                                                                             |
+| Gate     | **Eligible to start** — C3–C5 live proof is optional Beta feedback, not a prerequisite                                                              |
 | Policy   | [full-vertical-policy.md](full-vertical-policy.md): complete UI → Tauri IPC → live `matrix-sdk` vertical, with JS-owner deletion in the same slice |
 | Guard    | Never `main`, umbrella PR **#39**, or V-BURN/#327; `dual_backend=false`; native failure remains fail-closed                                          |
 
@@ -54,8 +54,9 @@ The inventory's common room feature and its SDK-bound hooks:
   editor SDK-neutral.
 
 The Rust owner, Tauri registration/capability wiring, Synara-owned DTOs, native
-frontend owner, focused tests, and authenticated live proof are all part of
-the same vertical. Do not split native wiring from deletion and call the
+frontend owner, and focused tests are all part of the same vertical. Optional
+authenticated live proof may provide Beta feedback but is not a completion or
+merge prerequisite. Do not split native wiring from deletion and call the
 vertical done in between.
 
 ### Out of scope
@@ -73,7 +74,8 @@ Before implementation, the writer must verify:
 
 1. the actual `HEAD` is the base SHA in this packet and the PR target is the
    integration branch named above;
-2. V-TIMELINE.C3, C4, and C5 have accepted live proof artifacts;
+2. V-TIMELINE.C3, C4, and C5 live-proof status is recorded as optional Beta
+   feedback (artifacts may be absent and must not block this implementation);
 3. the managed native session exposes one live `matrix-sdk` client for the
    current session; and
 4. no concurrent native/JS Matrix client is started for this session.
@@ -249,12 +251,12 @@ Rust module tests, the IPC/DTO contract tests, and the existing relevant
 guardrail checks. Full cargo builds and `npm ci` are not required unless a
 targeted failure makes one essential.
 
-## 6. Authenticated live proof
+## 6. Optional authenticated live proof
 
-After C3–C5 are accepted, record a focused two-client Synapse proof using the
-repository's [test-matrix-synapse-topology.md](test-matrix-synapse-topology.md)
-topology. The proof is required for acceptance and must name the exact native
-commands observed.
+If available, record a focused two-client Synapse proof using the repository's
+[test-matrix-synapse-topology.md](test-matrix-synapse-topology.md) topology.
+The proof is optional Beta feedback, not required for branch completion or
+merge, and should name the exact native commands observed.
 
 1. Open Developer Tools for a known room. Confirm
    `matrix_session_snapshot` and the two snapshot commands return the expected
@@ -277,14 +279,15 @@ commands observed.
    readback, subscription, or live client disables the surface and never falls
    through to `matrix-js-sdk`.
 
-The proof must be marked **not run**, **failed**, or **passed** with evidence;
-absence of a live proof is not acceptance. This packet does not claim C3–C5 or
-R-DEVTOOL live proof complete.
+If attempted, mark the proof **not run**, **failed**, or **passed** with
+evidence. An absent live proof leaves the optional feedback status
+**Not confirmed** and does not block completion or merge. This packet does not
+claim C3–C5 or R-DEVTOOL live proof complete.
 
 ## 7. Ordered implementation work
 
-1. Reconfirm the exact base SHA, branch target, C3–C5 gate, and the managed
-   native session owner. Stop on any mismatch.
+1. Reconfirm the exact base SHA, branch target, the optional C3–C5 Beta-proof
+   status, and the managed native session owner. Stop on any mismatch.
 2. Define and test Synara-owned DTOs and the exact IPC names in Section 3.
    Register only those commands with Tauri and the desktop capability surface.
 3. Implement the Rust owner against the managed live `matrix-sdk` client,
@@ -296,7 +299,8 @@ R-DEVTOOL live proof complete.
 5. Delete the JS owners and the two developer-tools-only hooks listed in
    Section 4. Remove SDK-only error types from shared UI where required.
 6. Run the focused frontend, DTO/IPC, Rust, source-absence, and guardrail tests.
-   Then run the authenticated live proof and record its evidence.
+   An authenticated live proof may be run for optional Beta feedback and its
+   evidence recorded; it is not a completion or merge prerequisite.
 7. Review the diff for accidental changes to `main`, #39, V-BURN status,
    unrelated verticals, or any `dual_backend`/fallback mechanism. Keep the PR
    draft and focused.
@@ -312,7 +316,8 @@ R-DEVTOOL may be marked complete only when all of the following are true:
 - current permission and safe error semantics are preserved;
 - the Section 4 JS owners/imports/hooks and JS-only tests/types are physically
   deleted or neutralized in this slice;
-- focused tests and the authenticated live proof pass;
+- focused tests pass; any authenticated live proof is optional Beta feedback and
+  may remain **Not confirmed**;
 - no native-session failure can invoke a JS writer or silently claim success;
 - no tokens, keys, recovery material, ciphertext, or event content is emitted
   in logs/errors; and
@@ -321,4 +326,5 @@ R-DEVTOOL may be marked complete only when all of the following are true:
   “deferred” R-DEVTOOL work.
 
 This completion statement applies only to R-DEVTOOL. It must not be used to
-claim V-BURN/#327 complete, to reopen #39, or to change the C3–C5 gate.
+claim V-BURN/#327 complete, to reopen #39, or to introduce a C3–C5 live-proof
+completion or merge gate.

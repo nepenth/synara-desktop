@@ -4,6 +4,27 @@
 
 Operator request: wrap in-flight work, **stop loops/spawns**, audit tracking, clean disk/PRs, leave resume-ready.
 
+## Policy refresh — 2026-08-03
+
+HUMAN OPERATOR LIVE-PROOF is removed as a completion or merge gate for
+residual-empty `matrix-js-sdk` burns on `feature/matrix-rust-sdk-full-replacement`.
+For branch purposes, a claimed file is accepted when its code is on the
+measured tip, focused unit/CI checks pass, and no `matrix-js-sdk` import remains
+in that file. Native product paths that require live Matrix state must fail
+closed. Fix-forward and private Beta are accepted.
+
+C3–C5 desktop proof remains optional Beta feedback and may stay **Not
+confirmed** without holding a residual-empty burn or merge. R-DEVTOOL may start
+without waiting for C3–C5 live confirmation once normal operator scheduling is
+re-enabled. V-BURN remains **HOLD**, `dual_backend=false` remains forbidden
+forever, and `main` / umbrella #39 remain out of scope.
+
+When a product change changes importer inventory, run
+`npm run inventory:matrix-sdk-usage`; ratchet the allowlist `pathCount` and
+`paths[]`; update inventory test floors for files, declarations, and buckets;
+and update P1.6 guardrail floors. This docs-only policy PR changes no
+production importers and carries the tip inventory's 124 files / 124 paths.
+
 ## Hard stop (do not violate)
 
 | Control | State |
@@ -20,13 +41,13 @@ Operator request: wrap in-flight work, **stop loops/spawns**, audit tracking, cl
 | Field | Value |
 | ----- | ----- |
 | Branch | `feature/matrix-rust-sdk-full-replacement` |
-| Tip SHA (short) | **`80af6ce7`** |
-| Tip subject | `fix(matrix): remove message renderer SDK type importer (#538)` |
+| Tip SHA (short) | **`abd736b3`** |
+| Tip subject | `docs(matrix): pause handoff + tip honesty after #538 (124 importers) (#539)` |
 | Production import files | **124** / baseline **220** (**96** removed, ~**43.6%**) |
 | Allowlist pathCount | **124** (= `paths[]` length) |
 | Inventory source | `docs/matrix-rust-sdk/desktop-sdk-usage.md` **on tip** (never a stale worktree) |
 | Burn board | https://kb.whyland.com/go/synara-matrix-burn |
-| Open product PRs (base = full-replacement) | **none** |
+| Open product PRs (base = full-replacement) | **one docs-only policy PR draft** (this branch) |
 
 ## What landed during the 2026-08-02 → 2026-08-03 push
 
@@ -65,7 +86,7 @@ Operator request: wrap in-flight work, **stop loops/spawns**, audit tracking, cl
 | #537 | AccountDataEditor MatrixError type-only |
 | #538 | RenderMessageContent MsgType presentation |
 
-**Importer path (approx.):** ~153 (early 08-01 scoreboard) → **~145** after join-rule/native stack → **124** after long-tail type burns.
+**Importer path (historical approximation):** ~153 (early 08-01 scoreboard) → **~145** after join-rule/native stack → **124** after long-tail type burns. The authoritative current count is the committed tip inventory above.
 
 ## Inventory honesty rules (resume)
 
@@ -81,7 +102,7 @@ Operator request: wrap in-flight work, **stop loops/spawns**, audit tracking, cl
 - **initMatrix / cryptoStoreContinuity** client lifecycle
 - **CallWidget** media config/download + call-status surfaces
 - **R-DEVTOOL** SendRoomEvent / StateEventEditor
-- **C3–C5** live proofs still **Not confirmed**
+- **C3–C5** live proofs still **Not confirmed**; optional Beta feedback, not a merge hold
 
 Bucket sketch at tip (desktop-runtime production importers ≈ inventory files): feature ~47, hook ~35, component ~14, utility ~9, page ~7, plugin ~6, state ~4, client-lifecycle ~2.
 

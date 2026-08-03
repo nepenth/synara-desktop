@@ -2,8 +2,8 @@
 
 | Field                                                  | Value                                                                       |
 | ------------------------------------------------------ | --------------------------------------------------------------------------- |
-| Updated                                                | **2026-08-03** (pipeline pause / audit handoff)                             |
-| Tip                                                    | `80af6ce7` on `feature/matrix-rust-sdk-full-replacement`                    |
+| Updated                                                | **2026-08-03** (live-proof gate policy refresh)                             |
+| Tip                                                    | `abd736b3` on `feature/matrix-rust-sdk-full-replacement`                    |
 | Production `matrix-js-sdk` import files (`synara/src`) | **124** (plan baseline was **220**; **96 removed**, ~**43.6%**)             |
 | Allowlist `pathCount`                                  | **124** (matches `paths[]` length)                                          |
 | Dual backend                                           | **false** (forbidden forever)                                               |
@@ -11,11 +11,30 @@
 | Burn board                                             | https://kb.whyland.com/go/synara-matrix-burn                                |
 | Umbrella #39                                           | **Do not merge** without explicit user approval                             |
 
+## Current burn policy
+
+The HUMAN OPERATOR LIVE-PROOF step is **not a completion or merge gate** for
+residual-empty `matrix-js-sdk` burns on this feature branch. A claimed file is
+engineering-complete for branch purposes when the code is on the measured tip,
+focused unit/CI checks pass, and the file has no remaining `matrix-js-sdk`
+import. A native product path that needs live Matrix state must fail closed;
+fix-forward and private Beta are accepted. C3–C5 desktop sessions remain
+useful optional Beta feedback and may remain **Not confirmed**, but they do not
+hold a residual-empty burn or merge.
+
+Inventory honesty remains mandatory when a product change changes importers:
+regenerate with `npm run inventory:matrix-sdk-usage`, ratchet the allowlist
+`pathCount` and `paths[]`, and update the inventory test floors for production
+files, declarations, and buckets plus the P1.6 guardrail floors. This PR does
+not change production importers, so the committed 124-file / 124-path tip
+inventory is carried forward unchanged.
+
 ## Operator index — timeline live proofs
 
 These are docs-only operator checklists for the selected native desktop path.
-All three live proofs remain **Not confirmed** until an authenticated desktop
-run passes the relevant checklist.
+All three live proofs remain **Not confirmed** because no authenticated desktop
+run is recorded at this tip. That status is optional Beta feedback, not a
+completion or merge hold.
 
 | Proof                         | Operator checklist                                                                 | Live proof        |
 | ----------------------------- | ---------------------------------------------------------------------------------- | ----------------- |
@@ -31,7 +50,7 @@ run passes the relevant checklist.
 | Core send | text/attachment/reaction/poll/thread/sticker/GIF native |
 | Auth | SSO out; login/UIA/register/reset; fail-closed desktop |
 | Rooms core | leave/join/create, hierarchy, DM, unread, typing |
-| Timeline shell C1/C2 | NativeTimelinePresenter; C3–C5 live **Not confirmed** |
+| Timeline shell C1/C2 | NativeTimelinePresenter; C3–C5 code/unit/CI may be engineering-complete while live proof remains **Not confirmed** |
 | Members/power (partial → residual-empty slices) | #375/#395/#405/#439/#450 powers; **#514** direct readers; **#516** tags READ; via-server **#519** |
 | Presence | first slice **#458** + full residual **#515** |
 | Directory | first **#461** + residual **#513** + visibility **#520** |
@@ -46,15 +65,15 @@ run passes the relevant checklist.
 | Item | Status |
 | ---- | ------ |
 | Daytime / overnight pipelines | **PAUSED** (scheduler cancelled 2026-08-03) |
-| Open product PRs onto full-replacement base | **none** (after #538 land + docs freezes closed) |
+| Open product PRs onto full-replacement base | **one docs-only policy PR draft** (this branch) |
 | Stale tip-docs drafts #502–#512 | **Closed** as obsolete tip-SHA freezes |
 
 ## Left (finish-line order after resume)
 
 1. **Long-tail importer burn (residual-empty only).** Prefer single-file type/presentation kills with allowlist+inventory honesty; refuse freestyle multi-module thrash. Hard leftovers include `RoomJoinRules.tsx` **writer**, `useMessageSearch`, `utils/room.ts`, timeline/media listeners, CallWidget media IPC, `initMatrix`/`cryptoStoreContinuity`, R-DEVTOOL.
 2. **Members residual honesty** — via-servers closed (#519); enumeration/search/DM-peer may remain — re-open [v-rooms-members-read-residual.md](v-rooms-members-read-residual.md) only with tip-accurate residual list.
-3. **V-TIMELINE.C3–C5 live proofs** — still **Not confirmed**; operator checklists only.
-4. **V-SEND.R-DEVTOOL** — gated after C3–C5 or explicit reorder.
+3. **V-TIMELINE.C3–C5 live proofs** — still **Not confirmed**; optional Beta feedback, not a merge gate. Branch completion is tip + focused unit/CI + residual-empty/fail-closed evidence.
+4. **V-SEND.R-DEVTOOL** — may start without waiting for C3–C5 live confirmation; retain the native, fail-closed implementation gate.
 5. **CallWidget media config/download** — residual still open ([v-send-call-widget-residual.md](v-send-call-widget-residual.md)).
 6. **V-BURN.1–.3** — HOLD until zero importers + drop npm criteria met.
 

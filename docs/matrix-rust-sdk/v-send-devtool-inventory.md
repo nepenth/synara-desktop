@@ -3,10 +3,10 @@
 | Field | Value |
 |-------|-------|
 | Status | **Docs-only inventory** — no product code changed |
-| Measured tip | `d3b7871f2af9aafed7770780b13720c5b376afab` (`feature/matrix-rust-sdk-full-replacement`) |
+| Measured tip | `abd736b3` (`feature/matrix-rust-sdk-full-replacement`) |
 | Scope | `synara/src/app/features/common-settings/developer-tools/` and its SDK-bound hooks |
 | Residual | **V-SEND.R-DEVTOOL** |
-| Gate | **Held** — V-TIMELINE.C3–C5 live proofs remain unconfirmed; this residual remains open |
+| Gate | **Eligible to start** — C3–C5 live proofs are optional Beta feedback, not a prerequisite; this residual remains open until its native implementation lands |
 | Policy | Native desktop is fail-closed; `dual_backend=false` |
 | Guard | Draft PR may target `feature/matrix-rust-sdk-full-replacement` only; do not touch `main` or umbrella PR **#39** |
 
@@ -59,15 +59,24 @@ dual-client fallback.
 
 ## Implementation gate
 
-R-DEVTOOL may start only after **V-TIMELINE.C3–C5 have confirmed live proofs**;
-it does not wait for V-BURN preparation, and it is not product work to start
-now. Keep **#327 V-BURN** on hold. When scheduled, implement the complete
+R-DEVTOOL may start without waiting for **V-TIMELINE.C3–C5 live confirmation**;
+their live desktop sessions are optional Beta feedback, not a completion or
+merge gate. It still does not wait for V-BURN preparation, and **#327 V-BURN**
+remains on hold. When scheduled, implement the complete
 UI → Tauri IPC → live `matrix-sdk` vertical: room-state/account-data reads and
 subscriptions, raw state/timeline event reads and writes, and the existing
 permission/error semantics must all be native-owned. On a native session, a
 missing or failed native command, readback, session, or live Matrix client must
 fail closed in the UI; there must be no `matrix-js-sdk` fallback, backend
 selector, or dual backend.
+
+For any separately claimed residual-empty file, the same branch policy applies:
+the implementation must be on the measured tip, focused unit/CI checks must
+pass, and no `matrix-js-sdk` import may remain in that claimed file. Fix-forward
+and private Beta are accepted. If product implementation changes importer
+inventory, regenerate with `npm run inventory:matrix-sdk-usage`, ratchet the
+allowlist `pathCount` and `paths[]`, and update the inventory files/declarations/
+buckets and P1.6 guardrail test floors.
 
 ## Documentation reconciliation
 
