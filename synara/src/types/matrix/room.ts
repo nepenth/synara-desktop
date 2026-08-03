@@ -50,6 +50,16 @@ export enum MessageEvent {
   Reaction = 'm.reaction',
 }
 
+/** SDK-neutral event projection used by native encrypted-message readback. */
+export type NativeEventContentEvent = {
+  eventId: string;
+  sender: string;
+  type: string;
+  originServerTs: number;
+  content: Record<string, unknown>;
+  redacted: boolean;
+};
+
 export enum RoomType {
   Space = 'm.space',
   Call = 'org.matrix.msc3417.call',

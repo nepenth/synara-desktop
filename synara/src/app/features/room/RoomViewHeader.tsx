@@ -24,7 +24,6 @@ import {
   Spinner,
 } from 'folds';
 import { useNavigate } from 'react-router-dom';
-import { Room } from 'matrix-js-sdk';
 import { useStateEvent } from '../../hooks/useStateEvent';
 import { PageHeader } from '../../components/page';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
@@ -75,6 +74,8 @@ import { getRoomNotesSummary } from '../../utils/roomNotes';
 import { roomNotesContentAtom } from '../../state/roomNotesList';
 import { RoomNotesPanel } from './room-notes/RoomNotesPanel';
 import type { RoomSidePanelType } from './RoomSidePanel';
+
+type Room = ReturnType<typeof useRoom>;
 
 type RoomMenuProps = {
   room: Room;

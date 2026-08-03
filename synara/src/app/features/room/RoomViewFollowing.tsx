@@ -11,7 +11,6 @@ import {
   as,
   config,
 } from 'folds';
-import { Room } from 'matrix-js-sdk';
 import classNames from 'classnames';
 import FocusTrap from 'focus-trap-react';
 
@@ -23,6 +22,8 @@ import { useRoomLatestRenderedEvent } from '../../hooks/useRoomLatestRenderedEve
 import { useRoomEventReaders } from '../../hooks/useRoomEventReaders';
 import { EventReaders } from '../../components/event-readers';
 import { stopPropagation } from '../../utils/keyboard';
+
+type Room = Parameters<typeof useRoomLatestRenderedEvent>[0];
 
 export function RoomViewFollowingPlaceholder() {
   return <div className={css.RoomViewFollowingPlaceholder} />;
