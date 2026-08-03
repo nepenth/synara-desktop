@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |          136 |                2 |                   3 |
+| production |          135 |                2 |                   3 |
 | test       |           10 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |      **149** |                  |                     |
+| **total**  |      **148** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |   136 |
+| Production import files |   135 |
 | Test import files       |    10 |
-| Total import files      |   146 |
+| Total import files      |   145 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 136)
+- Production match: **no** (found 135)
 - Test match: **no** (found 10)
 
 ### Production files by bucket (desktop runtime only)
@@ -47,7 +47,7 @@ Expected **220** production and **12** test import files.
 | Bucket           | Files |
 | ---------------- | ----: |
 | client-lifecycle |     2 |
-| component        |    17 |
+| component        |    16 |
 | feature          |    50 |
 | hook             |    37 |
 | media-boundary   |     1 |
@@ -59,13 +59,13 @@ Expected **220** production and **12** test import files.
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 136. Files with any finding: 138.
+Scope: **production only**. Import files: 135. Files with any finding: 137.
 
 ### Imported modules
 
 | Module path                                           | Import sites | Files |
 | ----------------------------------------------------- | -----------: | ----: |
-| `matrix-js-sdk`                                       |          131 |   131 |
+| `matrix-js-sdk`                                       |          130 |   130 |
 | `matrix-js-sdk/lib/types`                             |            8 |     8 |
 | `matrix-js-sdk/lib/matrixrtc/CallMembership`          |            4 |     4 |
 | `matrix-js-sdk/lib/models/relations`                  |            4 |     4 |
@@ -93,9 +93,9 @@ Scope: **production only**. Import files: 136. Files with any finding: 138.
 | `EventType`                 |       7 |     7 |         0 |     7 |
 | `RoomMember`                |       7 |     7 |         0 |     7 |
 | `Direction`                 |       6 |     6 |         0 |     6 |
-| `IContent`                  |       6 |     4 |         2 |     6 |
 | `IPushRules`                |       6 |     6 |         0 |     6 |
 | `RoomEventHandlerMap`       |       6 |     6 |         0 |     6 |
+| `IContent`                  |       5 |     3 |         2 |     5 |
 | `MsgType`                   |       5 |     5 |         0 |     5 |
 | `PushRuleKind`              |       5 |     5 |         0 |     5 |
 | `SyncState`                 |       5 |     4 |         1 |     5 |
@@ -416,7 +416,6 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `synara/src/app/components/image-pack-view/RoomImagePack.tsx`                                                                 | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/invite-user-prompt/InviteUserPrompt.tsx`                                                           | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/member-tile/MemberTile.tsx`                                                                        | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/components/message/MsgTypeRenderers.tsx`                                                                      | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/message/Reaction.tsx`                                                                              | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/message/Reply.tsx`                                                                                 | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/room-intro/RoomIntro.tsx`                                                                          | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
