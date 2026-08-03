@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 129,
-      "importFileCount": 127,
+      "fileCount": 128,
+      "importFileCount": 126,
       "methodCandidateFrequencies": [
         {
           "count": 57,
@@ -378,8 +378,8 @@
       },
       "modules": [
         {
-          "fileCount": 124,
-          "importCount": 124,
+          "fileCount": 123,
+          "importCount": 123,
           "path": "matrix-js-sdk"
         },
         {
@@ -754,13 +754,6 @@
           "valueImports": 2
         },
         {
-          "fileCount": 2,
-          "importCount": 2,
-          "name": "ValidatedAuthMetadata",
-          "typeImports": 0,
-          "valueImports": 2
-        },
-        {
           "fileCount": 1,
           "importCount": 1,
           "name": "AccessTokens",
@@ -1065,6 +1058,13 @@
           "fileCount": 1,
           "importCount": 1,
           "name": "UserEventHandlerMap",
+          "typeImports": 0,
+          "valueImports": 1
+        },
+        {
+          "fileCount": 1,
+          "importCount": 1,
+          "name": "ValidatedAuthMetadata",
           "typeImports": 0,
           "valueImports": 1
         },
@@ -5504,35 +5504,6 @@
       "modelCoupling": ["MatrixClient"],
       "networking": [],
       "path": "synara/src/app/hooks/useAccountDataCallback.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "hook",
-      "categories": [],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "ValidatedAuthMetadata"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/hooks/useAuthMetadata.ts",
       "role": "production"
     },
     {
@@ -10817,7 +10788,7 @@
         "client-lifecycle": 2,
         "component": 16,
         "feature": 47,
-        "hook": 36,
+        "hook": 35,
         "page": 7,
         "plugin": 6,
         "state": 4,
@@ -10829,13 +10800,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 127,
+      "productionImportFiles": 126,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 137
+      "totalImportFiles": 136
     },
     "repositoryWide": {
-      "productionImportFiles": 127,
+      "productionImportFiles": 126,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -10844,7 +10815,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 140
+      "totalImportFiles": 139
     }
   }
 }
