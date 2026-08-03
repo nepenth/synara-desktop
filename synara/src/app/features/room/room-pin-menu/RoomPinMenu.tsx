@@ -351,7 +351,10 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
           }
 
           return (
-            <NativeEventContent roomId={room.roomId} mEvent={mEvent as unknown as NativeEventSource}>
+            <NativeEventContent
+              roomId={room.roomId}
+              mEvent={mEvent as unknown as NativeEventSource}
+            >
               {(resolvedEvent) => {
                 if (resolvedEvent.redacted) return <RedactedContent />;
                 if (resolvedEvent.type === MessageEvent.Sticker)
