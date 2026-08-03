@@ -42,6 +42,7 @@ import { useTimeoutToggle } from '../../hooks/useTimeoutToggle';
 import { useIgnoredUsers } from '../../hooks/useIgnoredUsers';
 import { CutoutCard } from '../cutout-card';
 import { SettingTile } from '../setting-tile';
+import { normalizeRoomJoinRulePresentation } from '../../features/matrix-dto/roomJoinRule';
 
 export function ServerChip({ server }: { server: string }) {
   const mx = useMatrixClient();
@@ -324,7 +325,11 @@ export function MutualRoomsChip({ userId }: { userId: string }) {
                 )}
               />
             ) : (
-              <RoomIcon size="100" joinRule={room.getJoinRule()} roomType={room.getType()} />
+              <RoomIcon
+                size="100"
+                joinRule={normalizeRoomJoinRulePresentation(room.getJoinRule())}
+                roomType={room.getType()}
+              />
             )}
           </Avatar>
         }
