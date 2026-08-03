@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |          143 |                2 |                   3 |
+| production |          142 |                2 |                   3 |
 | test       |           10 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |      **156** |                  |                     |
+| **total**  |      **155** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |   143 |
+| Production import files |   142 |
 | Test import files       |    10 |
-| Total import files      |   153 |
+| Total import files      |   152 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 143)
+- Production match: **no** (found 142)
 - Test match: **no** (found 10)
 
 ### Production files by bucket (desktop runtime only)
@@ -47,7 +47,7 @@ Expected **220** production and **12** test import files.
 | Bucket           | Files |
 | ---------------- | ----: |
 | client-lifecycle |     2 |
-| component        |    20 |
+| component        |    19 |
 | feature          |    52 |
 | hook             |    39 |
 | media-boundary   |     1 |
@@ -59,13 +59,13 @@ Expected **220** production and **12** test import files.
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 143. Files with any finding: 145.
+Scope: **production only**. Import files: 142. Files with any finding: 144.
 
 ### Imported modules
 
 | Module path                                           | Import sites | Files |
 | ----------------------------------------------------- | -----------: | ----: |
-| `matrix-js-sdk`                                       |          137 |   137 |
+| `matrix-js-sdk`                                       |          136 |   136 |
 | `matrix-js-sdk/lib/types`                             |            8 |     8 |
 | `matrix-js-sdk/lib/matrixrtc/CallMembership`          |            4 |     4 |
 | `matrix-js-sdk/lib/models/relations`                  |            4 |     4 |
@@ -95,8 +95,8 @@ Scope: **production only**. Import files: 143. Files with any finding: 145.
 | `Direction`                 |       6 |     6 |         0 |     6 |
 | `IContent`                  |       6 |     4 |         2 |     6 |
 | `IPushRules`                |       6 |     6 |         0 |     6 |
-| `JoinRule`                  |       6 |     4 |         2 |     6 |
 | `RoomEventHandlerMap`       |       6 |     6 |         0 |     6 |
+| `JoinRule`                  |       5 |     3 |         2 |     5 |
 | `MsgType`                   |       5 |     5 |         0 |     5 |
 | `PushRuleKind`              |       5 |     5 |         0 |     5 |
 | `SyncState`                 |       5 |     4 |         1 |     5 |
@@ -406,7 +406,6 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `synara/scripts/run-synapse-two-client-integration.mjs`                                                                       | tooling    | no      | —                | dynamic      | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/AccountDataEditor.tsx`                                                                             | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/CapabilitiesLoader.tsx`                                                                            | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/components/JoinRulesSwitcher.tsx`                                                                             | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/RenderMessageContent.tsx`                                                                          | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/ServerConfigsLoader.tsx`                                                                           | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/create-room/CreateRoomAliasInput.tsx`                                                              | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
