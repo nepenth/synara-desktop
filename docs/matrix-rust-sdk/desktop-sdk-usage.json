@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 135,
-      "importFileCount": 133,
+      "fileCount": 134,
+      "importFileCount": 132,
       "methodCandidateFrequencies": [
         {
           "count": 61,
@@ -378,8 +378,8 @@
       },
       "modules": [
         {
-          "fileCount": 129,
-          "importCount": 129,
+          "fileCount": 128,
+          "importCount": 128,
           "path": "matrix-js-sdk"
         },
         {
@@ -553,13 +553,6 @@
         {
           "fileCount": 5,
           "importCount": 5,
-          "name": "MsgType",
-          "typeImports": 0,
-          "valueImports": 5
-        },
-        {
-          "fileCount": 5,
-          "importCount": 5,
           "name": "PushRuleKind",
           "typeImports": 0,
           "valueImports": 5
@@ -596,6 +589,13 @@
           "fileCount": 4,
           "importCount": 4,
           "name": "IPushRule",
+          "typeImports": 0,
+          "valueImports": 4
+        },
+        {
+          "fileCount": 4,
+          "importCount": 4,
+          "name": "MsgType",
           "typeImports": 0,
           "valueImports": 4
         },
@@ -11020,35 +11020,6 @@
       ],
       "path": "synara/src/sw.ts",
       "role": "production"
-    },
-    {
-      "bucket": "shared-type",
-      "categories": [],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MsgType"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/types/matrix/common.ts",
-      "role": "production"
     }
   ],
   "schemaVersion": 2,
@@ -11080,7 +11051,6 @@
         "hook": 37,
         "page": 7,
         "plugin": 6,
-        "shared-type": 1,
         "state": 5,
         "utility": 9
       },
@@ -11090,13 +11060,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 133,
+      "productionImportFiles": 132,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 143
+      "totalImportFiles": 142
     },
     "repositoryWide": {
-      "productionImportFiles": 133,
+      "productionImportFiles": 132,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -11105,7 +11075,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 146
+      "totalImportFiles": 145
     }
   }
 }
