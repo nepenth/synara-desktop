@@ -25,7 +25,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 75,
+          "fileCount": 74,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 133,
-      "importFileCount": 131,
+      "fileCount": 132,
+      "importFileCount": 130,
       "methodCandidateFrequencies": [
         {
           "count": 61,
@@ -340,8 +340,8 @@
           "importOccurrences": 1
         },
         "MatrixClient": {
-          "fileCount": 37,
-          "importOccurrences": 37
+          "fileCount": 36,
+          "importOccurrences": 36
         },
         "MatrixError": {
           "fileCount": 19,
@@ -408,8 +408,8 @@
           "path": "matrix-js-sdk/lib/@types/read_receipts"
         },
         {
-          "fileCount": 2,
-          "importCount": 2,
+          "fileCount": 1,
+          "importCount": 1,
           "path": "matrix-js-sdk/lib/client"
         },
         {
@@ -481,10 +481,10 @@
           "valueImports": 69
         },
         {
-          "fileCount": 37,
-          "importCount": 37,
+          "fileCount": 36,
+          "importCount": 36,
           "name": "MatrixClient",
-          "typeImports": 3,
+          "typeImports": 2,
           "valueImports": 34
         },
         {
@@ -6064,35 +6064,6 @@
     },
     {
       "bucket": "hook",
-      "categories": ["client_methods"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": true,
-          "line": 2,
-          "module": "matrix-js-sdk/lib/client",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "MatrixClient"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["MatrixClient"],
-      "networking": [],
-      "path": "synara/src/app/hooks/useMatrixClient.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "hook",
       "categories": ["client_methods", "room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -10977,7 +10948,7 @@
         "client-lifecycle": 2,
         "component": 16,
         "feature": 49,
-        "hook": 37,
+        "hook": 36,
         "page": 7,
         "plugin": 6,
         "state": 5,
@@ -10989,13 +10960,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 131,
+      "productionImportFiles": 130,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 141
+      "totalImportFiles": 140
     },
     "repositoryWide": {
-      "productionImportFiles": 131,
+      "productionImportFiles": 130,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -11004,7 +10975,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 144
+      "totalImportFiles": 143
     }
   }
 }
