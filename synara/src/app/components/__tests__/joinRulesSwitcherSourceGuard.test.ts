@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import test from 'node:test';
+
+const source = readFileSync(
+  join(process.cwd(), 'src/app/components/JoinRulesSwitcher.tsx'),
+  'utf8'
+);
+
+test('JoinRulesSwitcher presentation boundary has no direct matrix-js-sdk importer', () => {
+  assert.doesNotMatch(source, /matrix-js-sdk/);
+  assert.match(source, /RoomJoinRulePresentation/);
+  assert.match(source, /normalizeRoomJoinRulePresentation/);
+});
