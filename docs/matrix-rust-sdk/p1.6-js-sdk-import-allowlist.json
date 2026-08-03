@@ -130,7 +130,6 @@
     "synara/src/app/state/upload.ts",
     "synara/src/app/utils/matrix.ts",
     "synara/src/app/utils/notifications.ts",
-    "synara/src/app/utils/polls.ts",
     "synara/src/app/utils/room.ts",
     "synara/src/app/utils/sort.ts",
     "synara/src/app/utils/syncLifecycle.ts",

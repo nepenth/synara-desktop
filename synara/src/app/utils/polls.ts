@@ -1,5 +1,3 @@
-import type { IContent } from 'matrix-js-sdk/lib/models/event';
-
 export const POLL_START_EVENT_TYPE = 'org.matrix.msc3381.poll.start';
 export const POLL_RESPONSE_EVENT_TYPE = 'org.matrix.msc3381.poll.response';
 export const POLL_START_KEY = 'm.poll.start';
@@ -90,7 +88,7 @@ export const makePollStartContent = (
   question: string,
   answers: string[],
   maxSelections = DEFAULT_POLL_SELECTIONS
-): IContent | undefined => {
+) => {
   const poll = normalizePollParts(question, answers, maxSelections);
   if (!poll) return undefined;
 
@@ -117,7 +115,7 @@ export const makePollStartContent = (
   };
 };
 
-export const makePollStartContentFromCommand = (payload: string): IContent | undefined => {
+export const makePollStartContentFromCommand = (payload: string) => {
   const poll = parsePollCommand(payload);
   if (!poll) return undefined;
   return makePollStartContent(
@@ -170,7 +168,7 @@ export const parsePollStartContent = (content: Record<string, unknown>): ParsedP
   };
 };
 
-export const makePollResponseContent = (pollEventId: string, answerIds: string[]): IContent => {
+export const makePollResponseContent = (pollEventId: string, answerIds: string[]) => {
   const safeAnswers = Array.from(
     new Set(answerIds.filter((answerId) => typeof answerId === 'string' && answerId.trim()))
   );
