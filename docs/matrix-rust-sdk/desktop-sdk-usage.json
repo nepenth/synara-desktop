@@ -25,7 +25,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 72,
+          "fileCount": 71,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -95,7 +95,7 @@
         },
         "room_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 73,
+          "fileCount": 71,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -130,9 +130,9 @@
         },
         "timelines": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 25,
+          "fileCount": 24,
           "listenerCandidateOccurrences": 40,
-          "methodCandidateOccurrences": 22,
+          "methodCandidateOccurrences": 21,
           "networkingOccurrences": 0
         },
         "typing": {
@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 126,
-      "importFileCount": 124,
+      "fileCount": 124,
+      "importFileCount": 122,
       "methodCandidateFrequencies": [
         {
           "count": 57,
@@ -174,7 +174,7 @@
           "name": "sendStateEvent"
         },
         {
-          "count": 8,
+          "count": 7,
           "name": "findEventById"
         },
         {
@@ -340,24 +340,24 @@
           "importOccurrences": 1
         },
         "MatrixClient": {
-          "fileCount": 36,
-          "importOccurrences": 36
+          "fileCount": 35,
+          "importOccurrences": 35
         },
         "MatrixError": {
           "fileCount": 18,
           "importOccurrences": 18
         },
         "MatrixEvent": {
-          "fileCount": 25,
-          "importOccurrences": 25
+          "fileCount": 24,
+          "importOccurrences": 24
         },
         "Relations": {
           "fileCount": 4,
           "importOccurrences": 4
         },
         "Room": {
-          "fileCount": 71,
-          "importOccurrences": 71
+          "fileCount": 69,
+          "importOccurrences": 69
         },
         "RoomMember": {
           "fileCount": 7,
@@ -378,8 +378,8 @@
       },
       "modules": [
         {
-          "fileCount": 121,
-          "importCount": 121,
+          "fileCount": 119,
+          "importCount": 119,
           "path": "matrix-js-sdk"
         },
         {
@@ -474,25 +474,25 @@
       "scope": "role",
       "symbols": [
         {
-          "fileCount": 71,
-          "importCount": 71,
+          "fileCount": 69,
+          "importCount": 69,
           "name": "Room",
           "typeImports": 2,
-          "valueImports": 69
+          "valueImports": 67
         },
         {
-          "fileCount": 36,
-          "importCount": 36,
+          "fileCount": 35,
+          "importCount": 35,
           "name": "MatrixClient",
           "typeImports": 2,
-          "valueImports": 34
+          "valueImports": 33
         },
         {
-          "fileCount": 25,
-          "importCount": 25,
+          "fileCount": 24,
+          "importCount": 24,
           "name": "MatrixEvent",
           "typeImports": 3,
-          "valueImports": 22
+          "valueImports": 21
         },
         {
           "fileCount": 18,
@@ -672,13 +672,6 @@
         {
           "fileCount": 2,
           "importCount": 2,
-          "name": "EventTimelineSet",
-          "typeImports": 0,
-          "valueImports": 2
-        },
-        {
-          "fileCount": 2,
-          "importCount": 2,
           "name": "IEvent",
           "typeImports": 0,
           "valueImports": 2
@@ -764,6 +757,13 @@
           "fileCount": 1,
           "importCount": 1,
           "name": "EventStatus",
+          "typeImports": 0,
+          "valueImports": 1
+        },
+        {
+          "fileCount": 1,
+          "importCount": 1,
+          "name": "EventTimelineSet",
           "typeImports": 0,
           "valueImports": 1
         },
@@ -2913,87 +2913,6 @@
       "modelCoupling": ["MatrixClient", "Room", "RoomMember"],
       "networking": [],
       "path": "synara/src/app/components/member-tile/MemberTile.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "component",
-      "categories": ["client_methods", "room_methods"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 4,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixClient"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixEvent"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "Room"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["MatrixClient", "MatrixEvent", "Room"],
-      "networking": [],
-      "path": "synara/src/app/components/message/Reaction.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "component",
-      "categories": ["room_methods", "timelines"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "EventTimelineSet"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "Room"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "timelines",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 82,
-          "name": "findEventById"
-        }
-      ],
-      "modelCoupling": ["Room"],
-      "networking": [],
-      "path": "synara/src/app/components/message/Reply.tsx",
       "role": "production"
     },
     {
@@ -10728,7 +10647,7 @@
     "desktopRuntimeBaseline": {
       "buckets": {
         "client-lifecycle": 2,
-        "component": 14,
+        "component": 12,
         "feature": 47,
         "hook": 35,
         "page": 7,
@@ -10742,13 +10661,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 124,
+      "productionImportFiles": 122,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 134
+      "totalImportFiles": 132
     },
     "repositoryWide": {
-      "productionImportFiles": 124,
+      "productionImportFiles": 122,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -10757,7 +10676,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 137
+      "totalImportFiles": 135
     }
   }
 }
