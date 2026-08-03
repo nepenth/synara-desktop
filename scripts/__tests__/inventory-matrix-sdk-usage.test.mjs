@@ -482,10 +482,10 @@ test("repository inventory includes tooling dynamic import and records the curre
 
   assert.equal(
     baseline.productionImportFiles,
-    133,
-    `expected 133 desktop runtime production import files, found ${baseline.productionImportFiles}`
+    132,
+    `expected 132 desktop runtime production import files, found ${baseline.productionImportFiles}`
   );
-  assert.equal(productionImportDeclarations, 159);
+  assert.equal(productionImportDeclarations, 158);
   assert.equal(
     baseline.testImportFiles,
     10,
@@ -500,7 +500,7 @@ test("repository inventory includes tooling dynamic import and records the curre
   assert.equal(baseline.buckets.plugin, 6);
   assert.equal(baseline.buckets["client-lifecycle"], 2);
   assert.equal(baseline.buckets["media-boundary"] ?? 0, 0);
-  assert.equal(baseline.buckets["shared-type"], 1);
+  assert.equal(baseline.buckets["shared-type"] ?? 0, 0);
 
   // Repository-wide includes tooling beyond synara/src
   assert.ok(rw.toolingImportFiles >= 1);
