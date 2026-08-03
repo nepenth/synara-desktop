@@ -14,7 +14,6 @@ import {
   Scroll,
   config,
 } from 'folds';
-import { MatrixError } from 'matrix-js-sdk';
 import { Cursor } from '../plugins/text-area';
 import { syntaxErrorPosition } from '../utils/dom';
 import { AsyncStatus, useAsyncCallback } from '../hooks/useAsyncCallback';
@@ -57,7 +56,7 @@ function AccountDataEdit({
     EDITOR_INTENT_SPACE_COUNT
   );
 
-  const [submitState, submit] = useAsyncCallback<void, MatrixError, [string, object]>(submitChange);
+  const [submitState, submit] = useAsyncCallback<void, Error, [string, object]>(submitChange);
   const submitting = submitState.status === AsyncStatus.Loading;
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = (evt) => {
