@@ -193,6 +193,23 @@ The completed system will have:
 - Background tasks must be cancellable, joined, monitored, and unable to publish
   into a superseded session generation.
 
+### 3.7 UI/UX fidelity and public-repo hygiene
+
+- **UI/UX fidelity (high-fidelity mandate).** Replacing a capability must not
+  change the app's look and feel. The native rewiring renders the same UI from
+  the same Synara-owned DTOs; no visual redesign, layout/UX/copy change, or
+  rendering-altering component swap is acceptable. A visual difference
+  introduced by a slice is a defect, not decoration: file a named residual and
+  fix forward. A deliberately requested design change is a separate task and is
+  never smuggled into a migration slice (see
+  `docs/matrix-rust-sdk/operating-instructions.md` §3 and
+  `docs/matrix-rust-sdk/full-vertical-policy.md`).
+- **Public-repo hygiene.** This repository is public. No tokens, keys,
+  credentials, session/recovery material, private endpoints, or personal data
+  may ever appear in committed artifacts, fixtures, examples, or logs. Public
+  examples use placeholders (see
+  `docs/matrix-rust-sdk/operating-instructions.md` §1).
+
 ## 4. Current baseline
 
 The baseline must be regenerated in Phase 0 and committed as machine-readable

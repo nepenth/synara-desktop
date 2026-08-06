@@ -13,14 +13,16 @@
 
 | Field              | Value |
 | ------------------ | ----- |
-| Last updated (UTC) | **2026-08-03** |
-| Integration tip    | **`57ab9e64`** — after #546 residual-empty stack (124→114); usage pause |
-| Active work        | **PAUSED** (conserve Grok/Codex weekly usage) — [pause-handoff-2026-08-03.md](pause-handoff-2026-08-03.md) |
+| Last updated (UTC) | **2026-08-06** |
+| Integration tip    | **`57ab9e64`** — after #546 residual-empty stack (124→114) |
+| Active work        | **Ready to resume via this harness** (historical 2026-08-03 usage pause superseded) — [operating-instructions.md](operating-instructions.md) |
 | Product runtime    | Native owns core D0 + V-CRYPTO + residual-empty slices through members/presence/directory/join-rule READ; long-tail JS importers remain |
-| Execution model    | Codex `gpt-5.6-luna` xhigh product; Grok `deepseek-v4-flash-0731` ≤2 when running |
+| Execution model    | **This agent harness + locally hosted model** (orchestrator + sub-agents, 2–3 concurrent; no external model APIs) — [operating-instructions.md](operating-instructions.md) |
 | Import accounting  | Desktop production import files **114** / baseline **220** (**106** removed). Allowlist **114**. |
 | Dual backend       | **`false`** (forbidden forever) |
-| Operating model    | [cutover-operating-model.md](cutover-operating-model.md) · [full-vertical-policy.md](full-vertical-policy.md) |
+| Public repo        | **PUBLIC — no secrets ever**; placeholder-only examples ([operating-instructions.md](operating-instructions.md) §1) |
+| UI/UX fidelity     | **Preserve existing look and feel** — no UX/UI change when replacing a capability ([operating-instructions.md](operating-instructions.md) §3) |
+| Operating model    | [cutover-operating-model.md](cutover-operating-model.md) · [full-vertical-policy.md](full-vertical-policy.md) · [operating-instructions.md](operating-instructions.md) |
 | Burn board         | https://kb.whyland.com/go/synara-matrix-burn |
 | Scoreboard         | [SCOREBOARD.md](SCOREBOARD.md) |
 | Residual queue     | [d0-residual-completion.md](d0-residual-completion.md) (historical ledger; tip honesty = scoreboard + handoff) |
@@ -32,10 +34,10 @@
 
 |                | |
 | -------------- | - |
-| **Now**        | **PAUSED** for usage conservation. Tip **`57ab9e64`**. Production importers **114**. #544+#546 landed; Beta packages built as Actions artifacts. |
+| **Now**        | **Operating model updated (2026-08-06).** Historical 2026-08-03 pause superseded — resume through this harness. Tip **`57ab9e64`**. Production importers **114**. Public-repo hygiene + UI/UX fidelity mandatory on every slice ([operating-instructions.md](operating-instructions.md)). |
 | **Tip**        | `57ab9e64` |
-| **Active PRs** | none product; docs tip-honesty may land with this pause handoff |
-| **Blocked**    | V-BURN HOLD; agent spawns OFF for pause; #39 gated; dual_backend forbidden |
+| **Active PRs** | none product; operating-doc updates (this branch, docs-only) |
+| **Blocked**    | V-BURN HOLD; #39 gated; dual_backend forbidden; no external model APIs |
 
 ---
 
@@ -56,6 +58,17 @@ Update rules:
 - For every vertical, record native wiring **and** deleted JS files/import delta; “wired” is not “done.”
 - Commit as `docs(matrix): progress log — …` on a PR or as part of the landing PR.
 - Measure importers from **tip inventory**, never a stale residual worktree.
+
+## Current policy — 2026-08-06 (operating)
+
+Standing operating instructions govern every slice: **public-repo hygiene**
+(never commit secrets — this tree is public), **execute only through this agent
+harness with its locally hosted model** (orchestrator + bounded sub-agents, ≤2–3
+concurrent, no external model APIs), and **preserve the app's existing look and
+feel** (no UX/UI change when replacing a capability; a visual difference is a
+slice defect fixed forward). See
+[operating-instructions.md](operating-instructions.md). The 2026-08-03 pause was
+a usage pause and is superseded: product work may resume through this harness.
 
 ## Current policy — 2026-08-03
 
@@ -81,6 +94,15 @@ importers and carries the tip inventory's 124 files / 124 paths unchanged.
 ---
 
 ## Work log (newest first)
+
+### 2026-08-06 — operating instructions — public repo + this harness + UI/UX fidelity
+
+| When (UTC) | Item | Result | Notes |
+| ---------- | ---- | ------ | ----- |
+| current | **Operating model** | **This harness** | Orchestrator + sub-agents on the locally hosted model (≤2–3 concurrent); no external model APIs. Historical pause superseded; resume authorized. See [operating-instructions.md](operating-instructions.md). |
+| current | **Public repo policy** | **Mandatory** | Never commit secrets/tokens/keys/credentials/recovery material/private endpoints/personal data; placeholder-only public examples. Wired into README, plan §3.7, full-vertical-policy acceptance gates, SCOREBOARD, product-lane-protocol, pause-handoff. |
+| current | **UI/UX fidelity** | **Mandatory** | Replacing a capability must preserve exact look and feel — no redesign, layout/UX/copy change, or rendering-altering component swap; a visual diff is a slice defect → named residual → fix forward. Added as a full-vertical acceptance gate + plan §3.7 + operating instructions §3. |
+| current | **Go-forward (docs)** | SCOREBOARD "Left" item 1 | Long-tail residual-empty importer burn (RoomJoinRules writer, useMessageSearch, utils/room.ts, timeline/media listeners, CallWidget media IPC, initMatrix/cryptoStoreContinuity, R-DEVTOOL). V-BURN stays HOLD. |
 
 ### 2026-08-03 — tip `57ab9e64` — #546 land + usage pause
 

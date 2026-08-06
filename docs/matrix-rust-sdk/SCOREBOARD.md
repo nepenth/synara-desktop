@@ -7,7 +7,8 @@
 | Production `matrix-js-sdk` import files (`synara/src`) | **114** (plan baseline was **220**; **106 removed**, ~**48.2%**) |
 | Allowlist `pathCount`                                  | **114** (matches `paths[]` length) |
 | Dual backend                                           | **false** (forbidden forever)                                               |
-| Pipeline                                               | **PAUSED** — conserve Grok/Codex weekly usage; no agent spawns until resume |
+| Pipeline                                               | **PAUSED** — historical usage pause; resume authorized through this harness |
+| Operating model                                        | **This harness + locally hosted model** — orchestrator + sub-agents, 2–3 concurrent, no external model APIs; public-repo hygiene + UI/UX fidelity always on ([operating-instructions.md](operating-instructions.md)) |
 | Burn board                                             | https://kb.whyland.com/go/synara-matrix-burn                                |
 | Umbrella #39                                           | **Do not merge** without explicit user approval                             |
 
@@ -83,4 +84,9 @@ completion or merge hold.
 
 ## How to resume
 
-See [pause-handoff-2026-08-03.md](pause-handoff-2026-08-03.md) and `/tmp/synara-daytime-pipeline/PAUSE_HANDOFF.md`.
+See [pause-handoff-2026-08-03.md](pause-handoff-2026-08-03.md) and
+[operating-instructions.md](operating-instructions.md). Execution runs through
+**this agent harness with its locally hosted model** — orchestrator + bounded
+sub-agents, ≤2–3 concurrent, no external model APIs. Public-repo hygiene and
+the UI/UX high-fidelity mandate apply to every slice. Preferred next slice is
+item 1 in the "Left" list above (long-tail residual-empty importer burn).

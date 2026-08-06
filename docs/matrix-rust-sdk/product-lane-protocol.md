@@ -27,23 +27,28 @@ verticals remain the product standard.
 5. Watchers must **not** spawn a second product.rs implementer while a lane
    owner is set.
 
-### Model selection (selective)
+### Model selection (single local model — current instruction)
 
-| Work | Preferred model |
-| ---- | ---------------- |
-| Lane owner (`product.rs` vertical) | Stronger coding model (e.g. gpt-5.6-sol high) when available; else gpt-5.6-luna xhigh |
-| **product.rs extract/split** | Stronger model + high reasoning / max thinking |
-| Product ACCEPT review | luna xhigh or sol high |
-| Parallel docs / residuals / TS-first | luna xhigh and/or DeepSeek-V4-Flash (cap concurrent DeepSeek) |
+The configured model is **locally hosted** and supports ~2–3 concurrent
+sub-agents. No external model APIs are used at this time. Assign effort by role
+and reasoning budget on the same model:
 
-Do **not** burn the largest model on tip-SHA-only docs.
+| Work | Execution |
+| ---- | --------- |
+| Lane owner (`product.rs` vertical) | Local model, high-effort role; serial — one lane owner at a time |
+| **product.rs extract/split** | Local model, high reasoning budget (structural, behavior-preserving) |
+| Product ACCEPT review | Independent sub-agent review on the same local model |
+| Parallel docs / residuals / TS-first | Local model, ≤2–3 concurrent sub-agents; must not touch `product.rs` / command registration |
+
+Product.rs stays serial (one lane owner); only docs/TS-first work that reuses
+existing IPC may parallelize, within the 2–3 concurrency limit.
 
 ## Queue after this protocol
 
 1. Finish the **current lane owner** vertical (powers-bulk if in flight).
 2. **Extract/split `product.rs`** into domain command modules (behavior-preserving).
 3. After extract merges: fan-out multiple product lanes on **different modules**
-   with smaller models; keep ACL/`lib.rs` conflicts small.
+   with the same local model (≤2–3 concurrent); keep ACL/`lib.rs` conflicts small.
 
 ## Extract goals (next structural lane)
 
@@ -63,10 +68,9 @@ Do **not** burn the largest model on tip-SHA-only docs.
 
 ## Daytime pipeline binding
 
-Local daytime ops also keep a copy under `/tmp/synara-daytime-pipeline/`:
-
-- `PRODUCT_LANE.md` — full protocol
-- `LANE_OWNER` — current owner line
-- `daytime-watcher.sh` — must not spawn product racers
-
-If ops files and this doc disagree, **operator/orchestrator resolves** and updates both.
+Local ops may mirror protocol state under `/tmp/synara-daytime-pipeline/`
+(gitignored — **not** public). Execution now runs through **this agent harness**
+with its locally hosted model; `/tmp` mirrors are informational only. Keep
+harness-specific secrets, skills, and orchestrator loops out of the public tree
+([operating-instructions.md](operating-instructions.md)). If ops files and this
+doc disagree, **operator/orchestrator resolves** and updates both.
