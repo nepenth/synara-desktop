@@ -27,28 +27,30 @@ verticals remain the product standard.
 5. Watchers must **not** spawn a second product.rs implementer while a lane
    owner is set.
 
-### Model selection (single local model — current instruction)
+### Model selection (single configured model)
 
-The configured model is **locally hosted** and supports ~2–3 concurrent
-sub-agents. No external model APIs are used at this time. Assign effort by role
-and reasoning budget on the same model:
+The only model configured in prime-agent is **DeepSeek V4 Flash 0731**
+(selector `whyland-spark/deepseek-v4-flash-0731`), locally hosted. Orchestrator
+and sub-agents all use it; **max 2 concurrent sub-agent sessions**. Assign
+effort by role and reasoning budget on the same model:
 
 | Work | Execution |
 | ---- | --------- |
-| Lane owner (`product.rs` vertical) | Local model, high-effort role; serial — one lane owner at a time |
-| **product.rs extract/split** | Local model, high reasoning budget (structural, behavior-preserving) |
-| Product ACCEPT review | Independent sub-agent review on the same local model |
-| Parallel docs / residuals / TS-first | Local model, ≤2–3 concurrent sub-agents; must not touch `product.rs` / command registration |
+| Lane owner (`product.rs` vertical) | DeepSeek V4 Flash 0731, high-effort role; serial — one lane owner at a time |
+| **product.rs extract/split** | DeepSeek V4 Flash 0731, high reasoning budget (structural, behavior-preserving) |
+| Product ACCEPT review | Independent sub-agent review on the same model |
+| Parallel docs / residuals / TS-first | DeepSeek V4 Flash 0731, **≤2 concurrent sessions**; must not touch `product.rs` / command registration |
 
 Product.rs stays serial (one lane owner); only docs/TS-first work that reuses
-existing IPC may parallelize, within the 2–3 concurrency limit.
+existing IPC may run in the 2 parallel sessions.
 
 ## Queue after this protocol
 
 1. Finish the **current lane owner** vertical (powers-bulk if in flight).
 2. **Extract/split `product.rs`** into domain command modules (behavior-preserving).
 3. After extract merges: fan-out multiple product lanes on **different modules**
-   with the same local model (≤2–3 concurrent); keep ACL/`lib.rs` conflicts small.
+   with the same DeepSeek V4 Flash 0731 model (≤2 concurrent); keep ACL/`lib.rs`
+   conflicts small.
 
 ## Extract goals (next structural lane)
 

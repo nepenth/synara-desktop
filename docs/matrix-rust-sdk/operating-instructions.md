@@ -34,25 +34,41 @@ This repository is **public** and remains public for the life of the project.
 - Diagnostics, schemas, and negative-test fixtures that prove secrets must
   never parse are fine; real values are not.
 
-## 2. Execution model — this harness only
+## 2. Execution model — prime-agent orchestrator + DeepSeek V4 Flash 0731 sub-agents
 
-We execute this project through **this agent harness and its configured,
-locally hosted model** — no external model APIs at this time.
+**The harness is prime-agent** (the runtime we run in). The orchestrator runs
+here, drives scope, reviews, and merges. Sub-agents are spawned **inside
+prime-agent** (via the agent runtime's sub-agent facility) — up to **2
+concurrent sessions max**.
 
-- Keep the orchestrator + sub-agent operating method: the parent orchestrates,
-  scopes, reviews, and merges; children do bounded slices and reply with
-  results; results fan back through files and messages.
-- The configured model is **locally hosted** and comfortably supports
-  **2–3 concurrent** sub-agents. Stay at or below that concurrency; do not
-  flood the queue.
-- **Do not spawn or reference external model services** (no API-based model
-  calls, no third-party agent loops) while this instruction is in force.
+- **The only model configured in prime-agent is `deepseek-v4-flash-0731`**
+  (selector `whyland-spark/deepseek-v4-flash-0731`), **locally hosted**. Every
+  orchestrator turn and every sub-agent session uses it. There are no other
+  model APIs in use.
+- **Concurrency: up to 2 concurrent sub-agent sessions.** Do not spawn a third
+  concurrent session; do not flood the queue.
+- Children do bounded slices and reply with results; results fan back through
+  files and messages; the orchestrator (prime-agent) reviews, approves, and
+  merges PRs.
 - Shared-file lanes stay serial: exactly one product-lane owner edits
-  `product.rs` / registers new `matrix_*` commands at a time
-  ([product-lane-protocol.md](product-lane-protocol.md)); docs / TS-first work
-  that reuses existing IPC may parallelize within the concurrency limit.
-- Keep at least one independent sub-agent review for product merges (same
-  harness, same local model) before ACCEPT.
+  `product.rs`-family command files / registers new `matrix_*` commands at a
+  time ([product-lane-protocol.md](product-lane-protocol.md)); docs and
+  TS-first work that reuses existing IPC may run in the 2 parallel sessions.
+- Keep at least one independent sub-agent review for product merges before
+  ACCEPT.
+
+### 2.1 PR and merge workflow (orchestrator)
+
+- Each slice lands as a **task branch → PR onto
+  `feature/matrix-rust-sdk-full-replacement`**, never directly to `main`
+  (`main` and umbrella **#39** remain gated; no merge without explicit operator
+  approval).
+- The orchestrator opens the PR, labels it, and updates the project tracking
+  docs **as work starts and as it finishes** (PROGRESS / SCOREBOARD /
+  `v-*.md` / program status as applicable).
+- An independent sub-agent review (same model) or the repo's own review gate
+  approves the PR; the orchestrator merges the PR into the feature branch once
+  approved and CI is green, then republishes the scoreboard/burn board.
 
 ## 3. UI/UX high-fidelity mandate
 
