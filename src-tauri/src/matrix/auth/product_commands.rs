@@ -601,9 +601,8 @@ fn persist_frontend_session_envelope(
 }
 
 fn clear_frontend_session_envelope() -> Result<bool, MatrixAuthCommandError> {
-    desktop_remove_session_from_store(&KeyringDesktopSessionSecretStore).map_err(|_| {
-        MatrixAuthCommandError::unavailable("d0.1-desktop-session-clear-failed")
-    })
+    desktop_remove_session_from_store(&KeyringDesktopSessionSecretStore)
+        .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-desktop-session-clear-failed"))
 }
 
 impl MatrixAuthState {
@@ -999,8 +998,8 @@ mod tests {
     #[test]
     fn envelope_from_auth_session_oauth_fails_closed_without_echoing_tokens() {
         let user_id = UserId::parse("@alice:example.org").expect("valid user id");
-        let oauth_session = AuthSession::OAuth(Box::new(
-            matrix_sdk::authentication::oauth::OAuthSession {
+        let oauth_session =
+            AuthSession::OAuth(Box::new(matrix_sdk::authentication::oauth::OAuthSession {
                 client_id: matrix_sdk::authentication::oauth::ClientId::new(
                     "test_client_id".to_owned(),
                 ),
@@ -1014,8 +1013,7 @@ mod tests {
                         refresh_token: Some("oauth-refresh-secret".to_owned()),
                     },
                 },
-            },
-        ));
+            }));
 
         let error = envelope_from_auth_session(&native_identity(), &oauth_session)
             .err()
