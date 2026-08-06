@@ -1,5 +1,12 @@
 use super::*;
 
+use crate::desktop_session::{current_timestamp_ms, DesktopSessionEnvelope};
+use crate::desktop_session_store::{
+    desktop_remove_session_from_store, desktop_set_session_in_store,
+    KeyringDesktopSessionSecretStore,
+};
+use matrix_sdk::authentication::AuthSession;
+
 /// V-AUTH.3 — privacy-safe login-flow DTO (no secrets; discovery only).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -123,6 +130,12 @@ pub async fn matrix_login_password(
     };
     if let Err(error) = write_active_identity(&app_data_root, &identity) {
         let _ = clear_session_material(&session_vault, &live_identity);
+        return Err(error);
+    }
+    if let Err(error) = persist_frontend_session_envelope(&client, &identity) {
+        let _ = clear_session_material(&session_vault, &live_identity);
+        let _ = remove_active_identity(&app_data_root);
+        let _ = clear_frontend_session_envelope();
         return Err(error);
     }
 
@@ -359,6 +372,12 @@ pub(super) async fn install_session_from_register_secrets(
         let _ = clear_session_material(&session_vault, &live_identity);
         return Err(error);
     }
+    if let Err(error) = persist_frontend_session_envelope(&client, &identity) {
+        let _ = clear_session_material(&session_vault, &live_identity);
+        let _ = remove_active_identity(&app_data_root);
+        let _ = clear_frontend_session_envelope();
+        return Err(error);
+    }
 
     *session = Some(ManagedMatrixSession {
         client,
@@ -447,6 +466,7 @@ pub async fn matrix_logout(
     let clear_result = clear_session_material(&KeyringSessionMaterialVault::new(), &identity)
         .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-session-clear-failed"));
     let remove_result = remove_active_identity(&app_data_root(&app)?);
+    let _ = clear_frontend_session_envelope();
     *session = None;
     clear_result?;
     remove_result?;
@@ -523,6 +543,67 @@ pub async fn matrix_restore_session(
         next_room_key_import_selection_id: 0,
     });
     Ok(identity)
+}
+
+/// Build the hybrid desktop session envelope from a live SDK auth session.
+///
+/// Mirrors `session_material_from_auth_session` (same matrix-sdk 0.18
+/// `AuthSession` shape and token fields). Pure; never logs or echoes token
+/// values. The envelope lets the frontend bootstrap rehydrate via
+/// `desktop_get_session` — tokens never appear on the `matrix_login_password` /
+/// `matrix_register` IPC return paths.
+fn envelope_from_auth_session(
+    identity: &MatrixLoginIdentity,
+    session: &AuthSession,
+) -> Result<DesktopSessionEnvelope, MatrixAuthCommandError> {
+    match session {
+        AuthSession::Matrix(matrix) => Ok(DesktopSessionEnvelope {
+            base_url: identity.homeserver_url.clone(),
+            user_id: matrix.meta.user_id.as_str().to_owned(),
+            device_id: matrix.meta.device_id.as_str().to_owned(),
+            access_token: matrix.tokens.access_token.clone(),
+            session_generation: None,
+            refresh_token: matrix.tokens.refresh_token.clone(),
+            expires_in_ms: None,
+            stored_at_ms: Some(current_timestamp_ms()),
+        }),
+        AuthSession::OAuth(_) => Err(MatrixAuthCommandError::unavailable(
+            "d0.1-desktop-session-unsupported-kind",
+        )),
+        // Non-exhaustive AuthSession — future variants.
+        _ => Err(MatrixAuthCommandError::unavailable(
+            "d0.1-desktop-session-unsupported-kind",
+        )),
+    }
+}
+
+/// Dual-write the hybrid desktop session envelope host-side after a native
+/// session is installed so `desktop_get_session` can rehydrate the frontend
+/// bootstrap. Fail-closed: an unusable store returns a terminal command error
+/// (login rolls back rather than leaving a half-persisted state).
+fn persist_frontend_session_envelope(
+    client: &Client,
+    identity: &MatrixLoginIdentity,
+) -> Result<(), MatrixAuthCommandError> {
+    let session = client.session().ok_or_else(|| {
+        MatrixAuthCommandError::unavailable("d0.1-desktop-session-no-client-session")
+    })?;
+    let envelope = envelope_from_auth_session(identity, &session)?;
+    match desktop_set_session_in_store(&KeyringDesktopSessionSecretStore, envelope) {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(MatrixAuthCommandError::unavailable(
+            "d0.1-desktop-session-store-unavailable",
+        )),
+        Err(_) => Err(MatrixAuthCommandError::unavailable(
+            "d0.1-desktop-session-persist-failed",
+        )),
+    }
+}
+
+fn clear_frontend_session_envelope() -> Result<bool, MatrixAuthCommandError> {
+    desktop_remove_session_from_store(&KeyringDesktopSessionSecretStore).map_err(|_| {
+        MatrixAuthCommandError::unavailable("d0.1-desktop-session-clear-failed")
+    })
 }
 
 impl MatrixAuthState {
@@ -854,4 +935,94 @@ pub(super) fn map_login_flows_auth_error(error: AuthError) -> MatrixAuthCommandE
         _ => "Native login-flow discovery failed.",
     };
     MatrixAuthCommandError::new(code, message, error.diagnostic_id())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use matrix_sdk::authentication::matrix::MatrixSession;
+    use matrix_sdk::ruma::UserId;
+    use matrix_sdk::{SessionMeta, SessionTokens};
+
+    fn native_identity() -> MatrixLoginIdentity {
+        MatrixLoginIdentity {
+            user_id: "@alice:example.org".to_owned(),
+            device_id: "DEVICEID".to_owned(),
+            homeserver_url: "https://matrix.example.org".to_owned(),
+        }
+    }
+
+    fn matrix_auth_session(access: &str, refresh: Option<&str>) -> AuthSession {
+        let user_id = UserId::parse("@alice:example.org").expect("valid user id");
+        AuthSession::Matrix(MatrixSession {
+            meta: SessionMeta {
+                user_id,
+                device_id: "DEVICEID".into(),
+            },
+            tokens: SessionTokens {
+                access_token: access.to_owned(),
+                refresh_token: refresh.map(str::to_owned),
+            },
+        })
+    }
+
+    #[test]
+    fn envelope_from_auth_session_builds_native_envelope() {
+        let envelope = envelope_from_auth_session(
+            &native_identity(),
+            &matrix_auth_session("syt-secret", Some("refresh-secret")),
+        )
+        .expect("matrix auth session should build an envelope");
+
+        assert_eq!(envelope.base_url, "https://matrix.example.org");
+        assert_eq!(envelope.user_id, "@alice:example.org");
+        assert_eq!(envelope.device_id, "DEVICEID");
+        assert_eq!(envelope.access_token, "syt-secret");
+        assert_eq!(envelope.refresh_token.as_deref(), Some("refresh-secret"));
+        assert!(envelope.session_generation.is_none());
+        assert!(envelope.expires_in_ms.is_none());
+        assert!(envelope.stored_at_ms.is_some());
+    }
+
+    #[test]
+    fn envelope_from_auth_session_allows_missing_refresh_token() {
+        let envelope = envelope_from_auth_session(
+            &native_identity(),
+            &matrix_auth_session("syt-secret", None),
+        )
+        .expect("matrix auth session should build an envelope");
+
+        assert_eq!(envelope.access_token, "syt-secret");
+        assert!(envelope.refresh_token.is_none());
+    }
+
+    #[test]
+    fn envelope_from_auth_session_oauth_fails_closed_without_echoing_tokens() {
+        let user_id = UserId::parse("@alice:example.org").expect("valid user id");
+        let oauth_session = AuthSession::OAuth(Box::new(
+            matrix_sdk::authentication::oauth::OAuthSession {
+                client_id: matrix_sdk::authentication::oauth::ClientId::new(
+                    "test_client_id".to_owned(),
+                ),
+                user: matrix_sdk::authentication::oauth::UserSession {
+                    meta: SessionMeta {
+                        user_id,
+                        device_id: "DEVICEID".into(),
+                    },
+                    tokens: SessionTokens {
+                        access_token: "syt-oauth-access-secret".to_owned(),
+                        refresh_token: Some("oauth-refresh-secret".to_owned()),
+                    },
+                },
+            },
+        ));
+
+        let error = envelope_from_auth_session(&native_identity(), &oauth_session)
+            .err()
+            .expect("oauth session must fail closed");
+        assert_eq!(error.diagnostic_id, "d0.1-desktop-session-unsupported-kind");
+        // Fail-closed messages never echo token material.
+        assert!(!error.message.contains("syt-oauth"));
+        assert!(!error.message.contains("refresh"));
+    }
 }
