@@ -8,7 +8,7 @@
 | Allowlist `pathCount`                                  | **114** (matches `paths[]` length) |
 | Dual backend                                           | **false** (forbidden forever)                                               |
 | Pipeline                                               | **PAUSED** — historical usage pause; resume authorized through this harness |
-| Operating model                                        | **This harness + locally hosted model** — orchestrator + sub-agents, 2–3 concurrent, no external model APIs; public-repo hygiene + UI/UX fidelity always on ([operating-instructions.md](operating-instructions.md)) |
+| Operating model                                        | **prime-agent orchestrator + `deepseek-v4-flash-0731` sub-agents (max 2 concurrent)** — locally hosted, only configured model; public-repo hygiene + UI/UX fidelity always on ([operating-instructions.md](operating-instructions.md)) |
 | Burn board                                             | https://kb.whyland.com/go/synara-matrix-burn                                |
 | Umbrella #39                                           | **Do not merge** without explicit user approval                             |
 

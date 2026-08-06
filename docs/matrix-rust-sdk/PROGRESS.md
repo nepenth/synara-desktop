@@ -17,7 +17,7 @@
 | Integration tip    | **`57ab9e64`** — after #546 residual-empty stack (124→114) |
 | Active work        | **Ready to resume via this harness** (historical 2026-08-03 usage pause superseded) — [operating-instructions.md](operating-instructions.md) |
 | Product runtime    | Native owns core D0 + V-CRYPTO + residual-empty slices through members/presence/directory/join-rule READ; long-tail JS importers remain |
-| Execution model    | **This agent harness + locally hosted model** (orchestrator + sub-agents, 2–3 concurrent; no external model APIs) — [operating-instructions.md](operating-instructions.md) |
+| Execution model    | **prime-agent orchestrator + `deepseek-v4-flash-0731` sub-agents, max 2 concurrent** (locally hosted; only configured model) — [operating-instructions.md](operating-instructions.md) |
 | Import accounting  | Desktop production import files **114** / baseline **220** (**106** removed). Allowlist **114**. |
 | Dual backend       | **`false`** (forbidden forever) |
 | Public repo        | **PUBLIC — no secrets ever**; placeholder-only examples ([operating-instructions.md](operating-instructions.md) §1) |
