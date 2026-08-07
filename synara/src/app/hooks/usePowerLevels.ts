@@ -1,4 +1,4 @@
-import { MatrixEvent, Room } from 'matrix-js-sdk';
+import { Room } from 'matrix-js-sdk';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import produce from 'immer';
 import { useStateEvent } from './useStateEvent';
@@ -6,6 +6,7 @@ import { StateEvent } from '../../types/matrix/room';
 import { useStateEventCallback } from './useStateEventCallback';
 import { useMatrixClient } from './useMatrixClient';
 import { getStateEvent } from '../utils/room';
+import type { MatrixEventReading } from '../utils/room';
 import { isNativeMatrixSession } from '../features/verification/nativeVerification';
 import { readRoomPowerLevelsWithNativeOwner } from './nativeRoomPowerLevelsOwner';
 
@@ -67,7 +68,7 @@ const fillMissingPowers = (powerLevels: IPowerLevels): IPowerLevels =>
     return draftPl;
   });
 
-export const getPowersLevelFromMatrixEvent = (mEvent?: MatrixEvent): IPowerLevels => {
+export const getPowersLevelFromMatrixEvent = (mEvent?: MatrixEventReading): IPowerLevels => {
   const plContent = mEvent?.getContent<IPowerLevels>();
 
   const powerLevels = !plContent ? DEFAULT_POWER_LEVELS : fillMissingPowers(plContent);
