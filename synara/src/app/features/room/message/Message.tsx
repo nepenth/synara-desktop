@@ -32,8 +32,6 @@ import React, {
 } from 'react';
 import FocusTrap from 'focus-trap-react';
 import { useHover, useFocusWithin } from 'react-aria';
-import { MatrixEvent, Room } from 'matrix-js-sdk';
-import { Relations } from 'matrix-js-sdk/lib/models/relations';
 import classNames from 'classnames';
 import { useTranslation } from 'react-i18next';
 import {
@@ -54,7 +52,8 @@ import {
   getMemberDisplayName,
   trimReplyFromBody,
 } from '../../../utils/room';
-import type { MatrixEventReading } from '../../../utils/room';
+import type { EventTimelineSetReading, MatrixEventReading } from '../../../utils/room';
+import type { EventedRoomReading } from '../../../utils/roomEvents';
 import { getMxIdLocalPart } from '../../../utils/matrix';
 import { MessageLayout, MessageSpacing } from '../../../state/settings';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
@@ -86,6 +85,23 @@ import {
 } from '../nativeTimelineAction';
 
 export type ReactionHandler = (keyOrMxc: string, shortcode: string) => void;
+
+/**
+ * Room projection used by the message surface: the app's evented room reading
+ * plus the pinned/edited-event timeline lookup this surface relies on. js-sdk
+ * Rooms satisfy it structurally.
+ */
+type MessageRoomReading = EventedRoomReading & {
+  getTimelineForEvent(
+    eventId: string
+  ): { getTimelineSet(): EventTimelineSetReading; getEvents(): MatrixEventReading[] } | null;
+};
+
+/** Narrow structural projection of a reactions/threads aggregation (js-sdk Relations). */
+type MessageRelationsReading = {
+  getRelationsForEvent?(eventId: string, relationType: string, eventType: string): unknown;
+  [key: string]: unknown;
+};
 
 const CopyIcon = () => (
   <>
@@ -157,8 +173,8 @@ export const MessageQuickReactions = as<'div', MessageQuickReactionsProps>(
 export const MessageAllReactionItem = as<
   'button',
   {
-    room: Room;
-    relations: Relations;
+    room: MessageRoomReading;
+    relations: MessageRelationsReading;
     canRedact?: boolean;
     onClose?: () => void;
   }
@@ -220,7 +236,7 @@ export const MessageAllReactionItem = as<
 export const MessageReadReceiptItem = as<
   'button',
   {
-    room: Room;
+    room: MessageRoomReading;
     eventId: string;
     onClose?: () => void;
   }
@@ -270,21 +286,19 @@ export const MessageReadReceiptItem = as<
 export const MessageSourceCodeItem = as<
   'button',
   {
-    room: Room;
-    mEvent: MatrixEvent;
+    room: MessageRoomReading;
+    mEvent: MatrixEventReading;
     onClose?: () => void;
   }
 >(({ room, mEvent, onClose, ...props }, ref) => {
   const [open, setOpen] = useState(false);
 
-  const getContent = (evt: MatrixEvent | MatrixEventReading) => {
-    if (!('isEncrypted' in evt)) return evt.event;
-    return evt.isEncrypted()
-      ? {
-          [`<== DECRYPTED_EVENT ==>`]: evt.getEffectiveEvent(),
-          [`<== ORIGINAL_EVENT ==>`]: evt.event,
-        }
-      : evt.event;
+  const getContent = (evt: MatrixEventReading) => {
+    if (!evt.isEncrypted || !evt.isEncrypted()) return evt.event;
+    return {
+      [`<== DECRYPTED_EVENT ==>`]: evt.getEffectiveEvent ? evt.getEffectiveEvent() : evt.event,
+      [`<== ORIGINAL_EVENT ==>`]: evt.event,
+    };
   };
 
   const getText = (): string => {
@@ -352,7 +366,7 @@ export const MessageSourceCodeItem = as<
   );
 });
 
-const getMessageCopyText = (room: Room, mEvent: MatrixEvent): string => {
+const getMessageCopyText = (room: MessageRoomReading, mEvent: MatrixEventReading): string => {
   const eventId = mEvent.getId();
   const evtTimeline = eventId ? room.getTimelineForEvent(eventId) : undefined;
   const editedEvent =
@@ -401,8 +415,8 @@ export const MessageCopyItem = as<
 export const MessageCopyLinkItem = as<
   'button',
   {
-    room: Room;
-    mEvent: MatrixEvent;
+    room: MessageRoomReading;
+    mEvent: MatrixEventReading;
     onClose?: () => void;
   }
 >(({ room, mEvent, onClose, ...props }, ref) => {
@@ -528,8 +542,8 @@ export const MessageCustomReminderItem = as<
 export const MessagePinItem = as<
   'button',
   {
-    room: Room;
-    mEvent: MatrixEvent;
+    room: MessageRoomReading;
+    mEvent: MatrixEventReading;
     onClose?: () => void;
   }
 >(({ room, mEvent, onClose, ...props }, ref) => {
@@ -567,8 +581,8 @@ export const MessagePinItem = as<
 export const MessageDeleteItem = as<
   'button',
   {
-    room: Room;
-    mEvent: MatrixEvent;
+    room: MessageRoomReading;
+    mEvent: MatrixEventReading;
     onClose?: () => void;
   }
 >(({ room, mEvent, onClose, ...props }, ref) => {
@@ -699,8 +713,8 @@ export const MessageDeleteItem = as<
 export const MessageReportItem = as<
   'button',
   {
-    room: Room;
-    mEvent: MatrixEvent;
+    room: MessageRoomReading;
+    mEvent: MatrixEventReading;
     onClose?: () => void;
   }
 >(({ room, mEvent, onClose, ...props }, ref) => {
@@ -834,8 +848,8 @@ export const MessageReportItem = as<
 });
 
 export type MessageProps = {
-  room: Room;
-  mEvent: MatrixEvent;
+  room: MessageRoomReading;
+  mEvent: MatrixEventReading;
   timelineItem: number;
   collapse: boolean;
   highlight: boolean;
@@ -845,7 +859,7 @@ export type MessageProps = {
   canRedactReactions?: boolean;
   canPinEvent?: boolean;
   imagePackRooms?: string[];
-  relations?: Relations;
+  relations?: MessageRelationsReading;
   messageLayout: MessageLayout;
   messageSpacing: MessageSpacing;
   onUserClick: MouseEventHandler<HTMLButtonElement>;
@@ -1556,8 +1570,8 @@ export const Message = as<'div', MessageProps>(
 );
 
 export type EventProps = {
-  room: Room;
-  mEvent: MatrixEvent;
+  room: MessageRoomReading;
+  mEvent: MatrixEventReading;
   highlight: boolean;
   canDelete?: boolean;
   messageSpacing: MessageSpacing;
