@@ -1,16 +1,16 @@
 # Matrix Rust full-replacement — scoreboard
 
-| Field                                                  | Value                                                                       |
-| ------------------------------------------------------ | --------------------------------------------------------------------------- |
-| Updated                                                | **2026-08-07** (tip `c7a780f1` · 113 importers) |
-| Tip                                                    | `c7a780f1` on `feature/matrix-rust-sdk-full-replacement` |
-| Production `matrix-js-sdk` import files (`synara/src`) | **113** (plan baseline was **220**; **107 removed**, ~**48.6%**) |
-| Allowlist `pathCount`                                  | **113** (matches `paths[]` length) |
-| Dual backend                                           | **false** (forbidden forever)                                               |
-| Pipeline                                               | **RUNNING** — prime-agent orchestrated burn (see NOTES/program state) |
+| Field                                                  | Value                                                                                                                                                                                                                                  |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Updated                                                | **2026-08-07** (tip `ed52a787` · 111 importers)                                                                                                                                                                                        |
+| Tip                                                    | `ed52a787` on `feature/matrix-rust-sdk-full-replacement`                                                                                                                                                                               |
+| Production `matrix-js-sdk` import files (`synara/src`) | **111** (plan baseline was **220**; **109 removed**, ~**49.5%**)                                                                                                                                                                       |
+| Allowlist `pathCount`                                  | **111** (matches `paths[]` length)                                                                                                                                                                                                     |
+| Dual backend                                           | **false** (forbidden forever)                                                                                                                                                                                                          |
+| Pipeline                                               | **RUNNING** — prime-agent orchestrated burn (see NOTES/program state)                                                                                                                                                                  |
 | Operating model                                        | **prime-agent orchestrator + `deepseek-v4-flash-0731` sub-agents (max 2 concurrent)** — locally hosted, only configured model; public-repo hygiene + UI/UX fidelity always on ([operating-instructions.md](operating-instructions.md)) |
-| Burn board                                             | https://kb.whyland.com/go/synara-matrix-burn                                |
-| Umbrella #39                                           | **Do not merge** without explicit user approval                             |
+| Burn board                                             | https://kb.whyland.com/go/synara-matrix-burn                                                                                                                                                                                           |
+| Umbrella #39                                           | **Do not merge** without explicit user approval                                                                                                                                                                                        |
 
 ## Current burn policy
 
@@ -44,32 +44,32 @@ completion or merge hold.
 
 ## Done (high level)
 
-| Area | Evidence |
-| ---- | -------- |
-| Crypto vertical | V-CRYPTO done earlier |
-| Core send | text/attachment/reaction/poll/thread/sticker/GIF native |
-| Auth | SSO out; login/UIA/register/reset; fail-closed desktop |
-| Rooms core | leave/join/create, hierarchy, DM, unread, typing |
-| Timeline shell C1/C2 | NativeTimelinePresenter; C3–C5 code/unit/CI may be engineering-complete while live proof remains **Not confirmed** |
-| Members/power (partial → residual-empty slices) | #375/#395/#405/#439/#450 powers; **#514** direct readers; **#516** tags READ; via-server **#519** |
-| Presence | first slice **#458** + full residual **#515** |
-| Directory | first **#461** + residual **#513** + visibility **#520** |
-| Product extract | **#446** domain product_commands |
-| Join-rule READ residual-empty | **#521** native snapshot + RoomPublish |
-| Join-rule presentation DTO | **#522** |
-| Long-tail residual-empty (type/presentation/orphan) | **#517–#538** (room-summary → RenderMessageContent MsgType) — see [pause handoff](pause-handoff-2026-08-03.md) |
-| Importer burn (tip inventory) | **220 → 113** production files (#546 stack + #557 utils/room.ts burn) |
-| Live-proof gate policy | **#544** — not a residual-empty merge gate |
-| Live-proof-held residual stack | **#546** landed (chrome/typing/notes/reaction/NativeEventContent/reactions) |
-| Desktop Beta package smoke | Actions run [30821912637](https://github.com/nepenth/synara-desktop/actions/runs/30821912637) @ `57ab9e64` (artifacts, not Releases) |
+| Area                                                | Evidence                                                                                                                             |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Crypto vertical                                     | V-CRYPTO done earlier                                                                                                                |
+| Core send                                           | text/attachment/reaction/poll/thread/sticker/GIF native                                                                              |
+| Auth                                                | SSO out; login/UIA/register/reset; fail-closed desktop                                                                               |
+| Rooms core                                          | leave/join/create, hierarchy, DM, unread, typing                                                                                     |
+| Timeline shell C1/C2                                | NativeTimelinePresenter; C3–C5 code/unit/CI may be engineering-complete while live proof remains **Not confirmed**                   |
+| Members/power (partial → residual-empty slices)     | #375/#395/#405/#439/#450 powers; **#514** direct readers; **#516** tags READ; via-server **#519**                                    |
+| Presence                                            | first slice **#458** + full residual **#515**                                                                                        |
+| Directory                                           | first **#461** + residual **#513** + visibility **#520**                                                                             |
+| Product extract                                     | **#446** domain product_commands                                                                                                     |
+| Join-rule READ residual-empty                       | **#521** native snapshot + RoomPublish                                                                                               |
+| Join-rule presentation DTO                          | **#522**                                                                                                                             |
+| Long-tail residual-empty (type/presentation/orphan) | **#517–#538** (room-summary → RenderMessageContent MsgType) — see [pause handoff](pause-handoff-2026-08-03.md)                       |
+| Importer burn (tip inventory)                       | **220 → 111** production files (#546/#557/#559 stack)                                                                                |
+| Live-proof gate policy                              | **#544** — not a residual-empty merge gate                                                                                           |
+| Live-proof-held residual stack                      | **#546** landed (chrome/typing/notes/reaction/NativeEventContent/reactions)                                                          |
+| Desktop Beta package smoke                          | Actions run [30821912637](https://github.com/nepenth/synara-desktop/actions/runs/30821912637) @ `57ab9e64` (artifacts, not Releases) |
 
 ## In flight
 
-| Item | Status |
-| ---- | ------ |
-| Daytime / overnight pipelines | **PAUSED** (usage conservation 2026-08-03) |
+| Item                                        | Status                                          |
+| ------------------------------------------- | ----------------------------------------------- |
+| Daytime / overnight pipelines               | **PAUSED** (usage conservation 2026-08-03)      |
 | Open product PRs onto full-replacement base | **one docs-only policy PR draft** (this branch) |
-| Stale tip-docs drafts #502–#512 | **Closed** as obsolete tip-SHA freezes |
+| Stale tip-docs drafts #502–#512             | **Closed** as obsolete tip-SHA freezes          |
 
 ## Left (finish-line order after resume)
 
