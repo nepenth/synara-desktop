@@ -97,7 +97,7 @@ type PinEventReading = MatrixEventReading & {
 /** Room projection with the pin-menu timeline accessors synara already relies on. */
 type PinRoomReading = EventedRoomReading & {
   getTimelineForEvent(
-    eventId: string,
+    eventId: string
   ): { getTimelineSet(): EventTimelineSetReading; getEvents(): MatrixEventReading[] } | null;
 };
 
@@ -132,8 +132,8 @@ function PinnedMessage({
   const [unpinState, unpin] = useAsyncCallback(
     useCallback(
       () => unpinWithNativeTimelineAction({ roomId: room.roomId, eventId }),
-      [room.roomId, eventId],
-    ),
+      [room.roomId, eventId]
+    )
   );
 
   const handleOpenClick: MouseEventHandler = (evt) => {
@@ -275,7 +275,7 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
     const accessibleTagColors = useAccessiblePowerTagColors(
       theme.kind,
       creatorsTag,
-      powerLevelTags,
+      powerLevelTags
     );
 
     const pinnedEvents = useRoomPinnedEvents(room);
@@ -306,10 +306,10 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
       () => ({
         ...LINKIFY_OPTS,
         render: factoryRenderLinkifyWithMention((href) =>
-          renderMatrixMention(mx, room.roomId, href, makeMentionCustomProps(mentionClickHandler)),
+          renderMatrixMention(mx, room.roomId, href, makeMentionCustomProps(mentionClickHandler))
         ),
       }),
-      [mx, room, mentionClickHandler],
+      [mx, room, mentionClickHandler]
     );
     const htmlReactParserOptions = useMemo<HTMLReactParserOptions>(
       () =>
@@ -319,7 +319,7 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
           handleSpoilerClick: spoilerClickHandler,
           handleMentionClick: mentionClickHandler,
         }),
-      [mx, room, linkifyOpts, mentionClickHandler, spoilerClickHandler, useAuthentication],
+      [mx, room, linkifyOpts, mentionClickHandler, spoilerClickHandler, useAuthentication]
     );
 
     const renderMatrixEvent = useMatrixEventRenderer<[PinEventReading, string, GetContentCallback]>(
@@ -392,7 +392,7 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
                   const editedEvent = getEditedEvent(
                     eventId,
                     resolvedEvent,
-                    evtTimeline.getTimelineSet(),
+                    evtTimeline.getTimelineSet()
                   );
                   const getContent = (() =>
                     editedEvent?.getContent<Record<string, unknown>>()['m.new_content'] ??
@@ -470,7 +470,7 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
             </Text>
           </Box>
         );
-      },
+      }
     );
 
     const handleOpen = (roomId: string, eventId: string) => {
@@ -570,5 +570,5 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
         </Box>
       </Menu>
     );
-  },
+  }
 );

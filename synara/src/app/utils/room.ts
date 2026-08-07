@@ -52,6 +52,9 @@ export type MatrixEventReading = {
   getRelation(): RelationReading | null;
   getAssociatedId?(): string | undefined;
   status?: string | null;
+  threadRootId?: string;
+  isEncrypted?(): boolean;
+  getEffectiveEvent?(): unknown;
   event: { sender?: string; [key: string]: unknown };
 };
 
