@@ -1,5 +1,5 @@
-import { IContent, MsgType } from 'matrix-js-sdk';
 import to from 'await-to-js';
+import { IContent, MsgType } from '../../utils/messageContent';
 import {
   IThumbnailContent,
   MATRIX_BLUR_HASH_PROPERTY_NAME,

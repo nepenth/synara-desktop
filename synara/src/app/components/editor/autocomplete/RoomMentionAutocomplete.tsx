@@ -1,7 +1,7 @@
 import React, { KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect } from 'react';
 import { Editor } from 'slate';
 import { Avatar, Icon, Icons, MenuItem, Text } from 'folds';
-import { MatrixClient } from 'matrix-js-sdk';
+import type { MatrixClientReading } from '../../../utils/room';
 import { useAtomValue } from 'jotai';
 
 import { createMentionElement, moveCursor, replaceWithElement } from '../utils';
@@ -22,7 +22,7 @@ import { normalizeRoomJoinRulePresentation } from '../../../features/matrix-dto/
 
 type MentionAutoCompleteHandler = (roomAliasOrId: string, name: string) => void | Promise<void>;
 
-const roomAliasFromQueryText = (mx: MatrixClient, text: string) =>
+const roomAliasFromQueryText = (mx: MatrixClientReading, text: string) =>
   isRoomAlias(`#${text}`)
     ? `#${text}`
     : `#${text}${text.endsWith(':') ? '' : ':'}${getMxIdServer(mx.getUserId() ?? '')}`;
