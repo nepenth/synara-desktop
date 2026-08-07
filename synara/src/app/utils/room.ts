@@ -68,6 +68,7 @@ type RoomStateReading = {
 /** Narrow structural projection of a room. */
 export type RoomReading = {
   roomId: RoomId;
+  name?: string;
   currentState: RoomStateReading;
   getLiveTimeline(): {
     getState(direction: string): RoomStateReading | undefined;
@@ -79,6 +80,7 @@ export type RoomReading = {
   getAvatarFallbackMember(): MemberReading | undefined;
   getUnreadNotificationCount(type?: string): number;
   getEventReadUpTo(userId: UserId): string | null;
+  getLastActiveTimestamp?(): number | undefined;
   accountData: { get(eventType: string): MatrixEventReading | undefined };
   getMyMembership(): string;
   isSpaceRoom(): boolean;
