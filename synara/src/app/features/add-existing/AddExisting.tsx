@@ -1,3 +1,4 @@
+import type { RoomReading } from '../../utils/room';
 import FocusTrap from 'focus-trap-react';
 import {
   Avatar,
@@ -29,7 +30,7 @@ import React, {
 } from 'react';
 import { useAtomValue } from 'jotai';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Room } from 'matrix-js-sdk';
+
 import { stopPropagation } from '../../utils/keyboard';
 import { useDirects, useRooms, useSpaces } from '../../state/hooks/roomList';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -129,7 +130,7 @@ export function AddExistingModal({ parentId, space, requestClose }: AddExistingM
     searchRoom(value);
   };
 
-  const [applyState, applyChanges] = useAsyncCallback<undefined, Error, [Room[]]>(
+  const [applyState, applyChanges] = useAsyncCallback<undefined, Error, [RoomReading[]]>(
     useCallback(
       async (selectedRooms) => {
         const roomsWithVia = await Promise.all(

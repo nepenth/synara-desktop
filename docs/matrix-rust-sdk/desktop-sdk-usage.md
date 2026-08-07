@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |           63 |                2 |                   3 |
+| production |           53 |                2 |                   3 |
 | test       |           10 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |       **76** |                  |                     |
+| **total**  |       **66** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |    63 |
+| Production import files |    53 |
 | Test import files       |    10 |
-| Total import files      |    73 |
+| Total import files      |    63 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 63)
+- Production match: **no** (found 53)
 - Test match: **no** (found 10)
 
 ### Production files by bucket (desktop runtime only)
@@ -47,8 +47,8 @@ Expected **220** production and **12** test import files.
 | Bucket           | Files |
 | ---------------- | ----: |
 | client-lifecycle |     2 |
-| component        |     5 |
-| feature          |    20 |
+| component        |     1 |
+| feature          |    14 |
 | hook             |    18 |
 | page             |     7 |
 | plugin           |     4 |
@@ -57,13 +57,13 @@ Expected **220** production and **12** test import files.
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 63. Files with any finding: 65.
+Scope: **production only**. Import files: 53. Files with any finding: 55.
 
 ### Imported modules
 
 | Module path                                           | Import sites | Files |
 | ----------------------------------------------------- | -----------: | ----: |
-| `matrix-js-sdk`                                       |           61 |    61 |
+| `matrix-js-sdk`                                       |           51 |    51 |
 | `matrix-js-sdk/lib/types`                             |            6 |     6 |
 | `matrix-js-sdk/lib/matrixrtc/CallMembership`          |            2 |     2 |
 | `matrix-js-sdk/lib/@types/event`                      |            1 |     1 |
@@ -82,10 +82,10 @@ Scope: **production only**. Import files: 63. Files with any finding: 65.
 
 | Symbol                      | Imports | Value | Type-only | Files |
 | --------------------------- | ------: | ----: | --------: | ----: |
-| `Room`                      |      35 |    34 |         1 |    35 |
+| `Room`                      |      30 |    29 |         1 |    30 |
 | `MatrixClient`              |      18 |    16 |         2 |    18 |
-| `MatrixError`               |      14 |    14 |         0 |    14 |
 | `MatrixEvent`               |      11 |     9 |         2 |    11 |
+| `MatrixError`               |       9 |     9 |         0 |     9 |
 | `ClientEvent`               |       7 |     7 |         0 |     7 |
 | `RoomEvent`                 |       5 |     5 |         0 |     5 |
 | `SyncState`                 |       5 |     4 |         1 |     5 |
@@ -132,10 +132,10 @@ Scope: **production only**. Import files: 63. Files with any finding: 65.
 | `IndexedDBCryptoStore` |     1 |                  1 |
 | `IndexedDBStore`       |     1 |                  1 |
 | `MatrixClient`         |    18 |                 18 |
-| `MatrixError`          |    14 |                 14 |
+| `MatrixError`          |     9 |                  9 |
 | `MatrixEvent`          |    11 |                 11 |
 | `Relations`            |     1 |                  1 |
-| `Room`                 |    35 |                 35 |
+| `Room`                 |    30 |                 30 |
 | `RoomMember`           |     1 |                  1 |
 | `RoomState`            |     1 |                  1 |
 | `createClient`         |     1 |                  1 |
@@ -144,8 +144,8 @@ Scope: **production only**. Import files: 63. Files with any finding: 65.
 
 | Category                       | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
 | ------------------------------ | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
-| `client_methods`               |    40 |                 0 |                   0 |                      0 |          0 |
-| `room_methods`                 |    37 |                 0 |                   0 |                      0 |          0 |
+| `client_methods`               |    33 |                 0 |                   0 |                      0 |          0 |
+| `room_methods`                 |    32 |                 0 |                   0 |                      0 |          0 |
 | `event_emitters_listeners`     |    12 |                 0 |                  66 |                      0 |          0 |
 | `sync_lifecycle`               |    11 |                11 |                   6 |                      0 |          0 |
 | `crypto_verification_recovery` |     3 |                 3 |                   0 |                      0 |          0 |
@@ -153,14 +153,14 @@ Scope: **production only**. Import files: 63. Files with any finding: 65.
 | `authenticated_media`          |     2 |                 1 |                   0 |                      0 |          0 |
 | `matrixrtc_calls`              |     2 |                 0 |                   8 |                      0 |          0 |
 | `account_data`                 |     3 |                 6 |                   2 |                      0 |          0 |
-| `room_lists`                   |    17 |                46 |                   4 |                      0 |          0 |
+| `room_lists`                   |    16 |                45 |                   4 |                      0 |          0 |
 | `timelines`                    |    12 |                13 |                  24 |                      0 |          0 |
 | `searches`                     |     3 |                 3 |                   0 |                      0 |          0 |
-| `spaces`                       |     8 |                23 |                   0 |                      0 |          0 |
+| `spaces`                       |     6 |                19 |                   0 |                      0 |          0 |
 | `threads`                      |     1 |                 1 |                   0 |                      0 |          0 |
 | `receipts`                     |     1 |                 2 |                   0 |                      0 |          0 |
-| `uia_auth`                     |    24 |                52 |                   2 |                      0 |          0 |
-| `custom_raw_event_sends`       |     8 |                16 |                   0 |                      0 |          0 |
+| `uia_auth`                     |    18 |                41 |                   2 |                      0 |          0 |
+| `custom_raw_event_sends`       |     4 |                 9 |                   0 |                      0 |          0 |
 | `direct_matrix_networking`     |     2 |                 0 |                   0 |                      0 |          3 |
 | `client_events`                |     4 |                 0 |                  14 |                      0 |          0 |
 
@@ -168,11 +168,11 @@ Scope: **production only**. Import files: 63. Files with any finding: 65.
 
 | Method name                | Candidate occurrences |
 | -------------------------- | --------------------: |
-| `getRoom`                  |                    40 |
-| `getSafeUserId`            |                    31 |
-| `isSpaceRoom`              |                    23 |
-| `sendStateEvent`           |                    15 |
-| `getUserId`                |                    11 |
+| `getRoom`                  |                    39 |
+| `getSafeUserId`            |                    21 |
+| `isSpaceRoom`              |                    19 |
+| `getUserId`                |                    10 |
+| `sendStateEvent`           |                     8 |
 | `findEventById`            |                     7 |
 | `refreshToken`             |                     7 |
 | `getRooms`                 |                     4 |
@@ -394,20 +394,10 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `scripts/fixtures/matrix-rust-p1.6/prohibited/raw-matrix-http/synara/src/app/features/matrix-ipc/rawHttp.ts`                  | tooling    | no      | —                | —            | —                                                                                                                                                                         |
 | `synara/scripts/run-synapse-two-client-integration.mjs`                                                                       | tooling    | no      | —                | dynamic      | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/create-room/CreateRoomAliasInput.tsx`                                                              | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/components/image-pack-view/RoomImagePack.tsx`                                                                 | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/components/invite-user-prompt/InviteUserPrompt.tsx`                                                           | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/components/room-intro/RoomIntro.tsx`                                                                          | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/components/user-profile/UserChips.tsx`                                                                        | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/cs-api.ts`                                                                                                    | production | yes     | app-other        | —            | —                                                                                                                                                                         |
-| `synara/src/app/features/add-existing/AddExisting.tsx`                                                                        | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/features/call/CallMemberCard.tsx`                                                                             | production | yes     | feature          | static       | `matrix-js-sdk/lib/matrixrtc/CallMembership`                                                                                                                              |
-| `synara/src/app/features/common-settings/emojis-stickers/RoomPacks.tsx`                                                       | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/features/common-settings/general/RoomAddress.tsx`                                                             | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/features/common-settings/general/RoomEncryption.tsx`                                                          | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/features/common-settings/general/RoomJoinRules.tsx`                                                           | production | yes     | feature          | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/types`                                                                                                                                |
-| `synara/src/app/features/common-settings/general/RoomProfile.tsx`                                                             | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/features/common-settings/general/RoomUpgrade.tsx`                                                             | production | yes     | feature          | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/types`                                                                                                                                |
-| `synara/src/app/features/create-chat/CreateChat.tsx`                                                                          | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/features/create-room/CreateRoom.tsx`                                                                          | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/features/create-space/CreateSpace.tsx`                                                                        | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/features/message-search/SearchResultGroup.tsx`                                                                | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                           |

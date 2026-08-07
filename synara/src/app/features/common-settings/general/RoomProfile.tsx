@@ -15,7 +15,7 @@ import React, { FormEventHandler, useCallback, useMemo, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import Linkify from 'linkify-react';
 import classNames from 'classnames';
-import { MatrixError } from 'matrix-js-sdk';
+import type { MatrixError } from '../../../utils/matrix';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../../room-settings/styles.css';
 import { useRoom } from '../../../hooks/useRoom';

@@ -1,3 +1,4 @@
+import type { EventedRoomReading } from '../../utils/roomEvents';
 import React, {
   ChangeEventHandler,
   FormEventHandler,
@@ -29,7 +30,7 @@ import {
   Scroll,
   MenuItem,
 } from 'folds';
-import { Room } from 'matrix-js-sdk';
+
 import { isKeyHotkey } from 'is-hotkey';
 import FocusTrap from 'focus-trap-react';
 import { stopPropagation } from '../../utils/keyboard';
@@ -53,7 +54,7 @@ const SEARCH_OPTIONS: UseAsyncSearchOptions = {
 const getUserIdString = (userId: string) => getMxIdLocalPart(userId) ?? userId;
 
 type InviteUserProps = {
-  room: Room;
+  room: EventedRoomReading;
   requestClose: () => void;
 };
 export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
@@ -66,7 +67,7 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
   const filteredUsers = useMemo(
     () =>
       directUsers.filter((userId) => {
-        const membership = room.getMember(userId)?.membership;
+        const membership = (room.getMember(userId) as { membership?: string } | null)?.membership;
         return membership !== Membership.Join;
       }),
     [directUsers, room]
