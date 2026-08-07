@@ -19,7 +19,7 @@ import {
   toRem,
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
-import { Room } from 'matrix-js-sdk';
+import type { RoomReading } from '../../utils/room';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
 import { SequenceCard } from '../../components/sequence-card';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -298,7 +298,7 @@ type RoomItemCardProps = {
   after?: ReactNode;
   onDragging: (item?: HierarchyItem) => void;
   canReorder: boolean;
-  getRoom: (roomId: string) => Room | undefined;
+  getRoom: (roomId: string) => RoomReading | undefined;
 };
 export const RoomItemCard = as<'div', RoomItemCardProps>(
   (
@@ -342,7 +342,9 @@ export const RoomItemCard = as<'div', RoomItemCardProps>(
         <Box ref={canReorder ? targetRef : null} grow="Yes">
           {canReorder && <ItemDraggableTarget ref={targetHandleRef} />}
           {room ? (
-            <LocalRoomSummaryLoader room={room}>
+            <LocalRoomSummaryLoader
+              room={room as unknown as Parameters<typeof LocalRoomSummaryLoader>[0]['room']}
+            >
               {(localSummary) => (
                 <RoomProfile
                   roomId={roomId}

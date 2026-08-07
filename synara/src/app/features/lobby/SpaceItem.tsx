@@ -18,7 +18,7 @@ import {
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
 import classNames from 'classnames';
-import { Room } from 'matrix-js-sdk';
+import type { RoomReading } from '../../utils/room';
 import { HierarchyItem, SpaceHierarchyRoom } from '../../hooks/useSpaceHierarchy';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { RoomAvatar } from '../../components/room-avatar';
@@ -403,7 +403,7 @@ type SpaceItemCardProps = {
   canEditChild: boolean;
   canReorder: boolean;
   onDragging: (item?: HierarchyItem) => void;
-  getRoom: (roomId: string) => Room | undefined;
+  getRoom: (roomId: string) => RoomReading | undefined;
 };
 export const SpaceItemCard = as<'div', SpaceItemCardProps>(
   (
@@ -447,7 +447,9 @@ export const SpaceItemCard = as<'div', SpaceItemCardProps>(
         <Box grow="Yes" gap="100" alignItems="Inherit" justifyContent="SpaceBetween">
           <Box ref={canReorder ? targetRef : null}>
             {space ? (
-              <LocalRoomSummaryLoader room={space}>
+              <LocalRoomSummaryLoader
+                room={space as unknown as Parameters<typeof LocalRoomSummaryLoader>[0]['room']}
+              >
                 {(localSummary) =>
                   item.parentId ? (
                     <SpaceProfile
