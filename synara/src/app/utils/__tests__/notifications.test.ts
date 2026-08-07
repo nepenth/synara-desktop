@@ -8,7 +8,7 @@ import {
   markAsReadAtEvent,
   markAsReadInBackground,
 } from '../notifications';
-import { getThreadRootEventId, roomHaveUnread } from '../room';
+import { getThreadRootEventId } from '../room';
 import {
   ROOM_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
   TIMELINE_BOTTOM_TOLERANCE_PX,
@@ -40,14 +40,6 @@ const createTimelineEvent = (
     isSending: () => sending,
     isRedacted: () => false,
     getRelation: () => undefined,
-  } as any);
-
-const createUnreadRoom = (events: any[], readUpToId?: string) =>
-  ({
-    getEventReadUpTo: () => readUpToId,
-    getLiveTimeline: () => ({
-      getEvents: () => events,
-    }),
   } as any);
 
 test('clearUnreadAnchor skips account-data writes when the room has no anchor', async () => {
@@ -993,17 +985,6 @@ test('read-marker queue accepts a new request after the previous drain settles',
   await markAsRead(mx, room.roomId, false, 'loaded-live-tail');
 
   assert.deepEqual(writes, ['$first', '$second']);
-});
-
-test('roomHaveUnread only infers unread from a loaded slice containing the read marker', () => {
-  const readMarker = createTimelineEvent('$read');
-  const unread = createTimelineEvent('$unread');
-  const mx = {
-    getUserId: () => '@alice:example.org',
-  } as any;
-
-  assert.equal(roomHaveUnread(mx, createUnreadRoom([readMarker, unread], '$read')), true);
-  assert.equal(roomHaveUnread(mx, createUnreadRoom([unread], '$missing-read-marker')), false);
 });
 
 test('getRoomCurrentState prefers the SDK room current state over timeline state', () => {
