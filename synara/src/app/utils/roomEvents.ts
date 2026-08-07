@@ -12,6 +12,7 @@ export const RoomEvent = {
 
 export const RoomMemberEvent = {
   Membership: 'RoomMember.membership',
+  PowerLevel: 'RoomMember.power_level',
 } as const;
 
 export const RoomStateEvent = {
@@ -19,6 +20,23 @@ export const RoomStateEvent = {
 } as const;
 
 type Listener = (...args: any[]) => void;
+
+/** Structural projection of a js-sdk RoomMember as read by Synara (union-friendly). */
+export type JsRoomMemberReading = {
+  userId: string;
+  membership: string;
+  rawDisplayName: string;
+  name: string;
+  getMxcAvatarUrl(): string | undefined;
+  events: {
+    member?: {
+      getTs(): number;
+      getSender(): string | undefined;
+      getStateKey(): string | undefined;
+    };
+  };
+  [key: string]: unknown;
+};
 
 /**
  * Structural projection of a room that also supports event subscription and a
