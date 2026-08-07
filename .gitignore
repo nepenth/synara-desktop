@@ -31,6 +31,10 @@ src-tauri/gen/schemas/capabilities.json
 #   scripts/*workflow*     — CI policy checkers for GitHub Actions
 # ---------------------------------------------------------------------------
 
+# Harness-local operating data (operator continuity only — never pushed)
+# Public-safe operating instructions live in docs/matrix-rust-sdk/
+.harness_agent_operating/
+
 # Grok Build
 .grok/
 
