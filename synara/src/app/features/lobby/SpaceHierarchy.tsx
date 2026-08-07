@@ -1,5 +1,5 @@
 import React, { forwardRef, MouseEventHandler, useEffect, useMemo } from 'react';
-import { Room } from 'matrix-js-sdk';
+import type { RoomReading } from '../../utils/room';
 import { Box, config, Text } from 'folds';
 import {
   HierarchyItem,
@@ -34,7 +34,7 @@ type SpaceHierarchyProps = {
   canDrop: CanDropCallback;
   disabledReorder?: boolean;
   nextSpaceId?: string;
-  getRoom: (roomId: string) => Room | undefined;
+  getRoom: (roomId: string) => RoomReading | undefined;
   pinned: boolean;
   togglePinToSidebar: (roomId: string) => void;
   onSpacesFound: (spaceItems: SpaceHierarchyRoom[]) => void;

@@ -3,7 +3,7 @@ import { Box, Chip, Icon, IconButton, Icons, Line, Scroll, Spinner, Text, config
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAtom, useAtomValue } from 'jotai';
 import { useNavigate } from 'react-router-dom';
-import { JoinRule, Room } from 'matrix-js-sdk';
+import type { RoomReading } from '../../utils/room';
 import produce from 'immer';
 import { useSpace } from '../../hooks/useSpace';
 import { Page, PageContent, PageContentCenter, PageHeroSection } from '../../components/page';
@@ -56,10 +56,10 @@ import { getRoomPermissionsAPI } from '../../hooks/useRoomPermissions';
 import { useRoomsCreators } from '../../hooks/useRoomCreators';
 
 const useCanDropLobbyItem = (
-  space: Room,
+  space: RoomReading,
   roomsPowerLevels: Map<string, IPowerLevels>,
   roomCreators: Map<string, Set<string>>,
-  getRoom: (roomId: string) => Room | undefined
+  getRoom: (roomId: string) => RoomReading | undefined
 ): CanDropCallback => {
   const mx = useMatrixClient();
 
@@ -96,7 +96,7 @@ const useCanDropLobbyItem = (
         'space' in container.item ? container.item.roomId : container.item.parentId;
 
       const draggingOutsideSpace = item.parentId !== containerSpaceId;
-      const restrictedItem = mx.getRoom(item.roomId)?.getJoinRule() === JoinRule.Restricted;
+      const restrictedItem = mx.getRoom(item.roomId)?.getJoinRule() === 'restricted';
 
       // check and do not allow restricted room to be dragged outside
       // current space if can't change `m.room.join_rules` `content.allow`
@@ -219,7 +219,7 @@ export function Lobby() {
 
           return [getRoom(i.space.roomId), ...childRooms];
         })
-        .filter((r) => !!r) as Room[],
+        .filter((r) => !!r) as Array<NonNullable<ReturnType<typeof getRoom>>>,
     [hierarchy, getRoom]
   );
   const roomsPowerLevels = useRoomsPowerLevels(powerLevelRooms);
@@ -307,7 +307,7 @@ export function Lobby() {
 
         if (
           itemRoom &&
-          itemRoom.getJoinRule() === JoinRule.Restricted &&
+          itemRoom.getJoinRule() === 'restricted' &&
           item.parentId !== containerParentId
         ) {
           // change join rule allow parameter when dragging
