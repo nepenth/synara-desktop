@@ -1,5 +1,5 @@
-import { MatrixClient } from 'matrix-js-sdk';
 import { getAccountData } from '../utils/room';
+import type { MatrixClientReading } from '../utils/room';
 import { IEmoji, emojis } from './emoji';
 import { AccountDataEvent } from '../../types/matrix/accountData';
 
@@ -10,7 +10,7 @@ export type IRecentEmojiContent = {
   recent_emoji?: [EmojiUnicode, EmojiUsageCount][];
 };
 
-export const getRecentEmojis = (mx: MatrixClient, limit?: number): IEmoji[] => {
+export const getRecentEmojis = (mx: MatrixClientReading, limit?: number): IEmoji[] => {
   const recentEmojiEvent = getAccountData(mx, AccountDataEvent.ElementRecentEmoji);
   const recentEmoji = recentEmojiEvent?.getContent<IRecentEmojiContent>().recent_emoji;
   if (!Array.isArray(recentEmoji)) return [];
@@ -25,7 +25,7 @@ export const getRecentEmojis = (mx: MatrixClient, limit?: number): IEmoji[] => {
     }, []);
 };
 
-export function addRecentEmoji(mx: MatrixClient, unicode: string) {
+export function addRecentEmoji(mx: MatrixClientReading, unicode: string) {
   const recentEmojiEvent = getAccountData(mx, AccountDataEvent.ElementRecentEmoji);
   const recentEmojiContent = recentEmojiEvent?.getContent<IRecentEmojiContent>();
   const recentEmoji =
@@ -42,7 +42,11 @@ export function addRecentEmoji(mx: MatrixClient, unicode: string) {
     entry[1] += 1;
   }
   recentEmoji.unshift(entry);
-  mx.setAccountData(
+  (
+    mx as unknown as {
+      setAccountData(eventType: string, content: unknown): Promise<object>;
+    }
+  ).setAccountData(
     AccountDataEvent.ElementRecentEmoji as any,
     {
       recent_emoji: recentEmoji.slice(0, 100),
