@@ -50,6 +50,8 @@ export type MatrixEventReading = {
   isRedacted(): boolean;
   isSending(): boolean;
   getRelation(): RelationReading | null;
+  getAssociatedId?(): string | undefined;
+  status?: string | null;
   event: { sender?: string; [key: string]: unknown };
 };
 
@@ -81,6 +83,8 @@ export type RoomReading = {
   getUnreadNotificationCount(type?: string): number;
   getEventReadUpTo(userId: UserId): string | null;
   getLastActiveTimestamp?(): number | undefined;
+  getBumpStamp?(): number | undefined;
+  getThreads?(): { events: MatrixEventReading[] }[];
   accountData: { get(eventType: string): MatrixEventReading | undefined };
   getMyMembership(): string;
   getJoinRule(): string;

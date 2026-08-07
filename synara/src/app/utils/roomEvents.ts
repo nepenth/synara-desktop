@@ -5,16 +5,19 @@ export const RoomEvent = {
   AccountData: 'Room.accountData',
   CurrentStateUpdated: 'Room.CurrentStateUpdated',
   LocalEchoUpdated: 'Room.localEchoUpdated',
+  MyMembership: 'Room.myMembership',
   Name: 'Room.name',
   Receipt: 'Room.receipt',
+  Redaction: 'Room.redaction',
+  RedactionCancelled: 'Room.redactionCancelled',
   Timeline: 'Room.timeline',
-  TimelineRefresh: 'Room.timelineRefresh',
+  TimelineRefresh: 'Room.TimelineRefresh',
   TimelineReset: 'Room.timelineReset',
 } as const;
 
 export const RoomMemberEvent = {
   Membership: 'RoomMember.membership',
-  PowerLevel: 'RoomMember.power_level',
+  PowerLevel: 'RoomMember.powerLevel',
 } as const;
 
 export const RoomStateEvent = {
@@ -24,6 +27,15 @@ export const RoomStateEvent = {
 export const UserEvent = {
   AvatarUrl: 'User.avatarUrl',
   DisplayName: 'User.displayName',
+} as const;
+
+export const ClientEvent = {
+  Room: 'Room',
+  DeleteRoom: 'deleteRoom',
+} as const;
+
+export const MatrixEventEvent = {
+  Decrypted: 'Event.decrypted',
 } as const;
 
 type Listener = (...args: any[]) => void;
