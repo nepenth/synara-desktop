@@ -1,5 +1,5 @@
 import React from 'react';
-import { Room } from 'matrix-js-sdk';
+import type { EventedRoomReading } from '../../utils/roomEvents';
 import { Chip, Text } from 'folds';
 import { useAtomValue } from 'jotai';
 import { useRoomName } from '../../hooks/useRoomMeta';
@@ -15,7 +15,7 @@ import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 
 type CallRoomNameProps = {
-  room: Room;
+  room: EventedRoomReading;
 };
 export function CallRoomName({ room }: CallRoomNameProps) {
   const mx = useMatrixClient();

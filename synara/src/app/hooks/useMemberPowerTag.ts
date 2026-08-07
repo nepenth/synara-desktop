@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
-import { MatrixClient, Room, RoomMember as MatrixRoomMember } from 'matrix-js-sdk';
+import type { MatrixClientReading } from '../utils/room';
+import type { EventedRoomReading } from '../utils/roomEvents';
 import { getPowerLevelTag, PowerLevelTags, usePowerLevelTags } from './usePowerLevelTags';
 import { IPowerLevels, readPowerLevel } from './usePowerLevels';
 import { MemberPowerTag, MemberPowerTagIcon } from '../../types/matrix/room';
@@ -9,12 +10,13 @@ import { accessibleColor } from '../plugins/color';
 import { resolveMatrixMediaUrl } from '../matrix/media';
 import type { RoomMember as NativeRoomMember } from '../features/matrix-dto/member';
 
-type RoomMemberListItem = MatrixRoomMember | NativeRoomMember;
+type JsRoomMemberReading = { userId: string; membership?: string; rawDisplayName?: string };
+type RoomMemberListItem = JsRoomMemberReading | NativeRoomMember;
 
 export type GetMemberPowerTag = (userId: string) => MemberPowerTag;
 
 export const useGetMemberPowerTag = (
-  room: Room,
+  room: EventedRoomReading,
   creators: Set<string>,
   powerLevels: IPowerLevels
 ) => {
@@ -37,7 +39,7 @@ export const useGetMemberPowerTag = (
 };
 
 export const getPowerTagIconSrc = (
-  mx: MatrixClient,
+  mx: MatrixClientReading,
   useAuthentication: boolean,
   icon: MemberPowerTagIcon
 ): string | undefined => {
