@@ -15,9 +15,8 @@ import {
   Text,
   toRem,
 } from 'folds';
-import { CallMembership } from 'matrix-js-sdk/lib/matrixrtc/CallMembership';
+import type { RoomReading } from '../../utils/room';
 import FocusTrap from 'focus-trap-react';
-import { Room } from 'matrix-js-sdk';
 import * as css from './styles.css';
 import { stopPropagation } from '../../utils/keyboard';
 import { getMemberAvatarMxc, getMemberDisplayName } from '../../utils/room';
@@ -29,9 +28,14 @@ import { UserAvatar } from '../../components/user-avatar';
 import { useOpenUserRoomProfile } from '../../state/hooks/userRoomProfile';
 import { getMouseEventCords } from '../../utils/dom';
 
+type CallMembershipReading = {
+  sender: string;
+  membershipID: string;
+};
+
 type LiveChipProps = {
-  room: Room;
-  members: CallMembership[];
+  room: RoomReading;
+  members: CallMembershipReading[];
   count: number;
 };
 export function LiveChip({ count, room, members }: LiveChipProps) {

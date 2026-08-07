@@ -67,7 +67,7 @@
         },
         "matrixrtc_calls": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 4,
+          "fileCount": 2,
           "listenerCandidateOccurrences": 8,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -95,7 +95,7 @@
         },
         "room_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 62,
+          "fileCount": 59,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 113,
-      "importFileCount": 111,
+      "fileCount": 110,
+      "importFileCount": 108,
       "methodCandidateFrequencies": [
         {
           "count": 54,
@@ -312,8 +312,8 @@
       ],
       "modelCoupling": {
         "CallMembership": {
-          "fileCount": 4,
-          "importOccurrences": 4
+          "fileCount": 2,
+          "importOccurrences": 2
         },
         "CryptoApi": {
           "fileCount": 0,
@@ -348,8 +348,8 @@
           "importOccurrences": 1
         },
         "Room": {
-          "fileCount": 60,
-          "importOccurrences": 60
+          "fileCount": 57,
+          "importOccurrences": 57
         },
         "RoomMember": {
           "fileCount": 5,
@@ -370,8 +370,8 @@
       },
       "modules": [
         {
-          "fileCount": 109,
-          "importCount": 109,
+          "fileCount": 106,
+          "importCount": 106,
           "path": "matrix-js-sdk"
         },
         {
@@ -380,14 +380,14 @@
           "path": "matrix-js-sdk/lib/types"
         },
         {
-          "fileCount": 4,
-          "importCount": 4,
-          "path": "matrix-js-sdk/lib/matrixrtc/CallMembership"
+          "fileCount": 2,
+          "importCount": 2,
+          "path": "matrix-js-sdk/lib/@types/event"
         },
         {
           "fileCount": 2,
           "importCount": 2,
-          "path": "matrix-js-sdk/lib/@types/event"
+          "path": "matrix-js-sdk/lib/matrixrtc/CallMembership"
         },
         {
           "fileCount": 1,
@@ -466,11 +466,11 @@
       "scope": "role",
       "symbols": [
         {
-          "fileCount": 60,
-          "importCount": 60,
+          "fileCount": 57,
+          "importCount": 57,
           "name": "Room",
           "typeImports": 1,
-          "valueImports": 59
+          "valueImports": 56
         },
         {
           "fileCount": 34,
@@ -552,13 +552,6 @@
         {
           "fileCount": 4,
           "importCount": 4,
-          "name": "CallMembership",
-          "typeImports": 0,
-          "valueImports": 4
-        },
-        {
-          "fileCount": 4,
-          "importCount": 4,
           "name": "Direction",
           "typeImports": 0,
           "valueImports": 4
@@ -625,6 +618,13 @@
           "name": "RuleId",
           "typeImports": 0,
           "valueImports": 3
+        },
+        {
+          "fileCount": 2,
+          "importCount": 2,
+          "name": "CallMembership",
+          "typeImports": 0,
+          "valueImports": 2
         },
         {
           "fileCount": 2,
@@ -3051,123 +3051,6 @@
       "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/features/call-status/CallRoomName.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "feature",
-      "categories": ["room_methods", "matrixrtc_calls"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 18,
-          "module": "matrix-js-sdk/lib/matrixrtc/CallMembership",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "CallMembership"
-            }
-          ],
-          "namespaceImport": null
-        },
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 20,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "Room"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["CallMembership", "Room"],
-      "networking": [],
-      "path": "synara/src/app/features/call-status/LiveChip.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "feature",
-      "categories": ["room_methods", "matrixrtc_calls"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk/lib/matrixrtc/CallMembership",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "CallMembership"
-            }
-          ],
-          "namespaceImport": null
-        },
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 4,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "Room"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["CallMembership", "Room"],
-      "networking": [],
-      "path": "synara/src/app/features/call-status/MemberGlance.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "feature",
-      "categories": ["room_methods"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "Room"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["Room"],
-      "networking": [],
-      "path": "synara/src/app/features/call-status/MemberSpeaking.tsx",
       "role": "production"
     },
     {
@@ -9843,7 +9726,7 @@
       "buckets": {
         "client-lifecycle": 2,
         "component": 12,
-        "feature": 40,
+        "feature": 37,
         "hook": 34,
         "page": 7,
         "plugin": 6,
@@ -9856,13 +9739,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 111,
+      "productionImportFiles": 108,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 121
+      "totalImportFiles": 118
     },
     "repositoryWide": {
-      "productionImportFiles": 111,
+      "productionImportFiles": 108,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -9871,7 +9754,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 124
+      "totalImportFiles": 121
     }
   }
 }

@@ -1,7 +1,6 @@
 import { Box, config, Icon, Icons, Text } from 'folds';
-import { CallMembership } from 'matrix-js-sdk/lib/matrixrtc/CallMembership';
+import type { RoomReading } from '../../utils/room';
 import React from 'react';
-import { Room } from 'matrix-js-sdk';
 import { UserAvatar } from '../../components/user-avatar';
 import { getMemberAvatarMxc, getMemberDisplayName } from '../../utils/room';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
@@ -13,9 +12,14 @@ import { useOpenUserRoomProfile } from '../../state/hooks/userRoomProfile';
 import { getMouseEventCords } from '../../utils/dom';
 import * as css from './styles.css';
 
+type CallMembershipReading = {
+  sender: string;
+  membershipID: string;
+};
+
 type MemberGlanceProps = {
-  room: Room;
-  members: CallMembership[];
+  room: RoomReading;
+  members: CallMembershipReading[];
   speakers: Set<string>;
   max?: number;
 };

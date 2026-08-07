@@ -1,11 +1,11 @@
-import { Room } from 'matrix-js-sdk';
+import type { RoomReading } from '../../utils/room';
 import React from 'react';
 import { Box, Icon, Icons, Text } from 'folds';
 import { getMemberDisplayName } from '../../utils/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
 
 type MemberSpeakingProps = {
-  room: Room;
+  room: RoomReading;
   speakers: Set<string>;
 };
 export function MemberSpeaking({ room, speakers }: MemberSpeakingProps) {
