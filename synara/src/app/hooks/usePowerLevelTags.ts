@@ -1,6 +1,6 @@
-import { Room } from 'matrix-js-sdk';
 import { useEffect, useMemo, useState } from 'react';
 import { IPowerLevels } from './usePowerLevels';
+import type { EventedRoomReading } from '../utils/roomEvents';
 import { useStateEvent } from './useStateEvent';
 import { MemberPowerTag, StateEvent } from '../../types/matrix/room';
 import { isNativeMatrixSession } from '../features/verification/nativeVerification';
@@ -92,7 +92,10 @@ const generateFallbackTag = (powerLevelTags: PowerLevelTags, power: number): Mem
   };
 };
 
-export const usePowerLevelTags = (room: Room, powerLevels: IPowerLevels): PowerLevelTags => {
+export const usePowerLevelTags = (
+  room: EventedRoomReading,
+  powerLevels: IPowerLevels
+): PowerLevelTags => {
   const nativeSession = isNativeMatrixSession();
   const tagsEvent = useStateEvent(room, StateEvent.PowerLevelTags, '', !nativeSession);
   const [nativeState, setNativeState] = useState<

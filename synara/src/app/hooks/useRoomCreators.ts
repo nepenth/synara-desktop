@@ -1,4 +1,5 @@
-import { MatrixClient, Room } from 'matrix-js-sdk';
+import type { EventedRoomReading } from '../utils/roomEvents';
+import type { MatrixClientReading, RoomReading, MatrixEventReading } from '../utils/room';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStateEvent } from './useStateEvent';
 import { useStateEventCallback } from './useStateEventCallback';
@@ -6,7 +7,6 @@ import { useMatrixClient } from './useMatrixClient';
 import { IRoomCreateContent, StateEvent } from '../../types/matrix/room';
 import { creatorsSupported } from '../utils/matrix';
 import { getStateEvent } from '../utils/room';
-import type { MatrixEventReading } from '../utils/room';
 import { isNativeMatrixSession } from '../features/verification/nativeVerification';
 import { readRoomCreatorsWithNativeOwner } from './nativeRoomCreatorsOwner';
 
@@ -32,7 +32,7 @@ export const getRoomCreators = (createEvent: MatrixEventReading): Set<string> =>
   return creators;
 };
 
-export const useRoomCreators = (room: Room): Set<string> => {
+export const useRoomCreators = (room: EventedRoomReading): Set<string> => {
   const nativeSession = isNativeMatrixSession();
   const createEvent = useStateEvent(room, StateEvent.RoomCreate, '', !nativeSession);
   const [nativeState, setNativeState] = useState<
@@ -92,7 +92,7 @@ export const useRoomCreators = (room: Room): Set<string> => {
  * for native sessions. Loading and unavailable native results return empty
  * creator sets so permission checks remain fail-closed.
  */
-export const useRoomsCreators = (rooms: Room[]): Map<string, Set<string>> => {
+export const useRoomsCreators = (rooms: RoomReading[]): Map<string, Set<string>> => {
   const mx = useMatrixClient();
   const nativeSession = isNativeMatrixSession();
   const roomIdsKey = rooms.map((room) => room.roomId).join('\u0000');
@@ -177,7 +177,7 @@ export const useRoomsCreators = (rooms: Room[]): Map<string, Set<string>> => {
   return roomToCreators;
 };
 
-export const getRoomCreatorsForRoomId = (mx: MatrixClient, roomId: string): Set<string> => {
+export const getRoomCreatorsForRoomId = (mx: MatrixClientReading, roomId: string): Set<string> => {
   if (isNativeMatrixSession()) return new Set();
 
   const room = mx.getRoom(roomId);

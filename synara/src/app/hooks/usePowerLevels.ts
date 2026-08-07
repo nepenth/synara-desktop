@@ -1,12 +1,12 @@
-import { Room } from 'matrix-js-sdk';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import produce from 'immer';
+import type { EventedRoomReading } from '../utils/roomEvents';
+import type { RoomReading, MatrixEventReading } from '../utils/room';
 import { useStateEvent } from './useStateEvent';
 import { StateEvent } from '../../types/matrix/room';
 import { useStateEventCallback } from './useStateEventCallback';
 import { useMatrixClient } from './useMatrixClient';
 import { getStateEvent } from '../utils/room';
-import type { MatrixEventReading } from '../utils/room';
 import { isNativeMatrixSession } from '../features/verification/nativeVerification';
 import { readRoomPowerLevelsWithNativeOwner } from './nativeRoomPowerLevelsOwner';
 
@@ -76,7 +76,7 @@ export const getPowersLevelFromMatrixEvent = (mEvent?: MatrixEventReading): IPow
   return powerLevels;
 };
 
-export function usePowerLevels(room: Room): IPowerLevels {
+export function usePowerLevels(room: EventedRoomReading): IPowerLevels {
   const nativeSession = isNativeMatrixSession();
   const powerLevelsEvent = useStateEvent(room, StateEvent.RoomPowerLevels, '', !nativeSession);
   const [nativeState, setNativeState] = useState<
@@ -144,7 +144,7 @@ export const usePowerLevelsContext = (): IPowerLevels => {
   return pl;
 };
 
-export const useRoomsPowerLevels = (rooms: Room[]): Map<string, IPowerLevels> => {
+export const useRoomsPowerLevels = (rooms: RoomReading[]): Map<string, IPowerLevels> => {
   const mx = useMatrixClient();
   const nativeSession = isNativeMatrixSession();
   const roomIdsKey = rooms.map((room) => room.roomId).join('\u0000');
