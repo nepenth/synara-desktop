@@ -4,7 +4,6 @@ import {
   MatrixCapabilities,
   WidgetEventCapability,
 } from 'matrix-widget-api';
-import { EventType } from 'matrix-js-sdk';
 
 export function getCallCapabilities(
   roomId: string,
@@ -22,17 +21,15 @@ export function getCallCapabilities(
   capabilities.add(`org.matrix.msc2762.state:${roomId}`);
 
   capabilities.add(
-    WidgetEventCapability.forStateEvent(EventDirection.Receive, EventType.RoomMember).raw
+    WidgetEventCapability.forStateEvent(EventDirection.Receive, 'm.room.member').raw
   );
   capabilities.add(
     WidgetEventCapability.forStateEvent(EventDirection.Receive, 'org.matrix.msc3401.call').raw
   );
   capabilities.add(
-    WidgetEventCapability.forStateEvent(EventDirection.Receive, EventType.RoomEncryption).raw
+    WidgetEventCapability.forStateEvent(EventDirection.Receive, 'm.room.encryption').raw
   );
-  capabilities.add(
-    WidgetEventCapability.forStateEvent(EventDirection.Receive, EventType.RoomName).raw
-  );
+  capabilities.add(WidgetEventCapability.forStateEvent(EventDirection.Receive, 'm.room.name').raw);
 
   capabilities.add(
     WidgetEventCapability.forStateEvent(
@@ -75,7 +72,7 @@ export function getCallCapabilities(
       .raw
   );
   capabilities.add(
-    WidgetEventCapability.forStateEvent(EventDirection.Receive, EventType.RoomCreate).raw
+    WidgetEventCapability.forStateEvent(EventDirection.Receive, 'm.room.create').raw
   );
 
   capabilities.add(
@@ -88,8 +85,8 @@ export function getCallCapabilities(
   [
     'io.element.call.encryption_keys',
     'org.matrix.rageshake_request',
-    EventType.Reaction,
-    EventType.RoomRedaction,
+    'm.reaction',
+    'm.room.redaction',
     'io.element.call.reaction',
     'org.matrix.msc4310.rtc.decline',
   ].forEach((type) => {
@@ -98,17 +95,17 @@ export function getCallCapabilities(
   });
 
   [
-    EventType.CallInvite,
-    EventType.CallCandidates,
-    EventType.CallAnswer,
-    EventType.CallHangup,
-    EventType.CallReject,
-    EventType.CallSelectAnswer,
-    EventType.CallNegotiate,
-    EventType.CallSDPStreamMetadataChanged,
-    EventType.CallSDPStreamMetadataChangedPrefix,
-    EventType.CallReplaces,
-    EventType.CallEncryptionKeysPrefix,
+    'm.call.invite',
+    'm.call.candidates',
+    'm.call.answer',
+    'm.call.hangup',
+    'm.call.reject',
+    'm.call.select_answer',
+    'm.call.negotiate',
+    'm.call.sdp_stream_metadata_changed',
+    'm.call.sdp_stream_metadata_changed_prefix',
+    'm.call.replaces',
+    'm.call.encryption_keys_prefix',
   ].forEach((type) => {
     capabilities.add(WidgetEventCapability.forToDeviceEvent(EventDirection.Send, type).raw);
     capabilities.add(WidgetEventCapability.forToDeviceEvent(EventDirection.Receive, type).raw);

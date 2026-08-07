@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 110,
-      "importFileCount": 108,
+      "fileCount": 109,
+      "importFileCount": 107,
       "methodCandidateFrequencies": [
         {
           "count": 54,
@@ -370,8 +370,8 @@
       },
       "modules": [
         {
-          "fileCount": 106,
-          "importCount": 106,
+          "fileCount": 105,
+          "importCount": 105,
           "path": "matrix-js-sdk"
         },
         {
@@ -517,13 +517,6 @@
         {
           "fileCount": 5,
           "importCount": 5,
-          "name": "EventType",
-          "typeImports": 0,
-          "valueImports": 5
-        },
-        {
-          "fileCount": 5,
-          "importCount": 5,
           "name": "IPushRules",
           "typeImports": 0,
           "valueImports": 5
@@ -553,6 +546,13 @@
           "fileCount": 4,
           "importCount": 4,
           "name": "Direction",
+          "typeImports": 0,
+          "valueImports": 4
+        },
+        {
+          "fileCount": 4,
+          "importCount": 4,
+          "name": "EventType",
           "typeImports": 0,
           "valueImports": 4
         },
@@ -7874,35 +7874,6 @@
           "defaultImport": null,
           "form": "static",
           "isTypeOnly": false,
-          "line": 7,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "EventType"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/plugins/call/utils.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "plugin",
-      "categories": [],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
           "line": 1,
           "module": "matrix-js-sdk",
           "namedImports": [
@@ -9729,7 +9700,7 @@
         "feature": 37,
         "hook": 34,
         "page": 7,
-        "plugin": 6,
+        "plugin": 5,
         "state": 4,
         "utility": 6
       },
@@ -9739,13 +9710,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 108,
+      "productionImportFiles": 107,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 118
+      "totalImportFiles": 117
     },
     "repositoryWide": {
-      "productionImportFiles": 108,
+      "productionImportFiles": 107,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -9754,7 +9725,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 121
+      "totalImportFiles": 120
     }
   }
 }
