@@ -4,10 +4,9 @@
   "description": "Baseline production files under synara/src allowed to import matrix-js-sdk during migration. New importers not on this list fail the P1.6 guardrail. Full ban is Phase 11/14 cutover.",
   "scope": "synara/src production (non-test) files",
   "generatedFrom": "feature/matrix-rust-sdk-full-replacement @ 7e54fd3 (P1.6 start)",
-  "pathCount": 32,
+  "pathCount": 31,
   "paths": [
     "synara/src/app/features/call/CallMemberCard.tsx",
-    "synara/src/app/features/message-search/SearchResultGroup.tsx",
     "synara/src/app/features/message-search/useMessageSearch.ts",
     "synara/src/app/features/room-nav/RoomNavItem.tsx",
     "synara/src/app/features/room/RoomSidePanel.tsx",

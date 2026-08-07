@@ -1,10 +1,12 @@
 /* eslint-disable react/destructuring-assignment */
 import React, { MouseEventHandler, useMemo } from 'react';
-import { IEventWithRoomId, RelationType, Room } from 'matrix-js-sdk';
+import type { useRoomEvent } from '../../hooks/useRoomEvent';
+import type { RoomReading } from '../../utils/room';
+import type { EventedRoomReading } from '../../utils/roomEvents';
+import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { HTMLReactParserOptions } from 'html-react-parser';
 import { Avatar, Box, Chip, Header, Icon, Icons, Text, config } from 'folds';
 import { Opts as LinkifyOpts } from 'linkifyjs';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import {
   factoryRenderLinkifyWithMention,
   getReactCustomHtmlParser,
@@ -54,8 +56,35 @@ import {
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomCreatorsTag } from '../../hooks/useRoomCreatorsTag';
 
+type SearchResultEvent = {
+  type?: string;
+  event_id: string;
+  room_id: string;
+  sender?: string;
+  origin_server_ts?: number;
+  unsigned?: { redacted_because?: { content: { reason?: string } } };
+  content: {
+    msgtype?: string;
+    body?: string;
+    'm.new_content'?: Record<string, unknown>;
+    'm.relates_to'?: {
+      rel_type?: string;
+      event_id?: string;
+      'm.in_reply_to'?: { event_id?: string };
+    };
+    [key: string]: unknown;
+  };
+};
+
+type SearchResultRoomReading = {
+  roomId: string;
+  name?: string;
+  getType(): string | undefined;
+  getJoinRule(): string;
+};
+
 type SearchResultGroupProps = {
-  room: Room;
+  room: SearchResultRoomReading;
   highlights: string[];
   items: ResultItem[];
   mediaAutoLoad?: boolean;
@@ -75,15 +104,17 @@ export function SearchResultGroup({
   dateFormatString,
 }: SearchResultGroupProps) {
   const mx = useMatrixClient();
+  const eventedRoom = room as unknown as EventedRoomReading;
+  const roomReading = eventedRoom as unknown as RoomReading;
   const useAuthentication = useMediaAuthentication();
   const highlightRegex = useMemo(() => makeHighlightRegex(highlights), [highlights]);
 
-  const powerLevels = usePowerLevels(room);
-  const creators = useRoomCreators(room);
+  const powerLevels = usePowerLevels(eventedRoom);
+  const creators = useRoomCreators(eventedRoom);
 
   const creatorsTag = useRoomCreatorsTag();
-  const powerLevelTags = usePowerLevelTags(room, powerLevels);
-  const getMemberPowerTag = useGetMemberPowerTag(room, creators, powerLevels);
+  const powerLevelTags = usePowerLevelTags(eventedRoom, powerLevels);
+  const getMemberPowerTag = useGetMemberPowerTag(eventedRoom, creators, powerLevels);
 
   const theme = useTheme();
   const accessibleTagColors = useAccessiblePowerTagColors(theme.kind, creatorsTag, powerLevelTags);
@@ -120,7 +151,7 @@ export function SearchResultGroup({
     ]
   );
 
-  const renderMatrixEvent = useMatrixEventRenderer<[IEventWithRoomId, string, GetContentCallback]>(
+  const renderMatrixEvent = useMatrixEventRenderer<[SearchResultEvent, string, GetContentCallback]>(
     {
       [MessageEvent.RoomMessage]: (event, displayName, getContent) => {
         if (event.unsigned?.redacted_because) {
@@ -131,7 +162,7 @@ export function SearchResultGroup({
           <RenderMessageContent
             displayName={displayName}
             msgType={event.content.msgtype ?? ''}
-            ts={event.origin_server_ts}
+            ts={event.origin_server_ts ?? 0}
             getContent={getContent}
             mediaAutoLoad={mediaAutoLoad}
             htmlReactParserOptions={htmlReactParserOptions}
@@ -203,7 +234,7 @@ export function SearchResultGroup({
           <Avatar size="200" radii="300">
             <RoomAvatar
               roomId={room.roomId}
-              src={getRoomAvatarUrl(mx, room, 96, useAuthentication)}
+              src={getRoomAvatarUrl(mx, roomReading, 96, useAuthentication)}
               alt={room.name}
               renderFallback={() => (
                 <RoomIcon
@@ -225,21 +256,20 @@ export function SearchResultGroup({
           const { event } = item;
 
           const displayName =
-            getMemberDisplayName(room, event.sender) ??
+            getMemberDisplayName(roomReading, event.sender) ??
             getMxIdLocalPart(event.sender) ??
             event.sender;
-          const senderAvatarMxc = getMemberAvatarMxc(room, event.sender);
+          const senderAvatarMxc = getMemberAvatarMxc(roomReading, event.sender);
 
           const relation = event.content['m.relates_to'];
           const mainEventId =
-            relation?.rel_type === RelationType.Replace ? relation.event_id : event.event_id;
+            relation?.rel_type === 'm.replace' ? relation.event_id : event.event_id;
 
           const getContent = (() =>
             event.content['m.new_content'] ?? event.content) as GetContentCallback;
 
           const replyEventId = relation?.['m.in_reply_to']?.event_id;
-          const threadRootId =
-            relation?.rel_type === RelationType.Thread ? relation.event_id : undefined;
+          const threadRootId = relation?.rel_type === 'm.thread' ? relation.event_id : undefined;
 
           const memberPowerTag = getMemberPowerTag(event.sender);
           const tagColor = memberPowerTag?.color
@@ -289,7 +319,7 @@ export function SearchResultGroup({
                       {tagIconSrc && <PowerIcon size="100" iconSrc={tagIconSrc} />}
                     </Box>
                     <Time
-                      ts={event.origin_server_ts}
+                      ts={event.origin_server_ts ?? 0}
                       hour24Clock={hour24Clock}
                       dateFormatString={dateFormatString}
                     />
@@ -307,7 +337,7 @@ export function SearchResultGroup({
                 </Box>
                 {replyEventId && (
                   <Reply
-                    room={room}
+                    room={room as unknown as Parameters<typeof useRoomEvent>[0]}
                     replyEventId={replyEventId}
                     threadRootId={threadRootId}
                     onClick={handleOpenClick}
@@ -316,7 +346,13 @@ export function SearchResultGroup({
                     legacyUsernameColor={legacyUsernameColor}
                   />
                 )}
-                {renderMatrixEvent(event.type, false, event, displayName, getContent)}
+                {renderMatrixEvent(
+                  event.type,
+                  false,
+                  event as unknown as SearchResultEvent,
+                  displayName,
+                  getContent
+                )}
               </ModernLayout>
             </SequenceCard>
           );
