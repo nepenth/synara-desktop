@@ -11,7 +11,7 @@ import {
   Spinner,
   Text,
 } from 'folds';
-import { IPushRule } from 'matrix-js-sdk';
+import { IPushRule } from '../../../utils/pushRules';
 import React, { MouseEventHandler, useMemo, useState } from 'react';
 import FocusTrap from 'focus-trap-react';
 import { NotificationMode, useNotificationActionsMode } from '../../../hooks/useNotificationMode';

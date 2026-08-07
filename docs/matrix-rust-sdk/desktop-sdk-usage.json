@@ -25,7 +25,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 63,
+          "fileCount": 59,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -74,9 +74,9 @@
         },
         "notifications_push_rules": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 7,
+          "fileCount": 0,
           "listenerCandidateOccurrences": 0,
-          "methodCandidateOccurrences": 9,
+          "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
         },
         "receipts": {
@@ -144,14 +144,14 @@
         },
         "uia_auth": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 33,
+          "fileCount": 32,
           "listenerCandidateOccurrences": 2,
-          "methodCandidateOccurrences": 77,
+          "methodCandidateOccurrences": 76,
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 105,
-      "importFileCount": 103,
+      "fileCount": 97,
+      "importFileCount": 95,
       "methodCandidateFrequencies": [
         {
           "count": 50,
@@ -166,7 +166,7 @@
           "name": "isSpaceRoom"
         },
         {
-          "count": 18,
+          "count": 17,
           "name": "getUserId"
         },
         {
@@ -199,23 +199,11 @@
         },
         {
           "count": 3,
-          "name": "addPushRule"
-        },
-        {
-          "count": 3,
-          "name": "deletePushRule"
-        },
-        {
-          "count": 3,
           "name": "sendEvent"
         },
         {
           "count": 3,
           "name": "sendMessage"
-        },
-        {
-          "count": 3,
-          "name": "setPushRuleActions"
         },
         {
           "count": 2,
@@ -332,8 +320,8 @@
           "importOccurrences": 1
         },
         "MatrixClient": {
-          "fileCount": 31,
-          "importOccurrences": 31
+          "fileCount": 30,
+          "importOccurrences": 30
         },
         "MatrixError": {
           "fileCount": 18,
@@ -370,8 +358,8 @@
       },
       "modules": [
         {
-          "fileCount": 101,
-          "importCount": 101,
+          "fileCount": 93,
+          "importCount": 93,
           "path": "matrix-js-sdk"
         },
         {
@@ -473,11 +461,11 @@
           "valueImports": 56
         },
         {
-          "fileCount": 31,
-          "importCount": 31,
+          "fileCount": 30,
+          "importCount": 30,
           "name": "MatrixClient",
           "typeImports": 2,
-          "valueImports": 29
+          "valueImports": 28
         },
         {
           "fileCount": 18,
@@ -517,20 +505,6 @@
         {
           "fileCount": 5,
           "importCount": 5,
-          "name": "IPushRules",
-          "typeImports": 0,
-          "valueImports": 5
-        },
-        {
-          "fileCount": 5,
-          "importCount": 5,
-          "name": "PushRuleKind",
-          "typeImports": 0,
-          "valueImports": 5
-        },
-        {
-          "fileCount": 5,
-          "importCount": 5,
           "name": "RoomMember",
           "typeImports": 0,
           "valueImports": 5
@@ -561,20 +535,6 @@
           "importCount": 4,
           "name": "IContent",
           "typeImports": 1,
-          "valueImports": 3
-        },
-        {
-          "fileCount": 3,
-          "importCount": 3,
-          "name": "ConditionKind",
-          "typeImports": 0,
-          "valueImports": 3
-        },
-        {
-          "fileCount": 3,
-          "importCount": 3,
-          "name": "IPushRule",
-          "typeImports": 0,
           "valueImports": 3
         },
         {
@@ -613,13 +573,6 @@
           "valueImports": 3
         },
         {
-          "fileCount": 3,
-          "importCount": 3,
-          "name": "RuleId",
-          "typeImports": 0,
-          "valueImports": 3
-        },
-        {
           "fileCount": 2,
           "importCount": 2,
           "name": "CallMembership",
@@ -651,20 +604,6 @@
           "fileCount": 2,
           "importCount": 2,
           "name": "MsgType",
-          "typeImports": 0,
-          "valueImports": 2
-        },
-        {
-          "fileCount": 2,
-          "importCount": 2,
-          "name": "PushRuleAction",
-          "typeImports": 0,
-          "valueImports": 2
-        },
-        {
-          "fileCount": 2,
-          "importCount": 2,
-          "name": "PushRuleCondition",
           "typeImports": 0,
           "valueImports": 2
         },
@@ -797,13 +736,6 @@
         {
           "fileCount": 1,
           "importCount": 1,
-          "name": "IPusherRequest",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
           "name": "IRefreshTokenResponse",
           "typeImports": 1,
           "valueImports": 0
@@ -891,13 +823,6 @@
           "name": "OwnDeviceKeys",
           "typeImports": 1,
           "valueImports": 0
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "PushRuleActionName",
-          "typeImports": 0,
-          "valueImports": 1
         },
         {
           "fileCount": 1,
@@ -996,13 +921,6 @@
           "name": "TokenRefreshFunction",
           "typeImports": 1,
           "valueImports": 0
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "TweakName",
-          "typeImports": 0,
-          "valueImports": 1
         },
         {
           "fileCount": 1,
@@ -4635,241 +4553,6 @@
       "role": "production"
     },
     {
-      "bucket": "feature",
-      "categories": ["client_methods", "notifications_push_rules"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "ConditionKind"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IPushRules"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "PushRuleCondition"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "PushRuleKind"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "RuleId"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "notifications_push_rules",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 67,
-          "name": "setPushRuleActions"
-        }
-      ],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/features/settings/notifications/AllMessages.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "feature",
-      "categories": ["client_methods", "notifications_push_rules"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IPushRule"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IPushRules"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "PushRuleKind"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "notifications_push_rules",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 30,
-          "name": "addPushRule"
-        },
-        {
-          "category": "notifications_push_rules",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 114,
-          "name": "deletePushRule"
-        },
-        {
-          "category": "notifications_push_rules",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 135,
-          "name": "setPushRuleActions"
-        }
-      ],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "feature",
-      "categories": ["notifications_push_rules"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 14,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IPushRule"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "feature",
-      "categories": ["client_methods", "notifications_push_rules", "uia_auth"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "ConditionKind"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IPushRules"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "PushRuleKind"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "RuleId"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "notifications_push_rules",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 106,
-          "name": "setPushRuleActions"
-        },
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 116,
-          "name": "getUserId"
-        }
-      ],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "feature",
-      "categories": [],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IPusherRequest"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/features/settings/notifications/SystemNotification.tsx",
-      "role": "production"
-    },
-    {
       "bucket": "hook",
       "categories": [
         "client_methods",
@@ -5419,45 +5102,6 @@
     },
     {
       "bucket": "hook",
-      "categories": ["notifications_push_rules"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "PushRuleAction"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "PushRuleActionName"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "TweakName"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/hooks/useNotificationMode.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "hook",
       "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -5512,60 +5156,6 @@
       "modelCoupling": ["Room"],
       "networking": [],
       "path": "synara/src/app/hooks/usePowerLevels.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "hook",
-      "categories": ["notifications_push_rules"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IPushRule"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IPushRules"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "PushRuleAction"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "PushRuleCondition"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "PushRuleKind"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "RuleId"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/hooks/usePushRule.ts",
       "role": "production"
     },
     {
@@ -6339,79 +5929,6 @@
       "modelCoupling": ["MatrixEvent", "Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useRoomState.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "hook",
-      "categories": ["client_methods", "notifications_push_rules"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "ConditionKind"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IPushRules"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixClient"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "PushRuleKind"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "notifications_push_rules",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 121,
-          "name": "deletePushRule"
-        },
-        {
-          "category": "notifications_push_rules",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 124,
-          "name": "deletePushRule"
-        },
-        {
-          "category": "notifications_push_rules",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 133,
-          "name": "addPushRule"
-        },
-        {
-          "category": "notifications_push_rules",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 146,
-          "name": "addPushRule"
-        }
-      ],
-      "modelCoupling": ["MatrixClient"],
-      "networking": [],
-      "path": "synara/src/app/hooks/useRoomsNotificationPreferences.ts",
       "role": "production"
     },
     {
@@ -9514,8 +9031,8 @@
       "buckets": {
         "client-lifecycle": 2,
         "component": 12,
-        "feature": 37,
-        "hook": 32,
+        "feature": 32,
+        "hook": 29,
         "page": 7,
         "plugin": 4,
         "state": 4,
@@ -9527,13 +9044,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 103,
+      "productionImportFiles": 95,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 113
+      "totalImportFiles": 105
     },
     "repositoryWide": {
-      "productionImportFiles": 103,
+      "productionImportFiles": 95,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -9542,7 +9059,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 116
+      "totalImportFiles": 108
     }
   }
 }
