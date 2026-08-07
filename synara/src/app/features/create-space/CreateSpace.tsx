@@ -1,5 +1,4 @@
 import React, { FormEventHandler, useCallback, useEffect, useState } from 'react';
-import { MatrixError, Room } from 'matrix-js-sdk';
 import {
   Box,
   Button,
@@ -22,6 +21,8 @@ import {
   knockSupported,
   restrictedSupported,
 } from '../../utils/matrix';
+import type { MatrixError } from '../../utils/matrix';
+import type { RoomReading } from '../../utils/room';
 import { millisecondsToMinutes, replaceSpaceWithDash } from '../../utils/common';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { useCapabilities } from '../../hooks/useCapabilities';
@@ -47,7 +48,7 @@ const getCreateSpaceAccessToIcon = (access: CreateRoomAccess) => {
 
 type CreateSpaceFormProps = {
   defaultAccess?: CreateRoomAccess;
-  space?: Room;
+  space?: RoomReading;
   onCreate?: (roomId: string) => void;
 };
 export function CreateSpaceForm({ defaultAccess, space, onCreate }: CreateSpaceFormProps) {
@@ -251,9 +252,11 @@ export function CreateSpaceForm({ defaultAccess, space, onCreate }: CreateSpaceF
           <Icon src={Icons.Warning} filled size="100" />
           <Text size="T300" style={{ color: color.Critical.Main }}>
             <b>
-              {error instanceof MatrixError && error.name === ErrorCode.M_LIMIT_EXCEEDED
+              {(error as { name?: string } | null)?.name === ErrorCode.M_LIMIT_EXCEEDED
                 ? `Server rate-limited your request for ${millisecondsToMinutes(
-                    (error.data.retry_after_ms as number | undefined) ?? 0
+                    ((error as { data?: { retry_after_ms?: unknown } }).data?.retry_after_ms as
+                      | number
+                      | undefined) ?? 0
                   )} minutes!`
                 : error.message}
             </b>
