@@ -22,7 +22,8 @@ import {
 } from 'folds';
 import { Editor, Transforms } from 'slate';
 import { ReactEditor } from 'slate-react';
-import { IContent, IMentions, MatrixEvent, RelationType, Room } from 'matrix-js-sdk';
+import type { EventTimelineSetReading, MatrixEventReading, RoomReading } from '../../../utils/room';
+import { IContent, IMentions, RelationType } from '../../../utils/messageContent';
 import { isKeyHotkey } from 'is-hotkey';
 import {
   AUTOCOMPLETE_PREFIXES,
@@ -60,8 +61,10 @@ import { useComposingCheck } from '../../../hooks/useComposingCheck';
 
 type MessageEditorProps = {
   roomId: string;
-  room: Room;
-  mEvent: MatrixEvent;
+  room: RoomReading & {
+    getTimelineForEvent(eventId: string): { getTimelineSet(): EventTimelineSetReading } | null;
+  };
+  mEvent: MatrixEventReading;
   imagePackRooms?: string[];
   onCancel: () => void;
 };
@@ -91,7 +94,7 @@ export const MessageEditor = as<'div', MessageEditorProps>(
       const content: IContent = editedEvent?.getContent()['m.new_content'] ?? mEvent.getContent();
       const { body, formatted_body: customHtml }: Record<string, unknown> = content;
 
-      const mMentions: IMentions | undefined = content['m.mentions'];
+      const mMentions: IMentions | undefined = content['m.mentions'] as IMentions | undefined;
 
       return [
         typeof body === 'string' ? body : undefined,
@@ -178,7 +181,11 @@ export const MessageEditor = as<'div', MessageEditorProps>(
           },
         };
 
-        return mx.sendMessage(roomId, content as any);
+        return (
+          mx as unknown as {
+            sendMessage(roomId: string, content: IContent): Promise<unknown>;
+          }
+        ).sendMessage(roomId, content as any);
       }, [mx, editor, roomId, mEvent, isMarkdown, getPrevBodyAndFormattedBody])
     );
 

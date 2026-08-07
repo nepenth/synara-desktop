@@ -11,8 +11,16 @@ import React, {
 } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import { isKeyHotkey } from 'is-hotkey';
-import { IContent, MsgType, RelationType, Room } from 'matrix-js-sdk';
-import { EventType } from 'matrix-js-sdk/lib/@types/event';
+import type { EventedRoomReading } from '../../utils/roomEvents';
+
+type RelationTypeRelatesTo = {
+  'm.in_reply_to'?: { event_id: string };
+  event_id?: string;
+  rel_type?: string;
+  is_falling_back?: boolean;
+  [key: string]: unknown;
+};
+import { IContent, MsgType, RelationType } from '../../utils/messageContent';
 import { useTranslation } from 'react-i18next';
 import { ReactEditor } from 'slate-react';
 import { Transforms, Editor } from 'slate';
@@ -157,7 +165,7 @@ interface RoomInputProps {
   editor: Editor;
   fileDropContainerRef: RefObject<HTMLElement | null>;
   roomId: string;
-  room: Room;
+  room: EventedRoomReading;
 }
 export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
   ({ editor, fileDropContainerRef, roomId, room }, ref) => {
@@ -175,7 +183,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     );
     const { t } = useTranslation();
     const direct = useIsDirectRoom();
-    const commands = useCommands(mx, room);
+    const commands = useCommands(mx, room as unknown as Parameters<typeof useCommands>[1]);
     const emojiBtnRef = useRef<HTMLButtonElement>(null);
     const gifBtnRef = useRef<HTMLButtonElement>(null);
     const pollBtnRef = useRef<HTMLButtonElement>(null);
@@ -258,7 +266,10 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         const nativeReady = await nativeComposerAttachmentReady();
         setNativeComposerSend(nativeReady);
 
-        if (!nativeReady && room.hasEncryptionStateEvent()) {
+        if (
+          !nativeReady &&
+          (room as unknown as { hasEncryptionStateEvent(): boolean }).hasEncryptionStateEvent()
+        ) {
           const encryptFiles = fulfilledPromiseSettledResult(
             await Promise.allSettled(safeFiles.map((f) => encryptFile(f)))
           );
@@ -425,7 +436,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const getReplyRelation = useCallback(() => {
       if (!replyDraft) return undefined;
 
-      const relation: IContent['m.relates_to'] = {
+      const relation: RelationTypeRelatesTo = {
         'm.in_reply_to': {
           event_id: replyDraft.eventId,
         },
@@ -601,7 +612,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           allowInlineMarkdown: isMarkdown,
         })
       );
-      let msgType = MsgType.Text;
+      let msgType: 'm.text' | 'm.emote' | 'm.notice' = MsgType.Text;
 
       if (commandName) {
         plainText = trimCommand(commandName, plainText);
@@ -674,7 +685,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           formattedBody: content.formatted_body,
           mentionUserIds: Array.from(mentionData.users),
           mentionRoom: mentionData.room,
-          replyTo: replyDraft?.eventId,
+          replyTo: replyDraft?.eventId as string | undefined,
           threadRoot,
         });
         if (nativeOwner === 'legacy') {
@@ -758,7 +769,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           answers: poll.answers.map((answer) => answer.text),
           maxSelections: poll.maxSelections,
           threadRoot,
-          replyTo: replyDraft?.eventId,
+          replyTo: replyDraft?.eventId as string | undefined,
         });
         if (owner === 'legacy') {
           setPollError(
@@ -875,7 +886,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       if (!stickerUrl || !info) return;
       mx.sendEvent(
         roomId,
-        EventType.Sticker as any,
+        'm.sticker' as any,
         addReplyRelationToContent({
           body: label,
           url: mxc,

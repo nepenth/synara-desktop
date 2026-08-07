@@ -161,12 +161,12 @@ test("runGuardrails passes on current repository tree", () => {
   }
   assert.equal(result.ok, true);
   assert.equal(result.findingCount, 0);
-  assert.ok(result.allowlistSize >= 65);
+  assert.ok(result.allowlistSize >= 63);
 });
 
 test("committed JS SDK allowlist loads and has expected size", () => {
   const allow = loadJsSdkAllowlist(REPO_ROOT);
-  assert.ok(allow.size >= 65);
+  assert.ok(allow.size >= 63);
   assert.equal(
     allow.has("synara/src/app/features/room/RoomTimeline.tsx"),
     false
