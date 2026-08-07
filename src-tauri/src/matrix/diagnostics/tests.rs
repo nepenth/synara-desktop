@@ -138,7 +138,7 @@ fn desktop_projection_uses_allowlisted_fields_only() {
 #[test]
 fn redaction_fixture_strips_tokens_ids_urls_bodies() {
     let fixture = json!({
-        "access_token": "<TOKEN>",
+        "access_token": "syt_LEAKED_ACCESS_TOKEN_VALUE_0123456789abcdef",
         "refresh_token": "srr_LEAKED_REFRESH_TOKEN_VALUE_0123456789abcdef",
         "recovery_key": "EsTC v1 2a3b 4c5d 6e7f 8a9b 0c1d 2e3f 4a5b",
         "user_id": "@alice:matrix.example.org",

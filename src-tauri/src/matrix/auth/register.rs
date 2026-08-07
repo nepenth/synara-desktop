@@ -115,7 +115,7 @@ pub enum RegisterAuthStage {
     Terms { session: Option<String> },
     #[serde(rename_all = "camelCase")]
     RegistrationToken {
-        token: <SET_IN_CONFIG>
+        token: String,
         session: Option<String>,
     },
     #[serde(rename_all = "camelCase")]
@@ -126,7 +126,7 @@ pub enum RegisterAuthStage {
     #[serde(rename_all = "camelCase")]
     EmailIdentity {
         sid: String,
-        client_secret: <SET_IN_CONFIG>
+        client_secret: String,
         session: Option<String>,
     },
 }
@@ -144,7 +144,7 @@ pub async fn probe_register_flows(client: &Client) -> Result<RegisterFlowsProbe,
 pub async fn request_register_email_token(
     client: &Client,
     email: &str,
-    client_secret: <SET_IN_CONFIG>
+    client_secret: &str,
     send_attempt: u32,
 ) -> Result<PasswordEmailTokenResult, AuthError> {
     let email = validate_email(email)?;
@@ -612,14 +612,14 @@ mod tests {
         assert_eq!(terms.session(), Some("s"));
 
         let token = auth_data_from_stage(RegisterAuthStage::RegistrationToken {
-            token: "<SET_IN_CONFIG>".into(),
+            token: "invite".into(),
             session: Some("s".into()),
         })
         .unwrap();
         assert_eq!(token.session(), Some("s"));
 
         assert!(auth_data_from_stage(RegisterAuthStage::RegistrationToken {
-            token:<SET_IN_CONFIG>"".into(),
+            token: "".into(),
             session: None,
         })
         .is_err());

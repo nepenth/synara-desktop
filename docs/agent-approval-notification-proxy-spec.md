@@ -118,7 +118,7 @@ Suggested request:
 
 Rules:
 
-- Require authentication, for example `Authorization: Bearer <TOKEN> secret>`.
+- Require authentication, for example `Authorization: Bearer <shared secret>`.
 - Require HTTPS in deployed environments.
 - Require non-empty `homeserver`, `room_id`, and `event_id`.
 - Store metadata for a bounded TTL, default 15 minutes.

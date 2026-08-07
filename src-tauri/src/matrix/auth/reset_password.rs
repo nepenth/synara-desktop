@@ -60,7 +60,7 @@ pub enum PasswordResetOutcome {
 pub async fn request_password_email_token(
     client: &Client,
     email: &str,
-    client_secret: <SET_IN_CONFIG>
+    client_secret: &str,
     send_attempt: u32,
 ) -> Result<PasswordEmailTokenResult, AuthError> {
     let email = validate_email(email)?;
@@ -87,7 +87,7 @@ pub async fn complete_password_reset(
     client: &Client,
     email: &str,
     new_password: &str,
-    client_secret: <SET_IN_CONFIG>
+    client_secret: &str,
     sid: &str,
 ) -> Result<PasswordResetOutcome, AuthError> {
     let email = validate_email(email)?;
@@ -182,7 +182,7 @@ async fn change_password(
 /// Build `m.login.email.identity` AuthData without constructing non_exhaustive structs.
 fn email_identity_auth(
     sid: &str,
-    client_secret: <SET_IN_CONFIG>
+    client_secret: &str,
     session: Option<String>,
 ) -> Result<AuthData, AuthError> {
     let mut data = Map::new();
