@@ -1,5 +1,5 @@
 import React, { ChangeEventHandler, FormEventHandler, useCallback, useMemo, useState } from 'react';
-import { IPushRule, IPushRules, PushRuleKind } from 'matrix-js-sdk';
+import { IPushRule, IPushRules, PushRuleKind, asPushRuleClient } from '../../../utils/pushRules';
 import { Box, Text, Badge, Button, Input, config, IconButton, Icons, Icon, Spinner } from 'folds';
 import { useAccountData } from '../../../hooks/useAccountData';
 import { AccountDataEvent } from '../../../../types/matrix/accountData';
@@ -27,7 +27,7 @@ function KeywordInput() {
   const [keywordState, addKeyword] = useAsyncCallback(
     useCallback(
       async (k: string) => {
-        mx.addPushRule('global', PushRuleKind.ContentSpecific, k, {
+        asPushRuleClient(mx).addPushRule('global', PushRuleKind.ContentSpecific, k, {
           actions: getNotificationModeActions(NotificationMode.Notify, NOTIFY_MODE_OPS),
           pattern: k,
         });
@@ -111,7 +111,12 @@ function KeywordCross({ pushRule }: PushRulesProps) {
   const mx = useMatrixClient();
   const [removeState, remove] = useAsyncCallback(
     useCallback(
-      () => mx.deletePushRule('global', PushRuleKind.ContentSpecific, pushRule.rule_id),
+      () =>
+        asPushRuleClient(mx).deletePushRule(
+          'global',
+          PushRuleKind.ContentSpecific,
+          pushRule.rule_id
+        ),
       [mx, pushRule]
     )
   );
@@ -132,7 +137,7 @@ function KeywordModeSwitcher({ pushRule }: PushRulesProps) {
   const handleChange = useCallback(
     async (mode: NotificationMode) => {
       const actions = getModeActions(mode);
-      await mx.setPushRuleActions(
+      await asPushRuleClient(mx).setPushRuleActions(
         'global',
         PushRuleKind.ContentSpecific,
         pushRule.rule_id,
