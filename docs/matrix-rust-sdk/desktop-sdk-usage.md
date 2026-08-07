@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |           86 |                2 |                   3 |
+| production |           81 |                2 |                   3 |
 | test       |           10 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |       **99** |                  |                     |
+| **total**  |       **94** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |    86 |
+| Production import files |    81 |
 | Test import files       |    10 |
-| Total import files      |    96 |
+| Total import files      |    91 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 86)
+- Production match: **no** (found 81)
 - Test match: **no** (found 10)
 
 ### Production files by bucket (desktop runtime only)
@@ -49,7 +49,7 @@ Expected **220** production and **12** test import files.
 | client-lifecycle |     2 |
 | component        |     9 |
 | feature          |    28 |
-| hook             |    29 |
+| hook             |    24 |
 | page             |     7 |
 | plugin           |     4 |
 | state            |     3 |
@@ -57,14 +57,14 @@ Expected **220** production and **12** test import files.
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 86. Files with any finding: 88.
+Scope: **production only**. Import files: 81. Files with any finding: 83.
 
 ### Imported modules
 
 | Module path                                           | Import sites | Files |
 | ----------------------------------------------------- | -----------: | ----: |
-| `matrix-js-sdk`                                       |           84 |    84 |
-| `matrix-js-sdk/lib/types`                             |            7 |     7 |
+| `matrix-js-sdk`                                       |           79 |    79 |
+| `matrix-js-sdk/lib/types`                             |            6 |     6 |
 | `matrix-js-sdk/lib/@types/event`                      |            2 |     2 |
 | `matrix-js-sdk/lib/matrixrtc/CallMembership`          |            2 |     2 |
 | `matrix-js-sdk/lib/@types/read_receipts`              |            1 |     1 |
@@ -82,13 +82,12 @@ Scope: **production only**. Import files: 86. Files with any finding: 88.
 
 | Symbol                      | Imports | Value | Type-only | Files |
 | --------------------------- | ------: | ----: | --------: | ----: |
-| `Room`                      |      52 |    51 |         1 |    52 |
-| `MatrixClient`              |      26 |    24 |         2 |    26 |
+| `Room`                      |      48 |    47 |         1 |    48 |
+| `MatrixClient`              |      25 |    23 |         2 |    25 |
 | `MatrixError`               |      16 |    16 |         0 |    16 |
-| `MatrixEvent`               |      15 |    13 |         2 |    15 |
-| `RoomEvent`                 |       8 |     8 |         0 |     8 |
+| `MatrixEvent`               |      13 |    11 |         2 |    13 |
 | `ClientEvent`               |       7 |     7 |         0 |     7 |
-| `RoomEventHandlerMap`       |       6 |     6 |         0 |     6 |
+| `RoomEvent`                 |       5 |     5 |         0 |     5 |
 | `SyncState`                 |       5 |     4 |         1 |     5 |
 | `Direction`                 |       4 |     4 |         0 |     4 |
 | `EventType`                 |       4 |     4 |         0 |     4 |
@@ -96,16 +95,16 @@ Scope: **production only**. Import files: 86. Files with any finding: 88.
 | `RoomMember`                |       4 |     4 |         0 |     4 |
 | `Method`                    |       3 |     3 |         0 |     3 |
 | `RelationType`              |       3 |     3 |         0 |     3 |
-| `RoomJoinRulesEventContent` |       3 |     3 |         0 |     3 |
-| `RoomStateEvent`            |       3 |     3 |         0 |     3 |
+| `RoomEventHandlerMap`       |       3 |     3 |         0 |     3 |
 | `CallMembership`            |       2 |     2 |         0 |     2 |
 | `ClientEventHandlerMap`     |       2 |     2 |         0 |     2 |
 | `IEventWithRoomId`          |       2 |     2 |         0 |     2 |
 | `JoinRule`                  |       2 |     2 |         0 |     2 |
 | `MatrixEventEvent`          |       2 |     2 |         0 |     2 |
 | `MsgType`                   |       2 |     2 |         0 |     2 |
+| `RoomJoinRulesEventContent` |       2 |     2 |         0 |     2 |
 | `RoomMemberEvent`           |       2 |     2 |         0 |     2 |
-| `RoomState`                 |       2 |     2 |         0 |     2 |
+| `RoomStateEvent`            |       2 |     2 |         0 |     2 |
 | `AccessTokens`              |       1 |     0 |         1 |     1 |
 | `EventStatus`               |       1 |     1 |         0 |     1 |
 | `EventTimeline`             |       1 |     0 |         1 |     1 |
@@ -122,6 +121,7 @@ Scope: **production only**. Import files: 86. Files with any finding: 88.
 | `IRefreshTokenResponse`     |       1 |     0 |         1 |     1 |
 | `IResultContext`            |       1 |     1 |         0 |     1 |
 | `IRoomEvent`                |       1 |     1 |         0 |     1 |
+| `ISearchRequestBody`        |       1 |     1 |         0 |     1 |
 
 ### SDK model import coupling
 
@@ -131,22 +131,22 @@ Scope: **production only**. Import files: 86. Files with any finding: 88.
 | `EventTimeline`        |     1 |                  1 |
 | `IndexedDBCryptoStore` |     1 |                  1 |
 | `IndexedDBStore`       |     1 |                  1 |
-| `MatrixClient`         |    26 |                 26 |
+| `MatrixClient`         |    25 |                 25 |
 | `MatrixError`          |    16 |                 16 |
-| `MatrixEvent`          |    15 |                 15 |
+| `MatrixEvent`          |    13 |                 13 |
 | `Relations`            |     1 |                  1 |
-| `Room`                 |    52 |                 52 |
+| `Room`                 |    48 |                 48 |
 | `RoomMember`           |     4 |                  4 |
-| `RoomState`            |     2 |                  2 |
+| `RoomState`            |     1 |                  1 |
 | `createClient`         |     1 |                  1 |
 
 ### Usage categories (candidates + imports + networking)
 
 | Category                       | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
 | ------------------------------ | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
-| `client_methods`               |    52 |                 0 |                   0 |                      0 |          0 |
-| `room_methods`                 |    54 |                 0 |                   0 |                      0 |          0 |
-| `event_emitters_listeners`     |    18 |                 0 |                  90 |                      0 |          0 |
+| `client_methods`               |    51 |                 0 |                   0 |                      0 |          0 |
+| `room_methods`                 |    50 |                 0 |                   0 |                      0 |          0 |
+| `event_emitters_listeners`     |    14 |                 0 |                  72 |                      0 |          0 |
 | `sync_lifecycle`               |    11 |                11 |                   6 |                      0 |          0 |
 | `crypto_verification_recovery` |     3 |                 3 |                   0 |                      0 |          0 |
 | `indexeddb_matrix_stores`      |     1 |                 0 |                   0 |                      2 |          0 |
@@ -154,11 +154,11 @@ Scope: **production only**. Import files: 86. Files with any finding: 88.
 | `matrixrtc_calls`              |     2 |                 0 |                   8 |                      0 |          0 |
 | `account_data`                 |     3 |                 6 |                   2 |                      0 |          0 |
 | `room_lists`                   |    21 |                53 |                  10 |                      0 |          0 |
-| `timelines`                    |    18 |                16 |                  40 |                      0 |          0 |
+| `timelines`                    |    14 |                16 |                  24 |                      0 |          0 |
 | `searches`                     |     3 |                 3 |                   0 |                      0 |          0 |
 | `spaces`                       |     8 |                23 |                   0 |                      0 |          0 |
 | `threads`                      |     1 |                 1 |                   0 |                      0 |          0 |
-| `receipts`                     |     2 |                 3 |                   2 |                      0 |          0 |
+| `receipts`                     |     1 |                 2 |                   0 |                      0 |          0 |
 | `uia_auth`                     |    28 |                64 |                   2 |                      0 |          0 |
 | `custom_raw_event_sends`       |    11 |                20 |                   0 |                      0 |          0 |
 | `direct_matrix_networking`     |     2 |                 0 |                   0 |                      0 |          3 |
@@ -193,7 +193,6 @@ Scope: **production only**. Import files: 86. Files with any finding: 88.
 | `getRoomIdForAlias`        |                     1 |
 | `getThreads`               |                     1 |
 | `getUnfilteredTimelineSet` |                     1 |
-| `getUsersReadUpTo`         |                     1 |
 | `initRustCrypto`           |                     1 |
 | `logout`                   |                     1 |
 | `searchUserDirectory`      |                     1 |
@@ -449,17 +448,12 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `synara/src/app/hooks/useRoomAliases.ts`                                                                                      | production | yes     | hook             | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/types`                                                                                                                                |
 | `synara/src/app/hooks/useRoomCreators.ts`                                                                                     | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/hooks/useRoomEvent.ts`                                                                                        | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/hooks/useRoomEventReaders.ts`                                                                                 | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/hooks/useRoomLatestRenderedEvent.ts`                                                                          | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/hooks/useRoomMembers.ts`                                                                                      | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/hooks/useRoomMeta.ts`                                                                                         | production | yes     | hook             | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/types`                                                                                                                                |
 | `synara/src/app/hooks/useRoomPinnedEvents.ts`                                                                                 | production | yes     | hook             | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/types`                                                                                                                                |
 | `synara/src/app/hooks/useRoomState.ts`                                                                                        | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/hooks/useSidebarItems.ts`                                                                                     | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/hooks/useSpace.ts`                                                                                            | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/hooks/useSpaceHierarchy.ts`                                                                                   | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/hooks/useStateEvent.ts`                                                                                       | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/hooks/useStateEventCallback.ts`                                                                               | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/hooks/useSyncState.ts`                                                                                        | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/hooks/useUserProfile.ts`                                                                                      | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/matrix/__tests__/media.test.ts`                                                                               | test       | yes     | media-boundary   | —            | —                                                                                                                                                                         |

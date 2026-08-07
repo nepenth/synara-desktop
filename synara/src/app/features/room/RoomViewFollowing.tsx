@@ -60,7 +60,11 @@ export const RoomViewFollowing = as<'div', RoomViewFollowingProps>(
                 }}
               >
                 <Modal variant="Surface" size="300">
-                  <EventReaders room={room} eventId={eventId} requestClose={() => setOpen(false)} />
+                  <EventReaders
+                    room={room as unknown as Parameters<typeof EventReaders>[0]['room']}
+                    eventId={eventId}
+                    requestClose={() => setOpen(false)}
+                  />
                 </Modal>
               </FocusTrap>
             </OverlayCenter>
