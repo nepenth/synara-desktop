@@ -3,9 +3,14 @@ export type IContent = {
   msgtype?: string;
   body?: string;
   filename?: string;
-  info?: Record<string, unknown>;
   url?: string;
+  formatted_body?: string;
+  format?: string;
+  info?: Record<string, unknown>;
   file?: Record<string, unknown>;
+  'm.relates_to'?: RelationContent;
+  'm.mentions'?: IMentions;
+  'm.new_content'?: IContent;
   [key: string]: unknown;
 };
 
