@@ -3,20 +3,74 @@ import {
   decryptAttachment,
   encryptAttachment,
 } from 'browser-encrypt-attachment';
-import {
-  MatrixClient,
-  MatrixError,
-  MatrixEvent,
-  Room,
-  RoomMember,
-  UploadProgress,
-  UploadResponse,
-} from 'matrix-js-sdk';
 import to from 'await-to-js';
+import { type MatrixClientReading, type MatrixEventReading, type RoomReading } from './room';
 import { IImageInfo, IThumbnailContent, IVideoInfo } from '../../types/matrix/common';
 import { getStateEvent } from './room';
 import { Membership, StateEvent } from '../../types/matrix/room';
-import { getRoomCurrentState } from './timelineLifecycle';
+
+export type UploadProgress = {
+  loaded: number;
+  total?: number;
+};
+
+export type UploadResponse = {
+  content_uri: string;
+};
+
+/**
+ * Structural local re-type of the js-sdk MatrixError, matching the subset the
+ * app consumes (message/errcode/data). The web client (runtime) still throws
+ * its own MatrixError instances; this keeps upload error handling SDK-neutral.
+ */
+export class MatrixError extends Error {
+  public errcode: string | undefined;
+
+  public data: unknown;
+
+  public httpStatus: number | undefined;
+
+  constructor(
+    data: { error?: unknown; errcode?: string; httpStatus?: number; [k: string]: unknown } = {}
+  ) {
+    const message = typeof data.error === 'string' ? data.error : data.errcode ?? 'Unknown error';
+    super(message);
+    this.name = 'MatrixError';
+    this.errcode = data.errcode;
+    this.data = data;
+    if (typeof data.httpStatus === 'number') {
+      this.httpStatus = data.httpStatus;
+    }
+  }
+
+  isRateLimitError(): boolean {
+    return this.httpStatus === 429;
+  }
+
+  getRetryAfterMs(): number | undefined {
+    const d = (this.data ?? {}) as { retry_after_ms?: number; __m_retry_after_ms?: number };
+    return d.retry_after_ms ?? d.__m_retry_after_ms;
+  }
+
+  asWidgetApiErrorData(): { code?: string; message?: string; data?: unknown } {
+    return {
+      code: this.errcode ?? 'M_ERROR',
+      message: this.message,
+      data: this.data,
+    };
+  }
+}
+
+type SdkRoomMemberReading = {
+  userId: string;
+  events?: { member?: { getTs(): number } };
+};
+
+type DMRoomReading = RoomReading & {
+  getCanonicalAlias(): string | null;
+  hasEncryptionStateEvent(): boolean;
+  getJoinedMembers(): SdkRoomMemberReading[];
+};
 
 const DOMAIN_REGEX = /\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b/;
 
@@ -36,20 +90,23 @@ export const isRoomId = (id: string): boolean => id.startsWith('!');
 
 export const isRoomAlias = (id: string): boolean => validMxId(id) && id.startsWith('#');
 
-export const getCanonicalAliasRoomId = (mx: MatrixClient, alias: string): string | undefined =>
+export const getCanonicalAliasRoomId = (
+  mx: MatrixClientReading,
+  alias: string
+): string | undefined =>
   mx
     .getRooms()
     ?.find(
       (room) =>
-        room.getCanonicalAlias() === alias &&
+        (room as DMRoomReading).getCanonicalAlias() === alias &&
         getStateEvent(room, StateEvent.RoomTombstone) === undefined
     )?.roomId;
 
-export const getCanonicalAliasOrRoomId = (mx: MatrixClient, roomId: string): string => {
+export const getCanonicalAliasOrRoomId = (mx: MatrixClientReading, roomId: string): string => {
   const room = mx.getRoom(roomId);
   if (!room) return roomId;
   if (getStateEvent(room, StateEvent.RoomTombstone) !== undefined) return roomId;
-  const alias = room.getCanonicalAlias();
+  const alias = (room as DMRoomReading).getCanonicalAlias();
   if (alias && getCanonicalAliasRoomId(mx, alias) === roomId) {
     return alias;
   }
@@ -146,13 +203,24 @@ export type ContentUploadOptions = {
 };
 
 export const uploadContent = async (
-  mx: MatrixClient,
+  mx: MatrixClientReading,
   file: TUploadContent,
   options: ContentUploadOptions
 ) => {
   const { name, fileType, hideFilename, onProgress, onPromise, onSuccess, onError } = options;
 
-  const uploadPromise = mx.uploadContent(file, {
+  const uploadClient = mx as unknown as {
+    uploadContent(
+      file: TUploadContent,
+      opts: {
+        name?: string;
+        type?: string;
+        includeFilename?: boolean;
+        progressHandler?: (progress: UploadProgress) => void;
+      }
+    ): Promise<UploadResponse>;
+  };
+  const uploadPromise = uploadClient.uploadContent(file, {
     name,
     type: fileType,
     includeFilename: !hideFilename,
@@ -165,47 +233,48 @@ export const uploadContent = async (
     if (mxc) onSuccess(mxc);
     else onError(new MatrixError(data));
   } catch (e: any) {
-    const error = typeof e?.message === 'string' ? e.message : undefined;
-    const errcode = typeof e?.name === 'string' ? e.message : undefined;
-    onError(new MatrixError({ error, errcode }));
+    const message = typeof e?.message === 'string' ? e.message : undefined;
+    const errcode = typeof e?.errcode === 'string' ? e.errcode : undefined;
+    onError(new MatrixError({ error: message, errcode }));
   }
 };
 
-export const matrixEventByRecency = (m1: MatrixEvent, m2: MatrixEvent) => m2.getTs() - m1.getTs();
+export const matrixEventByRecency = (m1: MatrixEventReading, m2: MatrixEventReading) =>
+  m2.getTs() - m1.getTs();
 
-export const factoryEventSentBy = (senderId: string) => (ev: MatrixEvent) =>
+export const factoryEventSentBy = (senderId: string) => (ev: MatrixEventReading) =>
   ev.getSender() === senderId;
 
-export const eventWithShortcode = (ev: MatrixEvent) =>
+export const eventWithShortcode = (ev: MatrixEventReading) =>
   typeof ev.getContent().shortcode === 'string';
 
-export const getDMRoomFor = (mx: MatrixClient, userId: string): Room | undefined => {
+export const getDMRoomFor = (mx: MatrixClientReading, userId: string): RoomReading | undefined => {
   const dmLikeRooms = mx
     .getRooms()
     .filter(
       (room) =>
         room.getMyMembership() === Membership.Join &&
-        room.hasEncryptionStateEvent() &&
+        (room as DMRoomReading).hasEncryptionStateEvent() &&
         room.getMembers().length <= 2
     );
 
   return dmLikeRooms.find((room) => room.getMember(userId));
 };
 
-export const guessDmRoomUserId = (room: Room, myUserId: string): string => {
-  const getOldestMember = (members: RoomMember[]): RoomMember | undefined => {
+export const guessDmRoomUserId = (room: RoomReading, myUserId: string): string => {
+  const getOldestMember = (members: SdkRoomMemberReading[]): SdkRoomMemberReading | undefined => {
     let oldestMemberTs: number | undefined;
-    let oldestMember: RoomMember | undefined;
+    let oldestMember: SdkRoomMemberReading | undefined;
 
-    const pickOldestMember = (member: RoomMember) => {
+    const pickOldestMember = (member: SdkRoomMemberReading) => {
       if (member.userId === myUserId) return;
 
       if (
         oldestMemberTs === undefined ||
-        (member.events.member && member.events.member.getTs() < oldestMemberTs)
+        (member.events?.member && member.events.member.getTs() < oldestMemberTs)
       ) {
         oldestMember = member;
-        oldestMemberTs = member.events.member?.getTs();
+        oldestMemberTs = member.events?.member?.getTs();
       }
     };
 
@@ -215,16 +284,21 @@ export const guessDmRoomUserId = (room: Room, myUserId: string): string => {
   };
 
   // Pick the joined user who's been here longest (and isn't us),
-  const member = getOldestMember(room.getJoinedMembers());
+  const member = getOldestMember((room as DMRoomReading).getJoinedMembers());
   if (member) return member.userId;
 
   // if there are no joined members other than us, use the oldest member
-  const member1 = getOldestMember(getRoomCurrentState(room)?.getMembers() ?? []);
+  const currentState = room.currentState as
+    | (typeof room.currentState & {
+        getMembers(): SdkRoomMemberReading[];
+      })
+    | undefined;
+  const member1 = getOldestMember(currentState?.getMembers() ?? []);
   return member1?.userId ?? myUserId;
 };
 
 export const mxcUrlToHttp = (
-  mx: MatrixClient,
+  mx: MatrixClientReading,
   mxcUrl: string,
   useAuthentication?: boolean,
   width?: number,

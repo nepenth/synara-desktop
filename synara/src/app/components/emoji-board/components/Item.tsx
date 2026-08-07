@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box } from 'folds';
-import { MatrixClient } from 'matrix-js-sdk';
+import type { MatrixClientReading } from '../../../utils/room';
 import { EmojiItemInfo, EmojiType } from '../types';
 import * as css from './styles.css';
 import { PackImageReader } from '../../../plugins/custom-emoji';
@@ -46,7 +46,7 @@ export function EmojiItem({ emoji }: EmojiItemProps) {
 }
 
 type CustomEmojiItemProps = {
-  mx: MatrixClient;
+  mx: MatrixClientReading;
   useAuthentication?: boolean;
   image: PackImageReader;
 };
@@ -75,7 +75,7 @@ export function CustomEmojiItem({ mx, useAuthentication, image }: CustomEmojiIte
 }
 
 type StickerItemProps = {
-  mx: MatrixClient;
+  mx: MatrixClientReading;
   useAuthentication?: boolean;
   image: PackImageReader;
 };

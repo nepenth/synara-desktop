@@ -1,9 +1,15 @@
 import { atom, useAtom } from 'jotai';
 import { atomFamily } from 'jotai/utils';
-import { MatrixClient, UploadResponse, UploadProgress, MatrixError } from 'matrix-js-sdk';
+import type { MatrixClientReading } from '../utils/room';
+import {
+  MatrixError,
+  type TUploadContent,
+  type UploadProgress,
+  type UploadResponse,
+  uploadContent,
+} from '../utils/matrix';
 import { useCallback } from 'react';
 import { useThrottle } from '../hooks/useThrottle';
-import { uploadContent, TUploadContent } from '../utils/matrix';
 
 export enum UploadStatus {
   Idle = 'idle',
@@ -103,7 +109,7 @@ export const createUploadAtom = (file: TUploadContent) => {
 export type TUploadAtom = ReturnType<typeof createUploadAtom>;
 
 export const useBindUploadAtom = (
-  mx: MatrixClient,
+  mx: MatrixClientReading,
   uploadAtom: TUploadAtom,
   hideFilename?: boolean
 ) => {
@@ -129,7 +135,11 @@ export const useBindUploadAtom = (
 
   const cancelUpload = useCallback(async () => {
     if (upload.status === UploadStatus.Loading) {
-      await mx.cancelUpload(upload.promise);
+      await (
+        mx as unknown as {
+          cancelUpload(promise: Promise<UploadResponse>): Promise<void>;
+        }
+      ).cancelUpload(upload.promise);
     }
   }, [mx, upload]);
 
