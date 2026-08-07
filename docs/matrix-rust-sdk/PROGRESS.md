@@ -11,33 +11,33 @@
 >
 > [docs/matrix-rust-sdk/PROGRESS.md](https://github.com/nepenth/synara-desktop/blob/feature/matrix-rust-sdk-full-replacement/docs/matrix-rust-sdk/PROGRESS.md)
 
-| Field              | Value |
-| ------------------ | ----- |
-| Last updated (UTC) | **2026-08-07** |
-| Integration tip    | **`c7a780f1`** — #556 lineage reconciliation + #557 utils/room.ts burn (114→113); prior slices #550–#553 restored |
-| Active work        | **Orchestrated burn active via this harness** — [operating-instructions.md](operating-instructions.md) |
-| Product runtime    | Native owns core D0 + V-CRYPTO + residual-empty slices through members/presence/directory/join-rule READ; long-tail JS importers remain |
+| Field              | Value                                                                                                                                                                                 |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Last updated (UTC) | **2026-08-07**                                                                                                                                                                        |
+| Integration tip    | **`ed52a787`** — #559 timeline links/opening burn (113→111); #556/#557 prior                                                                                                          |
+| Active work        | **Orchestrated burn active via this harness** — [operating-instructions.md](operating-instructions.md)                                                                                |
+| Product runtime    | Native owns core D0 + V-CRYPTO + residual-empty slices through members/presence/directory/join-rule READ; long-tail JS importers remain                                               |
 | Execution model    | **prime-agent orchestrator + `deepseek-v4-flash-0731` sub-agents, max 2 concurrent** (locally hosted; only configured model) — [operating-instructions.md](operating-instructions.md) |
-| Import accounting  | Desktop production import files **113** / baseline **220** (**107** removed). Allowlist **113**. |
-| Dual backend       | **`false`** (forbidden forever) |
-| Public repo        | **PUBLIC — no secrets ever**; placeholder-only examples ([operating-instructions.md](operating-instructions.md) §1) |
-| UI/UX fidelity     | **Preserve existing look and feel** — no UX/UI change when replacing a capability ([operating-instructions.md](operating-instructions.md) §3) |
-| Operating model    | [cutover-operating-model.md](cutover-operating-model.md) · [full-vertical-policy.md](full-vertical-policy.md) · [operating-instructions.md](operating-instructions.md) |
-| Burn board         | https://kb.whyland.com/go/synara-matrix-burn |
-| Scoreboard         | [SCOREBOARD.md](SCOREBOARD.md) |
-| Residual queue     | [d0-residual-completion.md](d0-residual-completion.md) (historical ledger; tip honesty = scoreboard + handoff) |
-| Umbrella → main    | [PR #39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without explicit user approval** |
+| Import accounting  | Desktop production import files **111** / baseline **220** (**109** removed). Allowlist **111**.                                                                                      |
+| Dual backend       | **`false`** (forbidden forever)                                                                                                                                                       |
+| Public repo        | **PUBLIC — no secrets ever**; placeholder-only examples ([operating-instructions.md](operating-instructions.md) §1)                                                                   |
+| UI/UX fidelity     | **Preserve existing look and feel** — no UX/UI change when replacing a capability ([operating-instructions.md](operating-instructions.md) §3)                                         |
+| Operating model    | [cutover-operating-model.md](cutover-operating-model.md) · [full-vertical-policy.md](full-vertical-policy.md) · [operating-instructions.md](operating-instructions.md)                |
+| Burn board         | https://kb.whyland.com/go/synara-matrix-burn                                                                                                                                          |
+| Scoreboard         | [SCOREBOARD.md](SCOREBOARD.md)                                                                                                                                                        |
+| Residual queue     | [d0-residual-completion.md](d0-residual-completion.md) (historical ledger; tip honesty = scoreboard + handoff)                                                                        |
+| Umbrella → main    | [PR #39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without explicit user approval**                                                                         |
 
 ---
 
 ## Snapshot (read this first)
 
-|                | |
-| -------------- | - |
+|                |                                                                                                                                                                                                                                                                                           |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Now**        | **Operating model updated (2026-08-06).** Historical 2026-08-03 pause superseded — resume through this harness. Tip **`57ab9e64`**. Production importers **114**. Public-repo hygiene + UI/UX fidelity mandatory on every slice ([operating-instructions.md](operating-instructions.md)). |
-| **Tip**        | `57ab9e64` |
-| **Active PRs** | none product; operating-doc updates (this branch, docs-only) |
-| **Blocked**    | V-BURN HOLD; #39 gated; dual_backend forbidden; no external model APIs |
+| **Tip**        | `57ab9e64`                                                                                                                                                                                                                                                                                |
+| **Active PRs** | none product; operating-doc updates (this branch, docs-only)                                                                                                                                                                                                                              |
+| **Blocked**    | V-BURN HOLD; #39 gated; dual_backend forbidden; no external model APIs                                                                                                                                                                                                                    |
 
 ---
 
@@ -97,162 +97,162 @@ importers and carries the tip inventory's 124 files / 124 paths unchanged.
 
 ### 2026-08-06 — operating instructions — public repo + this harness + UI/UX fidelity
 
-| When (UTC) | Item | Result | Notes |
-| ---------- | ---- | ------ | ----- |
-| current | **Operating model** | **This harness** | Orchestrator + sub-agents on the locally hosted model (≤2–3 concurrent); no external model APIs. Historical pause superseded; resume authorized. See [operating-instructions.md](operating-instructions.md). |
-| current | **Public repo policy** | **Mandatory** | Never commit secrets/tokens/keys/credentials/recovery material/private endpoints/personal data; placeholder-only public examples. Wired into README, plan §3.7, full-vertical-policy acceptance gates, SCOREBOARD, product-lane-protocol, pause-handoff. |
-| current | **UI/UX fidelity** | **Mandatory** | Replacing a capability must preserve exact look and feel — no redesign, layout/UX/copy change, or rendering-altering component swap; a visual diff is a slice defect → named residual → fix forward. Added as a full-vertical acceptance gate + plan §3.7 + operating instructions §3. |
-| current | **Go-forward (docs)** | SCOREBOARD "Left" item 1 | Long-tail residual-empty importer burn (RoomJoinRules writer, useMessageSearch, utils/room.ts, timeline/media listeners, CallWidget media IPC, initMatrix/cryptoStoreContinuity, R-DEVTOOL). V-BURN stays HOLD. |
+| When (UTC) | Item                   | Result                   | Notes                                                                                                                                                                                                                                                                                  |
+| ---------- | ---------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Operating model**    | **This harness**         | Orchestrator + sub-agents on the locally hosted model (≤2–3 concurrent); no external model APIs. Historical pause superseded; resume authorized. See [operating-instructions.md](operating-instructions.md).                                                                           |
+| current    | **Public repo policy** | **Mandatory**            | Never commit secrets/tokens/keys/credentials/recovery material/private endpoints/personal data; placeholder-only public examples. Wired into README, plan §3.7, full-vertical-policy acceptance gates, SCOREBOARD, product-lane-protocol, pause-handoff.                               |
+| current    | **UI/UX fidelity**     | **Mandatory**            | Replacing a capability must preserve exact look and feel — no redesign, layout/UX/copy change, or rendering-altering component swap; a visual diff is a slice defect → named residual → fix forward. Added as a full-vertical acceptance gate + plan §3.7 + operating instructions §3. |
+| current    | **Go-forward (docs)**  | SCOREBOARD "Left" item 1 | Long-tail residual-empty importer burn (RoomJoinRules writer, useMessageSearch, utils/room.ts, timeline/media listeners, CallWidget media IPC, initMatrix/cryptoStoreContinuity, R-DEVTOOL). V-BURN stays HOLD.                                                                        |
 
 ### 2026-08-03 — tip `57ab9e64` — #546 land + usage pause
 
-| When (UTC) | Item | Result | Notes |
-| ---------- | ---- | ------ | ----- |
-| current | **Integration tip** | **`c7a780f1`** | #556 reconcile + #557 room-utils (114→113) |
-| current | **Imports / allowlist** | **114 / 114** | Baseline 220 → **106** removed (~48.2%) |
-| current | **#544** | **merged** | Live-proof not residual-empty merge gate |
-| current | **#546** | **merged** | −10 production importers (stack superseding #540–#545) |
-| current | **Beta packages** | **success** | [Desktop Package Smoke](https://github.com/nepenth/synara-desktop/actions/runs/30821912637) macOS + Arch + .deb artifacts @ tip |
-| current | **Pipeline** | **PAUSED** | Conserve weekly Grok/Codex usage; no new agent spawns |
-| current | **Handoff** | [pause-handoff-2026-08-03.md](pause-handoff-2026-08-03.md) | Resume checklist + residual notes |
+| When (UTC) | Item                    | Result                                                     | Notes                                                                                                                           |
+| ---------- | ----------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**     | **`ed52a787`**                                             | #559 timeline links/opening (113→111)                                                                                           |
+| current    | **Imports / allowlist** | **114 / 114**                                              | Baseline 220 → **106** removed (~48.2%)                                                                                         |
+| current    | **#544**                | **merged**                                                 | Live-proof not residual-empty merge gate                                                                                        |
+| current    | **#546**                | **merged**                                                 | −10 production importers (stack superseding #540–#545)                                                                          |
+| current    | **Beta packages**       | **success**                                                | [Desktop Package Smoke](https://github.com/nepenth/synara-desktop/actions/runs/30821912637) macOS + Arch + .deb artifacts @ tip |
+| current    | **Pipeline**            | **PAUSED**                                                 | Conserve weekly Grok/Codex usage; no new agent spawns                                                                           |
+| current    | **Handoff**             | [pause-handoff-2026-08-03.md](pause-handoff-2026-08-03.md) | Resume checklist + residual notes                                                                                               |
 
 ### 2026-08-03 — tip `abd736b3` — remove live-proof merge gates
 
-| When (UTC) | Item | Result | Notes |
-| ---------- | ---- | ------ | ----- |
-| current | **Policy** | **Updated** | HUMAN OPERATOR LIVE-PROOF is optional Beta feedback, not a completion or merge gate for residual-empty burns. |
-| current | **C3–C5** | **Tip/unit/CI path accepted** | Live desktop proof may remain **Not confirmed**; it is not a hold when the engineering evidence is on tip. |
-| current | **R-DEVTOOL** | **Eligible to start** | No longer waits for C3–C5 live confirmation; native UI → Tauri IPC → live `matrix-sdk` and fail-closed rules remain mandatory. |
-| current | **Inventory** | **Unchanged** | No production code/importers changed; committed tip inventory remains 124 files / 124 allowlist paths. |
-| current | **Scope** | **Docs only** | One product PR draft; `main`, #39, `dual_backend`, and V-BURN status unchanged. |
+| When (UTC) | Item          | Result                        | Notes                                                                                                                          |
+| ---------- | ------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| current    | **Policy**    | **Updated**                   | HUMAN OPERATOR LIVE-PROOF is optional Beta feedback, not a completion or merge gate for residual-empty burns.                  |
+| current    | **C3–C5**     | **Tip/unit/CI path accepted** | Live desktop proof may remain **Not confirmed**; it is not a hold when the engineering evidence is on tip.                     |
+| current    | **R-DEVTOOL** | **Eligible to start**         | No longer waits for C3–C5 live confirmation; native UI → Tauri IPC → live `matrix-sdk` and fail-closed rules remain mandatory. |
+| current    | **Inventory** | **Unchanged**                 | No production code/importers changed; committed tip inventory remains 124 files / 124 allowlist paths.                         |
+| current    | **Scope**     | **Docs only**                 | One product PR draft; `main`, #39, `dual_backend`, and V-BURN status unchanged.                                                |
 
 ### 2026-08-03 — tip `80af6ce7` — pause + long-tail burn audit
 
-| When (UTC) | Item | Result | Notes |
-| ---------- | ---- | ------ | ----- |
-| current | **Integration tip** | **`80af6ce7`** | After #538 MsgType presentation residual-empty |
-| current | **Imports / allowlist** | **124 / 124** | Baseline 220 → **96** removed (~43.6%) |
-| current | **Pipeline** | **PAUSED** | Daytime scheduler cancelled; overnight OFF; no new spawns |
-| current | **Wrap-up** | **#538 merged** | Final in-flight product; docs freezes #502–#512 closed as stale |
-| current | **Handoff** | [pause-handoff-2026-08-03.md](pause-handoff-2026-08-03.md) | Resume checklist + residual notes |
-| 2026-08-02→03 | **Product chain** | **#514–#538** | Members/tags/presence/directory natives + long-tail type/presentation kills |
+| When (UTC)    | Item                    | Result                                                     | Notes                                                                       |
+| ------------- | ----------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------- |
+| current       | **Integration tip**     | **`80af6ce7`**                                             | After #538 MsgType presentation residual-empty                              |
+| current       | **Imports / allowlist** | **124 / 124**                                              | Baseline 220 → **96** removed (~43.6%)                                      |
+| current       | **Pipeline**            | **PAUSED**                                                 | Daytime scheduler cancelled; overnight OFF; no new spawns                   |
+| current       | **Wrap-up**             | **#538 merged**                                            | Final in-flight product; docs freezes #502–#512 closed as stale             |
+| current       | **Handoff**             | [pause-handoff-2026-08-03.md](pause-handoff-2026-08-03.md) | Resume checklist + residual notes                                           |
+| 2026-08-02→03 | **Product chain**       | **#514–#538**                                              | Members/tags/presence/directory natives + long-tail type/presentation kills |
 
 ### 2026-08-02 — tip `cf79f975` — post-#490/#496/#497 scoreboard/progress tip honesty (superseded)
 
-| When (UTC) | Item | Result | Notes |
-| ---------- | ---- | ------ | ----- |
+| When (UTC) | Item        | Result         | Notes                                                                                 |
+| ---------- | ----------- | -------------- | ------------------------------------------------------------------------------------- |
 | historical | **Tip pin** | **Superseded** | Historical docs-only pin; do not treat as current tip. See 2026-08-03 snapshot above. |
 
 ### 2026-08-02 — tip `27a854d8` — directory packet tip honesty
 
-| When (UTC) | Item                           | Result                | Notes                                                                                                                                                                      |
-| ---------- | ------------------------------ | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| When (UTC) | Item                           | Result                | Notes                                                                                                                                                                                   |
+| ---------- | ------------------------------ | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | current    | **Integration tip**            | **Current**           | #478 is merged at `27a854d8`; the directory packet/residual retain `c1e9c3be` as the #461 product baseline and record the current docs refresh tip. `main` and #39 remain out of scope. |
-| current    | **Directory vertical**         | **First slice / WIP** | #461's first slice remains the only directory product claim; native route wiring and route-scoped JS-owner deletion are landed, while full vertical closure remains open. |
-| current    | **Proof / burn / merge gates** | **Held**              | Directory live proof and acceptance remain **Not confirmed**; C3–C5 remain **Not confirmed**; V-BURN remains **HOLD / Not ready**; `dual_backend` is forbidden. |
+| current    | **Directory vertical**         | **First slice / WIP** | #461's first slice remains the only directory product claim; native route wiring and route-scoped JS-owner deletion are landed, while full vertical closure remains open.               |
+| current    | **Proof / burn / merge gates** | **Held**              | Directory live proof and acceptance remain **Not confirmed**; C3–C5 remain **Not confirmed**; V-BURN remains **HOLD / Not ready**; `dual_backend` is forbidden.                         |
 
 ### 2026-08-02 — tip `3980f0e0` — #465 and #469 docs-only refreshes landed
 
-| When (UTC) | Item                         | Result       | Notes                                                                                                                                                                      |
-| ---------- | ---------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| current    | **Integration tip**          | **Current**  | #469 R-DEVTOOL landed at `8e14726a`; #465 members READ landed as squash commit `3980f0e0`. Both target `feature/matrix-rust-sdk-full-replacement`; `main` and #39 remain out of scope. |
-| current    | **Scoreboard / progress**    | **Refresh**  | #478 is replayed on the current target so `PROGRESS.md` and `SCOREBOARD.md` retain current-tip truth without overwriting the landed docs refreshes. |
-| current    | **Proof / burn / merge gates** | **Held**   | C3–C5 remain **Not confirmed**; R-DEVTOOL remains gated; V-BURN remains **HOLD**; `dual_backend` is forbidden.                                                        |
+| When (UTC) | Item                           | Result      | Notes                                                                                                                                                                                  |
+| ---------- | ------------------------------ | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**            | **Current** | #469 R-DEVTOOL landed at `8e14726a`; #465 members READ landed as squash commit `3980f0e0`. Both target `feature/matrix-rust-sdk-full-replacement`; `main` and #39 remain out of scope. |
+| current    | **Scoreboard / progress**      | **Refresh** | #478 is replayed on the current target so `PROGRESS.md` and `SCOREBOARD.md` retain current-tip truth without overwriting the landed docs refreshes.                                    |
+| current    | **Proof / burn / merge gates** | **Held**    | C3–C5 remain **Not confirmed**; R-DEVTOOL remains gated; V-BURN remains **HOLD**; `dual_backend` is forbidden.                                                                         |
 
 ### 2026-08-02 — tip `60141c8b` — rebase #465 onto current docs tip
 
-| When (UTC) | Item                           | Result       | Notes                                                                                                                                                                      |
-| ---------- | ------------------------------ | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| current    | **Integration tip**            | **Draft**    | Rebased onto `60141c8b`; the product state from `c1e9c3be` is unchanged while the V-BURN and C3–C5 docs refreshes are included. `main` and #39 remain out of scope.      |
-| current    | **#465 rejection repairs**     | **Preserved** | Section 5 is complete; the historical `52953091` planning base is labeled as historical; custom tag and direct helper/plugin READs remain residual.                       |
-| current    | **Proof / burn / merge gates** | **Held**     | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden; keep this PR draft/unmerged.                                                        |
+| When (UTC) | Item                           | Result        | Notes                                                                                                                                                               |
+| ---------- | ------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**            | **Draft**     | Rebased onto `60141c8b`; the product state from `c1e9c3be` is unchanged while the V-BURN and C3–C5 docs refreshes are included. `main` and #39 remain out of scope. |
+| current    | **#465 rejection repairs**     | **Preserved** | Section 5 is complete; the historical `52953091` planning base is labeled as historical; custom tag and direct helper/plugin READs remain residual.                 |
+| current    | **Proof / burn / merge gates** | **Held**      | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden; keep this PR draft/unmerged.                                                  |
 
 ### 2026-08-02 — tip `c1e9c3be` — rebase #465 after merged #461
 
-| When (UTC) | Item                         | Result                  | Notes                                                                                                                                                                      |
-| ---------- | ---------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| current    | **Integration tip**          | **This docs-only draft** | Based at `c1e9c3be`; #461's room-directory first slice is merged. `main` and #39 remain out of scope.                                                                    |
-| current    | **Members / power READ**     | **Residual boundary held** | #450 native power/creator owners remain closed for migrated paths; custom tag metadata and direct helper/plugin reads remain explicitly residual.                         |
-| current    | **#465 refresh**              | **Rebased / repair required** | Replayed the six-file docs refresh onto `c1e9c3be`; resolved the `SCOREBOARD.md` tip conflict and repaired the rejected Section 5 truncation.                           |
-| current    | **Proof / burn / merge gates** | **Held**             | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden; keep this PR draft/unmerged.                                                        |
+| When (UTC) | Item                           | Result                        | Notes                                                                                                                                             |
+| ---------- | ------------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**            | **This docs-only draft**      | Based at `c1e9c3be`; #461's room-directory first slice is merged. `main` and #39 remain out of scope.                                             |
+| current    | **Members / power READ**       | **Residual boundary held**    | #450 native power/creator owners remain closed for migrated paths; custom tag metadata and direct helper/plugin reads remain explicitly residual. |
+| current    | **#465 refresh**               | **Rebased / repair required** | Replayed the six-file docs refresh onto `c1e9c3be`; resolved the `SCOREBOARD.md` tip conflict and repaired the rejected Section 5 truncation.     |
+| current    | **Proof / burn / merge gates** | **Held**                      | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden; keep this PR draft/unmerged.                                |
 
 ### 2026-08-02 — tip `d82e043d` — refresh after #450/#458; #465 tip honesty
 
-| When (UTC) | Item                         | Result                  | Notes                                                                                                                                                                      |
-| ---------- | ---------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| current    | **Integration tip**          | **This docs-only draft** | Based at `d82e043d`; #450 and #458 are merged. `main` and #39 remain out of scope.                                                                                         |
-| current    | **Power/creator READ**       | **Merged #450**         | Native power-level and creator snapshots back the migrated hook/permission paths with fail-closed native ownership; no JS state-event fallback on native sessions.       |
-| current    | **Remaining READ residual**  | **Active**              | No native `in.synara.room.power_level_tags` snapshot; custom tag metadata plus direct `via-servers` / `utils/room.ts` power/create readers remain explicitly tracked. |
-| current    | **Presence / directory**     | **#458 merged / #461 open** | #458's presence first slice is landed but not product-complete; #461 remains a hot WIP directory vertical with proof and acceptance open.                                  |
-| current    | **#465 draft tip**           | **Refresh required**    | Prior head `3d7c5f42` was based at `103a653f`; the post-#458 replay conflicts in `SCOREBOARD.md`. This branch records `d82e043d` honestly and does not claim mergeability. |
-| current    | **Proof / burn / merge gates** | **Held**             | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden; hold merge while #461 is hot.                                                   |
+| When (UTC) | Item                           | Result                      | Notes                                                                                                                                                                      |
+| ---------- | ------------------------------ | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**            | **This docs-only draft**    | Based at `d82e043d`; #450 and #458 are merged. `main` and #39 remain out of scope.                                                                                         |
+| current    | **Power/creator READ**         | **Merged #450**             | Native power-level and creator snapshots back the migrated hook/permission paths with fail-closed native ownership; no JS state-event fallback on native sessions.         |
+| current    | **Remaining READ residual**    | **Active**                  | No native `in.synara.room.power_level_tags` snapshot; custom tag metadata plus direct `via-servers` / `utils/room.ts` power/create readers remain explicitly tracked.      |
+| current    | **Presence / directory**       | **#458 merged / #461 open** | #458's presence first slice is landed but not product-complete; #461 remains a hot WIP directory vertical with proof and acceptance open.                                  |
+| current    | **#465 draft tip**             | **Refresh required**        | Prior head `3d7c5f42` was based at `103a653f`; the post-#458 replay conflicts in `SCOREBOARD.md`. This branch records `d82e043d` honestly and does not claim mergeability. |
+| current    | **Proof / burn / merge gates** | **Held**                    | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden; hold merge while #461 is hot.                                                        |
 
 ### 2026-08-01 — tip `206d24f3` — presence/directory WIP after #446 extraction
 
-| When (UTC) | Item                              | Result                   | Notes                                                                                                                                                                      |
-| ---------- | --------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| current    | **Integration tip**               | **This docs-only draft** | Based at `206d24f3`; #446 product-command fan-out is merged. `main` and #39 remain out of scope.                                                                         |
-| current    | **Presence product vertical**     | **WIP in parallel**      | Implementation agent is in flight; packet, product wiring, JS-owner deletion, focused proof, live proof, and acceptance remain open.                                      |
-| current    | **Room directory vertical**       | **WIP in parallel**      | Implementation agent is in flight; packet, product wiring, JS-owner deletion, focused proof, live proof, and acceptance remain open.                                      |
-| current    | **Serial/parallel boundary**      | **Parallel**             | #446 removes the shared `product.rs` fan-out chokepoint for these module-owned slices; no packet or extraction is a product-done claim.                                    |
-| current    | **Proof / burn gates**             | **Held**                 | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden.                                                                                      |
+| When (UTC) | Item                          | Result                   | Notes                                                                                                                                   |
+| ---------- | ----------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**           | **This docs-only draft** | Based at `206d24f3`; #446 product-command fan-out is merged. `main` and #39 remain out of scope.                                        |
+| current    | **Presence product vertical** | **WIP in parallel**      | Implementation agent is in flight; packet, product wiring, JS-owner deletion, focused proof, live proof, and acceptance remain open.    |
+| current    | **Room directory vertical**   | **WIP in parallel**      | Implementation agent is in flight; packet, product wiring, JS-owner deletion, focused proof, live proof, and acceptance remain open.    |
+| current    | **Serial/parallel boundary**  | **Parallel**             | #446 removes the shared `product.rs` fan-out chokepoint for these module-owned slices; no packet or extraction is a product-done claim. |
+| current    | **Proof / burn gates**        | **Held**                 | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden.                                                   |
 
 ### 2026-08-01 — tip `9fb341af` — #439/#446 merged; parallel module fan-out next
 
-| When (UTC) | Item                      | Result                 | Notes                                                                                                                                                                                                 |
-| ---------- | ------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| current    | **Integration tip**       | **This draft**         | Docs-only refresh based at `9fb341af`; #405, #407, #438, #439, and #446 are present in the tip. This draft does not touch `product.rs` or any product code.                                               |
-| current    | **Powers-bulk writes**    | **Merged #439**        | Native bulk room power-level and tag writes are present at the tip; remaining power-level/creator reads are not closed by this write slice.                                                           |
-| current    | **Product command fan-out** | **Merged #446**      | The behavior-preserving `product.rs` extract/split is merged into domain `product_commands.rs` modules. This changes the ownership/layout boundary, not the completion status of downstream verticals. |
-| current    | **Next module fan-out**   | **Ready in parallel**  | Power-level READ, presence, room directory, and other domain slices can proceed in module-scoped lanes; do not reopen shared `product.rs` as a serial lane.                                          |
-| current    | **Import accounting**     | **152**                | Committed tip inventory reports 152 production `matrix-js-sdk` import files and 152 allowlist entries; #446 does not change the TypeScript inventory.                                              |
-| current    | **Proof / burn gates**    | **Held**               | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden and #39/main remain out of scope.                                                                                |
+| When (UTC) | Item                        | Result                | Notes                                                                                                                                                                                                  |
+| ---------- | --------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| current    | **Integration tip**         | **This draft**        | Docs-only refresh based at `9fb341af`; #405, #407, #438, #439, and #446 are present in the tip. This draft does not touch `product.rs` or any product code.                                            |
+| current    | **Powers-bulk writes**      | **Merged #439**       | Native bulk room power-level and tag writes are present at the tip; remaining power-level/creator reads are not closed by this write slice.                                                            |
+| current    | **Product command fan-out** | **Merged #446**       | The behavior-preserving `product.rs` extract/split is merged into domain `product_commands.rs` modules. This changes the ownership/layout boundary, not the completion status of downstream verticals. |
+| current    | **Next module fan-out**     | **Ready in parallel** | Power-level READ, presence, room directory, and other domain slices can proceed in module-scoped lanes; do not reopen shared `product.rs` as a serial lane.                                            |
+| current    | **Import accounting**       | **152**               | Committed tip inventory reports 152 production `matrix-js-sdk` import files and 152 allowlist entries; #446 does not change the TypeScript inventory.                                                  |
+| current    | **Proof / burn gates**      | **Held**              | C3–C5 remain **Not confirmed**; V-BURN remains **HOLD**; `dual_backend` is forbidden and #39/main remain out of scope.                                                                                 |
 
 ### 2026-08-01 — docs base `52953091` — post-#405 residual boundary
 
-| When (UTC) | Item                      | Result               | Notes                                                                                                                              |
-| ---------- | ------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| When (UTC) | Item                      | Result               | Notes                                                                                                                            |
+| ---------- | ------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | current    | **Integration base**      | **This draft**       | Docs-only refresh based at `52953091`; product PR #405 is not merged into this base.                                             |
-| current    | **Members drawer wiring** | **Post-#405 target** | Product head `cd2d57b4` wires drawer/lobby/mentions member snapshots; after merge those member reads are done on native desktop.     |
-| current    | **Power/creator reads**   | **Residual**         | #405 does not add native power-level or creator snapshots; those remain the next members-read slice.                              |
-| current    | **Policy**                | **Held**             | `dual_backend=false`; native paths remain fail-closed; #39 remains gated and `main` is untouched.                                 |
+| current    | **Members drawer wiring** | **Post-#405 target** | Product head `cd2d57b4` wires drawer/lobby/mentions member snapshots; after merge those member reads are done on native desktop. |
+| current    | **Power/creator reads**   | **Residual**         | #405 does not add native power-level or creator snapshots; those remain the next members-read slice.                             |
+| current    | **Policy**                | **Held**             | `dual_backend=false`; native paths remain fail-closed; #39 remains gated and `main` is untouched.                                |
 
 ### 2026-08-01 — base tip `8330c56b` — #405/#407 acceptance status
 
-| When (UTC) | Item                         | Result          | Notes                                                                                                                                    |
-| ---------- | ---------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| current    | **Integration tip**          | **This PR**     | Tip `8330c56b` on `feature/matrix-rust-sdk-full-replacement`; the docs-only base includes the #410 V-BURN-blocker update.            |
-| current    | **Members drawer wiring**    | **#405 `ACCEPT`** | CI may re-run; the drawer/lobby/mentions product wiring is not merged at this tip.                                                   |
-| current    | **CallWidget media IPC**     | **#407 `ACCEPT_WITH_NITS`** | Full-green proof is recorded at [`cd07f4fc`](https://github.com/nepenth/synara-desktop/commit/cd07f4fc), behind this tip; parent merge pending and product wiring is not merged here. |
-| current    | **Import accounting**        | **152**         | Production import files and allowlist remain **152**; these in-flight PRs do not change the accounting at this docs-only tip.            |
-| current    | **Policy**                   | **Held**        | `dual_backend=false`; V-BURN remains **HOLD**; #39 remains gated and `main` is untouched.                                                |
+| When (UTC) | Item                      | Result                      | Notes                                                                                                                                                                                 |
+| ---------- | ------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**       | **This PR**                 | Tip `8330c56b` on `feature/matrix-rust-sdk-full-replacement`; the docs-only base includes the #410 V-BURN-blocker update.                                                             |
+| current    | **Members drawer wiring** | **#405 `ACCEPT`**           | CI may re-run; the drawer/lobby/mentions product wiring is not merged at this tip.                                                                                                    |
+| current    | **CallWidget media IPC**  | **#407 `ACCEPT_WITH_NITS`** | Full-green proof is recorded at [`cd07f4fc`](https://github.com/nepenth/synara-desktop/commit/cd07f4fc), behind this tip; parent merge pending and product wiring is not merged here. |
+| current    | **Import accounting**     | **152**                     | Production import files and allowlist remain **152**; these in-flight PRs do not change the accounting at this docs-only tip.                                                         |
+| current    | **Policy**                | **Held**                    | `dual_backend=false`; V-BURN remains **HOLD**; #39 remains gated and `main` is untouched.                                                                                             |
 
 ### 2026-08-01 — tip `1c9653b2` — docs after #397/#398
 
-| When (UTC) | Item                          | Result          | Notes                                                                                                                                    |
-| ---------- | ----------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| current    | **Integration tip**           | **This PR**     | Tip `1c9653b2` on `feature/matrix-rust-sdk-full-replacement`; #397 tip honesty and #398 importer taxonomy alignment are merged.        |
-| current    | **Import accounting**         | **152**         | Production import files and allowlist remain **152**; taxonomy measurement remains anchored to the #395 product tip.                  |
-| current    | **CallWidget media IPC**      | **In flight**   | Native `getMediaConfig`/`downloadFile` implementation follows packet #396; this PR is docs-only and edits no `product.rs`.             |
-| current    | **Members-drawer residual**   | **Next**        | Room/MembersDrawer/Lobby/UserMentionAutocomplete member reads plus power-level/creator reads remain residual after #395.               |
+| When (UTC) | Item                        | Result        | Notes                                                                                                                           |
+| ---------- | --------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**         | **This PR**   | Tip `1c9653b2` on `feature/matrix-rust-sdk-full-replacement`; #397 tip honesty and #398 importer taxonomy alignment are merged. |
+| current    | **Import accounting**       | **152**       | Production import files and allowlist remain **152**; taxonomy measurement remains anchored to the #395 product tip.            |
+| current    | **CallWidget media IPC**    | **In flight** | Native `getMediaConfig`/`downloadFile` implementation follows packet #396; this PR is docs-only and edits no `product.rs`.      |
+| current    | **Members-drawer residual** | **Next**      | Room/MembersDrawer/Lobby/UserMentionAutocomplete member reads plus power-level/creator reads remain residual after #395.        |
 
 ### 2026-08-01 — tip `22f1f06d` — members-read first slice #395
 
-| When (UTC) | Item                     | Result          | Notes                                                                                                                          |
-| ---------- | ------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| current    | **Integration tip**      | **This PR**     | Tip `22f1f06d` on `feature/matrix-rust-sdk-full-replacement`. Imports/allowlist **152** (ratcheted 153→152).                   |
-| current    | **Members-read first slice** | **Merged #395** | `matrix_room_members_snapshot` IPC + Members settings native fail-closed; drawer/lobby/mentions + power-level/creator reads residual. |
-| current    | **Next**                 | **powers-bulk / CallWidget media IPC** | members-read residual (Room/MembersDrawer/Lobby/UserMentionAutocomplete + power reads); powers-bulk writes (packet #388); CallWidget media IPC (packet #396). V-BURN HOLD; #39 gated. |
+| When (UTC) | Item                         | Result                                 | Notes                                                                                                                                                                                 |
+| ---------- | ---------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**          | **This PR**                            | Tip `22f1f06d` on `feature/matrix-rust-sdk-full-replacement`. Imports/allowlist **152** (ratcheted 153→152).                                                                          |
+| current    | **Members-read first slice** | **Merged #395**                        | `matrix_room_members_snapshot` IPC + Members settings native fail-closed; drawer/lobby/mentions + power-level/creator reads residual.                                                 |
+| current    | **Next**                     | **powers-bulk / CallWidget media IPC** | members-read residual (Room/MembersDrawer/Lobby/UserMentionAutocomplete + power reads); powers-bulk writes (packet #388); CallWidget media IPC (packet #396). V-BURN HOLD; #39 gated. |
 
 ### 2026-08-01 — tip `96015ccd` — docs honesty after #375/#386/#387
 
-| When (UTC) | Item                     | Result          | Notes                                                                                                                          |
-| ---------- | ------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| current    | **Integration tip**      | **This PR**     | Tip `96015ccd` on `feature/matrix-rust-sdk-full-replacement`. Imports/allowlist **153**.                                       |
-| current    | **Moderation writes**    | **Merged #375** | Native invite/kick/ban/unban/setPowerLevel write vertical landed; marked done on scoreboard.                                   |
-| current    | **Tip honesty**          | **Merged #386** | Scoreboard honesty after moderation writes #375.                                                                               |
-| current    | **CallWidget media scan**| **Merged #387** | Docs scan of CallWidget media download reuse landed; product `getMediaConfig`/`downloadFile` IPC remains residual.             |
-| current    | **Next**                 | **members-read**| members-read product (#385 inventory); powers-bulk; CallWidget media IPC; C3–C5 live proofs. V-BURN HOLD; #39 gated.           |
+| When (UTC) | Item                      | Result           | Notes                                                                                                                |
+| ---------- | ------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------- |
+| current    | **Integration tip**       | **This PR**      | Tip `96015ccd` on `feature/matrix-rust-sdk-full-replacement`. Imports/allowlist **153**.                             |
+| current    | **Moderation writes**     | **Merged #375**  | Native invite/kick/ban/unban/setPowerLevel write vertical landed; marked done on scoreboard.                         |
+| current    | **Tip honesty**           | **Merged #386**  | Scoreboard honesty after moderation writes #375.                                                                     |
+| current    | **CallWidget media scan** | **Merged #387**  | Docs scan of CallWidget media download reuse landed; product `getMediaConfig`/`downloadFile` IPC remains residual.   |
+| current    | **Next**                  | **members-read** | members-read product (#385 inventory); powers-bulk; CallWidget media IPC; C3–C5 live proofs. V-BURN HOLD; #39 gated. |
 
 ### 2026-08-01 — tip `a53f14fa` — room create #372
 
@@ -333,7 +333,7 @@ importers and are outside the allowlist set difference.
 
 ### 2026-08-01 — scoreboard after #320 pack room ids + #328 call-upload
 
-| Field   | Value                  |
+| Field | Value |
 | ------- | ---------------------- | ----------- | ------------------------------------------------------------------------------------------------- |
 | current | **Scoreboard honesty** | **This PR** | Tip `324c40a4`. Imports **159**. #320 room ids + #328 R-CALL-UPLOAD landed. #325 open. #39 gated. |
 
