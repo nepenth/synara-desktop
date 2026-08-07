@@ -51,6 +51,8 @@ A slice is **done only when** all of the following hold for its capability set:
 | **Secrets**   | No tokens, keys, recovery material, ciphertext over IPC or logs                                                                                    |
 | **Ledger**    | Residual list for that slice is **empty** or only items that are **other verticals** with named follow-up IDs (not “later / deferred / minimum”)   |
 | **Tests**     | Smallest focused evidence set for changed retained behavior and real privacy/authority boundaries; required PR CI supplies broad integration proof |
+| **UX/UI fidelity** | The replaced capability presents the **same look and feel** as before — same visuals, layout, copy, spacing, interactions; no redesign or component swap that changes appearance. A visual difference introduced by a slice is a defect, filed as a named residual and fixed forward ([operating-instructions.md](operating-instructions.md) §3). |
+| **Public hygiene** | The repository is public: no tokens, keys, session/recovery material, private endpoints, or personal data in any committed artifact, fixture, example, or DTO. Use placeholder values in public examples ([operating-instructions.md](operating-instructions.md) §1). |
 
 **Not** acceptance: “core path works; verification/backup/media left as approved residual.”
 
