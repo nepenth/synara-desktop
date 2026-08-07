@@ -80,7 +80,7 @@ final class RoomReadMarkerServiceTests: XCTestCase {
             eventID: "$stale-fetch",
             roomID: "!room:matrix.example",
             userID: "@alice:matrix.example",
-            token: <SET_IN_CONFIG>
+            token: token
         )
 
         XCTAssertEqual(effectiveEventID, "$written")
@@ -98,13 +98,13 @@ final class RoomReadMarkerServiceTests: XCTestCase {
             eventID: "$older",
             roomID: "!room",
             userID: "@alice",
-            token: <SET_IN_CONFIG>
+            token: olderToken
         )
         _ = olderCompletesFirst.publishFetched(
             eventID: "$newer",
             roomID: "!room",
             userID: "@alice",
-            token: <SET_IN_CONFIG>
+            token: newerToken
         )
         XCTAssertEqual(olderCompletesFirst.snapshot(roomID: "!room", userID: "@alice").eventID, "$newer")
 
@@ -115,13 +115,13 @@ final class RoomReadMarkerServiceTests: XCTestCase {
             eventID: "$newer",
             roomID: "!room",
             userID: "@alice",
-            token: <SET_IN_CONFIG>
+            token: fastNewerToken
         )
         let delayedResult = newerCompletesFirst.publishFetched(
             eventID: "$older",
             roomID: "!room",
             userID: "@alice",
-            token: <SET_IN_CONFIG>
+            token: delayedOlderToken
         )
         XCTAssertEqual(delayedResult, "$newer")
         XCTAssertEqual(newerCompletesFirst.snapshot(roomID: "!room", userID: "@alice").eventID, "$newer")
@@ -133,7 +133,7 @@ final class RoomReadMarkerServiceTests: XCTestCase {
             eventID: "$older-but-successful",
             roomID: "!room",
             userID: "@alice",
-            token: <SET_IN_CONFIG>
+            token: viableOlderToken
         )
         XCTAssertEqual(viableResult, "$older-but-successful")
         XCTAssertEqual(

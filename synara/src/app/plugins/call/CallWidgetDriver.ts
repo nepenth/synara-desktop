@@ -241,7 +241,7 @@ export class CallWidgetDriver extends WidgetDriver {
   public async askOpenID(observer: SimpleObservable<IOpenIDUpdate>): Promise<void> {
     return observer.update({
       state: OpenIDRequestState.Allowed,
-      token: <SET_IN_CONFIG>
+      token: await this.mx.getOpenIdToken(),
     });
   }
 

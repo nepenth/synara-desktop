@@ -1843,3 +1843,73 @@ fn call_widget_media_commands_use_the_live_client_and_original_file() {
     assert!(!download.contains("Thumbnail"));
     assert!(!download.contains("mxcUrlToHttp"));
 }
+
+#[test]
+fn v_auth_native_session_envelope_host_dual_write_is_wired() {
+    let product_prod = AUTH_PRODUCT_COMMANDS_SOURCE
+        .split("#[cfg(test)]")
+        .next()
+        .expect("product production section");
+
+    // The hybrid desktop session envelope is the frontend bootstrap's native
+    // rehydration source (desktop_get_session). It must be dual-written
+    // host-side on native session install (password login + register) and
+    // cleared on logout so tokens never need to appear on the login/register
+    // IPC return paths.
+    for marker in [
+        "DesktopSessionEnvelope",
+        "desktop_set_session_in_store",
+        "persist_frontend_session_envelope",
+        "clear_frontend_session_envelope",
+    ] {
+        assert!(
+            product_prod.contains(marker),
+            "auth product module must wire {marker}"
+        );
+    }
+
+    let login_fn = product_prod
+        .split("pub async fn matrix_login_password")
+        .nth(1)
+        .and_then(|rest| rest.split("pub async fn ").next())
+        .expect("matrix_login_password body");
+    assert!(
+        login_fn.contains("persist_frontend_session_envelope(&client, &identity)"),
+        "password login must dual-write the desktop session envelope"
+    );
+
+    let register_install_fn = product_prod
+        .split("pub(super) async fn install_session_from_register_secrets")
+        .nth(1)
+        .and_then(|rest| rest.split("pub async fn ").next())
+        .expect("install_session_from_register_secrets body");
+    assert!(
+        register_install_fn.contains("persist_frontend_session_envelope(&client, &identity)"),
+        "register session install must dual-write the desktop session envelope"
+    );
+
+    let logout_fn = product_prod
+        .split("pub async fn matrix_logout")
+        .nth(1)
+        .and_then(|rest| rest.split("pub async fn ").next())
+        .expect("matrix_logout body");
+    assert!(
+        logout_fn.contains("clear_frontend_session_envelope()"),
+        "logout must clear the desktop session envelope"
+    );
+
+    // The login identity DTO must never carry tokens to the frontend; the
+    // host-side envelope is the only token transport.
+    let product_source = include_str!("product.rs");
+    let identity_fn = product_source
+        .split("pub struct MatrixLoginIdentity {")
+        .nth(1)
+        .and_then(|rest| rest.split('}').next())
+        .expect("MatrixLoginIdentity fields");
+    for forbidden in ["access_token", "refresh_token"] {
+        assert!(
+            !identity_fn.contains(forbidden),
+            "MatrixLoginIdentity must not expose {forbidden} on the login IPC"
+        );
+    }
+}

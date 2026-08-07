@@ -19,7 +19,7 @@ const useRegisterSearchParams = (searchParams: URLSearchParams): RegisterPathSea
     () => ({
       username: searchParams.get('username') ?? undefined,
       email: searchParams.get('email') ?? undefined,
-      token: <SET_IN_CONFIG>'token') ?? undefined,
+      token: searchParams.get('token') ?? undefined,
     }),
     [searchParams]
   );

@@ -1,5 +1,15 @@
 # Pipeline pause handoff — 2026-08-03 (final)
 
+> **Operating-model supersession:** this file is a **historical snapshot** of
+> what was true at the 2026-08-03 pause. Go-forward execution runs through
+> **this agent harness with its locally hosted model** — orchestrator + bounded
+> sub-agents, ≤2–3 concurrent, no external model APIs — per
+> [operating-instructions.md](operating-instructions.md). Any
+> Grok/Codex/DeepSeek consumption or model-routing language below is
+> **superseded**, as is the "no agent spawns until re-enable" hold (resume is
+> authorized). Public-repo hygiene and the **UI/UX high-fidelity mandate**
+> apply to every slice.
+
 ## Why paused (this stop)
 
 Operator request: **pause Matrix Rust js-sdk replacement agent work** to conserve

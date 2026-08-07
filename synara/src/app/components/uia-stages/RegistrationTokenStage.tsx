@@ -78,7 +78,7 @@ export function RegistrationTokenStageDialog({
     (t: string) => {
       submitAuthDict({
         type: AuthStageType.RegistrationToken,
-        token: <SET_IN_CONFIG>
+        token: t,
         session,
       });
     },

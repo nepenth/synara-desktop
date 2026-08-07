@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 import {
   generateRegisterClientSecret,
@@ -138,5 +140,27 @@ test('unavailable native register fails closed', async () => {
       assert.match(err.message, /unavailable/i);
       return true;
     }
+  );
+});
+
+test('PasswordRegisterForm rehydrates native bootstrap before entering app on complete', () => {
+  const packageRoot = process.cwd();
+  const form = readFileSync(
+    path.join(packageRoot, 'src/app/pages/auth/register/PasswordRegisterForm.tsx'),
+    'utf8'
+  );
+
+  // No matrix-js-sdk path may survive in the register form.
+  assert.doesNotMatch(form, /from ['"]matrix-js-sdk['"]/);
+  assert.doesNotMatch(form, /\bcreateClient\s*\(/);
+
+  // The complete branch must rehydrate the native bootstrap before navigating
+  // (fail-closed: no navigation if the host-side desktop session envelope is
+  // missing).
+  assert.match(form, /completeNativeLoginBootstrap/);
+  assert.match(form, /void completeNativeLoginBootstrap\(\)\s*\.then/);
+  assert.match(
+    form,
+    /navigate\(afterLoginRedirectPath \?\? getHomePath\(\), \{ replace: true \}\)/
   );
 });
