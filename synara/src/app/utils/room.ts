@@ -85,6 +85,7 @@ export type RoomReading = {
   getMyMembership(): string;
   getJoinRule(): string;
   getJoinedMemberCount(): number;
+  getCanonicalAlias(): string | null;
   getType(): string | undefined;
   isSpaceRoom(): boolean;
   hasMembershipState(userId: UserId, membership: string): boolean;

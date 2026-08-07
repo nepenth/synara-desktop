@@ -1,7 +1,7 @@
 import React, { useEffect, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Editor } from 'slate';
 import { Avatar, Icon, Icons, MenuItem, Text } from 'folds';
-import { MatrixClient, Room } from 'matrix-js-sdk';
+import type { MatrixClientReading, RoomReading } from '../../../utils/room';
 
 import { AutocompleteQuery } from './autocompleteQuery';
 import { AutocompleteMenu } from './AutocompleteMenu';
@@ -26,7 +26,7 @@ import { isSynaraDesktop } from '../../../utils/desktop';
 
 type MentionAutoCompleteHandler = (userId: string, name: string) => void;
 
-const userIdFromQueryText = (mx: MatrixClient, text: string) =>
+const userIdFromQueryText = (mx: MatrixClientReading, text: string) =>
   isUserId(`@${text}`)
     ? `@${text}`
     : `@${text}${text.endsWith(':') ? '' : ':'}${getMxIdServer(mx.getUserId() ?? '')}`;
@@ -65,7 +65,7 @@ function UnknownMentionItem({
 }
 
 type UserMentionAutocompleteProps = {
-  room: Room;
+  room: RoomReading;
   editor: Editor;
   query: AutocompleteQuery<string>;
   requestClose: () => void;

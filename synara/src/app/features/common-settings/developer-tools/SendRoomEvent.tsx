@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState, FormEventHandler, useEffect } from 'react';
-import { MatrixError } from 'matrix-js-sdk';
+import type { MatrixError } from '../../../utils/matrix';
 import {
   Box,
   Chip,
