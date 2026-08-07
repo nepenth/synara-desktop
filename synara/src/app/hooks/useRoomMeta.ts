@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
-import { RoomJoinRulesEventContent } from 'matrix-js-sdk/lib/types';
-import { Room, RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
 import { StateEvent } from '../../types/matrix/room';
+import type { EventedRoomReading } from '../utils/roomEvents';
+import { RoomEvent } from '../utils/roomEvents';
 import { useStateEvent } from './useStateEvent';
 
-export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
+type RoomJoinRulesEventContent = {
+  join_rule?: string;
+  allow?: string[];
+};
+
+export const useRoomAvatar = (room: EventedRoomReading, dm?: boolean): string | undefined => {
   const avatarEvent = useStateEvent(room, StateEvent.RoomAvatar);
 
   if (dm) {
@@ -16,16 +21,16 @@ export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
   return avatarMxc;
 };
 
-export const useRoomName = (room: Room): string => {
-  const [name, setName] = useState(room.name);
+export const useRoomName = (room: EventedRoomReading): string => {
+  const [name, setName] = useState(room.name ?? '');
 
   useEffect(() => {
-    setName(room.name);
+    setName(room.name ?? '');
 
-    const handleRoomNameChange: RoomEventHandlerMap[RoomEvent.Name] = () => {
-      setName(room.name);
+    const handleRoomNameChange: (...args: unknown[]) => void = () => {
+      setName(room.name ?? '');
     };
-    room.on(RoomEvent.Name, handleRoomNameChange);
+    room.on(RoomEvent.Name, handleRoomNameChange as (...args: any[]) => void);
     return () => {
       room.removeListener(RoomEvent.Name, handleRoomNameChange);
     };
@@ -34,7 +39,7 @@ export const useRoomName = (room: Room): string => {
   return name;
 };
 
-export const useRoomTopic = (room: Room): string | undefined => {
+export const useRoomTopic = (room: EventedRoomReading): string | undefined => {
   const topicEvent = useStateEvent(room, StateEvent.RoomTopic);
 
   const content = topicEvent?.getContent();
@@ -43,7 +48,9 @@ export const useRoomTopic = (room: Room): string | undefined => {
   return topic;
 };
 
-export const useRoomJoinRule = (room: Room): RoomJoinRulesEventContent | undefined => {
+export const useRoomJoinRule = (
+  room: EventedRoomReading
+): RoomJoinRulesEventContent | undefined => {
   const mEvent = useStateEvent(room, StateEvent.RoomJoinRules);
   const joinRuleContent = mEvent?.getContent<RoomJoinRulesEventContent>();
   return joinRuleContent;

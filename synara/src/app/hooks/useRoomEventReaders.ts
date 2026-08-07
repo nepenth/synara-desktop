@@ -1,15 +1,18 @@
-import { Room, RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
 import { useEffect, useState } from 'react';
 import { getLoadedLiveTimelineEvents } from '../utils/timelineLifecycle';
+import type { EventedRoomReading } from '../utils/roomEvents';
+import { RoomEvent } from '../utils/roomEvents';
 
-const getEventReaders = (room: Room, evtId?: string) => {
+const getEventReaders = (room: EventedRoomReading, evtId?: string) => {
   if (!evtId) return [];
 
   // if eventId is locally generated
   // we don't have read receipt for it yet
   if (!evtId.startsWith('$')) return [];
 
-  const liveEvents = getLoadedLiveTimelineEvents(room);
+  const liveEvents = getLoadedLiveTimelineEvents(
+    room as unknown as Parameters<typeof getLoadedLiveTimelineEvents>[0]
+  );
   const userIds: string[] = [];
 
   for (let i = liveEvents.length - 1; i >= 0; i -= 1) {
@@ -20,13 +23,13 @@ const getEventReaders = (room: Room, evtId?: string) => {
   return [...new Set(userIds)];
 };
 
-export const useRoomEventReaders = (room: Room, eventId?: string): string[] => {
+export const useRoomEventReaders = (room: EventedRoomReading, eventId?: string): string[] => {
   const [readers, setReaders] = useState<string[]>(() => getEventReaders(room, eventId));
 
   useEffect(() => {
     setReaders(getEventReaders(room, eventId));
 
-    const handleReceipt: RoomEventHandlerMap[RoomEvent.Receipt] = (event, r) => {
+    const handleReceipt = (r: { roomId: string }) => {
       if (r.roomId !== room.roomId) return;
       setReaders(getEventReaders(room, eventId));
     };
@@ -34,18 +37,14 @@ export const useRoomEventReaders = (room: Room, eventId?: string): string[] => {
       setReaders(getEventReaders(room, eventId));
     };
 
-    const handleLocalEcho: RoomEventHandlerMap[RoomEvent.LocalEchoUpdated] = (
-      event,
-      r,
-      oldEventId
-    ) => {
+    const handleLocalEcho = (r: { roomId: string }, oldEventId?: string) => {
       // update members on local event id replaced
       // with server generated id
       if (r.roomId !== room.roomId || !oldEventId) return;
       if (oldEventId.startsWith('$')) return;
       if (oldEventId !== eventId) return;
 
-      setReaders(getEventReaders(room, event.getId()));
+      setReaders(getEventReaders(room, eventId));
     };
 
     room.on(RoomEvent.Receipt, handleReceipt);
