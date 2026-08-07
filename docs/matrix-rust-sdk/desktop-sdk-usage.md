@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |          108 |                2 |                   3 |
+| production |          107 |                2 |                   3 |
 | test       |           10 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |      **121** |                  |                     |
+| **total**  |      **120** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |   108 |
+| Production import files |   107 |
 | Test import files       |    10 |
-| Total import files      |   118 |
+| Total import files      |   117 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 108)
+- Production match: **no** (found 107)
 - Test match: **no** (found 10)
 
 ### Production files by bucket (desktop runtime only)
@@ -51,19 +51,19 @@ Expected **220** production and **12** test import files.
 | feature          |    37 |
 | hook             |    34 |
 | page             |     7 |
-| plugin           |     6 |
+| plugin           |     5 |
 | state            |     4 |
 | utility          |     6 |
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 108. Files with any finding: 110.
+Scope: **production only**. Import files: 107. Files with any finding: 109.
 
 ### Imported modules
 
 | Module path                                           | Import sites | Files |
 | ----------------------------------------------------- | -----------: | ----: |
-| `matrix-js-sdk`                                       |          106 |   106 |
+| `matrix-js-sdk`                                       |          105 |   105 |
 | `matrix-js-sdk/lib/types`                             |            7 |     7 |
 | `matrix-js-sdk/lib/@types/event`                      |            2 |     2 |
 | `matrix-js-sdk/lib/matrixrtc/CallMembership`          |            2 |     2 |
@@ -89,12 +89,12 @@ Scope: **production only**. Import files: 108. Files with any finding: 110.
 | `ClientEvent`               |       8 |     8 |         0 |     8 |
 | `RoomEvent`                 |       8 |     8 |         0 |     8 |
 | `RoomEventHandlerMap`       |       6 |     6 |         0 |     6 |
-| `EventType`                 |       5 |     5 |         0 |     5 |
 | `IPushRules`                |       5 |     5 |         0 |     5 |
 | `PushRuleKind`              |       5 |     5 |         0 |     5 |
 | `RoomMember`                |       5 |     5 |         0 |     5 |
 | `SyncState`                 |       5 |     4 |         1 |     5 |
 | `Direction`                 |       4 |     4 |         0 |     4 |
+| `EventType`                 |       4 |     4 |         0 |     4 |
 | `IContent`                  |       4 |     3 |         1 |     4 |
 | `ConditionKind`             |       3 |     3 |         0 |     3 |
 | `IPushRule`                 |       3 |     3 |         0 |     3 |
@@ -496,7 +496,6 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `synara/src/app/pages/client/syncStatusCopy.ts`                                                                               | production | yes     | page             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/plugins/call/CallEmbed.ts`                                                                                    | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/plugins/call/CallWidgetDriver.ts`                                                                             | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/plugins/call/utils.ts`                                                                                        | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/plugins/custom-emoji/ImagePack.ts`                                                                            | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/plugins/react-custom-html-parser.tsx`                                                                         | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/plugins/recent-emoji.ts`                                                                                      | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                                                                                                           |
