@@ -1,11 +1,19 @@
 import { useEffect, useState } from 'react';
-import { UserEvent, UserEventHandlerMap } from 'matrix-js-sdk';
+import { UserEvent } from '../utils/roomEvents';
 import { useMatrixClient } from './useMatrixClient';
 
 export type UserProfile = {
   avatarUrl?: string;
   displayName?: string;
 };
+
+type UserEventedReading = {
+  avatarUrl?: string;
+  displayName?: string;
+  on(event: string, listener: (...args: any[]) => void): void;
+  removeListener(event: string, listener: (...args: any[]) => void): void;
+};
+
 export const useUserProfile = (userId: string): UserProfile => {
   const mx = useMatrixClient();
 
@@ -18,14 +26,15 @@ export const useUserProfile = (userId: string): UserProfile => {
   });
 
   useEffect(() => {
-    const user = mx.getUser(userId);
-    const onAvatarChange: UserEventHandlerMap[UserEvent.AvatarUrl] = (event, myUser) => {
+    const user = mx.getUser(userId) as unknown as UserEventedReading | null;
+
+    const onAvatarChange = (event: unknown, myUser: UserEventedReading) => {
       setProfile((cp) => ({
         ...cp,
         avatarUrl: myUser.avatarUrl,
       }));
     };
-    const onDisplayNameChange: UserEventHandlerMap[UserEvent.DisplayName] = (event, myUser) => {
+    const onDisplayNameChange = (event: unknown, myUser: UserEventedReading) => {
       setProfile((cp) => ({
         ...cp,
         displayName: myUser.displayName,

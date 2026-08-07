@@ -2,13 +2,14 @@ import type { MatrixClientReading, MatrixEventReading, RoomReading } from './roo
 
 /** SDK-neutral literal event names (mirror of the js-sdk RoomEvent subset used by Synara hooks). */
 export const RoomEvent = {
-  Name: 'Room.name',
   AccountData: 'Room.accountData',
+  CurrentStateUpdated: 'Room.CurrentStateUpdated',
+  LocalEchoUpdated: 'Room.localEchoUpdated',
+  Name: 'Room.name',
   Receipt: 'Room.receipt',
   Timeline: 'Room.timeline',
-  TimelineReset: 'Room.timelineReset',
   TimelineRefresh: 'Room.timelineRefresh',
-  LocalEchoUpdated: 'Room.localEchoUpdated',
+  TimelineReset: 'Room.timelineReset',
 } as const;
 
 export const RoomMemberEvent = {
@@ -18,6 +19,11 @@ export const RoomMemberEvent = {
 
 export const RoomStateEvent = {
   Events: 'RoomState.events',
+} as const;
+
+export const UserEvent = {
+  AvatarUrl: 'User.avatarUrl',
+  DisplayName: 'User.displayName',
 } as const;
 
 type Listener = (...args: any[]) => void;
