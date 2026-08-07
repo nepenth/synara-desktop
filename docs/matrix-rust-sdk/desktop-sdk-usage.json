@@ -4,8 +4,8 @@
       "categories": {
         "account_data": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 3,
-          "listenerCandidateOccurrences": 2,
+          "fileCount": 2,
+          "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 6,
           "networkingOccurrences": 0
         },
@@ -18,14 +18,14 @@
         },
         "client_events": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 4,
-          "listenerCandidateOccurrences": 14,
+          "fileCount": 3,
+          "listenerCandidateOccurrences": 12,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 33,
+          "fileCount": 28,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -53,8 +53,8 @@
         },
         "event_emitters_listeners": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 12,
-          "listenerCandidateOccurrences": 66,
+          "fileCount": 10,
+          "listenerCandidateOccurrences": 62,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
         },
@@ -88,14 +88,14 @@
         },
         "room_lists": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 16,
+          "fileCount": 12,
           "listenerCandidateOccurrences": 4,
-          "methodCandidateOccurrences": 45,
+          "methodCandidateOccurrences": 39,
           "networkingOccurrences": 0
         },
         "room_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 32,
+          "fileCount": 31,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -116,7 +116,7 @@
         },
         "sync_lifecycle": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 11,
+          "fileCount": 10,
           "listenerCandidateOccurrences": 6,
           "methodCandidateOccurrences": 11,
           "networkingOccurrences": 0
@@ -144,21 +144,21 @@
         },
         "uia_auth": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 18,
+          "fileCount": 16,
           "listenerCandidateOccurrences": 2,
-          "methodCandidateOccurrences": 41,
+          "methodCandidateOccurrences": 38,
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 55,
-      "importFileCount": 53,
+      "fileCount": 48,
+      "importFileCount": 46,
       "methodCandidateFrequencies": [
         {
-          "count": 39,
+          "count": 34,
           "name": "getRoom"
         },
         {
-          "count": 21,
+          "count": 19,
           "name": "getSafeUserId"
         },
         {
@@ -166,7 +166,7 @@
           "name": "isSpaceRoom"
         },
         {
-          "count": 10,
+          "count": 9,
           "name": "getUserId"
         },
         {
@@ -235,10 +235,6 @@
         },
         {
           "count": 1,
-          "name": "getRoomIdForAlias"
-        },
-        {
-          "count": 1,
           "name": "getThreads"
         },
         {
@@ -304,24 +300,24 @@
           "importOccurrences": 1
         },
         "MatrixClient": {
-          "fileCount": 18,
-          "importOccurrences": 18
+          "fileCount": 14,
+          "importOccurrences": 14
         },
         "MatrixError": {
-          "fileCount": 9,
-          "importOccurrences": 9
+          "fileCount": 8,
+          "importOccurrences": 8
         },
         "MatrixEvent": {
-          "fileCount": 11,
-          "importOccurrences": 11
+          "fileCount": 10,
+          "importOccurrences": 10
         },
         "Relations": {
           "fileCount": 1,
           "importOccurrences": 1
         },
         "Room": {
-          "fileCount": 30,
-          "importOccurrences": 30
+          "fileCount": 29,
+          "importOccurrences": 29
         },
         "RoomMember": {
           "fileCount": 1,
@@ -342,8 +338,8 @@
       },
       "modules": [
         {
-          "fileCount": 51,
-          "importCount": 51,
+          "fileCount": 44,
+          "importCount": 44,
           "path": "matrix-js-sdk"
         },
         {
@@ -438,46 +434,39 @@
       "scope": "role",
       "symbols": [
         {
-          "fileCount": 30,
-          "importCount": 30,
+          "fileCount": 29,
+          "importCount": 29,
           "name": "Room",
           "typeImports": 1,
-          "valueImports": 29
+          "valueImports": 28
         },
         {
-          "fileCount": 18,
-          "importCount": 18,
+          "fileCount": 14,
+          "importCount": 14,
           "name": "MatrixClient",
           "typeImports": 2,
-          "valueImports": 16
+          "valueImports": 12
         },
         {
-          "fileCount": 11,
-          "importCount": 11,
+          "fileCount": 10,
+          "importCount": 10,
           "name": "MatrixEvent",
           "typeImports": 2,
-          "valueImports": 9
+          "valueImports": 8
         },
         {
-          "fileCount": 9,
-          "importCount": 9,
+          "fileCount": 8,
+          "importCount": 8,
           "name": "MatrixError",
           "typeImports": 0,
-          "valueImports": 9
+          "valueImports": 8
         },
         {
-          "fileCount": 7,
-          "importCount": 7,
+          "fileCount": 6,
+          "importCount": 6,
           "name": "ClientEvent",
           "typeImports": 0,
-          "valueImports": 7
-        },
-        {
-          "fileCount": 5,
-          "importCount": 5,
-          "name": "RoomEvent",
-          "typeImports": 0,
-          "valueImports": 5
+          "valueImports": 6
         },
         {
           "fileCount": 5,
@@ -490,6 +479,13 @@
           "fileCount": 4,
           "importCount": 4,
           "name": "Direction",
+          "typeImports": 0,
+          "valueImports": 4
+        },
+        {
+          "fileCount": 4,
+          "importCount": 4,
+          "name": "RoomEvent",
           "typeImports": 0,
           "valueImports": 4
         },
@@ -508,23 +504,9 @@
           "valueImports": 3
         },
         {
-          "fileCount": 3,
-          "importCount": 3,
-          "name": "RoomEventHandlerMap",
-          "typeImports": 0,
-          "valueImports": 3
-        },
-        {
           "fileCount": 2,
           "importCount": 2,
           "name": "CallMembership",
-          "typeImports": 0,
-          "valueImports": 2
-        },
-        {
-          "fileCount": 2,
-          "importCount": 2,
-          "name": "ClientEventHandlerMap",
           "typeImports": 0,
           "valueImports": 2
         },
@@ -552,6 +534,13 @@
         {
           "fileCount": 2,
           "importCount": 2,
+          "name": "RoomEventHandlerMap",
+          "typeImports": 0,
+          "valueImports": 2
+        },
+        {
+          "fileCount": 2,
+          "importCount": 2,
           "name": "RoomJoinRulesEventContent",
           "typeImports": 0,
           "valueImports": 2
@@ -569,6 +558,13 @@
           "name": "AccessTokens",
           "typeImports": 1,
           "valueImports": 0
+        },
+        {
+          "fileCount": 1,
+          "importCount": 1,
+          "name": "ClientEventHandlerMap",
+          "typeImports": 0,
+          "valueImports": 1
         },
         {
           "fileCount": 1,
@@ -2286,57 +2282,6 @@
       "role": "tooling"
     },
     {
-      "bucket": "component",
-      "categories": ["client_methods", "room_lists", "uia_auth"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 9,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixError"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 34,
-          "name": "getSafeUserId"
-        },
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 36,
-          "name": "getRoomIdForAlias"
-        },
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 97,
-          "name": "getSafeUserId"
-        }
-      ],
-      "modelCoupling": ["MatrixError"],
-      "networking": [],
-      "path": "synara/src/app/components/create-room/CreateRoomAliasInput.tsx",
-      "role": "production"
-    },
-    {
       "bucket": "app-other",
       "categories": ["direct_matrix_networking"],
       "constructorCandidates": [],
@@ -3088,65 +3033,6 @@
     {
       "bucket": "hook",
       "categories": [
-        "client_methods",
-        "event_emitters_listeners",
-        "sync_lifecycle",
-        "client_events"
-      ],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "ClientEvent"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "ClientEventHandlerMap"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixClient"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [
-        {
-          "category": "client_events",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "ClientEvent.AccountData",
-          "line": 11,
-          "method": "on"
-        },
-        {
-          "category": "client_events",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "ClientEvent.AccountData",
-          "line": 13,
-          "method": "removeListener"
-        }
-      ],
-      "methodCandidates": [],
-      "modelCoupling": ["MatrixClient"],
-      "networking": [],
-      "path": "synara/src/app/hooks/useAccountDataCallback.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "hook",
-      "categories": [
         "room_methods",
         "event_emitters_listeners",
         "matrixrtc_calls"
@@ -3572,101 +3458,6 @@
     {
       "bucket": "hook",
       "categories": [
-        "room_methods",
-        "event_emitters_listeners",
-        "account_data"
-      ],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "Room"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "RoomEvent"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "RoomEventHandlerMap"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [
-        {
-          "category": "account_data",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "RoomEvent.AccountData",
-          "line": 22,
-          "method": "on"
-        },
-        {
-          "category": "account_data",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "RoomEvent.AccountData",
-          "line": 24,
-          "method": "removeListener"
-        }
-      ],
-      "methodCandidates": [],
-      "modelCoupling": ["Room"],
-      "networking": [],
-      "path": "synara/src/app/hooks/useRoomAccountData.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "hook",
-      "categories": ["client_methods", "room_lists"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixClient"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 80,
-          "name": "getRoom"
-        }
-      ],
-      "modelCoupling": ["MatrixClient"],
-      "networking": [],
-      "path": "synara/src/app/hooks/useRoomActivity.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "hook",
-      "categories": [
         "client_methods",
         "room_methods",
         "room_lists",
@@ -3919,43 +3710,6 @@
       "modelCoupling": ["MatrixEvent", "Room"],
       "networking": [],
       "path": "synara/src/app/hooks/useRoomState.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "hook",
-      "categories": ["client_methods", "room_lists"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixClient"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 34,
-          "name": "getRoom"
-        }
-      ],
-      "modelCoupling": ["MatrixClient"],
-      "networking": [],
-      "path": "synara/src/app/hooks/useSidebarItems.ts",
       "role": "production"
     },
     {
@@ -5193,93 +4947,6 @@
       "modelCoupling": ["MatrixClient", "MatrixError", "MatrixEvent"],
       "networking": [],
       "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "plugin",
-      "categories": [],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixEvent"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["MatrixEvent"],
-      "networking": [],
-      "path": "synara/src/app/plugins/custom-emoji/ImagePack.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "plugin",
-      "categories": ["client_methods", "room_lists", "uia_auth"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 17,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixClient"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 110,
-          "name": "getRoom"
-        },
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 116,
-          "name": "getUserId"
-        },
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 129,
-          "name": "getRoom"
-        },
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 153,
-          "name": "getRoom"
-        }
-      ],
-      "modelCoupling": ["MatrixClient"],
-      "networking": [],
-      "path": "synara/src/app/plugins/react-custom-html-parser.tsx",
       "role": "production"
     },
     {
@@ -6782,11 +6449,10 @@
     "desktopRuntimeBaseline": {
       "buckets": {
         "client-lifecycle": 2,
-        "component": 1,
         "feature": 14,
-        "hook": 18,
+        "hook": 14,
         "page": 7,
-        "plugin": 4,
+        "plugin": 2,
         "state": 3,
         "utility": 4
       },
@@ -6796,13 +6462,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 53,
+      "productionImportFiles": 46,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 63
+      "totalImportFiles": 56
     },
     "repositoryWide": {
-      "productionImportFiles": 53,
+      "productionImportFiles": 46,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -6811,7 +6477,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 66
+      "totalImportFiles": 59
     }
   }
 }

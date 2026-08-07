@@ -3,6 +3,7 @@ import type { MatrixClientReading, MatrixEventReading, RoomReading } from './roo
 /** SDK-neutral literal event names (mirror of the js-sdk RoomEvent subset used by Synara hooks). */
 export const RoomEvent = {
   Name: 'Room.name',
+  AccountData: 'Room.accountData',
   Receipt: 'Room.receipt',
   Timeline: 'Room.timeline',
   TimelineReset: 'Room.timelineReset',
