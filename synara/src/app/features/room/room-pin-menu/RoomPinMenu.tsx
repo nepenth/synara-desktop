@@ -1,6 +1,5 @@
 /* eslint-disable react/destructuring-assignment */
 import React, { forwardRef, MouseEventHandler, useCallback, useMemo, useRef } from 'react';
-import { MatrixEvent, Room } from 'matrix-js-sdk';
 import {
   Avatar,
   Box,
@@ -43,6 +42,8 @@ import { UserAvatar } from '../../../components/user-avatar';
 import { getMxIdLocalPart } from '../../../utils/matrix';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { getEditedEvent, getMemberAvatarMxc, getMemberDisplayName } from '../../../utils/room';
+import type { EventTimelineSetReading, MatrixEventReading } from '../../../utils/room';
+import type { EventedRoomReading } from '../../../utils/roomEvents';
 import { GetContentCallback, MessageEvent, StateEvent } from '../../../../types/matrix/room';
 import { unpinWithNativeTimelineAction } from '../nativeTimelineAction';
 import { useMentionClickHandler } from '../../../hooks/useMentionClickHandler';
@@ -84,10 +85,26 @@ import { useRoomCreatorsTag } from '../../../hooks/useRoomCreatorsTag';
 import { resolveMatrixThumbnailUrl } from '../../../matrix/media';
 import { IImageContent } from '../../../../types/matrix/common';
 
+/** A js-sdk-backed MatrixEvent as read by the pin menu (renderer receives live SDK events). */
+type PinEventReading = MatrixEventReading & {
+  getUnsigned(): {
+    redacted_because?: { content: { reason?: string; [key: string]: unknown } };
+    [key: string]: unknown;
+  };
+  replacingEvent(): MatrixEventReading | null;
+};
+
+/** Room projection with the pin-menu timeline accessors synara already relies on. */
+type PinRoomReading = EventedRoomReading & {
+  getTimelineForEvent(
+    eventId: string,
+  ): { getTimelineSet(): EventTimelineSetReading; getEvents(): MatrixEventReading[] } | null;
+};
+
 type PinnedMessageProps = {
-  room: Room;
+  room: PinRoomReading;
   eventId: string;
-  renderContent: RenderMatrixEvent<[MatrixEvent, string, GetContentCallback]>;
+  renderContent: RenderMatrixEvent<[PinEventReading, string, GetContentCallback]>;
   onOpen: (roomId: string, eventId: string) => void;
   canPinEvent: boolean;
   getMemberPowerTag: GetMemberPowerTag;
@@ -108,15 +125,15 @@ function PinnedMessage({
   hour24Clock,
   dateFormatString,
 }: PinnedMessageProps) {
-  const pinnedEvent = useRoomEvent(room, eventId);
+  const pinnedEvent = useRoomEvent(room as unknown as Parameters<typeof useRoomEvent>[0], eventId);
   const useAuthentication = useMediaAuthentication();
   const mx = useMatrixClient();
 
   const [unpinState, unpin] = useAsyncCallback(
     useCallback(
       () => unpinWithNativeTimelineAction({ roomId: room.roomId, eventId }),
-      [room.roomId, eventId]
-    )
+      [room.roomId, eventId],
+    ),
   );
 
   const handleOpenClick: MouseEventHandler = (evt) => {
@@ -220,7 +237,7 @@ function PinnedMessage({
       </Box>
       {pinnedEvent.replyEventId && (
         <Reply
-          room={room}
+          room={room as unknown as Parameters<typeof useRoomEvent>[0]}
           replyEventId={pinnedEvent.replyEventId}
           threadRootId={pinnedEvent.threadRootId}
           onClick={handleOpenClick}
@@ -235,7 +252,7 @@ function PinnedMessage({
 }
 
 type RoomPinMenuProps = {
-  room: Room;
+  room: PinRoomReading;
   requestClose: () => void;
   mode?: 'menu' | 'drawer';
 };
@@ -258,7 +275,7 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
     const accessibleTagColors = useAccessiblePowerTagColors(
       theme.kind,
       creatorsTag,
-      powerLevelTags
+      powerLevelTags,
     );
 
     const pinnedEvents = useRoomPinnedEvents(room);
@@ -289,10 +306,10 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
       () => ({
         ...LINKIFY_OPTS,
         render: factoryRenderLinkifyWithMention((href) =>
-          renderMatrixMention(mx, room.roomId, href, makeMentionCustomProps(mentionClickHandler))
+          renderMatrixMention(mx, room.roomId, href, makeMentionCustomProps(mentionClickHandler)),
         ),
       }),
-      [mx, room, mentionClickHandler]
+      [mx, room, mentionClickHandler],
     );
     const htmlReactParserOptions = useMemo<HTMLReactParserOptions>(
       () =>
@@ -302,10 +319,10 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
           handleSpoilerClick: spoilerClickHandler,
           handleMentionClick: mentionClickHandler,
         }),
-      [mx, room, linkifyOpts, mentionClickHandler, spoilerClickHandler, useAuthentication]
+      [mx, room, linkifyOpts, mentionClickHandler, spoilerClickHandler, useAuthentication],
     );
 
-    const renderMatrixEvent = useMatrixEventRenderer<[MatrixEvent, string, GetContentCallback]>(
+    const renderMatrixEvent = useMatrixEventRenderer<[PinEventReading, string, GetContentCallback]>(
       {
         [MessageEvent.RoomMessage]: (event, displayName, getContent) => {
           if (event.isRedacted()) {
@@ -375,7 +392,7 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
                   const editedEvent = getEditedEvent(
                     eventId,
                     resolvedEvent,
-                    evtTimeline.getTimelineSet()
+                    evtTimeline.getTimelineSet(),
                   );
                   const getContent = (() =>
                     editedEvent?.getContent<Record<string, unknown>>()['m.new_content'] ??
@@ -453,7 +470,7 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
             </Text>
           </Box>
         );
-      }
+      },
     );
 
     const handleOpen = (roomId: string, eventId: string) => {
@@ -553,5 +570,5 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
         </Box>
       </Menu>
     );
-  }
+  },
 );
