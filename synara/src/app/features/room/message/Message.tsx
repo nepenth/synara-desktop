@@ -54,6 +54,7 @@ import {
   getMemberDisplayName,
   trimReplyFromBody,
 } from '../../../utils/room';
+import type { MatrixEventReading } from '../../../utils/room';
 import { getMxIdLocalPart } from '../../../utils/matrix';
 import { MessageLayout, MessageSpacing } from '../../../state/settings';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
@@ -276,13 +277,15 @@ export const MessageSourceCodeItem = as<
 >(({ room, mEvent, onClose, ...props }, ref) => {
   const [open, setOpen] = useState(false);
 
-  const getContent = (evt: MatrixEvent) =>
-    evt.isEncrypted()
+  const getContent = (evt: MatrixEvent | MatrixEventReading) => {
+    if (!('isEncrypted' in evt)) return evt.event;
+    return evt.isEncrypted()
       ? {
           [`<== DECRYPTED_EVENT ==>`]: evt.getEffectiveEvent(),
           [`<== ORIGINAL_EVENT ==>`]: evt.event,
         }
       : evt.event;
+  };
 
   const getText = (): string => {
     const evtId = mEvent.getId()!;

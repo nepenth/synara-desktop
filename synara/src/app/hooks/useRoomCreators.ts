@@ -1,4 +1,4 @@
-import { MatrixClient, MatrixEvent, Room } from 'matrix-js-sdk';
+import { MatrixClient, Room } from 'matrix-js-sdk';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStateEvent } from './useStateEvent';
 import { useStateEventCallback } from './useStateEventCallback';
@@ -6,10 +6,11 @@ import { useMatrixClient } from './useMatrixClient';
 import { IRoomCreateContent, StateEvent } from '../../types/matrix/room';
 import { creatorsSupported } from '../utils/matrix';
 import { getStateEvent } from '../utils/room';
+import type { MatrixEventReading } from '../utils/room';
 import { isNativeMatrixSession } from '../features/verification/nativeVerification';
 import { readRoomCreatorsWithNativeOwner } from './nativeRoomCreatorsOwner';
 
-export const getRoomCreators = (createEvent: MatrixEvent): Set<string> => {
+export const getRoomCreators = (createEvent: MatrixEventReading): Set<string> => {
   const createContent = createEvent.getContent<IRoomCreateContent>();
 
   const creators: Set<string> = new Set();
