@@ -1,4 +1,4 @@
-import { MatrixEvent } from 'matrix-js-sdk';
+import type { MatrixEventReading } from '../../utils/room';
 import { PackAddress } from './PackAddress';
 import { PackImageReader } from './PackImageReader';
 import { PackImagesReader } from './PackImagesReader';
@@ -31,7 +31,7 @@ export class ImagePack {
     this.images = new PackImagesReader(content.images ?? {});
   }
 
-  static fromMatrixEvent(id: string, matrixEvent: MatrixEvent) {
+  static fromMatrixEvent(id: string, matrixEvent: MatrixEventReading) {
     const roomId = matrixEvent.getRoomId();
     const stateKey = matrixEvent.getStateKey();
 

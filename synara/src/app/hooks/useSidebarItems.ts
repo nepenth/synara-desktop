@@ -1,5 +1,5 @@
+import type { MatrixClientReading, MatrixEventReading } from '../utils/room';
 import { Dispatch, SetStateAction, useCallback, useEffect, useState } from 'react';
-import { MatrixClient } from 'matrix-js-sdk';
 import { AccountDataEvent } from '../../types/matrix/accountData';
 import { useMatrixClient } from './useMatrixClient';
 import { getAccountData, isSpace } from '../utils/room';
@@ -20,7 +20,7 @@ export type InSynaraSpacesContent = {
 };
 
 export const parseSidebar = (
-  mx: MatrixClient,
+  mx: MatrixClientReading,
   orphanSpaces: string[],
   content?: InSynaraSpacesContent
 ) => {
@@ -87,7 +87,7 @@ export const useSidebarItems = (
   useAccountDataCallback(
     mx,
     useCallback(
-      (mEvent) => {
+      (mEvent: MatrixEventReading) => {
         if (mEvent.getType() === AccountDataEvent.SynaraSpaces) {
           const newContent = mEvent.getContent<InSynaraSpacesContent>();
           setSidebarItems(parseSidebar(mx, orphanSpaces, newContent));
@@ -123,7 +123,7 @@ export const sidebarItemWithout = (items: SidebarItems, roomId: string) => {
 };
 
 export const makeSynaraSpacesContent = (
-  mx: MatrixClient,
+  mx: MatrixClientReading,
   items: SidebarItems
 ): InSynaraSpacesContent => {
   const currentInSpaces =

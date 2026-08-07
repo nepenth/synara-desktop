@@ -6,7 +6,6 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { MatrixError } from 'matrix-js-sdk';
 import { Box, color, Icon, Icons, Input, Spinner, Text, toRem } from 'folds';
 import { isKeyHotkey } from 'is-hotkey';
 import { getMxIdServer } from '../../utils/matrix';
@@ -36,7 +35,7 @@ export function CreateRoomAliasInput({ disabled }: { disabled?: boolean }) {
           const result = await mx.getRoomIdForAlias(roomAlias);
           return typeof result.room_id !== 'string';
         } catch (e) {
-          if (e instanceof MatrixError && e.httpStatus === 404) {
+          if ((e as { httpStatus?: number } | null)?.httpStatus === 404) {
             return true;
           }
           throw e;

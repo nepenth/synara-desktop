@@ -1,5 +1,5 @@
+import type { MatrixClientReading } from '../utils/room';
 import { useEffect, useMemo, useReducer, useRef, useSyncExternalStore } from 'react';
-import { MatrixClient } from 'matrix-js-sdk';
 import {
   getLegacyRoomActivitySnapshot,
   getRecentRoomExpiryDelay,
@@ -11,23 +11,27 @@ import { recordFoundationDiagnostic } from '../utils/foundationDiagnostics';
 
 const subscribeDisabledRoomActivity: (listener: () => void) => () => void = () => () => undefined;
 
-export const useRecentRoomPartition = (mx: MatrixClient, roomIds: readonly string[]) => {
+export const useRecentRoomPartition = (mx: MatrixClientReading, roomIds: readonly string[]) => {
+  const activityClient = useMemo(
+    () => mx as unknown as Parameters<typeof getRoomActivityStore>[0],
+    [mx]
+  );
   const reactiveEnabled = isFoundationFeatureEnabled('reactiveRoomActivity');
   const legacySnapshot = useMemo(
-    () => (reactiveEnabled ? undefined : getLegacyRoomActivitySnapshot(mx, roomIds)),
-    [mx, reactiveEnabled, roomIds]
+    () => (reactiveEnabled ? undefined : getLegacyRoomActivitySnapshot(activityClient, roomIds)),
+    [reactiveEnabled, roomIds, activityClient]
   );
   const snapshotSource = useMemo(() => {
     if (!reactiveEnabled) {
-      const snapshot = legacySnapshot ?? getLegacyRoomActivitySnapshot(mx, roomIds);
+      const snapshot = legacySnapshot ?? getLegacyRoomActivitySnapshot(activityClient, roomIds);
       return {
         subscribe: subscribeDisabledRoomActivity,
         getSnapshot: () => snapshot,
       };
     }
-    const store = getRoomActivityStore(mx);
+    const store = getRoomActivityStore(activityClient);
     return store.createSnapshotSource(roomIds);
-  }, [legacySnapshot, mx, reactiveEnabled, roomIds]);
+  }, [legacySnapshot, reactiveEnabled, roomIds, activityClient]);
   const snapshot = useSyncExternalStore(
     snapshotSource.subscribe,
     snapshotSource.getSnapshot,
