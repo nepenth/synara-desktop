@@ -84,6 +84,7 @@ export type RoomReading = {
   accountData: { get(eventType: string): MatrixEventReading | undefined };
   getMyMembership(): string;
   getJoinRule(): string;
+  getJoinedMemberCount(): number;
   getType(): string | undefined;
   isSpaceRoom(): boolean;
   hasMembershipState(userId: UserId, membership: string): boolean;

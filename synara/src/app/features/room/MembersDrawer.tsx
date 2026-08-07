@@ -26,7 +26,8 @@ import {
   TooltipProvider,
   config,
 } from 'folds';
-import { MatrixClient, Room } from 'matrix-js-sdk';
+import type { MatrixClientReading } from '../../utils/room';
+import type { EventedRoomReading } from '../../utils/roomEvents';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import classNames from 'classnames';
 
@@ -107,9 +108,9 @@ function MemberDrawerHeader({ joinedMemberCount }: MemberDrawerHeaderProps) {
 }
 
 type MemberItemProps = {
-  mx: MatrixClient;
+  mx: MatrixClientReading;
   useAuthentication: boolean;
-  room: Room;
+  room: EventedRoomReading;
   member: RoomMemberListItem;
   onClick: MouseEventHandler<HTMLButtonElement>;
   pressed?: boolean;
@@ -183,7 +184,7 @@ const getRoomMemberStr: SearchItemStrGetter<RoomMemberListItem> = (m, query) =>
 const EMPTY_ROOM_MEMBERS: RoomMemberListItem[] = [];
 
 type MembersDrawerProps = {
-  room: Room;
+  room: EventedRoomReading;
 };
 export function MembersDrawer({ room }: MembersDrawerProps) {
   const mx = useMatrixClient();
