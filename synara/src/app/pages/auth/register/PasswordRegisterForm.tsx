@@ -38,6 +38,7 @@ import {
 import { ConfirmPasswordMatch } from '../../../components/ConfirmPasswordMatch';
 import { UIAFlowOverlay } from '../../../components/UIAFlowOverlay';
 import { synaraDeviceDisplayName } from '../../../utils/user-agent';
+import { completeNativeLoginBootstrap } from '../login/loginUtil';
 import { openExternalUrlFromClick } from '../../../utils/appLinks';
 import {
   deleteAfterLoginRedirectPath,
@@ -263,9 +264,19 @@ export function PasswordRegisterForm({
     if (registerState.status !== AsyncStatus.Success) return;
     const outcome = registerState.data;
     if (outcome.status === 'complete') {
-      const afterLoginRedirectPath = getAfterLoginRedirectPath();
-      deleteAfterLoginRedirectPath();
-      navigate(afterLoginRedirectPath ?? getHomePath(), { replace: true });
+      // Registration installed the native session host-side (vault + desktop
+      // session envelope). Rehydrate the frontend bootstrap from the envelope
+      // before entering the app; without it the router gate sees no active
+      // session. Fail-closed: no navigation if the envelope is missing.
+      void completeNativeLoginBootstrap()
+        .then(() => {
+          const afterLoginRedirectPath = getAfterLoginRedirectPath();
+          deleteAfterLoginRedirectPath();
+          navigate(afterLoginRedirectPath ?? getHomePath(), { replace: true });
+        })
+        .catch(() => {
+          // No navigation without a native bootstrap session.
+        });
       return;
     }
     setOngoingAuthData(uiaAuthDataFromChallenge(outcome));

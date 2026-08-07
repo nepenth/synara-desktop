@@ -475,6 +475,31 @@ export type DesktopInvokeResult<T> =
   | { available: false }
   | { available: true; value: T | undefined };
 
+/** Format Tauri/native invoke rejections for diagnostics (not always `Error`). */
+export const formatDesktopInvokeError = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message || error.name || 'unknown error';
+  }
+  if (typeof error === 'string' && error.trim().length > 0) {
+    return error.trim();
+  }
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>;
+    const parts = [record.message, record.code, record.diagnosticId, record.diagnostic_id]
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      .map((value) => value.trim());
+    if (parts.length > 0) {
+      return parts.join(' | ');
+    }
+    try {
+      return JSON.stringify(error);
+    } catch {
+      // fall through
+    }
+  }
+  return 'unknown error';
+};
+
 export const invokeDesktopWithAvailability = async <T = unknown>(
   command: string,
   args?: Record<string, unknown>
@@ -487,9 +512,7 @@ export const invokeDesktopWithAvailability = async <T = unknown>(
   try {
     return { available: true, value: await invoke<T>(command, args) };
   } catch (error) {
-    recordDesktopDiagnostic(
-      `${command} failed: ${error instanceof Error ? error.message : 'unknown error'}`
-    );
+    recordDesktopDiagnostic(`${command} failed: ${formatDesktopInvokeError(error)}`);
     throw error;
   }
 };
