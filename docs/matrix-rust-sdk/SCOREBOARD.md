@@ -2,12 +2,12 @@
 
 | Field                                                  | Value                                                                       |
 | ------------------------------------------------------ | --------------------------------------------------------------------------- |
-| Updated                                                | **2026-08-03** (usage pause · tip `57ab9e64` · 114 importers) |
-| Tip                                                    | `57ab9e64` on `feature/matrix-rust-sdk-full-replacement` |
-| Production `matrix-js-sdk` import files (`synara/src`) | **114** (plan baseline was **220**; **106 removed**, ~**48.2%**) |
-| Allowlist `pathCount`                                  | **114** (matches `paths[]` length) |
+| Updated                                                | **2026-08-07** (tip `c7a780f1` · 113 importers) |
+| Tip                                                    | `c7a780f1` on `feature/matrix-rust-sdk-full-replacement` |
+| Production `matrix-js-sdk` import files (`synara/src`) | **113** (plan baseline was **220**; **107 removed**, ~**48.6%**) |
+| Allowlist `pathCount`                                  | **113** (matches `paths[]` length) |
 | Dual backend                                           | **false** (forbidden forever)                                               |
-| Pipeline                                               | **PAUSED** — historical usage pause; resume authorized through this harness |
+| Pipeline                                               | **RUNNING** — prime-agent orchestrated burn (see NOTES/program state) |
 | Operating model                                        | **prime-agent orchestrator + `deepseek-v4-flash-0731` sub-agents (max 2 concurrent)** — locally hosted, only configured model; public-repo hygiene + UI/UX fidelity always on ([operating-instructions.md](operating-instructions.md)) |
 | Burn board                                             | https://kb.whyland.com/go/synara-matrix-burn                                |
 | Umbrella #39                                           | **Do not merge** without explicit user approval                             |
@@ -58,7 +58,7 @@ completion or merge hold.
 | Join-rule READ residual-empty | **#521** native snapshot + RoomPublish |
 | Join-rule presentation DTO | **#522** |
 | Long-tail residual-empty (type/presentation/orphan) | **#517–#538** (room-summary → RenderMessageContent MsgType) — see [pause handoff](pause-handoff-2026-08-03.md) |
-| Importer burn (tip inventory) | **220 → 114** production files (#546 live-proof stack) |
+| Importer burn (tip inventory) | **220 → 113** production files (#546 stack + #557 utils/room.ts burn) |
 | Live-proof gate policy | **#544** — not a residual-empty merge gate |
 | Live-proof-held residual stack | **#546** landed (chrome/typing/notes/reaction/NativeEventContent/reactions) |
 | Desktop Beta package smoke | Actions run [30821912637](https://github.com/nepenth/synara-desktop/actions/runs/30821912637) @ `57ab9e64` (artifacts, not Releases) |

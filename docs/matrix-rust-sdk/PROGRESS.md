@@ -13,12 +13,12 @@
 
 | Field              | Value |
 | ------------------ | ----- |
-| Last updated (UTC) | **2026-08-06** |
-| Integration tip    | **`57ab9e64`** — after #546 residual-empty stack (124→114) |
-| Active work        | **Ready to resume via this harness** (historical 2026-08-03 usage pause superseded) — [operating-instructions.md](operating-instructions.md) |
+| Last updated (UTC) | **2026-08-07** |
+| Integration tip    | **`c7a780f1`** — #556 lineage reconciliation + #557 utils/room.ts burn (114→113); prior slices #550–#553 restored |
+| Active work        | **Orchestrated burn active via this harness** — [operating-instructions.md](operating-instructions.md) |
 | Product runtime    | Native owns core D0 + V-CRYPTO + residual-empty slices through members/presence/directory/join-rule READ; long-tail JS importers remain |
 | Execution model    | **prime-agent orchestrator + `deepseek-v4-flash-0731` sub-agents, max 2 concurrent** (locally hosted; only configured model) — [operating-instructions.md](operating-instructions.md) |
-| Import accounting  | Desktop production import files **114** / baseline **220** (**106** removed). Allowlist **114**. |
+| Import accounting  | Desktop production import files **113** / baseline **220** (**107** removed). Allowlist **113**. |
 | Dual backend       | **`false`** (forbidden forever) |
 | Public repo        | **PUBLIC — no secrets ever**; placeholder-only examples ([operating-instructions.md](operating-instructions.md) §1) |
 | UI/UX fidelity     | **Preserve existing look and feel** — no UX/UI change when replacing a capability ([operating-instructions.md](operating-instructions.md) §3) |
@@ -108,7 +108,7 @@ importers and carries the tip inventory's 124 files / 124 paths unchanged.
 
 | When (UTC) | Item | Result | Notes |
 | ---------- | ---- | ------ | ----- |
-| current | **Integration tip** | **`57ab9e64`** | After #546 residual-empty live-proof stack |
+| current | **Integration tip** | **`c7a780f1`** | #556 reconcile + #557 room-utils (114→113) |
 | current | **Imports / allowlist** | **114 / 114** | Baseline 220 → **106** removed (~48.2%) |
 | current | **#544** | **merged** | Live-proof not residual-empty merge gate |
 | current | **#546** | **merged** | −10 production importers (stack superseding #540–#545) |
