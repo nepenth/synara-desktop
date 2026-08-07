@@ -1,6 +1,6 @@
 import { Box, Button, color, config, Icon, Icons, Input, Spinner, Switch, Text } from 'folds';
 import React, { FormEventHandler, useCallback, useState } from 'react';
-import { MatrixError } from 'matrix-js-sdk';
+import type { MatrixError } from '../../utils/matrix';
 import { useNavigate } from 'react-router-dom';
 import { SettingTile } from '../../components/setting-tile';
 import { SequenceCard } from '../../components/sequence-card';
@@ -121,9 +121,11 @@ export function CreateChat({ defaultUserId }: CreateChatProps) {
           <Icon src={Icons.Warning} filled size="100" />
           <Text size="T300" style={{ color: color.Critical.Main }}>
             <b>
-              {error instanceof MatrixError && error.name === ErrorCode.M_LIMIT_EXCEEDED
+              {(error as { name?: string } | null)?.name === ErrorCode.M_LIMIT_EXCEEDED
                 ? `Server rate-limited your request for ${millisecondsToMinutes(
-                    (error.data.retry_after_ms as number | undefined) ?? 0
+                    ((error as { data?: { retry_after_ms?: unknown } }).data?.retry_after_ms as
+                      | number
+                      | undefined) ?? 0
                   )} minutes!`
                 : error.message}
             </b>

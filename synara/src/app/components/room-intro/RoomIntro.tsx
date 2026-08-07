@@ -1,9 +1,10 @@
 import React, { useCallback, useState } from 'react';
 import { Avatar, Box, Button, Spinner, Text, as } from 'folds';
-import { Room } from 'matrix-js-sdk';
+
 import { useAtomValue } from 'jotai';
 import { IRoomCreateContent, Membership, StateEvent } from '../../../types/matrix/room';
 import { getMemberDisplayName, getStateEvent } from '../../utils/room';
+import type { EventedRoomReading } from '../../utils/roomEvents';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
@@ -22,7 +23,7 @@ import { InviteUserPrompt } from '../invite-user-prompt';
 import { joinRoomWithNativeOwner } from '../nativeRoomJoinOwner';
 
 export type RoomIntroProps = {
-  room: Room;
+  room: EventedRoomReading;
 };
 
 export const RoomIntro = as<'div', RoomIntroProps>(({ room, ...props }, ref) => {

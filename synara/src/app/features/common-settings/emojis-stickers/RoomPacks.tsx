@@ -16,7 +16,7 @@ import {
   IconButton,
   Menu,
 } from 'folds';
-import { MatrixError } from 'matrix-js-sdk';
+import type { MatrixError } from '../../../utils/matrix';
 import { SequenceCard } from '../../../components/sequence-card';
 import {
   ImagePack,

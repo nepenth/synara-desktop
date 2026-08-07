@@ -1,5 +1,6 @@
+import type { EventedRoomReading } from '../../utils/roomEvents';
 import React, { useCallback, useMemo } from 'react';
-import { Room } from 'matrix-js-sdk';
+
 import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { ImagePackContent } from './ImagePackContent';
@@ -12,7 +13,7 @@ import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { setRoomImagePackNative } from '../../features/room/nativeImagePack';
 
 type RoomImagePackProps = {
-  room: Room;
+  room: EventedRoomReading;
   stateKey: string;
 };
 
