@@ -4,7 +4,7 @@
   "description": "Baseline production files under synara/src allowed to import matrix-js-sdk during migration. New importers not on this list fail the P1.6 guardrail. Full ban is Phase 11/14 cutover.",
   "scope": "synara/src production (non-test) files",
   "generatedFrom": "feature/matrix-rust-sdk-full-replacement @ 7e54fd3 (P1.6 start)",
-  "pathCount": 111,
+  "pathCount": 108,
   "paths": [
     "synara/src/app/components/ServerConfigsLoader.tsx",
     "synara/src/app/components/create-room/CreateRoomAliasInput.tsx",
@@ -20,9 +20,6 @@
     "synara/src/app/components/user-profile/UserChips.tsx",
     "synara/src/app/features/add-existing/AddExisting.tsx",
     "synara/src/app/features/call-status/CallRoomName.tsx",
-    "synara/src/app/features/call-status/LiveChip.tsx",
-    "synara/src/app/features/call-status/MemberGlance.tsx",
-    "synara/src/app/features/call-status/MemberSpeaking.tsx",
     "synara/src/app/features/call/CallMemberCard.tsx",
     "synara/src/app/features/common-settings/developer-tools/SendRoomEvent.tsx",
     "synara/src/app/features/common-settings/developer-tools/StateEventEditor.tsx",
