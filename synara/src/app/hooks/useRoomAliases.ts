@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { MatrixError, Room } from 'matrix-js-sdk';
-import { RoomCanonicalAliasEventContent } from 'matrix-js-sdk/lib/types';
+import type { MatrixError } from '../utils/matrix';
+import type { EventedRoomReading } from '../utils/roomEvents';
 import { AsyncState, useAsyncCallback } from './useAsyncCallback';
 import { useMatrixClient } from './useMatrixClient';
 import { useAlive } from './useAlive';
@@ -8,7 +8,12 @@ import { useStateEvent } from './useStateEvent';
 import { StateEvent } from '../../types/matrix/room';
 import { getStateEvent } from '../utils/room';
 
-export const usePublishedAliases = (room: Room): [string | undefined, string[]] => {
+type RoomCanonicalAliasEventContent = {
+  alias?: string;
+  alt_aliases?: string[];
+};
+
+export const usePublishedAliases = (room: EventedRoomReading): [string | undefined, string[]] => {
   const aliasContent = useStateEvent(
     room,
     StateEvent.RoomCanonicalAlias
@@ -32,7 +37,9 @@ export const usePublishedAliases = (room: Room): [string | undefined, string[]] 
   return [canonicalAlias, publishedAliases];
 };
 
-export const useSetMainAlias = (room: Room): ((alias: string | undefined) => Promise<void>) => {
+export const useSetMainAlias = (
+  room: EventedRoomReading
+): ((alias: string | undefined) => Promise<void>) => {
   const mx = useMatrixClient();
   const mainAlias = useCallback(
     async (alias: string | undefined) => {
@@ -65,7 +72,7 @@ export const useSetMainAlias = (room: Room): ((alias: string | undefined) => Pro
 };
 
 export const usePublishUnpublishAliases = (
-  room: Room
+  room: EventedRoomReading
 ): {
   publishAliases: (aliases: string[]) => Promise<void>;
   unpublishAliases: (aliases: string[]) => Promise<void>;

@@ -1,5 +1,5 @@
-import { GuestAccess, HistoryVisibility, Room } from 'matrix-js-sdk';
 import { getStateEvent } from '../utils/room';
+import type { RoomReading } from '../utils/room';
 import { StateEvent } from '../../types/matrix/room';
 import {
   normalizeRoomJoinRulePresentation,
@@ -18,7 +18,7 @@ export type LocalRoomSummary = {
   roomType?: string;
   joinRule?: RoomJoinRulePresentation | null;
 };
-export const useLocalRoomSummary = (room: Room): LocalRoomSummary => {
+export const useLocalRoomSummary = (room: RoomReading): LocalRoomSummary => {
   const topicEvent = getStateEvent(room, StateEvent.RoomTopic);
   const topicContent = topicEvent?.getContent();
   const topic =
@@ -28,14 +28,15 @@ export const useLocalRoomSummary = (room: Room): LocalRoomSummary => {
   const historyContent = historyEvent?.getContent();
   const worldReadable =
     historyContent && typeof historyContent.history_visibility === 'string'
-      ? historyContent.history_visibility === HistoryVisibility.WorldReadable
+      ? historyContent.history_visibility === 'world_readable'
       : undefined;
 
-  const guestCanJoin = room.getGuestAccess() === GuestAccess.CanJoin;
+  const guestCanJoin =
+    (room as unknown as { getGuestAccess(): string | null }).getGuestAccess() === 'can_join';
 
   return {
     roomId: room.roomId,
-    name: room.name,
+    name: (room as RoomReading & { name: string }).name,
     topic,
     avatarUrl: room.getMxcAvatarUrl() ?? undefined,
     canonicalAlias: room.getCanonicalAlias() ?? undefined,
