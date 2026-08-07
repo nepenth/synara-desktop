@@ -16,8 +16,15 @@ import {
 } from '../../afterLoginRedirectPath';
 import { getHomePath } from '../../pathUtils';
 import { platformSessionStore } from '../../../platform';
+import {
+  clearSessionBootstrap,
+  resolveSessionBootstrap,
+  setSessionBootstrapResult,
+  type AsyncSessionStore,
+} from '../../../state/sessionBootstrap';
 import { persistAuthenticatedSession } from '../../../state/sessionPersistence';
 import { pushSessionToSW } from '../../../../sw-session';
+import { recordClientDiagnostic } from '../../../utils/clientDiagnostics';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../../utils/desktop';
 
 export enum GetBaseUrlError {
@@ -237,6 +244,34 @@ export const completeAuthenticatedLogin = async (
   pushSession(loginBaseUrl, loginRes.access_token);
 };
 
+/**
+ * Rehydrate the frontend bootstrap from the host-side desktop session envelope
+ * after a native password login / register. The login IPC never returns tokens;
+ * route guards and ClientRoot gate on this in-memory bootstrap (`source:
+ * 'native'`). Fail-closed: a missing envelope throws (no JS session fallback).
+ */
+export const completeNativeLoginBootstrap = async (
+  nativeSessionStore: AsyncSessionStore = platformSessionStore
+): Promise<void> => {
+  clearSessionBootstrap();
+  const bootstrap = await resolveSessionBootstrap({ nativeSessionStore });
+  if (!bootstrap.session) {
+    recordClientDiagnostic('session', 'bootstrap.completed', {
+      source: 'none',
+      outcome: 'native-login-missing-desktop-session',
+    });
+    throw new PasswordLoginError(
+      LoginError.Unknown,
+      'Native login succeeded but the desktop session envelope is missing.'
+    );
+  }
+  setSessionBootstrapResult({
+    session: bootstrap.session,
+    source: 'native',
+    nativeStoreError: bootstrap.nativeStoreError,
+  });
+};
+
 export const useLoginComplete = (data?: CustomLoginResponse | NativeLoginResponse) => {
   const navigate = useNavigate();
 
@@ -245,8 +280,13 @@ export const useLoginComplete = (data?: CustomLoginResponse | NativeLoginRespons
 
     let active = true;
     const persistAndNavigate = async () => {
-      // Native password login already persists the session host-side.
-      if (!('native' in data)) {
+      // Native password login already persists the session host-side (vault +
+      // desktop session envelope). Rehydrate the frontend bootstrap from the
+      // envelope so route guards / ClientRoot see the active native session
+      // (tokens never return on the login IPC).
+      if ('native' in data) {
+        await completeNativeLoginBootstrap();
+      } else {
         await completeAuthenticatedLogin(data);
       }
       if (!active) return;
@@ -255,7 +295,12 @@ export const useLoginComplete = (data?: CustomLoginResponse | NativeLoginRespons
       navigate(afterLoginRedirectUrl ?? getHomePath(), { replace: true });
     };
 
-    void persistAndNavigate();
+    void persistAndNavigate().catch((error) => {
+      recordClientDiagnostic('session', 'bootstrap.failed', {
+        errorType: error instanceof Error ? error.name : typeof error,
+        outcome: 'native-login-handoff-failed',
+      });
+    });
 
     return () => {
       active = false;
