@@ -1,6 +1,5 @@
-import { Direction, IContextResponse, MatrixClient, Method, Room, RoomMember } from 'matrix-js-sdk';
-import { RoomServerAclEventContent } from 'matrix-js-sdk/lib/types';
 import { useMemo } from 'react';
+import type { MatrixClientReading, MemberReading, RoomReading } from '../utils/room';
 import { useTranslation } from 'react-i18next';
 import {
   getDMRoomFor,
@@ -29,6 +28,57 @@ import {
   kickUserWithNativeOwner,
   unbanUserWithNativeOwner,
 } from '../components/nativeRoomModerationOwner';
+
+type ServerMemberReading = MemberReading & { membership: string };
+
+type CommandsClientReading = MatrixClientReading & {
+  getSafeUserId(): string;
+  getIgnoredUsers(): string[];
+  setIgnoredUsers(ids: string[]): Promise<unknown>;
+  sendStateEvent(
+    roomId: string,
+    eventType: string,
+    content: unknown,
+    stateKey?: string
+  ): Promise<unknown>;
+  timestampToEvent(
+    roomId: string,
+    timestamp: number,
+    direction: 'f' | 'b'
+  ): Promise<{ event_id: string }>;
+  http: {
+    authedRequest<T>(method: string, path: string, opts: { limit: number }): Promise<T>;
+  };
+  createMessagesRequest(
+    roomId: string,
+    fromToken: string,
+    limit: number,
+    direction: 'f' | 'b',
+    filter?: unknown
+  ): Promise<{
+    end?: string;
+    chunk: {
+      type: string;
+      sender: string;
+      unsigned?: { redacted_because?: unknown };
+      event_id: string;
+    }[];
+  }>;
+  redactEvent(
+    roomId: string,
+    eventId: string,
+    txnId?: string,
+    opts?: { reason?: string }
+  ): Promise<unknown>;
+};
+
+type ContextResponseReading = { start?: string; end?: string };
+
+type RoomServerAclEventContent = {
+  allow?: string[];
+  deny?: string[];
+  allow_ip_literals?: boolean;
+};
 
 export const SHRUG = '¯\\_(ツ)_/¯';
 export const TABLEFLIP = '(╯°□°)╯︵ ┻━┻';
@@ -95,12 +145,9 @@ export const parseServers = (payload: string): string[] => {
   return servers;
 };
 
-const getServerMembers = (room: Room, server: string): RoomMember[] => {
-  const members: RoomMember[] = room
-    .getMembers()
-    .filter((member) => member.userId.endsWith(`:${server}`));
-
-  return members;
+const getServerMembers = (room: RoomReading, server: string): ServerMemberReading[] => {
+  const members = room.getMembers() as ServerMemberReading[];
+  return members.filter((member) => member.userId.endsWith(`:${server}`));
 };
 
 export const parseTimestampFlag = (input: string): number | undefined => {
@@ -172,7 +219,8 @@ export type CommandContent = {
 
 export type CommandRecord = Record<Command, CommandContent>;
 
-export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
+export const useCommands = (mx: MatrixClientReading, room: RoomReading): CommandRecord => {
+  const c = useMemo(() => mx as unknown as CommandsClientReading, [mx]);
   const { navigateRoom } = useRoomNavigate();
   const { t } = useTranslation();
 
@@ -208,7 +256,7 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         description: 'Start direct message with user. Example: /startdm userId1',
         exe: async (payload) => {
           const rawIds = splitWithSpace(payload);
-          const userIds = rawIds.filter((id) => isUserId(id) && id !== mx.getSafeUserId());
+          const userIds = rawIds.filter((id) => isUserId(id) && id !== c.getSafeUserId());
           if (userIds.length === 0) return;
           if (userIds.length === 1) {
             const dmRoomId = getDMRoomFor(mx, userIds[0])?.roomId;
@@ -390,9 +438,9 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           const rawIds = splitWithSpace(payload);
           const userIds = rawIds.filter((id) => isUserId(id));
           if (userIds.length > 0) {
-            let ignoredUsers = mx.getIgnoredUsers().concat(userIds);
+            let ignoredUsers = c.getIgnoredUsers().concat(userIds);
             ignoredUsers = [...new Set(ignoredUsers)];
-            await mx.setIgnoredUsers(ignoredUsers);
+            await c.setIgnoredUsers(ignoredUsers);
           }
         },
       },
@@ -403,8 +451,8 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           const rawIds = splitWithSpace(payload);
           const userIds = rawIds.filter((id) => isUserId(id));
           if (userIds.length > 0) {
-            const ignoredUsers = mx.getIgnoredUsers();
-            await mx.setIgnoredUsers(ignoredUsers.filter((id) => !userIds.includes(id)));
+            const ignoredUsers = c.getIgnoredUsers();
+            await c.setIgnoredUsers(ignoredUsers.filter((id) => !userIds.includes(id)));
           }
         },
       },
@@ -414,20 +462,19 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         exe: async (payload) => {
           const nick = payload.trim();
           if (nick === '') return;
-          const mEvent = getRoomCurrentState(room)?.getStateEvents(
-            StateEvent.RoomMember,
-            mx.getSafeUserId()
-          );
+          const mEvent = getRoomCurrentState(
+            room as unknown as Parameters<typeof getRoomCurrentState>[0]
+          )?.getStateEvents(StateEvent.RoomMember, c.getSafeUserId());
           const content = mEvent?.getContent();
           if (!content) return;
-          await mx.sendStateEvent(
+          await c.sendStateEvent(
             room.roomId,
             StateEvent.RoomMember as any,
             {
               ...content,
               displayname: nick,
             },
-            mx.getSafeUserId()
+            c.getSafeUserId()
           );
         },
       },
@@ -436,20 +483,19 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         description: 'Change profile picture in current room. Example /myroomavatar mxc://xyzabc',
         exe: async (payload) => {
           if (payload.match(/^mxc:\/\/\S+$/)) {
-            const mEvent = getRoomCurrentState(room)?.getStateEvents(
-              StateEvent.RoomMember,
-              mx.getSafeUserId()
-            );
+            const mEvent = getRoomCurrentState(
+              room as unknown as Parameters<typeof getRoomCurrentState>[0]
+            )?.getStateEvents(StateEvent.RoomMember, c.getSafeUserId());
             const content = mEvent?.getContent();
             if (!content) return;
-            await mx.sendStateEvent(
+            await c.sendStateEvent(
               room.roomId,
               StateEvent.RoomMember as any,
               {
                 ...content,
                 avatar_url: payload,
               },
-              mx.getSafeUserId()
+              c.getSafeUserId()
             );
           }
         },
@@ -458,7 +504,7 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         name: Command.ConvertToDm,
         description: 'Convert room to direct message',
         exe: async () => {
-          const dmUserId = guessDmRoomUserId(room, mx.getSafeUserId());
+          const dmUserId = guessDmRoomUserId(room, c.getSafeUserId());
           await addRoomIdToMDirect(room.roomId, dmUserId);
         },
       },
@@ -496,26 +542,20 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
             });
           }
 
-          const result = await mx.timestampToEvent(room.roomId, ts, Direction.Forward);
+          const result = await c.timestampToEvent(room.roomId, ts, 'f');
           const startEventId = result.event_id;
 
           const path = `/rooms/${encodeURIComponent(room.roomId)}/context/${encodeURIComponent(
             startEventId
           )}`;
-          const eventContext = await mx.http.authedRequest<IContextResponse>(Method.Get, path, {
+          const eventContext = await c.http.authedRequest<ContextResponseReading>('GET', path, {
             limit: 0,
           });
 
           let token: string | undefined = eventContext.start;
           while (token) {
             // eslint-disable-next-line no-await-in-loop
-            const response = await mx.createMessagesRequest(
-              room.roomId,
-              token,
-              20,
-              Direction.Forward,
-              undefined
-            );
+            const response = await c.createMessagesRequest(room.roomId, token, 20, 'f', undefined);
             const { end, chunk } = response;
             // remove until the latest event;
             token = end;
@@ -531,7 +571,7 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
 
             // eslint-disable-next-line no-await-in-loop
             await rateLimitedActions(eventIds, (eventId) =>
-              mx.redactEvent(room.roomId, eventId, undefined, { reason })
+              c.redactEvent(room.roomId, eventId, undefined, { reason })
             );
           }
         },
@@ -584,7 +624,7 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           aclContent.allow?.sort();
           aclContent.deny?.sort();
 
-          await mx.sendStateEvent(room.roomId, StateEvent.RoomServerAcl as any, aclContent);
+          await c.sendStateEvent(room.roomId, StateEvent.RoomServerAcl as any, aclContent);
         },
       },
       [Command.Poll]: {
@@ -608,7 +648,7 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         },
       },
     }),
-    [mx, room, navigateRoom, t]
+    [c, mx, room, navigateRoom, t]
   );
 
   return commands;
