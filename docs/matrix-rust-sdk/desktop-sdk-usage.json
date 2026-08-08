@@ -67,7 +67,7 @@
         },
         "matrixrtc_calls": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 2,
+          "fileCount": 1,
           "listenerCandidateOccurrences": 8,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 15,
-      "importFileCount": 13,
+      "fileCount": 14,
+      "importFileCount": 12,
       "methodCandidateFrequencies": [
         {
           "count": 14,
@@ -260,8 +260,8 @@
       ],
       "modelCoupling": {
         "CallMembership": {
-          "fileCount": 2,
-          "importOccurrences": 2
+          "fileCount": 1,
+          "importOccurrences": 1
         },
         "CryptoApi": {
           "fileCount": 0,
@@ -323,11 +323,6 @@
           "path": "matrix-js-sdk"
         },
         {
-          "fileCount": 2,
-          "importCount": 2,
-          "path": "matrix-js-sdk/lib/matrixrtc/CallMembership"
-        },
-        {
           "fileCount": 1,
           "importCount": 1,
           "path": "matrix-js-sdk/lib/@types/event"
@@ -346,6 +341,11 @@
           "fileCount": 1,
           "importCount": 1,
           "path": "matrix-js-sdk/lib/http-api/interface"
+        },
+        {
+          "fileCount": 1,
+          "importCount": 1,
+          "path": "matrix-js-sdk/lib/matrixrtc/CallMembership"
         },
         {
           "fileCount": 1,
@@ -424,13 +424,6 @@
         {
           "fileCount": 2,
           "importCount": 2,
-          "name": "CallMembership",
-          "typeImports": 0,
-          "valueImports": 2
-        },
-        {
-          "fileCount": 2,
-          "importCount": 2,
           "name": "EventType",
           "typeImports": 0,
           "valueImports": 2
@@ -455,6 +448,13 @@
           "name": "AccessTokens",
           "typeImports": 1,
           "valueImports": 0
+        },
+        {
+          "fileCount": 1,
+          "importCount": 1,
+          "name": "CallMembership",
+          "typeImports": 0,
+          "valueImports": 1
         },
         {
           "fileCount": 1,
@@ -2112,35 +2112,6 @@
         }
       ],
       "path": "synara/src/app/cs-api.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "feature",
-      "categories": ["matrixrtc_calls"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk/lib/matrixrtc/CallMembership",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "CallMembership"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["CallMembership"],
-      "networking": [],
-      "path": "synara/src/app/features/call/CallMemberCard.tsx",
       "role": "production"
     },
     {
@@ -4142,7 +4113,7 @@
     "desktopRuntimeBaseline": {
       "buckets": {
         "client-lifecycle": 1,
-        "feature": 2,
+        "feature": 1,
         "hook": 3,
         "page": 4,
         "plugin": 2,
@@ -4154,13 +4125,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 13,
+      "productionImportFiles": 12,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 23
+      "totalImportFiles": 22
     },
     "repositoryWide": {
-      "productionImportFiles": 13,
+      "productionImportFiles": 12,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -4169,7 +4140,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 26
+      "totalImportFiles": 25
     }
   }
 }
