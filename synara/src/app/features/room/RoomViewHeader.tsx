@@ -503,7 +503,10 @@ export function RoomViewHeader({
                     escapeDeactivates: stopPropagation,
                   }}
                 >
-                  <RoomPinMenu room={room} requestClose={() => setPinMenuAnchor(undefined)} />
+                  <RoomPinMenu
+                    room={room as unknown as React.ComponentProps<typeof RoomPinMenu>['room']}
+                    requestClose={() => setPinMenuAnchor(undefined)}
+                  />
                 </FocusTrap>
               }
             />

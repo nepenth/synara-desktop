@@ -1,6 +1,6 @@
 import { atom, useAtom } from 'jotai';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Room } from 'matrix-js-sdk';
+import type { RoomReading } from '../utils/room';
 import { useQuery } from '@tanstack/react-query';
 import { useMatrixClient } from './useMatrixClient';
 import { MSpaceChildContent } from '../../types/matrix/room';
@@ -38,7 +38,7 @@ export type HierarchyItemRoom = {
 
 export type HierarchyItem = HierarchyItemSpace | HierarchyItemRoom;
 
-type GetRoomCallback = (roomId: string) => Room | undefined;
+type GetRoomCallback = (roomId: string) => RoomReading | undefined;
 
 type ChildEdge = {
   childId: string;
@@ -131,7 +131,7 @@ export type SpaceHierarchy = {
 const getSpaceHierarchy = (
   rootSpaceId: string,
   spaceRooms: Set<string>,
-  getRoom: (roomId: string) => Room | undefined,
+  getRoom: (roomId: string) => RoomReading | undefined,
   closedCategory: (spaceId: string) => boolean,
   edgeMap: SpaceChildEdgeMap
 ): SpaceHierarchy[] => {
@@ -213,7 +213,7 @@ const useNativeSpaceChildEdgeMap = (): SpaceChildEdgeMap => {
 export const useSpaceHierarchy = (
   spaceId: string,
   spaceRooms: Set<string>,
-  getRoom: (roomId: string) => Room | undefined,
+  getRoom: (roomId: string) => RoomReading | undefined,
   closedCategory: (spaceId: string) => boolean
 ): SpaceHierarchy[] => {
   const edgeMap = useNativeSpaceChildEdgeMap();

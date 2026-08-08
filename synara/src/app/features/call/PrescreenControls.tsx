@@ -49,7 +49,13 @@ export function PrescreenControls({ canJoin }: PrescreenControlsProps) {
         <Button
           variant={disabled ? 'Secondary' : 'Success'}
           fill={disabled ? 'Soft' : 'Solid'}
-          onClick={() => startCall(room, { microphone, video, sound })}
+          onClick={() =>
+            startCall(room as unknown as Parameters<typeof startCall>[0], {
+              microphone,
+              video,
+              sound,
+            })
+          }
           disabled={disabled || joining}
           before={
             joining ? (

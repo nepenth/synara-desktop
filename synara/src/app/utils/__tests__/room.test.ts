@@ -179,11 +179,13 @@ test('member display/avatar helpers resolve from the room member projection', ()
       userId: '@bob:example.org',
       rawDisplayName: 'Bob',
       getMxcAvatarUrl: () => 'mxc://avatar/bob',
+      events: { member: undefined },
     },
     {
       userId: '@alone:example.org',
       rawDisplayName: '@alone:example.org',
       getMxcAvatarUrl: () => 'mxc://avatar/alone',
+      events: { member: undefined },
     },
   ];
   const room = makeRoom({}, { members });
