@@ -13,7 +13,8 @@ import {
   Spinner,
   Text,
 } from 'folds';
-import { HttpApiEvent, HttpApiEventHandlerMap, MatrixClient, type SyncState } from 'matrix-js-sdk';
+/** The live client's type, derived like useMatrixClient (js-sdk-free here). */
+type ClientMatrix = Awaited<ReturnType<typeof initClient>>;
 import FocusTrap from 'focus-trap-react';
 import React, {
   MouseEventHandler,
@@ -76,7 +77,7 @@ function ClientRootLoading({ status }: { status: string }) {
   );
 }
 
-function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
+function ClientRootOptions({ mx }: { mx?: ClientMatrix }) {
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
 
   const handleToggle: MouseEventHandler<HTMLButtonElement> = (evt) => {
@@ -145,20 +146,23 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
   );
 }
 
-const useLogoutListener = (mx?: MatrixClient) => {
+const useLogoutListener = (mx?: ClientMatrix) => {
   useEffect(() => {
-    const handleLogout: HttpApiEventHandlerMap[HttpApiEvent.SessionLoggedOut] = async () => {
+    const handleLogout = async () => {
       await performLogout(mx);
     };
 
-    mx?.on(HttpApiEvent.SessionLoggedOut, handleLogout);
+    mx?.on('Session.logged_out' as unknown as Parameters<ClientMatrix['on']>[0], handleLogout);
     return () => {
-      mx?.removeListener(HttpApiEvent.SessionLoggedOut, handleLogout);
+      mx?.removeListener(
+        'Session.logged_out' as unknown as Parameters<ClientMatrix['on']>[0],
+        handleLogout
+      );
     };
   }, [mx]);
 };
 
-const useSyncResumeRetry = (mx?: MatrixClient) => {
+const useSyncResumeRetry = (mx?: ClientMatrix) => {
   useEffect(() => {
     if (!mx) return undefined;
 
@@ -203,7 +207,7 @@ const useSyncResumeRetry = (mx?: MatrixClient) => {
   }, [mx]);
 };
 
-const useProactiveTokenRefresh = (mx?: MatrixClient) => {
+const useProactiveTokenRefresh = (mx?: ClientMatrix) => {
   useEffect(() => {
     if (!mx) return undefined;
 
@@ -226,13 +230,13 @@ type ClientRootProps = {
 export function ClientRoot({ children }: ClientRootProps) {
   const [loading, setLoading] = useState(true);
   const [syncTimedOut, setSyncTimedOut] = useState(false);
-  const [syncState, setSyncState] = useState<SyncState | null>(null);
-  const syncStateRef = useRef<SyncState | null>(syncState);
+  const [syncState, setSyncState] = useState<string | null>(null);
+  const syncStateRef = useRef<string | null>(syncState);
   syncStateRef.current = syncState;
   const syncRetryInFlightRef = useRef(false);
   const { baseUrl, userId } = getActiveSession() ?? {};
 
-  const [loadState, loadMatrix] = useAsyncCallback<MatrixClient, Error, []>(
+  const [loadState, loadMatrix] = useAsyncCallback<ClientMatrix, Error, []>(
     useCallback(() => {
       const session = getActiveSession();
       if (!session) {
@@ -254,7 +258,7 @@ export function ClientRoot({ children }: ClientRootProps) {
     }, [])
   );
   const mx = loadState.status === AsyncStatus.Success ? loadState.data : undefined;
-  const [startState, startMatrix] = useAsyncCallback<void, Error, [MatrixClient]>(
+  const [startState, startMatrix] = useAsyncCallback<void, Error, [ClientMatrix]>(
     useCallback((m) => startClient(m), [])
   );
 
@@ -337,7 +341,10 @@ export function ClientRoot({ children }: ClientRootProps) {
     }
   }, [mx, startMatrix, startState.status, syncState]);
 
-  const splashStatus = formatSyncSplashStatus(syncState, Boolean(mx));
+  const splashStatus = formatSyncSplashStatus(
+    syncState as Parameters<typeof formatSyncSplashStatus>[0],
+    Boolean(mx)
+  );
   const splashView = selectSyncSplashView({
     hasError: loadState.status === AsyncStatus.Error || startState.status === AsyncStatus.Error,
     hasClient: Boolean(mx),
