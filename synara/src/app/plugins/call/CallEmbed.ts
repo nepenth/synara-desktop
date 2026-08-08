@@ -1,12 +1,21 @@
-import {
-  ClientEvent,
-  KnownMembership,
-  MatrixClient,
-  MatrixEvent,
-  MatrixEventEvent,
-  Room,
-  RoomStateEvent,
-} from 'matrix-js-sdk';
+import type { useMatrixClient } from '../../hooks/useMatrixClient';
+import type { EventedRoomReading } from '../../utils/roomEvents';
+import type { MatrixEventReading } from '../../utils/room';
+
+/** The live client type (type-only; matches useMatrixClient). */
+type LocalMx = ReturnType<typeof useMatrixClient>;
+/** Event projection with the silencing/relation lookups the widget needs. Real MatrixEvent satisfies it. */
+type WidgetEventReading = MatrixEventReading & {
+  isState(): boolean;
+  isBeingDecrypted(): boolean;
+  isDecryptionFailure(): boolean;
+  relationEventId?: string;
+  replyEventId?: string;
+  getEffectiveEvent(): unknown;
+  isEncrypted(): boolean;
+};
+/** Room projection with the encryption-state check used by the widget launcher. */
+type WidgetRoomReading = EventedRoomReading & { hasEncryptionStateEvent(): boolean };
 import {
   ClientWidgetApi,
   IRoomEvent,
@@ -28,13 +37,13 @@ import { CallControlState } from './CallControlState';
 import { getLoadedLiveTimelineEvents } from '../../utils/timelineLifecycle';
 
 export class CallEmbed {
-  private mx: MatrixClient;
+  private mx: LocalMx;
 
   public readonly call: ClientWidgetApi;
 
   public readonly iframe: HTMLIFrameElement;
 
-  public readonly room: Room;
+  public readonly room: EventedRoomReading;
 
   public joined = false;
 
@@ -44,7 +53,7 @@ export class CallEmbed {
 
   private readUpToMap: { [roomId: string]: string } = {}; // room ID to event ID
 
-  private eventsToFeed = new WeakSet<MatrixEvent>();
+  private eventsToFeed = new WeakSet<WidgetEventReading>();
 
   private readonly disposables: Array<() => void> = [];
 
@@ -57,8 +66,8 @@ export class CallEmbed {
   }
 
   static getWidget(
-    mx: MatrixClient,
-    room: Room,
+    mx: LocalMx,
+    room: EventedRoomReading,
     intent: ElementCallIntent,
     themeKind: ElementCallThemeKind
   ): Widget {
@@ -79,7 +88,7 @@ export class CallEmbed {
       skipLobby: 'true',
       confineToRoom: 'true',
       appPrompt: 'false',
-      perParticipantE2EE: room.hasEncryptionStateEvent().toString(),
+      perParticipantE2EE: (room as WidgetRoomReading).hasEncryptionStateEvent().toString(),
       lang: 'en-EN',
       theme: themeKind,
     });
@@ -124,8 +133,8 @@ export class CallEmbed {
   }
 
   constructor(
-    mx: MatrixClient,
-    room: Room,
+    mx: LocalMx,
+    room: EventedRoomReading,
     widget: Widget,
     container: HTMLElement,
     initialControlState?: CallControlState
@@ -197,7 +206,7 @@ export class CallEmbed {
   }
 
   private start() {
-    // Room widgets get locked to the room they were added in
+    // RoomReading widgets get locked to the room they were added in
     this.call.setViewedRoomId(this.roomId);
     this.disposables.push(
       this.listenAction(ElementWidgetActions.JoinCall, this.onCallJoined.bind(this))
@@ -215,10 +224,22 @@ export class CallEmbed {
     });
 
     // Attach listeners for feeding events - the underlying widget classes handle permissions for us
-    this.mx.on(ClientEvent.Event, this.onEvent.bind(this));
-    this.mx.on(MatrixEventEvent.Decrypted, this.onEventDecrypted.bind(this));
-    this.mx.on(RoomStateEvent.Events, this.onStateUpdate.bind(this));
-    this.mx.on(ClientEvent.ToDeviceEvent, this.onToDeviceEvent.bind(this));
+    this.mx.on(
+      'event' as unknown as Parameters<LocalMx['on']>[0],
+      this.onEvent.bind(this) as unknown as Parameters<LocalMx['on']>[1]
+    );
+    this.mx.on(
+      'Event.decrypted' as unknown as Parameters<LocalMx['on']>[0],
+      this.onEventDecrypted.bind(this) as unknown as Parameters<LocalMx['on']>[1]
+    );
+    this.mx.on(
+      'RoomState.events' as unknown as Parameters<LocalMx['on']>[0],
+      this.onStateUpdate.bind(this) as unknown as Parameters<LocalMx['on']>[1]
+    );
+    this.mx.on(
+      'toDeviceEvent' as unknown as Parameters<LocalMx['on']>[0],
+      this.onToDeviceEvent.bind(this) as unknown as Parameters<LocalMx['on']>[1]
+    );
   }
 
   /**
@@ -234,14 +255,26 @@ export class CallEmbed {
     this.container.removeChild(this.iframe);
     this.control.dispose();
 
-    this.mx.off(ClientEvent.Event, this.onEvent.bind(this));
-    this.mx.off(MatrixEventEvent.Decrypted, this.onEventDecrypted.bind(this));
-    this.mx.off(RoomStateEvent.Events, this.onStateUpdate.bind(this));
-    this.mx.off(ClientEvent.ToDeviceEvent, this.onToDeviceEvent.bind(this));
+    this.mx.off(
+      'event' as unknown as Parameters<LocalMx['off']>[0],
+      this.onEvent.bind(this) as unknown as Parameters<LocalMx['off']>[1]
+    );
+    this.mx.off(
+      'Event.decrypted' as unknown as Parameters<LocalMx['off']>[0],
+      this.onEventDecrypted.bind(this) as unknown as Parameters<LocalMx['off']>[1]
+    );
+    this.mx.off(
+      'RoomState.events' as unknown as Parameters<LocalMx['off']>[0],
+      this.onStateUpdate.bind(this) as unknown as Parameters<LocalMx['off']>[1]
+    );
+    this.mx.off(
+      'toDeviceEvent' as unknown as Parameters<LocalMx['off']>[0],
+      this.onToDeviceEvent.bind(this) as unknown as Parameters<LocalMx['off']>[1]
+    );
 
     // Clear internal state
     this.readUpToMap = {};
-    this.eventsToFeed = new WeakSet<MatrixEvent>();
+    this.eventsToFeed = new WeakSet<WidgetEventReading>();
   }
 
   private onCallJoined(): void {
@@ -263,16 +296,16 @@ export class CallEmbed {
     }
   }
 
-  private onEvent(ev: MatrixEvent): void {
-    this.mx.decryptEventIfNeeded(ev);
+  private onEvent(ev: WidgetEventReading): void {
+    this.mx.decryptEventIfNeeded(ev as unknown as Parameters<LocalMx['decryptEventIfNeeded']>[0]);
     this.feedEvent(ev);
   }
 
-  private onEventDecrypted(ev: MatrixEvent): void {
+  private onEventDecrypted(ev: WidgetEventReading): void {
     this.feedEvent(ev);
   }
 
-  private onStateUpdate(ev: MatrixEvent): void {
+  private onStateUpdate(ev: WidgetEventReading): void {
     if (this.call === null) return;
     const raw = ev.getEffectiveEvent();
     this.call.feedStateUpdate(raw as IRoomEvent).catch((e) => {
@@ -280,8 +313,10 @@ export class CallEmbed {
     });
   }
 
-  private async onToDeviceEvent(ev: MatrixEvent): Promise<void> {
-    await this.mx.decryptEventIfNeeded(ev);
+  private async onToDeviceEvent(ev: WidgetEventReading): Promise<void> {
+    await this.mx.decryptEventIfNeeded(
+      ev as unknown as Parameters<LocalMx['decryptEventIfNeeded']>[0]
+    );
     if (ev.isDecryptionFailure()) return;
     await this.call?.feedToDevice(ev.getEffectiveEvent() as IRoomEvent, ev.isEncrypted());
   }
@@ -289,7 +324,7 @@ export class CallEmbed {
   /**
    * Determines whether the event has a relation to an unknown parent.
    */
-  private relatesToUnknown(ev: MatrixEvent): boolean {
+  private relatesToUnknown(ev: WidgetEventReading): boolean {
     // Replies to unknown events don't count
     if (!ev.relationEventId || ev.replyEventId) return false;
     const room = this.mx.getRoom(ev.getRoomId());
@@ -301,7 +336,7 @@ export class CallEmbed {
    * the event is before the marker.
    * @returns Whether the "read up to" marker was advanced.
    */
-  private advanceReadUpToMarker(ev: MatrixEvent): boolean {
+  private advanceReadUpToMarker(ev: WidgetEventReading): boolean {
     const evId = ev.getId();
     if (evId === undefined) return false;
     const roomId = ev.getRoomId();
@@ -321,8 +356,10 @@ export class CallEmbed {
 
     // Timelines are most recent last, so reverse the order and limit ourselves to 100 events
     // to avoid overusing the CPU.
-    const events = [...getLoadedLiveTimelineEvents(room)].reverse().slice(0, 100) as MatrixEvent[];
-    function isRelevantTimelineEvent(timelineEvent: MatrixEvent): boolean {
+    const events = [...getLoadedLiveTimelineEvents(room)]
+      .reverse()
+      .slice(0, 100) as unknown as WidgetEventReading[];
+    function isRelevantTimelineEvent(timelineEvent: WidgetEventReading): boolean {
       return timelineEvent.getId() === upToEventId || timelineEvent.getId() === ev.getId();
     }
     const possibleMarkerEv = events.find(isRelevantTimelineEvent);
@@ -345,12 +382,12 @@ export class CallEmbed {
    * Determines whether the event comes from a room that we've been invited to
    * (in which case we likely don't have the full timeline).
    */
-  private isFromInvite(ev: MatrixEvent): boolean {
+  private isFromInvite(ev: WidgetEventReading): boolean {
     const room = this.mx.getRoom(ev.getRoomId());
-    return room?.getMyMembership() === KnownMembership.Invite;
+    return room?.getMyMembership() === 'invite';
   }
 
-  private feedEvent(ev: MatrixEvent): void {
+  private feedEvent(ev: WidgetEventReading): void {
     if (this.call === null) return;
     if (
       // If we had decided earlier to feed this event to the widget, but

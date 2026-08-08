@@ -1,6 +1,6 @@
 import { createContext, RefObject, useCallback, useContext, useEffect, useState } from 'react';
-import { MatrixClient, Room } from 'matrix-js-sdk';
 import { useSetAtom } from 'jotai';
+import type { EventedRoomReading } from '../utils/roomEvents';
 import {
   CallEmbed,
   ElementCallThemeKind,
@@ -8,6 +8,9 @@ import {
   useClientWidgetApiEvent,
 } from '../plugins/call';
 import { useMatrixClient } from './useMatrixClient';
+
+/** The live client type (type-only; matches useMatrixClient). */
+type LocalMx = ReturnType<typeof useMatrixClient>;
 import { ThemeKind, useTheme } from './useTheme';
 import { callEmbedAtom } from '../state/callEmbed';
 import { useResizeObserver } from './useResizeObserver';
@@ -36,14 +39,16 @@ export const useCallEmbedRef = (): RefObject<HTMLDivElement | null> => {
 };
 
 export const createCallEmbed = (
-  mx: MatrixClient,
-  room: Room,
+  mx: LocalMx,
+  room: EventedRoomReading,
   dm: boolean,
   themeKind: ElementCallThemeKind,
   container: HTMLElement,
   pref?: CallPreferences
 ): CallEmbed => {
-  const rtcSession = mx.matrixRTC.getRoomSession(room);
+  const rtcSession = mx.matrixRTC.getRoomSession(
+    room as unknown as Parameters<LocalMx['matrixRTC']['getRoomSession']>[0]
+  );
   const ongoing = rtcSession.memberships.length > 0;
 
   const intent = CallEmbed.getIntent(dm, ongoing);
@@ -62,7 +67,7 @@ export const useCallStart = (dm = false) => {
   const callEmbedRef = useCallEmbedRef();
 
   const startCall = useCallback(
-    (room: Room, pref?: CallPreferences) => {
+    (room: EventedRoomReading, pref?: CallPreferences) => {
       const container = callEmbedRef.current;
       if (!container) {
         throw new Error('Failed to start call, No embed container element found!');
