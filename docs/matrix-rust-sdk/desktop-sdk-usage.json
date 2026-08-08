@@ -208,8 +208,8 @@
           "importOccurrences": 1
         },
         "MatrixError": {
-          "fileCount": 1,
-          "importOccurrences": 1
+          "fileCount": 0,
+          "importOccurrences": 0
         },
         "MatrixEvent": {
           "fileCount": 0,
@@ -329,13 +329,6 @@
         {
           "fileCount": 1,
           "importCount": 1,
-          "name": "MatrixError",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
           "name": "SyncState",
           "typeImports": 0,
           "valueImports": 1
@@ -381,7 +374,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 3,
+          "fileCount": 0,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -409,8 +402,8 @@
         },
         "event_emitters_listeners": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 1,
-          "listenerCandidateOccurrences": 1,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
         },
@@ -437,7 +430,7 @@
         },
         "receipts": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 2,
+          "fileCount": 0,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -451,7 +444,7 @@
         },
         "room_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 2,
+          "fileCount": 0,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -472,7 +465,7 @@
         },
         "sync_lifecycle": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 3,
+          "fileCount": 0,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -486,7 +479,7 @@
         },
         "timelines": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 2,
+          "fileCount": 0,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -500,20 +493,15 @@
         },
         "uia_auth": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 1,
+          "fileCount": 0,
           "listenerCandidateOccurrences": 0,
-          "methodCandidateOccurrences": 3,
+          "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 18,
-      "importFileCount": 10,
-      "methodCandidateFrequencies": [
-        {
-          "count": 3,
-          "name": "refreshToken"
-        }
-      ],
+      "fileCount": 8,
+      "importFileCount": 0,
+      "methodCandidateFrequencies": [],
       "modelCoupling": {
         "CallMembership": {
           "fileCount": 0,
@@ -524,8 +512,8 @@
           "importOccurrences": 0
         },
         "EventTimeline": {
-          "fileCount": 2,
-          "importOccurrences": 2
+          "fileCount": 0,
+          "importOccurrences": 0
         },
         "IndexedDBCryptoStore": {
           "fileCount": 0,
@@ -536,24 +524,24 @@
           "importOccurrences": 0
         },
         "MatrixClient": {
-          "fileCount": 3,
-          "importOccurrences": 3
+          "fileCount": 0,
+          "importOccurrences": 0
         },
         "MatrixError": {
-          "fileCount": 1,
-          "importOccurrences": 1
+          "fileCount": 0,
+          "importOccurrences": 0
         },
         "MatrixEvent": {
-          "fileCount": 2,
-          "importOccurrences": 2
+          "fileCount": 0,
+          "importOccurrences": 0
         },
         "Relations": {
           "fileCount": 0,
           "importOccurrences": 0
         },
         "Room": {
-          "fileCount": 2,
-          "importOccurrences": 2
+          "fileCount": 0,
+          "importOccurrences": 0
         },
         "RoomMember": {
           "fileCount": 0,
@@ -572,23 +560,7 @@
           "importOccurrences": 0
         }
       },
-      "modules": [
-        {
-          "fileCount": 10,
-          "importCount": 10,
-          "path": "matrix-js-sdk"
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "path": "matrix-js-sdk/lib/@types/event"
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "path": "matrix-js-sdk/lib/@types/read_receipts"
-        }
-      ],
+      "modules": [],
       "networking": [
         {
           "indicator": "/_matrix/client/versions",
@@ -775,106 +747,7 @@
       "networkingFindingCount": 30,
       "role": "test",
       "scope": "role",
-      "symbols": [
-        {
-          "fileCount": 3,
-          "importCount": 3,
-          "name": "MatrixClient",
-          "typeImports": 3,
-          "valueImports": 0
-        },
-        {
-          "fileCount": 3,
-          "importCount": 3,
-          "name": "SyncState",
-          "typeImports": 0,
-          "valueImports": 3
-        },
-        {
-          "fileCount": 2,
-          "importCount": 2,
-          "name": "Direction",
-          "typeImports": 0,
-          "valueImports": 2
-        },
-        {
-          "fileCount": 2,
-          "importCount": 2,
-          "name": "EventTimeline",
-          "typeImports": 2,
-          "valueImports": 0
-        },
-        {
-          "fileCount": 2,
-          "importCount": 2,
-          "name": "MatrixEvent",
-          "typeImports": 2,
-          "valueImports": 0
-        },
-        {
-          "fileCount": 2,
-          "importCount": 2,
-          "name": "ReceiptType",
-          "typeImports": 0,
-          "valueImports": 2
-        },
-        {
-          "fileCount": 2,
-          "importCount": 2,
-          "name": "Room",
-          "typeImports": 2,
-          "valueImports": 0
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "EventStatus",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "EventType",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "IRefreshTokenResponse",
-          "typeImports": 1,
-          "valueImports": 0
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "MatrixError",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "MatrixEventEvent",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "RoomEvent",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "WrappedReceipt",
-          "typeImports": 1,
-          "valueImports": 0
-        }
-      ]
+      "symbols": []
     },
     "tooling": {
       "categories": {
@@ -1832,230 +1705,6 @@
       "role": "test"
     },
     {
-      "bucket": "page",
-      "categories": ["sync_lifecycle"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "SyncState"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/pages/client/__tests__/syncStatusCopy.test.ts",
-      "role": "test"
-    },
-    {
-      "bucket": "state",
-      "categories": ["client_methods"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": true,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "MatrixClient"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["MatrixClient"],
-      "networking": [],
-      "path": "synara/src/app/state/__tests__/initMatrix.test.ts",
-      "role": "test"
-    },
-    {
-      "bucket": "state",
-      "categories": ["client_methods"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": true,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "MatrixClient"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["MatrixClient"],
-      "networking": [],
-      "path": "synara/src/app/state/__tests__/performLogout.test.ts",
-      "role": "test"
-    },
-    {
-      "bucket": "state",
-      "categories": ["client_methods", "uia_auth"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "IRefreshTokenResponse"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "MatrixClient"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixError"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_reference_candidate",
-          "line": 58,
-          "name": "refreshToken"
-        },
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_reference_candidate",
-          "line": 134,
-          "name": "refreshToken"
-        },
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_reference_candidate",
-          "line": 176,
-          "name": "refreshToken"
-        }
-      ],
-      "modelCoupling": ["MatrixClient", "MatrixError"],
-      "networking": [],
-      "path": "synara/src/app/state/__tests__/tokenRefresh.test.ts",
-      "role": "test"
-    },
-    {
-      "bucket": "state",
-      "categories": ["event_emitters_listeners"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 4,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "EventStatus"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixEventEvent"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "RoomEvent"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [
-        {
-          "category": "event_emitters_listeners",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "eventName",
-          "line": 62,
-          "method": "removeListener"
-        }
-      ],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/state/room-list/__tests__/roomActivity.test.ts",
-      "role": "test"
-    },
-    {
-      "bucket": "utility",
-      "categories": ["receipts"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "ReceiptType"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/utils/__tests__/notifications.test.ts",
-      "role": "test"
-    },
-    {
       "bucket": "utility",
       "categories": ["direct_matrix_networking"],
       "constructorCandidates": [],
@@ -2073,187 +1722,6 @@
         }
       ],
       "path": "synara/src/app/utils/__tests__/remoteContent.test.ts",
-      "role": "test"
-    },
-    {
-      "bucket": "utility",
-      "categories": ["sync_lifecycle"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "SyncState"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/utils/__tests__/syncLifecycle.test.ts",
-      "role": "test"
-    },
-    {
-      "bucket": "utility",
-      "categories": ["sync_lifecycle"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "SyncState"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/utils/__tests__/syncSplashRecovery.test.ts",
-      "role": "test"
-    },
-    {
-      "bucket": "utility",
-      "categories": ["room_methods", "timelines"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "Direction"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "EventTimeline"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "MatrixEvent"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "Room"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["EventTimeline", "MatrixEvent", "Room"],
-      "networking": [],
-      "path": "synara/src/app/utils/__tests__/timelineLinks.test.ts",
-      "role": "test"
-    },
-    {
-      "bucket": "utility",
-      "categories": ["room_methods", "timelines", "receipts"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "Direction"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "EventTimeline"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "MatrixEvent"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "Room"
-            }
-          ],
-          "namespaceImport": null
-        },
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 4,
-          "module": "matrix-js-sdk/lib/@types/event",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "EventType"
-            }
-          ],
-          "namespaceImport": null
-        },
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 5,
-          "module": "matrix-js-sdk/lib/@types/read_receipts",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "ReceiptType"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "WrappedReceipt"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["EventTimeline", "MatrixEvent", "Room"],
-      "networking": [],
-      "path": "synara/src/app/utils/__tests__/timelineOpening.test.ts",
       "role": "test"
     },
     {
@@ -2322,11 +1790,6 @@
             {
               "alias": null,
               "isTypeOnly": false,
-              "name": "MatrixError"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
               "name": "SyncState"
             },
             {
@@ -2341,7 +1804,7 @@
           "defaultImport": null,
           "form": "static",
           "isTypeOnly": true,
-          "line": 12,
+          "line": 11,
           "module": "matrix-js-sdk/lib/http-api/interface",
           "namedImports": [
             {
@@ -2379,14 +1842,14 @@
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_reference_candidate",
-          "line": 84,
+          "line": 87,
           "name": "refreshToken"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 106,
+          "line": 109,
           "name": "refreshToken"
         },
         {
@@ -2485,7 +1948,6 @@
         "IndexedDBCryptoStore",
         "IndexedDBStore",
         "MatrixClient",
-        "MatrixError",
         "createClient"
       ],
       "networking": [],
@@ -2552,20 +2014,20 @@
       },
       "productionImportFiles": 1,
       "sourcePrefix": "synara/src/",
-      "testImportFiles": 10,
-      "totalImportFiles": 11
+      "testImportFiles": 0,
+      "totalImportFiles": 1
     },
     "repositoryWide": {
       "productionImportFiles": 1,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
-      "testImportFiles": 10,
+      "testImportFiles": 0,
       "testNetworkingFiles": 8,
       "testNetworkingFindings": 30,
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 14
+      "totalImportFiles": 4
     }
   }
 }

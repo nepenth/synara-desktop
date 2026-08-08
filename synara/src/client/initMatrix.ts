@@ -4,7 +4,6 @@ import {
   MatrixClient,
   IndexedDBStore,
   IndexedDBCryptoStore,
-  MatrixError,
   SyncState,
   type ICreateClientOpts,
   type IRefreshTokenResponse,
@@ -38,6 +37,10 @@ import { assertCryptoStoreContinuity, CryptoStoreContinuityError } from './crypt
 import { recordClientDiagnostic } from '../app/utils/clientDiagnostics';
 import { getSessionBootstrapResult } from '../app/state/sessionBootstrap';
 import { isSynaraDesktop } from '../app/utils/desktop';
+
+/** Duck-typed js-sdk MatrixError: an Error carrying a string `errcode`. */
+export const isMatrixErrorLike = (error: unknown): error is Error & { errcode?: string } =>
+  error instanceof Error && typeof (error as { errcode?: unknown } | null)?.errcode === 'string';
 
 export const REFRESH_BEFORE_EXPIRY_MS = 60_000;
 
@@ -145,13 +148,10 @@ export const createTokenRefreshFunction = (
       const { tokens } = await refreshAndPersistSession(getClient(), session, refreshToken, deps);
       return tokens;
     } catch (error) {
-      if (error instanceof MatrixError) {
+      if (isMatrixErrorLike(error)) {
         throw error;
       }
-      throw new MatrixError({
-        errcode: 'M_UNKNOWN',
-        error: 'Token refresh failed',
-      });
+      throw Object.assign(new Error('Token refresh failed'), { errcode: 'M_UNKNOWN' });
     }
   };
 };
