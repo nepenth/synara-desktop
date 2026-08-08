@@ -3,7 +3,11 @@ import { Box, config, Line, Text } from 'folds';
 import type { ClientEventedReading } from '../../hooks/useSyncState';
 import { useSyncState } from '../../hooks/useSyncState';
 import { ContainerColor } from '../../styles/ContainerColor.css';
-import { getSyncStatusBannerCopy, getSyncStatusBannerVariant, type SyncState } from './syncStatusCopy';
+import {
+  getSyncStatusBannerCopy,
+  getSyncStatusBannerVariant,
+  type SyncState,
+} from './syncStatusCopy';
 
 type StateData = {
   current: SyncState | null;

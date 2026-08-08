@@ -256,8 +256,8 @@ export class CallWidgetDriver extends WidgetDriver {
     if (state === undefined) return [];
 
     if (stateKey === undefined)
-      return (state.getStateEvents(eventType) as MatrixEvent[]).map((e) =>
-        e.getEffectiveEvent() as IRoomEvent
+      return (state.getStateEvents(eventType) as MatrixEvent[]).map(
+        (e) => e.getEffectiveEvent() as IRoomEvent
       );
     const event = state.getStateEvents(eventType, stateKey) as MatrixEvent | null;
     return event === null ? [] : [event.getEffectiveEvent() as IRoomEvent];
