@@ -234,3 +234,68 @@ test('F2 fetchRoomEvent returns null on unavailable command', async () => {
   const client = createNativeMatrixClient(async () => unavailable);
   assert.equal(await client.fetchRoomEvent('!r:example.org', '$evt1'), null);
 });
+
+test('F3 sendMessage proxies matrix_send_text', async () => {
+  const { invoke, callLog } = invokingWith({
+    matrix_send_text: {
+      roomId: '!r:example.org',
+      eventId: '$e1',
+      localTxnId: 't1',
+      status: 'sent',
+    },
+  });
+  const client = createNativeMatrixClient(invoke);
+  const sent = await client.sendMessage({ roomId: '!r:example.org', body: 'hello' });
+  assert.equal(sent?.eventId, '$e1');
+  assert.deepEqual(callLog, ['matrix_send_text']);
+});
+
+test('F3 sendMessage fails closed when the command is unavailable', async () => {
+  const client = createNativeMatrixClient(async () => unavailable);
+  assert.equal(await client.sendMessage({ roomId: '!r:example.org', body: 'x' }), null);
+});
+
+test('F3 sendEvent tunnels m.room.message to send_text and GAPs other types', async () => {
+  const { invoke } = invokingWith({
+    matrix_send_text: {
+      roomId: '!r:example.org',
+      eventId: '$msg',
+      localTxnId: 't2',
+      status: 'sent',
+    },
+  });
+  const client = createNativeMatrixClient(invoke);
+  const msg = await client.sendEvent('!r:example.org', 'm.room.message', { body: 'hi' });
+  assert.equal(msg?.eventId, '$msg');
+  const gap = await client.sendEvent('!r:example.org', 'm.custom.type', {});
+  assert.equal(gap, null);
+});
+
+test('F3 sendStateEvent maps covered room-state types, GAPs others', async () => {
+  const { invoke, callLog } = invokingWith({
+    matrix_set_room_name: { status: 'ok', roomId: '!r:example.org', sessionGeneration: 8 },
+  });
+  const client = createNativeMatrixClient(invoke);
+  const name = await client.sendStateEvent('!r:example.org', 'm.room.name', { name: 'New' });
+  assert.equal(name?.status, 'ok');
+  const gap = await client.sendStateEvent('!r:example.org', 'm.custom', {});
+  assert.equal(gap, null);
+  assert.deepEqual(callLog, ['matrix_set_room_name']);
+});
+
+test('F3 account-data methods are documented GAP (fail-closed null)', async () => {
+  const client = createNativeMatrixClient(async () => unavailable);
+  assert.equal(await client.getAccountData('m.tag'), null);
+  assert.equal(await client.setAccountData('m.tag', {}), null);
+  assert.equal(await client.setRoomAccountData('!r:example.org', 'm.tag', {}), null);
+});
+
+test('F3 D1C still holds: no token surface after send/state additions', async () => {
+  const client = createNativeMatrixClient(async () => unavailable) as unknown as Record<
+    string,
+    unknown
+  >;
+  assert.equal('getAccessToken' in client, false);
+  assert.equal('setAccessToken' in client, false);
+  assert.equal('refreshToken' in client, false);
+});
