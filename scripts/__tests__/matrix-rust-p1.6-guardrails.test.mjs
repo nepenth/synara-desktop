@@ -32,11 +32,11 @@ import {
 
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "../.."
+  "../..",
 );
 const FIXTURES = path.join(
   REPO_ROOT,
-  "scripts/fixtures/matrix-rust-p1.6/prohibited"
+  "scripts/fixtures/matrix-rust-p1.6/prohibited",
 );
 
 function makeTempRoot() {
@@ -98,43 +98,44 @@ use matrix_sdk::Room;
   assert.doesNotMatch(stripped, /OwnedRoomId/);
   assert.equal(
     findRustSdkWireHits(src).some(
-      (h) => h.text.includes("Client") && h.line < 3
+      (h) => h.text.includes("Client") && h.line < 3,
     ),
-    false
+    false,
   );
   assert.ok(
-    findRustSdkWireHits(src).some((h) => h.text.includes("matrix_sdk::Room"))
+    findRustSdkWireHits(src).some((h) => h.text.includes("matrix_sdk::Room")),
   );
 });
 
 test("findJsSdkImportHits detects from/require/import()", () => {
   assert.ok(
-    findJsSdkImportHits(`import { Room } from 'matrix-js-sdk';`).length > 0
+    findJsSdkImportHits(`import { Room } from 'matrix-js-sdk';`).length > 0,
   );
   assert.ok(
     findJsSdkImportHits(`import x from "matrix-js-sdk/lib/crypto-api";`)
-      .length > 0
+      .length > 0,
   );
   assert.ok(
-    findJsSdkImportHits(`const m = require('matrix-js-sdk');`).length > 0
+    findJsSdkImportHits(`const m = require('matrix-js-sdk');`).length > 0,
   );
   assert.ok(
-    findJsSdkImportHits(`const m = await import('matrix-js-sdk');`).length > 0
+    findJsSdkImportHits(`const m = await import('matrix-js-sdk');`).length > 0,
   );
   assert.equal(
     findJsSdkImportHits(`// import { Room } from 'matrix-js-sdk';`).length,
-    0
+    0,
   );
   assert.equal(findJsSdkImportHits(`const x = 'not-matrix-js-sdk';`).length, 0);
 });
 
 test("findRawMatrixHttpHits detects path literals", () => {
   assert.ok(
-    findRawMatrixHttpHits(`fetch(base + '/_matrix/client/versions')`).length > 0
+    findRawMatrixHttpHits(`fetch(base + '/_matrix/client/versions')`).length >
+      0,
   );
   assert.equal(
     findRawMatrixHttpHits(`// '/_matrix/client/versions'`).length,
-    0
+    0,
   );
 });
 
@@ -142,11 +143,11 @@ test("findRustSdkWireHits detects use and type paths", () => {
   assert.ok(findRustSdkWireHits(`use matrix_sdk::Client;\n`).length > 0);
   assert.ok(findRustSdkWireHits(`use ruma::OwnedUserId;\n`).length > 0);
   assert.ok(
-    findRustSdkWireHits(`fn f() -> matrix_sdk::Room { todo!() }\n`).length > 0
+    findRustSdkWireHits(`fn f() -> matrix_sdk::Room { todo!() }\n`).length > 0,
   );
   assert.equal(
     findRustSdkWireHits(`// No matrix_sdk types on the wire.\n`).length,
-    0
+    0,
   );
 });
 
@@ -161,26 +162,26 @@ test("runGuardrails passes on current repository tree", () => {
   }
   assert.equal(result.ok, true);
   assert.equal(result.findingCount, 0);
-  assert.ok(result.allowlistSize >= 11);
-  assert.ok(result.allowlistSize >= 11);
-  assert.ok(result.allowlistSize >= 11);
-  assert.ok(result.allowlistSize >= 11);
+  assert.ok(result.allowlistSize >= 10);
+  assert.ok(result.allowlistSize >= 10);
+  assert.ok(result.allowlistSize >= 10);
+  assert.ok(result.allowlistSize >= 10);
 });
 
 test("committed JS SDK allowlist loads and has expected size", () => {
   const allow = loadJsSdkAllowlist(REPO_ROOT);
-  assert.ok(allow.size >= 11);
-  assert.ok(allow.size >= 11);
-  assert.ok(allow.size >= 11);
-  assert.ok(allow.size >= 11);
+  assert.ok(allow.size >= 10);
+  assert.ok(allow.size >= 10);
+  assert.ok(allow.size >= 10);
+  assert.ok(allow.size >= 10);
   assert.equal(
     allow.has("synara/src/app/features/room/RoomTimeline.tsx"),
-    false
+    false,
   );
-  assert.ok(allow.has("synara/src/app/hooks/useRoomEvent.ts"));
+  assert.equal(allow.has("synara/src/app/hooks/useRoomEvent.ts"), false);
   assert.equal(
     allow.has("synara/src/app/features/matrix-ipc/envelope.ts"),
-    false
+    false,
   );
   assert.ok(existsSync(path.join(REPO_ROOT, JS_SDK_ALLOWLIST_REL)));
 });
@@ -194,7 +195,7 @@ test("fixture: js-sdk in matrix-ipc hard-ban zone fails", () => {
   assert.equal(result.ok, false);
   assert.ok(
     result.findings.some((f) => f.rule === "js-sdk-hard-ban-zone"),
-    `expected js-sdk-hard-ban-zone, got ${result.findings.map((f) => f.rule)}`
+    `expected js-sdk-hard-ban-zone, got ${result.findings.map((f) => f.rule)}`,
   );
   assert.ok(result.findings.some((f) => f.path.includes("leakyImport.ts")));
 });
@@ -204,7 +205,7 @@ test("fixture: new production js-sdk importer outside allowlist fails", () => {
   assert.equal(result.ok, false);
   assert.ok(
     result.findings.some((f) => f.rule === "js-sdk-new-importer"),
-    `expected js-sdk-new-importer, got ${result.findings.map((f) => f.rule)}`
+    `expected js-sdk-new-importer, got ${result.findings.map((f) => f.rule)}`,
   );
 });
 
@@ -214,7 +215,7 @@ test("fixture: raw /_matrix/ HTTP outside exceptions fails (TS + Rust)", () => {
   const raw = result.findings.filter((f) => f.rule === "raw-matrix-http");
   assert.ok(
     raw.length >= 2,
-    `expected >=2 raw-matrix-http findings, got ${raw.length}`
+    `expected >=2 raw-matrix-http findings, got ${raw.length}`,
   );
   assert.ok(raw.some((f) => f.path.endsWith("rawHttp.ts")));
   assert.ok(raw.some((f) => f.path.endsWith("raw_http.rs")));
@@ -228,11 +229,11 @@ test("fixture: unversioned IPC envelope fails", () => {
       (f) =>
         f.rule === "unversioned-ipc-shape" ||
         f.rule === "unversioned-ipc-envelope" ||
-        f.rule === "unversioned-ipc-missing-const"
+        f.rule === "unversioned-ipc-missing-const",
     ),
     `expected unversioned-ipc-* finding, got ${result.findings.map(
-      (f) => f.rule
-    )}`
+      (f) => f.rule,
+    )}`,
   );
 });
 
@@ -241,7 +242,7 @@ test("fixture: matrix_sdk in DTO wire module fails", () => {
   assert.equal(result.ok, false);
   assert.ok(
     result.findings.some((f) => f.rule === "sdk-types-in-wire-rust"),
-    `expected sdk-types-in-wire-rust, got ${result.findings.map((f) => f.rule)}`
+    `expected sdk-types-in-wire-rust, got ${result.findings.map((f) => f.rule)}`,
   );
   assert.ok(result.findings.some((f) => f.path.includes("dto/leaky.rs")));
 });
@@ -251,7 +252,7 @@ test("fixture: ruma in IPC wire module fails", () => {
   assert.equal(result.ok, false);
   assert.ok(
     result.findings.some((f) => f.rule === "sdk-types-in-wire-rust"),
-    `expected sdk-types-in-wire-rust, got ${result.findings.map((f) => f.rule)}`
+    `expected sdk-types-in-wire-rust, got ${result.findings.map((f) => f.rule)}`,
   );
   assert.ok(result.findings.some((f) => f.path.includes("ipc/leaky.rs")));
 });

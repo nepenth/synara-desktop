@@ -31,7 +31,7 @@ import {
 
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "../.."
+  "../..",
 );
 
 /** Same binary and cwd as the required external Prettier check. */
@@ -44,7 +44,7 @@ const PRETTIER_CLI = path.join(REPO_ROOT, "synara/node_modules/.bin/prettier");
 function formatViaExternalPrettierCli(text, repoRelativePath) {
   assert.ok(
     existsSync(PRETTIER_CLI),
-    `Prettier CLI missing at ${PRETTIER_CLI}`
+    `Prettier CLI missing at ${PRETTIER_CLI}`,
   );
   return execFileSync(PRETTIER_CLI, ["--stdin-filepath", repoRelativePath], {
     cwd: REPO_ROOT,
@@ -75,46 +75,46 @@ test("classifies modules, buckets, roles, and runtime paths", () => {
   assert.equal(isMatrixSdkModule("matrix-js-sdk/lib/crypto-api"), true);
   assert.equal(
     isMatrixSdkModule("matrix-js-sdk/lib/matrixrtc/CallMembership"),
-    true
+    true,
   );
   assert.equal(isMatrixSdkModule("@matrix-org/something"), false);
   assert.equal(isMatrixSdkModule("not-matrix-js-sdk"), false);
 
   assert.equal(
     classifyBucket("synara/src/app/features/room/RoomView.tsx"),
-    "feature"
+    "feature",
   );
   assert.equal(classifyBucket("synara/src/app/hooks/useCall.ts"), "hook");
   assert.equal(
     classifyBucket("synara/src/client/initMatrix.ts"),
-    "client-lifecycle"
+    "client-lifecycle",
   );
   assert.equal(
     classifyBucket("synara/scripts/run-synapse-two-client-integration.mjs"),
-    null
+    null,
   );
   assert.equal(isDesktopRuntimePath("synara/src/app/utils/matrix.ts"), true);
   assert.equal(isDesktopRuntimePath("synara/scripts/harness.mjs"), false);
 
   assert.equal(
     classifyFileRole("synara/src/app/utils/matrix.ts"),
-    "production"
+    "production",
   );
   assert.equal(
     classifyFileRole("synara/src/app/utils/__tests__/matrix.test.ts"),
-    "test"
+    "test",
   );
   assert.equal(
     classifyFileRole("synara/src/app/utils/matrix.spec.tsx"),
-    "test"
+    "test",
   );
   assert.equal(
     classifyFileRole("synara/scripts/run-synapse-two-client-integration.mjs"),
-    "tooling"
+    "tooling",
   );
   assert.equal(
     classifyFileRole("scripts/inventory-matrix-sdk-usage.mjs"),
-    "tooling"
+    "tooling",
   );
 });
 
@@ -143,12 +143,12 @@ export async function loadSdk() {
     assert.equal(inventory.summary.repositoryWide.toolingImportFiles, 1);
     assert.equal(
       inventory.summary.desktopRuntimeBaseline.productionImportFiles,
-      1
+      1,
     );
     assert.equal(inventory.summary.desktopRuntimeBaseline.testImportFiles, 0);
 
     const feature = inventory.files.find((f) =>
-      f.path.endsWith("sample/imports.ts")
+      f.path.endsWith("sample/imports.ts"),
     );
     assert.ok(feature);
     assert.equal(feature.role, "production");
@@ -159,44 +159,44 @@ export async function loadSdk() {
       (imp) =>
         imp.module === "matrix-js-sdk" &&
         imp.isTypeOnly &&
-        imp.namedImports.some((n) => n.name === "MatrixClient")
+        imp.namedImports.some((n) => n.name === "MatrixClient"),
     );
     assert.ok(typeOnly, "type-only MatrixClient import");
 
     const aliased = feature.imports.find((imp) =>
       imp.namedImports.some(
-        (n) => n.name === "Room" && n.alias === "MatrixRoom"
-      )
+        (n) => n.name === "Room" && n.alias === "MatrixRoom",
+      ),
     );
     assert.ok(aliased, "aliased Room import");
 
     const deep = feature.imports.find(
-      (imp) => imp.module === "matrix-js-sdk/lib/crypto-api"
+      (imp) => imp.module === "matrix-js-sdk/lib/crypto-api",
     );
     assert.ok(deep);
     assert.ok(
-      deep.namedImports.some((n) => n.name === "CryptoEvent" && !n.isTypeOnly)
+      deep.namedImports.some((n) => n.name === "CryptoEvent" && !n.isTypeOnly),
     );
     assert.ok(
       deep.namedImports.some(
-        (n) => n.name === "VerificationRequest" && n.isTypeOnly
-      )
+        (n) => n.name === "VerificationRequest" && n.isTypeOnly,
+      ),
     );
 
     assert.ok(
-      feature.imports.find((imp) => imp.defaultImport === "DefaultClient")
+      feature.imports.find((imp) => imp.defaultImport === "DefaultClient"),
     );
     assert.ok(
-      feature.imports.find((imp) => imp.namespaceImport === "MatrixSDK")
+      feature.imports.find((imp) => imp.namespaceImport === "MatrixSDK"),
     );
     assert.ok(
       feature.imports.find(
-        (imp) => imp.module === "matrix-js-sdk/lib/matrixrtc/CallMembership"
-      )
+        (imp) => imp.module === "matrix-js-sdk/lib/matrixrtc/CallMembership",
+      ),
     );
 
     const harness = inventory.files.find((f) =>
-      f.path.endsWith("dynamic-harness.mjs")
+      f.path.endsWith("dynamic-harness.mjs"),
     );
     assert.ok(harness);
     assert.equal(harness.role, "tooling");
@@ -212,14 +212,14 @@ export async function loadSdk() {
     assert.equal(inventory.aggregates.test.importFileCount, 0);
     assert.ok(
       inventory.aggregates.production.modules.some((m) =>
-        m.path.includes("matrixrtc")
-      )
+        m.path.includes("matrixrtc"),
+      ),
     );
     assert.equal(
       inventory.aggregates.tooling.modules.find(
-        (m) => m.path === "matrix-js-sdk"
+        (m) => m.path === "matrix-js-sdk",
       )?.fileCount,
-      1
+      1,
     );
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -241,7 +241,7 @@ test("classifies production vs test vs tooling independently", () => {
     assert.equal(inventory.summary.repositoryWide.toolingImportFiles, 1);
     assert.equal(
       inventory.summary.desktopRuntimeBaseline.productionImportFiles,
-      1
+      1,
     );
     assert.equal(inventory.summary.desktopRuntimeBaseline.testImportFiles, 2);
     assert.equal(inventory.summary.desktopRuntimeBaseline.buckets.hook, 1);
@@ -302,7 +302,7 @@ export function boot(mx: MatrixClient) {
     assert.ok(file.categories.includes("searches"));
 
     assert.ok(
-      file.methodCandidates.some((r) => r.name === "startClient" && r.line > 0)
+      file.methodCandidates.some((r) => r.name === "startClient" && r.line > 0),
     );
     assert.ok(file.methodCandidates.some((r) => r.name === "sendEvent"));
     assert.ok(
@@ -310,16 +310,16 @@ export function boot(mx: MatrixClient) {
         (r) =>
           r.kind.includes("candidate") &&
           typeof r.confidence === "string" &&
-          r.confidence.includes("not type-proven")
-      )
+          r.confidence.includes("not type-proven"),
+      ),
     );
     assert.ok(
       file.listenerCandidates.some(
-        (r) => r.method === "on" && r.event?.includes("ClientEvent.Sync")
-      )
+        (r) => r.method === "on" && r.event?.includes("ClientEvent.Sync"),
+      ),
     );
     assert.ok(
-      file.constructorCandidates.some((r) => r.name === "IndexedDBStore")
+      file.constructorCandidates.some((r) => r.name === "IndexedDBStore"),
     );
     assert.ok(file.modelCoupling.includes("MatrixClient"));
     assert.ok(file.modelCoupling.includes("IndexedDBStore"));
@@ -345,14 +345,14 @@ const PREFIX = 'matrix-js-sdk:crypto';
 `;
   const findings = scanNetworkingIndicators(
     content,
-    "synara/src/app/cs-api.ts"
+    "synara/src/app/cs-api.ts",
   );
   assert.ok(findings.length >= 2);
   assert.ok(
-    findings.every((f) => f.line > 0 && f.indicator.includes("/_matrix/"))
+    findings.every((f) => f.line > 0 && f.indicator.includes("/_matrix/")),
   );
   assert.ok(
-    !findings.some((f) => f.indicator.includes("matrix-js-sdk:crypto"))
+    !findings.some((f) => f.indicator.includes("matrix-js-sdk:crypto")),
   );
 
   const files = {
@@ -374,11 +374,11 @@ const u = 'https://example.org/_matrix/client/v3/sync';
     // production networking totals must not include test hits
     assert.equal(
       inventory.aggregates.production.networkingFindingCount,
-      inventory.summary.repositoryWide.productionNetworkingFindings
+      inventory.summary.repositoryWide.productionNetworkingFindings,
     );
     assert.equal(
       inventory.aggregates.test.networkingFindingCount,
-      inventory.summary.repositoryWide.testNetworkingFindings
+      inventory.summary.repositoryWide.testNetworkingFindings,
     );
     for (const finding of inventory.aggregates.production.networking) {
       assert.ok(!path.isAbsolute(finding.path));
@@ -408,7 +408,7 @@ test("output is deterministic and uses repository-relative POSIX paths only", ()
     const inventory = buildInventory({ root, fileList });
     assert.deepEqual(
       inventory.files.map((f) => f.path),
-      ["synara/src/app/utils/a.ts", "synara/src/app/utils/b.ts"]
+      ["synara/src/app/utils/a.ts", "synara/src/app/utils/b.ts"],
     );
     assert.equal(inventory.schemaVersion, 2);
     assert.ok(!("generatedAt" in inventory));
@@ -445,14 +445,14 @@ test("check mode detects stale artifacts and does not mutate them", () => {
     writeFileSync(
       jsonPath,
       beforeJson.replace('"schemaVersion": 2', '"schemaVersion": 0'),
-      "utf8"
+      "utf8",
     );
     const stale = checkSnapshots(inventory, { root });
     assert.equal(stale.ok, false);
     assert.ok(
       stale.errors.some(
-        (e) => e.includes("Stale snapshot") && e.includes(jsonRel)
-      )
+        (e) => e.includes("Stale snapshot") && e.includes(jsonRel),
+      ),
     );
 
     const afterCheckJson = readFileSync(jsonPath, "utf8");
@@ -482,17 +482,17 @@ test("repository inventory includes tooling dynamic import and records the curre
 
   assert.equal(
     baseline.productionImportFiles,
-    11,
-    `expected 11 desktop runtime production import files, found ${baseline.productionImportFiles}`
+    10,
+    `expected 10 desktop runtime production import files, found ${baseline.productionImportFiles}`,
   );
-  assert.equal(productionImportDeclarations, 19);
+  assert.equal(productionImportDeclarations, 18);
   assert.equal(
     baseline.testImportFiles,
     10,
-    `expected 10 desktop runtime test import files, found ${baseline.testImportFiles}`
+    `expected 10 desktop runtime test import files, found ${baseline.testImportFiles}`,
   );
   assert.equal(baseline.buckets.feature, 1);
-  assert.equal(baseline.buckets.hook, 3);
+  assert.equal(baseline.buckets.hook, 2);
   assert.equal(baseline.buckets.component ?? 0, 0);
   assert.equal(baseline.buckets.page, 3);
   assert.equal(baseline.buckets.utility, 1);
@@ -507,13 +507,13 @@ test("repository inventory includes tooling dynamic import and records the curre
   assert.ok(rw.totalImportFiles >= baseline.totalImportFiles + 1);
 
   const harness = inventory.files.find(
-    (f) => f.path === "synara/scripts/run-synapse-two-client-integration.mjs"
+    (f) => f.path === "synara/scripts/run-synapse-two-client-integration.mjs",
   );
   assert.ok(harness, "integration harness must be inventoried");
   assert.equal(harness.role, "tooling");
   assert.equal(harness.desktopRuntime, false);
   const dynamic = harness.imports.find(
-    (imp) => imp.form === "dynamic" && imp.module === "matrix-js-sdk"
+    (imp) => imp.form === "dynamic" && imp.module === "matrix-js-sdk",
   );
   assert.ok(dynamic, "dynamic import of matrix-js-sdk must be recorded");
   assert.ok(dynamic.line >= 1);
@@ -521,16 +521,16 @@ test("repository inventory includes tooling dynamic import and records the curre
   // Aggregates must be role-scoped
   assert.equal(
     inventory.aggregates.production.networkingFindingCount,
-    rw.productionNetworkingFindings
+    rw.productionNetworkingFindings,
   );
   assert.equal(
     inventory.aggregates.test.networkingFindingCount,
-    rw.testNetworkingFindings
+    rw.testNetworkingFindings,
   );
   assert.ok(
     !inventory.aggregates.production.networking.some((n) =>
-      n.path.includes("__tests__")
-    )
+      n.path.includes("__tests__"),
+    ),
   );
 
   const json = stableStringify(inventory);
@@ -560,19 +560,19 @@ test("generator artifacts match external root Prettier CLI formatting", () => {
   // Config resolution walks from the file path (null for docs/scripts => defaults).
   const cliJson = formatViaExternalPrettierCli(
     stableStringify(inventory),
-    jsonRel
+    jsonRel,
   );
   const cliMd = formatViaExternalPrettierCli(renderMarkdown(inventory), mdRel);
 
   assert.equal(
     generatorJson,
     cliJson,
-    "generated JSON must match external Prettier CLI output"
+    "generated JSON must match external Prettier CLI output",
   );
   assert.equal(
     generatorMd,
     cliMd,
-    "generated Markdown must match external Prettier CLI output"
+    "generated Markdown must match external Prettier CLI output",
   );
 
   // Re-formatting CLI-clean text with the CLI is a no-op
@@ -582,21 +582,21 @@ test("generator artifacts match external root Prettier CLI formatting", () => {
   // Explicitly reject the incorrect synara/.prettierrc force-path resolution
   const requireFromTest = createRequire(import.meta.url);
   const prettier = requireFromTest(
-    path.join(REPO_ROOT, "synara/node_modules/prettier")
+    path.join(REPO_ROOT, "synara/node_modules/prettier"),
   );
   const pathConfig = prettier.resolveConfig.sync(jsonPath);
   const synaraForced = prettier.resolveConfig.sync(
-    path.join(REPO_ROOT, "synara/package.json")
+    path.join(REPO_ROOT, "synara/package.json"),
   );
   assert.equal(
     pathConfig,
     null,
-    "docs artifacts must not inherit synara/.prettierrc from root CLI"
+    "docs artifacts must not inherit synara/.prettierrc from root CLI",
   );
   assert.ok(synaraForced, "synara config still exists for runtime sources");
   assert.notDeepEqual(
     pathConfig ?? {},
     synaraForced,
-    "docs formatting rules must differ from forced synara config"
+    "docs formatting rules must differ from forced synara config",
   );
 });
