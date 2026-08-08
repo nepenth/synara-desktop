@@ -96,6 +96,30 @@ importers and carries the tip inventory's 124 files / 124 paths unchanged.
 ## Work log (newest first)
 ## Work log (newest first)
 
+### 2026-08-08 — INITMATRIX execution memo (decision required)
+
+[INITMATRIX-execution-memo.md](INITMATRIX-execution-memo.md): the re-scoped epic as an
+operator-reviewable contract. Verified state: native Rust client + sync + ~142 `matrix_*`
+commands + IPC are already built/wired on this branch (ClientRoot does `matrix_restore_session`
+then js-sdk `initClient`); sole js-sdk importer is `initMatrix.ts`. Remaining gap = renderer
+facade + native sync-state push + token-refresh re-point + room-list live delta (staged plan).
+Two operator options (approve native cutover epic, staged/CI-per-PR / legacy-loader
+redefinition). Acceptance remands V-BURN HOLD pending decision.
+
+## Work log (newest first)
+## Work log (newest first)
+
+### 2026-08-08 — INITMATRIX execution memo (decision required)
+
+[INITMATRIX-execution-memo.md](INITMATRIX-execution-memo.md): the re-scoped epic as an
+operator-reviewable contract. Verified state: native Rust client + sync + ~142 `matrix_*`
+commands + IPC are already built/wired on this branch (ClientRoot does `matrix_restore_session`
+then js-sdk `initClient`); sole js-sdk importer is `initMatrix.ts`. Remaining gap = renderer
+facade + native sync-state push + token-refresh re-point + room-list live delta (staged plan).
+Two operator options (approve native cutover epic, staged/CI-per-PR / legacy-loader
+redefinition). Acceptance remands V-BURN HOLD pending decision.
+
+
 ### 2026-08-08 — tip `4365ca96` — burn 114→1 production, test importers 0
 
 | When (UTC) | Item                  | Result        | Notes |
