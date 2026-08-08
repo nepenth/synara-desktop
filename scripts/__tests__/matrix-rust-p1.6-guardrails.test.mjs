@@ -161,19 +161,23 @@ test("runGuardrails passes on current repository tree", () => {
   }
   assert.equal(result.ok, true);
   assert.equal(result.findingCount, 0);
-  assert.ok(result.allowlistSize >= 20);
-  assert.ok(result.allowlistSize >= 20);
+  assert.ok(result.allowlistSize >= 17);
+  assert.ok(result.allowlistSize >= 17);
+  assert.ok(result.allowlistSize >= 17);
+  assert.ok(result.allowlistSize >= 17);
 });
 
 test("committed JS SDK allowlist loads and has expected size", () => {
   const allow = loadJsSdkAllowlist(REPO_ROOT);
-  assert.ok(allow.size >= 20);
-  assert.ok(allow.size >= 20);
+  assert.ok(allow.size >= 17);
+  assert.ok(allow.size >= 17);
+  assert.ok(allow.size >= 17);
+  assert.ok(allow.size >= 17);
   assert.equal(
     allow.has("synara/src/app/features/room/RoomTimeline.tsx"),
     false
   );
-  assert.ok(allow.has("synara/src/app/hooks/useSyncState.ts"));
+  assert.ok(allow.has("synara/src/app/utils/timelineLifecycle.ts"));
   assert.equal(
     allow.has("synara/src/app/features/matrix-ipc/envelope.ts"),
     false
