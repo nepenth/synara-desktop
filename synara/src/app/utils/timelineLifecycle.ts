@@ -102,7 +102,7 @@ type LatestTimelineReading = {
 /** MatrixClient reading extended with the latest-timeline accessor (satisfied
  * by the js-sdk MatrixClient at runtime). */
 type LatestTimelineClientReading = MatrixClientReading & {
-  getLatestTimeline(timelineSet: unknown): Promise<LatestTimelineReading | null>;
+  getLatestTimeline(timelineSet: unknown): Promise<LatestTimelineReading | null | undefined>;
 };
 
 /** RoomReading extended with the unfiltered timeline set accessor used only by

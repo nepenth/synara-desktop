@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |           10 |                2 |                   3 |
+| production |            9 |                2 |                   3 |
 | test       |           10 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |       **23** |                  |                     |
+| **total**  |       **22** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |    10 |
+| Production import files |     9 |
 | Test import files       |    10 |
-| Total import files      |    20 |
+| Total import files      |    19 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 10)
+- Production match: **no** (found 9)
 - Test match: **no** (found 10)
 
 ### Production files by bucket (desktop runtime only)
@@ -51,41 +51,35 @@ Expected **220** production and **12** test import files.
 | hook             |     2 |
 | page             |     3 |
 | plugin           |     2 |
-| utility          |     1 |
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 10. Files with any finding: 12.
+Scope: **production only**. Import files: 9. Files with any finding: 11.
 
 ### Imported modules
 
 | Module path                                           | Import sites | Files |
 | ----------------------------------------------------- | -----------: | ----: |
 | `matrix-js-sdk`                                       |            9 |     9 |
-| `matrix-js-sdk/lib/@types/event`                      |            1 |     1 |
-| `matrix-js-sdk/lib/@types/read_receipts`              |            1 |     1 |
-| `matrix-js-sdk/lib/client`                            |            1 |     1 |
 | `matrix-js-sdk/lib/http-api/interface`                |            1 |     1 |
 | `matrix-js-sdk/lib/matrixrtc/CallMembership`          |            1 |     1 |
 | `matrix-js-sdk/lib/matrixrtc/MatrixRTCSession`        |            1 |     1 |
 | `matrix-js-sdk/lib/matrixrtc/MatrixRTCSessionManager` |            1 |     1 |
-| `matrix-js-sdk/lib/models/event`                      |            1 |     1 |
-| `matrix-js-sdk/lib/models/room`                       |            1 |     1 |
 
 ### Top imported symbols
 
 | Symbol                          | Imports | Value | Type-only | Files |
 | ------------------------------- | ------: | ----: | --------: | ----: |
-| `MatrixClient`                  |       6 |     5 |         1 |     6 |
-| `Room`                          |       6 |     5 |         1 |     6 |
-| `MatrixEvent`                   |       4 |     2 |         2 |     4 |
+| `MatrixClient`                  |       5 |     5 |         0 |     5 |
+| `Room`                          |       5 |     5 |         0 |     5 |
 | `ClientEvent`                   |       3 |     3 |         0 |     3 |
-| `EventType`                     |       2 |     2 |         0 |     2 |
+| `MatrixEvent`                   |       3 |     2 |         1 |     3 |
 | `MatrixError`                   |       2 |     2 |         0 |     2 |
 | `SyncState`                     |       2 |     1 |         1 |     2 |
 | `AccessTokens`                  |       1 |     0 |         1 |     1 |
 | `CallMembership`                |       1 |     1 |         0 |     1 |
 | `Direction`                     |       1 |     1 |         0 |     1 |
+| `EventType`                     |       1 |     1 |         0 |     1 |
 | `HttpApiEvent`                  |       1 |     1 |         0 |     1 |
 | `HttpApiEventHandlerMap`        |       1 |     1 |         0 |     1 |
 | `IContent`                      |       1 |     0 |         1 |     1 |
@@ -107,7 +101,6 @@ Scope: **production only**. Import files: 10. Files with any finding: 12.
 | `MatrixRTCSessionEvent`         |       1 |     1 |         0 |     1 |
 | `MatrixRTCSessionManagerEvents` |       1 |     1 |         0 |     1 |
 | `Method`                        |       1 |     1 |         0 |     1 |
-| `ReceiptType`                   |       1 |     1 |         0 |     1 |
 | `RoomEvent`                     |       1 |     1 |         0 |     1 |
 | `RoomEventHandlerMap`           |       1 |     1 |         0 |     1 |
 | `RoomStateEvent`                |       1 |     1 |         0 |     1 |
@@ -116,6 +109,7 @@ Scope: **production only**. Import files: 10. Files with any finding: 12.
 | `StateEvents`                   |       1 |     0 |         1 |     1 |
 | `TimelineEvents`                |       1 |     0 |         1 |     1 |
 | `TokenRefreshFunction`          |       1 |     0 |         1 |     1 |
+| `createClient`                  |       1 |     1 |         0 |     1 |
 
 ### SDK model import coupling
 
@@ -124,31 +118,29 @@ Scope: **production only**. Import files: 10. Files with any finding: 12.
 | `CallMembership`       |     1 |                  1 |
 | `IndexedDBCryptoStore` |     1 |                  1 |
 | `IndexedDBStore`       |     1 |                  1 |
-| `MatrixClient`         |     6 |                  6 |
+| `MatrixClient`         |     5 |                  5 |
 | `MatrixError`          |     2 |                  2 |
-| `MatrixEvent`          |     4 |                  4 |
-| `Room`                 |     6 |                  6 |
+| `MatrixEvent`          |     3 |                  3 |
+| `Room`                 |     5 |                  5 |
 | `createClient`         |     1 |                  1 |
 
 ### Usage categories (candidates + imports + networking)
 
 | Category                       | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
 | ------------------------------ | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
-| `client_methods`               |     9 |                 0 |                   0 |                      0 |          0 |
-| `room_methods`                 |     6 |                 0 |                   0 |                      0 |          0 |
+| `client_methods`               |     8 |                 0 |                   0 |                      0 |          0 |
+| `room_methods`                 |     5 |                 0 |                   0 |                      0 |          0 |
 | `event_emitters_listeners`     |     5 |                 0 |                  28 |                      0 |          0 |
 | `sync_lifecycle`               |     4 |                10 |                   4 |                      0 |          0 |
 | `crypto_verification_recovery` |     2 |                 2 |                   0 |                      0 |          0 |
 | `indexeddb_matrix_stores`      |     1 |                 0 |                   0 |                      2 |          0 |
 | `authenticated_media`          |     2 |                 1 |                   0 |                      0 |          0 |
 | `matrixrtc_calls`              |     1 |                 0 |                   8 |                      0 |          0 |
-| `account_data`                 |     1 |                 4 |                   0 |                      0 |          0 |
-| `room_lists`                   |     5 |                12 |                   0 |                      0 |          0 |
-| `timelines`                    |     5 |                 7 |                   8 |                      0 |          0 |
+| `room_lists`                   |     4 |                10 |                   0 |                      0 |          0 |
+| `timelines`                    |     4 |                 7 |                   8 |                      0 |          0 |
 | `searches`                     |     3 |                 3 |                   0 |                      0 |          0 |
 | `spaces`                       |     1 |                 3 |                   0 |                      0 |          0 |
-| `receipts`                     |     1 |                 2 |                   0 |                      0 |          0 |
-| `uia_auth`                     |     6 |                17 |                   2 |                      0 |          0 |
+| `uia_auth`                     |     5 |                16 |                   2 |                      0 |          0 |
 | `custom_raw_event_sends`       |     1 |                 2 |                   0 |                      0 |          0 |
 | `direct_matrix_networking`     |     2 |                 0 |                   0 |                      0 |          3 |
 | `client_events`                |     1 |                 0 |                   4 |                      0 |          0 |
@@ -157,17 +149,16 @@ Scope: **production only**. Import files: 10. Files with any finding: 12.
 
 | Method name           | Candidate occurrences |
 | --------------------- | --------------------: |
-| `getRoom`             |                    10 |
+| `getRoom`             |                     8 |
 | `refreshToken`        |                     7 |
 | `findEventById`       |                     6 |
 | `getSafeUserId`       |                     4 |
 | `stopClient`          |                     4 |
 | `getSyncState`        |                     3 |
-| `getUserId`           |                     3 |
 | `isSpaceRoom`         |                     3 |
-| `getAccountData`      |                     2 |
 | `getDeviceId`         |                     2 |
 | `getRooms`            |                     2 |
+| `getUserId`           |                     2 |
 | `retryImmediately`    |                     2 |
 | `search`              |                     2 |
 | `getCrypto`           |                     1 |
@@ -176,11 +167,7 @@ Scope: **production only**. Import files: 10. Files with any finding: 12.
 | `redactEvent`         |                     1 |
 | `searchUserDirectory` |                     1 |
 | `sendEvent`           |                     1 |
-| `sendReadReceipt`     |                     1 |
 | `sendStateEvent`      |                     1 |
-| `setAccountData`      |                     1 |
-| `setRoomAccountData`  |                     1 |
-| `setRoomReadMarkers`  |                     1 |
 | `startClient`         |                     1 |
 | `uploadContent`       |                     1 |
 
@@ -271,14 +258,14 @@ Scope: **test only**. Import files: 10. Files with any finding: 18.
 | `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  365 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
 | `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  133 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
 | `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  133 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  136 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  136 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  298 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  298 | `matrix_cs_path_template` | `/_matrix/client/v1/media/download`          |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  299 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  299 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  325 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  325 | `matrix_cs_path_template` | `/_matrix/client/v3/sync`                    |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  137 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  137 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  299 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  299 | `matrix_cs_path_template` | `/_matrix/client/v1/media/download`          |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  300 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  300 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  326 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  326 | `matrix_cs_path_template` | `/_matrix/client/v3/sync`                    |
 | `scripts/__tests__/synapse-two-client-integration.test.mjs`     |   40 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
 | `synara/src/app/matrix/__tests__/media.test.ts`                 |   14 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
 | `synara/src/app/matrix/__tests__/media.test.ts`                 |   27 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
@@ -363,43 +350,42 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 
 ## Files (import and networking inventory)
 
-| Path                                                                                                                          | Role       | Runtime | Bucket           | Import forms | Modules                                                                                                                                                                   |
-| ----------------------------------------------------------------------------------------------------------------------------- | ---------- | ------- | ---------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scripts/__tests__/audit-matrix-public.test.mjs`                                                                              | test       | no      | —                | —            | —                                                                                                                                                                         |
-| `scripts/__tests__/check-matrix-rust-sdk-guardrails.test.mjs`                                                                 | test       | no      | —                | —            | —                                                                                                                                                                         |
-| `scripts/__tests__/feature-parity-audit-normalization.test.mjs`                                                               | test       | no      | —                | —            | —                                                                                                                                                                         |
-| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`                                                                       | test       | no      | —                | —            | —                                                                                                                                                                         |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`                                                                      | test       | no      | —                | —            | —                                                                                                                                                                         |
-| `scripts/__tests__/synapse-two-client-integration.test.mjs`                                                                   | test       | no      | —                | —            | —                                                                                                                                                                         |
-| `scripts/audit-matrix-public.mjs`                                                                                             | tooling    | no      | —                | —            | —                                                                                                                                                                         |
-| `scripts/fixtures/matrix-rust-p1.6/prohibited/js-sdk-in-matrix-ipc/synara/src/app/features/matrix-ipc/leakyImport.ts`         | tooling    | no      | —                | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `scripts/fixtures/matrix-rust-p1.6/prohibited/js-sdk-new-file/synara/src/app/features/brand-new-migration/NewClientBridge.ts` | tooling    | no      | —                | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `scripts/fixtures/matrix-rust-p1.6/prohibited/raw-matrix-http/synara/src/app/features/matrix-ipc/rawHttp.ts`                  | tooling    | no      | —                | —            | —                                                                                                                                                                         |
-| `synara/scripts/run-synapse-two-client-integration.mjs`                                                                       | tooling    | no      | —                | dynamic      | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/cs-api.ts`                                                                                                    | production | yes     | app-other        | —            | —                                                                                                                                                                         |
-| `synara/src/app/features/message-search/useMessageSearch.ts`                                                                  | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/hooks/useCall.ts`                                                                                             | production | yes     | hook             | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/matrixrtc/CallMembership`, `matrix-js-sdk/lib/matrixrtc/MatrixRTCSession`, `matrix-js-sdk/lib/matrixrtc/MatrixRTCSessionManager`      |
-| `synara/src/app/hooks/useCallEmbed.ts`                                                                                        | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/matrix/__tests__/media.test.ts`                                                                               | test       | yes     | media-boundary   | —            | —                                                                                                                                                                         |
-| `synara/src/app/pages/client/ClientNonUIFeatures.tsx`                                                                         | production | yes     | page             | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/pages/client/ClientRoot.tsx`                                                                                  | production | yes     | page             | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/pages/client/__tests__/syncStatusCopy.test.ts`                                                                | test       | yes     | page             | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/pages/client/inbox/Notifications.tsx`                                                                         | production | yes     | page             | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/plugins/call/CallEmbed.ts`                                                                                    | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/plugins/call/CallWidgetDriver.ts`                                                                             | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/state/__tests__/initMatrix.test.ts`                                                                           | test       | yes     | state            | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/state/__tests__/performLogout.test.ts`                                                                        | test       | yes     | state            | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/state/__tests__/tokenRefresh.test.ts`                                                                         | test       | yes     | state            | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/state/room-list/__tests__/roomActivity.test.ts`                                                               | test       | yes     | state            | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/utils/__tests__/notifications.test.ts`                                                                        | test       | yes     | utility          | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/utils/__tests__/remoteContent.test.ts`                                                                        | test       | yes     | utility          | —            | —                                                                                                                                                                         |
-| `synara/src/app/utils/__tests__/syncLifecycle.test.ts`                                                                        | test       | yes     | utility          | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/utils/__tests__/syncSplashRecovery.test.ts`                                                                   | test       | yes     | utility          | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/utils/__tests__/timelineLinks.test.ts`                                                                        | test       | yes     | utility          | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/utils/__tests__/timelineOpening.test.ts`                                                                      | test       | yes     | utility          | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/@types/event`, `matrix-js-sdk/lib/@types/read_receipts`                                                                               |
-| `synara/src/app/utils/notifications.ts`                                                                                       | production | yes     | utility          | static       | `matrix-js-sdk/lib/@types/event`, `matrix-js-sdk/lib/@types/read_receipts`, `matrix-js-sdk/lib/client`, `matrix-js-sdk/lib/models/event`, `matrix-js-sdk/lib/models/room` |
-| `synara/src/client/initMatrix.ts`                                                                                             | production | yes     | client-lifecycle | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/http-api/interface`                                                                                                                   |
-| `synara/src/sw.ts`                                                                                                            | production | yes     | service-worker   | —            | —                                                                                                                                                                         |
+| Path                                                                                                                          | Role       | Runtime | Bucket           | Import forms | Modules                                                                                                                                                              |
+| ----------------------------------------------------------------------------------------------------------------------------- | ---------- | ------- | ---------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/__tests__/audit-matrix-public.test.mjs`                                                                              | test       | no      | —                | —            | —                                                                                                                                                                    |
+| `scripts/__tests__/check-matrix-rust-sdk-guardrails.test.mjs`                                                                 | test       | no      | —                | —            | —                                                                                                                                                                    |
+| `scripts/__tests__/feature-parity-audit-normalization.test.mjs`                                                               | test       | no      | —                | —            | —                                                                                                                                                                    |
+| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`                                                                       | test       | no      | —                | —            | —                                                                                                                                                                    |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`                                                                      | test       | no      | —                | —            | —                                                                                                                                                                    |
+| `scripts/__tests__/synapse-two-client-integration.test.mjs`                                                                   | test       | no      | —                | —            | —                                                                                                                                                                    |
+| `scripts/audit-matrix-public.mjs`                                                                                             | tooling    | no      | —                | —            | —                                                                                                                                                                    |
+| `scripts/fixtures/matrix-rust-p1.6/prohibited/js-sdk-in-matrix-ipc/synara/src/app/features/matrix-ipc/leakyImport.ts`         | tooling    | no      | —                | static       | `matrix-js-sdk`                                                                                                                                                      |
+| `scripts/fixtures/matrix-rust-p1.6/prohibited/js-sdk-new-file/synara/src/app/features/brand-new-migration/NewClientBridge.ts` | tooling    | no      | —                | static       | `matrix-js-sdk`                                                                                                                                                      |
+| `scripts/fixtures/matrix-rust-p1.6/prohibited/raw-matrix-http/synara/src/app/features/matrix-ipc/rawHttp.ts`                  | tooling    | no      | —                | —            | —                                                                                                                                                                    |
+| `synara/scripts/run-synapse-two-client-integration.mjs`                                                                       | tooling    | no      | —                | dynamic      | `matrix-js-sdk`                                                                                                                                                      |
+| `synara/src/app/cs-api.ts`                                                                                                    | production | yes     | app-other        | —            | —                                                                                                                                                                    |
+| `synara/src/app/features/message-search/useMessageSearch.ts`                                                                  | production | yes     | feature          | static       | `matrix-js-sdk`                                                                                                                                                      |
+| `synara/src/app/hooks/useCall.ts`                                                                                             | production | yes     | hook             | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/matrixrtc/CallMembership`, `matrix-js-sdk/lib/matrixrtc/MatrixRTCSession`, `matrix-js-sdk/lib/matrixrtc/MatrixRTCSessionManager` |
+| `synara/src/app/hooks/useCallEmbed.ts`                                                                                        | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                      |
+| `synara/src/app/matrix/__tests__/media.test.ts`                                                                               | test       | yes     | media-boundary   | —            | —                                                                                                                                                                    |
+| `synara/src/app/pages/client/ClientNonUIFeatures.tsx`                                                                         | production | yes     | page             | static       | `matrix-js-sdk`                                                                                                                                                      |
+| `synara/src/app/pages/client/ClientRoot.tsx`                                                                                  | production | yes     | page             | static       | `matrix-js-sdk`                                                                                                                                                      |
+| `synara/src/app/pages/client/__tests__/syncStatusCopy.test.ts`                                                                | test       | yes     | page             | static       | `matrix-js-sdk`                                                                                                                                                      |
+| `synara/src/app/pages/client/inbox/Notifications.tsx`                                                                         | production | yes     | page             | static       | `matrix-js-sdk`                                                                                                                                                      |
+| `synara/src/app/plugins/call/CallEmbed.ts`                                                                                    | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                                                                                                      |
+| `synara/src/app/plugins/call/CallWidgetDriver.ts`                                                                             | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                                                                                                      |
+| `synara/src/app/state/__tests__/initMatrix.test.ts`                                                                           | test       | yes     | state            | static       | `matrix-js-sdk`                                                                                                                                                      |
+| `synara/src/app/state/__tests__/performLogout.test.ts`                                                                        | test       | yes     | state            | static       | `matrix-js-sdk`                                                                                                                                                      |
+| `synara/src/app/state/__tests__/tokenRefresh.test.ts`                                                                         | test       | yes     | state            | static       | `matrix-js-sdk`                                                                                                                                                      |
+| `synara/src/app/state/room-list/__tests__/roomActivity.test.ts`                                                               | test       | yes     | state            | static       | `matrix-js-sdk`                                                                                                                                                      |
+| `synara/src/app/utils/__tests__/notifications.test.ts`                                                                        | test       | yes     | utility          | static       | `matrix-js-sdk`                                                                                                                                                      |
+| `synara/src/app/utils/__tests__/remoteContent.test.ts`                                                                        | test       | yes     | utility          | —            | —                                                                                                                                                                    |
+| `synara/src/app/utils/__tests__/syncLifecycle.test.ts`                                                                        | test       | yes     | utility          | static       | `matrix-js-sdk`                                                                                                                                                      |
+| `synara/src/app/utils/__tests__/syncSplashRecovery.test.ts`                                                                   | test       | yes     | utility          | static       | `matrix-js-sdk`                                                                                                                                                      |
+| `synara/src/app/utils/__tests__/timelineLinks.test.ts`                                                                        | test       | yes     | utility          | static       | `matrix-js-sdk`                                                                                                                                                      |
+| `synara/src/app/utils/__tests__/timelineOpening.test.ts`                                                                      | test       | yes     | utility          | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/@types/event`, `matrix-js-sdk/lib/@types/read_receipts`                                                                          |
+| `synara/src/client/initMatrix.ts`                                                                                             | production | yes     | client-lifecycle | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/http-api/interface`                                                                                                              |
+| `synara/src/sw.ts`                                                                                                            | production | yes     | service-worker   | —            | —                                                                                                                                                                    |
 
 ## Scope notes
 
