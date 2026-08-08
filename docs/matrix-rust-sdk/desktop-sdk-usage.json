@@ -25,7 +25,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 8,
+          "fileCount": 7,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -53,8 +53,8 @@
         },
         "event_emitters_listeners": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 5,
-          "listenerCandidateOccurrences": 28,
+          "fileCount": 4,
+          "listenerCandidateOccurrences": 26,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
         },
@@ -116,9 +116,9 @@
         },
         "sync_lifecycle": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 4,
+          "fileCount": 3,
           "listenerCandidateOccurrences": 4,
-          "methodCandidateOccurrences": 10,
+          "methodCandidateOccurrences": 7,
           "networkingOccurrences": 0
         },
         "threads": {
@@ -144,26 +144,26 @@
         },
         "uia_auth": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 5,
-          "listenerCandidateOccurrences": 2,
-          "methodCandidateOccurrences": 16,
+          "fileCount": 4,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 15,
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 11,
-      "importFileCount": 9,
+      "fileCount": 10,
+      "importFileCount": 8,
       "methodCandidateFrequencies": [
         {
           "count": 8,
           "name": "getRoom"
         },
         {
-          "count": 7,
-          "name": "refreshToken"
+          "count": 6,
+          "name": "findEventById"
         },
         {
           "count": 6,
-          "name": "findEventById"
+          "name": "refreshToken"
         },
         {
           "count": 4,
@@ -172,10 +172,6 @@
         {
           "count": 4,
           "name": "stopClient"
-        },
-        {
-          "count": 3,
-          "name": "getSyncState"
         },
         {
           "count": 3,
@@ -191,11 +187,11 @@
         },
         {
           "count": 2,
-          "name": "getUserId"
+          "name": "getSyncState"
         },
         {
           "count": 2,
-          "name": "retryImmediately"
+          "name": "getUserId"
         },
         {
           "count": 2,
@@ -260,8 +256,8 @@
           "importOccurrences": 1
         },
         "MatrixClient": {
-          "fileCount": 5,
-          "importOccurrences": 5
+          "fileCount": 4,
+          "importOccurrences": 4
         },
         "MatrixError": {
           "fileCount": 2,
@@ -298,8 +294,8 @@
       },
       "modules": [
         {
-          "fileCount": 9,
-          "importCount": 9,
+          "fileCount": 8,
+          "importCount": 8,
           "path": "matrix-js-sdk"
         },
         {
@@ -351,16 +347,16 @@
         {
           "fileCount": 5,
           "importCount": 5,
-          "name": "MatrixClient",
+          "name": "Room",
           "typeImports": 0,
           "valueImports": 5
         },
         {
-          "fileCount": 5,
-          "importCount": 5,
-          "name": "Room",
+          "fileCount": 4,
+          "importCount": 4,
+          "name": "MatrixClient",
           "typeImports": 0,
-          "valueImports": 5
+          "valueImports": 4
         },
         {
           "fileCount": 3,
@@ -382,13 +378,6 @@
           "name": "MatrixError",
           "typeImports": 0,
           "valueImports": 2
-        },
-        {
-          "fileCount": 2,
-          "importCount": 2,
-          "name": "SyncState",
-          "typeImports": 1,
-          "valueImports": 1
         },
         {
           "fileCount": 1,
@@ -415,20 +404,6 @@
           "fileCount": 1,
           "importCount": 1,
           "name": "EventType",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "HttpApiEvent",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "HttpApiEventHandlerMap",
           "typeImports": 0,
           "valueImports": 1
         },
@@ -606,6 +581,13 @@
           "name": "StateEvents",
           "typeImports": 1,
           "valueImports": 0
+        },
+        {
+          "fileCount": 1,
+          "importCount": 1,
+          "name": "SyncState",
+          "typeImports": 0,
+          "valueImports": 1
         },
         {
           "fileCount": 1,
@@ -2536,99 +2518,6 @@
     },
     {
       "bucket": "page",
-      "categories": [
-        "client_methods",
-        "event_emitters_listeners",
-        "sync_lifecycle",
-        "uia_auth"
-      ],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 16,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "HttpApiEvent"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "HttpApiEventHandlerMap"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixClient"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "SyncState"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "HttpApiEvent.SessionLoggedOut",
-          "line": 154,
-          "method": "on"
-        },
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "HttpApiEvent.SessionLoggedOut",
-          "line": 156,
-          "method": "removeListener"
-        }
-      ],
-      "methodCandidates": [
-        {
-          "category": "sync_lifecycle",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 170,
-          "name": "getSyncState"
-        },
-        {
-          "category": "sync_lifecycle",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 178,
-          "name": "retryImmediately"
-        },
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_reference_candidate",
-          "line": 211,
-          "name": "refreshToken"
-        },
-        {
-          "category": "sync_lifecycle",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 329,
-          "name": "retryImmediately"
-        }
-      ],
-      "modelCoupling": ["MatrixClient"],
-      "networking": [],
-      "path": "synara/src/app/pages/client/ClientRoot.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "page",
       "categories": ["sync_lifecycle"],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -3763,7 +3652,7 @@
         "client-lifecycle": 1,
         "feature": 1,
         "hook": 2,
-        "page": 3,
+        "page": 2,
         "plugin": 2
       },
       "planComparison": {
@@ -3772,13 +3661,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 9,
+      "productionImportFiles": 8,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 19
+      "totalImportFiles": 18
     },
     "repositoryWide": {
-      "productionImportFiles": 9,
+      "productionImportFiles": 8,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -3787,7 +3676,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 22
+      "totalImportFiles": 21
     }
   }
 }
