@@ -25,7 +25,7 @@ import {
   toRem,
 } from 'folds';
 import { useAtom, useAtomValue } from 'jotai';
-import { Room } from 'matrix-js-sdk';
+import type { EventedRoomReading } from '../../../utils/roomEvents';
 import {
   draggable,
   dropTargetForElements,
@@ -95,7 +95,7 @@ import { useRoomPermissions } from '../../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../../components/invite-user-prompt';
 
 type SpaceMenuProps = {
-  room: Room;
+  room: EventedRoomReading;
   requestClose: () => void;
   onUnpin?: (roomId: string) => void;
 };
@@ -383,7 +383,7 @@ const useDnDMonitor = (
 };
 
 type SpaceTabProps = {
-  space: Room;
+  space: EventedRoomReading;
   selected: boolean;
   onClick: MouseEventHandler<HTMLButtonElement>;
   folder?: ISidebarFolder;
