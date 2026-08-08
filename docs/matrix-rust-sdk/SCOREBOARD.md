@@ -2,8 +2,8 @@
 
 | Field                                                  | Value                                                                                                                                                                                                                                  |
 | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Updated                                                | **2026-08-08** (tip `6693309f` · 1 importer) |
-| Tip                                                    | `6693309f` on `feature/matrix-rust-sdk-full-replacement` |
+| Updated                                                | **2026-08-08** (tip `607dd930` · 1 importer) |
+| Tip                                                    | `607dd930` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **1** (`initMatrix.ts` only) — plan baseline **220**; **219 removed**, ~**99.5%** |
 | Allowlist `pathCount`                                  | **1** (matches `paths[]` length) |
 | Test `matrix-js-sdk` import files (`synara/src`)             | **0** (burned in #595; fixtures migrated to probed literals)  |
