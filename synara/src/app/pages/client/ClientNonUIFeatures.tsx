@@ -2,7 +2,14 @@ import { useAtomValue } from 'jotai';
 import { isKeyHotkey } from 'is-hotkey';
 import React, { ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClientEvent, MatrixEvent, Room, RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
+import type { MatrixEventReading } from '../../utils/room';
+import type { EventedRoomReading } from '../../utils/roomEvents';
+import { eventFromWire } from '../../utils/nativeEventAdapter';
+
+type NonUIRoomReading = EventedRoomReading & {
+  findEventById(eventId: string): MatrixEventReading | undefined;
+};
+type LocalMx = ReturnType<typeof useMatrixClient>;
 import { roomToUnreadAtom, unreadEqual, unreadInfoToUnread } from '../../state/room/roomToUnread';
 import LogoPNG from '../../../../public/res/png/synara.png';
 import LogoUnreadPNG from '../../../../public/res/png/synara-unread.png';
@@ -81,14 +88,14 @@ const resolveAgentApprovalTargetEvent = async (
   mx: ReturnType<typeof useMatrixClient>,
   roomId: string,
   eventId: string
-): Promise<MatrixEvent | undefined> => {
+): Promise<MatrixEventReading | undefined> => {
   const room = mx.getRoom(roomId);
   const local = room?.findEventById(eventId);
   if (local) return local;
 
   try {
     const raw = await mx.fetchRoomEvent(roomId, eventId);
-    return new MatrixEvent(raw);
+    return eventFromWire(raw, roomId);
   } catch {
     return undefined;
   }
@@ -401,12 +408,12 @@ function MessageNotifications() {
   }, []);
 
   useEffect(() => {
-    const handleTimelineEvent: RoomEventHandlerMap[RoomEvent.Timeline] = (
-      mEvent,
-      room,
-      toStartOfTimeline,
-      removed,
-      data
+    const handleTimelineEvent = (
+      mEvent: MatrixEventReading,
+      room: NonUIRoomReading | undefined,
+      toStartOfTimeline: boolean,
+      removed: boolean,
+      data: { liveEvent?: boolean; [key: string]: unknown }
     ) => {
       if (mx.getSyncState() !== 'SYNCING') return;
       if (document.hasFocus() && (selectedRoomId === room?.roomId || notificationSelected)) return;
@@ -458,9 +465,15 @@ function MessageNotifications() {
         playSound();
       }
     };
-    mx.on(RoomEvent.Timeline, handleTimelineEvent);
+    mx.on(
+      'Room.timeline' as unknown as Parameters<LocalMx['on']>[0],
+      handleTimelineEvent as unknown as Parameters<LocalMx['on']>[1]
+    );
     return () => {
-      mx.removeListener(RoomEvent.Timeline, handleTimelineEvent);
+      mx.removeListener(
+        'Room.timeline' as unknown as Parameters<LocalMx['removeListener']>[0],
+        handleTimelineEvent as unknown as Parameters<LocalMx['removeListener']>[1]
+      );
     };
   }, [
     mx,
@@ -666,7 +679,7 @@ function AgentApprovalNotifications() {
   }, []);
 
   const notifyApprovalEvent = useCallback(
-    (mEvent: MatrixEvent, room: Room) => {
+    (mEvent: MatrixEventReading, room: NonUIRoomReading) => {
       if (room.isSpaceRoom()) return;
       if (mEvent.getSender() === mx.getUserId()) return;
       if (Date.now() - mEvent.getTs() > RECENT_AGENT_APPROVAL_MS) return;
@@ -702,19 +715,25 @@ function AgentApprovalNotifications() {
   );
 
   useEffect(() => {
-    const handleTimelineEvent: RoomEventHandlerMap[RoomEvent.Timeline] = (
-      mEvent,
-      room,
-      toStartOfTimeline,
-      removed
+    const handleTimelineEvent = (
+      mEvent: MatrixEventReading,
+      room: NonUIRoomReading,
+      toStartOfTimeline: boolean,
+      removed: boolean
     ) => {
       if (!room || toStartOfTimeline || removed) return;
       notifyApprovalEvent(mEvent, room);
     };
 
-    mx.on(RoomEvent.Timeline, handleTimelineEvent);
+    mx.on(
+      'Room.timeline' as unknown as Parameters<LocalMx['on']>[0],
+      handleTimelineEvent as unknown as Parameters<LocalMx['on']>[1]
+    );
     return () => {
-      mx.removeListener(RoomEvent.Timeline, handleTimelineEvent);
+      mx.removeListener(
+        'Room.timeline' as unknown as Parameters<LocalMx['removeListener']>[0],
+        handleTimelineEvent as unknown as Parameters<LocalMx['removeListener']>[1]
+      );
     };
   }, [mx, notifyApprovalEvent]);
 
@@ -727,17 +746,20 @@ function AgentApprovalNotifications() {
           const event = events[index];
           if (!event) continue;
           if (Date.now() - event.getTs() > RECENT_AGENT_APPROVAL_MS) break;
-          notifyApprovalEvent(event as MatrixEvent, room);
+          notifyApprovalEvent(event as MatrixEventReading, room);
         }
       });
     };
 
     scanRecentApprovalEvents();
     const interval = window.setInterval(scanRecentApprovalEvents, 30_000);
-    mx.on(ClientEvent.Sync, scanRecentApprovalEvents);
+    mx.on('sync' as unknown as Parameters<LocalMx['on']>[0], scanRecentApprovalEvents);
     return () => {
       window.clearInterval(interval);
-      mx.removeListener(ClientEvent.Sync, scanRecentApprovalEvents);
+      mx.removeListener(
+        'sync' as unknown as Parameters<LocalMx['removeListener']>[0],
+        scanRecentApprovalEvents
+      );
     };
   }, [mx, notifyApprovalEvent]);
 
