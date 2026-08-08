@@ -56,3 +56,33 @@ client; full desktop feature parity suite green. `dual_backend` stays forbidden 
 No secrets/credentials in the public tree at any step; UI/UX byte-identical; every PR
 opens against `feature/matrix-rust-sdk-full-replacement`, independently reviewed, CI-green
 before merge; never merge `main`/#39 without explicit operator approval.
+
+## 6. Open design decision — refresh token custody (D1)
+
+Feasibility probe (2026-08-08): the native token-refresh artifact (c) is NOT a mechanical
+command add. Verified architecture facts:
+
+- The renderer holds its own `MatrixClientSession` (tokens) in its TS session persistence;
+  Rust concurrently holds the same session in `DesktopSessionEnvelope` (`desktop_session_store`
+  + keyring). Custody is dual today.
+- `matrix_restore_session` is a renderer **availability gate**: `ClientRoot` checks
+  `restored.available/value` but does not consume tokens from it.
+- Command DTOs deliberately never carry tokens (snapshots expose user_id/device_id/generation
+  only). Matrix-sdk 0.18 DOES expose `Client::refresh_access_token()` (in-place) — the API is
+  not the blocker.
+
+So artifact (c) requires choosing ONE of:
+- D1a) **Explicit tokens-over-IPC exception**: the refresh command returns the new
+  access/refresh token to the renderer (which already holds tokens from its own store). Smallest
+  change; needs an explicit, documented exception to the no-tokens-in-DTO posture (redacted from
+  logs, never surfaced in any snapshot/event DTO).
+- D1b) **Native refresh + TS session-update event**: refresh happens in Rust (client in place +
+  keyring store) and a `session-updated` event carries generation (+ optionally tokens) so the
+  renderer/SW refresh. More plumbing; keeps DTOs token-free.
+- D1c) **Renderer cedes token custody to native** (end-state): drop the TS token copy entirely,
+  re-derive the session from native. Largest change; touches session persistence, SW media auth,
+  and `refreshAndPersistSession`.
+
+Recommendation: D1a for the narrow re-point slice (matches today's dual-custody), with D1c as
+the eventual end-state. This decision (plus the fixed artifact list) is what the operator's
+Option-A approval actually authorizes.
