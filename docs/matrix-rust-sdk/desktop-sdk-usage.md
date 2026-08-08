@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |            5 |                2 |                   3 |
+| production |            4 |                2 |                   3 |
 | test       |           10 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |       **18** |                  |                     |
+| **total**  |       **17** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |     5 |
+| Production import files |     4 |
 | Test import files       |    10 |
-| Total import files      |    15 |
+| Total import files      |    14 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 5)
+- Production match: **no** (found 4)
 - Test match: **no** (found 10)
 
 ### Production files by bucket (desktop runtime only)
@@ -47,19 +47,18 @@ Expected **220** production and **12** test import files.
 | Bucket           | Files |
 | ---------------- | ----: |
 | client-lifecycle |     1 |
-| feature          |     1 |
 | hook             |     1 |
 | plugin           |     2 |
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 5. Files with any finding: 7.
+Scope: **production only**. Import files: 4. Files with any finding: 6.
 
 ### Imported modules
 
 | Module path                            | Import sites | Files |
 | -------------------------------------- | -----------: | ----: |
-| `matrix-js-sdk`                        |            5 |     5 |
+| `matrix-js-sdk`                        |            4 |     4 |
 | `matrix-js-sdk/lib/http-api/interface` |            1 |     1 |
 
 ### Top imported symbols
@@ -76,18 +75,12 @@ Scope: **production only**. Import files: 5. Files with any finding: 7.
 | `EventType`                |       1 |     1 |         0 |     1 |
 | `IContent`                 |       1 |     0 |         1 |     1 |
 | `ICreateClientOpts`        |       1 |     0 |         1 |     1 |
-| `IEventWithRoomId`         |       1 |     1 |         0 |     1 |
 | `IRefreshTokenResponse`    |       1 |     0 |         1 |     1 |
-| `IResultContext`           |       1 |     1 |         0 |     1 |
-| `ISearchRequestBody`       |       1 |     1 |         0 |     1 |
-| `ISearchResponse`          |       1 |     1 |         0 |     1 |
-| `ISearchResult`            |       1 |     1 |         0 |     1 |
 | `IndexedDBCryptoStore`     |       1 |     1 |         0 |     1 |
 | `IndexedDBStore`           |       1 |     1 |         0 |     1 |
 | `KnownMembership`          |       1 |     1 |         0 |     1 |
 | `MatrixEventEvent`         |       1 |     1 |         0 |     1 |
 | `RoomStateEvent`           |       1 |     1 |         0 |     1 |
-| `SearchOrderBy`            |       1 |     1 |         0 |     1 |
 | `SendDelayedEventResponse` |       1 |     0 |         1 |     1 |
 | `StateEvents`              |       1 |     0 |         1 |     1 |
 | `SyncState`                |       1 |     1 |         0 |     1 |
@@ -111,7 +104,7 @@ Scope: **production only**. Import files: 5. Files with any finding: 7.
 
 | Category                       | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
 | ------------------------------ | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
-| `client_methods`               |     5 |                 0 |                   0 |                      0 |          0 |
+| `client_methods`               |     4 |                 0 |                   0 |                      0 |          0 |
 | `room_methods`                 |     2 |                 0 |                   0 |                      0 |          0 |
 | `event_emitters_listeners`     |     2 |                 0 |                  12 |                      0 |          0 |
 | `sync_lifecycle`               |     2 |                 6 |                   2 |                      0 |          0 |
@@ -120,7 +113,7 @@ Scope: **production only**. Import files: 5. Files with any finding: 7.
 | `authenticated_media`          |     2 |                 1 |                   0 |                      0 |          0 |
 | `room_lists`                   |     2 |                 6 |                   0 |                      0 |          0 |
 | `timelines`                    |     2 |                 2 |                   4 |                      0 |          0 |
-| `searches`                     |     3 |                 3 |                   0 |                      0 |          0 |
+| `searches`                     |     2 |                 2 |                   0 |                      0 |          0 |
 | `uia_auth`                     |     3 |                13 |                   0 |                      0 |          0 |
 | `custom_raw_event_sends`       |     1 |                 2 |                   0 |                      0 |          0 |
 | `direct_matrix_networking`     |     2 |                 0 |                   0 |                      0 |          3 |
@@ -135,7 +128,6 @@ Scope: **production only**. Import files: 5. Files with any finding: 7.
 | `getSafeUserId`       |                     4 |
 | `stopClient`          |                     4 |
 | `getDeviceId`         |                     2 |
-| `search`              |                     2 |
 | `findEventById`       |                     1 |
 | `getCrypto`           |                     1 |
 | `getRooms`            |                     1 |
@@ -143,6 +135,7 @@ Scope: **production only**. Import files: 5. Files with any finding: 7.
 | `initRustCrypto`      |                     1 |
 | `logout`              |                     1 |
 | `redactEvent`         |                     1 |
+| `search`              |                     1 |
 | `searchUserDirectory` |                     1 |
 | `sendEvent`           |                     1 |
 | `sendStateEvent`      |                     1 |
@@ -342,7 +335,6 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `scripts/fixtures/matrix-rust-p1.6/prohibited/raw-matrix-http/synara/src/app/features/matrix-ipc/rawHttp.ts`                  | tooling    | no      | —                | —            | —                                                                                           |
 | `synara/scripts/run-synapse-two-client-integration.mjs`                                                                       | tooling    | no      | —                | dynamic      | `matrix-js-sdk`                                                                             |
 | `synara/src/app/cs-api.ts`                                                                                                    | production | yes     | app-other        | —            | —                                                                                           |
-| `synara/src/app/features/message-search/useMessageSearch.ts`                                                                  | production | yes     | feature          | static       | `matrix-js-sdk`                                                                             |
 | `synara/src/app/hooks/useCallEmbed.ts`                                                                                        | production | yes     | hook             | static       | `matrix-js-sdk`                                                                             |
 | `synara/src/app/matrix/__tests__/media.test.ts`                                                                               | test       | yes     | media-boundary   | —            | —                                                                                           |
 | `synara/src/app/pages/client/__tests__/syncStatusCopy.test.ts`                                                                | test       | yes     | page             | static       | `matrix-js-sdk`                                                                             |
