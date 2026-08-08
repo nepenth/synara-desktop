@@ -144,11 +144,13 @@ test("tracks full-vertical execution and requires per-vertical deletion policy",
   assert.match(rendered, /negative capability-owner\/file deletion delta/);
   assert.match(
     rendered,
-    /Integration product state: `capability-cutover-in-progress`/
+    /Integration product state: `between-slices-paused`/
   );
   assert.ok(
     rendered.includes(
-      `Active slice: **${status.vertical_execution.active_slice}** (PR #${status.vertical_execution.active_pr})`
+      `Active slice: **${status.vertical_execution.active_slice ?? "None"}**${
+        status.vertical_execution.active_pr === null ? "" : ` (PR #${status.vertical_execution.active_pr})`
+      }`
     )
   );
   assert.match(
