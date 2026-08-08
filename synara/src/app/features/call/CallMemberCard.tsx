@@ -1,4 +1,14 @@
-import { CallMembership } from 'matrix-js-sdk/lib/matrixrtc/CallMembership';
+/**
+ * Narrow structural projection of a MatrixRTC call membership (js-sdk
+ * CallMembership). Only the fields this card renders are declared; the live
+ * MatrixRTC class satisfies it at runtime.
+ */
+type CallMembershipReading = {
+  sender: string;
+  callIntent?: string;
+  membershipID: string;
+};
+
 import React, { useState } from 'react';
 import { Avatar, Box, Icon, Icons, Text } from 'folds';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -14,7 +24,7 @@ import { getMouseEventCords } from '../../utils/dom';
 import * as css from './styles.css';
 
 type CallMemberCardProps = {
-  member: CallMembership;
+  member: CallMembershipReading;
 };
 export function CallMemberCard({ member }: CallMemberCardProps) {
   const mx = useMatrixClient();
@@ -75,7 +85,7 @@ export function CallMemberRenderer({
   members,
   max = 4,
 }: {
-  members: CallMembership[];
+  members: CallMembershipReading[];
   max?: number;
 }) {
   const [viewMore, setViewMore] = useState(false);
