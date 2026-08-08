@@ -14,7 +14,7 @@
 | Field              | Value                                                                                                                                                                                 |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-08** |
-| Integration tip    | **`607dd930`** — #601 initMatrix surface burn (decl 2→1), #602 D1 refresh-custody decision; sole importer |
+| Integration tip    | **`a7ca71e5`** — #604 F0 FACADE-contract, #605 F1 facade core (emitter+lifecycle+identity); route **1 → 0**, slices 1/7 done |
 | Active work        | **Orchestrated burn active via this harness** — V-BURN epic (`initMatrix.ts`, sole importer) awaiting operator decision ([operating-instructions.md](operating-instructions.md)) |
 | Product runtime    | Native owns core D0 + V-CRYPTO + residual-empty slices through members/presence/directory/join-rule READ; long-tail JS importers remain                                               |
 | Execution model    | **prime-agent orchestrator + `deepseek-v4-flash-0731` sub-agents, max 2 concurrent** (locally hosted; only configured model) — [operating-instructions.md](operating-instructions.md) |
@@ -124,11 +124,12 @@ redefinition). Acceptance remands V-BURN HOLD pending decision.
 
 | When (UTC) | Item                  | Result        | Notes |
 | ---------- | --------------------- | ------------- | ----- |
-| current    | **Integration tip**   | **`ac71e9bf`** | #560–#603 merged (F0 contract on this PR); every slice independently reviewed + Quality gate + Desktop package gate green; provenance anchor verified after each merge |
+| current    | **Integration tip**   | **`a7ca71e5`** | #560–#605 merged (F0 contract + F1 facade core); every slice independently reviewed + Quality gate + Desktop package gate green; provenance anchor verified after each merge |
 | current    | **Imports / allowlist** | **1 / 1**   | Production 114→**1** (`synara/src/client/initMatrix.ts` only); test import files 10→**0**; repo-wide total 4 (3 tooling = guardrail fixtures); ~99.5% removed |
 | current    | **#560–#592**         | **merged**    | Command/room/state/settings/timeline/search/pin/sync/room-graph/lifecycle/crypto/call-members/SpaceTabs/read-receipts/ClientRoot/Notifications/ClientNonUIFeatures/useCall/useMessageSearch burns via sliced PRs |
 | current    | **#593/#594**         | **merged**    | V-CALL lane: CallWidgetDriver + CallEmbed + useCallEmbed burned
-| **F0 (this PR)**      | **merged**    | FACADE-contract executable spec: Option A (complete native) + D1C (renderer cedes token custody) + slice-by-slice F0–F7; 63-method/373-hit client surface mapped vs 135 native commands; 1 importer → 0 target; PR titles carry the `1 → 0` route | (4→1); all live client calls kept via derived `LocalMx`/readings + probed literals; matrix-widget-api remains a runtime dep (not a js-sdk removal target) |
+| **F0 (this PR)**      | **merged**    | FACADE-contract executable spec
+| **F1 (#605)**         | **merged**    | NativeMatrixClient facade core: emitter + lifecycle/sync (matrix_sync_status/matrix_logout) + identity/profile (matrix_session_snapshot); D1C no-token enforced; 9/9 tests; importer still 1 (drop at F6) |: Option A (complete native) + D1C (renderer cedes token custody) + slice-by-slice F0–F7; 63-method/373-hit client surface mapped vs 135 native commands; 1 importer → 0 target; PR titles carry the `1 → 0` route | (4→1); all live client calls kept via derived `LocalMx`/readings + probed literals; matrix-widget-api remains a runtime dep (not a js-sdk removal target) |
 | current    | **#595**              | **merged**    | Test-import burn: 10 test fixtures to probed literals/local structurals (712/712 modernization unchanged); `initMatrix` MatrixError contract duck-typed (`isMatrixErrorLike`, Error & { errcode?: string }); test importers **0** |
 | current    | **V-BURN**            | **HOLD**      | Sole importer is the epic: `initMatrix` = live `createClient`/IndexedDBStore/login/sync/token-refresh bootstrap (every derived client type hangs off `typeof initClient`); no native `initClient` exists. `matrix-js-sdk@42.0.0` removal = exactly one epic away (no transitive dependents). Waits on operator INITMATRIX decision (native-bootstrap epic vs sanctioned legacy-loader) |
 | current    | **Gates**             | **green**     | tsc 0 · node --test 292/0 · guardrails PASS allowlist 1 · modernization 712/0 · prettier clean |
