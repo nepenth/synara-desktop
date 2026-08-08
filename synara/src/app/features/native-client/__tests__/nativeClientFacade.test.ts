@@ -299,3 +299,56 @@ test('F3 D1C still holds: no token surface after send/state additions', async ()
   assert.equal('setAccessToken' in client, false);
   assert.equal('refreshToken' in client, false);
 });
+
+test('F4 uploadContent proxies matrix_upload_media', async () => {
+  const { invoke, callLog } = invokingWith({
+    matrix_upload_media: { mxc: 'mxc://example.org/up1' },
+  });
+  const client = createNativeMatrixClient(invoke);
+  const uploaded = await client.uploadContent({ mimeType: 'image/png', bytes: [1, 2, 3] });
+  assert.equal(uploaded?.mxc, 'mxc://example.org/up1');
+  assert.deepEqual(callLog, ['matrix_upload_media']);
+});
+
+test('F4 uploadContent fails closed when unavailable', async () => {
+  const client = createNativeMatrixClient(async () => unavailable);
+  assert.equal(await client.uploadContent({ mimeType: 'x', bytes: [1] }), null);
+});
+
+test('F4 getMediaConfig reads m.upload.size wire key', async () => {
+  const { invoke } = invokingWith({
+    matrix_call_media_config: { 'm.upload.size': 10485760 },
+  });
+  const client = createNativeMatrixClient(invoke);
+  assert.deepEqual(await client.getMediaConfig(), { maxUploadSizeBytes: 10485760 });
+});
+
+test('F4 getMediaConfig fails closed (empty) when unavailable', async () => {
+  const client = createNativeMatrixClient(async () => unavailable);
+  assert.deepEqual(await client.getMediaConfig(), {});
+});
+
+test('F4 downloadMedia proxies matrix_media_download', async () => {
+  const { invoke } = invokingWith({
+    matrix_media_download: { bytes: [10, 20, 30] },
+  });
+  const client = createNativeMatrixClient(invoke);
+  const dl = await client.downloadMedia('mxc://example.org/f1');
+  assert.deepEqual(dl?.bytes, [10, 20, 30]);
+});
+
+test('F4 getProfileInfo returns session identity', async () => {
+  const { invoke } = invokingWith({
+    matrix_session_snapshot: {
+      status: 'logged_in',
+      user_id: '@alice:example.org',
+      device_id: 'DEV',
+      homeserver_url: 'https://matrix.example.org',
+      sessionGeneration: 5,
+    },
+  });
+  const client = createNativeMatrixClient(invoke);
+  const profile = await client.getProfileInfo();
+  assert.equal(profile.userId, '@alice:example.org');
+  assert.equal(profile.deviceId, 'DEV');
+});
