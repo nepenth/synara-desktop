@@ -117,7 +117,7 @@
         "sync_lifecycle": {
           "constructorCandidateOccurrences": 0,
           "fileCount": 1,
-          "listenerCandidateOccurrences": 2,
+          "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 6,
           "networkingOccurrences": 0
         },
@@ -204,8 +204,8 @@
           "importOccurrences": 1
         },
         "MatrixClient": {
-          "fileCount": 1,
-          "importOccurrences": 1
+          "fileCount": 0,
+          "importOccurrences": 0
         },
         "MatrixError": {
           "fileCount": 0,
@@ -245,11 +245,6 @@
           "fileCount": 1,
           "importCount": 1,
           "path": "matrix-js-sdk"
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "path": "matrix-js-sdk/lib/http-api/interface"
         }
       ],
       "networking": [
@@ -280,34 +275,6 @@
         {
           "fileCount": 1,
           "importCount": 1,
-          "name": "AccessTokens",
-          "typeImports": 1,
-          "valueImports": 0
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "ClientEvent",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "ICreateClientOpts",
-          "typeImports": 1,
-          "valueImports": 0
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "IRefreshTokenResponse",
-          "typeImports": 1,
-          "valueImports": 0
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
           "name": "IndexedDBCryptoStore",
           "typeImports": 0,
           "valueImports": 1
@@ -318,27 +285,6 @@
           "name": "IndexedDBStore",
           "typeImports": 0,
           "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "MatrixClient",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "SyncState",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "TokenRefreshFunction",
-          "typeImports": 1,
-          "valueImports": 0
         },
         {
           "fileCount": 1,
@@ -1738,13 +1684,13 @@
         {
           "category": "indexeddb_matrix_stores",
           "confidence": "AST new-expression of an SDK store constructor name in an SDK-importing file; not type-proven.",
-          "line": 172,
+          "line": 177,
           "name": "IndexedDBStore"
         },
         {
           "category": "indexeddb_matrix_stores",
           "confidence": "AST new-expression of an SDK store constructor name in an SDK-importing file; not type-proven.",
-          "line": 178,
+          "line": 183,
           "name": "IndexedDBCryptoStore"
         }
       ],
@@ -1760,21 +1706,6 @@
             {
               "alias": null,
               "isTypeOnly": false,
-              "name": "ClientEvent"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "ICreateClientOpts"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "IRefreshTokenResponse"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
               "name": "IndexedDBCryptoStore"
             },
             {
@@ -1785,37 +1716,7 @@
             {
               "alias": null,
               "isTypeOnly": false,
-              "name": "MatrixClient"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "SyncState"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
               "name": "createClient"
-            }
-          ],
-          "namespaceImport": null
-        },
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": true,
-          "line": 11,
-          "module": "matrix-js-sdk/lib/http-api/interface",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "AccessTokens"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "TokenRefreshFunction"
             }
           ],
           "namespaceImport": null
@@ -1823,17 +1724,17 @@
       ],
       "listenerCandidates": [
         {
-          "category": "sync_lifecycle",
+          "category": "event_emitters_listeners",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "ClientEvent.Sync",
-          "line": 382,
+          "event": "'sync' as unknown as Parameters<MatrixClient['removeListener']>[0]",
+          "line": 387,
           "method": "removeListener"
         },
         {
-          "category": "sync_lifecycle",
+          "category": "event_emitters_listeners",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "ClientEvent.Sync",
-          "line": 393,
+          "event": "'sync' as unknown as Parameters<MatrixClient['on']>[0]",
+          "line": 401,
           "method": "on"
         }
       ],
@@ -1842,112 +1743,111 @@
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_reference_candidate",
-          "line": 87,
+          "line": 92,
           "name": "refreshToken"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 109,
+          "line": 114,
           "name": "refreshToken"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_reference_candidate",
-          "line": 195,
+          "line": 200,
           "name": "refreshToken"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_reference_candidate",
-          "line": 197,
+          "line": 202,
           "name": "refreshToken"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_reference_candidate",
-          "line": 224,
+          "line": 229,
           "name": "refreshToken"
         },
         {
           "category": "crypto_verification_recovery",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 246,
+          "line": 251,
           "name": "initRustCrypto"
         },
         {
           "category": "sync_lifecycle",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 278,
+          "line": 283,
           "name": "stopClient"
         },
         {
           "category": "sync_lifecycle",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 362,
+          "line": 367,
           "name": "getSyncState"
         },
         {
           "category": "sync_lifecycle",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 459,
+          "line": 470,
           "name": "startClient"
         },
         {
           "category": "sync_lifecycle",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 490,
+          "line": 501,
           "name": "stopClient"
         },
         {
           "category": "sync_lifecycle",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 502,
+          "line": 513,
           "name": "stopClient"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 503,
+          "line": 514,
           "name": "getSafeUserId"
         },
         {
           "category": "sync_lifecycle",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 532,
+          "line": 543,
           "name": "stopClient"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_call_candidate",
-          "line": 534,
+          "line": 545,
           "name": "logout"
         },
         {
           "category": "uia_auth",
           "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
           "kind": "property_reference_candidate",
-          "line": 601,
+          "line": 612,
           "name": "refreshToken"
         }
       ],
       "modelCoupling": [
         "IndexedDBCryptoStore",
         "IndexedDBStore",
-        "MatrixClient",
         "createClient"
       ],
       "networking": [],

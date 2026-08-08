@@ -1,14 +1,19 @@
-import {
-  createClient,
-  ClientEvent,
-  MatrixClient,
-  IndexedDBStore,
-  IndexedDBCryptoStore,
-  SyncState,
-  type ICreateClientOpts,
-  type IRefreshTokenResponse,
-} from 'matrix-js-sdk';
-import type { AccessTokens, TokenRefreshFunction } from 'matrix-js-sdk/lib/http-api/interface';
+import { createClient, IndexedDBStore, IndexedDBCryptoStore } from 'matrix-js-sdk';
+
+/** Derived client type: the exact js-sdk constructor return, no direct import. */
+type MatrixClient = ReturnType<typeof createClient>;
+/** Derived create options: the exact js-sdk createClient options, no direct import. */
+type ICreateClientOpts = Parameters<typeof createClient>[0];
+/** Refresh-response wire shape (js-sdk IRefreshTokenResponse mirror — all fields used). */
+type IRefreshTokenResponse = {
+  access_token: string;
+  refresh_token: string;
+  expires_in_ms: number;
+};
+/** Access-token pair wire shape (js-sdk AccessTokens mirror). */
+type AccessTokens = { accessToken: string; refreshToken?: string; expiry?: Date };
+/** Token-refresh callback wire shape (js-sdk TokenRefreshFunction mirror). */
+type TokenRefreshFunction = (refreshToken: string) => Promise<AccessTokens>;
 
 import {
   isCryptoAccountMismatchError,
@@ -359,7 +364,7 @@ export const waitForInitialSyncPrepared = async (
   timeoutMs = POST_START_CRYPTO_CONTINUITY_TIMEOUT_MS
 ): Promise<void> => {
   const startedAtMs = performance.now();
-  if (mx.getSyncState() === SyncState.Prepared) {
+  if (mx.getSyncState() === 'PREPARED') {
     recordClientDiagnostic('session', 'initial-sync.prepared', {
       outcome: 'already-prepared',
       durationMs: 0,
@@ -368,8 +373,8 @@ export const waitForInitialSyncPrepared = async (
   }
 
   await new Promise<void>((resolve, reject) => {
-    const handleSync = (state: SyncState) => {
-      if (state !== SyncState.Prepared) return;
+    const handleSync = (state: string) => {
+      if (state !== 'PREPARED') return;
       cleanup();
       recordClientDiagnostic('session', 'initial-sync.prepared', {
         outcome: 'prepared',
@@ -379,7 +384,10 @@ export const waitForInitialSyncPrepared = async (
     };
     const cleanup = () => {
       clearTimeout(timer);
-      mx.removeListener(ClientEvent.Sync, handleSync);
+      mx.removeListener(
+        'sync' as unknown as Parameters<MatrixClient['removeListener']>[0],
+        handleSync as unknown as Parameters<MatrixClient['removeListener']>[1]
+      );
     };
 
     const timer = setTimeout(() => {
@@ -390,7 +398,10 @@ export const waitForInitialSyncPrepared = async (
       });
       reject(new Error('Initial sync did not become ready for the crypto continuity check.'));
     }, timeoutMs);
-    mx.on(ClientEvent.Sync, handleSync);
+    mx.on(
+      'sync' as unknown as Parameters<MatrixClient['on']>[0],
+      handleSync as unknown as Parameters<MatrixClient['on']>[1]
+    );
   });
 };
 
