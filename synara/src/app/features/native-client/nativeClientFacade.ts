@@ -274,6 +274,53 @@ export type FacadeSendStateEventResult = {
   roomId?: RoomId;
 };
 
+/** F4 — media types. */
+export type FacadeMediaUploadInput = {
+  mimeType: string;
+  bytes: number[];
+};
+
+export type FacadeUploadMediaResult = {
+  mxc: string;
+};
+
+export type FacadeMediaConfig = {
+  /** Wire key is `m.upload.size` (Rust MatrixCallMediaConfigResult). */
+  maxUploadSizeBytes?: number;
+};
+
+export type FacadeMediaDownloadResult = {
+  bytes: number[];
+};
+
+export type FacadeProfileInfo = {
+  userId?: UserId;
+  deviceId?: string;
+  displayName?: string;
+  avatarUrl?: string;
+};
+
+const parseUploadMediaResult = (value: unknown): FacadeUploadMediaResult | null => {
+  if (!isObject(value) || hasForbiddenWireFields(value)) return null;
+  const mxc = reqString(value, 'mxc');
+  return mxc === null ? null : { mxc };
+};
+
+const parseMediaConfig = (value: unknown): FacadeMediaConfig => {
+  if (!isObject(value) || hasForbiddenWireFields(value)) return {};
+  const maybeSize = (value as Record<string, unknown>)['m.upload.size'];
+  return typeof maybeSize === 'number' && Number.isSafeInteger(maybeSize) && maybeSize > 0
+    ? { maxUploadSizeBytes: maybeSize }
+    : {};
+};
+
+const parseMediaDownload = (value: unknown): FacadeMediaDownloadResult | null => {
+  if (!isObject(value) || hasForbiddenWireFields(value)) return null;
+  const bytes = value.bytes;
+  if (!Array.isArray(bytes)) return null;
+  return { bytes: bytes.map((b) => (typeof b === 'number' ? b : 0)) };
+};
+
 const parseSendTextResult = (value: unknown): FacadeSendTextResult | null => {
   if (!isObject(value) || hasForbiddenWireFields(value)) return null;
   const roomId = reqString(value, 'roomId');
@@ -578,6 +625,37 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
         return Promise.resolve(null);
       }
       return Promise.resolve(null); // GAP: no native account-data command
+    },
+
+    /** F4 — upload content bytes via matrix_upload_media (fail-closed null). */
+    async uploadContent(input: FacadeMediaUploadInput): Promise<FacadeUploadMediaResult | null> {
+      const result = await invoke('matrix_upload_media', {
+        mimeType: input.mimeType,
+        bytes: input.bytes,
+      });
+      if (!result.available) return null;
+      return parseUploadMediaResult(result.value);
+    },
+
+    /** F4 — media upload size limit via matrix_call_media_config. */
+    async getMediaConfig(): Promise<FacadeMediaConfig> {
+      const result = await invoke('matrix_call_media_config');
+      if (!result.available) return {};
+      return parseMediaConfig(result.value);
+    },
+
+    /** F4 — download original file bytes via matrix_media_download (fail-closed null). */
+    async downloadMedia(contentUri: string): Promise<FacadeMediaDownloadResult | null> {
+      const result = await invoke('matrix_media_download', { contentUri });
+      if (!result.available) return null;
+      return parseMediaDownload(result.value);
+    },
+
+    /** F4 — profile/identity from session snapshot + session-level hints. */
+    async getProfileInfo(): Promise<FacadeProfileInfo> {
+      const identity = await this.getIdentity();
+      const sessionId = await this.getDeviceId();
+      return { userId: identity.userId, deviceId: sessionId };
     },
 
     // D1C guard: fail-closed readiness helper for callers that must not run
