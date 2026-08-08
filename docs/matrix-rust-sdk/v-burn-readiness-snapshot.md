@@ -8,15 +8,15 @@
 | ----------------------- | -------------------------------------------------------------------------------- |
 | Readiness               | **Not ready**                                                                    |
 | Runtime proof           | **Not confirmed**                                                                |
-| Source tip              | `fd0dfbf464ea59351d2cca1b746ba9d3f00923e7`                                       |
+| Source tip              | `4365ca96a5` |
 | Base                    | `feature/matrix-rust-sdk-full-replacement` only                                  |
 | Scope                   | Docs only; no product code or cutover state change                               |
 | `dual_backend`          | **Forbidden**; this snapshot does not enable or claim it                         |
 | Fail-closed policy      | Native-session command absence/failure is terminal; no JS fallback is authorized |
 | Prettier                | `2.8.1`                                                                          |
-| Production import files | **150** under `synara/src/`                                                      |
-| P1.6 allowlist entries  | **150**                                                                          |
-| V-BURN                  | **HOLD** — not started; do not claim ready                                       |
+| Production import files | **1** under `synara/src/` |
+| P1.6 allowlist entries  | **1** |
+| V-BURN                  | **HOLD** — not ready; sole importer `initMatrix.ts` (live `createClient` epic core) awaits operator decision |
 | #39 / `main`            | **Gated** — never merge #39 to `main`                                            |
 
 ## Direct source blockers
@@ -30,9 +30,10 @@ The tip still constructs and starts a live JavaScript Matrix client:
 - [`synara/package.json:99`](../../synara/package.json#L99) retains
   `matrix-js-sdk` at `42.0.0`; the lockfile retains the dependency as well.
 - The committed [`desktop-sdk-usage.md`](desktop-sdk-usage.md) report counts
-  **150** production import files. The committed
+  **1** production import file (\`synara/src/client/initMatrix.ts\`) and **0**
+  test import files. The committed
   [`p1.6-js-sdk-import-allowlist.json`](p1.6-js-sdk-import-allowlist.json)
-  contains **150** paths.
+  contains **1** path.
 
 These facts alone prevent a zero-live-client or zero-import V-BURN conclusion.
 The allowlist is inventory policy during migration; it is not evidence that the
@@ -69,7 +70,7 @@ add no product code or cutover state change.
 ## Bottom line
 
 Native replacement progress is real, but the tip still has a live JS client,
-the npm dependency, 150 production import files against a 150-entry migration
-allowlist, and unconfirmed residual proofs. Therefore the honest statement is:
+the npm dependency, 1 production import file (`initMatrix.ts`) against a 1-entry
+migration allowlist (test import files now 0), and unconfirmed residual live proofs. Therefore the honest statement is:
 
 **V-BURN is blocked; readiness is Not ready; this file is not a readiness claim.**
