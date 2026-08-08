@@ -27,13 +27,13 @@
 |---|----------|-------|
 | a | Renderer native **client facade** | Backs the unchanged `Awaited<ReturnType<typeof initClient>>` anchor so ~141 `mx` consumers need zero churn; re-expresses `initClient`/`startClient`/`performLogout`/`clearCacheAndReload`/`scheduleProactiveTokenRefresh` on the `matrix_*` commands. |
 | b | Native **main sync-state push** | UI gating today reads the js-sdk client's `getSyncState()`; only a `sync_status` snapshot exists natively — add the PREPARED/ERROR readiness event stream. |
-| c | **Token-refresh re-point** | Renderer `refreshAndPersistSession` still calls js-sdk `mx.refreshToken`; Rust already exposes `handle_refresh_tokens`. |
+| c | **Token-refresh re-point** | Renderer `refreshAndPersistSession` still calls js-sdk `mx.refreshToken`. **Corrected (11c324e0): NO native refresh command exists** — `desktop_session` stores `refresh_token` and login may request one, but no `matrix_refresh_*` command is registered; this artifact needs a NEW native refresh command first (narrow Rust work) before the TS re-point. |
 | d | **Room-list live delta / local-echo** | `roomList.ts` is snapshot-pull today; the js-sdk sync event path can only be dropped when a live delta source exists. |
 
 ## 3. Operator options
 
 - **A — Approve the native cutover epic (recommended, staged).** Landing order:
-  1. (a) client facade + (c) token-refresh re-point behind the unchanged type anchor;
+  1. (a) client facade behind the unchanged type anchor + (c) token-refresh re-point (after adding the missing native refresh command — see table);
   2. (b) native sync-state readiness stream;
   3. (d) room-list live delta.
   Each slice is independently reviewed and must pass the Quality gate + Desktop package
