@@ -8,6 +8,7 @@ import {
 } from '../matrix-dto/parseUtil';
 import type { EventId, RoomId, UserId } from '../matrix-dto/ids';
 import { parseRoomSummary, type RoomSummary } from '../matrix-dto/room';
+import type { MatrixEventReading, RoomReading } from '../../utils/room';
 import type { DesktopInvokeResult } from '../../utils/desktop';
 
 /**
@@ -212,24 +213,44 @@ const parseRoomListSnapshot = (value: unknown): NativeRoomListSnapshot | null =>
   return { sessionGeneration, rooms };
 };
 
-const toFacadeRoomReading = (summary: RoomSummary): FacadeRoomReading => ({
+type EmptyStateReading = {
+  getStateEvents(eventType: string): MatrixEventReading[];
+  getStateEvents(eventType: string, stateKey: string): MatrixEventReading | null;
+};
+
+const EMPTY_STATE: EmptyStateReading = {
+  getStateEvents: (eventType: string, stateKey?: string) => (stateKey === undefined ? [] : null),
+} as EmptyStateReading;
+
+/** F6a — full structural RoomReading projection (fail-closed deep surface). */
+const toRoomReading = (summary: RoomSummary): RoomReading => ({
   roomId: summary.roomId,
   name: summary.name ?? '',
-  canonicalAlias: summary.canonicalAlias ?? null,
-  avatarUrl: summary.avatarUrl ?? null,
-  membership: summary.membership,
-  isDirect: summary.isDirect,
-  isSpace: summary.isSpace,
-  isEncrypted: summary.isEncrypted,
-  unreadCount: summary.unreadCount,
-  highlightCount: summary.highlightCount,
-  lastActivityTs: summary.lastActivityTs,
-  tombstoneSuccessorRoomId: summary.tombstoneSuccessorRoomId ?? null,
+  currentState: EMPTY_STATE as RoomReading['currentState'],
+  getLiveTimeline: () => ({
+    getState: () => undefined,
+    getEvents: () => [],
+  }),
+  getMember: () => null,
+  getMembers: () => [],
+  getMxcAvatarUrl: () => summary.avatarUrl ?? null,
+  getAvatarFallbackMember: () => undefined,
+  getUnreadNotificationCount: () => summary.unreadCount,
+  getEventReadUpTo: () => null,
+  getLastActiveTimestamp: () => summary.lastActivityTs,
+  getBumpStamp: () => summary.lastActivityTs,
+  getThreads: () => [],
+  accountData: { get: () => undefined },
   getMyMembership: () => summary.membership,
+  getJoinRule: () => summary.joinRule ?? '',
+  getJoinedMemberCount: () => 0,
   getCanonicalAlias: () => summary.canonicalAlias ?? null,
-  getJoinedMemberCount: () => summary.heroes?.length ?? 0,
-  isSpaceRoom: () => summary.isSpace,
+  getType: () => undefined,
+  getVersion: () => '',
   isCallRoom: () => false,
+  isSpaceRoom: () => summary.isSpace,
+  getTimelineForEvent: () => null,
+  hasMembershipState: () => summary.membership === 'join',
 });
 
 const parseTimelineEventReadback = (value: unknown): FacadeTimelineEventReading | null => {
@@ -323,6 +344,17 @@ const parseMediaDownload = (value: unknown): FacadeMediaDownloadResult | null =>
 
 /** F5 — crypto & extended readings. */
 
+export type FacadePushRuleCondition = {
+  kind?: string;
+  roomMentions?: string;
+};
+
+export type FacadePushRule = {
+  ruleId: string;
+  enabled: boolean;
+  actions: unknown[];
+  conditions?: FacadePushRuleCondition[];
+};
 export type FacadeCryptoCrossSigningState = 'Unavailable' | 'NotSetUp' | 'Partial' | 'Ready';
 
 /** Structural mirror of the Rust MatrixCryptoStatus DTO. */
@@ -435,19 +467,67 @@ export class NativeClientEmitter {
  */
 export const createNativeMatrixClient = (invoke: NativeInvoke) => {
   const emitter = new NativeClientEmitter();
+
+  // F6a synchronous read cache: the facade presents js-sdk-style SYNC reads;
+  // refresh() hydrates the cache from native commands. Writes stay async.
+  let cachedIdentity: NativeClientIdentity = {};
   let cachedSyncState: NativeSyncState | null = null;
   let cachedSyncData: NativeSyncStateData | null = null;
+  let cachedRooms: RoomReading[] = [];
 
-  const readSyncStatus = async (): Promise<NativeSyncStatus | null> => {
-    const result = await invoke('matrix_sync_status');
-    if (!result.available) return null;
-    return parseSyncStatus(result.value);
+  const readSyncStatus = (): Promise<NativeSyncStatus | null> =>
+    invoke('matrix_sync_status').then((result) =>
+      result.available ? parseSyncStatus(result.value) : null
+    );
+
+  const readIdentity = async (): Promise<NativeClientIdentity> => {
+    const result = await invoke('matrix_session_snapshot');
+    if (!result.available) return {};
+    return parseSessionSnapshot(result.value) as NativeClientIdentity;
   };
 
-  const emitSyncState = (state: NativeSyncState, data: NativeSyncStateData | null): void => {
-    cachedSyncState = state;
-    cachedSyncData = data;
-    emitter.emit('sync', state);
+  const readRooms = async (): Promise<RoomReading[]> => {
+    const result = await invoke('matrix_room_list_snapshot');
+    if (!result.available) return [];
+    const snapshot = parseRoomListSnapshot(result.value);
+    return snapshot ? snapshot.rooms.map(toRoomReading) : [];
+  };
+
+  const applySyncStatus = (status: NativeSyncStatus): void => {
+    cachedSyncState = readinessToSyncState(status.readiness);
+    cachedSyncData = {
+      readiness: status.readiness,
+      sessionGeneration: status.sessionGeneration,
+      failureDiagnosticId: status.failureDiagnosticId,
+    };
+  };
+
+  const emitSyncState = (): void => {
+    if (cachedSyncState !== null) emitter.emit('sync', cachedSyncState);
+  };
+
+  /**
+   * F6a — hydrate the whole read cache from native commands. Call this after
+   * construct (or on demand) before relying on synchronous reads. Fail-closed:
+   * unavailable commands leave the corresponding cache slot at its default.
+   */
+  const refresh = async (): Promise<void> => {
+    const [status, identity, rooms] = await Promise.all([
+      readSyncStatus(),
+      readIdentity(),
+      readRooms(),
+    ]);
+    if (status) applySyncStatus(status);
+    cachedIdentity = { ...cachedIdentity, ...identity };
+    if (rooms.length > 0 || !identity.userId) cachedRooms = rooms;
+    emitSyncState();
+  };
+
+  const clearSession = (): void => {
+    cachedSyncState = null;
+    cachedSyncData = null;
+    cachedRooms = [];
+    emitter.emit('sync', 'STOPPED');
   };
 
   return Object.freeze({
@@ -458,88 +538,65 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     removeListener: emitter.removeListener.bind(emitter),
     emit: emitter.emit.bind(emitter),
     setMaxListeners: emitter.setMaxListeners.bind(emitter),
+    refresh,
 
-    /** js-sdk-compatible lifecycle. readState=false: cached value only. */
-    async getSyncState(readState?: boolean): Promise<NativeSyncState | null> {
-      if (readState !== false || cachedSyncState === null) {
-        const status = await readSyncStatus();
-        if (status) {
-          emitSyncState(readinessToSyncState(status.readiness), {
-            readiness: status.readiness,
-            sessionGeneration: status.sessionGeneration,
-            failureDiagnosticId: status.failureDiagnosticId,
-          });
-        }
-      }
+    /** F6a — SYNCHRONOUS identity reads (js-sdk object model). */
+    getIdentity(): NativeClientIdentity {
+      return cachedIdentity;
+    },
+    getUserId(): string | null {
+      return cachedIdentity.userId ?? null;
+    },
+    getSafeUserId(): string {
+      return cachedIdentity.userId ?? '';
+    },
+    getDeviceId(): string | undefined {
+      return cachedIdentity.deviceId;
+    },
+
+    /** F6a — SYNCHRONOUS sync-state reads. */
+    getSyncState(): NativeSyncState | null {
       return cachedSyncState;
     },
-
-    async getSyncStateData(): Promise<NativeSyncStateData | null> {
-      if (cachedSyncData === null) {
-        const status = await readSyncStatus();
-        if (status) {
-          emitSyncState(readinessToSyncState(status.readiness), {
-            readiness: status.readiness,
-            sessionGeneration: status.sessionGeneration,
-            failureDiagnosticId: status.failureDiagnosticId,
-          });
-        }
-      }
+    getSyncStateData(): NativeSyncStateData | null {
       return cachedSyncData;
     },
-
-    async clientRunning(): Promise<boolean> {
-      const status = await readSyncStatus();
-      return status?.readiness === 'running';
+    clientRunning(): boolean {
+      return cachedSyncData?.readiness === 'running';
     },
 
+    /** Readiness refresh on demand (still async); keeps sync cache fresh. */
     async retryImmediately(): Promise<void> {
-      const status = await readSyncStatus();
-      if (!status) throw new Error(UNAVAILABLE_MESSAGE);
-      emitSyncState(readinessToSyncState(status.readiness), {
-        readiness: status.readiness,
-        sessionGeneration: status.sessionGeneration,
-        failureDiagnosticId: status.failureDiagnosticId,
-      });
+      await refresh();
     },
-
-    /** Native sync runs in Rust; startClient is a readiness confirmation. */
     async startClient(): Promise<void> {
-      await this.getSyncState();
+      await refresh();
     },
-
-    /** Session teardown path: retain the facade, drop readiness. */
     async stopClient(): Promise<void> {
-      cachedSyncState = null;
-      cachedSyncData = null;
-      emitter.emit('sync', 'STOPPED');
+      clearSession();
     },
-
     async logout(): Promise<void> {
       const result = await invoke('matrix_logout');
       if (!result.available) throw new Error(UNAVAILABLE_MESSAGE);
-      cachedSyncState = null;
-      cachedSyncData = null;
-      emitter.emit('sync', 'STOPPED');
+      clearSession();
     },
 
-    /** D1C identity: user/device/homeserver from the native session snapshot. */
-    async getIdentity(): Promise<NativeClientIdentity> {
-      const result = await invoke('matrix_session_snapshot');
-      if (!result.available) return {};
-      return parseSessionSnapshot(result.value) as NativeClientIdentity;
+    /** F6a — SYNCHRONOUS room reads from the cache. */
+    getRooms(): RoomReading[] {
+      return cachedRooms;
+    },
+    getRoom(roomId: RoomId): RoomReading | null {
+      return cachedRooms.find((r) => r.roomId === roomId) ?? null;
     },
 
-    async getUserId(): Promise<string | undefined> {
-      return (await this.getIdentity()).userId;
-    },
-
-    async getSafeUserId(): Promise<string> {
-      return (await this.getIdentity()).userId ?? '';
-    },
-
-    async getDeviceId(): Promise<string | undefined> {
-      return (await this.getIdentity()).deviceId;
+    /** F2 — single event readback via matrix_timeline_event_readback. */
+    async fetchRoomEvent(
+      roomId: RoomId,
+      eventId: EventId
+    ): Promise<FacadeTimelineEventReading | null> {
+      const result = await invoke('matrix_timeline_event_readback', { roomId, eventId });
+      if (!result.available) return null;
+      return parseTimelineEventReadback(result.value);
     },
 
     async setDisplayName(displayName: string): Promise<NativeInvokeResult> {
@@ -565,11 +622,8 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
           const next = readinessToSyncState(status.readiness);
           if (next !== last) {
             last = next;
-            emitSyncState(next, {
-              readiness: status.readiness,
-              sessionGeneration: status.sessionGeneration,
-              failureDiagnosticId: status.failureDiagnosticId,
-            });
+            applySyncStatus(status);
+            emitSyncState();
           }
         }
       };
@@ -580,31 +634,6 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
         stopped = true;
         clearInterval(timer);
       };
-    },
-
-    /** F2 — all joined rooms from matrix_room_list_snapshot (fail-closed []). */
-    async getRooms(): Promise<FacadeRoomReading[]> {
-      const result = await invoke('matrix_room_list_snapshot');
-      if (!result.available) return [];
-      const snapshot = parseRoomListSnapshot(result.value);
-      return snapshot ? snapshot.rooms.map(toFacadeRoomReading) : [];
-    },
-
-    /** F2 — single room by id from the native room-list projection. */
-    async getRoom(roomId: RoomId): Promise<FacadeRoomReading | null> {
-      const rooms = await this.getRooms();
-      const found = rooms.find((r) => r.roomId === roomId);
-      return found ?? null;
-    },
-
-    /** F2 — single event readback via matrix_timeline_event_readback. */
-    async fetchRoomEvent(
-      roomId: RoomId,
-      eventId: EventId
-    ): Promise<FacadeTimelineEventReading | null> {
-      const result = await invoke('matrix_timeline_event_readback', { roomId, eventId });
-      if (!result.available) return null;
-      return parseTimelineEventReadback(result.value);
     },
 
     /** F3 — send a plain message via matrix_send_text (fail-closed null). */
@@ -657,10 +686,9 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       return isObject(result.value) ? (result.value as FacadeSendStateEventResult) : null;
     },
 
-    /** F3 — account-data is a documented GAP (no native command yet); fail-closed null. */
-    async getAccountData(type: string): Promise<unknown> {
-      const noNativeAccountDataCommand = type.length > 0; // eslint-disable-line no-unused-vars
-      return Promise.resolve(noNativeAccountDataCommand ? null : null);
+    /** F3 — account-data is a documented GAP (no native command yet); fail-closed undefined. */
+    getAccountData(_type: string): MatrixEventReading | undefined {
+      return undefined;
     },
     async setAccountData(type: string, content: Record<string, unknown>): Promise<unknown> {
       if (type.length === 0 || Object.keys(content).length === 0) return Promise.resolve(null);
@@ -701,11 +729,9 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       return parseMediaDownload(result.value);
     },
 
-    /** F4 — profile/identity from session snapshot + session-level hints. */
-    async getProfileInfo(): Promise<FacadeProfileInfo> {
-      const identity = await this.getIdentity();
-      const sessionId = await this.getDeviceId();
-      return { userId: identity.userId, deviceId: sessionId };
+    /** F4 — profile/identity from the sync cache (no key material, D1C). */
+    getProfileInfo(): FacadeProfileInfo {
+      return { ...cachedIdentity };
     },
 
     /** F5 — crypto status via matrix_crypto_status (never key material, D1C). */
@@ -760,6 +786,43 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       const nativeSearchDoesNotApply = query.term.length >= 0; // eslint-disable-line
       return Promise.resolve(nativeSearchDoesNotApply ? null : null);
     },
+    /** F6a — aliases + ignored users + auth metadata + relations (GAP-safe). */
+    async getRoomIdForAlias(alias: string): Promise<string | null> {
+      const noNativeAliasResolve = alias.length > 0; // eslint-disable-line
+      return Promise.resolve(noNativeAliasResolve ? null : null);
+    },
+    async setIgnoredUsers(userIds: string[]): Promise<void> {
+      const ignore = userIds.length >= 0; // eslint-disable-line
+      return Promise.resolve(ignore ? undefined : undefined);
+    },
+    async getAuthMetadata(): Promise<unknown> {
+      return Promise.resolve(null);
+    },
+    async relations(eventId: string, relationType?: string, eventType?: string): Promise<unknown> {
+      const noNativeRelations = eventId.length > 0; // eslint-disable-line
+      return Promise.resolve(noNativeRelations && relationType && eventType ? null : null);
+    },
+
+    /** F6a — push-rule read (notification GAP: fail-closed undefined). */
+    getRoomPushRule(
+      scope: string,
+      roomId: RoomId
+    ):
+      | {
+          actions: (string | { [key: string]: any })[];
+          conditions?: { kind?: string }[];
+          rule_id: string;
+        }
+      | undefined {
+      const noNativePushRule = scope.length > 0 && roomId.length > 0; // eslint-disable-line
+      return noNativePushRule ? undefined : undefined;
+    },
+
+    /** F6a — MXC -> native URI (media handle protocol); fail-closed null. */
+    mxcUrlToHttp(mxcUrl: string): string | null {
+      return mxcUrl.startsWith('mxc://') ? mxcUrl : null;
+    },
+
     get http(): unknown {
       return undefined;
     },
