@@ -53,8 +53,8 @@
         },
         "event_emitters_listeners": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 3,
-          "listenerCandidateOccurrences": 20,
+          "fileCount": 2,
+          "listenerCandidateOccurrences": 12,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
         },
@@ -67,8 +67,8 @@
         },
         "matrixrtc_calls": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 1,
-          "listenerCandidateOccurrences": 8,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
         },
@@ -95,7 +95,7 @@
         },
         "room_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 3,
+          "fileCount": 2,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 8,
-      "importFileCount": 6,
+      "fileCount": 7,
+      "importFileCount": 5,
       "methodCandidateFrequencies": [
         {
           "count": 6,
@@ -228,8 +228,8 @@
       ],
       "modelCoupling": {
         "CallMembership": {
-          "fileCount": 1,
-          "importOccurrences": 1
+          "fileCount": 0,
+          "importOccurrences": 0
         },
         "CryptoApi": {
           "fileCount": 0,
@@ -264,8 +264,8 @@
           "importOccurrences": 0
         },
         "Room": {
-          "fileCount": 3,
-          "importOccurrences": 3
+          "fileCount": 2,
+          "importOccurrences": 2
         },
         "RoomMember": {
           "fileCount": 0,
@@ -286,29 +286,14 @@
       },
       "modules": [
         {
-          "fileCount": 6,
-          "importCount": 6,
+          "fileCount": 5,
+          "importCount": 5,
           "path": "matrix-js-sdk"
         },
         {
           "fileCount": 1,
           "importCount": 1,
           "path": "matrix-js-sdk/lib/http-api/interface"
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "path": "matrix-js-sdk/lib/matrixrtc/CallMembership"
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "path": "matrix-js-sdk/lib/matrixrtc/MatrixRTCSession"
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "path": "matrix-js-sdk/lib/matrixrtc/MatrixRTCSessionManager"
         }
       ],
       "networking": [
@@ -344,13 +329,6 @@
           "valueImports": 4
         },
         {
-          "fileCount": 3,
-          "importCount": 3,
-          "name": "Room",
-          "typeImports": 0,
-          "valueImports": 3
-        },
-        {
           "fileCount": 2,
           "importCount": 2,
           "name": "ClientEvent",
@@ -372,18 +350,18 @@
           "valueImports": 1
         },
         {
+          "fileCount": 2,
+          "importCount": 2,
+          "name": "Room",
+          "typeImports": 0,
+          "valueImports": 2
+        },
+        {
           "fileCount": 1,
           "importCount": 1,
           "name": "AccessTokens",
           "typeImports": 1,
           "valueImports": 0
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "CallMembership",
-          "typeImports": 0,
-          "valueImports": 1
         },
         {
           "fileCount": 1,
@@ -480,27 +458,6 @@
           "fileCount": 1,
           "importCount": 1,
           "name": "MatrixEventEvent",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "MatrixRTCSession",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "MatrixRTCSessionEvent",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "MatrixRTCSessionManagerEvents",
           "typeImports": 0,
           "valueImports": 1
         },
@@ -2051,146 +2008,6 @@
     },
     {
       "bucket": "hook",
-      "categories": [
-        "room_methods",
-        "event_emitters_listeners",
-        "matrixrtc_calls"
-      ],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "Room"
-            }
-          ],
-          "namespaceImport": null
-        },
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk/lib/matrixrtc/MatrixRTCSession",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixRTCSession"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixRTCSessionEvent"
-            }
-          ],
-          "namespaceImport": null
-        },
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 6,
-          "module": "matrix-js-sdk/lib/matrixrtc/CallMembership",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "CallMembership"
-            }
-          ],
-          "namespaceImport": null
-        },
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 8,
-          "module": "matrix-js-sdk/lib/matrixrtc/MatrixRTCSessionManager",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixRTCSessionManagerEvents"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [
-        {
-          "category": "matrixrtc_calls",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "MatrixRTCSessionManagerEvents.SessionStarted",
-          "line": 25,
-          "method": "on"
-        },
-        {
-          "category": "matrixrtc_calls",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "MatrixRTCSessionManagerEvents.SessionEnded",
-          "line": 26,
-          "method": "on"
-        },
-        {
-          "category": "matrixrtc_calls",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "MatrixRTCSessionManagerEvents.SessionStarted",
-          "line": 28,
-          "method": "off"
-        },
-        {
-          "category": "matrixrtc_calls",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "MatrixRTCSessionManagerEvents.SessionEnded",
-          "line": 29,
-          "method": "off"
-        },
-        {
-          "category": "matrixrtc_calls",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "MatrixRTCSessionEvent.MembershipsChanged",
-          "line": 46,
-          "method": "on"
-        },
-        {
-          "category": "matrixrtc_calls",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "MatrixRTCSessionEvent.MembershipsChanged",
-          "line": 48,
-          "method": "removeListener"
-        },
-        {
-          "category": "matrixrtc_calls",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "MatrixRTCSessionEvent.MembershipsChanged",
-          "line": 57,
-          "method": "on"
-        },
-        {
-          "category": "matrixrtc_calls",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "MatrixRTCSessionEvent.MembershipsChanged",
-          "line": 59,
-          "method": "removeListener"
-        }
-      ],
-      "methodCandidates": [],
-      "modelCoupling": ["CallMembership", "Room"],
-      "networking": [],
-      "path": "synara/src/app/hooks/useCall.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "hook",
       "categories": ["client_methods", "room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -3339,7 +3156,7 @@
       "buckets": {
         "client-lifecycle": 1,
         "feature": 1,
-        "hook": 2,
+        "hook": 1,
         "plugin": 2
       },
       "planComparison": {
@@ -3348,13 +3165,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 6,
+      "productionImportFiles": 5,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 16
+      "totalImportFiles": 15
     },
     "repositoryWide": {
-      "productionImportFiles": 6,
+      "productionImportFiles": 5,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -3363,7 +3180,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 19
+      "totalImportFiles": 18
     }
   }
 }
