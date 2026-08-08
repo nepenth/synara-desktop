@@ -25,7 +25,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 5,
+          "fileCount": 4,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -102,9 +102,9 @@
         },
         "searches": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 3,
+          "fileCount": 2,
           "listenerCandidateOccurrences": 0,
-          "methodCandidateOccurrences": 3,
+          "methodCandidateOccurrences": 2,
           "networkingOccurrences": 0
         },
         "spaces": {
@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 7,
-      "importFileCount": 5,
+      "fileCount": 6,
+      "importFileCount": 4,
       "methodCandidateFrequencies": [
         {
           "count": 6,
@@ -172,10 +172,6 @@
         {
           "count": 2,
           "name": "getDeviceId"
-        },
-        {
-          "count": 2,
-          "name": "search"
         },
         {
           "count": 1,
@@ -204,6 +200,10 @@
         {
           "count": 1,
           "name": "redactEvent"
+        },
+        {
+          "count": 1,
+          "name": "search"
         },
         {
           "count": 1,
@@ -286,8 +286,8 @@
       },
       "modules": [
         {
-          "fileCount": 5,
-          "importCount": 5,
+          "fileCount": 4,
+          "importCount": 4,
           "path": "matrix-js-sdk"
         },
         {
@@ -394,44 +394,9 @@
         {
           "fileCount": 1,
           "importCount": 1,
-          "name": "IEventWithRoomId",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
           "name": "IRefreshTokenResponse",
           "typeImports": 1,
           "valueImports": 0
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "IResultContext",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "ISearchRequestBody",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "ISearchResponse",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "ISearchResult",
-          "typeImports": 0,
-          "valueImports": 1
         },
         {
           "fileCount": 1,
@@ -465,13 +430,6 @@
           "fileCount": 1,
           "importCount": 1,
           "name": "RoomStateEvent",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "SearchOrderBy",
           "typeImports": 0,
           "valueImports": 1
         },
@@ -1945,68 +1903,6 @@
       "role": "production"
     },
     {
-      "bucket": "feature",
-      "categories": ["client_methods", "searches"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IEventWithRoomId"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IResultContext"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "ISearchRequestBody"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "ISearchResponse"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "ISearchResult"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "SearchOrderBy"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "searches",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 105,
-          "name": "search"
-        }
-      ],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/features/message-search/useMessageSearch.ts",
-      "role": "production"
-    },
-    {
       "bucket": "hook",
       "categories": ["client_methods", "room_methods"],
       "constructorCandidates": [],
@@ -3155,7 +3051,6 @@
     "desktopRuntimeBaseline": {
       "buckets": {
         "client-lifecycle": 1,
-        "feature": 1,
         "hook": 1,
         "plugin": 2
       },
@@ -3165,13 +3060,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 5,
+      "productionImportFiles": 4,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 15
+      "totalImportFiles": 14
     },
     "repositoryWide": {
-      "productionImportFiles": 5,
+      "productionImportFiles": 4,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -3180,7 +3075,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 18
+      "totalImportFiles": 17
     }
   }
 }
