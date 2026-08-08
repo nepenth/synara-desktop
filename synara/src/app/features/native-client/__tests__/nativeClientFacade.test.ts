@@ -135,3 +135,102 @@ test('watchSync emits on readiness change into PREPARED', async () => {
   });
   assert.ok(seen.includes('PREPARED'), `expected PREPARED emission, saw: ${JSON.stringify(seen)}`);
 });
+
+test('F2 getRooms proxies matrix_room_list_snapshot and maps summaries', async () => {
+  const summary = {
+    roomId: '!r:example.org',
+    name: 'Engineering',
+    canonicalAlias: '#eng:example.org',
+    avatarUrl: 'mxc://example.org/av',
+    membership: 'join',
+    isDirect: false,
+    isSpace: false,
+    isEncrypted: true,
+    joinRule: 'invite',
+    unreadCount: 2,
+    highlightCount: 1,
+    markedUnread: false,
+    lastActivityTs: 1234,
+  };
+  const { invoke } = invokingWith({
+    matrix_room_list_snapshot: { sessionGeneration: 8, rooms: [summary] },
+  });
+  const client = createNativeMatrixClient(invoke);
+  const rooms = await client.getRooms();
+  assert.equal(rooms.length, 1);
+  assert.equal(rooms[0].roomId, '!r:example.org');
+  assert.equal(rooms[0].name, 'Engineering');
+  assert.equal(rooms[0].isEncrypted, true);
+  assert.equal(rooms[0].getMyMembership(), 'join');
+  assert.equal(rooms[0].getCanonicalAlias(), '#eng:example.org');
+});
+
+test('F2 getRoom finds a single room by id or null', async () => {
+  const { invoke } = invokingWith({
+    matrix_room_list_snapshot: {
+      sessionGeneration: 8,
+      rooms: [
+        {
+          roomId: '!a:example.org',
+          name: 'A',
+          membership: 'join',
+          isDirect: false,
+          isSpace: false,
+          isEncrypted: false,
+          unreadCount: 0,
+          highlightCount: 0,
+          markedUnread: false,
+        },
+        {
+          roomId: '!b:example.org',
+          name: 'B',
+          membership: 'join',
+          isDirect: true,
+          isSpace: false,
+          isEncrypted: false,
+          unreadCount: 0,
+          highlightCount: 0,
+          markedUnread: false,
+        },
+      ],
+    },
+  });
+  const client = createNativeMatrixClient(invoke);
+  assert.equal((await client.getRoom('!b:example.org'))?.name, 'B');
+  assert.equal(await client.getRoom('!missing:example.org'), null);
+});
+
+test('F2 getRooms fails closed when the command is unavailable', async () => {
+  const client = createNativeMatrixClient(async () => unavailable);
+  assert.deepEqual(await client.getRooms(), []);
+  assert.equal(await client.getRoom('!r:example.org'), null);
+});
+
+test('F2 fetchRoomEvent proxies matrix_timeline_event_readback', async () => {
+  const { invoke } = invokingWith({
+    matrix_timeline_event_readback: {
+      sessionGeneration: 8,
+      roomId: '!r:example.org',
+      eventId: '$evt1',
+      item: {
+        itemId: 'i1',
+        eventId: '$evt1',
+        sender: '@alice:example.org',
+        type: 'm.room.message',
+        body: 'hello',
+        originServerTs: 999,
+      },
+    },
+  });
+  const client = createNativeMatrixClient(invoke);
+  const evt = await client.fetchRoomEvent('!r:example.org', '$evt1');
+  assert.equal(evt?.eventId, '$evt1');
+  assert.equal(evt?.sender, '@alice:example.org');
+  assert.equal(evt?.type, 'm.room.message');
+  assert.equal(evt?.body, 'hello');
+});
+
+test('F2 fetchRoomEvent returns null on unavailable command', async () => {
+  const client = createNativeMatrixClient(async () => unavailable);
+  assert.equal(await client.fetchRoomEvent('!r:example.org', '$evt1'), null);
+});
