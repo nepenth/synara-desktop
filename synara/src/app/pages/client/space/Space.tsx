@@ -26,8 +26,15 @@ import {
   toRem,
 } from 'folds';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { JoinRule, Room } from 'matrix-js-sdk';
-import { RoomJoinRulesEventContent } from 'matrix-js-sdk/lib/types';
+
+type RoomJoinRulesEventContent = {
+  join_rule: string;
+  allow?: Array<{
+    type: string;
+    room_id?: string;
+    not_room_id?: string;
+  }>;
+};
 import FocusTrap from 'focus-trap-react';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { mDirectAtom } from '../../../state/mDirectList';
@@ -70,6 +77,7 @@ import { useClosedNavCategoriesAtom } from '../../../state/hooks/closedNavCatego
 import { useStateEvent } from '../../../hooks/useStateEvent';
 import { Membership, StateEvent } from '../../../../types/matrix/room';
 import { stopPropagation } from '../../../utils/keyboard';
+import type { EventedRoomReading } from '../../../utils/roomEvents';
 import { getMatrixToRoom } from '../../../plugins/matrix-to';
 import { getViaServers } from '../../../plugins/via-servers';
 import { useSetting } from '../../../state/hooks/settings';
@@ -89,7 +97,7 @@ import { InviteUserPrompt } from '../../../components/invite-user-prompt';
 import { useCallEmbed } from '../../../hooks/useCallEmbed';
 
 type SpaceMenuProps = {
-  room: Room;
+  room: EventedRoomReading;
   requestClose: () => void;
 };
 const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClose }, ref) => {
@@ -272,7 +280,7 @@ function SpaceHeader() {
             <Text size="H4" truncate>
               {spaceName}
             </Text>
-            {joinRules?.join_rule !== JoinRule.Public && <Icon src={Icons.Lock} size="50" />}
+            {joinRules?.join_rule !== 'public' && <Icon src={Icons.Lock} size="50" />}
           </Box>
           <Box shrink="No">
             <IconButton aria-pressed={!!menuAnchor} variant="Background" onClick={handleOpenMenu}>
@@ -402,7 +410,7 @@ export function Space() {
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 
   const getRoom = useCallback(
-    (rId: string): Room | undefined => {
+    (rId: string): EventedRoomReading | undefined => {
       if (allJoinedRooms.has(rId)) {
         return mx.getRoom(rId) ?? undefined;
       }

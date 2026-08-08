@@ -1,5 +1,4 @@
 import React, { MouseEventHandler, forwardRef, useState } from 'react';
-import { Room } from 'matrix-js-sdk';
 import {
   Avatar,
   Box,
@@ -36,6 +35,7 @@ import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
 import { useRoomTypingMember } from '../../hooks/useRoomTypingMembers';
 import { TypingIndicator } from '../../components/typing-indicator';
 import { stopPropagation } from '../../utils/keyboard';
+import type { EventedRoomReading } from '../../utils/roomEvents';
 import { getMatrixToRoom } from '../../plugins/matrix-to';
 import { getCanonicalAliasOrRoomId, isRoomAlias } from '../../utils/matrix';
 import { getViaServers } from '../../plugins/via-servers';
@@ -63,7 +63,7 @@ import { livekitSupport } from '../../hooks/useLivekitSupport';
 import { StateEvent } from '../../../types/matrix/room';
 
 type RoomNavItemMenuProps = {
-  room: Room;
+  room: EventedRoomReading;
   requestClose: () => void;
   notificationMode?: RoomNotificationMode;
 };
@@ -242,7 +242,7 @@ function CallChatToggle() {
 }
 
 type RoomNavItemProps = {
-  room: Room;
+  room: EventedRoomReading;
   selected: boolean;
   linkPath: string;
   notificationMode?: RoomNotificationMode;
@@ -285,8 +285,11 @@ function RoomNavItemImpl({
   };
 
   const optionsVisible = hover || !!menuAnchor;
-  const callSession = useCallSession(room);
-  const callMembers = useCallMembers(room, callSession);
+  const callSession = useCallSession(room as unknown as Parameters<typeof useCallSession>[0]);
+  const callMembers = useCallMembers(
+    room as unknown as Parameters<typeof useCallMembers>[0],
+    callSession
+  );
   const startCall = useCallStart(direct);
   const callEmbed = useCallEmbed();
   const callPref = useAtomValue(useCallPreferencesAtom());
@@ -313,7 +316,7 @@ function RoomNavItemImpl({
     // Start call in second click
     if (selected) {
       evt.preventDefault();
-      startCall(room, callPref);
+      startCall(room as unknown as Parameters<typeof startCall>[0], callPref);
     }
   };
 

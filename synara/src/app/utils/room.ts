@@ -63,6 +63,7 @@ export type MemberReading = {
   userId: UserId;
   rawDisplayName: string;
   getMxcAvatarUrl(): string | undefined;
+  events: { member?: MatrixEventReading };
 };
 
 type RoomStateReading = {
@@ -73,7 +74,7 @@ type RoomStateReading = {
 /** Narrow structural projection of a room. */
 export type RoomReading = {
   roomId: RoomId;
-  name?: string;
+  name: string;
   currentState: RoomStateReading;
   getLiveTimeline(): {
     getState(direction: string): RoomStateReading | undefined;
@@ -94,7 +95,12 @@ export type RoomReading = {
   getJoinedMemberCount(): number;
   getCanonicalAlias(): string | null;
   getType(): string | undefined;
+  getVersion(): string;
+  isCallRoom(): boolean;
   isSpaceRoom(): boolean;
+  getTimelineForEvent?(
+    eventId: string
+  ): { getTimelineSet(): EventTimelineSetReading; getEvents(): MatrixEventReading[] } | null;
   hasMembershipState(userId: UserId, membership: string): boolean;
 };
 

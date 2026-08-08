@@ -1,7 +1,7 @@
 import React, { PointerEventHandler, useRef, useState } from 'react';
-import { Room } from 'matrix-js-sdk';
 import { Box, Header, Icon, IconButton, Icons, Line, Scroll, Text, config, toRem } from 'folds';
 import { ContainerColor } from '../../styles/ContainerColor.css';
+import type { EventedRoomReading } from '../../utils/roomEvents';
 import { RoomNotesPanel } from './room-notes/RoomNotesPanel';
 import { RoomPinMenu } from './room-pin-menu';
 import { MessageSearch } from '../message-search';
@@ -9,7 +9,7 @@ import { MessageSearch } from '../message-search';
 export type RoomSidePanelType = 'notes' | 'pins' | 'search';
 
 type RoomSearchPanelProps = {
-  room: Room;
+  room: EventedRoomReading;
   requestClose: () => void;
 };
 
@@ -42,7 +42,7 @@ function RoomSearchPanel({ room, requestClose }: RoomSearchPanelProps) {
 }
 
 type RoomSidePanelProps = {
-  room: Room;
+  room: EventedRoomReading;
   activePanel: RoomSidePanelType;
   requestClose: () => void;
 };
@@ -125,7 +125,11 @@ export function RoomSidePanel({ room, activePanel, requestClose }: RoomSidePanel
         <RoomNotesPanel room={room} requestClose={requestClose} embedded />
       )}
       {activePanel === 'pins' && (
-        <RoomPinMenu room={room} requestClose={requestClose} mode="drawer" />
+        <RoomPinMenu
+          room={room as unknown as React.ComponentProps<typeof RoomPinMenu>['room']}
+          requestClose={requestClose}
+          mode="drawer"
+        />
       )}
       {activePanel === 'search' && <RoomSearchPanel room={room} requestClose={requestClose} />}
     </Box>
