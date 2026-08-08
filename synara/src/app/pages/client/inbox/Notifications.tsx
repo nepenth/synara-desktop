@@ -15,7 +15,32 @@ import {
   toRem,
 } from 'folds';
 import { useSearchParams } from 'react-router-dom';
-import { INotification, INotificationsResponse, IRoomEvent, Method, Room } from 'matrix-js-sdk';
+/** Structural mirrors of the js-sdk notifications wire types (fields read here). */
+type NotificationEventReading = {
+  event_id: string;
+  type: string;
+  sender: string;
+  origin_server_ts: number;
+  content: Record<string, any>;
+  unsigned?: Record<string, any>;
+  [key: string]: any;
+};
+type NotificationReading = {
+  event: NotificationEventReading;
+  room_id: string;
+  ts?: number;
+  read?: boolean;
+  [key: string]: unknown;
+};
+type NotificationsResponseReading = {
+  notifications: NotificationReading[];
+  next_token?: string;
+};
+type NotificationsRoomReading = EventedRoomReading & {
+  findEventById(eventId: string): MatrixEventReading | undefined;
+};
+import type { EventedRoomReading } from '../../../utils/roomEvents';
+import type { MatrixEventReading } from '../../../utils/room';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { HTMLReactParserOptions } from 'html-react-parser';
 import { Opts as LinkifyOpts } from 'linkifyjs';
@@ -104,7 +129,7 @@ import {
 
 type RoomNotificationsGroup = {
   roomId: string;
-  notifications: INotification[];
+  notifications: NotificationReading[];
 };
 type NotificationTimeline = {
   nextToken?: string;
@@ -114,7 +139,7 @@ type LoadTimeline = (from?: string) => Promise<void>;
 type SilentReloadTimeline = () => Promise<void>;
 
 const groupNotifications = (
-  notifications: INotification[],
+  notifications: NotificationReading[],
   allowRooms: Set<string>
 ): RoomNotificationsGroup[] => {
   const groups: RoomNotificationsGroup[] = [];
@@ -150,8 +175,8 @@ const useNotificationTimeline = (
   const fetchNotifications = useCallback(
     (from?: string, limit?: number, only?: 'highlight') => {
       const queryParams = { from, limit, only };
-      return mx.http.authedRequest<INotificationsResponse>(
-        Method.Get,
+      return mx.http.authedRequest<NotificationsResponseReading>(
+        'GET' as unknown as Parameters<typeof mx.http.authedRequest>[0],
         '/notifications',
         queryParams
       );
@@ -205,8 +230,8 @@ const useNotificationTimeline = (
 };
 
 type RoomNotificationsGroupProps = {
-  room: Room;
-  notifications: INotification[];
+  room: NotificationsRoomReading;
+  notifications: NotificationReading[];
   mediaAutoLoad?: boolean;
   hideActivity: boolean;
   onOpen: (roomId: string, eventId: string) => void;
@@ -264,7 +289,9 @@ function RoomNotificationsGroupComp({
     [mx, room, linkifyOpts, mentionClickHandler, spoilerClickHandler, useAuthentication]
   );
 
-  const renderMatrixEvent = useMatrixEventRenderer<[IRoomEvent, string, GetContentCallback]>(
+  const renderMatrixEvent = useMatrixEventRenderer<
+    [NotificationEventReading, string, GetContentCallback]
+  >(
     {
       [MessageEvent.RoomMessage]: (event, displayName, getContent) => {
         if (event.unsigned?.redacted_because) {
@@ -289,7 +316,7 @@ function RoomNotificationsGroupComp({
         );
       },
       [MessageEvent.RoomMessageEncrypted]: (evt, displayName) => {
-        const evtTimeline = room.getTimelineForEvent(evt.event_id);
+        const evtTimeline = room.getTimelineForEvent?.(evt.event_id);
 
         const mEvent = evtTimeline?.getEvents().find((e) => e.getId() === evt.event_id);
 
@@ -392,7 +419,7 @@ function RoomNotificationsGroupComp({
         return (
           <Box grow="Yes" direction="Column">
             <Text size="T400" priority="300">
-              Room Tombstone. {content.body}
+              NotificationsRoomReading Tombstone. {content.body}
             </Text>
           </Box>
         );

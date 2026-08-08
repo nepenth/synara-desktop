@@ -25,7 +25,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 7,
+          "fileCount": 6,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -88,14 +88,14 @@
         },
         "room_lists": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 4,
+          "fileCount": 3,
           "listenerCandidateOccurrences": 0,
-          "methodCandidateOccurrences": 10,
+          "methodCandidateOccurrences": 9,
           "networkingOccurrences": 0
         },
         "room_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 5,
+          "fileCount": 4,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -130,9 +130,9 @@
         },
         "timelines": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 4,
+          "fileCount": 3,
           "listenerCandidateOccurrences": 8,
-          "methodCandidateOccurrences": 7,
+          "methodCandidateOccurrences": 6,
           "networkingOccurrences": 0
         },
         "typing": {
@@ -150,20 +150,20 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 10,
-      "importFileCount": 8,
+      "fileCount": 9,
+      "importFileCount": 7,
       "methodCandidateFrequencies": [
         {
-          "count": 8,
+          "count": 7,
           "name": "getRoom"
         },
         {
           "count": 6,
-          "name": "findEventById"
+          "name": "refreshToken"
         },
         {
-          "count": 6,
-          "name": "refreshToken"
+          "count": 5,
+          "name": "findEventById"
         },
         {
           "count": 4,
@@ -272,8 +272,8 @@
           "importOccurrences": 0
         },
         "Room": {
-          "fileCount": 5,
-          "importOccurrences": 5
+          "fileCount": 4,
+          "importOccurrences": 4
         },
         "RoomMember": {
           "fileCount": 0,
@@ -294,8 +294,8 @@
       },
       "modules": [
         {
-          "fileCount": 8,
-          "importCount": 8,
+          "fileCount": 7,
+          "importCount": 7,
           "path": "matrix-js-sdk"
         },
         {
@@ -345,16 +345,16 @@
       "scope": "role",
       "symbols": [
         {
-          "fileCount": 5,
-          "importCount": 5,
-          "name": "Room",
+          "fileCount": 4,
+          "importCount": 4,
+          "name": "MatrixClient",
           "typeImports": 0,
-          "valueImports": 5
+          "valueImports": 4
         },
         {
           "fileCount": 4,
           "importCount": 4,
-          "name": "MatrixClient",
+          "name": "Room",
           "typeImports": 0,
           "valueImports": 4
         },
@@ -431,20 +431,6 @@
         {
           "fileCount": 1,
           "importCount": 1,
-          "name": "INotification",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "INotificationsResponse",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
           "name": "IRefreshTokenResponse",
           "typeImports": 1,
           "valueImports": 0
@@ -453,13 +439,6 @@
           "fileCount": 1,
           "importCount": 1,
           "name": "IResultContext",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "IRoomEvent",
           "typeImports": 0,
           "valueImports": 1
         },
@@ -530,13 +509,6 @@
           "fileCount": 1,
           "importCount": 1,
           "name": "MatrixRTCSessionManagerEvents",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "Method",
           "typeImports": 0,
           "valueImports": 1
         },
@@ -2546,75 +2518,6 @@
       "role": "test"
     },
     {
-      "bucket": "page",
-      "categories": [
-        "client_methods",
-        "room_methods",
-        "room_lists",
-        "timelines"
-      ],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 18,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "INotification"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "INotificationsResponse"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IRoomEvent"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "Method"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "Room"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "timelines",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 488,
-          "name": "findEventById"
-        },
-        {
-          "category": "room_lists",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 764,
-          "name": "getRoom"
-        }
-      ],
-      "modelCoupling": ["Room"],
-      "networking": [],
-      "path": "synara/src/app/pages/client/inbox/Notifications.tsx",
-      "role": "production"
-    },
-    {
       "bucket": "plugin",
       "categories": [
         "client_methods",
@@ -3652,7 +3555,7 @@
         "client-lifecycle": 1,
         "feature": 1,
         "hook": 2,
-        "page": 2,
+        "page": 1,
         "plugin": 2
       },
       "planComparison": {
@@ -3661,13 +3564,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 8,
+      "productionImportFiles": 7,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 18
+      "totalImportFiles": 17
     },
     "repositoryWide": {
-      "productionImportFiles": 8,
+      "productionImportFiles": 7,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -3676,7 +3579,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 21
+      "totalImportFiles": 20
     }
   }
 }
