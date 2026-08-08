@@ -352,3 +352,64 @@ test('F4 getProfileInfo returns session identity', async () => {
   assert.equal(profile.userId, '@alice:example.org');
   assert.equal(profile.deviceId, 'DEV');
 });
+
+test('F5 getCryptoStatus proxies matrix_crypto_status (no keys, D1C)', async () => {
+  const { invoke, callLog } = invokingWith({
+    matrix_crypto_status: {
+      sessionGeneration: 7,
+      encryptionEnabled: true,
+      crossSigningState: 'Ready',
+    },
+  });
+  const client = createNativeMatrixClient(invoke);
+  const crypto = await client.getCryptoStatus();
+  assert.equal(crypto?.encryptionEnabled, true);
+  assert.equal(crypto?.crossSigningState, 'Ready');
+  assert.equal(callLog[0], 'matrix_crypto_status');
+});
+
+test('F5 getCrypto returns status-backed, key-free reading', async () => {
+  const { invoke } = invokingWith({
+    matrix_crypto_status: {
+      sessionGeneration: 3,
+      encryptionEnabled: true,
+      crossSigningState: 'Ready',
+    },
+  });
+  const client = createNativeMatrixClient(invoke);
+  const crypto = client.getCrypto();
+  assert.equal(await crypto.isCrossSigningReady(), true);
+  assert.equal(await crypto.isEncryptionEnabled(), true);
+  assert.equal(await crypto.getCrossSigningState(), 'Ready');
+});
+
+test('F5 getCryptoStatus fails closed when unavailable', async () => {
+  const client = createNativeMatrixClient(async () => unavailable);
+  assert.equal(await client.getCryptoStatus(), null);
+  const crypto = client.getCrypto();
+  assert.equal(await crypto.isCrossSigningReady(), false);
+});
+
+test('F5 decryptEventIfNeeded is a documented no-op (native events pre-decrypted)', async () => {
+  const client = createNativeMatrixClient(async () => unavailable);
+  await client.decryptEventIfNeeded({ eventId: '$e' });
+  assert.ok(true);
+});
+
+test('F5 downloadKeysForUsers is a D1C-key-free stub', async () => {
+  const client = createNativeMatrixClient(async () => unavailable);
+  assert.deepEqual(await client.downloadKeysForUsers(['@alice:example.org']), {});
+});
+
+test('F5 matrixRTC is a GAP-safe stub (V-CALL is matrix-widget-api)', async () => {
+  const client = createNativeMatrixClient(async () => unavailable);
+  assert.equal(client.matrixRTC.getRoomSession({ roomId: '!r:example.org' }), null);
+  assert.doesNotThrow(() => client.matrixRTC.on('session_started', () => undefined));
+});
+
+test('F5 extended GAP stubs satisfy the anchor without data', async () => {
+  const client = createNativeMatrixClient(async () => unavailable);
+  assert.deepEqual(await client.getCapabilities(), {});
+  assert.equal(await client.getOpenIdToken(), null);
+  assert.equal(await client.search({ term: 'x' }), null);
+});
