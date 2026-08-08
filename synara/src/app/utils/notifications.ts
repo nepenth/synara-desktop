@@ -444,7 +444,7 @@ export async function markAsRead(
 
   if (!latestEvent) return;
 
-  await markResolvedEventAsRead(mx, room, privateReceipt, latestEvent, mode);
+  await markResolvedEventAsRead(mx, room, privateReceipt, latestEvent as MatrixEvent, mode);
 }
 
 /**

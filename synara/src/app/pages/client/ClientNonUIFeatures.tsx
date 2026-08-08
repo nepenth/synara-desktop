@@ -727,7 +727,7 @@ function AgentApprovalNotifications() {
           const event = events[index];
           if (!event) continue;
           if (Date.now() - event.getTs() > RECENT_AGENT_APPROVAL_MS) break;
-          notifyApprovalEvent(event, room);
+          notifyApprovalEvent(event as MatrixEvent, room);
         }
       });
     };

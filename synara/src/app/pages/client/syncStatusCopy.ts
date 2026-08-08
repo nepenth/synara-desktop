@@ -8,7 +8,7 @@ const SyncState = {
   Reconnecting: 'RECONNECTING',
 } as const;
 
-type SyncState = typeof SyncState[keyof typeof SyncState];
+export type SyncState = typeof SyncState[keyof typeof SyncState];
 
 export const getSyncStatusBannerCopy = (state: SyncState | null): string | null => {
   if (state === SyncState.Catchup) {
