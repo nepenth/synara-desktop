@@ -245,6 +245,44 @@ const parseTimelineEventReadback = (value: unknown): FacadeTimelineEventReading 
   return { eventId, sender, type: eventType, body: body ?? '', originServerTs };
 };
 
+/** F3 — send text input mirroring NativeSendTextInput (room/nativeSendTextOwner). */
+export type FacadeSendTextInput = {
+  roomId: RoomId;
+  body: string;
+  msgType?: string;
+  formattedBody?: string;
+  mentionUserIds?: UserId[];
+  mentionRoom?: boolean;
+  replyTo?: EventId;
+  threadRoot?: EventId;
+  txnId?: string;
+};
+
+export type FacadeSendTextResult = {
+  roomId: RoomId;
+  eventId: EventId;
+  localTxnId: string;
+  status: 'sent';
+};
+
+export type FacadeSendEventContent = Record<string, unknown>;
+
+export type FacadeSendStateEventContent = Record<string, unknown>;
+
+export type FacadeSendStateEventResult = {
+  status: string;
+  roomId?: RoomId;
+};
+
+const parseSendTextResult = (value: unknown): FacadeSendTextResult | null => {
+  if (!isObject(value) || hasForbiddenWireFields(value)) return null;
+  const roomId = reqString(value, 'roomId');
+  const eventId = reqString(value, 'eventId');
+  const localTxnId = reqString(value, 'localTxnId');
+  if (roomId === null || eventId === null || localTxnId === null) return null;
+  return { roomId, eventId, localTxnId, status: 'sent' };
+};
+
 /** In-process emitter (F1). A native sync-state PUSH event is a later slice. */
 export class NativeClientEmitter {
   private readonly listeners = new Map<string, Set<NativeClientListener>>();
@@ -470,6 +508,76 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       const result = await invoke('matrix_timeline_event_readback', { roomId, eventId });
       if (!result.available) return null;
       return parseTimelineEventReadback(result.value);
+    },
+
+    /** F3 — send a plain message via matrix_send_text (fail-closed null). */
+    async sendMessage(input: FacadeSendTextInput): Promise<FacadeSendTextResult | null> {
+      const result = await invoke('matrix_send_text', {
+        roomId: input.roomId,
+        body: input.body,
+        msgType: input.msgType,
+        formattedBody: input.formattedBody,
+        mentionUserIds: input.mentionUserIds,
+        mentionRoom: input.mentionRoom,
+        replyTo: input.replyTo,
+        threadRoot: input.threadRoot,
+        txnId: input.txnId,
+      });
+      if (!result.available) return null;
+      return parseSendTextResult(result.value);
+    },
+
+    /** F3 — generic event send: m.room.message tunnels to matrix_send_text; else GAP null. */
+    async sendEvent(
+      roomId: RoomId,
+      type: string,
+      content: FacadeSendEventContent
+    ): Promise<FacadeSendTextResult | null> {
+      if (type === 'm.room.message') {
+        return this.sendMessage({ roomId, body: String(content.body ?? '') });
+      }
+      // Other event types have no generic native send command yet (GAP).
+      return Promise.resolve(null);
+    },
+
+    /** F3 — room state setters for the covered types; else GAP null. */
+    async sendStateEvent(
+      roomId: RoomId,
+      type: string,
+      content: FacadeSendStateEventContent
+    ): Promise<FacadeSendStateEventResult | null> {
+      const command =
+        type === 'm.room.name'
+          ? 'matrix_set_room_name'
+          : type === 'm.room.topic'
+          ? 'matrix_set_room_topic'
+          : type === 'm.room.avatar'
+          ? 'matrix_set_room_avatar'
+          : null;
+      if (!command) return null; // GAP: no generic state-event command
+      const result = await invoke(command, { roomId, name: content.name, avatarUrl: content.url });
+      if (!result.available) return null;
+      return isObject(result.value) ? (result.value as FacadeSendStateEventResult) : null;
+    },
+
+    /** F3 — account-data is a documented GAP (no native command yet); fail-closed null. */
+    async getAccountData(type: string): Promise<unknown> {
+      const noNativeAccountDataCommand = type.length > 0; // eslint-disable-line no-unused-vars
+      return Promise.resolve(noNativeAccountDataCommand ? null : null);
+    },
+    async setAccountData(type: string, content: Record<string, unknown>): Promise<unknown> {
+      if (type.length === 0 || Object.keys(content).length === 0) return Promise.resolve(null);
+      return Promise.resolve(null); // GAP: no native account-data command
+    },
+    async setRoomAccountData(
+      roomId: RoomId,
+      type: string,
+      content: Record<string, unknown>
+    ): Promise<unknown> {
+      if (roomId.length === 0 || type.length === 0 || Object.keys(content).length === 0) {
+        return Promise.resolve(null);
+      }
+      return Promise.resolve(null); // GAP: no native account-data command
     },
 
     // D1C guard: fail-closed readiness helper for callers that must not run
