@@ -13,12 +13,12 @@
 
 | Field              | Value                                                                                                                                                                                 |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Last updated (UTC) | **2026-08-07**                                                                                                                                                                        |
-| Integration tip    | **`ed52a787`** — #559 timeline links/opening burn (113→111); #556/#557 prior                                                                                                          |
-| Active work        | **Orchestrated burn active via this harness** — [operating-instructions.md](operating-instructions.md)                                                                                |
+| Last updated (UTC) | **2026-08-08** |
+| Integration tip    | **`4365ca96`** — #595 test-import burn (test 10→0); #593/#594 V-CALL burn (4→1); #560–#592 prior (work log) |
+| Active work        | **Orchestrated burn active via this harness** — V-BURN epic (`initMatrix.ts`, sole importer) awaiting operator decision ([operating-instructions.md](operating-instructions.md)) |
 | Product runtime    | Native owns core D0 + V-CRYPTO + residual-empty slices through members/presence/directory/join-rule READ; long-tail JS importers remain                                               |
 | Execution model    | **prime-agent orchestrator + `deepseek-v4-flash-0731` sub-agents, max 2 concurrent** (locally hosted; only configured model) — [operating-instructions.md](operating-instructions.md) |
-| Import accounting  | Desktop production import files **111** / baseline **220** (**109** removed). Allowlist **111**.                                                                                      |
+| Import accounting  | Desktop production import files **1** / baseline **220** (**219** removed, ~99.5%); test import files **0**. Allowlist **1**. |
 | Dual backend       | **`false`** (forbidden forever)                                                                                                                                                       |
 | Public repo        | **PUBLIC — no secrets ever**; placeholder-only examples ([operating-instructions.md](operating-instructions.md) §1)                                                                   |
 | UI/UX fidelity     | **Preserve existing look and feel** — no UX/UI change when replacing a capability ([operating-instructions.md](operating-instructions.md) §3)                                         |
@@ -34,10 +34,10 @@
 
 |                |                                                                                                                                                                                                                                                                                           |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Operating model updated (2026-08-06).** Historical 2026-08-03 pause superseded — resume through this harness. Tip **`57ab9e64`**. Production importers **114**. Public-repo hygiene + UI/UX fidelity mandatory on every slice ([operating-instructions.md](operating-instructions.md)). |
-| **Tip**        | `57ab9e64`                                                                                                                                                                                                                                                                                |
-| **Active PRs** | none product; operating-doc updates (this branch, docs-only)                                                                                                                                                                                                                              |
-| **Blocked**    | V-BURN HOLD; #39 gated; dual_backend forbidden; no external model APIs                                                                                                                                                                                                                    |
+| **Now**        | **Burn at 1 importer (tip `4365ca96`).** Production importers 114→**1** (`initMatrix.ts` only), test importers **0**, allowlist **1**, all gates green. Sole importer is the live-`createClient` bootstrap epic (no native `initClient` exists); V-BURN completion waits on the operator INITMATRIX decision (native epic vs sanctioned legacy-loader). Public-repo hygiene + UI/UX fidelity held through every slice. |
+| **Tip**        | `4365ca96` |
+| **Active PRs** | none; this docs-only tracking update |
+| **Blocked**    | V-BURN epic (`initMatrix`) awaits operator INITMATRIX decision; #39 gated; dual_backend forbidden; no external model APIs |
 
 ---
 
@@ -94,6 +94,21 @@ importers and carries the tip inventory's 124 files / 124 paths unchanged.
 ---
 
 ## Work log (newest first)
+## Work log (newest first)
+
+### 2026-08-08 — tip `4365ca96` — burn 114→1 production, test importers 0
+
+| When (UTC) | Item                  | Result        | Notes |
+| ---------- | --------------------- | ------------- | ----- |
+| current    | **Integration tip**   | **`4365ca96`** | #560–#595 merged; every slice independently reviewed + Quality gate + Desktop package gate green; provenance anchor verified after each merge |
+| current    | **Imports / allowlist** | **1 / 1**   | Production 114→**1** (`synara/src/client/initMatrix.ts` only); test import files 10→**0**; repo-wide total 4 (3 tooling = guardrail fixtures); ~99.5% removed |
+| current    | **#560–#592**         | **merged**    | Command/room/state/settings/timeline/search/pin/sync/room-graph/lifecycle/crypto/call-members/SpaceTabs/read-receipts/ClientRoot/Notifications/ClientNonUIFeatures/useCall/useMessageSearch burns via sliced PRs |
+| current    | **#593/#594**         | **merged**    | V-CALL lane: CallWidgetDriver + CallEmbed + useCallEmbed burned (4→1); all live client calls kept via derived `LocalMx`/readings + probed literals; matrix-widget-api remains a runtime dep (not a js-sdk removal target) |
+| current    | **#595**              | **merged**    | Test-import burn: 10 test fixtures to probed literals/local structurals (712/712 modernization unchanged); `initMatrix` MatrixError contract duck-typed (`isMatrixErrorLike`, Error & { errcode?: string }); test importers **0** |
+| current    | **V-BURN**            | **HOLD**      | Sole importer is the epic: `initMatrix` = live `createClient`/IndexedDBStore/login/sync/token-refresh bootstrap (every derived client type hangs off `typeof initClient`); no native `initClient` exists. `matrix-js-sdk@42.0.0` removal = exactly one epic away (no transitive dependents). Waits on operator INITMATRIX decision (native-bootstrap epic vs sanctioned legacy-loader) |
+| current    | **Gates**             | **green**     | tsc 0 · node --test 292/0 · guardrails PASS allowlist 1 · modernization 712/0 · prettier clean |
+| current    | **Operators**         | **needed**    | INITMATRIX decision; luna provider visibility for the max-thinking epic lane (not visible to this session's model list) |
+
 
 ### 2026-08-06 — operating instructions — public repo + this harness + UI/UX fidelity
 

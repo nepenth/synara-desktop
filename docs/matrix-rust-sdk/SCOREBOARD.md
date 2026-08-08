@@ -2,15 +2,17 @@
 
 | Field                                                  | Value                                                                                                                                                                                                                                  |
 | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Updated                                                | **2026-08-07** (tip `ed52a787` · 111 importers)                                                                                                                                                                                        |
-| Tip                                                    | `ed52a787` on `feature/matrix-rust-sdk-full-replacement`                                                                                                                                                                               |
-| Production `matrix-js-sdk` import files (`synara/src`) | **111** (plan baseline was **220**; **109 removed**, ~**49.5%**)                                                                                                                                                                       |
-| Allowlist `pathCount`                                  | **111** (matches `paths[]` length)                                                                                                                                                                                                     |
+| Updated                                                | **2026-08-08** (tip `4365ca96` · 1 importer) |
+| Tip                                                    | `4365ca96` on `feature/matrix-rust-sdk-full-replacement` |
+| Production `matrix-js-sdk` import files (`synara/src`) | **1** (`initMatrix.ts` only) — plan baseline **220**; **219 removed**, ~**99.5%** |
+| Allowlist `pathCount`                                  | **1** (matches `paths[]` length) |
+| Test `matrix-js-sdk` import files (`synara/src`)             | **0** (burned in #595; fixtures migrated to probed literals)  |
 | Dual backend                                           | **false** (forbidden forever)                                                                                                                                                                                                          |
-| Pipeline                                               | **RUNNING** — prime-agent orchestrated burn (see NOTES/program state)                                                                                                                                                                  |
+| Pipeline                                               | **GREEN** — Quality gate + Desktop package gate pass at tip; 0 open PRs |
 | Operating model                                        | **prime-agent orchestrator + `deepseek-v4-flash-0731` sub-agents (max 2 concurrent)** — locally hosted, only configured model; public-repo hygiene + UI/UX fidelity always on ([operating-instructions.md](operating-instructions.md)) |
 | Burn board                                             | https://kb.whyland.com/go/synara-matrix-burn                                                                                                                                                                                           |
 | Umbrella #39                                           | **Do not merge** without explicit user approval                                                                                                                                                                                        |
+| V-BURN                                                | **HOLD** — sole importer `initMatrix.ts` = live-`createClient` epic core; completion waits on operator INITMATRIX decision (native epic vs legacy-loader) |
 
 ## Current burn policy
 
@@ -58,7 +60,7 @@ completion or merge hold.
 | Join-rule READ residual-empty                       | **#521** native snapshot + RoomPublish                                                                                               |
 | Join-rule presentation DTO                          | **#522**                                                                                                                             |
 | Long-tail residual-empty (type/presentation/orphan) | **#517–#538** (room-summary → RenderMessageContent MsgType) — see [pause handoff](pause-handoff-2026-08-03.md)                       |
-| Importer burn (tip inventory)                       | **220 → 111** production files (#546/#557/#559 stack)                                                                                |
+| Importer burn (tip inventory)                       | **220 → 1** production files (`initMatrix.ts` only; #546→#595 stack); test import files 10→**0** (#595); allowlist **1**  |
 | Live-proof gate policy                              | **#544** — not a residual-empty merge gate                                                                                           |
 | Live-proof-held residual stack                      | **#546** landed (chrome/typing/notes/reaction/NativeEventContent/reactions)                                                          |
 | Desktop Beta package smoke                          | Actions run [30821912637](https://github.com/nepenth/synara-desktop/actions/runs/30821912637) @ `57ab9e64` (artifacts, not Releases) |
@@ -67,8 +69,8 @@ completion or merge hold.
 
 | Item                                        | Status                                          |
 | ------------------------------------------- | ----------------------------------------------- |
-| Daytime / overnight pipelines               | **PAUSED** (usage conservation 2026-08-03)      |
-| Open product PRs onto full-replacement base | **one docs-only policy PR draft** (this branch) |
+| Daytime / overnight pipelines               | **BURN COMPLETE (dormant-green)** — all gates green at tip; 0 open PRs |
+| Open product PRs onto full-replacement base | **none** — this docs-only tracking update |
 | Stale tip-docs drafts #502–#512             | **Closed** as obsolete tip-SHA freezes          |
 
 ## Left (finish-line order after resume)
