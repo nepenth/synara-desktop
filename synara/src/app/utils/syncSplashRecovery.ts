@@ -1,4 +1,14 @@
-import { SyncState } from 'matrix-js-sdk';
+/** SDK-neutral mirror of the js-sdk SyncState string values. */
+const SyncState = {
+  Error: 'ERROR',
+  Prepared: 'PREPARED',
+  Stopped: 'STOPPED',
+  Syncing: 'SYNCING',
+  Catchup: 'CATCHUP',
+  Reconnecting: 'RECONNECTING',
+} as const;
+
+type SyncState = typeof SyncState[keyof typeof SyncState];
 
 export const SYNC_PREPARED_TIMEOUT_MS = 30_000;
 

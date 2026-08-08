@@ -32,6 +32,7 @@ export const UserEvent = {
 export const ClientEvent = {
   Room: 'Room',
   DeleteRoom: 'deleteRoom',
+  Sync: 'sync',
 } as const;
 
 export const MatrixEventEvent = {
