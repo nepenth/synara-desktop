@@ -1,17 +1,21 @@
-import { MatrixClient } from 'matrix-js-sdk';
 import React, { useCallback, useState } from 'react';
 import { Box, config, Line, Text } from 'folds';
+import type { ClientEventedReading } from '../../hooks/useSyncState';
 import { useSyncState } from '../../hooks/useSyncState';
 import { ContainerColor } from '../../styles/ContainerColor.css';
-import { getSyncStatusBannerCopy, getSyncStatusBannerVariant } from './syncStatusCopy';
+import {
+  getSyncStatusBannerCopy,
+  getSyncStatusBannerVariant,
+  type SyncState,
+} from './syncStatusCopy';
 
 type StateData = {
-  current: ReturnType<MatrixClient['getSyncState']>;
-  previous: ReturnType<MatrixClient['getSyncState']> | null | undefined;
+  current: SyncState | null;
+  previous: SyncState | null | undefined;
 };
 
 type SyncStatusProps = {
-  mx: MatrixClient;
+  mx: ClientEventedReading;
 };
 export function SyncStatus({ mx }: SyncStatusProps) {
   const [stateData, setStateData] = useState<StateData>({

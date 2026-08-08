@@ -321,7 +321,7 @@ export class CallEmbed {
 
     // Timelines are most recent last, so reverse the order and limit ourselves to 100 events
     // to avoid overusing the CPU.
-    const events = [...getLoadedLiveTimelineEvents(room)].reverse().slice(0, 100);
+    const events = [...getLoadedLiveTimelineEvents(room)].reverse().slice(0, 100) as MatrixEvent[];
     function isRelevantTimelineEvent(timelineEvent: MatrixEvent): boolean {
       return timelineEvent.getId() === upToEventId || timelineEvent.getId() === ev.getId();
     }

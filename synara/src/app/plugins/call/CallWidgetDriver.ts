@@ -218,7 +218,7 @@ export class CallWidgetDriver extends WidgetDriver {
     const room = this.mx.getRoom(roomId);
     if (room === null) return [];
     const results: MatrixEvent[] = [];
-    const events = getLoadedLiveTimelineEvents(room);
+    const events = getLoadedLiveTimelineEvents(room) as MatrixEvent[];
 
     for (let i = events.length - 1; i >= 0; i -= 1) {
       const ev = events[i];
@@ -256,8 +256,10 @@ export class CallWidgetDriver extends WidgetDriver {
     if (state === undefined) return [];
 
     if (stateKey === undefined)
-      return state.getStateEvents(eventType).map((e) => e.getEffectiveEvent() as IRoomEvent);
-    const event = state.getStateEvents(eventType, stateKey);
+      return (state.getStateEvents(eventType) as MatrixEvent[]).map(
+        (e) => e.getEffectiveEvent() as IRoomEvent
+      );
+    const event = state.getStateEvents(eventType, stateKey) as MatrixEvent | null;
     return event === null ? [] : [event.getEffectiveEvent() as IRoomEvent];
   }
 

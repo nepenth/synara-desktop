@@ -10,7 +10,7 @@ import { ClientEvent } from '../utils/roomEvents';
  */
 export type SyncStateHandler = (syncState: any, prevState: any, data?: any) => void;
 
-type ClientEventedReading = MatrixClientReading & {
+export type ClientEventedReading = MatrixClientReading & {
   getSyncState(): unknown;
   getSyncStateData(): unknown;
   on(event: string, listener: (...args: any[]) => unknown): unknown;
