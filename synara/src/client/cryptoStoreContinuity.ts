@@ -1,5 +1,21 @@
-import type { MatrixClient } from 'matrix-js-sdk';
-import type { OwnDeviceKeys } from 'matrix-js-sdk/lib/crypto-api';
+/**
+ * Continuity guard between the persisted Rust crypto store and the homeserver
+ * device keys. The structural projections below mirror only the matrix-js-sdk
+ * (CryptoApi / MatrixClient) surface read by this module; the module itself is
+ * intentionally matrix-js-sdk-free so it can be exercised without a live client.
+ */
+
+type ContinuityDeviceKeys = { ed25519: string; curve25519: string };
+type ContinuityCryptoApi = { getOwnDeviceKeys(): Promise<ContinuityDeviceKeys> };
+type ContinuityDeviceKeysMap = { keys: Record<string, string> };
+type ContinuityDownloadKeysResult = {
+  failures?: Record<string, unknown>;
+  device_keys: Record<string, Record<string, ContinuityDeviceKeysMap | undefined> | undefined>;
+};
+type ContinuityClientReading = {
+  getCrypto(): ContinuityCryptoApi | undefined;
+  downloadKeysForUsers(userIds: string[]): Promise<ContinuityDownloadKeysResult>;
+};
 
 export type CryptoStoreContinuityFailureReason =
   | 'crypto-unavailable'
@@ -33,7 +49,7 @@ export const canRetryCryptoStoreContinuityFailure = (error: CryptoStoreContinuit
 const serverKeysMatchLocalIdentity = (
   serverKeys: Record<string, string>,
   deviceId: string,
-  localKeys: OwnDeviceKeys
+  localKeys: ContinuityDeviceKeys
 ): boolean =>
   serverKeys[`ed25519:${deviceId}`] === localKeys.ed25519 &&
   serverKeys[`curve25519:${deviceId}`] === localKeys.curve25519;
@@ -45,7 +61,7 @@ const serverKeysMatchLocalIdentity = (
  * cache. It must run after initRustCrypto and before startClient.
  */
 export const assertCryptoStoreContinuity = async (
-  mx: MatrixClient,
+  mx: ContinuityClientReading,
   {
     userId,
     deviceId,
@@ -62,7 +78,7 @@ export const assertCryptoStoreContinuity = async (
   }
 
   const localKeys = await crypto.getOwnDeviceKeys();
-  let serverResult: Awaited<ReturnType<MatrixClient['downloadKeysForUsers']>>;
+  let serverResult: ContinuityDownloadKeysResult;
   try {
     serverResult = await mx.downloadKeysForUsers([userId]);
   } catch {
@@ -79,8 +95,8 @@ export const assertCryptoStoreContinuity = async (
     throw new CryptoStoreContinuityError(userId, deviceId, 'server-device-missing');
   }
 
-  const serverEd25519 = serverDevice.keys?.[`ed25519:${deviceId}`];
-  const serverCurve25519 = serverDevice.keys?.[`curve25519:${deviceId}`];
+  const serverEd25519 = serverDevice.keys[`ed25519:${deviceId}`];
+  const serverCurve25519 = serverDevice.keys[`curve25519:${deviceId}`];
   if (!serverEd25519 || !serverCurve25519) {
     throw new CryptoStoreContinuityError(userId, deviceId, 'server-keys-missing');
   }

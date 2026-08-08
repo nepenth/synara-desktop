@@ -25,16 +25,16 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 11,
+          "fileCount": 10,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
         },
         "crypto_verification_recovery": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 3,
+          "fileCount": 2,
           "listenerCandidateOccurrences": 0,
-          "methodCandidateOccurrences": 3,
+          "methodCandidateOccurrences": 2,
           "networkingOccurrences": 0
         },
         "custom_raw_event_sends": {
@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 16,
-      "importFileCount": 14,
+      "fileCount": 15,
+      "importFileCount": 13,
       "methodCandidateFrequencies": [
         {
           "count": 14,
@@ -195,10 +195,6 @@
         },
         {
           "count": 2,
-          "name": "getCrypto"
-        },
-        {
-          "count": 2,
           "name": "getDeviceId"
         },
         {
@@ -212,6 +208,10 @@
         {
           "count": 2,
           "name": "search"
+        },
+        {
+          "count": 1,
+          "name": "getCrypto"
         },
         {
           "count": 1,
@@ -280,8 +280,8 @@
           "importOccurrences": 1
         },
         "MatrixClient": {
-          "fileCount": 7,
-          "importOccurrences": 7
+          "fileCount": 6,
+          "importOccurrences": 6
         },
         "MatrixError": {
           "fileCount": 2,
@@ -318,8 +318,8 @@
       },
       "modules": [
         {
-          "fileCount": 12,
-          "importCount": 12,
+          "fileCount": 11,
+          "importCount": 11,
           "path": "matrix-js-sdk"
         },
         {
@@ -341,11 +341,6 @@
           "fileCount": 1,
           "importCount": 1,
           "path": "matrix-js-sdk/lib/client"
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "path": "matrix-js-sdk/lib/crypto-api"
         },
         {
           "fileCount": 1,
@@ -406,10 +401,10 @@
           "valueImports": 7
         },
         {
-          "fileCount": 7,
-          "importCount": 7,
+          "fileCount": 6,
+          "importCount": 6,
           "name": "MatrixClient",
-          "typeImports": 2,
+          "typeImports": 1,
           "valueImports": 5
         },
         {
@@ -621,13 +616,6 @@
           "name": "Method",
           "typeImports": 0,
           "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "OwnDeviceKeys",
-          "typeImports": 1,
-          "valueImports": 0
         },
         {
           "fileCount": 1,
@@ -3869,58 +3857,6 @@
     },
     {
       "bucket": "client-lifecycle",
-      "categories": ["client_methods", "crypto_verification_recovery"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": true,
-          "line": 1,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "MatrixClient"
-            }
-          ],
-          "namespaceImport": null
-        },
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": true,
-          "line": 2,
-          "module": "matrix-js-sdk/lib/crypto-api",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": true,
-              "name": "OwnDeviceKeys"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "crypto_verification_recovery",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 59,
-          "name": "getCrypto"
-        }
-      ],
-      "modelCoupling": ["MatrixClient"],
-      "networking": [],
-      "path": "synara/src/client/cryptoStoreContinuity.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "client-lifecycle",
       "categories": [
         "client_methods",
         "event_emitters_listeners",
@@ -4205,7 +4141,7 @@
   "summary": {
     "desktopRuntimeBaseline": {
       "buckets": {
-        "client-lifecycle": 2,
+        "client-lifecycle": 1,
         "feature": 2,
         "hook": 3,
         "page": 4,
@@ -4218,13 +4154,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 14,
+      "productionImportFiles": 13,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 10,
-      "totalImportFiles": 24
+      "totalImportFiles": 23
     },
     "repositoryWide": {
-      "productionImportFiles": 14,
+      "productionImportFiles": 13,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 10,
@@ -4233,7 +4169,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 27
+      "totalImportFiles": 26
     }
   }
 }
