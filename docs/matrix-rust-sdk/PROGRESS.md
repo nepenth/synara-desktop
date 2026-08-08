@@ -14,7 +14,7 @@
 | Field              | Value                                                                                                                                                                                 |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-08** |
-| Integration tip    | **`4365ca96`** — #595 test-import burn (test 10→0); #593/#594 V-CALL burn (4→1); #560–#592 prior (work log) |
+| Integration tip    | **​`6693309f`​** — #596 docs-track, #597 program-status ledger, #598 INITMATRIX memo; burn at sole importer |
 | Active work        | **Orchestrated burn active via this harness** — V-BURN epic (`initMatrix.ts`, sole importer) awaiting operator decision ([operating-instructions.md](operating-instructions.md)) |
 | Product runtime    | Native owns core D0 + V-CRYPTO + residual-empty slices through members/presence/directory/join-rule READ; long-tail JS importers remain                                               |
 | Execution model    | **prime-agent orchestrator + `deepseek-v4-flash-0731` sub-agents, max 2 concurrent** (locally hosted; only configured model) — [operating-instructions.md](operating-instructions.md) |
@@ -35,7 +35,7 @@
 |                |                                                                                                                                                                                                                                                                                           |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Now**        | **Burn at 1 importer (tip `4365ca96`).** Production importers 114→**1** (`initMatrix.ts` only), test importers **0**, allowlist **1**, all gates green. Sole importer is the live-`createClient` bootstrap epic (no native `initClient` exists); V-BURN completion waits on the operator INITMATRIX decision (native epic vs sanctioned legacy-loader). Public-repo hygiene + UI/UX fidelity held through every slice. |
-| **Tip**        | `4365ca96` |
+| **Tip**        | `6693309f` |
 | **Active PRs** | none; this docs-only tracking update |
 | **Blocked**    | V-BURN epic (`initMatrix`) awaits operator INITMATRIX decision; #39 gated; dual_backend forbidden; no external model APIs |
 
@@ -124,7 +124,7 @@ redefinition). Acceptance remands V-BURN HOLD pending decision.
 
 | When (UTC) | Item                  | Result        | Notes |
 | ---------- | --------------------- | ------------- | ----- |
-| current    | **Integration tip**   | **`4365ca96`** | #560–#595 merged; every slice independently reviewed + Quality gate + Desktop package gate green; provenance anchor verified after each merge |
+| current    | **Integration tip**   | **`6693309f`** | #560–#598 merged; every slice independently reviewed + Quality gate + Desktop package gate green; provenance anchor verified after each merge |
 | current    | **Imports / allowlist** | **1 / 1**   | Production 114→**1** (`synara/src/client/initMatrix.ts` only); test import files 10→**0**; repo-wide total 4 (3 tooling = guardrail fixtures); ~99.5% removed |
 | current    | **#560–#592**         | **merged**    | Command/room/state/settings/timeline/search/pin/sync/room-graph/lifecycle/crypto/call-members/SpaceTabs/read-receipts/ClientRoot/Notifications/ClientNonUIFeatures/useCall/useMessageSearch burns via sliced PRs |
 | current    | **#593/#594**         | **merged**    | V-CALL lane: CallWidgetDriver + CallEmbed + useCallEmbed burned (4→1); all live client calls kept via derived `LocalMx`/readings + probed literals; matrix-widget-api remains a runtime dep (not a js-sdk removal target) |
