@@ -6,6 +6,8 @@ import {
   reqNumber,
   reqString,
 } from '../matrix-dto/parseUtil';
+import type { EventId, RoomId, UserId } from '../matrix-dto/ids';
+import { parseRoomSummary, type RoomSummary } from '../matrix-dto/room';
 import type { DesktopInvokeResult } from '../../utils/desktop';
 
 /**
@@ -157,6 +159,90 @@ const parseSessionSnapshot = (value: unknown): NativeSessionSnapshot => {
       reqString(value, 'homeserver_url') ?? reqString(value, 'homeserverUrl') ?? undefined,
     sessionGeneration: reqNumber(value, 'sessionGeneration') ?? undefined,
   };
+};
+
+/** Structural mirror of the Rust `NativeRoomListSnapshot` DTO (room_list/live.rs). */
+export type NativeRoomListSnapshot = {
+  sessionGeneration: number;
+  orderedRoomIds?: string[];
+  rooms: RoomSummary[];
+};
+
+/** Minimal F2 room reading backed by the native room-list projection. */
+export type FacadeRoomReading = {
+  roomId: RoomId;
+  name: string;
+  canonicalAlias: string | null;
+  avatarUrl: string | null;
+  membership: RoomSummary['membership'];
+  isDirect: boolean;
+  isSpace: boolean;
+  isEncrypted: boolean;
+  unreadCount: number;
+  highlightCount: number;
+  lastActivityTs?: number;
+  tombstoneSuccessorRoomId?: string | null;
+  getMyMembership(): string;
+  getCanonicalAlias(): string | null;
+  getJoinedMemberCount(): number;
+  isSpaceRoom(): boolean;
+  isCallRoom(): boolean;
+};
+
+/** Minimal F2 timeline event readback (matrix_timeline_event_readback). */
+export type FacadeTimelineEventReading = {
+  eventId: EventId;
+  sender: UserId;
+  type: string;
+  body: string;
+  originServerTs: number;
+};
+
+const parseRoomListSnapshot = (value: unknown): NativeRoomListSnapshot | null => {
+  if (!isObject(value) || hasForbiddenWireFields(value)) return null;
+  const sessionGeneration = reqNumber(value, 'sessionGeneration');
+  if (sessionGeneration === null || !isSafeGeneration(sessionGeneration)) return null;
+  const rawRooms = value.rooms;
+  if (!Array.isArray(rawRooms)) return null;
+  const rooms: RoomSummary[] = [];
+  for (const raw of rawRooms) {
+    const parsed = parseRoomSummary(raw);
+    if (parsed) rooms.push(parsed);
+  }
+  return { sessionGeneration, rooms };
+};
+
+const toFacadeRoomReading = (summary: RoomSummary): FacadeRoomReading => ({
+  roomId: summary.roomId,
+  name: summary.name ?? '',
+  canonicalAlias: summary.canonicalAlias ?? null,
+  avatarUrl: summary.avatarUrl ?? null,
+  membership: summary.membership,
+  isDirect: summary.isDirect,
+  isSpace: summary.isSpace,
+  isEncrypted: summary.isEncrypted,
+  unreadCount: summary.unreadCount,
+  highlightCount: summary.highlightCount,
+  lastActivityTs: summary.lastActivityTs,
+  tombstoneSuccessorRoomId: summary.tombstoneSuccessorRoomId ?? null,
+  getMyMembership: () => summary.membership,
+  getCanonicalAlias: () => summary.canonicalAlias ?? null,
+  getJoinedMemberCount: () => summary.heroes?.length ?? 0,
+  isSpaceRoom: () => summary.isSpace,
+  isCallRoom: () => false,
+});
+
+const parseTimelineEventReadback = (value: unknown): FacadeTimelineEventReading | null => {
+  if (!isObject(value) || hasForbiddenWireFields(value)) return null;
+  const eventId = reqString(value, 'eventId');
+  const rawItem = value.item;
+  if (eventId === null || !isObject(rawItem)) return null;
+  const sender = reqString(rawItem, 'sender');
+  const eventType = reqString(rawItem, 'type');
+  const body = optString(rawItem, 'body');
+  const originServerTs = reqNumber(rawItem, 'originServerTs');
+  if (sender === null || eventType === null || originServerTs === null) return null;
+  return { eventId, sender, type: eventType, body: body ?? '', originServerTs };
 };
 
 /** In-process emitter (F1). A native sync-state PUSH event is a later slice. */
@@ -359,6 +445,31 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
         stopped = true;
         clearInterval(timer);
       };
+    },
+
+    /** F2 — all joined rooms from matrix_room_list_snapshot (fail-closed []). */
+    async getRooms(): Promise<FacadeRoomReading[]> {
+      const result = await invoke('matrix_room_list_snapshot');
+      if (!result.available) return [];
+      const snapshot = parseRoomListSnapshot(result.value);
+      return snapshot ? snapshot.rooms.map(toFacadeRoomReading) : [];
+    },
+
+    /** F2 — single room by id from the native room-list projection. */
+    async getRoom(roomId: RoomId): Promise<FacadeRoomReading | null> {
+      const rooms = await this.getRooms();
+      const found = rooms.find((r) => r.roomId === roomId);
+      return found ?? null;
+    },
+
+    /** F2 — single event readback via matrix_timeline_event_readback. */
+    async fetchRoomEvent(
+      roomId: RoomId,
+      eventId: EventId
+    ): Promise<FacadeTimelineEventReading | null> {
+      const result = await invoke('matrix_timeline_event_readback', { roomId, eventId });
+      if (!result.available) return null;
+      return parseTimelineEventReadback(result.value);
     },
 
     // D1C guard: fail-closed readiness helper for callers that must not run
