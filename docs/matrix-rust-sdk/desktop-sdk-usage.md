@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |            3 |                2 |                   3 |
+| production |            1 |                2 |                   3 |
 | test       |           10 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |       **16** |                  |                     |
+| **total**  |       **14** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |     3 |
+| Production import files |     1 |
 | Test import files       |    10 |
-| Total import files      |    13 |
+| Total import files      |    11 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 3)
+- Production match: **no** (found 1)
 - Test match: **no** (found 10)
 
 ### Production files by bucket (desktop runtime only)
@@ -47,37 +47,30 @@ Expected **220** production and **12** test import files.
 | Bucket           | Files |
 | ---------------- | ----: |
 | client-lifecycle |     1 |
-| hook             |     1 |
-| plugin           |     1 |
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 3. Files with any finding: 5.
+Scope: **production only**. Import files: 1. Files with any finding: 3.
 
 ### Imported modules
 
 | Module path                            | Import sites | Files |
 | -------------------------------------- | -----------: | ----: |
-| `matrix-js-sdk`                        |            3 |     3 |
+| `matrix-js-sdk`                        |            1 |     1 |
 | `matrix-js-sdk/lib/http-api/interface` |            1 |     1 |
 
 ### Top imported symbols
 
 | Symbol                  | Imports | Value | Type-only | Files |
 | ----------------------- | ------: | ----: | --------: | ----: |
-| `MatrixClient`          |       3 |     3 |         0 |     3 |
-| `ClientEvent`           |       2 |     2 |         0 |     2 |
-| `Room`                  |       2 |     2 |         0 |     2 |
 | `AccessTokens`          |       1 |     0 |         1 |     1 |
+| `ClientEvent`           |       1 |     1 |         0 |     1 |
 | `ICreateClientOpts`     |       1 |     0 |         1 |     1 |
 | `IRefreshTokenResponse` |       1 |     0 |         1 |     1 |
 | `IndexedDBCryptoStore`  |       1 |     1 |         0 |     1 |
 | `IndexedDBStore`        |       1 |     1 |         0 |     1 |
-| `KnownMembership`       |       1 |     1 |         0 |     1 |
+| `MatrixClient`          |       1 |     1 |         0 |     1 |
 | `MatrixError`           |       1 |     1 |         0 |     1 |
-| `MatrixEvent`           |       1 |     1 |         0 |     1 |
-| `MatrixEventEvent`      |       1 |     1 |         0 |     1 |
-| `RoomStateEvent`        |       1 |     1 |         0 |     1 |
 | `SyncState`             |       1 |     1 |         0 |     1 |
 | `TokenRefreshFunction`  |       1 |     0 |         1 |     1 |
 | `createClient`          |       1 |     1 |         0 |     1 |
@@ -88,29 +81,22 @@ Scope: **production only**. Import files: 3. Files with any finding: 5.
 | ---------------------- | ----: | -----------------: |
 | `IndexedDBCryptoStore` |     1 |                  1 |
 | `IndexedDBStore`       |     1 |                  1 |
-| `MatrixClient`         |     3 |                  3 |
+| `MatrixClient`         |     1 |                  1 |
 | `MatrixError`          |     1 |                  1 |
-| `MatrixEvent`          |     1 |                  1 |
-| `Room`                 |     2 |                  2 |
 | `createClient`         |     1 |                  1 |
 
 ### Usage categories (candidates + imports + networking)
 
 | Category                       | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
 | ------------------------------ | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
-| `client_methods`               |     3 |                 0 |                   0 |                      0 |          0 |
-| `room_methods`                 |     2 |                 0 |                   0 |                      0 |          0 |
-| `event_emitters_listeners`     |     2 |                 0 |                  12 |                      0 |          0 |
-| `sync_lifecycle`               |     2 |                 6 |                   2 |                      0 |          0 |
+| `client_methods`               |     1 |                 0 |                   0 |                      0 |          0 |
+| `event_emitters_listeners`     |     1 |                 0 |                   2 |                      0 |          0 |
+| `sync_lifecycle`               |     1 |                 6 |                   2 |                      0 |          0 |
 | `crypto_verification_recovery` |     1 |                 1 |                   0 |                      0 |          0 |
 | `indexeddb_matrix_stores`      |     1 |                 0 |                   0 |                      2 |          0 |
 | `authenticated_media`          |     1 |                 0 |                   0 |                      0 |          0 |
-| `room_lists`                   |     1 |                 4 |                   0 |                      0 |          0 |
-| `timelines`                    |     1 |                 1 |                   4 |                      0 |          0 |
-| `searches`                     |     1 |                 1 |                   0 |                      0 |          0 |
-| `uia_auth`                     |     2 |                11 |                   0 |                      0 |          0 |
+| `uia_auth`                     |     1 |                 8 |                   0 |                      0 |          0 |
 | `direct_matrix_networking`     |     2 |                 0 |                   0 |                      0 |          3 |
-| `client_events`                |     1 |                 0 |                   4 |                      0 |          0 |
 
 ### Top method-name candidates (not type-proven)
 
@@ -118,15 +104,10 @@ Scope: **production only**. Import files: 3. Files with any finding: 5.
 | ---------------- | --------------------: |
 | `refreshToken`   |                     6 |
 | `stopClient`     |                     4 |
-| `getRoom`        |                     3 |
-| `getSafeUserId`  |                     3 |
-| `findEventById`  |                     1 |
-| `getDeviceId`    |                     1 |
-| `getRooms`       |                     1 |
+| `getSafeUserId`  |                     1 |
 | `getSyncState`   |                     1 |
 | `initRustCrypto` |                     1 |
 | `logout`         |                     1 |
-| `search`         |                     1 |
 | `startClient`    |                     1 |
 
 ### Direct Matrix networking findings
@@ -322,10 +303,8 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `scripts/fixtures/matrix-rust-p1.6/prohibited/raw-matrix-http/synara/src/app/features/matrix-ipc/rawHttp.ts`                  | tooling    | no      | —                | —            | —                                                                                           |
 | `synara/scripts/run-synapse-two-client-integration.mjs`                                                                       | tooling    | no      | —                | dynamic      | `matrix-js-sdk`                                                                             |
 | `synara/src/app/cs-api.ts`                                                                                                    | production | yes     | app-other        | —            | —                                                                                           |
-| `synara/src/app/hooks/useCallEmbed.ts`                                                                                        | production | yes     | hook             | static       | `matrix-js-sdk`                                                                             |
 | `synara/src/app/matrix/__tests__/media.test.ts`                                                                               | test       | yes     | media-boundary   | —            | —                                                                                           |
 | `synara/src/app/pages/client/__tests__/syncStatusCopy.test.ts`                                                                | test       | yes     | page             | static       | `matrix-js-sdk`                                                                             |
-| `synara/src/app/plugins/call/CallEmbed.ts`                                                                                    | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                             |
 | `synara/src/app/state/__tests__/initMatrix.test.ts`                                                                           | test       | yes     | state            | static       | `matrix-js-sdk`                                                                             |
 | `synara/src/app/state/__tests__/performLogout.test.ts`                                                                        | test       | yes     | state            | static       | `matrix-js-sdk`                                                                             |
 | `synara/src/app/state/__tests__/tokenRefresh.test.ts`                                                                         | test       | yes     | state            | static       | `matrix-js-sdk`                                                                             |
