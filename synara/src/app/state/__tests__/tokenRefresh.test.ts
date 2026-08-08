@@ -1,6 +1,10 @@
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { MatrixError, type IRefreshTokenResponse, type MatrixClient } from 'matrix-js-sdk';
+// Local wire projections (js-sdk MatrixError/IRefreshTokenResponse/MatrixClient no longer imported):
+// - matrix errors are duck-typed as Error & { errcode?: string } (see initMatrix.isMatrixErrorLike)
+// - IRefreshTokenResponse.shape is a plain refresh response body
+// - the live client is mocked with any
+type RefreshResponse = { access_token: string; refresh_token: string; expires_in_ms: number };
 import {
   REFRESH_BEFORE_EXPIRY_MS,
   applyRefreshedCredentialsToClient,
@@ -22,7 +26,7 @@ const baseSession: MatrixClientSession = {
   storedAtMs: 1_000,
 };
 
-const refreshResponse: IRefreshTokenResponse = {
+const refreshResponse: RefreshResponse = {
   access_token: 'new-access-token',
   refresh_token: 'new-refresh-token',
   expires_in_ms: 120_000,
@@ -62,7 +66,7 @@ test('refreshAndPersistSession persists refreshed credentials', async () => {
       accessToken = token;
     },
     http,
-  } as unknown as MatrixClient;
+  } as unknown as any;
 
   const { tokens, session } = await refreshAndPersistSession(mx, baseSession, 'refresh-token', {
     persistAuthenticatedSession: async (persistedSession) => {
@@ -90,7 +94,7 @@ test('applyRefreshedCredentialsToClient updates live matrix client tokens', () =
       accessToken = token;
     },
     http,
-  } as unknown as MatrixClient;
+  } as unknown as any;
 
   applyRefreshedCredentialsToClient(mx, refreshResponse);
 
@@ -99,12 +103,12 @@ test('applyRefreshedCredentialsToClient updates live matrix client tokens', () =
 });
 
 test('createTokenRefreshFunction rethrows MatrixError refresh failures', async () => {
-  const matrixError = new MatrixError({ errcode: 'M_UNKNOWN_TOKEN' });
+  const matrixError = Object.assign(new Error('M_UNKNOWN_TOKEN'), { errcode: 'M_UNKNOWN_TOKEN' });
   const mx = {
     refreshToken: async () => {
       throw matrixError;
     },
-  } as unknown as MatrixClient;
+  } as unknown as any;
 
   const refreshFn = createTokenRefreshFunction(() => mx, baseSession, {
     persistAuthenticatedSession: async (session) => ({ session, source: 'native' }),
@@ -115,7 +119,7 @@ test('createTokenRefreshFunction rethrows MatrixError refresh failures', async (
 });
 
 test('scheduleProactiveTokenRefresh no-ops without expiry metadata', () => {
-  const mx = {} as MatrixClient;
+  const mx = {} as any;
   const handle = scheduleProactiveTokenRefresh(
     mx,
     { ...baseSession, expiresInMs: undefined },
@@ -132,7 +136,7 @@ test('scheduleProactiveTokenRefresh refreshes shortly before token expiry', asyn
     refreshToken: async () => refreshResponse,
     setAccessToken: () => undefined,
     http: { opts: { refreshToken: baseSession.refreshToken } },
-  } as unknown as MatrixClient;
+  } as unknown as any;
 
   const now = baseSession.storedAtMs! + baseSession.expiresInMs! - REFRESH_BEFORE_EXPIRY_MS;
   const handle = scheduleProactiveTokenRefresh(
@@ -174,7 +178,7 @@ test('scheduleProactiveTokenRefresh schedules a follow-up refresh after rotation
       },
       setAccessToken: () => undefined,
       http: { opts: { refreshToken: baseSession.refreshToken } },
-    } as unknown as MatrixClient;
+    } as unknown as any;
 
     const initialNow =
       baseSession.storedAtMs! + baseSession.expiresInMs! - REFRESH_BEFORE_EXPIRY_MS;

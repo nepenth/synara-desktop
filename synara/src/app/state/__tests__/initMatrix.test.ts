@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { MatrixClient } from 'matrix-js-sdk';
+// Mock client type: local structural projection (js-sdk MatrixClient type no longer imported).
 import {
   confirmFreshLoginCryptoContinuity,
   initClient,
@@ -20,7 +20,7 @@ const session = {
   sessionGeneration: 'generation-1',
 };
 
-const createMockMatrixClient = (): MatrixClient => ({} as MatrixClient);
+const createMockMatrixClient = (): any => ({} as any);
 
 test('initClient clears matrix stores before init when bootstrapped identity differs', async () => {
   const calls: string[] = [];
@@ -152,7 +152,7 @@ const createContinuityClient = ({
         },
       };
     },
-  } as unknown as MatrixClient;
+  } as unknown as any;
   return { mx, calls };
 };
 
@@ -199,7 +199,7 @@ test('crypto continuity normalizes authoritative query transport failures', asyn
     downloadKeysForUsers: async () => {
       throw new Error('network unavailable');
     },
-  } as unknown as MatrixClient;
+  } as unknown as any;
 
   await assert.rejects(
     () => assertCryptoStoreContinuity(mx, session),
@@ -308,7 +308,7 @@ test('post-start continuity stops the running client and normalizes raw failures
     stopClient: () => {
       calls.push('stop');
     },
-  } as unknown as MatrixClient;
+  } as unknown as any;
 
   await assert.rejects(
     () =>

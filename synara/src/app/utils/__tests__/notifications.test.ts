@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ReceiptType } from 'matrix-js-sdk';
+// 'm.read' literal is the probed js-sdk value 'm.read'.
 import { AccountDataEvent } from '../../../types/matrix/accountData';
 import {
   clearUnreadAnchor,
@@ -386,7 +386,7 @@ test('exact read-marker emergency disable uses the SDK receipt fallback', async 
 
     await markAsRead(mx, room.roomId, false, 'loaded-live-tail');
 
-    assert.deepEqual(receiptArgs, [latest, ReceiptType.Read]);
+    assert.deepEqual(receiptArgs, [latest, 'm.read']);
     assert.equal(markerWrites, 0);
   } finally {
     if (originalWindow === undefined) {

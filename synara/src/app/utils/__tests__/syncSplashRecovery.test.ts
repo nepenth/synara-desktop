@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { SyncState } from 'matrix-js-sdk';
+// SyncState literals are the probed js-sdk enum values.
 import {
   formatSyncSplashStatus,
   formatSyncStateTransition,
@@ -70,14 +70,14 @@ test('sync splash view renders only one startup surface at a time', () => {
 test('sync splash status names the current startup phase', () => {
   assert.equal(formatSyncSplashStatus(undefined, false), 'Restoring session');
   assert.equal(formatSyncSplashStatus(null, true), 'Starting Matrix sync');
-  assert.equal(formatSyncSplashStatus(SyncState.Catchup, true), 'Catching up');
-  assert.equal(formatSyncSplashStatus(SyncState.Syncing, true), 'Syncing messages');
-  assert.equal(formatSyncSplashStatus(SyncState.Reconnecting, true), 'Reconnecting');
+  assert.equal(formatSyncSplashStatus('CATCHUP', true), 'Catching up');
+  assert.equal(formatSyncSplashStatus('SYNCING', true), 'Syncing messages');
+  assert.equal(formatSyncSplashStatus('RECONNECTING', true), 'Reconnecting');
 });
 
 test('sync state transitions format previous and current values', () => {
   assert.equal(
-    formatSyncStateTransition(SyncState.Prepared, SyncState.Catchup),
-    `sync ${SyncState.Catchup} -> ${SyncState.Prepared}`
+    formatSyncStateTransition('PREPARED', 'CATCHUP'),
+    `sync ${'CATCHUP'} -> ${'PREPARED'}`
   );
 });

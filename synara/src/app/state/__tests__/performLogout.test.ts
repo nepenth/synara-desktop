@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { MatrixClient } from 'matrix-js-sdk';
+// Mock client type: local structural projection (js-sdk MatrixClient type no longer imported).
 import { performLogout } from '../../../client/initMatrix';
 import {
   notifiedEventIdsCache,
@@ -45,7 +45,7 @@ const createMockMatrixClient = () => {
     clearStores: async () => {
       calls.push('clearStores');
     },
-  } as unknown as MatrixClient;
+  } as unknown as any;
 
   return { mx, calls };
 };

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Direction, type EventTimeline, type MatrixEvent, type Room } from 'matrix-js-sdk';
+import type { EventTimelineReading, TimelineEventReading } from '../timelineLinks';
+import type { RoomReading } from '../timelineLinks';
+// Direction literals are the probed js-sdk values 'b'/'f'; event/room shapes are stubbed below.
 import {
   getEventTimeline,
   getEventIdAbsoluteIndex,
@@ -14,17 +16,16 @@ import {
   getTimelinesEventsCount,
 } from '../timelineLinks';
 
-type TimelineStub = EventTimeline & {
+type StubEvent = TimelineEventReading;
+type StubRoom = RoomReading;
+type TimelineStub = EventTimelineReading & {
   id: string;
-  stubEvents: MatrixEvent[];
+  stubEvents: StubEvent[];
   backward?: TimelineStub;
   forward?: TimelineStub;
 };
 
-const event = (id: string): MatrixEvent =>
-  ({
-    getId: () => id,
-  } as MatrixEvent);
+const event = (id: string): StubEvent => ({ getId: () => id } as StubEvent);
 
 const timeline = (id: string, eventIds: string[]): TimelineStub => {
   const stub = {
@@ -32,11 +33,11 @@ const timeline = (id: string, eventIds: string[]): TimelineStub => {
     stubEvents: eventIds.map(event),
     backward: undefined as TimelineStub | undefined,
     forward: undefined as TimelineStub | undefined,
-    getEvents(): MatrixEvent[] {
+    getEvents(): StubEvent[] {
       return stub.stubEvents;
     },
-    getNeighbouringTimeline(direction: Direction): EventTimeline | null {
-      return direction === Direction.Backward ? stub.backward ?? null : stub.forward ?? null;
+    getNeighbouringTimeline(direction: string): TimelineStub | null {
+      return direction === 'b' ? stub.backward ?? null : stub.forward ?? null;
     },
   };
   return stub as unknown as TimelineStub;
@@ -57,16 +58,16 @@ test('timeline link helpers walk a linked timeline chain from any member', () =>
     timeline('live', ['$4', '$5'])
   );
 
-  assert.equal(getFirstLinkedTimeline(live, Direction.Backward), older);
-  assert.equal(getFirstLinkedTimeline(older, Direction.Forward), live);
+  assert.equal(getFirstLinkedTimeline(live, 'b'), older);
+  assert.equal(getFirstLinkedTimeline(older, 'f'), live);
   assert.deepEqual(getLinkedTimelines(middle), [older, middle, live]);
 });
 
 test('timeline link helpers handle isolated timelines', () => {
   const only = timeline('only', ['$1']);
 
-  assert.equal(getFirstLinkedTimeline(only, Direction.Backward), only);
-  assert.equal(getFirstLinkedTimeline(only, Direction.Forward), only);
+  assert.equal(getFirstLinkedTimeline(only, 'b'), only);
+  assert.equal(getFirstLinkedTimeline(only, 'f'), only);
   assert.deepEqual(getLinkedTimelines(only), [only]);
   assert.equal(timelineToEventsCount(only), 1);
 });
@@ -101,7 +102,7 @@ test('timeline link helpers use the unfiltered room timeline set wrappers', () =
       getLiveTimeline: () => live,
       getTimelineForEvent: (eventId: string) => (eventId === '$0' ? historic : null),
     }),
-  } as unknown as Room;
+  } as unknown as StubRoom;
 
   assert.equal(getLiveTimeline(room), live);
   assert.equal(getEventTimeline(room, '$0'), historic);

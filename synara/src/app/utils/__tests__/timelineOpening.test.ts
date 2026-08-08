@@ -1,8 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Direction, type EventTimeline, type MatrixEvent, type Room } from 'matrix-js-sdk';
-import { EventType } from 'matrix-js-sdk/lib/@types/event';
-import { ReceiptType, type WrappedReceipt } from 'matrix-js-sdk/lib/@types/read_receipts';
+import type { EventTimelineReading } from '../timelineLinks';
+import type { TimelineEventReading, RoomReading } from '../timelineOpening';
+// Direction/EventType/ReceiptType literals are the probed js-sdk values ('b'/'f',
+// 'm.fully_read'/'m.marked_unread', 'm.read'/'m.read.private'); event/room/timeline shapes are
+// local structural projections.
+type StubEvent = TimelineEventReading;
+type StubTimeline = EventTimelineReading & {
+  id: string;
+  stubEvents: StubEvent[];
+  backward?: StubTimeline;
+  forward?: StubTimeline;
+};
+type StubRoom = RoomReading;
+type WrappedReceipt = { eventId: string; data: { ts: number } };
 import {
   buildRoomTimelineOpenDiagnostics,
   canReplaceTimelineWindowPreservingAnchor,
@@ -31,17 +42,9 @@ import {
   timelineHasEvents,
 } from '../timelineOpening';
 
-type TimelineStub = EventTimeline & {
-  id: string;
-  stubEvents: MatrixEvent[];
-  backward?: TimelineStub;
-  forward?: TimelineStub;
-};
+type TimelineStub = StubTimeline;
 
-const event = (id: string): MatrixEvent =>
-  ({
-    getId: () => id,
-  } as MatrixEvent);
+const event = (id: string): StubEvent => ({ getId: () => id } as unknown as StubEvent);
 
 const timeline = (id: string, eventIds: string[]): TimelineStub => {
   const stub = {
@@ -49,11 +52,11 @@ const timeline = (id: string, eventIds: string[]): TimelineStub => {
     stubEvents: eventIds.map(event),
     backward: undefined as TimelineStub | undefined,
     forward: undefined as TimelineStub | undefined,
-    getEvents(): MatrixEvent[] {
+    getEvents(): StubEvent[] {
       return stub.stubEvents;
     },
-    getNeighbouringTimeline(direction: Direction): EventTimeline | null {
-      return direction === Direction.Backward ? stub.backward ?? null : stub.forward ?? null;
+    getNeighbouringTimeline(direction: string): StubTimeline | null {
+      return direction === 'b' ? stub.backward ?? null : stub.forward ?? null;
     },
   };
   return stub as unknown as TimelineStub;
@@ -83,7 +86,7 @@ const roomWithTimelines = ({
   publicReceipt?: WrappedReceipt;
   privateReceipt?: WrappedReceipt;
   userId?: string;
-}): Room => {
+}): StubRoom => {
   const linkedTimelines: TimelineStub[] = [];
   let first: TimelineStub = live;
   while (first.backward) first = first.backward;
@@ -99,12 +102,12 @@ const roomWithTimelines = ({
       return eventId ? [[eventId, index] as const] : [];
     })
   );
-  const accountData = (type: EventType | string): MatrixEvent | undefined => {
-    if (type === EventType.FullyRead && fullyRead) {
-      return { getContent: () => ({ event_id: fullyRead }) } as MatrixEvent;
+  const accountData = (type: string): StubEvent | undefined => {
+    if (type === 'm.fully_read' && fullyRead) {
+      return { getContent: () => ({ event_id: fullyRead }) } as StubEvent;
     }
-    if (type === EventType.MarkedUnread) {
-      return { getContent: () => ({ unread: markedUnread }) } as MatrixEvent;
+    if (type === 'm.marked_unread') {
+      return { getContent: () => ({ unread: markedUnread }) } as StubEvent;
     }
     return undefined;
   };
@@ -118,8 +121,8 @@ const roomWithTimelines = ({
     getReadReceiptForUserId: (
       _receiptUserId: string,
       _ignoreSynthesized: boolean,
-      receiptType: ReceiptType
-    ) => (receiptType === ReceiptType.ReadPrivate ? privateReceipt : publicReceipt) ?? null,
+      receiptType: string
+    ) => (receiptType === 'm.read.private' ? privateReceipt : publicReceipt) ?? null,
     compareEventOrdering: (leftEventId: string, rightEventId: string) => {
       const leftIndex = eventIndex.get(leftEventId);
       const rightIndex = eventIndex.get(rightEventId);
@@ -132,7 +135,7 @@ const roomWithTimelines = ({
       getLiveTimeline: () => live,
       getTimelineForEvent: (eventId: string) => eventTimelines[eventId] ?? null,
     }),
-  } as unknown as Room;
+  } as unknown as StubRoom;
 };
 
 const receipt = (eventId: string, ts: number): WrappedReceipt => ({
@@ -488,12 +491,12 @@ test('receipt advancement changes the frontier revision even when unread counts 
   const ownReceiptEvent = {
     getContent: () => ({
       $2: {
-        [ReceiptType.Read]: {
+        ['m.read']: {
           '@alice:example.org': { ts: 20 },
         },
       },
     }),
-  } as unknown as MatrixEvent;
+  } as unknown as StubEvent;
   assert.equal(receiptEventContainsUser(ownReceiptEvent, '@alice:example.org'), true);
   assert.equal(receiptEventContainsUser(ownReceiptEvent, '@bob:example.org'), false);
 });
