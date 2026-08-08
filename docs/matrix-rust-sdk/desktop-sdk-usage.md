@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |            4 |                2 |                   3 |
+| production |            3 |                2 |                   3 |
 | test       |           10 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |       **17** |                  |                     |
+| **total**  |       **16** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |     4 |
+| Production import files |     3 |
 | Test import files       |    10 |
-| Total import files      |    14 |
+| Total import files      |    13 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 4)
+- Production match: **no** (found 3)
 - Test match: **no** (found 10)
 
 ### Production files by bucket (desktop runtime only)
@@ -48,45 +48,39 @@ Expected **220** production and **12** test import files.
 | ---------------- | ----: |
 | client-lifecycle |     1 |
 | hook             |     1 |
-| plugin           |     2 |
+| plugin           |     1 |
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 4. Files with any finding: 6.
+Scope: **production only**. Import files: 3. Files with any finding: 5.
 
 ### Imported modules
 
 | Module path                            | Import sites | Files |
 | -------------------------------------- | -----------: | ----: |
-| `matrix-js-sdk`                        |            4 |     4 |
+| `matrix-js-sdk`                        |            3 |     3 |
 | `matrix-js-sdk/lib/http-api/interface` |            1 |     1 |
 
 ### Top imported symbols
 
-| Symbol                     | Imports | Value | Type-only | Files |
-| -------------------------- | ------: | ----: | --------: | ----: |
-| `MatrixClient`             |       4 |     4 |         0 |     4 |
-| `ClientEvent`              |       2 |     2 |         0 |     2 |
-| `MatrixError`              |       2 |     2 |         0 |     2 |
-| `MatrixEvent`              |       2 |     1 |         1 |     2 |
-| `Room`                     |       2 |     2 |         0 |     2 |
-| `AccessTokens`             |       1 |     0 |         1 |     1 |
-| `Direction`                |       1 |     1 |         0 |     1 |
-| `EventType`                |       1 |     1 |         0 |     1 |
-| `IContent`                 |       1 |     0 |         1 |     1 |
-| `ICreateClientOpts`        |       1 |     0 |         1 |     1 |
-| `IRefreshTokenResponse`    |       1 |     0 |         1 |     1 |
-| `IndexedDBCryptoStore`     |       1 |     1 |         0 |     1 |
-| `IndexedDBStore`           |       1 |     1 |         0 |     1 |
-| `KnownMembership`          |       1 |     1 |         0 |     1 |
-| `MatrixEventEvent`         |       1 |     1 |         0 |     1 |
-| `RoomStateEvent`           |       1 |     1 |         0 |     1 |
-| `SendDelayedEventResponse` |       1 |     0 |         1 |     1 |
-| `StateEvents`              |       1 |     0 |         1 |     1 |
-| `SyncState`                |       1 |     1 |         0 |     1 |
-| `TimelineEvents`           |       1 |     0 |         1 |     1 |
-| `TokenRefreshFunction`     |       1 |     0 |         1 |     1 |
-| `createClient`             |       1 |     1 |         0 |     1 |
+| Symbol                  | Imports | Value | Type-only | Files |
+| ----------------------- | ------: | ----: | --------: | ----: |
+| `MatrixClient`          |       3 |     3 |         0 |     3 |
+| `ClientEvent`           |       2 |     2 |         0 |     2 |
+| `Room`                  |       2 |     2 |         0 |     2 |
+| `AccessTokens`          |       1 |     0 |         1 |     1 |
+| `ICreateClientOpts`     |       1 |     0 |         1 |     1 |
+| `IRefreshTokenResponse` |       1 |     0 |         1 |     1 |
+| `IndexedDBCryptoStore`  |       1 |     1 |         0 |     1 |
+| `IndexedDBStore`        |       1 |     1 |         0 |     1 |
+| `KnownMembership`       |       1 |     1 |         0 |     1 |
+| `MatrixError`           |       1 |     1 |         0 |     1 |
+| `MatrixEvent`           |       1 |     1 |         0 |     1 |
+| `MatrixEventEvent`      |       1 |     1 |         0 |     1 |
+| `RoomStateEvent`        |       1 |     1 |         0 |     1 |
+| `SyncState`             |       1 |     1 |         0 |     1 |
+| `TokenRefreshFunction`  |       1 |     0 |         1 |     1 |
+| `createClient`          |       1 |     1 |         0 |     1 |
 
 ### SDK model import coupling
 
@@ -94,9 +88,9 @@ Scope: **production only**. Import files: 4. Files with any finding: 6.
 | ---------------------- | ----: | -----------------: |
 | `IndexedDBCryptoStore` |     1 |                  1 |
 | `IndexedDBStore`       |     1 |                  1 |
-| `MatrixClient`         |     4 |                  4 |
-| `MatrixError`          |     2 |                  2 |
-| `MatrixEvent`          |     2 |                  2 |
+| `MatrixClient`         |     3 |                  3 |
+| `MatrixError`          |     1 |                  1 |
+| `MatrixEvent`          |     1 |                  1 |
 | `Room`                 |     2 |                  2 |
 | `createClient`         |     1 |                  1 |
 
@@ -104,43 +98,36 @@ Scope: **production only**. Import files: 4. Files with any finding: 6.
 
 | Category                       | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
 | ------------------------------ | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
-| `client_methods`               |     4 |                 0 |                   0 |                      0 |          0 |
+| `client_methods`               |     3 |                 0 |                   0 |                      0 |          0 |
 | `room_methods`                 |     2 |                 0 |                   0 |                      0 |          0 |
 | `event_emitters_listeners`     |     2 |                 0 |                  12 |                      0 |          0 |
 | `sync_lifecycle`               |     2 |                 6 |                   2 |                      0 |          0 |
-| `crypto_verification_recovery` |     2 |                 2 |                   0 |                      0 |          0 |
+| `crypto_verification_recovery` |     1 |                 1 |                   0 |                      0 |          0 |
 | `indexeddb_matrix_stores`      |     1 |                 0 |                   0 |                      2 |          0 |
-| `authenticated_media`          |     2 |                 1 |                   0 |                      0 |          0 |
-| `room_lists`                   |     2 |                 6 |                   0 |                      0 |          0 |
-| `timelines`                    |     2 |                 2 |                   4 |                      0 |          0 |
-| `searches`                     |     2 |                 2 |                   0 |                      0 |          0 |
-| `uia_auth`                     |     3 |                13 |                   0 |                      0 |          0 |
-| `custom_raw_event_sends`       |     1 |                 2 |                   0 |                      0 |          0 |
+| `authenticated_media`          |     1 |                 0 |                   0 |                      0 |          0 |
+| `room_lists`                   |     1 |                 4 |                   0 |                      0 |          0 |
+| `timelines`                    |     1 |                 1 |                   4 |                      0 |          0 |
+| `searches`                     |     1 |                 1 |                   0 |                      0 |          0 |
+| `uia_auth`                     |     2 |                11 |                   0 |                      0 |          0 |
 | `direct_matrix_networking`     |     2 |                 0 |                   0 |                      0 |          3 |
 | `client_events`                |     1 |                 0 |                   4 |                      0 |          0 |
 
 ### Top method-name candidates (not type-proven)
 
-| Method name           | Candidate occurrences |
-| --------------------- | --------------------: |
-| `refreshToken`        |                     6 |
-| `getRoom`             |                     5 |
-| `getSafeUserId`       |                     4 |
-| `stopClient`          |                     4 |
-| `getDeviceId`         |                     2 |
-| `findEventById`       |                     1 |
-| `getCrypto`           |                     1 |
-| `getRooms`            |                     1 |
-| `getSyncState`        |                     1 |
-| `initRustCrypto`      |                     1 |
-| `logout`              |                     1 |
-| `redactEvent`         |                     1 |
-| `search`              |                     1 |
-| `searchUserDirectory` |                     1 |
-| `sendEvent`           |                     1 |
-| `sendStateEvent`      |                     1 |
-| `startClient`         |                     1 |
-| `uploadContent`       |                     1 |
+| Method name      | Candidate occurrences |
+| ---------------- | --------------------: |
+| `refreshToken`   |                     6 |
+| `stopClient`     |                     4 |
+| `getRoom`        |                     3 |
+| `getSafeUserId`  |                     3 |
+| `findEventById`  |                     1 |
+| `getDeviceId`    |                     1 |
+| `getRooms`       |                     1 |
+| `getSyncState`   |                     1 |
+| `initRustCrypto` |                     1 |
+| `logout`         |                     1 |
+| `search`         |                     1 |
+| `startClient`    |                     1 |
 
 ### Direct Matrix networking findings
 
@@ -339,7 +326,6 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `synara/src/app/matrix/__tests__/media.test.ts`                                                                               | test       | yes     | media-boundary   | —            | —                                                                                           |
 | `synara/src/app/pages/client/__tests__/syncStatusCopy.test.ts`                                                                | test       | yes     | page             | static       | `matrix-js-sdk`                                                                             |
 | `synara/src/app/plugins/call/CallEmbed.ts`                                                                                    | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                             |
-| `synara/src/app/plugins/call/CallWidgetDriver.ts`                                                                             | production | yes     | plugin           | static       | `matrix-js-sdk`                                                                             |
 | `synara/src/app/state/__tests__/initMatrix.test.ts`                                                                           | test       | yes     | state            | static       | `matrix-js-sdk`                                                                             |
 | `synara/src/app/state/__tests__/performLogout.test.ts`                                                                        | test       | yes     | state            | static       | `matrix-js-sdk`                                                                             |
 | `synara/src/app/state/__tests__/tokenRefresh.test.ts`                                                                         | test       | yes     | state            | static       | `matrix-js-sdk`                                                                             |

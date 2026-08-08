@@ -13,17 +13,21 @@ import {
   SimpleObservable,
   IOpenIDUpdate,
 } from 'matrix-widget-api';
-import {
-  Direction,
-  EventType,
-  type IContent,
-  MatrixError,
-  type MatrixEvent,
-  type SendDelayedEventResponse,
-  type StateEvents,
-  type TimelineEvents,
-  MatrixClient,
-} from 'matrix-js-sdk';
+import type { useMatrixClient } from '../../hooks/useMatrixClient';
+import type { MatrixEventReading } from '../../utils/room';
+
+/** Timeline event with the widget check used here. */
+type WidgetEventReading = MatrixEventReading & { isState(): boolean };
+
+/** The live client type (type-only; matches useMatrixClient). */
+type LocalMx = ReturnType<typeof useMatrixClient>;
+/** Widget event content projection. */
+type WidgetContent = Record<string, any>;
+/** Delayed-event send response projection. */
+type SendDelayedWidgetResponse = { [key: string]: any };
+
+const hasWidgetApiErrorData = (error: unknown): error is { asWidgetApiErrorData(): unknown } =>
+  typeof (error as { asWidgetApiErrorData?: unknown } | null)?.asWidgetApiErrorData === 'function';
 import { getCallCapabilities } from './utils';
 import { uploadCallWidgetFileWithNativeOwner } from './nativeCallMediaUploadOwner';
 import {
@@ -38,9 +42,9 @@ import { getKnownRoomsFromNativeSnapshot } from './nativeCallWidgetOwner';
 export class CallWidgetDriver extends WidgetDriver {
   private allowedCapabilities: Set<Capability>;
 
-  private readonly mx: MatrixClient;
+  private readonly mx: LocalMx;
 
-  public constructor(mx: MatrixClient, private inRoomId: string) {
+  public constructor(mx: LocalMx, private inRoomId: string) {
     super();
     this.mx = mx;
 
@@ -57,7 +61,7 @@ export class CallWidgetDriver extends WidgetDriver {
 
   public async sendEvent(
     eventType: string,
-    content: IContent,
+    content: WidgetContent,
     stateKey: string | null = null,
     targetRoomId: string | null = null
   ): Promise<ISendEventDetails> {
@@ -68,21 +72,12 @@ export class CallWidgetDriver extends WidgetDriver {
 
     let r: { event_id: string } | null;
     if (typeof stateKey === 'string') {
-      r = await client.sendStateEvent(
-        roomId,
-        eventType as keyof StateEvents,
-        content as StateEvents[keyof StateEvents],
-        stateKey
-      );
-    } else if (eventType === EventType.RoomRedaction) {
+      r = await client.sendStateEvent(roomId, eventType as never, content as never, stateKey);
+    } else if (eventType === 'm.room.redaction') {
       // special case: extract the `redacts` property and call redact
       r = await client.redactEvent(roomId, content.redacts);
     } else {
-      r = await client.sendEvent(
-        roomId,
-        eventType as keyof TimelineEvents,
-        content as TimelineEvents[keyof TimelineEvents]
-      );
+      r = await client.sendEvent(roomId, eventType as never, content as never);
     }
 
     return { roomId, eventId: r.event_id };
@@ -92,7 +87,7 @@ export class CallWidgetDriver extends WidgetDriver {
     delay: number | null,
     parentDelayId: string | null,
     eventType: string,
-    content: IContent,
+    content: WidgetContent,
     stateKey: string | null = null,
     targetRoomId: string | null = null
   ): Promise<ISendDelayedEventDetails> {
@@ -115,14 +110,14 @@ export class CallWidgetDriver extends WidgetDriver {
       throw new Error('Must provide at least one of delay or parentDelayId');
     }
 
-    let r: SendDelayedEventResponse | null;
+    let r: SendDelayedWidgetResponse | null;
     if (stateKey !== null) {
       // state event
       r = await client._unstable_sendDelayedStateEvent(
         roomId,
         delayOpts,
-        eventType as keyof StateEvents,
-        content as StateEvents[keyof StateEvents],
+        eventType as never,
+        content as never,
         stateKey
       );
     } else {
@@ -131,8 +126,8 @@ export class CallWidgetDriver extends WidgetDriver {
         roomId,
         delayOpts,
         null,
-        eventType as keyof TimelineEvents,
-        content as TimelineEvents[keyof TimelineEvents]
+        eventType as never,
+        content as never
       );
     }
 
@@ -217,8 +212,8 @@ export class CallWidgetDriver extends WidgetDriver {
 
     const room = this.mx.getRoom(roomId);
     if (room === null) return [];
-    const results: MatrixEvent[] = [];
-    const events = getLoadedLiveTimelineEvents(room) as MatrixEvent[];
+    const results: WidgetEventReading[] = [];
+    const events = getLoadedLiveTimelineEvents(room) as WidgetEventReading[];
 
     for (let i = events.length - 1; i >= 0; i -= 1) {
       const ev = events[i];
@@ -228,14 +223,14 @@ export class CallWidgetDriver extends WidgetDriver {
       if (
         ev.getType() === eventType &&
         !ev.isState() &&
-        (eventType !== EventType.RoomMessage || !msgtype || msgtype === ev.getContent().msgtype) &&
+        (eventType !== 'm.room.message' || !msgtype || msgtype === ev.getContent().msgtype) &&
         (ev.getStateKey() === undefined || stateKey === undefined || ev.getStateKey() === stateKey)
       ) {
         results.push(ev);
       }
     }
 
-    return results.map((e) => e.getEffectiveEvent() as IRoomEvent);
+    return results.map((e) => e.getEffectiveEvent?.() as IRoomEvent);
   }
 
   public async askOpenID(observer: SimpleObservable<IOpenIDUpdate>): Promise<void> {
@@ -256,11 +251,11 @@ export class CallWidgetDriver extends WidgetDriver {
     if (state === undefined) return [];
 
     if (stateKey === undefined)
-      return (state.getStateEvents(eventType) as MatrixEvent[]).map(
-        (e) => e.getEffectiveEvent() as IRoomEvent
+      return (state.getStateEvents(eventType) as WidgetEventReading[]).map(
+        (e) => e.getEffectiveEvent?.() as IRoomEvent
       );
-    const event = state.getStateEvents(eventType, stateKey) as MatrixEvent | null;
-    return event === null ? [] : [event.getEffectiveEvent() as IRoomEvent];
+    const event = state.getStateEvents(eventType, stateKey) as MatrixEventReading | null;
+    return event === null ? [] : [event.getEffectiveEvent?.() as IRoomEvent];
   }
 
   public async readEventRelations(
@@ -274,8 +269,7 @@ export class CallWidgetDriver extends WidgetDriver {
     direction?: 'f' | 'b'
   ): Promise<IReadEventRelationsResult> {
     const client = this.mx;
-    const dir =
-      direction === 'f' ? Direction.Forward : direction === 'b' ? Direction.Backward : undefined;
+    const dir = direction === 'f' ? 'f' : direction === 'b' ? 'b' : undefined;
     const targetRoomId = roomId ?? this.inRoomId ?? undefined;
 
     if (typeof targetRoomId !== 'string') {
@@ -287,11 +281,11 @@ export class CallWidgetDriver extends WidgetDriver {
       eventId,
       relationType ?? null,
       eventType ?? null,
-      { from, to, limit, dir }
+      { from, to, limit, dir: dir as never }
     );
 
     return {
-      chunk: events.map((e) => e.getEffectiveEvent() as IRoomEvent),
+      chunk: events.map((e) => e.getEffectiveEvent?.() as IRoomEvent),
       nextBatch: nextBatch ?? undefined,
       prevBatch: prevBatch ?? undefined,
     };
@@ -344,8 +338,11 @@ export class CallWidgetDriver extends WidgetDriver {
 
   // eslint-disable-next-line class-methods-use-this
   public processError(error: unknown): IWidgetApiErrorResponseDataDetails | undefined {
-    return error instanceof MatrixError
-      ? { matrix_api_error: error.asWidgetApiErrorData() }
+    return hasWidgetApiErrorData(error)
+      ? ({
+          matrix_api_error:
+            error.asWidgetApiErrorData() as unknown as IWidgetApiErrorResponseDataDetails,
+        } as unknown as IWidgetApiErrorResponseDataDetails)
       : undefined;
   }
 }
