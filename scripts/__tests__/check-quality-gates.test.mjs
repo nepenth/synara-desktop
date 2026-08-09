@@ -115,7 +115,7 @@ ${iosBuildStep}
   quality-gate:
     name: Quality gate
     if: always()
-    needs: [changes, validate, ios-tests, synapse-native-reactions, synapse-native-attachments, synapse-native-call-media, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads]
+    needs: [changes, validate, ios-tests, synapse-native-reactions, synapse-native-attachments, synapse-native-call-media, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads, synapse-native-receipts]
     runs-on: ubuntu-latest
     steps:
       - name: Require every scheduled client validation job
@@ -128,6 +128,7 @@ ${iosBuildStep}
           SYNAPSE_NATIVE_POLLS_RESULT: \${{ needs.synapse-native-polls.result }}
           SYNAPSE_NATIVE_RICH_MESSAGES_RESULT: \${{ needs.synapse-native-rich-messages.result }}
           SYNAPSE_NATIVE_THREADS_RESULT: \${{ needs.synapse-native-threads.result }}
+          SYNAPSE_NATIVE_RECEIPTS_RESULT: \${{ needs.synapse-native-receipts.result }}
           CHANGES_RESULT: \${{ needs.changes.result }}
         run: |
           set -euo pipefail
@@ -156,6 +157,7 @@ ${iosBuildStep}
           ok "Synapse native poll proof" "$SYNAPSE_NATIVE_POLLS_RESULT" || fail=1
           ok "Synapse native rich-message proof" "$SYNAPSE_NATIVE_RICH_MESSAGES_RESULT" || fail=1
           ok "Synapse native thread-send proof" "$SYNAPSE_NATIVE_THREADS_RESULT" || fail=1
+          ok "Synapse native two-client receipt proof" "$SYNAPSE_NATIVE_RECEIPTS_RESULT" || fail=1
           if [[ "$fail" -ne 0 ]]; then
             exit 1
           fi

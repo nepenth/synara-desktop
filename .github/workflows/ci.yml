@@ -32,6 +32,7 @@ jobs:
       synapse_native_polls: ${{ steps.scope.outputs.synapse_native_polls }}
       synapse_native_rich_messages: ${{ steps.scope.outputs.synapse_native_rich_messages }}
       synapse_native_threads: ${{ steps.scope.outputs.synapse_native_threads }}
+      synapse_native_receipts: ${{ steps.scope.outputs.synapse_native_receipts }}
     steps:
       - name: Checkout repository history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -259,7 +260,24 @@ jobs:
             SYNAPSE_NATIVE_THREADS=true
           fi
 
-          echo "CI scope: validate=${VALIDATE} rust=${VALIDATE_RUST:-n/a} frontend=${VALIDATE_FRONTEND:-n/a} ios=${IOS} synapse=${SYNAPSE} synapse_native_reactions=${SYNAPSE_NATIVE_REACTIONS} synapse_native_attachments=${SYNAPSE_NATIVE_ATTACHMENTS} synapse_native_call_media=${SYNAPSE_NATIVE_CALL_MEDIA} synapse_native_polls=${SYNAPSE_NATIVE_POLLS} synapse_native_rich_messages=${SYNAPSE_NATIVE_RICH_MESSAGES} synapse_native_threads=${SYNAPSE_NATIVE_THREADS}"
+          # Native two-client receipt + ordered-delivery proof against disposable
+          # Synapse (replaces the retired js-sdk two-client harness).
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            .github/workflows/ci.yml \
+            scripts/synapse-integration.sh \
+            integration/synapse \
+            src-tauri/Cargo.toml \
+            src-tauri/Cargo.lock \
+            src-tauri/src/matrix/timeline/live_synapse_proof \
+            src-tauri/src/matrix/auth/product.rs; then
+            echo "synapse_native_receipts=false" >> "$GITHUB_OUTPUT"
+            SYNAPSE_NATIVE_RECEIPTS=false
+          else
+            echo "synapse_native_receipts=true" >> "$GITHUB_OUTPUT"
+            SYNAPSE_NATIVE_RECEIPTS=true
+          fi
+
+          echo "CI scope: validate=${VALIDATE} rust=${VALIDATE_RUST:-n/a} frontend=${VALIDATE_FRONTEND:-n/a} ios=${IOS} synapse=${SYNAPSE} synapse_native_reactions=${SYNAPSE_NATIVE_REACTIONS} synapse_native_attachments=${SYNAPSE_NATIVE_ATTACHMENTS} synapse_native_call_media=${SYNAPSE_NATIVE_CALL_MEDIA} synapse_native_polls=${SYNAPSE_NATIVE_POLLS} synapse_native_rich_messages=${SYNAPSE_NATIVE_RICH_MESSAGES} synapse_native_threads=${SYNAPSE_NATIVE_THREADS} synapse_native_receipts=${SYNAPSE_NATIVE_RECEIPTS}"
           git diff --name-only "$BASE_SHA" "$HEAD_SHA" | head -80 || true
 
   validate-rust:
@@ -680,10 +698,52 @@ jobs:
         if: always()
         run: scripts/synapse-integration.sh reset
 
+  synapse-native-receipts:
+    name: Synapse native two-client receipt proof
+    needs: [changes]
+    if: needs.changes.outputs.synapse_native_receipts == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust 1.93
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+        with:
+          toolchain: 1.93
+
+      - name: Install Linux Tauri dependencies
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.list /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Start disposable Synapse
+        run: scripts/synapse-integration.sh up
+
+      - name: Prove native two-client receipt + ordered delivery against Synapse
+        working-directory: src-tauri
+        env:
+          SYNARA_RUN_MATRIX_RUST_RECEIPT_LIVE: "1"
+          SYNARA_MATRIX_HOMESERVER_URL: http://127.0.0.1:8008
+        run: >
+          cargo test --locked
+          live_native_two_client_receipt_and_ordering_against_disposable_synapse_when_configured
+          -- --nocapture
+
+      - name: Tear down disposable Synapse
+        if: always()
+        run: scripts/synapse-integration.sh reset
+
   quality-gate:
     name: Quality gate
     if: always()
-    needs: [changes, validate-rust, validate-frontend, ios-tests, synapse-native-reactions, synapse-native-attachments, synapse-native-call-media, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads]
+    needs: [changes, validate-rust, validate-frontend, ios-tests, synapse-native-reactions, synapse-native-attachments, synapse-native-call-media, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads, synapse-native-receipts]
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
@@ -698,6 +758,7 @@ jobs:
           SYNAPSE_NATIVE_POLLS_RESULT: ${{ needs.synapse-native-polls.result }}
           SYNAPSE_NATIVE_RICH_MESSAGES_RESULT: ${{ needs.synapse-native-rich-messages.result }}
           SYNAPSE_NATIVE_THREADS_RESULT: ${{ needs.synapse-native-threads.result }}
+          SYNAPSE_NATIVE_RECEIPTS_RESULT: ${{ needs.synapse-native-receipts.result }}
           CHANGES_RESULT: ${{ needs.changes.result }}
         run: |
           set -euo pipefail
@@ -728,6 +789,7 @@ jobs:
           ok "Synapse native poll proof" "$SYNAPSE_NATIVE_POLLS_RESULT" || fail=1
           ok "Synapse native rich-message proof" "$SYNAPSE_NATIVE_RICH_MESSAGES_RESULT" || fail=1
           ok "Synapse native thread-send proof" "$SYNAPSE_NATIVE_THREADS_RESULT" || fail=1
+          ok "Synapse native two-client receipt proof" "$SYNAPSE_NATIVE_RECEIPTS_RESULT" || fail=1
           if [[ "$fail" -ne 0 ]]; then
             exit 1
           fi
