@@ -2,7 +2,7 @@
 
 > Operator-authorized 2026-08-08: **Option A** (complete native rust-sdk, no holdover JS client),
 > **D1C** (renderer cedes token custody to native entirely), **slice-by-slice** with parallel sub-agents.
-> Status: **1 production importer (initMatrix) → target 0**. Every slice lands as its own reviewed + CI-green PR.
+> Status: **0 production importers — V-BURN complete**. Every slice landed as its own reviewed + CI-green PR.
 
 ## 1. Why this exists
 The last js-sdk importer is `synara/src/client/initMatrix.ts` (still constructs a live JS client via
