@@ -452,3 +452,59 @@ test('F6c crypto reading includes encryptToDeviceMessages no-op', async () => {
   await crypto.encryptToDeviceMessages();
   assert.ok(true);
 });
+
+test('F6c-2a evented room cache satisfies EventedRoomReading contract', async () => {
+  const { invoke } = invokingWith({
+    matrix_room_list_snapshot: {
+      sessionGeneration: 8,
+      rooms: [
+        {
+          roomId: '!r:example.org',
+          name: 'Test Room',
+          membership: 'join',
+          isDirect: false,
+          isSpace: false,
+          isEncrypted: false,
+          unreadCount: 0,
+          highlightCount: 0,
+          markedUnread: false,
+        },
+      ],
+    },
+    matrix_sync_status: { readiness: 'Prepared', session_generation: 1, failure: null },
+    matrix_session_snapshot: {},
+  });
+  const client = createNativeMatrixClient(invoke);
+  await client.refresh();
+  const room = client.getRoom('!r:example.org');
+  assert.ok(room);
+  assert.ok(typeof room?.on === 'function');
+  assert.ok(typeof room?.removeListener === 'function');
+  assert.deepEqual(room?.getUsersReadUpTo({} as never), []);
+  assert.equal(room?.findEventById('$e'), undefined);
+  assert.equal(room?.hasEncryptionStateEvent(), false);
+});
+
+test('F6c-2a GAP stub batch (user/pusher/alias/upload/verification)', async () => {
+  const client = createNativeMatrixClient(async () => unavailable);
+  assert.equal(await client.getUser('@u:example.org'), null);
+  assert.equal(await client.getThreePids(), null);
+  assert.equal(await client.getPushers(), null);
+  await client.setPusher({});
+  assert.deepEqual(await client.getLocalAliases('!r'), []);
+  assert.equal(await client.createAlias('#a', '!r'), null);
+  assert.equal(await client.deleteAlias('#a'), null);
+  assert.equal(await client.cancelUpload('tok'), null);
+  assert.equal(await client.getBaseUrl(), null);
+  assert.equal(await client.setRoomReadMarkers('!r', '$e'), null);
+  assert.equal(await client.sendReadReceipt({}), null);
+  assert.equal(await client.getLatestTimeline(undefined), null);
+});
+
+test('F6c-2a crypto reading exposes getOwnDeviceKeys continuity surfaceless stub', async () => {
+  const client = createNativeMatrixClient(async () => unavailable);
+  const crypto = client.getCrypto() as {
+    getOwnDeviceKeys?(): Promise<{ ed25519: string; curve25519: string }>;
+  };
+  assert.ok(!crypto.getOwnDeviceKeys, 'D1C: renderer crypto must not expose own-device keys');
+});
