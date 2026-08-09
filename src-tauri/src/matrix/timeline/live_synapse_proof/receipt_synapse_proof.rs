@@ -178,8 +178,7 @@ async fn build_client(
 ) -> (matrix_sdk::Client, OwnedUserId, PathBuf) {
     let localpart = format!("rcpt_{tag}_{stamp:x}");
     let password = format!("R-{stamp:x}");
-    let registration =
-        register_disposable_account(base, &localpart, &password).await;
+    let registration = register_disposable_account(base, &localpart, &password).await;
     let user_id: OwnedUserId = registration["user_id"]
         .as_str()
         .expect("registration user_id")
@@ -253,7 +252,9 @@ async fn live_native_two_client_receipt_and_ordering_against_disposable_synapse_
     let mut event_ids = Vec::new();
     for index in 1..=EVENT_COUNT {
         let sent = room
-            .send(RoomMessageEventContent::text_plain(format!("{SEQ_PREFIX}{index}")))
+            .send(RoomMessageEventContent::text_plain(format!(
+                "{SEQ_PREFIX}{index}"
+            )))
             .await
             .expect("A send sequenced event");
         event_ids.push(sent.response.event_id);
@@ -270,7 +271,11 @@ async fn live_native_two_client_receipt_and_ordering_against_disposable_synapse_
     loop {
         sync_briefly(&client_b).await;
         let _ = registry_b
-            .paginate_legacy(&client_b, room_id.as_str(), NativeTimelineDirection::Backwards)
+            .paginate_legacy(
+                &client_b,
+                room_id.as_str(),
+                NativeTimelineDirection::Backwards,
+            )
             .await;
         let snapshot = registry_b
             .snapshot(&client_b, room_id.as_str())
