@@ -38,7 +38,9 @@ export class CryptoStoreContinuityError extends Error {
  * D1C: the renderer never runs a crypto-store continuity check (native owns the
  * store), so no continuity error can be retried from the renderer.
  */
-export const canRetryCryptoStoreContinuityFailure = (error: CryptoStoreContinuityError): boolean => {
+export const canRetryCryptoStoreContinuityFailure = (
+  error: CryptoStoreContinuityError
+): boolean => {
   void error;
   return false;
 };

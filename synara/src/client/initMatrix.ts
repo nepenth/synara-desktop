@@ -19,10 +19,7 @@ import {
 import { platformSessionStore } from '../app/platform';
 import { clearNotificationCaches } from '../app/notifications/notificationCaches';
 import { recordClientDiagnostic } from '../app/utils/clientDiagnostics';
-import {
-  invokeDesktopWithAvailability,
-  type DesktopInvokeResult,
-} from '../app/utils/desktop';
+import { invokeDesktopWithAvailability, type DesktopInvokeResult } from '../app/utils/desktop';
 
 /**
  * F6c — renderer client boot on the native facade (Option A + D1C).

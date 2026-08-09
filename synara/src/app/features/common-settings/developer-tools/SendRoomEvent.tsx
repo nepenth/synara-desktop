@@ -51,7 +51,12 @@ export function SendRoomEvent({ type, stateKey, requestClose }: SendRoomEventPro
     useCallback(
       (evtType, evtStateKey, evtContent) => {
         if (typeof evtStateKey === 'string') {
-          return mx.sendStateEvent(room.roomId, evtType as any, evtContent as Record<string, unknown>, evtStateKey);
+          return mx.sendStateEvent(
+            room.roomId,
+            evtType as any,
+            evtContent as Record<string, unknown>,
+            evtStateKey
+          );
         }
         return mx.sendEvent(room.roomId, evtType as any, evtContent as Record<string, unknown>);
       },
