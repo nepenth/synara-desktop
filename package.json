@@ -15,7 +15,7 @@
     "check:matrix-rust-program-status": "node scripts/check-matrix-rust-sdk-program-status.mjs",
     "test:matrix-rust-traceability-tooling": "node --test scripts/__tests__/feature-parity-audit-normalization.test.mjs scripts/__tests__/feature-parity-traceability-v2.test.mjs",
     "check:matrix-rust-governance": "node scripts/check-matrix-rust-governance-artifacts.mjs",
-    "check:matrix-rust-guardrails": "node scripts/matrix-rust-p1.6-guardrails.mjs && node scripts/check-matrix-rust-sdk-guardrails.mjs && node scripts/check-matrix-rust-sdk-program-status.mjs && node scripts/check-matrix-rust-governance-artifacts.mjs",
+    "check:matrix-rust-guardrails": "node scripts/matrix-rust-p1.6-guardrails.mjs && node scripts/check-matrix-rust-sdk-guardrails.mjs && node scripts/check-matrix-rust-sdk-program-status.mjs && node scripts/check-matrix-rust-governance-artifacts.mjs && node scripts/check-v-burn-complete.mjs",
     "inventory:matrix-sdk-usage": "node scripts/inventory-matrix-sdk-usage.mjs --write",
     "check:matrix-sdk-usage": "node scripts/inventory-matrix-sdk-usage.mjs --check",
     "check:quality-gates": "node scripts/check-quality-gates.mjs && node scripts/check-workflow-policy.mjs",
