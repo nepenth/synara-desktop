@@ -2,17 +2,17 @@
 
 | Field                                                  | Value                                                                                                                                                                                                                                  |
 | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Updated                                                | **2026-08-08** (tip `ac71e9bf` · 1 importer) |
-| Tip                                                    | `ac71e9bf` on `feature/matrix-rust-sdk-full-replacement` |
-| Production `matrix-js-sdk` import files (`synara/src`) | **1** (`initMatrix.ts` only) — plan baseline **220**; **219 removed**, ~**99.5%** |
-| Allowlist `pathCount`                                  | **1** (matches `paths[]` length) |
+| Updated                                                | **2026-08-09** (tip `0f93424e` · **0 importers**) |
+| Tip                                                    | `0f93424e` on `feature/matrix-rust-sdk-full-replacement` |
+| Production `matrix-js-sdk` import files (`synara/src`) | **0** — plan baseline **220**; **220 removed, 100%** |
+| Allowlist `pathCount`                                  | **0** (empty = full ban; any new importer fails) |
 | Test `matrix-js-sdk` import files (`synara/src`)             | **0** (burned in #595; fixtures migrated to probed literals)  |
 | Dual backend                                           | **false** (forbidden forever)                                                                                                                                                                                                          |
 | Pipeline                                               | **GREEN** — Quality gate + Desktop package gate pass at tip; 0 open PRs |
 | Operating model                                        | **prime-agent orchestrator + `deepseek-v4-flash-0731` sub-agents (max 2 concurrent)** — locally hosted, only configured model; public-repo hygiene + UI/UX fidelity always on ([operating-instructions.md](operating-instructions.md)) |
 | Burn board                                             | https://kb.whyland.com/go/synara-matrix-burn                                                                                                                                                                                           |
 | Umbrella #39                                           | **Do not merge** without explicit user approval                                                                                                                                                                                        |
-| V-BURN                                                | **HOLD** — sole importer `initMatrix.ts` = live-`createClient` epic core; completion waits on operator INITMATRIX decision (native epic vs legacy-loader) |
+| V-BURN                                                | **REACHED (product)** — 0 production/test importers; allowlist 0; `matrix-js-sdk@42.0.0` moved to **devDependencies** (tooling-only two-client integration harness, governed CI; excluded from prod audit/bundle). matrix-widget-api stays (V-CALL separate slice); #39 still operator-gated |
 
 ## Current burn policy
 
@@ -28,8 +28,7 @@ hold a residual-empty burn or merge.
 Inventory honesty remains mandatory when a product change changes importers:
 regenerate with `npm run inventory:matrix-sdk-usage`, ratchet the allowlist
 `pathCount` and `paths[]`, and update the inventory test floors for production
-files, declarations, and buckets plus the P1.6 guardrail floors. This PR does
-not change production importers, so the current tip inventory is **114** production files / **114** allowlist paths after #546.
+files, declarations, and buckets plus the P1.6 guardrail floors. F6c-2c completes the importer burn: current tip inventory is **0** production files / **0** allowlist paths; the production allowlist is now empty (full ban) after the #624 importer drop + dependency removal.
 
 ## Operator index — timeline live proofs
 
@@ -60,7 +59,7 @@ completion or merge hold.
 | Join-rule READ residual-empty                       | **#521** native snapshot + RoomPublish                                                                                               |
 | Join-rule presentation DTO                          | **#522**                                                                                                                             |
 | Long-tail residual-empty (type/presentation/orphan) | **#517–#538** (room-summary → RenderMessageContent MsgType) — see [pause handoff](pause-handoff-2026-08-03.md)                       |
-| Importer burn (tip inventory)                       | **220 → 1** production files (`initMatrix.ts` only; #546→#595 stack); test import files 10→**0** (#595); allowlist **1**  |
+| Importer burn (tip inventory)                       | **220 → 0** production files (#546→#624 stack); test import files 10→**0** (#595); allowlist **1 → 0** (F6c-2c) |
 | Live-proof gate policy                              | **#544** — not a residual-empty merge gate                                                                                           |
 | Live-proof-held residual stack                      | **#546** landed (chrome/typing/notes/reaction/NativeEventContent/reactions)                                                          |
 | Desktop Beta package smoke                          | Actions run [30821912637](https://github.com/nepenth/synara-desktop/actions/runs/30821912637) @ `57ab9e64` (artifacts, not Releases) |
@@ -82,7 +81,7 @@ completion or merge hold.
 5. **CallWidget media config/download** — residual still open ([v-send-call-widget-residual.md](v-send-call-widget-residual.md)).
 6. **V-BURN.1–.3** — HOLD until zero importers + drop npm criteria met.
 
-**V-BURN remains HOLD.** `dual_backend` remains **forbidden**. [#39](https://github.com/nepenth/synara-desktop/pull/39) remains gated.
+**V-BURN reached** (0 importers + npm dep removed). `dual_backend` remains **forbidden**. [#39](https://github.com/nepenth/synara-desktop/pull/39) remains gated on explicit operator approval.
 
 ## How to resume
 
