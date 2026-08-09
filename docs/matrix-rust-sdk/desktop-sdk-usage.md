@@ -15,9 +15,9 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
 | production |            0 |                2 |                   3 |
-| test       |            0 |                8 |                  30 |
-| tooling    |            3 |                2 |                   5 |
-| **total**  |        **3** |                  |                     |
+| test       |            0 |                7 |                  29 |
+| tooling    |            2 |                2 |                   5 |
+| **total**  |        **2** |                  |                     |
 
 ### Role definitions
 
@@ -86,7 +86,7 @@ _None._
 
 ## Aggregates: test
 
-Scope: **test only**. Import files: 0. Files with any finding: 8.
+Scope: **test only**. Import files: 0. Files with any finding: 7.
 
 ### Imported modules
 
@@ -107,7 +107,7 @@ _None._
 | Category                   | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
 | -------------------------- | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
 | `authenticated_media`      |     1 |                 0 |                   0 |                      0 |          0 |
-| `direct_matrix_networking` |     8 |                 0 |                   0 |                      0 |         30 |
+| `direct_matrix_networking` |     7 |                 0 |                   0 |                      0 |         29 |
 
 ### Top method-name candidates (not type-proven)
 
@@ -139,7 +139,6 @@ _None._
 | `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  298 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
 | `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  324 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
 | `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  324 | `matrix_cs_path_template` | `/_matrix/client/v3/sync`                    |
-| `scripts/__tests__/synapse-two-client-integration.test.mjs`     |   40 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
 | `synara/src/app/matrix/__tests__/media.test.ts`                 |   14 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
 | `synara/src/app/matrix/__tests__/media.test.ts`                 |   27 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
 | `synara/src/app/matrix/__tests__/media.test.ts`                 |   48 | `matrix_cs_path_literal`  | `/_matrix/media/v3/thumbnail/example/avatar` |
@@ -150,13 +149,13 @@ _None._
 
 ## Aggregates: tooling
 
-Scope: **tooling only**. Import files: 3. Files with any finding: 5.
+Scope: **tooling only**. Import files: 2. Files with any finding: 4.
 
 ### Imported modules
 
 | Module path     | Import sites | Files |
 | --------------- | -----------: | ----: |
-| `matrix-js-sdk` |            3 |     3 |
+| `matrix-js-sdk` |            2 |     2 |
 
 ### Top imported symbols
 
@@ -176,40 +175,15 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 
 | Category                   | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
 | -------------------------- | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
-| `client_methods`           |     3 |                 0 |                   0 |                      0 |          0 |
-| `room_methods`             |     1 |                 0 |                   0 |                      0 |          0 |
-| `event_emitters_listeners` |     1 |                 0 |                   2 |                      0 |          0 |
-| `sync_lifecycle`           |     1 |                 3 |                   0 |                      0 |          0 |
-| `account_data`             |     1 |                 1 |                   0 |                      0 |          0 |
-| `room_lists`               |     1 |                 7 |                   0 |                      0 |          0 |
-| `timelines`                |     1 |                 7 |                   0 |                      0 |          0 |
-| `searches`                 |     1 |                 1 |                   0 |                      0 |          0 |
-| `receipts`                 |     1 |                 1 |                   0 |                      0 |          0 |
+| `client_methods`           |     2 |                 0 |                   0 |                      0 |          0 |
 | `uia_auth`                 |     1 |                 1 |                   0 |                      0 |          0 |
-| `custom_raw_event_sends`   |     1 |                 1 |                   0 |                      0 |          0 |
 | `direct_matrix_networking` |     2 |                 0 |                   0 |                      0 |          5 |
 
 ### Top method-name candidates (not type-proven)
 
-| Method name                | Candidate occurrences |
-| -------------------------- | --------------------: |
-| `getRoom`                  |                     5 |
-| `findEventById`            |                     2 |
-| `createRoom`               |                     1 |
-| `getAccountData`           |                     1 |
-| `getEventTimeline`         |                     1 |
-| `getLatestTimeline`        |                     1 |
-| `getLiveTimeline`          |                     1 |
-| `getSyncState`             |                     1 |
-| `getUnfilteredTimelineSet` |                     1 |
-| `getUserId`                |                     1 |
-| `joinRoom`                 |                     1 |
-| `paginateEventTimeline`    |                     1 |
-| `search`                   |                     1 |
-| `sendEvent`                |                     1 |
-| `setRoomReadMarkers`       |                     1 |
-| `startClient`              |                     1 |
-| `stopClient`               |                     1 |
+| Method name | Candidate occurrences |
+| ----------- | --------------------: |
+| `getUserId` |                     1 |
 
 ### Direct Matrix networking findings
 
@@ -230,12 +204,10 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `scripts/__tests__/feature-parity-audit-normalization.test.mjs`                                                               | test       | no      | —              | —            | —               |
 | `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`                                                                       | test       | no      | —              | —            | —               |
 | `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`                                                                      | test       | no      | —              | —            | —               |
-| `scripts/__tests__/synapse-two-client-integration.test.mjs`                                                                   | test       | no      | —              | —            | —               |
 | `scripts/audit-matrix-public.mjs`                                                                                             | tooling    | no      | —              | —            | —               |
 | `scripts/fixtures/matrix-rust-p1.6/prohibited/js-sdk-in-matrix-ipc/synara/src/app/features/matrix-ipc/leakyImport.ts`         | tooling    | no      | —              | static       | `matrix-js-sdk` |
 | `scripts/fixtures/matrix-rust-p1.6/prohibited/js-sdk-new-file/synara/src/app/features/brand-new-migration/NewClientBridge.ts` | tooling    | no      | —              | static       | `matrix-js-sdk` |
 | `scripts/fixtures/matrix-rust-p1.6/prohibited/raw-matrix-http/synara/src/app/features/matrix-ipc/rawHttp.ts`                  | tooling    | no      | —              | —            | —               |
-| `synara/scripts/run-synapse-two-client-integration.mjs`                                                                       | tooling    | no      | —              | dynamic      | `matrix-js-sdk` |
 | `synara/src/app/cs-api.ts`                                                                                                    | production | yes     | app-other      | —            | —               |
 | `synara/src/app/matrix/__tests__/media.test.ts`                                                                               | test       | yes     | media-boundary | —            | —               |
 | `synara/src/app/utils/__tests__/remoteContent.test.ts`                                                                        | test       | yes     | utility        | —            | —               |

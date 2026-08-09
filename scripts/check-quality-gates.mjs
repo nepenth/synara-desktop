@@ -187,66 +187,6 @@ function hasRequiredCommandStep(jobLines, command, workingDirectory) {
   });
 }
 
-function synapseIntegrationJobError(
-  jobLines,
-  expectedName = "Synapse two-client integration"
-) {
-  if (!jobLines) return "job is missing";
-  if (getScalar(jobLines, "name", 4) !== expectedName) {
-    return `job name must be ${expectedName}`;
-  }
-
-  const timeout = Number(getScalar(jobLines, "timeout-minutes", 4));
-  if (!Number.isInteger(timeout) || timeout < 1 || timeout > 20) {
-    return "job timeout-minutes must be between 1 and 20";
-  }
-
-  const steps = parseSteps(jobLines);
-  const singleCommandIndex = (command) =>
-    steps.findIndex((step) => {
-      const lines = executableLines(getStepRun(step));
-      return lines.length === 1 && lines[0] === command;
-    });
-  const installIndex = steps.findIndex(
-    (step) =>
-      executableLines(getStepRun(step)).length === 1 &&
-      executableLines(getStepRun(step))[0] === "npm ci" &&
-      getScalar(step, "working-directory", 8) === "synara"
-  );
-  const startIndex = singleCommandIndex("scripts/synapse-integration.sh up");
-  const testIndex = singleCommandIndex("npm run test:synapse-integration");
-  const resetIndex = singleCommandIndex("scripts/synapse-integration.sh reset");
-
-  if (installIndex < 0)
-    return "job must install the locked runtime dependencies";
-  if (startIndex < 0)
-    return "job must execute the disposable harness up command";
-  if (testIndex < 0)
-    return "job must execute the two-client integration runner";
-  if (
-    getStepEnvironment(steps[testIndex] ?? []).get("SYNARA_RECEIPT_MODE") !==
-    "both"
-  ) {
-    return "integration runner must execute both public and private receipts";
-  }
-  if (resetIndex < 0)
-    return "job must execute the disposable harness reset command";
-  if (getScalar(steps[resetIndex], "if", 8) !== "always()") {
-    return "harness reset step must use if: always()";
-  }
-  if (
-    !(
-      installIndex < startIndex &&
-      startIndex < testIndex &&
-      testIndex < resetIndex
-    )
-  ) {
-    return "install, up, integration test, and reset steps must remain ordered";
-  }
-
-  return undefined;
-}
-
 function aggregateGateError(jobLines, expectedName, expectedNeeds) {
   if (!jobLines) return "job is missing";
   if (getScalar(jobLines, "name", 4) !== expectedName) {
@@ -306,7 +246,6 @@ function pathFilteredCiAggregateError(jobLines) {
     "changes",
     "validate",
     "ios-tests",
-    "synapse-integration",
     "synapse-native-reactions",
     "synapse-native-attachments",
     "synapse-native-call-media",
@@ -319,7 +258,6 @@ function pathFilteredCiAggregateError(jobLines) {
     "validate-rust",
     "validate-frontend",
     "ios-tests",
-    "synapse-integration",
     "synapse-native-reactions",
     "synapse-native-attachments",
     "synapse-native-call-media",
@@ -351,9 +289,6 @@ function pathFilteredCiAggregateError(jobLines) {
     const iosVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.ios-tests.result }}"
     )?.[0];
-    const synapseVar = [...environment.entries()].find(
-      ([, value]) => value === "${{ needs.synapse-integration.result }}"
-    )?.[0];
     const synapseNativeReactionsVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.synapse-native-reactions.result }}"
     )?.[0];
@@ -379,7 +314,6 @@ function pathFilteredCiAggregateError(jobLines) {
       !changesVar ||
       !desktopOk ||
       !iosVar ||
-      !synapseVar ||
       !synapseNativeReactionsVar ||
       !synapseNativeAttachmentsVar ||
       !synapseNativeCallMediaVar ||
@@ -416,7 +350,6 @@ function pathFilteredCiAggregateError(jobLines) {
     if (
       !desktopRefsOk ||
       !runText.includes(`"$${iosVar}"`) ||
-      !runText.includes(`"$${synapseVar}"`) ||
       !runText.includes(`"$${synapseNativeReactionsVar}"`) ||
       !runText.includes(`"$${synapseNativeAttachmentsVar}"`) ||
       !runText.includes(`"$${synapseNativeCallMediaVar}"`) ||
@@ -448,7 +381,7 @@ function pathFilteredCiAggregateError(jobLines) {
     if (failExit >= 0) return undefined;
   }
 
-  return "job must require changes=success, allow success|skipped for validate/ios/synapse, and exit 1 on failure";
+  return "job must require changes=success, allow success|skipped for validate/ios/native-synapse, and exit 1 on failure";
 }
 
 export function inspectQualityGates({
@@ -468,14 +401,6 @@ export function inspectQualityGates({
     packageScripts = JSON.parse(rootPackage).scripts ?? {};
   } catch {
     errors.push("Root package metadata must be valid JSON.");
-  }
-  if (
-    packageScripts["test:synapse-integration"] !==
-    "SYNARA_RUN_SYNAPSE_INTEGRATION=1 npm --prefix synara exec -- vite-node --config synara/scripts/vite-node.integration.config.mjs synara/scripts/run-synapse-two-client-integration.mjs"
-  ) {
-    errors.push(
-      "Root test:synapse-integration must execute the pinned two-client runner."
-    );
   }
 
   if (!hasIosTestBuildStep(ciJobs.get("ios-tests"))) {
@@ -530,33 +455,6 @@ export function inspectQualityGates({
     }
   }
 
-  const synapseError = synapseIntegrationJobError(
-    ciJobs.get("synapse-integration")
-  );
-  if (synapseError) errors.push(`CI Synapse integration ${synapseError}.`);
-
-  const releaseSynapseError = synapseIntegrationJobError(
-    releaseJobs.get("exact-tag-synapse-integration"),
-    "Exact-tag Synapse two-client integration"
-  );
-  if (releaseSynapseError) {
-    errors.push(`Exact-tag Synapse integration ${releaseSynapseError}.`);
-  }
-  if (
-    !sameList(
-      getList(
-        releaseJobs.get("exact-tag-synapse-integration") ?? [],
-        "needs",
-        4
-      ),
-      ["validate"]
-    )
-  ) {
-    errors.push(
-      "Release workflow exact-tag-synapse-integration needs must be exactly [validate]."
-    );
-  }
-
   const ciAggregateError = pathFilteredCiAggregateError(
     ciJobs.get("quality-gate")
   );
@@ -605,7 +503,6 @@ export function inspectQualityGates({
       "validate",
       "exact-tag-desktop-quality",
       "exact-tag-ios-quality",
-      "exact-tag-synapse-integration",
     ]
   );
   if (releaseAggregateError) {

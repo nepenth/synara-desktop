@@ -2,8 +2,8 @@
 
 | Field                                                  | Value                                                                                                                                                                                                                                  |
 | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Updated                                                | **2026-08-09** (tip `0f93424e` · **0 importers**) |
-| Tip                                                    | `0f93424e` on `feature/matrix-rust-sdk-full-replacement` |
+| Updated                                                | **2026-08-10** (tip `TBD` · **0 importers, js-sdk removed**) |
+| Tip                                                    | `TBD` (full-removal slice) on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **0** — plan baseline **220**; **220 removed, 100%** |
 | Allowlist `pathCount`                                  | **0** (empty = full ban; any new importer fails) |
 | Test `matrix-js-sdk` import files (`synara/src`)             | **0** (burned in #595; fixtures migrated to probed literals)  |
@@ -12,7 +12,7 @@
 | Operating model                                        | **prime-agent orchestrator + `deepseek-v4-flash-0731` sub-agents (max 2 concurrent)** — locally hosted, only configured model; public-repo hygiene + UI/UX fidelity always on ([operating-instructions.md](operating-instructions.md)) |
 | Burn board                                             | https://kb.whyland.com/go/synara-matrix-burn                                                                                                                                                                                           |
 | Umbrella #39                                           | **Do not merge** without explicit user approval                                                                                                                                                                                        |
-| V-BURN                                                | **REACHED (product)** — 0 production/test importers; allowlist 0; `matrix-js-sdk@42.0.0` moved to **devDependencies** (tooling-only two-client integration harness, governed CI; excluded from prod audit/bundle). matrix-widget-api stays (V-CALL separate slice); #39 still operator-gated |
+| V-BURN                                                | **REACHED (full)** — 0 importers; allowlist 0; **`matrix-js-sdk@42.0.0` fully removed from package.json + lockfile** (dep, devDep, two-client tooling harness + CI job all retired); no js-sdk anywhere in the repo tree. matrix-widget-api stays (V-CALL separate slice); #39 still operator-gated |
 
 ## Current burn policy
 

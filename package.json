@@ -20,7 +20,6 @@
     "check:matrix-sdk-usage": "node scripts/inventory-matrix-sdk-usage.mjs --check",
     "check:quality-gates": "node scripts/check-quality-gates.mjs && node scripts/check-workflow-policy.mjs",
     "check:synapse-harness": "node scripts/check-synapse-integration-harness.mjs",
-    "test:synapse-integration": "SYNARA_RUN_SYNAPSE_INTEGRATION=1 npm --prefix synara exec -- vite-node --config synara/scripts/vite-node.integration.config.mjs synara/scripts/run-synapse-two-client-integration.mjs",
     "check:mip1-evidence": "node scripts/check-mip1-commit-evidence.mjs --base main",
     "check:production-smoke": "node scripts/check-production-smoke-checklist.mjs",
     "check:release-updater": "node scripts/check-release-updater.mjs",

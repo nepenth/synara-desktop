@@ -472,7 +472,7 @@ test("check mode detects stale artifacts and does not mutate them", () => {
   }
 });
 
-test("repository inventory includes tooling dynamic import and records the current deletion delta", () => {
+test("repository inventory records the deletion delta to zero production js-sdk importers", () => {
   const inventory = buildInventory({ root: REPO_ROOT });
   const baseline = inventory.summary.desktopRuntimeBaseline;
   const rw = inventory.summary.repositoryWide;
@@ -502,21 +502,17 @@ test("repository inventory includes tooling dynamic import and records the curre
   assert.equal(baseline.buckets["media-boundary"] ?? 0, 0);
   assert.equal(baseline.buckets["shared-type"] ?? 0, 0);
 
-  // Repository-wide includes tooling beyond synara/src
+  // Repository-wide tooling = guardrail fixtures only (js-sdk fully removed:
+  // no dynamic matrix-js-sdk import remains anywhere in the tree).
   assert.ok(rw.toolingImportFiles >= 1);
   assert.ok(rw.totalImportFiles >= baseline.totalImportFiles + 1);
 
-  const harness = inventory.files.find(
-    (f) => f.path === "synara/scripts/run-synapse-two-client-integration.mjs",
+  const fixtures = inventory.files.filter((f) => f.role === "tooling");
+  assert.ok(fixtures.length >= 1, "guardrail fixtures must be inventoried");
+  const anyDynamic = fixtures.some((f) =>
+    f.imports.some((imp) => imp.form === "dynamic"),
   );
-  assert.ok(harness, "integration harness must be inventoried");
-  assert.equal(harness.role, "tooling");
-  assert.equal(harness.desktopRuntime, false);
-  const dynamic = harness.imports.find(
-    (imp) => imp.form === "dynamic" && imp.module === "matrix-js-sdk",
-  );
-  assert.ok(dynamic, "dynamic import of matrix-js-sdk must be recorded");
-  assert.ok(dynamic.line >= 1);
+  assert.equal(anyDynamic, false, "no dynamic js-sdk import may remain in tooling");
 
   // Aggregates must be role-scoped
   assert.equal(
@@ -536,8 +532,7 @@ test("repository inventory includes tooling dynamic import and records the curre
   const json = stableStringify(inventory);
   assert.ok(!json.includes(REPO_ROOT));
   assert.ok(!/"\/Users\//.test(json));
-  assert.match(json, /run-synapse-two-client-integration\.mjs/);
-  assert.match(json, /"form": "dynamic"/);
+  assert.ok(!/"form": "dynamic"/.test(json), "no dynamic js-sdk import recorded");
 });
 
 test("generator artifacts match external root Prettier CLI formatting", () => {

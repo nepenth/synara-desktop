@@ -31,17 +31,21 @@ Push to `main` / `release/**` and `workflow_dispatch` always run the **full** su
 | --- | --- | --- |
 | `validate` | `src-tauri/`, `synara/`, `scripts/`, root package lock/config, `ci.yml` | Validate desktop and runtime |
 | `ios` | `synara-ios/`, `scripts/ci-build.sh`, `ci.yml` | iOS simulator tests |
-| `synapse` | `synara/`, `scripts/synapse-integration.sh`, selected scripts tests, package lock, `ci.yml` | Synapse two-client integration |
+| `synapse_native_*` | `src-tauri/src/matrix/**`, `synara/`, `scripts/synapse-integration.sh`, package lock, `ci.yml` | Native Matrix Rust synapse proofs (reactions/attachments/call/polls/rich-messages/threads) |
+
+> **Retired 2026-08-09:** the legacy `synapse` two-client **js-sdk** integration
+> (`run-synapse-two-client-integration.mjs`) was removed with the complete
+> `matrix-js-sdk` removal (V-BURN). Native proofs cover the shipped client.
 
 Examples:
 
-| PR content | validate | ios | synapse |
+| PR content | validate | ios | synapse_native_* |
 | --- | --- | --- | --- |
 | `docs/matrix-rust-sdk/PROGRESS.md` only | skip | skip | skip |
-| `src-tauri/src/matrix/**` only | run | skip | skip |
+| `src-tauri/src/matrix/**` only | run | skip | run (rust path) |
 | `synara-ios/**` only | skip | run | skip |
 | `synara/` frontend only | run | skip | run |
-| Workflow `ci.yml` change | run | run | run |
+| Workflow `ci.yml` change | run | run | run |run |
 
 ## Quality gate
 

@@ -2,14 +2,14 @@
 
 | Field                  | Value                                                                             |
 | ---------------------- | --------------------------------------------------------------------------------- |
-| Status                 | **V-BURN REACHED (product)** — 0 production importers; `matrix-js-sdk` devDependency-only (tooling harness; F6c-2c, tip `0f93424e`) |
+| Status                 | **V-BURN REACHED (full)** — 0 importers; `matrix-js-sdk` fully removed from package.json/lock (two-client harness + CI retired) |
 | Measured tip           | `0f93424e`                                                                       |
 | Base                   | `feature/matrix-rust-sdk-full-replacement`                                        |
 | Scope                  | Production `matrix-js-sdk` importers under `synara/src`                           |
 | Current importers      | **0**                                                                             |
 | P1.6 allowlist entries | **0** (empty = full ban)                                                          |
 | Policy                 | Full replacement; `dual_backend` forbidden; fail-closed                           |
-| V-BURN                 | **REACHED (product)** — importer drop 1 → 0 (#624) + js-sdk to devDeps-only (F6c-2c) |
+| V-BURN                 | **REACHED (full)** — importer drop 1 → 0 (#624) + js-sdk fully removed (dep, devDep, harness, CI; F6c-2c/3) |
 | Hold                   | **V-BURN HOLD**; do not claim V-BURN-ready; **#39 remains gated**                 |
 
 This is a classification snapshot, not a cutover plan or readiness claim. The
