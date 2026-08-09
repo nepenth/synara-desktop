@@ -10,7 +10,6 @@ import {
   isPendingFreshLoginIdentity,
   setLastBootstrappedMatrixIdentity,
   type SessionPersistenceOptions,
-  persistAuthenticatedSession,
 } from '../app/state/sessionPersistence';
 import {
   clearSessionLocalStorage,
@@ -22,7 +21,6 @@ import { clearNotificationCaches } from '../app/notifications/notificationCaches
 import { recordClientDiagnostic } from '../app/utils/clientDiagnostics';
 import {
   invokeDesktopWithAvailability,
-  isSynaraDesktop,
   type DesktopInvokeResult,
 } from '../app/utils/desktop';
 

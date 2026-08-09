@@ -996,9 +996,10 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       };
       [key: string]: unknown;
     } | null> {
-      const x =
+      const argLength =
         (typeof opts.body === 'object' && opts.body !== null ? 1 : 0) +
-        (opts.next_batch?.length ?? 0); // eslint-disable-line @typescript-eslint/no-unused-vars
+        (opts.next_batch?.length ?? 0);
+      void argLength;
       return Promise.resolve(null);
     },
     /** F6a — aliases + ignored users + auth metadata + relations (GAP-safe). */
@@ -1036,12 +1037,13 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       nextBatch?: unknown;
       prevBatch?: unknown;
     }> {
-      const x =
+      const argLength =
         roomId.length +
         eventId.length +
         (relationType?.length ?? 0) +
         (eventType?.length ?? 0) +
-        (filter ? 1 : 0); // eslint-disable-line @typescript-eslint/no-unused-vars
+        (filter ? 1 : 0);
+      void argLength;
       return Promise.resolve({ events: [] });
     },
 
@@ -1089,12 +1091,13 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       content: Record<string, unknown>,
       stateKey?: string
     ): Promise<{ delay_id?: string } | null> {
-      const x =
+      const argLength =
         roomId.length +
         (opts === null ? 1 : 0) +
         eventType.length +
         Object.keys(content).length +
-        (stateKey?.length ?? 0); // eslint-disable-line @typescript-eslint/no-unused-vars
+        (stateKey?.length ?? 0);
+      void argLength;
       return Promise.resolve(null);
     },
     async _unstable_updateDelayedEvent(...args: unknown[]): Promise<unknown> {

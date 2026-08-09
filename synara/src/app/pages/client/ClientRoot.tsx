@@ -208,7 +208,9 @@ const useSyncResumeRetry = (mx?: ClientMatrix) => {
 const useProactiveTokenRefresh = (_mx?: ClientMatrix) => {
   // D1C: the renderer ceded token custody to native — native owns refresh via
   // `session_updated` (readiness/generation only). No renderer timer/handle.
+  const clientArg = _mx !== undefined ? 1 : 0; // eslint-disable-line @typescript-eslint/no-unused-vars
   useEffect(() => undefined, []);
+  void clientArg;
 };
 
 type ClientRootProps = {

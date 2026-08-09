@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Badge, Box, Text, IconButton, Icon, Icons, Scroll, Switch, Button } from 'folds';
+import { Badge, Box, Text, IconButton, Icon, Icons, Scroll, Switch } from 'folds';
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../styles.css';
@@ -11,7 +11,6 @@ import {
   AccountDataEditor,
   AccountDataSubmitCallback,
 } from '../../../components/AccountDataEditor';
-import { copyToClipboard } from '../../../utils/dom';
 import { AccountData } from './AccountData';
 import {
   getPlatformSecretStoreBackendLabel,
