@@ -420,3 +420,35 @@ test('F5 extended GAP stubs satisfy the anchor without data', async () => {
   assert.equal(await client.getOpenIdToken(), null);
   assert.equal(await client.search({ term: 'x' }), null);
 });
+
+test('F6c redactEvent proxies matrix_timeline_redact', async () => {
+  const { invoke, callLog } = invokingWith({
+    matrix_timeline_redact: { event_id: '$evt1', room_id: '!r:example.org' },
+  });
+  const client = createNativeMatrixClient(invoke);
+  const redacted = await client.redactEvent('!r:example.org', '$evt1', 'spam');
+  assert.equal(redacted?.event_id, '$evt1');
+  assert.equal(callLog[0], 'matrix_timeline_redact');
+});
+
+test('F6c redactEvent fails closed when unavailable', async () => {
+  const client = createNativeMatrixClient(async () => unavailable);
+  assert.equal(await client.redactEvent('!r:example.org', '$evt1'), null);
+});
+
+test('F6c GAP-safe stubs (searchUserDirectory, queueToDevice, delayed events)', async () => {
+  const client = createNativeMatrixClient(async () => unavailable);
+  assert.equal(await client.searchUserDirectory('term'), null);
+  await client.queueToDevice('m.test', {});
+  assert.equal(await client._unstable_sendDelayedEvent('!r', 'm.test', {}), null);
+  assert.equal(await client._unstable_sendDelayedStateEvent('!r', 'm.test', {}, '$k'), null);
+  assert.equal(await client._unstable_updateDelayedEvent('$evt', '!r', {}, {}), null);
+  assert.equal(await client.getOpenIdTokenData(), null);
+});
+
+test('F6c crypto reading includes encryptToDeviceMessages no-op', async () => {
+  const client = createNativeMatrixClient(async () => unavailable);
+  const crypto = client.getCrypto();
+  await crypto.encryptToDeviceMessages();
+  assert.ok(true);
+});

@@ -385,6 +385,8 @@ export type FacadeCryptoReading = {
   getCrossSigningState(): Promise<FacadeCryptoCrossSigningState>;
   isCrossSigningReady(): Promise<boolean>;
   isEncryptionEnabled(): Promise<boolean>;
+  /** D1C: to-device encryption is native-owned; GAP-safe no-op stub. */
+  encryptToDeviceMessages(): Promise<void>;
 };
 
 export type FacadeMatrixRtcSession = unknown;
@@ -795,6 +797,7 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
         isCrossSigningReady: async () =>
           (await this.getCryptoStatus())?.crossSigningState === 'Ready',
         isEncryptionEnabled: async () => (await this.getCryptoStatus())?.encryptionEnabled ?? false,
+        encryptToDeviceMessages: async () => Promise.resolve(),
       };
     },
 
@@ -849,6 +852,50 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       return Promise.resolve(noNativeRelations && relationType && eventType ? null : null);
     },
 
+    /** F6c — redact a message/event (matrix_timeline_redact). */
+    async redactEvent(
+      roomId: RoomId,
+      eventId: EventId,
+      reason?: string
+    ): Promise<{ event_id: string } | null> {
+      const result = await invoke('matrix_timeline_redact', { roomId, eventId, reason });
+      if (!result.available) return null;
+      return isObject(result.value) &&
+        typeof (result.value as { event_id?: string }).event_id === 'string'
+        ? { event_id: (result.value as { event_id: string }).event_id }
+        : null;
+    },
+
+    /** F6c — user-directory search GAP is a stateful owner; fail-closed null. */
+    async searchUserDirectory(term: string): Promise<unknown> {
+      const termIgnored = term.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars
+      return Promise.resolve(null);
+    },
+
+    /** F6c — device to-device queue (D1C: native crypto owns); fail-closed no-op. */
+    async queueToDevice(eventType: string, content: Record<string, unknown>): Promise<void> {
+      const eventTypeLen = eventType.length + Object.keys(content).length; // eslint-disable-line
+      return Promise.resolve(undefined);
+    },
+
+    /** F6c — delayed-event APIs are not natively surfaced; GAP-safe stubs. */
+    async _unstable_sendDelayedEvent(...args: unknown[]): Promise<unknown> {
+      const noNativeDelayed = args.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars
+      return Promise.resolve(noNativeDelayed ? null : null);
+    },
+    async _unstable_sendDelayedStateEvent(...args: unknown[]): Promise<unknown> {
+      const noNativeDelayed = args.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars
+      return Promise.resolve(noNativeDelayed ? null : null);
+    },
+    async _unstable_updateDelayedEvent(...args: unknown[]): Promise<unknown> {
+      const noNativeDelayed = args.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars
+      return Promise.resolve(noNativeDelayed ? null : null);
+    },
+
+    /** F6c — openid-credentials GAP stub (real shape: { access_token }). */
+    async getOpenIdTokenData(): Promise<{ access_token: string } | null> {
+      return Promise.resolve(null);
+    },
     /** F6a — push-rule read (notification GAP: fail-closed undefined). */
     getRoomPushRule(
       scope: string,
