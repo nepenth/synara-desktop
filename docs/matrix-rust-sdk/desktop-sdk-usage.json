@@ -25,16 +25,16 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 1,
+          "fileCount": 0,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
         },
         "crypto_verification_recovery": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 1,
+          "fileCount": 0,
           "listenerCandidateOccurrences": 0,
-          "methodCandidateOccurrences": 1,
+          "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
         },
         "custom_raw_event_sends": {
@@ -53,14 +53,14 @@
         },
         "event_emitters_listeners": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 1,
-          "listenerCandidateOccurrences": 2,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
         },
         "indexeddb_matrix_stores": {
-          "constructorCandidateOccurrences": 2,
-          "fileCount": 1,
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -116,9 +116,9 @@
         },
         "sync_lifecycle": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 1,
+          "fileCount": 0,
           "listenerCandidateOccurrences": 0,
-          "methodCandidateOccurrences": 6,
+          "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
         },
         "threads": {
@@ -144,44 +144,15 @@
         },
         "uia_auth": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 1,
+          "fileCount": 0,
           "listenerCandidateOccurrences": 0,
-          "methodCandidateOccurrences": 8,
+          "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 3,
-      "importFileCount": 1,
-      "methodCandidateFrequencies": [
-        {
-          "count": 6,
-          "name": "refreshToken"
-        },
-        {
-          "count": 4,
-          "name": "stopClient"
-        },
-        {
-          "count": 1,
-          "name": "getSafeUserId"
-        },
-        {
-          "count": 1,
-          "name": "getSyncState"
-        },
-        {
-          "count": 1,
-          "name": "initRustCrypto"
-        },
-        {
-          "count": 1,
-          "name": "logout"
-        },
-        {
-          "count": 1,
-          "name": "startClient"
-        }
-      ],
+      "fileCount": 2,
+      "importFileCount": 0,
+      "methodCandidateFrequencies": [],
       "modelCoupling": {
         "CallMembership": {
           "fileCount": 0,
@@ -196,12 +167,12 @@
           "importOccurrences": 0
         },
         "IndexedDBCryptoStore": {
-          "fileCount": 1,
-          "importOccurrences": 1
+          "fileCount": 0,
+          "importOccurrences": 0
         },
         "IndexedDBStore": {
-          "fileCount": 1,
-          "importOccurrences": 1
+          "fileCount": 0,
+          "importOccurrences": 0
         },
         "MatrixClient": {
           "fileCount": 0,
@@ -236,17 +207,11 @@
           "importOccurrences": 0
         },
         "createClient": {
-          "fileCount": 1,
-          "importOccurrences": 1
+          "fileCount": 0,
+          "importOccurrences": 0
         }
       },
-      "modules": [
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "path": "matrix-js-sdk"
-        }
-      ],
+      "modules": [],
       "networking": [
         {
           "indicator": "/_matrix/client/versions",
@@ -271,29 +236,7 @@
       "networkingFindingCount": 3,
       "role": "production",
       "scope": "role",
-      "symbols": [
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "IndexedDBCryptoStore",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "IndexedDBStore",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "createClient",
-          "typeImports": 0,
-          "valueImports": 1
-        }
-      ]
+      "symbols": []
     },
     "test": {
       "categories": {
@@ -1671,190 +1614,6 @@
       "role": "test"
     },
     {
-      "bucket": "client-lifecycle",
-      "categories": [
-        "client_methods",
-        "event_emitters_listeners",
-        "sync_lifecycle",
-        "crypto_verification_recovery",
-        "indexeddb_matrix_stores",
-        "uia_auth"
-      ],
-      "constructorCandidates": [
-        {
-          "category": "indexeddb_matrix_stores",
-          "confidence": "AST new-expression of an SDK store constructor name in an SDK-importing file; not type-proven.",
-          "line": 177,
-          "name": "IndexedDBStore"
-        },
-        {
-          "category": "indexeddb_matrix_stores",
-          "confidence": "AST new-expression of an SDK store constructor name in an SDK-importing file; not type-proven.",
-          "line": 183,
-          "name": "IndexedDBCryptoStore"
-        }
-      ],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IndexedDBCryptoStore"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IndexedDBStore"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "createClient"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [
-        {
-          "category": "event_emitters_listeners",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "'sync' as unknown as Parameters<MatrixClient['removeListener']>[0]",
-          "line": 387,
-          "method": "removeListener"
-        },
-        {
-          "category": "event_emitters_listeners",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "'sync' as unknown as Parameters<MatrixClient['on']>[0]",
-          "line": 401,
-          "method": "on"
-        }
-      ],
-      "methodCandidates": [
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_reference_candidate",
-          "line": 92,
-          "name": "refreshToken"
-        },
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 114,
-          "name": "refreshToken"
-        },
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_reference_candidate",
-          "line": 200,
-          "name": "refreshToken"
-        },
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_reference_candidate",
-          "line": 202,
-          "name": "refreshToken"
-        },
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_reference_candidate",
-          "line": 229,
-          "name": "refreshToken"
-        },
-        {
-          "category": "crypto_verification_recovery",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 251,
-          "name": "initRustCrypto"
-        },
-        {
-          "category": "sync_lifecycle",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 283,
-          "name": "stopClient"
-        },
-        {
-          "category": "sync_lifecycle",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 367,
-          "name": "getSyncState"
-        },
-        {
-          "category": "sync_lifecycle",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 470,
-          "name": "startClient"
-        },
-        {
-          "category": "sync_lifecycle",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 501,
-          "name": "stopClient"
-        },
-        {
-          "category": "sync_lifecycle",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 513,
-          "name": "stopClient"
-        },
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 514,
-          "name": "getSafeUserId"
-        },
-        {
-          "category": "sync_lifecycle",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 543,
-          "name": "stopClient"
-        },
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 545,
-          "name": "logout"
-        },
-        {
-          "category": "uia_auth",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_reference_candidate",
-          "line": 612,
-          "name": "refreshToken"
-        }
-      ],
-      "modelCoupling": [
-        "IndexedDBCryptoStore",
-        "IndexedDBStore",
-        "createClient"
-      ],
-      "networking": [],
-      "path": "synara/src/client/initMatrix.ts",
-      "role": "production"
-    },
-    {
       "bucket": "service-worker",
       "categories": ["authenticated_media", "direct_matrix_networking"],
       "constructorCandidates": [],
@@ -1903,22 +1662,20 @@
   },
   "summary": {
     "desktopRuntimeBaseline": {
-      "buckets": {
-        "client-lifecycle": 1
-      },
+      "buckets": {},
       "planComparison": {
         "expectedProductionImportFiles": 220,
         "expectedTestImportFiles": 12,
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 1,
+      "productionImportFiles": 0,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 0,
-      "totalImportFiles": 1
+      "totalImportFiles": 0
     },
     "repositoryWide": {
-      "productionImportFiles": 1,
+      "productionImportFiles": 0,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 0,
@@ -1927,7 +1684,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 4
+      "totalImportFiles": 3
     }
   }
 }

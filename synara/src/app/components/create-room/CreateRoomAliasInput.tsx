@@ -33,7 +33,7 @@ export function CreateRoomAliasInput({ disabled }: { disabled?: boolean }) {
         const roomAlias = `#${aliasLocalPart}:${getMxIdServer(mx.getSafeUserId())}`;
         try {
           const result = await mx.getRoomIdForAlias(roomAlias);
-          return typeof result.room_id !== 'string';
+          return typeof result?.room_id !== 'string';
         } catch (e) {
           if ((e as { httpStatus?: number } | null)?.httpStatus === 404) {
             return true;

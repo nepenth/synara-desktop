@@ -62,6 +62,8 @@ export type MatrixEventReading = {
 export type MemberReading = {
   userId: UserId;
   rawDisplayName: string;
+  /** js-sdk RoomMember.name (display name or userId); reading may omit it. */
+  name?: string;
   getMxcAvatarUrl(): string | undefined;
   events: { member?: MatrixEventReading };
 };

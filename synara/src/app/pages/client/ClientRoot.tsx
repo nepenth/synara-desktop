@@ -28,9 +28,7 @@ import {
   clearCacheAndReload,
   initClient,
   performLogout,
-  scheduleProactiveTokenRefresh,
   startClient,
-  type ProactiveTokenRefreshHandle,
 } from '../../../client/initMatrix';
 import {
   canRetryCryptoStoreContinuityFailure,
@@ -207,21 +205,12 @@ const useSyncResumeRetry = (mx?: ClientMatrix) => {
   }, [mx]);
 };
 
-const useProactiveTokenRefresh = (mx?: ClientMatrix) => {
-  useEffect(() => {
-    if (!mx) return undefined;
-
-    const session = getActiveSession();
-    if (!session?.refreshToken) return undefined;
-
-    const handle: ProactiveTokenRefreshHandle = scheduleProactiveTokenRefresh(mx, session, {
-      nativeSessionStore: platformSessionStore,
-    });
-
-    return () => {
-      handle.dispose();
-    };
-  }, [mx]);
+const useProactiveTokenRefresh = (_mx?: ClientMatrix) => {
+  // D1C: the renderer ceded token custody to native — native owns refresh via
+  // `session_updated` (readiness/generation only). No renderer timer/handle.
+  const clientArg = _mx !== undefined ? 1 : 0; // eslint-disable-line @typescript-eslint/no-unused-vars
+  useEffect(() => undefined, []);
+  void clientArg;
 };
 
 type ClientRootProps = {
@@ -329,7 +318,7 @@ export function ClientRoot({ children }: ClientRootProps) {
     });
 
     try {
-      if (mx.clientRunning) {
+      if (mx.clientRunning()) {
         mx.retryImmediately();
         return;
       }

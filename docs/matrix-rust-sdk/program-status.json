@@ -126,7 +126,19 @@
       "V-SEND.5"
     ],
     "held_prs": [
-      221, 240, 109, 193, 196, 198, 199, 201, 203, 204, 207, 208, 209
+      221,
+      240,
+      109,
+      193,
+      196,
+      198,
+      199,
+      201,
+      203,
+      204,
+      207,
+      208,
+      209
     ],
     "completion_evidence": {
       "capability_owner_delta": "negative",
@@ -138,9 +150,9 @@
         "import_lines": 292
       },
       "current": {
-        "files": 1,
-        "import_lines": 2,
-        "note": "tip bf1b565e: sole importer synara/src/client/initMatrix.ts (production); test import files 0; tooling guardrail fixtures excluded; plan baseline 232 production+test files"
+        "files": 0,
+        "import_lines": 0,
+        "note": "tip after F6c-2b(#624): production importers 0; test import files 0; matrix-js-sdk dependency removal (F6c-2c) next; plan baseline 232 production+test files"
       }
     }
   },
@@ -161,21 +173,48 @@
         "P0.6",
         "P0.7"
       ],
-      "blocked_by": ["R0.2", "R0.8"],
+      "blocked_by": [
+        "R0.2",
+        "R0.8"
+      ],
       "strict_acceptance_state": "open",
       "phase_gate_state": "open"
     },
     {
       "phase": 1,
-      "planned_task_ids": ["P1.1", "P1.2", "P1.3", "P1.4", "P1.5", "P1.6"],
-      "blocked_by": ["R0.1", "R0.3", "R0.8"],
+      "planned_task_ids": [
+        "P1.1",
+        "P1.2",
+        "P1.3",
+        "P1.4",
+        "P1.5",
+        "P1.6"
+      ],
+      "blocked_by": [
+        "R0.1",
+        "R0.3",
+        "R0.8"
+      ],
       "strict_acceptance_state": "open",
       "phase_gate_state": "open"
     },
     {
       "phase": 2,
-      "planned_task_ids": ["P2.1", "P2.2", "P2.3", "P2.4", "P2.5", "P2.6"],
-      "blocked_by": ["R0.4", "R0.5", "R0.6", "R0.7", "R0.8"],
+      "planned_task_ids": [
+        "P2.1",
+        "P2.2",
+        "P2.3",
+        "P2.4",
+        "P2.5",
+        "P2.6"
+      ],
+      "blocked_by": [
+        "R0.4",
+        "R0.5",
+        "R0.6",
+        "R0.7",
+        "R0.8"
+      ],
       "strict_acceptance_state": "open",
       "phase_gate_state": "open"
     },
@@ -191,7 +230,10 @@
         "P3.7",
         "P3.8"
       ],
-      "blocked_by": ["R0.7", "R0.8"],
+      "blocked_by": [
+        "R0.7",
+        "R0.8"
+      ],
       "strict_acceptance_state": "open",
       "phase_gate_state": "open"
     },
@@ -278,7 +320,14 @@
     },
     {
       "phase": 9,
-      "planned_task_ids": ["P9.1", "P9.2", "P9.3", "P9.4", "P9.5", "P9.6"],
+      "planned_task_ids": [
+        "P9.1",
+        "P9.2",
+        "P9.3",
+        "P9.4",
+        "P9.5",
+        "P9.6"
+      ],
       "blocked_by": [],
       "strict_acceptance_state": "not_reviewed",
       "phase_gate_state": "open"

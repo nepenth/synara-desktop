@@ -137,7 +137,9 @@ export const useMessageSearch = (params: MessageSearchParams) => {
         body: requestBody,
         next_batch: nextBatch === '' ? undefined : nextBatch,
       } as unknown as Parameters<LocalMx['search']>[0]);
-      return parseSearchResult(r);
+      return r
+        ? parseSearchResult(r as SearchResponseReading)
+        : { nextToken: undefined, highlights: [], groups: [] };
     },
     [mx, term, order, rooms, senders]
   );

@@ -57,9 +57,9 @@ function StateEventEdit({ type, stateKey, content, requestClose }: StateEventEdi
     EDITOR_INTENT_SPACE_COUNT
   );
 
-  const [submitState, submit] = useAsyncCallback<object, MatrixError, [object]>(
+  const [submitState, submit] = useAsyncCallback<object | null, MatrixError, [object]>(
     useCallback(
-      (c) => mx.sendStateEvent(room.roomId, type as any, c, stateKey),
+      (c) => mx.sendStateEvent(room.roomId, type as any, c as Record<string, unknown>, stateKey),
       [mx, room, type, stateKey]
     )
   );

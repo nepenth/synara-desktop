@@ -313,6 +313,8 @@ export type FacadeSendTextInput = {
 export type FacadeSendTextResult = {
   roomId: RoomId;
   eventId: EventId;
+  /** js-sdk wire alias (event_id) for widget-bridge consumers. */
+  event_id?: string;
   localTxnId: string;
   status: 'sent';
 };
@@ -335,6 +337,8 @@ export type FacadeMediaUploadInput = {
 
 export type FacadeUploadMediaResult = {
   mxc: string;
+  /** js-sdk upload response alias (content_uri = mxc); widget bridge expects it. */
+  content_uri: string;
 };
 
 export type FacadeMediaConfig = {
@@ -356,7 +360,7 @@ export type FacadeProfileInfo = {
 const parseUploadMediaResult = (value: unknown): FacadeUploadMediaResult | null => {
   if (!isObject(value) || hasForbiddenWireFields(value)) return null;
   const mxc = reqString(value, 'mxc');
-  return mxc === null ? null : { mxc };
+  return mxc === null ? null : { mxc, content_uri: mxc };
 };
 
 const parseMediaConfig = (value: unknown): FacadeMediaConfig => {
@@ -661,7 +665,8 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     getRooms(): FacadeEventedRoomReading[] {
       return cachedRooms;
     },
-    getRoom(roomId: RoomId): FacadeEventedRoomReading | null {
+    getRoom(roomId: string | null | undefined): FacadeEventedRoomReading | null {
+      if (typeof roomId !== 'string') return null;
       return cachedRooms.find((r) => r.roomId === roomId) ?? null;
     },
 
@@ -712,18 +717,20 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       };
     },
 
-    /** F3 — send a plain message via matrix_send_text (fail-closed null). */
-    async sendMessage(input: FacadeSendTextInput): Promise<FacadeSendTextResult | null> {
+    /** F3 — send a plain message via matrix_send_text (js-sdk arity; fail-closed null). */
+    async sendMessage(
+      roomId: RoomId,
+      content: Record<string, unknown>
+    ): Promise<FacadeSendTextResult | null> {
+      const body = typeof content.body === 'string' ? content.body : '';
       const result = await invoke('matrix_send_text', {
-        roomId: input.roomId,
-        body: input.body,
-        msgType: input.msgType,
-        formattedBody: input.formattedBody,
-        mentionUserIds: input.mentionUserIds,
-        mentionRoom: input.mentionRoom,
-        replyTo: input.replyTo,
-        threadRoot: input.threadRoot,
-        txnId: input.txnId,
+        roomId,
+        body,
+        msgType: typeof content.msgtype === 'string' ? content.msgtype : undefined,
+        formattedBody:
+          typeof content.formatted_body === 'string' ? content.formatted_body : undefined,
+        txnId: typeof content.txnid === 'string' ? content.txnid : undefined,
+        ...(typeof content['m.mentions'] === 'object' ? { mentions: content['m.mentions'] } : {}),
       });
       if (!result.available) return null;
       return parseSendTextResult(result.value);
@@ -736,7 +743,7 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       content: FacadeSendEventContent
     ): Promise<FacadeSendTextResult | null> {
       if (type === 'm.room.message') {
-        return this.sendMessage({ roomId, body: String(content.body ?? '') });
+        return this.sendMessage(roomId, content);
       }
       // Other event types have no generic native send command yet (GAP).
       return Promise.resolve(null);
@@ -818,13 +825,26 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     },
 
     /** F4 — upload content bytes via matrix_upload_media (fail-closed null). */
-    async uploadContent(input: FacadeMediaUploadInput): Promise<FacadeUploadMediaResult | null> {
-      const result = await invoke('matrix_upload_media', {
-        mimeType: input.mimeType,
-        bytes: input.bytes,
-      });
-      if (!result.available) return null;
-      return parseUploadMediaResult(result.value);
+    async uploadContent(input: unknown): Promise<FacadeUploadMediaResult> {
+      let mimeType = '';
+      let bytes: number[] = [];
+      if (isObject(input)) {
+        const rec = input as Record<string, unknown>;
+        mimeType = typeof rec.mimeType === 'string' ? rec.mimeType : '';
+        const rawBytes = rec.bytes;
+        bytes = Array.isArray(rawBytes)
+          ? rawBytes.filter((b): b is number => typeof b === 'number')
+          : [];
+      }
+      const result = await invoke('matrix_upload_media', { mimeType, bytes });
+      if (!result.available) {
+        throw new Error('Native media upload is unavailable.');
+      }
+      const parsed = parseUploadMediaResult(result.value);
+      if (!parsed) {
+        throw new Error('Native media upload returned an invalid result.');
+      }
+      return parsed;
     },
 
     /** F4 — media upload size limit via matrix_call_media_config. */
@@ -904,9 +924,9 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       const unused = pusher === null; // eslint-disable-line @typescript-eslint/no-unused-vars
       return Promise.resolve(null);
     },
-    async getLocalAliases(roomId: string): Promise<string[]> {
-      const unused = roomId.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars
-      return Promise.resolve([]);
+    async getLocalAliases(roomId: string): Promise<{ aliases: string[] }> {
+      const x = roomId.length; // eslint-disable-line @typescript-eslint/no-unused-vars
+      return Promise.resolve({ aliases: [] });
     },
     async createAlias(alias: string, roomId: string): Promise<unknown> {
       const unused = alias.length + roomId.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -916,9 +936,9 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       const unused = alias.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars
       return Promise.resolve(null);
     },
-    async cancelUpload(token: string): Promise<unknown> {
-      const unused = token.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars
-      return Promise.resolve(null);
+    async cancelUpload(_token: unknown): Promise<unknown> {
+      const noNativeCancel = _token !== null; // eslint-disable-line @typescript-eslint/no-unused-vars
+      return Promise.resolve(noNativeCancel ? null : null);
     },
     async _requestDeviceVerification(userId: string): Promise<unknown> {
       const unused = userId.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -926,7 +946,11 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     },
     async searchUserDirectory(opts: { term: string; limit?: number }): Promise<{
       limited: boolean;
-      results: Array<{ user_id: string }>;
+      results: Array<{
+        user_id: string;
+        display_name?: string;
+        avatar_url?: string;
+      }>;
     }> {
       const x = opts.term.length + (opts.limit ?? 0); // eslint-disable-line @typescript-eslint/no-unused-vars
       return Promise.resolve({ limited: false, results: [] });
@@ -962,40 +986,64 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     } | null> {
       return Promise.resolve(null);
     },
-    async search(query: { term: string }): Promise<unknown> {
-      // Room-directory search is a stateful native owner; not a facade call (GAP).
-      const nativeSearchDoesNotApply = query.term.length >= 0; // eslint-disable-line
-      return Promise.resolve(nativeSearchDoesNotApply ? null : null);
+    async search(opts: { body?: unknown; next_batch?: string }): Promise<{
+      search_categories: {
+        room_events?: {
+          next_batch?: string;
+          highlights?: string[];
+          results?: Array<{ rank: number; result: unknown; context: { [key: string]: unknown } }>;
+        };
+      };
+      [key: string]: unknown;
+    } | null> {
+      const argLength =
+        (typeof opts.body === 'object' && opts.body !== null ? 1 : 0) +
+        (opts.next_batch?.length ?? 0);
+      void argLength;
+      return Promise.resolve(null);
     },
     /** F6a — aliases + ignored users + auth metadata + relations (GAP-safe). */
-    async getRoomIdForAlias(alias: string): Promise<string | null> {
-      const noNativeAliasResolve = alias.length > 0; // eslint-disable-line
-      return Promise.resolve(noNativeAliasResolve ? null : null);
+    async getRoomIdForAlias(alias: string): Promise<{ room_id?: string } | null> {
+      const x = alias.length; // eslint-disable-line @typescript-eslint/no-unused-vars
+      return Promise.resolve(null);
     },
     async setIgnoredUsers(userIds: string[]): Promise<void> {
       const ignore = userIds.length >= 0; // eslint-disable-line
       return Promise.resolve(ignore ? undefined : undefined);
     },
-    async getAuthMetadata(): Promise<unknown> {
-      return Promise.resolve(null);
+    async getAuthMetadata(): Promise<
+      | {
+          issuer?: string;
+          account_management_uri?: string;
+          homeserver_url?: string;
+        }
+      | undefined
+    > {
+      return Promise.resolve(undefined);
     },
     async relations(
       roomId: string,
       eventId: string,
-      relationType?: string,
-      eventType?: string
+      relationType?: string | null,
+      eventType?: string | null,
+      filter?: { from?: string; to?: string; limit?: number; dir?: string }
     ): Promise<{
       events: Array<{
         getContent<T = Record<string, unknown>>(): T;
         getSender(): string | null;
         getTs(): number;
+        getEffectiveEvent?(): unknown;
       }>;
       nextBatch?: unknown;
       prevBatch?: unknown;
     }> {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const x =
-        roomId.length + eventId.length + (relationType?.length ?? 0) + (eventType?.length ?? 0);
+      const argLength =
+        roomId.length +
+        eventId.length +
+        (relationType?.length ?? 0) +
+        (eventType?.length ?? 0) +
+        (filter ? 1 : 0);
+      void argLength;
       return Promise.resolve({ events: [] });
     },
 
@@ -1036,9 +1084,21 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
         Object.keys(content).length;
       return Promise.resolve(null);
     },
-    async _unstable_sendDelayedStateEvent(...args: unknown[]): Promise<unknown> {
-      const noNativeDelayed = args.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars
-      return Promise.resolve(noNativeDelayed ? null : null);
+    async _unstable_sendDelayedStateEvent(
+      roomId: string,
+      opts: unknown,
+      eventType: string,
+      content: Record<string, unknown>,
+      stateKey?: string
+    ): Promise<{ delay_id?: string } | null> {
+      const argLength =
+        roomId.length +
+        (opts === null ? 1 : 0) +
+        eventType.length +
+        Object.keys(content).length +
+        (stateKey?.length ?? 0);
+      void argLength;
+      return Promise.resolve(null);
     },
     async _unstable_updateDelayedEvent(...args: unknown[]): Promise<unknown> {
       const noNativeDelayed = args.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -1069,11 +1129,26 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       return mxcUrl.startsWith('mxc://') ? mxcUrl : null;
     },
 
-    get http(): unknown {
-      return undefined;
+    get http(): {
+      authedRequest<T = unknown>(
+        _method: string,
+        _path: string,
+        _queryParams?: Record<string, unknown>
+      ): Promise<T>;
+    } {
+      // D1C/native: the renderer has no js-sdk HTTP transport; legacy authed
+      // request paths (unrouted web inbox) resolve to an empty typed result.
+      return {
+        authedRequest: (async <T>() => {
+          const empty: T = {} as T;
+          return empty;
+        }) as never,
+      };
     },
-    get store(): unknown {
-      return undefined;
+    get store(): { accountData: Map<string, unknown> } {
+      // D1C/native: the renderer has no js-sdk IndexedDB store; expose an empty
+      // account-data map so dev-tools compile and render an empty list.
+      return { accountData: new Map() };
     },
 
     // D1C guard: fail-closed readiness helper for callers that must not run
