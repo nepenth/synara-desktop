@@ -31,7 +31,7 @@ Push to `main` / `release/**` and `workflow_dispatch` always run the **full** su
 | --- | --- | --- |
 | `validate` | `src-tauri/`, `synara/`, `scripts/`, root package lock/config, `ci.yml` | Validate desktop and runtime |
 | `ios` | `synara-ios/`, `scripts/ci-build.sh`, `ci.yml` | iOS simulator tests |
-| `synapse_native_*` | `src-tauri/src/matrix/**`, `synara/`, `scripts/synapse-integration.sh`, package lock, `ci.yml` | Native Matrix Rust synapse proofs (reactions/attachments/call/polls/rich-messages/threads) |
+| `synapse_native_*` | `src-tauri/src/matrix/**`, `synara/`, `scripts/synapse-integration.sh`, package lock, `ci.yml` | Native Matrix Rust synapse proofs (reactions/attachments/call/polls/rich-messages/threads/**receipts**) |
 
 > **Retired 2026-08-09:** the legacy `synapse` two-client **js-sdk** integration
 > (`run-synapse-two-client-integration.mjs`) was removed with the complete

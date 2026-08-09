@@ -252,6 +252,7 @@ function pathFilteredCiAggregateError(jobLines) {
     "synapse-native-polls",
     "synapse-native-rich-messages",
     "synapse-native-threads",
+    "synapse-native-receipts",
   ];
   const expectedNeedsSplit = [
     "changes",
@@ -264,6 +265,7 @@ function pathFilteredCiAggregateError(jobLines) {
     "synapse-native-polls",
     "synapse-native-rich-messages",
     "synapse-native-threads",
+    "synapse-native-receipts",
   ];
   const needs = getList(jobLines, "needs", 4);
   const splitDesktop = sameList(needs, expectedNeedsSplit);
@@ -307,6 +309,9 @@ function pathFilteredCiAggregateError(jobLines) {
     const synapseNativeThreadsVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.synapse-native-threads.result }}"
     )?.[0];
+    const synapseNativeReceiptsVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.synapse-native-receipts.result }}"
+    )?.[0];
     const desktopOk = splitDesktop
       ? Boolean(desktopRustVar && desktopFrontendVar)
       : Boolean(desktopVar);
@@ -319,7 +324,8 @@ function pathFilteredCiAggregateError(jobLines) {
       !synapseNativeCallMediaVar ||
       !synapseNativePollsVar ||
       !synapseNativeRichMessagesVar ||
-      !synapseNativeThreadsVar
+      !synapseNativeThreadsVar ||
+      !synapseNativeReceiptsVar
     ) {
       continue;
     }
@@ -355,7 +361,8 @@ function pathFilteredCiAggregateError(jobLines) {
       !runText.includes(`"$${synapseNativeCallMediaVar}"`) ||
       !runText.includes(`"$${synapseNativePollsVar}"`) ||
       !runText.includes(`"$${synapseNativeRichMessagesVar}"`) ||
-      !runText.includes(`"$${synapseNativeThreadsVar}"`)
+      !runText.includes(`"$${synapseNativeThreadsVar}"`) ||
+      !runText.includes(`"$${synapseNativeReceiptsVar}"`)
     ) {
       continue;
     }
