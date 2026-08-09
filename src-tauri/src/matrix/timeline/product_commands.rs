@@ -41,20 +41,6 @@ pub async fn matrix_timeline_jump_latest(
 }
 
 #[tauri::command]
-pub async fn matrix_timeline_snapshot(
-    state: State<'_, MatrixAuthState>,
-    room_id: String,
-) -> Result<NativeTimelineSnapshot, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
-    let active = require_session_mut(session.as_mut())?;
-    active
-        .timelines
-        .snapshot(&active.client, &room_id)
-        .await
-        .map_err(map_timeline_error)
-}
-
-#[tauri::command]
 pub async fn matrix_timeline_event_readback(
     state: State<'_, MatrixAuthState>,
     room_id: String,
