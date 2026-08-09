@@ -322,7 +322,7 @@ async fn live_native_two_client_receipt_and_ordering_against_disposable_synapse_
     loop {
         sync_briefly(&client_b).await;
         if let Ok(Some((observed_event, _))) = room_b
-            .load_user_receipt(ReceiptType::Read, ReceiptThread::Main, &user_a)
+            .load_user_receipt(ReceiptType::Read, ReceiptThread::Unthreaded, &user_a)
             .await
         {
             assert_eq!(
