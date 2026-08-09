@@ -37,10 +37,10 @@ test('getSyncState proxies matrix_sync_status and caches PREPARED when running',
     },
   });
   const client = createNativeMatrixClient(invoke);
-  const state = await client.getSyncState();
-  assert.equal(state, 'PREPARED');
-  assert.equal(await client.clientRunning(), true);
-  assert.deepEqual(await client.getSyncStateData(), {
+  await client.refresh();
+  assert.equal(client.getSyncState(), 'PREPARED');
+  assert.equal(client.clientRunning(), true);
+  assert.deepEqual(client.getSyncStateData(), {
     readiness: 'running',
     sessionGeneration: 7,
     failureDiagnosticId: null,
@@ -50,8 +50,9 @@ test('getSyncState proxies matrix_sync_status and caches PREPARED when running',
 test('getSyncState fails closed when the native command is unavailable', async () => {
   const { invoke } = invokingWith({});
   const client = createNativeMatrixClient(invoke);
-  assert.equal(await client.getSyncState(), null);
-  assert.equal(await client.clientRunning(), false);
+  await client.refresh();
+  assert.equal(client.getSyncState(), null);
+  assert.equal(client.clientRunning(), false);
 });
 
 test('sync emitter delivers the sync payload to listeners and removeListener detaches', async () => {
@@ -64,10 +65,10 @@ test('sync emitter delivers the sync payload to listeners and removeListener det
     seen.push(payload);
   };
   client.on('sync', listener);
-  await client.getSyncState();
+  await client.refresh();
   assert.deepEqual(seen, ['ERROR']);
   client.removeListener('sync', listener);
-  await client.getSyncState();
+  await client.refresh();
   assert.deepEqual(seen, ['ERROR']);
 });
 
@@ -82,16 +83,18 @@ test('identity comes from matrix_session_snapshot (logged_in)', async () => {
     },
   });
   const client = createNativeMatrixClient(invoke);
-  assert.equal(await client.getUserId(), '@alice:example.org');
-  assert.equal(await client.getSafeUserId(), '@alice:example.org');
-  assert.equal(await client.getDeviceId(), 'DEVICE');
+  await client.refresh();
+  assert.equal(client.getUserId(), '@alice:example.org');
+  assert.equal(client.getSafeUserId(), '@alice:example.org');
+  assert.equal(client.getDeviceId(), 'DEVICE');
 });
 
 test('identity is empty when the session is logged out', async () => {
   const { invoke } = invokingWith({ matrix_session_snapshot: { status: 'logged_out' } });
   const client = createNativeMatrixClient(invoke);
-  assert.equal(await client.getUserId(), undefined);
-  assert.equal(await client.getSafeUserId(), '');
+  await client.refresh();
+  assert.equal(client.getUserId(), null);
+  assert.equal(client.getSafeUserId(), '');
 });
 
 test('write commands call the native profile commands', async () => {
@@ -156,12 +159,13 @@ test('F2 getRooms proxies matrix_room_list_snapshot and maps summaries', async (
     matrix_room_list_snapshot: { sessionGeneration: 8, rooms: [summary] },
   });
   const client = createNativeMatrixClient(invoke);
-  const rooms = await client.getRooms();
+  await client.refresh();
+  const rooms = client.getRooms();
   assert.equal(rooms.length, 1);
   assert.equal(rooms[0].roomId, '!r:example.org');
   assert.equal(rooms[0].name, 'Engineering');
-  assert.equal(rooms[0].isEncrypted, true);
   assert.equal(rooms[0].getMyMembership(), 'join');
+  assert.equal(rooms[0].isSpaceRoom(), false);
   assert.equal(rooms[0].getCanonicalAlias(), '#eng:example.org');
 });
 
@@ -196,14 +200,16 @@ test('F2 getRoom finds a single room by id or null', async () => {
     },
   });
   const client = createNativeMatrixClient(invoke);
-  assert.equal((await client.getRoom('!b:example.org'))?.name, 'B');
-  assert.equal(await client.getRoom('!missing:example.org'), null);
+  await client.refresh();
+  assert.equal(client.getRoom('!b:example.org')?.name, 'B');
+  assert.equal(client.getRoom('!missing:example.org'), null);
 });
 
 test('F2 getRooms fails closed when the command is unavailable', async () => {
   const client = createNativeMatrixClient(async () => unavailable);
-  assert.deepEqual(await client.getRooms(), []);
-  assert.equal(await client.getRoom('!r:example.org'), null);
+  await client.refresh();
+  assert.deepEqual(client.getRooms(), []);
+  assert.equal(client.getRoom('!r:example.org'), null);
 });
 
 test('F2 fetchRoomEvent proxies matrix_timeline_event_readback', async () => {
@@ -283,9 +289,9 @@ test('F3 sendStateEvent maps covered room-state types, GAPs others', async () =>
   assert.deepEqual(callLog, ['matrix_set_room_name']);
 });
 
-test('F3 account-data methods are documented GAP (fail-closed null)', async () => {
+test('F3 account-data methods are documented GAP (fail-closed)', async () => {
   const client = createNativeMatrixClient(async () => unavailable);
-  assert.equal(await client.getAccountData('m.tag'), null);
+  assert.equal(client.getAccountData('m.tag'), undefined);
   assert.equal(await client.setAccountData('m.tag', {}), null);
   assert.equal(await client.setRoomAccountData('!r:example.org', 'm.tag', {}), null);
 });
@@ -348,7 +354,8 @@ test('F4 getProfileInfo returns session identity', async () => {
     },
   });
   const client = createNativeMatrixClient(invoke);
-  const profile = await client.getProfileInfo();
+  await client.refresh();
+  const profile = client.getProfileInfo();
   assert.equal(profile.userId, '@alice:example.org');
   assert.equal(profile.deviceId, 'DEV');
 });
