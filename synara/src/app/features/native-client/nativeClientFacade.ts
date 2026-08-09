@@ -879,14 +879,17 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     },
 
     /** F6c — delayed-event APIs are not natively surfaced; GAP-safe stubs. */
-    async _unstable_sendDelayedEvent(..._args: unknown[]): Promise<unknown> {
-      return Promise.resolve(null);
+    async _unstable_sendDelayedEvent(...args: unknown[]): Promise<unknown> {
+      const noNativeDelayed = args.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars
+      return Promise.resolve(noNativeDelayed ? null : null);
     },
-    async _unstable_sendDelayedStateEvent(..._args: unknown[]): Promise<unknown> {
-      return Promise.resolve(null);
+    async _unstable_sendDelayedStateEvent(...args: unknown[]): Promise<unknown> {
+      const noNativeDelayed = args.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars
+      return Promise.resolve(noNativeDelayed ? null : null);
     },
-    async _unstable_updateDelayedEvent(..._args: unknown[]): Promise<unknown> {
-      return Promise.resolve(null);
+    async _unstable_updateDelayedEvent(...args: unknown[]): Promise<unknown> {
+      const noNativeDelayed = args.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars
+      return Promise.resolve(noNativeDelayed ? null : null);
     },
 
     /** F6c — openid-credentials GAP stub (real shape: { access_token }). */
