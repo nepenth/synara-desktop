@@ -28,7 +28,6 @@ mod thread;
 mod timeline;
 mod typing;
 mod upload;
-mod widget;
 
 pub use ids::*;
 pub use media::*;
@@ -45,7 +44,6 @@ pub use thread::*;
 pub use timeline::*;
 pub use typing::*;
 pub use upload::*;
-pub use widget::*;
 
 /// Marker that domain DTO modules are linked (no Client / network / Tauri cmds).
 pub const MATRIX_DTO_MARKER: &str = "matrix-domain-dtos-p1.4";

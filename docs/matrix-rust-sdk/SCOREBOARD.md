@@ -1,18 +1,27 @@
 # Matrix Rust full-replacement — scoreboard
 
-| Field                                                  | Value                                                                                                                                                                                                                                  |
-| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Updated                                                | **2026-08-09** (tip `11feb3b2` · **0 importers, js-sdk removed**) |
-| Tip                                                    | `11feb3b2` on `feature/matrix-rust-sdk-full-replacement` |
-| Production `matrix-js-sdk` import files (`synara/src`) | **0** — plan baseline **220**; **220 removed, 100%** |
-| Allowlist `pathCount`                                  | **0** (empty = full ban; any new importer fails) |
-| Test `matrix-js-sdk` import files (`synara/src`)             | **0** (burned in #595; fixtures migrated to probed literals)  |
-| Dual backend                                           | **false** (forbidden forever)                                                                                                                                                                                                          |
-| Pipeline                                               | **GREEN** — Quality gate + Desktop package gate pass at tip; 0 open PRs |
-| Operating model                                        | **prime-agent orchestrator + `deepseek-v4-flash-0731` sub-agents (max 2 concurrent)** — locally hosted, only configured model; public-repo hygiene + UI/UX fidelity always on ([operating-instructions.md](operating-instructions.md)) |
-| Burn board                                             | https://kb.whyland.com/go/synara-matrix-burn                                                                                                                                                                                           |
-| Umbrella #39                                           | **Do not merge** without explicit user approval                                                                                                                                                                                        |
-| V-BURN                                                | **REACHED (full)** — 0 importers; allowlist 0; **`matrix-js-sdk@42.0.0` fully removed from package.json + lockfile** (dep, devDep, two-client tooling harness + CI job all retired); no js-sdk anywhere in the repo tree. matrix-widget-api stays (V-CALL separate slice); #39 still operator-gated |
+> **2026-08-09 (post V-BURN):** Operator-authorized **deep V-CALL cut** — the embedded
+> call plugin (`plugins/call`, `features/call`, `features/call-status`, call atoms/hooks),
+> the native `matrix/widgets` module, the call-media live Synapse proof, and the
+> `matrix-widget-api` dependency were **removed**. The tree is now **fully zero-Matrix-JS**
+> (no client SDK, no widget protocol library); the general native media `matrix_media_config`
+> / `matrix_media_download` owners were preserved (moved into the media module). Native
+> Synapse proof family is now **6 jobs** (reactions, attachments, polls, rich-messages,
+> threads, receipts).
+
+| Field                                                  | Value                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Updated                                                | **2026-08-09** (tip `11feb3b2` · **0 importers, js-sdk removed**)                                                                                                                                                                                                                                   |
+| Tip                                                    | `11feb3b2` on `feature/matrix-rust-sdk-full-replacement`                                                                                                                                                                                                                                            |
+| Production `matrix-js-sdk` import files (`synara/src`) | **0** — plan baseline **220**; **220 removed, 100%**                                                                                                                                                                                                                                                |
+| Allowlist `pathCount`                                  | **0** (empty = full ban; any new importer fails)                                                                                                                                                                                                                                                    |
+| Test `matrix-js-sdk` import files (`synara/src`)       | **0** (burned in #595; fixtures migrated to probed literals)                                                                                                                                                                                                                                        |
+| Dual backend                                           | **false** (forbidden forever)                                                                                                                                                                                                                                                                       |
+| Pipeline                                               | **GREEN** — Quality gate + Desktop package gate pass at tip; 0 open PRs                                                                                                                                                                                                                             |
+| Operating model                                        | **prime-agent orchestrator + `deepseek-v4-flash-0731` sub-agents (max 2 concurrent)** — locally hosted, only configured model; public-repo hygiene + UI/UX fidelity always on ([operating-instructions.md](operating-instructions.md))                                                              |
+| Burn board                                             | https://kb.whyland.com/go/synara-matrix-burn                                                                                                                                                                                                                                                        |
+| Umbrella #39                                           | **Do not merge** without explicit user approval                                                                                                                                                                                                                                                     |
+| V-BURN                                                 | **REACHED (full)** — 0 importers; allowlist 0; **`matrix-js-sdk@42.0.0` fully removed from package.json + lockfile** (dep, devDep, two-client tooling harness + CI job all retired); no js-sdk anywhere in the repo tree. matrix-widget-api stays (V-CALL separate slice); #39 still operator-gated |
 
 ## Current burn policy
 
@@ -59,18 +68,18 @@ completion or merge hold.
 | Join-rule READ residual-empty                       | **#521** native snapshot + RoomPublish                                                                                               |
 | Join-rule presentation DTO                          | **#522**                                                                                                                             |
 | Long-tail residual-empty (type/presentation/orphan) | **#517–#538** (room-summary → RenderMessageContent MsgType) — see [pause handoff](pause-handoff-2026-08-03.md)                       |
-| Importer burn (tip inventory)                       | **220 → 0** production files (#546→#624 stack); test import files 10→**0** (#595); allowlist **1 → 0** (F6c-2c) |
+| Importer burn (tip inventory)                       | **220 → 0** production files (#546→#624 stack); test import files 10→**0** (#595); allowlist **1 → 0** (F6c-2c)                      |
 | Live-proof gate policy                              | **#544** — not a residual-empty merge gate                                                                                           |
 | Live-proof-held residual stack                      | **#546** landed (chrome/typing/notes/reaction/NativeEventContent/reactions)                                                          |
 | Desktop Beta package smoke                          | Actions run [30821912637](https://github.com/nepenth/synara-desktop/actions/runs/30821912637) @ `57ab9e64` (artifacts, not Releases) |
 
 ## In flight
 
-| Item                                        | Status                                          |
-| ------------------------------------------- | ----------------------------------------------- |
+| Item                                        | Status                                                                 |
+| ------------------------------------------- | ---------------------------------------------------------------------- |
 | Daytime / overnight pipelines               | **BURN COMPLETE (dormant-green)** — all gates green at tip; 0 open PRs |
-| Open product PRs onto full-replacement base | **none** — this docs-only tracking update |
-| Stale tip-docs drafts #502–#512             | **Closed** as obsolete tip-SHA freezes          |
+| Open product PRs onto full-replacement base | **none** — this docs-only tracking update                              |
+| Stale tip-docs drafts #502–#512             | **Closed** as obsolete tip-SHA freezes                                 |
 
 ## Left (post-completion status @ tip `a88c8c79`)
 

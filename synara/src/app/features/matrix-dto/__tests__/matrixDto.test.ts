@@ -26,7 +26,6 @@ import {
   parseTimelineItem,
   parseTypingSnapshot,
   parseUploadJob,
-  parseWidgetSession,
 } from '../index';
 
 /**
@@ -299,14 +298,6 @@ test('valid_thread_summary parses', () => {
   assert.equal(t.participated, true);
 });
 
-test('valid_widget_session parses', () => {
-  const w = parseWidgetSession(loadFixture('valid_widget_session.json'));
-  assert.ok(w);
-  assert.equal(w.kind, 'element_call');
-  assert.equal(w.state, 'active');
-  assert.equal(w.hasActiveCall, true);
-});
-
 test('all fixtures lack forbidden secret field names', () => {
   const names = [
     'valid_session.json',
@@ -324,7 +315,6 @@ test('all fixtures lack forbidden secret field names', () => {
     'valid_search_result.json',
     'valid_space_summary.json',
     'valid_thread_summary.json',
-    'valid_widget_session.json',
   ];
   for (const name of names) {
     const raw = loadRaw(name);

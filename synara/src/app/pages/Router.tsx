@@ -70,8 +70,6 @@ import { Create } from './client/create';
 import { CreateSpaceModalRenderer } from '../features/create-space';
 import { SearchModalRenderer } from '../features/search';
 import { getActiveSession } from '../state/sessionBootstrap';
-import { CallStatusRenderer } from './CallStatusRenderer';
-import { CallEmbedProvider } from '../components/CallEmbedProvider';
 import { Settings } from '../features/settings';
 import { Modal500 } from '../components/Modal500';
 
@@ -141,18 +139,15 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
                 <ClientRoomsNotificationPreferences>
                   <ClientBindAtoms>
                     <ClientNonUIFeatures>
-                      <CallEmbedProvider>
-                        <ClientLayout
-                          nav={
-                            <MobileFriendlyClientNav>
-                              <SidebarNav />
-                            </MobileFriendlyClientNav>
-                          }
-                        >
-                          <Outlet />
-                        </ClientLayout>
-                        <CallStatusRenderer />
-                      </CallEmbedProvider>
+                      <ClientLayout
+                        nav={
+                          <MobileFriendlyClientNav>
+                            <SidebarNav />
+                          </MobileFriendlyClientNav>
+                        }
+                      >
+                        <Outlet />
+                      </ClientLayout>
                       <SearchModalRenderer />
                       <UserRoomProfileRenderer />
                       <CreateRoomModalRenderer />

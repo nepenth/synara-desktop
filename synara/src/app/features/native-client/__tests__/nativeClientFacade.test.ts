@@ -323,7 +323,7 @@ test('F4 uploadContent throws when unavailable (js-sdk non-null contract)', asyn
 
 test('F4 getMediaConfig reads m.upload.size wire key', async () => {
   const { invoke } = invokingWith({
-    matrix_call_media_config: { 'm.upload.size': 10485760 },
+    matrix_media_config: { 'm.upload.size': 10485760 },
   });
   const client = createNativeMatrixClient(invoke);
   assert.deepEqual(await client.getMediaConfig(), { maxUploadSizeBytes: 10485760 });
@@ -421,13 +421,6 @@ test('F5 decryptEventIfNeeded is a documented no-op (native events pre-decrypted
 test('F5 downloadKeysForUsers is a D1C-key-free stub', async () => {
   const client = createNativeMatrixClient(async () => unavailable);
   assert.deepEqual(await client.downloadKeysForUsers(['@alice:example.org']), {});
-});
-
-test('F5 matrixRTC is a GAP-safe stub (V-CALL is matrix-widget-api)', async () => {
-  const client = createNativeMatrixClient(async () => unavailable);
-  const session = client.matrixRTC.getRoomSession({ roomId: '!r:example.org' });
-  assert.deepEqual(session.memberships, []);
-  assert.doesNotThrow(() => client.matrixRTC.on('session_started', () => undefined));
 });
 
 test('F5 extended GAP stubs satisfy the anchor without data', async () => {

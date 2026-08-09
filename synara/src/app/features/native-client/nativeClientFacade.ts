@@ -313,7 +313,7 @@ export type FacadeSendTextInput = {
 export type FacadeSendTextResult = {
   roomId: RoomId;
   eventId: EventId;
-  /** js-sdk wire alias (event_id) for widget-bridge consumers. */
+  /** native send-result alias (event_id) kept for existing consumers. */
   event_id?: string;
   localTxnId: string;
   status: 'sent';
@@ -337,7 +337,7 @@ export type FacadeMediaUploadInput = {
 
 export type FacadeUploadMediaResult = {
   mxc: string;
-  /** js-sdk upload response alias (content_uri = mxc); widget bridge expects it. */
+  /** native upload response alias (content_uri = mxc) for media consumers. */
   content_uri: string;
 };
 
@@ -411,18 +411,6 @@ export type FacadeCryptoReading = {
     _recipients: Array<{ userId: string; deviceId: string }>,
     _content: unknown
   ): Promise<Array<{ userId: string; deviceId: string; payload: unknown }>>;
-};
-
-export type FacadeMatrixRtcSession = {
-  memberships: Array<{ sender: string; membershipID: string }>;
-  on(_event: string, _listener: (...args: any[]) => void): void;
-  removeListener(_event: string, _listener: (...args: any[]) => void): void;
-};
-
-export type FacadeMatrixRtc = {
-  getRoomSession(_room: { roomId: string }): FacadeMatrixRtcSession;
-  on(_event: string, _listener: (...args: any[]) => void): void;
-  off(_event: string, _listener: (...args: any[]) => void): void;
 };
 
 export type FacadeDownloadKeysResult = Record<string, unknown>;
@@ -847,9 +835,9 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       return parsed;
     },
 
-    /** F4 — media upload size limit via matrix_call_media_config. */
+    /** F4 — media upload size limit via matrix_media_config. */
     async getMediaConfig(): Promise<FacadeMediaConfig> {
-      const result = await invoke('matrix_call_media_config');
+      const result = await invoke('matrix_media_config');
       if (!result.available) return {};
       return parseMediaConfig(result.value);
     },
@@ -958,20 +946,6 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     async searchUserDirectoryFn(term: string): Promise<unknown> {
       const x = term.length; // eslint-disable-line @typescript-eslint/no-unused-vars
       return Promise.resolve(null);
-    },
-
-    /** F5 — V-CALL runtime remains matrix-widget-api; facade exposes a GAP-safe stub. */
-    get matrixRTC(): FacadeMatrixRtc {
-      const noOpSession: FacadeMatrixRtcSession = {
-        memberships: [],
-        on: () => undefined,
-        removeListener: () => undefined,
-      };
-      return {
-        getRoomSession: () => noOpSession,
-        on: () => undefined,
-        off: () => undefined,
-      };
     },
 
     /** F5 — GAP stubs required by the type anchor; no native surface. */
