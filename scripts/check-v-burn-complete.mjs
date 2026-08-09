@@ -6,11 +6,14 @@
 //
 //   1. 0 production + 0 test js-sdk importers (desktop-sdk-usage inventory).
 //   2. P1.6 allowlist empty = full ban.
-//   3. matrix-js-sdk absent from package.json (deps + devDeps) and lockfile.
-//   4. No matrix-js-sdk import/require/dynamic-import in executable source,
-//      tooling, or CI outside the explicit detector/fixture allowlist.
-//   5. Every native Synapse proof job (reactions, attachments, call-media,
-//      polls, rich-messages, threads, two-client receipts) is wired in CI.
+//   3. matrix-js-sdk AND matrix-widget-api absent from package.json
+//      (deps + devDeps) and lockfile — the tree is a fully zero-Matrix-JS
+//      build (no client SDK, no widget protocol library).
+//   4. No matrix-js-sdk / matrix-widget-api import/require/dynamic-import in
+//      executable source, tooling, or CI outside the explicit
+//      detector/fixture allowlist.
+//   5. Every native Synapse proof job (reactions, attachments, polls,
+//      rich-messages, threads, receipts) is wired in CI.
 //   6. Tracking docs carry the V-BURN reached marker.
 //
 // Run via `npm run check:matrix-rust-guardrails` (appended to the guardrail
@@ -75,12 +78,17 @@ if (existsSync(usagePath)) {
 }
 
 // --- 2. Allowlist = empty (full ban) ---
-const allowPath = join(ROOT, "docs/matrix-rust-sdk/p1.6-js-sdk-import-allowlist.json");
+const allowPath = join(
+  ROOT,
+  "docs/matrix-rust-sdk/p1.6-js-sdk-import-allowlist.json"
+);
 if (existsSync(allowPath)) {
   const allow = JSON.parse(readFileSync(allowPath, "utf8"));
   check(
     "P1.6 allowlist empty (full ban)",
-    allow.pathCount === 0 && Array.isArray(allow.paths) && allow.paths.length === 0,
+    allow.pathCount === 0 &&
+      Array.isArray(allow.paths) &&
+      allow.paths.length === 0,
     `pathCount=${allow.pathCount} paths=${(allow.paths ?? []).length}`
   );
 } else {
@@ -101,6 +109,14 @@ if (existsSync(pkgPath)) {
     "matrix-js-sdk absent from devDependencies",
     !devDeps.includes("matrix-js-sdk")
   );
+  check(
+    "matrix-widget-api absent from production dependencies",
+    !deps.includes("matrix-widget-api")
+  );
+  check(
+    "matrix-widget-api absent from devDependencies",
+    !devDeps.includes("matrix-widget-api")
+  );
 }
 const lockPath = join(ROOT, "synara/package-lock.json");
 if (existsSync(lockPath)) {
@@ -108,6 +124,10 @@ if (existsSync(lockPath)) {
   check(
     "matrix-js-sdk absent from lockfile packages",
     !(lock.packages ?? {})["node_modules/matrix-js-sdk"]
+  );
+  check(
+    "matrix-widget-api absent from lockfile packages",
+    !(lock.packages ?? {})["node_modules/matrix-widget-api"]
   );
 }
 
@@ -163,7 +183,9 @@ for (const rootDir of scanRoots) {
       /(?:from\s+['"]matrix-js-sdk|require\(\s*['"]matrix-js-sdk|import\(\s*['"]matrix-js-sdk)/;
     for (const line of text.split(/\r?\n/)) {
       if (importPattern.test(line)) {
-        coupling.push(`${file.replace(ROOT + "/", "")}: ${line.trim().slice(0, 90)}`);
+        coupling.push(
+          `${file.replace(ROOT + "/", "")}: ${line.trim().slice(0, 90)}`
+        );
         break;
       }
     }
@@ -177,6 +199,46 @@ check(
   coupling.slice(0, 6).join(", ")
 );
 
+// matrix-widget-api coupling: the V-CALL widget protocol was removed from the
+// tree (zero-Matrix-JS). Sources, tooling, and CI must not import it either.
+const widgetCoupling = [];
+for (const rootDir of scanRoots) {
+  if (!existsSync(rootDir)) continue;
+  for (const file of walkFiles(rootDir)) {
+    if (extname(file) === ".json" && file.endsWith("Cargo.lock")) continue;
+    if (
+      docDirs.some((d) => file.startsWith(d)) ||
+      fixtureDirs.some((d) => file.startsWith(d))
+    ) {
+      continue;
+    }
+    if (allowedDetectorSuffixes.some((s) => file.endsWith(s))) continue;
+    const base = file.split("/").pop() ?? "";
+    if (base.startsWith(".")) continue;
+    let text;
+    try {
+      text = readFileSync(file, "utf8");
+    } catch {
+      continue;
+    }
+    const widgetPattern =
+      /(?:from\s+['"]matrix-widget-api|require\(\s*['"]matrix-widget-api|import\(\s*['"]matrix-widget-api)/;
+    for (const line of text.split(/\r?\n/)) {
+      if (widgetPattern.test(line)) {
+        widgetCoupling.push(
+          `${file.replace(ROOT + "/", "")}: ${line.trim().slice(0, 90)}`
+        );
+        break;
+      }
+    }
+  }
+}
+check(
+  "no matrix-widget-api coupling in source/tooling/CI (outside detectors/fixtures/docs)",
+  widgetCoupling.length === 0,
+  widgetCoupling.slice(0, 6).join(", ")
+);
+
 // --- 5. Native Synapse proof family wired in CI ---
 const ciPath = join(ROOT, ".github/workflows/ci.yml");
 if (existsSync(ciPath)) {
@@ -184,7 +246,6 @@ if (existsSync(ciPath)) {
   const requiredProofJobs = [
     "synapse-native-reactions",
     "synapse-native-attachments",
-    "synapse-native-call-media",
     "synapse-native-polls",
     "synapse-native-rich-messages",
     "synapse-native-threads",
@@ -212,7 +273,9 @@ for (const doc of docs) {
   );
 }
 
-console.log(`\n[v-burn] ${okCount} checks ok, ${findings.length} violation(s).`);
+console.log(
+  `\n[v-burn] ${okCount} checks ok, ${findings.length} violation(s).`
+);
 if (findings.length > 0) {
   console.error("[v-burn] V-BURN completion validation FAILED.");
   process.exit(1);

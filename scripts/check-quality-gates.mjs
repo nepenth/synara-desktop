@@ -248,7 +248,6 @@ function pathFilteredCiAggregateError(jobLines) {
     "ios-tests",
     "synapse-native-reactions",
     "synapse-native-attachments",
-    "synapse-native-call-media",
     "synapse-native-polls",
     "synapse-native-rich-messages",
     "synapse-native-threads",
@@ -261,7 +260,6 @@ function pathFilteredCiAggregateError(jobLines) {
     "ios-tests",
     "synapse-native-reactions",
     "synapse-native-attachments",
-    "synapse-native-call-media",
     "synapse-native-polls",
     "synapse-native-rich-messages",
     "synapse-native-threads",
@@ -271,7 +269,9 @@ function pathFilteredCiAggregateError(jobLines) {
   const splitDesktop = sameList(needs, expectedNeedsSplit);
   const monolithDesktop = sameList(needs, expectedNeedsMonolith);
   if (!splitDesktop && !monolithDesktop) {
-    return `job needs must be exactly [${expectedNeedsSplit.join(", ")}] (or legacy monolith [${expectedNeedsMonolith.join(", ")}])`;
+    return `job needs must be exactly [${expectedNeedsSplit.join(
+      ", "
+    )}] (or legacy monolith [${expectedNeedsMonolith.join(", ")}])`;
   }
 
   for (const step of parseSteps(jobLines)) {
@@ -297,14 +297,12 @@ function pathFilteredCiAggregateError(jobLines) {
     const synapseNativeAttachmentsVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.synapse-native-attachments.result }}"
     )?.[0];
-    const synapseNativeCallMediaVar = [...environment.entries()].find(
-      ([, value]) => value === "${{ needs.synapse-native-call-media.result }}"
-    )?.[0];
     const synapseNativePollsVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.synapse-native-polls.result }}"
     )?.[0];
     const synapseNativeRichMessagesVar = [...environment.entries()].find(
-      ([, value]) => value === "${{ needs.synapse-native-rich-messages.result }}"
+      ([, value]) =>
+        value === "${{ needs.synapse-native-rich-messages.result }}"
     )?.[0];
     const synapseNativeThreadsVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.synapse-native-threads.result }}"
@@ -321,7 +319,6 @@ function pathFilteredCiAggregateError(jobLines) {
       !iosVar ||
       !synapseNativeReactionsVar ||
       !synapseNativeAttachmentsVar ||
-      !synapseNativeCallMediaVar ||
       !synapseNativePollsVar ||
       !synapseNativeRichMessagesVar ||
       !synapseNativeThreadsVar ||
@@ -358,7 +355,6 @@ function pathFilteredCiAggregateError(jobLines) {
       !runText.includes(`"$${iosVar}"`) ||
       !runText.includes(`"$${synapseNativeReactionsVar}"`) ||
       !runText.includes(`"$${synapseNativeAttachmentsVar}"`) ||
-      !runText.includes(`"$${synapseNativeCallMediaVar}"`) ||
       !runText.includes(`"$${synapseNativePollsVar}"`) ||
       !runText.includes(`"$${synapseNativeRichMessagesVar}"`) ||
       !runText.includes(`"$${synapseNativeThreadsVar}"`) ||
@@ -457,7 +453,7 @@ export function inspectQualityGates({
   ]) {
     if (!hasRequiredCommandStep(jobLines, "npm run check:release-updater")) {
       errors.push(
-        `${label} must execute npm run check:release-updater at repository root.`,
+        `${label} must execute npm run check:release-updater at repository root.`
       );
     }
   }
@@ -506,11 +502,7 @@ export function inspectQualityGates({
   const releaseAggregateError = aggregateGateError(
     releaseJobs.get("quality-gate"),
     "Exact-tag quality gate",
-    [
-      "validate",
-      "exact-tag-desktop-quality",
-      "exact-tag-ios-quality",
-    ]
+    ["validate", "exact-tag-desktop-quality", "exact-tag-ios-quality"]
   );
   if (releaseAggregateError) {
     errors.push(`Release aggregate ${releaseAggregateError}.`);

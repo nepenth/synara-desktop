@@ -24,8 +24,5 @@ pub type UploadId = String;
 /// Opaque notification candidate id.
 pub type NotificationCandidateId = String;
 
-/// Opaque widget / call session id.
-pub type WidgetId = String;
-
 /// Timeline virtualization key (often equals `eventId` or a local-echo id).
 pub type TimelineItemId = String;

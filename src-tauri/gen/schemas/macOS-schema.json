@@ -771,6 +771,12 @@
           "markdownDescription": "Enables the matrix_mdirect_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_media_config command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-media-config",
+          "markdownDescription": "Enables the matrix_media_config command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_media_download command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-media-download",
@@ -1759,6 +1765,12 @@
           "type": "string",
           "const": "deny-matrix-mdirect-snapshot",
           "markdownDescription": "Denies the matrix_mdirect_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_media_config command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-media-config",
+          "markdownDescription": "Denies the matrix_media_config command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_media_download command without any pre-configured scope.",

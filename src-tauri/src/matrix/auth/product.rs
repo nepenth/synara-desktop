@@ -262,6 +262,27 @@ pub struct MatrixUploadMediaResult {
     pub mxc: String,
 }
 
+/// V-SEND.R-MEDIA — the exact media-config result shape (`m.upload.size`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MatrixMediaConfigResult {
+    #[serde(rename = "m.upload.size")]
+    pub upload_size: u64,
+}
+
+/// V-SEND.R-MEDIA — original-file bytes returned by the native media owner.
+/// This DTO is intentionally not part of a versioned Matrix envelope.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MatrixMediaDownloadResult {
+    pub bytes: Vec<u8>,
+}
+
+/// V-SEND.R-MEDIA — camelCase request used by the native media owner.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MatrixMediaDownloadRequest {
+    pub content_uri: String,
+}
+
 /// V-ROOMS.R-POWERS-BULK — acknowledged complete state replacement.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -272,27 +293,6 @@ pub struct NativePowerLevelWriteResult {
     pub state_key: &'static str,
     pub session_generation: u64,
     pub content: serde_json::Value,
-}
-
-/// V-SEND.R-CALL-MEDIA — the exact config shape required by the widget API.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct MatrixCallMediaConfigResult {
-    #[serde(rename = "m.upload.size")]
-    pub upload_size: u64,
-}
-
-/// V-SEND.R-CALL-MEDIA — original-file bytes returned by the native media
-/// owner. This DTO is intentionally not part of a versioned Matrix envelope.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct MatrixMediaDownloadResult {
-    pub bytes: Vec<u8>,
-}
-
-/// V-SEND.R-CALL-MEDIA — camelCase request used by the widget media owner.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct MatrixMediaDownloadRequest {
-    pub content_uri: String,
 }
 
 /// JSON-friendly create-room request owned by the desktop Matrix SDK route.
@@ -665,9 +665,6 @@ mod typing;
 mod user_profile;
 #[path = "../verification/product_commands.rs"]
 mod verification;
-#[path = "../widgets/product_commands.rs"]
-mod widgets;
-
 pub use account_data::*;
 pub use auth_commands::*;
 pub use backup::*;
@@ -688,7 +685,6 @@ pub use timeline::*;
 pub use typing::*;
 pub use user_profile::*;
 pub use verification::*;
-pub use widgets::*;
 
 #[cfg(test)]
 #[path = "product_tests.rs"]

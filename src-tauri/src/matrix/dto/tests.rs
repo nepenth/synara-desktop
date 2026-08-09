@@ -307,15 +307,6 @@ fn thread_summary_fixture() {
 }
 
 #[test]
-fn widget_session_fixture() {
-    let w: WidgetSession = load_fixture_as("valid_widget_session.json");
-    assert_eq!(w.kind, WidgetKind::ElementCall);
-    assert_eq!(w.state, WidgetSessionState::Active);
-    assert!(w.has_active_call);
-    round_trip_json(&w);
-}
-
-#[test]
 fn all_valid_fixtures_parse_as_json_objects() {
     let names = [
         "valid_session.json",
@@ -333,7 +324,6 @@ fn all_valid_fixtures_parse_as_json_objects() {
         "valid_search_result.json",
         "valid_space_summary.json",
         "valid_thread_summary.json",
-        "valid_widget_session.json",
     ];
     for name in names {
         let raw = fixture(name);

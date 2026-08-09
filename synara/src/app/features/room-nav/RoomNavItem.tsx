@@ -18,7 +18,6 @@ import {
 } from 'folds';
 import { useFocusWithin, useHover } from 'react-aria';
 import FocusTrap from 'focus-trap-react';
-import { useAtom, useAtomValue } from 'jotai';
 import { NavItem, NavItemContent, NavItemOptions, NavLink } from '../../components/nav';
 import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
@@ -54,13 +53,6 @@ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { useRoomName } from '../../hooks/useRoomMeta';
 import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
-import { useCallMembers, useCallSession } from '../../hooks/useCall';
-import { useCallEmbed, useCallStart } from '../../hooks/useCallEmbed';
-import { callChatAtom } from '../../state/callEmbed';
-import { useCallPreferencesAtom } from '../../state/hooks/callPreferences';
-import { useAutoDiscoveryInfo } from '../../hooks/useAutoDiscoveryInfo';
-import { livekitSupport } from '../../hooks/useLivekitSupport';
-import { StateEvent } from '../../../types/matrix/room';
 
 type RoomNavItemMenuProps = {
   room: EventedRoomReading;
@@ -223,24 +215,6 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
   }
 );
 
-function CallChatToggle() {
-  const [chat, setChat] = useAtom(callChatAtom);
-
-  return (
-    <IconButton
-      onClick={() => setChat(!chat)}
-      aria-pressed={chat}
-      aria-label="Toggle Chat"
-      variant="Background"
-      fill="None"
-      size="300"
-      radii="300"
-    >
-      <Icon size="50" src={Icons.Message} filled={chat} />
-    </IconButton>
-  );
-}
-
 type RoomNavItemProps = {
   room: EventedRoomReading;
   selected: boolean;
@@ -285,40 +259,6 @@ function RoomNavItemImpl({
   };
 
   const optionsVisible = hover || !!menuAnchor;
-  const callSession = useCallSession(room as unknown as Parameters<typeof useCallSession>[0]);
-  const callMembers = useCallMembers(
-    room as unknown as Parameters<typeof useCallMembers>[0],
-    callSession
-  );
-  const startCall = useCallStart(direct);
-  const callEmbed = useCallEmbed();
-  const callPref = useAtomValue(useCallPreferencesAtom());
-  const autoDiscoveryInfo = useAutoDiscoveryInfo();
-  const powerLevels = usePowerLevels(room);
-  const creators = useRoomCreators(room);
-  const permissions = useRoomPermissions(creators, powerLevels);
-
-  const handleStartCall: MouseEventHandler<HTMLAnchorElement> = (evt) => {
-    const hasCallPermission = permissions.event(
-      StateEvent.GroupCallMemberPrefix,
-      mx.getSafeUserId()
-    );
-
-    // Do not join if missing permissions or no livekit support and call is not started by others
-    if (!hasCallPermission || (!livekitSupport(autoDiscoveryInfo) && callMembers.length === 0)) {
-      return;
-    }
-
-    // Do not join if already in call
-    if (callEmbed) {
-      return;
-    }
-    // Start call in second click
-    if (selected) {
-      evt.preventDefault();
-      startCall(room as unknown as Parameters<typeof startCall>[0], callPref);
-    }
-  };
 
   return (
     <NavItem
@@ -331,7 +271,7 @@ function RoomNavItemImpl({
       {...hoverProps}
       {...focusWithinProps}
     >
-      <NavLink to={linkPath} onClick={room.isCallRoom() ? handleStartCall : undefined}>
+      <NavLink to={linkPath}>
         <NavItemContent>
           <Box as="span" grow="Yes" alignItems="Center" gap="200">
             <Avatar size="200" radii="400">
@@ -384,21 +324,11 @@ function RoomNavItemImpl({
                 aria-label={notificationMode}
               />
             )}
-            {room.isCallRoom() && callMembers.length > 0 && (
-              <Badge variant="Critical" fill="Solid" size="400">
-                <Text as="span" size="L400" truncate>
-                  {callMembers.length} Live
-                </Text>
-              </Badge>
-            )}
           </Box>
         </NavItemContent>
       </NavLink>
       {optionsVisible && (
         <NavItemOptions>
-          {selected && (callEmbed?.roomId === room.roomId || room.isCallRoom()) && (
-            <CallChatToggle />
-          )}
           <PopOut
             id={`menu-${room.roomId}`}
             aria-expanded={!!menuAnchor}

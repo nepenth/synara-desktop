@@ -69,7 +69,6 @@ import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { ContainerColor } from '../../styles/ContainerColor.css';
-import { RoomSettingsPage } from '../../state/roomSettings';
 import { getRoomNotesSummary } from '../../utils/roomNotes';
 import { roomNotesContentAtom } from '../../state/roomNotesList';
 import { RoomNotesPanel } from './room-notes/RoomNotesPanel';
@@ -266,14 +265,12 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
 });
 
 type RoomViewHeaderProps = {
-  callView?: boolean;
   activeSidePanel?: RoomSidePanelType | 'members';
   onToggleSidePanel?: (panel: RoomSidePanelType) => void;
   onToggleMembers?: () => void;
 };
 
 export function RoomViewHeader({
-  callView,
   activeSidePanel,
   onToggleSidePanel,
   onToggleMembers,
@@ -339,13 +336,7 @@ export function RoomViewHeader({
     setNotesOverlayOpen(true);
   };
 
-  const openSettings = useOpenRoomSettings();
-  const parentSpace = useSpaceOptionally();
   const handleMemberToggle = () => {
-    if (callView) {
-      openSettings(room.roomId, parentSpace?.roomId, RoomSettingsPage.MembersPage);
-      return;
-    }
     if (onToggleMembers) {
       onToggleMembers();
       return;
@@ -574,15 +565,11 @@ export function RoomViewHeader({
               offset={4}
               tooltip={
                 <Tooltip>
-                  {callView ? (
-                    <Text>Members</Text>
-                  ) : (
-                    <Text>
-                      {activeSidePanel === 'members' || peopleDrawer
-                        ? 'Hide Members'
-                        : 'Show Members'}
-                    </Text>
-                  )}
+                  <Text>
+                    {activeSidePanel === 'members' || peopleDrawer
+                      ? 'Hide Members'
+                      : 'Show Members'}
+                  </Text>
                 </Tooltip>
               }
             >

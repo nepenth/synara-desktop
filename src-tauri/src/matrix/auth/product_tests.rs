@@ -2,7 +2,7 @@ use super::*;
 use super::{
     account_data::*, auth_commands::*, backup::*, cross_signing::*, devices::*, media::*,
     members::*, presence::*, room_keys::*, room_ops::*, room_profile::*, secret_storage::*,
-    send::*, spaces::*, timeline::*, typing::*, user_profile::*, verification::*, widgets::*,
+    send::*, spaces::*, timeline::*, typing::*, user_profile::*, verification::*,
 };
 use crate::matrix::presence::{
     NativePresenceSnapshot, NativePresenceSnapshotResult, NativePresenceState,
@@ -30,7 +30,6 @@ const PRODUCT_SOURCE: &str = concat!(
     include_str!("../typing/product_commands.rs"),
     include_str!("../user_profile/product_commands.rs"),
     include_str!("../verification/product_commands.rs"),
-    include_str!("../widgets/product_commands.rs"),
     include_str!("product.rs"),
 );
 
@@ -1734,117 +1733,6 @@ fn power_level_commands_are_registered_and_have_no_bulk_single_user_loop() {
 }
 
 #[test]
-fn call_widget_media_contract_uses_exact_wire_shapes() {
-    let request = MatrixMediaDownloadRequest {
-        content_uri: "mxc://example.org/call-media".to_owned(),
-    };
-    assert_eq!(
-        serde_json::to_value(request).unwrap(),
-        serde_json::json!({ "contentUri": "mxc://example.org/call-media" })
-    );
-
-    let config = MatrixCallMediaConfigResult {
-        upload_size: 16 * 1024 * 1024,
-    };
-    assert_eq!(
-        serde_json::to_value(config).unwrap(),
-        serde_json::json!({ "m.upload.size": 16 * 1024 * 1024 })
-    );
-
-    let download = MatrixMediaDownloadResult {
-        bytes: vec![0, 1, 255],
-    };
-    assert_eq!(
-        serde_json::to_value(download).unwrap(),
-        serde_json::json!({ "bytes": [0, 1, 255] })
-    );
-}
-
-#[test]
-fn call_widget_media_uri_validation_is_bounded_and_fail_closed() {
-    assert_eq!(
-        parse_call_widget_media_uri("mxc://example.org/call-media")
-            .unwrap()
-            .to_string(),
-        "mxc://example.org/call-media"
-    );
-
-    for invalid in [
-        "",
-        " ",
-        "https://example.org/call-media",
-        "data:text/plain,secret",
-        "javascript:alert(1)",
-        "mxc://example.org/",
-        "mxc://example.org/call-media?access_token=secret",
-        "mxc://example.org/call/media",
-        &format!("mxc://example.org/{}", "a".repeat(2_050)),
-    ] {
-        assert_eq!(
-            parse_call_widget_media_uri(invalid)
-                .unwrap_err()
-                .diagnostic_id,
-            "v-send.r-call-media-invalid-content-uri",
-            "invalid URI should be rejected: {invalid}"
-        );
-    }
-}
-
-#[test]
-fn call_widget_media_size_ceiling_never_truncates() {
-    assert!(validate_call_widget_media_download_size(MAX_CALL_WIDGET_MEDIA_DOWNLOAD_BYTES).is_ok());
-    assert_eq!(
-        validate_call_widget_media_download_size(MAX_CALL_WIDGET_MEDIA_DOWNLOAD_BYTES + 1)
-            .unwrap_err()
-            .diagnostic_id,
-        "v-send.r-call-media-download-too-large"
-    );
-}
-
-#[test]
-fn call_widget_media_errors_are_stable_and_privacy_safe() {
-    let error = map_call_widget_media_error("v-send.r-call-media-download-sdk-failed");
-    let raw = serde_json::to_string(&error).unwrap();
-    assert_eq!(error.code, "Unknown");
-    assert_eq!(
-        error.diagnostic_id,
-        "v-send.r-call-media-download-sdk-failed"
-    );
-    assert!(!raw.contains("mxc://"));
-    assert!(!raw.contains("access_token"));
-    assert!(!raw.contains("bytes"));
-    assert!(!raw.contains("sdk error"));
-}
-
-#[test]
-fn call_widget_media_commands_use_the_live_client_and_original_file() {
-    let product = PRODUCT_SOURCE;
-    let config = product
-        .split("pub async fn matrix_call_media_config")
-        .nth(1)
-        .expect("media config command");
-    let config = config
-        .split("#[tauri::command]")
-        .next()
-        .expect("media config command body");
-    assert!(config.contains("load_or_fetch_max_upload_size"));
-    assert!(!config.contains("matrix-js-sdk"));
-
-    let download = product
-        .split("pub async fn matrix_media_download")
-        .nth(1)
-        .expect("media download command");
-    let download = download
-        .split("#[tauri::command]")
-        .next()
-        .expect("media download command body");
-    assert!(download.contains("MediaFormat::File"));
-    assert!(download.contains("get_media_content(&media_request, true)"));
-    assert!(!download.contains("Thumbnail"));
-    assert!(!download.contains("mxcUrlToHttp"));
-}
-
-#[test]
 fn v_auth_native_session_envelope_host_dual_write_is_wired() {
     let product_prod = AUTH_PRODUCT_COMMANDS_SOURCE
         .split("#[cfg(test)]")
@@ -1912,4 +1800,110 @@ fn v_auth_native_session_envelope_host_dual_write_is_wired() {
             "MatrixLoginIdentity must not expose {forbidden} on the login IPC"
         );
     }
+}
+
+#[test]
+fn media_config_and_download_use_exact_wire_shapes() {
+    let request = MatrixMediaDownloadRequest {
+        content_uri: "mxc://example.org/media".to_owned(),
+    };
+    assert_eq!(
+        serde_json::to_value(request).unwrap(),
+        serde_json::json!({ "contentUri": "mxc://example.org/media" })
+    );
+
+    let config = MatrixMediaConfigResult {
+        upload_size: 16 * 1024 * 1024,
+    };
+    assert_eq!(
+        serde_json::to_value(config).unwrap(),
+        serde_json::json!({ "m.upload.size": 16 * 1024 * 1024 })
+    );
+
+    let download = MatrixMediaDownloadResult {
+        bytes: vec![0, 1, 255],
+    };
+    assert_eq!(
+        serde_json::to_value(download).unwrap(),
+        serde_json::json!({ "bytes": [0, 1, 255] })
+    );
+}
+
+#[test]
+fn media_download_uri_validation_is_bounded_and_fail_closed() {
+    assert_eq!(
+        parse_media_download_uri("mxc://example.org/media")
+            .unwrap()
+            .to_string(),
+        "mxc://example.org/media"
+    );
+
+    for invalid in [
+        "",
+        " ",
+        "https://example.org/media",
+        "data:text/plain,secret",
+        "javascript:alert(1)",
+        "mxc://example.org/",
+        "mxc://example.org/media?access_token=secret",
+        "mxc://example.org/me/dia",
+        &format!("mxc://example.org/{}", "a".repeat(2_100)),
+    ] {
+        assert_eq!(
+            parse_media_download_uri(invalid).unwrap_err().diagnostic_id,
+            "v-send.r-media-invalid-content-uri",
+            "invalid URI should be rejected: {invalid}"
+        );
+    }
+}
+
+#[test]
+fn media_download_size_ceiling_never_truncates() {
+    assert!(validate_media_download_size(MAX_MEDIA_DOWNLOAD_BYTES).is_ok());
+    assert_eq!(
+        validate_media_download_size(MAX_MEDIA_DOWNLOAD_BYTES + 1)
+            .unwrap_err()
+            .diagnostic_id,
+        "v-send.r-media-download-too-large"
+    );
+}
+
+#[test]
+fn media_errors_are_stable_and_privacy_safe() {
+    let error = map_media_download_error("v-send.r-media-download-sdk-failed");
+    let raw = serde_json::to_string(&error).unwrap();
+    assert_eq!(error.code, "Unknown");
+    assert_eq!(error.diagnostic_id, "v-send.r-media-download-sdk-failed");
+    assert!(!raw.contains("mxc://"));
+    assert!(!raw.contains("access_token"));
+    assert!(!raw.contains("bytes"));
+    assert!(!raw.contains("sdk error"));
+}
+
+#[test]
+fn media_commands_use_the_live_client_and_original_file() {
+    let product = PRODUCT_SOURCE;
+    let config = product
+        .split("pub async fn matrix_media_config")
+        .nth(1)
+        .expect("media config command");
+    let config = config
+        .split("#[tauri::command]")
+        .next()
+        .expect("media config command body");
+    assert!(config.contains("load_or_fetch_max_upload_size"));
+    assert!(!config.contains("matrix-js-sdk"));
+
+    let download = product
+        .split("pub async fn matrix_media_download")
+        .nth(1)
+        .expect("media download command");
+    let download = download
+        .split("#[tauri::command]")
+        .next()
+        .expect("media download command body");
+    assert!(download.contains("MediaFormat::File"));
+    assert!(download.contains("get_media_content(&media_request, true)"));
+    assert!(!download.contains("Thumbnail"));
+    assert!(!download.contains("mxcUrlToHttp"));
 }
