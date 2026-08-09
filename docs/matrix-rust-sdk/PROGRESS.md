@@ -13,8 +13,8 @@
 
 | Field              | Value                                                                                                                                                                                 |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Last updated (UTC) | **2026-08-08** |
-| Integration tip    | **`c6777880`** — F0–F6c-2a landed; route **1 → 0**, slice F6c-2a/3; web fallback dropped; F6c-2b = initMatrix boot rewrite (impeller drop) |
+| Last updated (UTC) | **2026-08-09** |
+| Integration tip    | **`0f93424e`** — F0–F6c-2c landed; **importer drop 1 → 0** (#624 initMatrix native facade boot) + **`matrix-js-sdk` dependency removed** (F6c-2c); V-BURN reached |
 | Active work        | **Orchestrated burn active via this harness** — V-BURN epic (`initMatrix.ts`, sole importer) awaiting operator decision ([operating-instructions.md](operating-instructions.md)) |
 | Product runtime    | Native owns core D0 + V-CRYPTO + residual-empty slices through members/presence/directory/join-rule READ; long-tail JS importers remain                                               |
 | Execution model    | **prime-agent orchestrator + `deepseek-v4-flash-0731` sub-agents, max 2 concurrent** (locally hosted; only configured model) — [operating-instructions.md](operating-instructions.md) |

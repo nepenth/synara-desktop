@@ -162,18 +162,16 @@ test("runGuardrails passes on current repository tree", () => {
   }
   assert.equal(result.ok, true);
   assert.equal(result.findingCount, 0);
-  assert.ok(result.allowlistSize >= 1);
-  assert.ok(result.allowlistSize >= 1);
-  assert.ok(result.allowlistSize >= 1);
-  assert.ok(result.allowlistSize >= 1);
+  // F6c-2c: empty allowlist = full ban (0 production js-sdk importers).
+  assert.equal(result.allowlistSize, 0);
 });
 
 test("committed JS SDK allowlist loads and has expected size", () => {
   const allow = loadJsSdkAllowlist(REPO_ROOT);
-  assert.ok(allow.size >= 1);
-  assert.ok(allow.size >= 1);
-  assert.ok(allow.size >= 1);
-  assert.ok(allow.size >= 1);
+  // F6c-2c: committed allowlist is empty (full ban; any new importer fails).
+  assert.equal(allow.size, 0);
+  assert.equal(allow.size, 0);
+  assert.equal(allow.size, 0);
   assert.equal(
     allow.has("synara/src/app/features/room/RoomTimeline.tsx"),
     false,

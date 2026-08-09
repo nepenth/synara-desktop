@@ -2,14 +2,14 @@
 
 | Field                  | Value                                                                             |
 | ---------------------- | --------------------------------------------------------------------------------- |
-| Status                 | **Docs-only taxonomy**; no product code changed in this commit                    |
-| Measured tip           | `4365ca96a5`                                                                       |
+| Status                 | **V-BURN REACHED** — 0 production importers; `matrix-js-sdk` dependency removed (F6c-2c, tip `0f93424e`) |
+| Measured tip           | `0f93424e`                                                                       |
 | Base                   | `feature/matrix-rust-sdk-full-replacement`                                        |
 | Scope                  | Production `matrix-js-sdk` importers under `synara/src`                           |
-| Current importers      | **1** (`synara/src/client/initMatrix.ts` only)                                     |
-| P1.6 allowlist entries | **1**                                                                              |
+| Current importers      | **0**                                                                             |
+| P1.6 allowlist entries | **0** (empty = full ban)                                                          |
 | Policy                 | Full replacement; `dual_backend` forbidden; fail-closed                           |
-| V-BURN                 | **HOLD** — completion blocked only by the `initMatrix` epic (operator decision)   |
+| V-BURN                 | **REACHED** — importer drop 1 → 0 (#624) + npm dep removal (F6c-2c)              |
 | Hold                   | **V-BURN HOLD**; do not claim V-BURN-ready; **#39 remains gated**                 |
 
 This is a classification snapshot, not a cutover plan or readiness claim. The
