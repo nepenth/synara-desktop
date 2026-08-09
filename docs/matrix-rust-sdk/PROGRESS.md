@@ -14,7 +14,7 @@
 | Field              | Value                                                                                                                                                                                 |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-08** |
-| Integration tip    | **`13148c27`** — F0–F6c-1 landed; route **1 → 0**, slice F6c-1/2; web fallback dropped (macOS/Linux/iOS only); F6c-2 = boot rewrite/drop |
+| Integration tip    | **`c6777880`** — F0–F6c-2a landed; route **1 → 0**, slice F6c-2a/3; web fallback dropped; F6c-2b = initMatrix boot rewrite (impeller drop) |
 | Active work        | **Orchestrated burn active via this harness** — V-BURN epic (`initMatrix.ts`, sole importer) awaiting operator decision ([operating-instructions.md](operating-instructions.md)) |
 | Product runtime    | Native owns core D0 + V-CRYPTO + residual-empty slices through members/presence/directory/join-rule READ; long-tail JS importers remain                                               |
 | Execution model    | **prime-agent orchestrator + `deepseek-v4-flash-0731` sub-agents, max 2 concurrent** (locally hosted; only configured model) — [operating-instructions.md](operating-instructions.md) |
@@ -124,7 +124,7 @@ redefinition). Acceptance remands V-BURN HOLD pending decision.
 
 | When (UTC) | Item                  | Result        | Notes |
 | ---------- | --------------------- | ------------- | ----- |
-| current    | **Integration tip**   | **`13148c27`** | #560–#619 merged (F0–F6c-1); provenance anchor verified after each merge; importer 1; F6c-2 = D1C boot rewrite/drop |
+| current    | **Integration tip**   | **`c6777880`** | #560–#621 merged (F0–F6c-2a); provenance verified; importer 1; re-point 136→97; F6c-2b = D1C boot rewrite/drop |
 | current    | **Imports / allowlist** | **1 / 1**   | Production 114→**1** (`synara/src/client/initMatrix.ts` only); test import files 10→**0**; repo-wide total 4 (3 tooling = guardrail fixtures); ~99.5% removed |
 | current    | **#560–#592**         | **merged**    | Command/room/state/settings/timeline/search/pin/sync/room-graph/lifecycle/crypto/call-members/SpaceTabs/read-receipts/ClientRoot/Notifications/ClientNonUIFeatures/useCall/useMessageSearch burns via sliced PRs |
 | current    | **#593/#594**         | **merged**    | V-CALL lane: CallWidgetDriver + CallEmbed + useCallEmbed burned
@@ -137,6 +137,7 @@ redefinition). Acceptance remands V-BURN HOLD pending decision.
 | **F6a (#615)**        | **merged**    | Sync-read contract: synchronous read cache + async refresh(); sync getUserId/getDeviceId/getIdentity/getSyncState/getRooms/getRoom/getAccountData/mxcUrlToHttp; re-point 551 → 140; 745/745 modernization; importer still 1 |
 | **F6b (#617)**        | **merged**    | Facade completion: evented rooms (on/removeListener/getUsersReadUpTo), client self-ref, sendStateEvent real arity, setAccountData; re-point 140 → 136; 33/33 + 745/745; importer still 1 |
 | **F6c-1 (#619)**      | **merged**    | Facade completeness: redactEvent (matrix_timeline_redact), searchUserDirectory, queueToDevice+encryptToDeviceMessages (D1C no-op), delayed-event GAP stubs, getOpenIdTokenData; 37/37 tests; operator decision: **drop web fallback** (macOS/Linux native + iOS only) => js-sdk client vestigial everywhere; importer still 1 (F6c-2 = initMatrix D1C boot rewrite = the 1→0 drop) |
+| **F6c-2a (#621)**      | **merged**    | Facade completion batch 2: FacadeEventedRoomReading (EventedRoomReading structural match: client/on/removeListener/getUsersReadUpTo/findEventById/hasEncryptionStateEvent), ReceiptClientReading completions (setRoomReadMarkers/sendReadReceipt/getLatestTimeline), method stubs (getUser/getThreePids/getPushers/setPusher/aliases/cancelUpload/getBaseUrl); D1C: NO getOwnDeviceKeys (test-locked); re-point 136→97; 40/40; importer still 1 |
 | current    | **#595**              | **merged**    | Test-import burn: 10 test fixtures to probed literals/local structurals (712/712 modernization unchanged); `initMatrix` MatrixError contract duck-typed (`isMatrixErrorLike`, Error & { errcode?: string }); test importers **0** |
 | current    | **V-BURN**            | **HOLD**      | Sole importer is the epic: `initMatrix` = live `createClient`/IndexedDBStore/login/sync/token-refresh bootstrap (every derived client type hangs off `typeof initClient`); no native `initClient` exists. `matrix-js-sdk@42.0.0` removal = exactly one epic away (no transitive dependents). Waits on operator INITMATRIX decision (native-bootstrap epic vs sanctioned legacy-loader) |
 | current    | **Gates**             | **green**     | tsc 0 · node --test 292/0 · guardrails PASS allowlist 1 · modernization 712/0 · prettier clean |
