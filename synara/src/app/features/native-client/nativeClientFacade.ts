@@ -8,7 +8,7 @@ import {
 } from '../matrix-dto/parseUtil';
 import type { EventId, RoomId, UserId } from '../matrix-dto/ids';
 import { parseRoomSummary, type RoomSummary } from '../matrix-dto/room';
-import type { MatrixEventReading, RoomReading } from '../../utils/room';
+import type { MatrixClientReading, MatrixEventReading, RoomReading } from '../../utils/room';
 import type { DesktopInvokeResult } from '../../utils/desktop';
 
 /**
@@ -25,6 +25,19 @@ import type { DesktopInvokeResult } from '../../utils/desktop';
  * not exist here; token custody is native-only and never crosses IPC (a
  * `session_updated` event carries readiness/generation, never tokens).
  */
+
+/** Structural match to `EventedRoomReading` (utils/roomEvents) so the facade's
+ * synchronous room cache satisfies consumer casts without per-file edits. */
+export type FacadeEventedRoomReading = RoomReading & {
+  client: MatrixClientReading;
+  on(event: string, listener: (...args: unknown[]) => void): void;
+  removeListener(event: string, listener: (...args: unknown[]) => void): void;
+  getUsersReadUpTo(event: MatrixEventReading): string[];
+  /** Real js-sdk room method; native has no equivalent — fail-closed stub. */
+  findEventById(eventId: string): MatrixEventReading | undefined;
+  /** js-sdk encryption-state read; native event-room projection lacks it — fail-closed false. */
+  hasEncryptionStateEvent(): boolean;
+};
 
 export type NativeInvoke = (
   command: string,
@@ -491,7 +504,7 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
   let cachedIdentity: NativeClientIdentity = {};
   let cachedSyncState: NativeSyncState | null = null;
   let cachedSyncData: NativeSyncStateData | null = null;
-  let cachedRooms: RoomReading[] = [];
+  let cachedRooms: FacadeEventedRoomReading[] = [];
 
   const readSyncStatus = (): Promise<NativeSyncStatus | null> =>
     invoke('matrix_sync_status').then((result) =>
@@ -546,15 +559,21 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     cachedIdentity = { ...cachedIdentity, ...identity };
     if (rooms.length > 0 || !identity.userId) {
       cachedRooms = rooms.map((room) => {
-        const evented = room as RoomReading & {
-          client?: unknown;
-          on?: (event: string, listener: (payload?: unknown) => void) => void;
-          removeListener?: (event: string, listener: (payload?: unknown) => void) => void;
+        const evented = room as unknown as FacadeEventedRoomReading;
+        evented.client = facadeClient as MatrixClientReading;
+        evented.on = (event, listener) => {
+          emitter.on(event, listener as (...args: unknown[]) => void);
         };
-        evented.client = facadeClient;
-        evented.on = (event, listener) => emitter.on(event, listener);
-        evented.removeListener = (event, listener) => emitter.removeListener(event, listener);
-        return evented as RoomReading;
+        evented.removeListener = (event, listener) => {
+          emitter.removeListener(event, listener as (...args: unknown[]) => void);
+        };
+        evented.getUsersReadUpTo = () => [];
+        (evented as unknown as { hasEncryptionStateEvent(): boolean }).hasEncryptionStateEvent =
+          () => false;
+        (
+          evented as unknown as { findEventById(_eventId: string): MatrixEventReading | undefined }
+        ).findEventById = () => undefined;
+        return evented;
       });
     }
     emitSyncState();
@@ -583,6 +602,9 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     /** F6a — SYNCHRONOUS identity reads (js-sdk object model). */
     getIdentity(): NativeClientIdentity {
       return cachedIdentity;
+    },
+    getBaseUrl(): string | null {
+      return cachedIdentity.homeserverUrl ?? null;
     },
     getUserId(): string | null {
       return cachedIdentity.userId ?? null;
@@ -621,11 +643,11 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       clearSession();
     },
 
-    /** F6a — SYNCHRONOUS room reads from the cache. */
-    getRooms(): RoomReading[] {
+    /** F6a — SYNCHRONOUS room reads from the cache (evented projection). */
+    getRooms(): FacadeEventedRoomReading[] {
       return cachedRooms;
     },
-    getRoom(roomId: RoomId): RoomReading | null {
+    getRoom(roomId: RoomId): FacadeEventedRoomReading | null {
       return cachedRooms.find((r) => r.roomId === roomId) ?? null;
     },
 
@@ -738,19 +760,35 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       const noNativeAccountData = type.length; // eslint-disable-line @typescript-eslint/no-unused-vars
       return undefined;
     },
-    setAccountData(type: string, content: Record<string, unknown>): Promise<unknown> {
-      if (type.length === 0 || Object.keys(content).length === 0) return Promise.resolve(null);
+    setAccountData(type: string, content: unknown): Promise<unknown> {
+      const hasContent = isObject(content) && Object.keys(content).length > 0;
+      if (type.length === 0 || !hasContent) return Promise.resolve(null);
       return Promise.resolve(null); // GAP: no native account-data command
     },
-    async setRoomAccountData(
-      roomId: RoomId,
-      type: string,
-      content: Record<string, unknown>
-    ): Promise<unknown> {
-      if (roomId.length === 0 || type.length === 0 || Object.keys(content).length === 0) {
+    async setRoomAccountData(roomId: RoomId, type: string, content: unknown): Promise<unknown> {
+      const hasContent = isObject(content) && Object.keys(content).length > 0;
+      if (roomId.length === 0 || type.length === 0 || !hasContent) {
         return Promise.resolve(null);
       }
       return Promise.resolve(null); // GAP: no native account-data command
+    },
+
+    /** F6c — read-marker engine surface (ReceiptClientReading); native owns receipts. */
+    async setRoomReadMarkers(
+      _roomId: string,
+      _fullyReadEventId: string,
+      _publicReceipt?: unknown,
+      _privateReceipt?: unknown
+    ): Promise<unknown> {
+      return Promise.resolve(null);
+    },
+    async sendReadReceipt(_event: unknown, _receiptType?: string): Promise<unknown> {
+      return Promise.resolve(null);
+    },
+    async getLatestTimeline(
+      _timelineSet: unknown
+    ): Promise<{ getEvents(): MatrixEventReading[] } | null | undefined> {
+      return Promise.resolve(null);
     },
 
     /** F4 — upload content bytes via matrix_upload_media (fail-closed null). */
@@ -812,6 +850,38 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       // Native crypto owns device keys (D1C); renderer never downloads keys.
       const keysRequested = userIds.length; // eslint-disable-line @typescript-eslint/no-unused-vars
       return Promise.resolve({});
+    },
+
+    /** F6c — user/directory/pusher/imap GAP stubs (no native commands). */
+    async getUser(_userId: string): Promise<unknown> {
+      return Promise.resolve(null);
+    },
+    async getThreePids(): Promise<unknown> {
+      return Promise.resolve(null);
+    },
+    async getPushers(): Promise<unknown> {
+      return Promise.resolve(null);
+    },
+    async setPusher(_pusher: unknown): Promise<unknown> {
+      return Promise.resolve(null);
+    },
+    async getLocalAliases(_roomId: string): Promise<string[]> {
+      return Promise.resolve([]);
+    },
+    async createAlias(_alias: string, _roomId: string): Promise<unknown> {
+      return Promise.resolve(null);
+    },
+    async deleteAlias(_alias: string): Promise<unknown> {
+      return Promise.resolve(null);
+    },
+    async cancelUpload(_token: string): Promise<unknown> {
+      return Promise.resolve(null);
+    },
+    async _requestDeviceVerification(_userId: string): Promise<unknown> {
+      return Promise.resolve(null);
+    },
+    async searchUserDirectoryFn(_term: string): Promise<unknown> {
+      return Promise.resolve(null);
     },
 
     /** F5 — V-CALL runtime remains matrix-widget-api; facade exposes a GAP-safe stub. */
