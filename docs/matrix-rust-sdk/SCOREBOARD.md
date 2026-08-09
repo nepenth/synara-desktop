@@ -72,14 +72,18 @@ completion or merge hold.
 | Open product PRs onto full-replacement base | **none** — this docs-only tracking update |
 | Stale tip-docs drafts #502–#512             | **Closed** as obsolete tip-SHA freezes          |
 
-## Left (finish-line order after resume)
+## Left (post-completion status @ tip `a88c8c79`)
 
-1. **Long-tail importer burn (residual-empty only).** Prefer single-file type/presentation kills with allowlist+inventory honesty; refuse freestyle multi-module thrash. Hard leftovers include `RoomJoinRules.tsx` **writer**, `useMessageSearch`, `utils/room.ts`, timeline/media listeners, CallWidget media IPC, `initMatrix`/`cryptoStoreContinuity`, R-DEVTOOL.
-2. **Members residual honesty** — via-servers closed (#519); enumeration/search/DM-peer may remain — re-open [v-rooms-members-read-residual.md](v-rooms-members-read-residual.md) only with tip-accurate residual list.
-3. **V-TIMELINE.C3–C5 live proofs** — still **Not confirmed**; optional Beta feedback, not a merge gate. Branch completion is tip + focused unit/CI + residual-empty/fail-closed evidence.
-4. **V-SEND.R-DEVTOOL** — may start without waiting for C3–C5 live confirmation; retain the native, fail-closed implementation gate.
-5. **CallWidget media config/download** — residual still open ([v-send-call-widget-residual.md](v-send-call-widget-residual.md)).
-6. **V-BURN.1–.3** — HOLD until zero importers + drop npm criteria met.
+The js-sdk importer burn and V-BURN are **complete** (220 → 0; allowlist 0; npm
+dep removed; native proofs incl. two-client receipt + validation loop landed).
+Remaining items are **non-importer capability follow-ups**, none block the burn:
+
+1. ~~Long-tail importer burn~~ — **DONE** (0 production/test importers; 100% removal).
+2. **V-BURN.1–.3** — **DONE** (zero importers + npm dep removal criteria met; V-BURN reached).
+3. **Members residual honesty** — via-servers closed (#519); enumeration/search/DM-peer may remain — re-open [v-rooms-members-read-residual.md](v-rooms-members-read-residual.md) only with tip-accurate residual list. **Not a burn item** (capability depth only).
+4. **V-TIMELINE.C3–C5 live proofs** — **Not confirmed** (optional Beta feedback, not a merge gate).
+5. **V-SEND.R-DEVTOOL** — native, fail-closed; optional.
+6. **CallWidget media config/download** — matrix-widget-api / V-CALL-adjacent residual ([v-send-call-widget-residual.md](v-send-call-widget-residual.md)) — separate native-widget slice if operator requests.
 
 **V-BURN reached** (0 importers + npm dep removed). `dual_backend` remains **forbidden**. [#39](https://github.com/nepenth/synara-desktop/pull/39) remains gated on explicit operator approval.
 
@@ -89,5 +93,5 @@ See [pause-handoff-2026-08-03.md](pause-handoff-2026-08-03.md) and
 [operating-instructions.md](operating-instructions.md). Execution runs through
 **this agent harness with its locally hosted model** — orchestrator + bounded
 sub-agents, ≤2–3 concurrent, no external model APIs. Public-repo hygiene and
-the UI/UX high-fidelity mandate apply to every slice. Preferred next slice is
+the UI/UX high-fidelity mandate apply to every slice. Preferred next slice: none — V-BURN complete; feature → main bridge (#39) is operator-gated.
 item 1 in the "Left" list above (long-tail residual-empty importer burn).
