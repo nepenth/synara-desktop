@@ -355,9 +355,24 @@ test('F4 getProfileInfo returns session identity', async () => {
   });
   const client = createNativeMatrixClient(invoke);
   await client.refresh();
-  const profile = client.getProfileInfo();
-  assert.equal(profile.userId, '@alice:example.org');
-  assert.equal(profile.deviceId, 'DEV');
+  const profile = await client.getProfileInfo('@alice:example.org');
+  assert.equal(profile.avatar_url, undefined);
+  assert.equal(profile.displayname, undefined);
+});
+test('F5 getIdentity snapshot preserves userId/deviceId', async () => {
+  const { invoke } = invokingWith({
+    matrix_session_snapshot: {
+      status: 'logged_in',
+      user_id: '@alice:example.org',
+      device_id: 'DEV',
+      homeserver_url: 'https://matrix.example.org',
+      sessionGeneration: 5,
+    },
+  });
+  const client = createNativeMatrixClient(invoke);
+  await client.refresh();
+  assert.equal(client.getIdentity().userId, '@alice:example.org');
+  assert.equal(client.getIdentity().deviceId, 'DEV');
 });
 
 test('F5 getCryptoStatus proxies matrix_crypto_status (no keys, D1C)', async () => {
@@ -410,7 +425,8 @@ test('F5 downloadKeysForUsers is a D1C-key-free stub', async () => {
 
 test('F5 matrixRTC is a GAP-safe stub (V-CALL is matrix-widget-api)', async () => {
   const client = createNativeMatrixClient(async () => unavailable);
-  assert.equal(client.matrixRTC.getRoomSession({ roomId: '!r:example.org' }), null);
+  const session = client.matrixRTC.getRoomSession({ roomId: '!r:example.org' });
+  assert.deepEqual(session.memberships, []);
   assert.doesNotThrow(() => client.matrixRTC.on('session_started', () => undefined));
 });
 
@@ -438,9 +454,12 @@ test('F6c redactEvent fails closed when unavailable', async () => {
 
 test('F6c GAP-safe stubs (searchUserDirectory, queueToDevice, delayed events)', async () => {
   const client = createNativeMatrixClient(async () => unavailable);
-  assert.equal(await client.searchUserDirectory('term'), null);
-  await client.queueToDevice('m.test', {});
-  assert.equal(await client._unstable_sendDelayedEvent('!r', 'm.test', {}), null);
+  assert.deepEqual(await client.searchUserDirectory({ term: 'term' }), {
+    limited: false,
+    results: [],
+  });
+  await client.queueToDevice({ eventType: 'm.test', batch: [] });
+  assert.equal(await client._unstable_sendDelayedEvent('!r', {}, null, 'm.test', {}), null);
   assert.equal(await client._unstable_sendDelayedStateEvent('!r', 'm.test', {}, '$k'), null);
   assert.equal(await client._unstable_updateDelayedEvent('$evt', '!r', {}, {}), null);
   assert.equal(await client.getOpenIdTokenData(), null);
@@ -449,7 +468,12 @@ test('F6c GAP-safe stubs (searchUserDirectory, queueToDevice, delayed events)', 
 test('F6c crypto reading includes encryptToDeviceMessages no-op', async () => {
   const client = createNativeMatrixClient(async () => unavailable);
   const crypto = client.getCrypto();
-  await crypto.encryptToDeviceMessages();
+  const batch = await crypto.encryptToDeviceMessages(
+    'm.test',
+    [{ userId: '@u:example.org', deviceId: 'D' }],
+    {}
+  );
+  assert.deepEqual(batch, []);
   assert.ok(true);
 });
 
