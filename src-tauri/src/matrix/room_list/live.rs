@@ -84,6 +84,7 @@ async fn project_room(room: &Room) -> RoomSummary {
         membership: membership(room.state()),
         is_direct: room.is_direct().await.unwrap_or(false),
         is_space: room.is_space(),
+        is_call: room.is_call(),
         is_favorite: false,
         is_low_priority: false,
         folder_id: None,

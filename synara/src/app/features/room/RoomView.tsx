@@ -20,6 +20,7 @@ import { settingsAtom } from '../../state/settings';
 import { useSetting } from '../../state/hooks/settings';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
+import { VoiceRoom } from './VoiceRoom';
 import { useRoom } from '../../hooks/useRoom';
 
 const FN_KEYS_REGEX = /^F\d+$/;
@@ -95,6 +96,7 @@ export function RoomView({ eventId }: { eventId?: string }) {
   return (
     <Page ref={roomViewRef}>
       <Box grow="Yes" direction="Column">
+        {room.isCallRoom() && <VoiceRoom />}
         <NativeTimelinePresenter key={roomId} roomId={roomId} eventId={eventId} />
         <RoomViewTyping room={room} />
       </Box>

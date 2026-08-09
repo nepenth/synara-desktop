@@ -6230,11 +6230,22 @@ function assertNoSymlinkComponents(candidate, { allowMissing = false } = {}) {
       if (allowMissing && error?.code === "ENOENT") return absolute;
       throw error;
     }
-    if (info.isSymbolicLink())
+    if (info.isSymbolicLink()) {
+      if (SYSTEM_SYMLINK_ALIASES[current] === realpathSync(current)) continue;
       throw new Error("Path contains a symbolic-link component.");
+    }
   }
   return absolute;
 }
+
+const SYSTEM_SYMLINK_ALIASES = {
+  // macOS maps /var, /tmp, /etc to /private/* . These are OS-standard prefix
+  // aliases: the destination is still fully canonicalized downstream, and only
+  // these exact aliases are tolerated so user-supplied symlinks stay rejected.
+  "/tmp": "/private/tmp",
+  "/var": "/private/var",
+  "/etc": "/private/etc",
+};
 
 function assertExternalEmptyDirectory(destination, repositoryRoot) {
   const absoluteDestination = assertNoSymlinkComponents(destination);

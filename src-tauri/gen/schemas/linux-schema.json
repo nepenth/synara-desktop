@@ -393,12 +393,6 @@
           "markdownDescription": "Enables the matrix_backup_status command without any pre-configured scope."
         },
         {
-          "description": "Enables the matrix_call_media_config command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-call-media-config",
-          "markdownDescription": "Enables the matrix_call_media_config command without any pre-configured scope."
-        },
-        {
           "description": "Enables the matrix_composer_clear_reply_draft command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-composer-clear-reply-draft",
@@ -1089,12 +1083,6 @@
           "markdownDescription": "Enables the matrix_timeline_set_read_state command without any pre-configured scope."
         },
         {
-          "description": "Enables the matrix_timeline_snapshot command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-timeline-snapshot",
-          "markdownDescription": "Enables the matrix_timeline_snapshot command without any pre-configured scope."
-        },
-        {
           "description": "Enables the matrix_timeline_unpin command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-timeline-unpin",
@@ -1381,12 +1369,6 @@
           "type": "string",
           "const": "deny-matrix-backup-status",
           "markdownDescription": "Denies the matrix_backup_status command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_call_media_config command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-call-media-config",
-          "markdownDescription": "Denies the matrix_call_media_config command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_composer_clear_reply_draft command without any pre-configured scope.",
@@ -2077,12 +2059,6 @@
           "type": "string",
           "const": "deny-matrix-timeline-set-read-state",
           "markdownDescription": "Denies the matrix_timeline_set_read_state command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_timeline_snapshot command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-timeline-snapshot",
-          "markdownDescription": "Denies the matrix_timeline_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_timeline_unpin command without any pre-configured scope.",

@@ -10,6 +10,7 @@ import type { EventId, RoomId, UserId } from '../matrix-dto/ids';
 import { parseRoomSummary, type RoomSummary } from '../matrix-dto/room';
 import type { MatrixClientReading, MatrixEventReading, RoomReading } from '../../utils/room';
 import type { DesktopInvokeResult } from '../../utils/desktop';
+import { RoomType } from '../../../types/matrix/room';
 
 /**
  * F1 — renderer NativeMatrixClient facade core (emitter + lifecycle + identity).
@@ -272,9 +273,9 @@ const toRoomReading = (
   getJoinRule: () => summary.joinRule ?? '',
   getJoinedMemberCount: () => 0,
   getCanonicalAlias: () => summary.canonicalAlias ?? null,
-  getType: () => undefined,
+  getType: () => (summary.isCall ? RoomType.Call : undefined),
   getVersion: () => '',
-  isCallRoom: () => false,
+  isCallRoom: () => summary.isCall,
   isSpaceRoom: () => summary.isSpace,
   getTimelineForEvent: () => null,
   hasMembershipState: () => summary.membership === 'join',

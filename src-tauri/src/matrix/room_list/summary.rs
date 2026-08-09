@@ -13,6 +13,7 @@ pub struct RoomSummaryBuilder {
     name: Option<String>,
     membership: Membership,
     is_direct: bool,
+    is_call: bool,
     is_favorite: bool,
     is_low_priority: bool,
     folder_id: Option<String>,
@@ -30,6 +31,7 @@ impl RoomSummaryBuilder {
             name: None,
             membership: Membership::Join,
             is_direct: false,
+            is_call: false,
             is_favorite: false,
             is_low_priority: false,
             folder_id: None,
@@ -58,6 +60,11 @@ impl RoomSummaryBuilder {
 
     pub fn favorite(mut self, is_favorite: bool) -> Self {
         self.is_favorite = is_favorite;
+        self
+    }
+
+    pub fn call(mut self, is_call: bool) -> Self {
+        self.is_call = is_call;
         self
     }
 
@@ -107,6 +114,7 @@ impl RoomSummaryBuilder {
             avatar_url: None,
             membership: self.membership,
             is_direct: self.is_direct,
+            is_call: self.is_call,
             is_space: false,
             is_favorite: self.is_favorite,
             is_low_priority: self.is_low_priority,

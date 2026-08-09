@@ -7,6 +7,7 @@ const room = (overrides: Partial<RoomSummary> & Pick<RoomSummary, 'roomId'>): Ro
   membership: 'join',
   isDirect: false,
   isSpace: false,
+  isCall: false,
   isEncrypted: false,
   unreadCount: 0,
   highlightCount: 0,
