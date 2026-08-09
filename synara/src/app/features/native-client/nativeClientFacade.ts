@@ -992,8 +992,9 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       nextBatch?: unknown;
       prevBatch?: unknown;
     }> {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const x =
-        roomId.length + eventId.length + (relationType?.length ?? 0) + (eventType?.length ?? 0); // eslint-disable-line @typescript-eslint/no-unused-vars
+        roomId.length + eventId.length + (relationType?.length ?? 0) + (eventType?.length ?? 0);
       return Promise.resolve({ events: [] });
     },
 
@@ -1025,12 +1026,13 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       eventType: string,
       content: Record<string, unknown>
     ): Promise<{ delay_id?: string } | null> {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const x =
         roomId.length +
         (opts === null ? 1 : 0) +
         (txnId?.length ?? 0) +
         eventType.length +
-        Object.keys(content).length; // eslint-disable-line @typescript-eslint/no-unused-vars
+        Object.keys(content).length;
       return Promise.resolve(null);
     },
     async _unstable_sendDelayedStateEvent(...args: unknown[]): Promise<unknown> {
