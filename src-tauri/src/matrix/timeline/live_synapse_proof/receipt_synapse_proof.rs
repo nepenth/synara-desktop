@@ -339,12 +339,22 @@ async fn live_native_two_client_receipt_and_ordering_against_disposable_synapse_
         tokio::time::sleep(Duration::from_millis(250)).await;
     }
 
-    // A also observes its own fully-read marker (room account data).
+    // A also observes its own fully-read marker (room account data). The marker
+    // is set server-side via set_read_marker, so A must pull it back over sync.
     let room_a = client_a.get_room(&room_id).expect("A room handle");
-    let fully_read = room_a
+    let marker_deadline = Instant::now() + Duration::from_secs(30);
+    let mut fully_read = room_a
         .account_data_static::<FullyReadEventContent>()
         .await
         .expect("A fully-read account data load");
+    while fully_read.is_none() && Instant::now() < marker_deadline {
+        sync_briefly(&client_a).await;
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        fully_read = room_a
+            .account_data_static::<FullyReadEventContent>()
+            .await
+            .expect("A fully-read account data poll");
+    }
     let marker_event_id = fully_read
         .expect("A must have a fully-read marker after sending read receipts")
         .deserialize()
