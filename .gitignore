@@ -19,7 +19,6 @@ xcuserdata/
 synara-ios/.build/
 src-tauri/capabilities/release-hardening.json
 src-tauri/gen/schemas/capabilities.json
-
 # ---------------------------------------------------------------------------
 # Local AI / agent operator tooling — NOT product source.
 # This repository is public; keep playbooks, skills, MCP secrets, and
@@ -29,28 +28,21 @@ src-tauri/gen/schemas/capabilities.json
 #   .github/workflows/     — GitHub Actions CI (product)
 #   synara/src/app/agents/ — product desktop agent features
 #   scripts/*workflow*     — CI policy checkers for GitHub Actions
-# ---------------------------------------------------------------------------
-
 # Harness-local operating data (operator continuity only — never pushed)
 # Public-safe operating instructions live in docs/matrix-rust-sdk/
 .harness_agent_operating/
-
 # Grok Build
 .grok/
-
 # Codex / OpenAI agent harness
 .codex/
 .agents/
-
 # Claude Code
 .claude/
 CLAUDE.md
-
 # Cursor
 .cursor/
 .cursorrules
 .cursorignore
-
 # Other common agent / assistant harnesses
 .continue/
 .aider/
@@ -62,31 +54,29 @@ CLAUDE.md
 .swarm/
 .opencode/
 .pi/
-
 # Project-root agent instruction dumps (use ~/.config / user skills instead)
 /AGENTS.md
 /AGENT.md
 /.agent/
 /.ai/
-
 # Local MCP / tool server config (often contains tokens or private URLs)
 .mcp.json
 .mcp.*.json
 mcp.json
 **/mcp.local.json
-
 # Local session / scratch notes (if dropped in tree)
 .session/
 .sessions/
 *.local.md
 !**/README.local.md
-
 # Editor / IDE noise beyond above
 .idea/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.example.json
-
 # Local agent session notes (if recreated in-tree)
 docs/**/SESSION-HANDOFF.md
 docs/**/*-session-handoff.md
+# Local runtime logs
+*.log
+logs/
