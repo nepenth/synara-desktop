@@ -101,7 +101,7 @@ Measured at tip `ac71e9bf`: **63 js-sdk client methods / 373 call sites** across
 | F4 | `1 → 0` media + profile | upload/media-config/mxc-resolve; displayname/avatar/threepid | — |
 | F5 | `1 → 0` crypto + extended | decrypt/keys stubs, matrixRTC/http/store/search unfold | — |
 | F6 | `1 → 0` INITMATRIX re-point | initMatrix constructs facade; **drop importer 1→0**; dependency removal begins | **1→0** |
-| F7 | `0` lockdown + dep removal + V-BURN checklist | **LANDED** (F6c-2c): npm dep `matrix-js-sdk@42.0.0` removed, allowlist 0, full green, audit high-gate clean | **0** |
+| F7 | `0` lockdown + dep control + V-BURN checklist | **LANDED** (F6c-2c): allowlist 0 (full ban); `matrix-js-sdk@42.0.0` → devDependencies-only (tooling harness); prod audit high-gate clean | **0** |
 
 ## 5. Test & CI discipline
 - Each slice: unit tests registered in `run-modernization-tests.mjs`; Quality gate + Desktop package gate green;

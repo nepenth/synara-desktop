@@ -12,7 +12,7 @@
 | Operating model                                        | **prime-agent orchestrator + `deepseek-v4-flash-0731` sub-agents (max 2 concurrent)** — locally hosted, only configured model; public-repo hygiene + UI/UX fidelity always on ([operating-instructions.md](operating-instructions.md)) |
 | Burn board                                             | https://kb.whyland.com/go/synara-matrix-burn                                                                                                                                                                                           |
 | Umbrella #39                                           | **Do not merge** without explicit user approval                                                                                                                                                                                        |
-| V-BURN                                                | **REACHED** — 0 production/test importers; `matrix-js-sdk@42.0.0` removed from package.json + lockfile (F6c-2c); matrix-widget-api remains (V-CALL separate slice); #39 still operator-gated |
+| V-BURN                                                | **REACHED (product)** — 0 production/test importers; allowlist 0; `matrix-js-sdk@42.0.0` moved to **devDependencies** (tooling-only two-client integration harness, governed CI; excluded from prod audit/bundle). matrix-widget-api stays (V-CALL separate slice); #39 still operator-gated |
 
 ## Current burn policy
 

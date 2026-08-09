@@ -152,7 +152,7 @@
       "current": {
         "files": 0,
         "import_lines": 0,
-        "note": "tip 0f93424e (F6c-2b F6c-2c): production importers 0; test import files 0; matrix-js-sdk@42.0.0 removed from package.json+lock (allowlist empty=full ban); V-BURN reached. plan baseline 232 production+test files"
+        "note": "tip 0f93424e+ (F6c-2b/2c): production importers 0; test import files 0; allowlist empty=full ban; matrix-js-sdk moved to devDependencies (tooling-only two-client integration harness, governed CI; never bundled/audited in prod). plan baseline 232 production+test files"
       }
     }
   },
