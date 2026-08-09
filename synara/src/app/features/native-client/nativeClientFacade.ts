@@ -89,6 +89,8 @@ export type NativeClientIdentity = {
   userId?: string;
   deviceId?: string;
   homeserverUrl?: string;
+  avatarUrl?: string;
+  displayName?: string;
 };
 
 export type NativeInvokeResult = {
@@ -322,6 +324,7 @@ export type FacadeSendStateEventContent = Record<string, unknown>;
 export type FacadeSendStateEventResult = {
   status: string;
   roomId?: RoomId;
+  event_id?: string;
 };
 
 /** F4 — media types. */
@@ -398,16 +401,24 @@ export type FacadeCryptoReading = {
   getCrossSigningState(): Promise<FacadeCryptoCrossSigningState>;
   isCrossSigningReady(): Promise<boolean>;
   isEncryptionEnabled(): Promise<boolean>;
-  /** D1C: to-device encryption is native-owned; GAP-safe no-op stub. */
-  encryptToDeviceMessages(): Promise<void>;
+  /** D1C: to-device encryption is native-owned; GAP-safe no-op stub (batch shape). */
+  encryptToDeviceMessages(
+    _eventType: string,
+    _recipients: Array<{ userId: string; deviceId: string }>,
+    _content: unknown
+  ): Promise<Array<{ userId: string; deviceId: string; payload: unknown }>>;
 };
 
-export type FacadeMatrixRtcSession = unknown;
+export type FacadeMatrixRtcSession = {
+  memberships: Array<{ sender: string; membershipID: string }>;
+  on(_event: string, _listener: (...args: any[]) => void): void;
+  removeListener(_event: string, _listener: (...args: any[]) => void): void;
+};
 
 export type FacadeMatrixRtc = {
-  getRoomSession(_room: { roomId: string }): FacadeMatrixRtcSession | null;
-  on(_event: string, _listener: (...args: unknown[]) => void): void;
-  off(_event: string, _listener: (...args: unknown[]) => void): void;
+  getRoomSession(_room: { roomId: string }): FacadeMatrixRtcSession;
+  on(_event: string, _listener: (...args: any[]) => void): void;
+  off(_event: string, _listener: (...args: any[]) => void): void;
 };
 
 export type FacadeDownloadKeysResult = Record<string, unknown>;
@@ -604,6 +615,9 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       return cachedIdentity;
     },
     getBaseUrl(): string | null {
+      return cachedIdentity.homeserverUrl ?? null;
+    },
+    get baseUrl(): string | null {
       return cachedIdentity.homeserverUrl ?? null;
     },
     getUserId(): string | null {
@@ -828,8 +842,12 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     },
 
     /** F4 — profile/identity from the sync cache (no key material, D1C). */
-    getProfileInfo(): FacadeProfileInfo {
-      return { ...cachedIdentity };
+    getProfileInfo(userId?: string): Promise<{ avatar_url?: string; displayname?: string }> {
+      const x = userId?.length ?? 0; // eslint-disable-line @typescript-eslint/no-unused-vars
+      return Promise.resolve({
+        avatar_url: cachedIdentity.avatarUrl,
+        displayname: cachedIdentity.displayName,
+      });
     },
 
     /** F5 — crypto status via matrix_crypto_status (never key material, D1C). */
@@ -847,7 +865,7 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
         isCrossSigningReady: async () =>
           (await this.getCryptoStatus())?.crossSigningState === 'Ready',
         isEncryptionEnabled: async () => (await this.getCryptoStatus())?.encryptionEnabled ?? false,
-        encryptToDeviceMessages: async () => Promise.resolve(),
+        encryptToDeviceMessages: async () => [],
       };
     },
 
@@ -863,16 +881,23 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       const keysRequested = userIds.length; // eslint-disable-line @typescript-eslint/no-unused-vars
       return Promise.resolve({});
     },
+    /** F6c — mutual-rooms GAP: native has no shared-rooms command; fail-closed []. */
+    async _unstable_getSharedRooms(userId: string): Promise<string[]> {
+      const x = userId.length; // eslint-disable-line @typescript-eslint/no-unused-vars
+      return Promise.resolve([]);
+    },
 
     /** F6c — user/directory/pusher/imap GAP stubs (no native commands). */
-    async getUser(userId: string): Promise<unknown> {
-      const unused = userId.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars
+    getUser(userId: string): { avatarUrl?: string; displayName?: string } | null {
+      const x = userId.length; // eslint-disable-line @typescript-eslint/no-unused-vars
+      return null;
+    },
+    async getThreePids(): Promise<{
+      threepids: Array<{ medium: string; address: string }>;
+    } | null> {
       return Promise.resolve(null);
     },
-    async getThreePids(): Promise<unknown> {
-      return Promise.resolve(null);
-    },
-    async getPushers(): Promise<unknown> {
+    async getPushers(): Promise<{ pushers: Array<{ app_id: string; pushkey: string }> } | null> {
       return Promise.resolve(null);
     },
     async setPusher(pusher: unknown): Promise<unknown> {
@@ -899,15 +924,27 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       const unused = userId.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars
       return Promise.resolve(null);
     },
+    async searchUserDirectory(opts: { term: string; limit?: number }): Promise<{
+      limited: boolean;
+      results: Array<{ user_id: string }>;
+    }> {
+      const x = opts.term.length + (opts.limit ?? 0); // eslint-disable-line @typescript-eslint/no-unused-vars
+      return Promise.resolve({ limited: false, results: [] });
+    },
     async searchUserDirectoryFn(term: string): Promise<unknown> {
-      const unused = term.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars
+      const x = term.length; // eslint-disable-line @typescript-eslint/no-unused-vars
       return Promise.resolve(null);
     },
 
     /** F5 — V-CALL runtime remains matrix-widget-api; facade exposes a GAP-safe stub. */
     get matrixRTC(): FacadeMatrixRtc {
+      const noOpSession: FacadeMatrixRtcSession = {
+        memberships: [],
+        on: () => undefined,
+        removeListener: () => undefined,
+      };
       return {
-        getRoomSession: () => null,
+        getRoomSession: () => noOpSession,
         on: () => undefined,
         off: () => undefined,
       };
@@ -917,7 +954,12 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     async getCapabilities(): Promise<FacadeCapabilitiesIntersection> {
       return Promise.resolve({});
     },
-    async getOpenIdToken(): Promise<unknown> {
+    async getOpenIdToken(): Promise<{
+      access_token: string;
+      expires_in?: number;
+      matrix_server_name?: string;
+      token_type?: string;
+    } | null> {
       return Promise.resolve(null);
     },
     async search(query: { term: string }): Promise<unknown> {
@@ -937,9 +979,24 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     async getAuthMetadata(): Promise<unknown> {
       return Promise.resolve(null);
     },
-    async relations(eventId: string, relationType?: string, eventType?: string): Promise<unknown> {
-      const noNativeRelations = eventId.length > 0; // eslint-disable-line
-      return Promise.resolve(noNativeRelations && relationType && eventType ? null : null);
+    async relations(
+      roomId: string,
+      eventId: string,
+      relationType?: string,
+      eventType?: string
+    ): Promise<{
+      events: Array<{
+        getContent<T = Record<string, unknown>>(): T;
+        getSender(): string | null;
+        getTs(): number;
+      }>;
+      nextBatch?: unknown;
+      prevBatch?: unknown;
+    }> {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const x =
+        roomId.length + eventId.length + (relationType?.length ?? 0) + (eventType?.length ?? 0);
+      return Promise.resolve({ events: [] });
     },
 
     /** F6c — redact a message/event (matrix_timeline_redact). */
@@ -956,22 +1013,28 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
         : null;
     },
 
-    /** F6c — user-directory search GAP is a stateful owner; fail-closed null. */
-    async searchUserDirectory(term: string): Promise<unknown> {
-      const termIgnored = term.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars
-      return Promise.resolve(null);
-    },
-
     /** F6c — device to-device queue (D1C: native crypto owns); fail-closed no-op. */
-    async queueToDevice(eventType: string, content: Record<string, unknown>): Promise<void> {
-      const eventTypeLen = eventType.length + Object.keys(content).length; // eslint-disable-line
+    async queueToDevice(batch: unknown[] | { eventType: string; batch: unknown[] }): Promise<void> {
+      const x = Array.isArray(batch) ? batch.length : batch.batch.length + batch.eventType.length; // eslint-disable-line @typescript-eslint/no-unused-vars
       return Promise.resolve(undefined);
     },
 
     /** F6c — delayed-event APIs are not natively surfaced; GAP-safe stubs. */
-    async _unstable_sendDelayedEvent(...args: unknown[]): Promise<unknown> {
-      const noNativeDelayed = args.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars
-      return Promise.resolve(noNativeDelayed ? null : null);
+    async _unstable_sendDelayedEvent(
+      roomId: string,
+      opts: unknown,
+      txnId: string | null,
+      eventType: string,
+      content: Record<string, unknown>
+    ): Promise<{ delay_id?: string } | null> {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const x =
+        roomId.length +
+        (opts === null ? 1 : 0) +
+        (txnId?.length ?? 0) +
+        eventType.length +
+        Object.keys(content).length;
+      return Promise.resolve(null);
     },
     async _unstable_sendDelayedStateEvent(...args: unknown[]): Promise<unknown> {
       const noNativeDelayed = args.length >= 0; // eslint-disable-line @typescript-eslint/no-unused-vars

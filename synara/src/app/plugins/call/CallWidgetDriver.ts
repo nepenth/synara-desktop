@@ -70,7 +70,7 @@ export class CallWidgetDriver extends WidgetDriver {
 
     if (!client || !roomId) throw new Error('Not in a room or not attached to a client');
 
-    let r: { event_id: string } | null;
+    let r: { event_id?: string } | null;
     if (typeof stateKey === 'string') {
       r = await client.sendStateEvent(roomId, eventType as never, content as never, stateKey);
     } else if (eventType === 'm.room.redaction') {
@@ -80,7 +80,7 @@ export class CallWidgetDriver extends WidgetDriver {
       r = await client.sendEvent(roomId, eventType as never, content as never);
     }
 
-    return { roomId, eventId: r.event_id };
+    return { roomId, eventId: r?.event_id ?? '' };
   }
 
   public async sendDelayedEvent(
