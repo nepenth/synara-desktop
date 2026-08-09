@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |            1 |                2 |                   3 |
+| production |            0 |                2 |                   3 |
 | test       |            0 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |        **4** |                  |                     |
+| **total**  |        **3** |                  |                     |
 
 ### Role definitions
 
@@ -31,73 +31,50 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |     1 |
+| Production import files |     0 |
 | Test import files       |     0 |
-| Total import files      |     1 |
+| Total import files      |     0 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 1)
+- Production match: **no** (found 0)
 - Test match: **no** (found 0)
 
 ### Production files by bucket (desktop runtime only)
 
-| Bucket           | Files |
-| ---------------- | ----: |
-| client-lifecycle |     1 |
+| Bucket | Files |
+| ------ | ----: |
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 1. Files with any finding: 3.
+Scope: **production only**. Import files: 0. Files with any finding: 2.
 
 ### Imported modules
 
-| Module path     | Import sites | Files |
-| --------------- | -----------: | ----: |
-| `matrix-js-sdk` |            1 |     1 |
+_None._
 
 ### Top imported symbols
 
-| Symbol                 | Imports | Value | Type-only | Files |
-| ---------------------- | ------: | ----: | --------: | ----: |
-| `IndexedDBCryptoStore` |       1 |     1 |         0 |     1 |
-| `IndexedDBStore`       |       1 |     1 |         0 |     1 |
-| `createClient`         |       1 |     1 |         0 |     1 |
+_None._
 
 ### SDK model import coupling
 
-| Model / symbol         | Files | Import occurrences |
-| ---------------------- | ----: | -----------------: |
-| `IndexedDBCryptoStore` |     1 |                  1 |
-| `IndexedDBStore`       |     1 |                  1 |
-| `createClient`         |     1 |                  1 |
+| Model / symbol | Files | Import occurrences |
+| -------------- | ----: | -----------------: |
+| —              |     0 |                  0 |
 
 ### Usage categories (candidates + imports + networking)
 
-| Category                       | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
-| ------------------------------ | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
-| `client_methods`               |     1 |                 0 |                   0 |                      0 |          0 |
-| `event_emitters_listeners`     |     1 |                 0 |                   2 |                      0 |          0 |
-| `sync_lifecycle`               |     1 |                 6 |                   0 |                      0 |          0 |
-| `crypto_verification_recovery` |     1 |                 1 |                   0 |                      0 |          0 |
-| `indexeddb_matrix_stores`      |     1 |                 0 |                   0 |                      2 |          0 |
-| `authenticated_media`          |     1 |                 0 |                   0 |                      0 |          0 |
-| `uia_auth`                     |     1 |                 8 |                   0 |                      0 |          0 |
-| `direct_matrix_networking`     |     2 |                 0 |                   0 |                      0 |          3 |
+| Category                   | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
+| -------------------------- | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
+| `authenticated_media`      |     1 |                 0 |                   0 |                      0 |          0 |
+| `direct_matrix_networking` |     2 |                 0 |                   0 |                      0 |          3 |
 
 ### Top method-name candidates (not type-proven)
 
-| Method name      | Candidate occurrences |
-| ---------------- | --------------------: |
-| `refreshToken`   |                     6 |
-| `stopClient`     |                     4 |
-| `getSafeUserId`  |                     1 |
-| `getSyncState`   |                     1 |
-| `initRustCrypto` |                     1 |
-| `logout`         |                     1 |
-| `startClient`    |                     1 |
+_None._
 
 ### Direct Matrix networking findings
 
@@ -246,24 +223,23 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 
 ## Files (import and networking inventory)
 
-| Path                                                                                                                          | Role       | Runtime | Bucket           | Import forms | Modules         |
-| ----------------------------------------------------------------------------------------------------------------------------- | ---------- | ------- | ---------------- | ------------ | --------------- |
-| `scripts/__tests__/audit-matrix-public.test.mjs`                                                                              | test       | no      | —                | —            | —               |
-| `scripts/__tests__/check-matrix-rust-sdk-guardrails.test.mjs`                                                                 | test       | no      | —                | —            | —               |
-| `scripts/__tests__/feature-parity-audit-normalization.test.mjs`                                                               | test       | no      | —                | —            | —               |
-| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`                                                                       | test       | no      | —                | —            | —               |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`                                                                      | test       | no      | —                | —            | —               |
-| `scripts/__tests__/synapse-two-client-integration.test.mjs`                                                                   | test       | no      | —                | —            | —               |
-| `scripts/audit-matrix-public.mjs`                                                                                             | tooling    | no      | —                | —            | —               |
-| `scripts/fixtures/matrix-rust-p1.6/prohibited/js-sdk-in-matrix-ipc/synara/src/app/features/matrix-ipc/leakyImport.ts`         | tooling    | no      | —                | static       | `matrix-js-sdk` |
-| `scripts/fixtures/matrix-rust-p1.6/prohibited/js-sdk-new-file/synara/src/app/features/brand-new-migration/NewClientBridge.ts` | tooling    | no      | —                | static       | `matrix-js-sdk` |
-| `scripts/fixtures/matrix-rust-p1.6/prohibited/raw-matrix-http/synara/src/app/features/matrix-ipc/rawHttp.ts`                  | tooling    | no      | —                | —            | —               |
-| `synara/scripts/run-synapse-two-client-integration.mjs`                                                                       | tooling    | no      | —                | dynamic      | `matrix-js-sdk` |
-| `synara/src/app/cs-api.ts`                                                                                                    | production | yes     | app-other        | —            | —               |
-| `synara/src/app/matrix/__tests__/media.test.ts`                                                                               | test       | yes     | media-boundary   | —            | —               |
-| `synara/src/app/utils/__tests__/remoteContent.test.ts`                                                                        | test       | yes     | utility          | —            | —               |
-| `synara/src/client/initMatrix.ts`                                                                                             | production | yes     | client-lifecycle | static       | `matrix-js-sdk` |
-| `synara/src/sw.ts`                                                                                                            | production | yes     | service-worker   | —            | —               |
+| Path                                                                                                                          | Role       | Runtime | Bucket         | Import forms | Modules         |
+| ----------------------------------------------------------------------------------------------------------------------------- | ---------- | ------- | -------------- | ------------ | --------------- |
+| `scripts/__tests__/audit-matrix-public.test.mjs`                                                                              | test       | no      | —              | —            | —               |
+| `scripts/__tests__/check-matrix-rust-sdk-guardrails.test.mjs`                                                                 | test       | no      | —              | —            | —               |
+| `scripts/__tests__/feature-parity-audit-normalization.test.mjs`                                                               | test       | no      | —              | —            | —               |
+| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`                                                                       | test       | no      | —              | —            | —               |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`                                                                      | test       | no      | —              | —            | —               |
+| `scripts/__tests__/synapse-two-client-integration.test.mjs`                                                                   | test       | no      | —              | —            | —               |
+| `scripts/audit-matrix-public.mjs`                                                                                             | tooling    | no      | —              | —            | —               |
+| `scripts/fixtures/matrix-rust-p1.6/prohibited/js-sdk-in-matrix-ipc/synara/src/app/features/matrix-ipc/leakyImport.ts`         | tooling    | no      | —              | static       | `matrix-js-sdk` |
+| `scripts/fixtures/matrix-rust-p1.6/prohibited/js-sdk-new-file/synara/src/app/features/brand-new-migration/NewClientBridge.ts` | tooling    | no      | —              | static       | `matrix-js-sdk` |
+| `scripts/fixtures/matrix-rust-p1.6/prohibited/raw-matrix-http/synara/src/app/features/matrix-ipc/rawHttp.ts`                  | tooling    | no      | —              | —            | —               |
+| `synara/scripts/run-synapse-two-client-integration.mjs`                                                                       | tooling    | no      | —              | dynamic      | `matrix-js-sdk` |
+| `synara/src/app/cs-api.ts`                                                                                                    | production | yes     | app-other      | —            | —               |
+| `synara/src/app/matrix/__tests__/media.test.ts`                                                                               | test       | yes     | media-boundary | —            | —               |
+| `synara/src/app/utils/__tests__/remoteContent.test.ts`                                                                        | test       | yes     | utility        | —            | —               |
+| `synara/src/sw.ts`                                                                                                            | production | yes     | service-worker | —            | —               |
 
 ## Scope notes
 
