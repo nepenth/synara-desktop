@@ -14,11 +14,11 @@
 | Field              | Value                                                                                                                                                                                 |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-08-09** |
-| Integration tip    | **`11feb3b2`** — F0–F6c-3 landed: js-sdk fully removed (dep, devDeps, two-client harness, CI job); native two-client receipt+ordering proof (#627); V-BURN validation loop (`check-v-burn-complete.mjs`); 63 stale branches pruned |
-| Active work        | **Orchestrated burn active via this harness** — V-BURN epic (`initMatrix.ts`, sole importer) awaiting operator decision ([operating-instructions.md](operating-instructions.md)) |
-| Product runtime    | Native owns core D0 + V-CRYPTO + residual-empty slices through members/presence/directory/join-rule READ; long-tail JS importers remain                                               |
+| Integration tip    | **`5fe7a40e`** — F0–F6c-3 landed: js-sdk fully removed (dep, devDeps, two-client harness, CI job); native two-client receipt+ordering proof (#627); V-BURN validation loop (`check-v-burn-complete.mjs`); 63 stale branches pruned |
+| Active work        | **V-BURN COMPLETE** — V-BURN epic (`initMatrix.ts`, sole importer) awaiting operator decision ([operating-instructions.md](operating-instructions.md)) |
+| Product runtime    | Native owns core D0 + V-CRYPTO + full replacement (members/presence/directory/join-rule/timeline/send/receipts); zero js-sdk anywhere                                               |
 | Execution model    | **prime-agent orchestrator + `deepseek-v4-flash-0731` sub-agents, max 2 concurrent** (locally hosted; only configured model) — [operating-instructions.md](operating-instructions.md) |
-| Import accounting  | Desktop production import files **1** / baseline **220** (**219** removed, ~99.5%); test import files **0**. Allowlist **1**. |
+| Import accounting  | Desktop production import files **0** / baseline **220** (**220** removed, **100%**); test import files **0**. Allowlist **0** (full ban). |
 | Dual backend       | **`false`** (forbidden forever)                                                                                                                                                       |
 | Public repo        | **PUBLIC — no secrets ever**; placeholder-only examples ([operating-instructions.md](operating-instructions.md) §1)                                                                   |
 | UI/UX fidelity     | **Preserve existing look and feel** — no UX/UI change when replacing a capability ([operating-instructions.md](operating-instructions.md) §3)                                         |
@@ -34,10 +34,10 @@
 
 |                |                                                                                                                                                                                                                                                                                           |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**        | **Burn at 1 importer (tip `4365ca96`).** Production importers 114→**1** (`initMatrix.ts` only), test importers **0**, allowlist **1**, all gates green. Sole importer is the live-`createClient` bootstrap epic (no native `initClient` exists); V-BURN completion waits on the operator INITMATRIX decision (native epic vs sanctioned legacy-loader). Public-repo hygiene + UI/UX fidelity held through every slice. |
-| **Tip**        | `607dd930` |
-| **Active PRs** | none; this docs-only tracking update |
-| **Blocked**    | V-BURN epic (`initMatrix`) awaits operator INITMATRIX decision; #39 gated; dual_backend forbidden; no external model APIs |
+| **Now**        | **V-BURN complete (tip `5fe7a40e`).** Production importers 114→**0** (100%), test importers **0**, allowlist **0** (full ban), `matrix-js-sdk` fully removed; native two-client receipt proof + validation loop landed |
+| **Tip**        | `5fe7a40e` |
+| **Active PRs** | none |
+| **Blocked**    | feature → main bridge (#39) awaits **explicit operator approval**; dual_backend forbidden |
 
 ---
 
