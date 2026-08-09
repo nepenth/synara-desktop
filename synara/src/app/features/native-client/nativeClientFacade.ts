@@ -223,7 +223,19 @@ const EMPTY_STATE: EmptyStateReading = {
 } as EmptyStateReading;
 
 /** F6a — full structural RoomReading projection (fail-closed deep surface). */
-const toRoomReading = (summary: RoomSummary): RoomReading => ({
+const toRoomReading = (
+  summary: RoomSummary,
+  roomClient?: {
+    on: (event: string, listener: (payload?: unknown) => void) => void;
+    removeListener: (event: string, listener: (payload?: unknown) => void) => void;
+  }
+): RoomReading & {
+  client?: unknown;
+  on?: (event: string, listener: (payload?: unknown) => void) => void;
+  removeListener?: (event: string, listener: (payload?: unknown) => void) => void;
+  getUsersReadUpTo?: (event: MatrixEventReading) => string[];
+  findEventById?: () => unknown;
+} => ({
   roomId: summary.roomId,
   name: summary.name ?? '',
   currentState: EMPTY_STATE as RoomReading['currentState'],
@@ -251,6 +263,10 @@ const toRoomReading = (summary: RoomSummary): RoomReading => ({
   isSpaceRoom: () => summary.isSpace,
   getTimelineForEvent: () => null,
   hasMembershipState: () => summary.membership === 'join',
+  on: roomClient?.on,
+  removeListener: roomClient?.removeListener,
+  getUsersReadUpTo: () => [],
+  findEventById: () => undefined,
 });
 
 const parseTimelineEventReadback = (value: unknown): FacadeTimelineEventReading | null => {
@@ -490,7 +506,14 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     const result = await invoke('matrix_room_list_snapshot');
     if (!result.available) return [];
     const snapshot = parseRoomListSnapshot(result.value);
-    return snapshot ? snapshot.rooms.map(toRoomReading) : [];
+    return snapshot
+      ? snapshot.rooms.map((r) =>
+          toRoomReading(r, {
+            on: emitter.on.bind(emitter),
+            removeListener: emitter.removeListener.bind(emitter),
+          })
+        )
+      : [];
   };
 
   const applySyncStatus = (status: NativeSyncStatus): void => {
@@ -519,7 +542,19 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     ]);
     if (status) applySyncStatus(status);
     cachedIdentity = { ...cachedIdentity, ...identity };
-    if (rooms.length > 0 || !identity.userId) cachedRooms = rooms;
+    if (rooms.length > 0 || !identity.userId) {
+      cachedRooms = rooms.map((room) => {
+        const evented = room as RoomReading & {
+          client?: unknown;
+          on?: (event: string, listener: (payload?: unknown) => void) => void;
+          removeListener?: (event: string, listener: (payload?: unknown) => void) => void;
+        };
+        evented.client = facadeClient;
+        evented.on = (event, listener) => emitter.on(event, listener);
+        evented.removeListener = (event, listener) => emitter.removeListener(event, listener);
+        return evented as RoomReading;
+      });
+    }
     emitSyncState();
   };
 
@@ -530,7 +565,10 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     emitter.emit('sync', 'STOPPED');
   };
 
-  return Object.freeze({
+  // F6b: the facade object fills this holder after construction so rooms can
+  // reference it as their `client` (EventedRoomReading contract).
+  let facadeClient: unknown = null;
+  const clientObj = {
     emitter,
     on: emitter.on.bind(emitter),
     once: emitter.once.bind(emitter),
@@ -670,8 +708,10 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     async sendStateEvent(
       roomId: RoomId,
       type: string,
-      content: FacadeSendStateEventContent
+      content: FacadeSendStateEventContent,
+      stateKey?: string
     ): Promise<FacadeSendStateEventResult | null> {
+      const stateKeyApplied = stateKey ?? ''; // eslint-disable-line @typescript-eslint/no-unused-vars
       const command =
         type === 'm.room.name'
           ? 'matrix_set_room_name'
@@ -681,7 +721,12 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
           ? 'matrix_set_room_avatar'
           : null;
       if (!command) return null; // GAP: no generic state-event command
-      const result = await invoke(command, { roomId, name: content.name, avatarUrl: content.url });
+      const result = await invoke(command, {
+        roomId,
+        name: content.name,
+        avatarUrl: content.url,
+        stateKey,
+      });
       if (!result.available) return null;
       return isObject(result.value) ? (result.value as FacadeSendStateEventResult) : null;
     },
@@ -691,7 +736,7 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       const noNativeAccountData = type.length; // eslint-disable-line @typescript-eslint/no-unused-vars
       return undefined;
     },
-    async setAccountData(type: string, content: Record<string, unknown>): Promise<unknown> {
+    setAccountData(type: string, content: Record<string, unknown>): Promise<unknown> {
       if (type.length === 0 || Object.keys(content).length === 0) return Promise.resolve(null);
       return Promise.resolve(null); // GAP: no native account-data command
     },
@@ -836,7 +881,9 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     isReady(): boolean {
       return !FORBIDDEN_READINESS.has(cachedSyncData?.readiness ?? 'unconfigured');
     },
-  });
+  };
+  facadeClient = clientObj;
+  return Object.freeze(clientObj);
 };
 
 export type NativeMatrixClient = ReturnType<typeof createNativeMatrixClient>;
