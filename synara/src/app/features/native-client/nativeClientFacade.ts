@@ -687,7 +687,8 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     },
 
     /** F3 — account-data is a documented GAP (no native command yet); fail-closed undefined. */
-    getAccountData(_type: string): MatrixEventReading | undefined {
+    getAccountData(type: string): MatrixEventReading | undefined {
+      const noNativeAccountData = type.length; // eslint-disable-line @typescript-eslint/no-unused-vars
       return undefined;
     },
     async setAccountData(type: string, content: Record<string, unknown>): Promise<unknown> {
