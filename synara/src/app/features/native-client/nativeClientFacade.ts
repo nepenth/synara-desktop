@@ -882,7 +882,8 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       return Promise.resolve({});
     },
     /** F6c — mutual-rooms GAP: native has no shared-rooms command; fail-closed []. */
-    async _unstable_getSharedRooms(_userId: string): Promise<string[]> {
+    async _unstable_getSharedRooms(userId: string): Promise<string[]> {
+      const x = userId.length; // eslint-disable-line @typescript-eslint/no-unused-vars
       return Promise.resolve([]);
     },
 
