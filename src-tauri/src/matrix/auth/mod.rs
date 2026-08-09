@@ -110,5 +110,4 @@ pub fn matrix_auth_markers() -> &'static str {
 }
 
 #[cfg(test)]
-#[cfg(test)]
 mod tests;
