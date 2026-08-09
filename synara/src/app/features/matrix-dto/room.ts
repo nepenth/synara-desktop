@@ -43,6 +43,7 @@ export type RoomSummary = {
   membership: Membership;
   isDirect: boolean;
   isSpace: boolean;
+  isCall: boolean;
   isEncrypted: boolean;
   joinRule?: string;
   unreadCount: number;
@@ -70,6 +71,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
   const avatarUrl = optString(value, 'avatarUrl');
   const isDirect = reqBoolean(value, 'isDirect');
   const isSpace = optBoolean(value, 'isSpace');
+  const isCall = optBoolean(value, 'isCall') ?? false;
   const isEncrypted = reqBoolean(value, 'isEncrypted');
   const joinRule = optString(value, 'joinRule');
   const unreadCount = reqNumber(value, 'unreadCount');
@@ -121,6 +123,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
     membership: value.membership,
     isDirect,
     isSpace: isSpace ?? false,
+    isCall: isCall ?? false,
     isEncrypted,
     joinRule,
     unreadCount,

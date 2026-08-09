@@ -15,7 +15,7 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
 | production |            0 |                2 |                   3 |
-| test       |            0 |                7 |                  29 |
+| test       |            0 |                6 |                  27 |
 | tooling    |            2 |                2 |                   5 |
 | **total**  |        **2** |                  |                     |
 
@@ -86,7 +86,7 @@ _None._
 
 ## Aggregates: test
 
-Scope: **test only**. Import files: 0. Files with any finding: 7.
+Scope: **test only**. Import files: 0. Files with any finding: 6.
 
 ### Imported modules
 
@@ -107,7 +107,7 @@ _None._
 | Category                   | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
 | -------------------------- | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
 | `authenticated_media`      |     1 |                 0 |                   0 |                      0 |          0 |
-| `direct_matrix_networking` |     7 |                 0 |                   0 |                      0 |         29 |
+| `direct_matrix_networking` |     6 |                 0 |                   0 |                      0 |         27 |
 
 ### Top method-name candidates (not type-proven)
 
@@ -115,37 +115,35 @@ _None._
 
 ### Direct Matrix networking findings
 
-| Path                                                            | Line | Kind                      | Indicator                                    |
-| --------------------------------------------------------------- | ---: | ------------------------- | -------------------------------------------- |
-| `scripts/__tests__/audit-matrix-public.test.mjs`                |   45 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
-| `scripts/__tests__/audit-matrix-public.test.mjs`                |   47 | `matrix_cs_path_literal`  | `/_matrix/federation/v1/version`             |
-| `scripts/__tests__/audit-matrix-public.test.mjs`                |   51 | `matrix_cs_path_literal`  | `/_matrix/key/v2/server`                     |
-| `scripts/__tests__/audit-matrix-public.test.mjs`                |   55 | `matrix_cs_path_literal`  | `/_matrix/client/v3/login`                   |
-| `scripts/__tests__/check-matrix-rust-sdk-guardrails.test.mjs`   |  131 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
-| `scripts/__tests__/feature-parity-audit-normalization.test.mjs` | 2076 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
-| `scripts/__tests__/feature-parity-audit-normalization.test.mjs` | 2971 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
-| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  340 | `matrix_cs_path_template` | `/_matrix/client/versions\`                  |
-| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  343 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
-| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  361 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
-| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  361 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/thumbnail`         |
-| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`         |  365 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  133 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  133 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  137 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  137 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  297 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  297 | `matrix_cs_path_template` | `/_matrix/client/v1/media/download`          |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  298 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  298 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  324 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`        |  324 | `matrix_cs_path_template` | `/_matrix/client/v3/sync`                    |
-| `synara/src/app/matrix/__tests__/media.test.ts`                 |   14 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
-| `synara/src/app/matrix/__tests__/media.test.ts`                 |   27 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
-| `synara/src/app/matrix/__tests__/media.test.ts`                 |   48 | `matrix_cs_path_literal`  | `/_matrix/media/v3/thumbnail/example/avatar` |
-| `synara/src/app/matrix/__tests__/media.test.ts`                 |   56 | `matrix_cs_path_literal`  | `/_matrix/media/v3/thumbnail/example/avatar` |
-| `synara/src/app/matrix/__tests__/media.test.ts`                 |   71 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
-| `synara/src/app/matrix/__tests__/media.test.ts`                 |   84 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
-| `synara/src/app/utils/__tests__/remoteContent.test.ts`          |   37 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
+| Path                                                          | Line | Kind                      | Indicator                                    |
+| ------------------------------------------------------------- | ---: | ------------------------- | -------------------------------------------- |
+| `scripts/__tests__/audit-matrix-public.test.mjs`              |   45 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
+| `scripts/__tests__/audit-matrix-public.test.mjs`              |   47 | `matrix_cs_path_literal`  | `/_matrix/federation/v1/version`             |
+| `scripts/__tests__/audit-matrix-public.test.mjs`              |   51 | `matrix_cs_path_literal`  | `/_matrix/key/v2/server`                     |
+| `scripts/__tests__/audit-matrix-public.test.mjs`              |   55 | `matrix_cs_path_literal`  | `/_matrix/client/v3/login`                   |
+| `scripts/__tests__/check-matrix-rust-sdk-guardrails.test.mjs` |  131 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
+| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`       |  340 | `matrix_cs_path_template` | `/_matrix/client/versions\`                  |
+| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`       |  343 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
+| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`       |  361 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
+| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`       |  361 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/thumbnail`         |
+| `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`       |  365 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  133 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  133 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  137 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  137 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  297 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  297 | `matrix_cs_path_template` | `/_matrix/client/v1/media/download`          |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  298 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  298 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  324 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  324 | `matrix_cs_path_template` | `/_matrix/client/v3/sync`                    |
+| `synara/src/app/matrix/__tests__/media.test.ts`               |   14 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
+| `synara/src/app/matrix/__tests__/media.test.ts`               |   27 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
+| `synara/src/app/matrix/__tests__/media.test.ts`               |   48 | `matrix_cs_path_literal`  | `/_matrix/media/v3/thumbnail/example/avatar` |
+| `synara/src/app/matrix/__tests__/media.test.ts`               |   56 | `matrix_cs_path_literal`  | `/_matrix/media/v3/thumbnail/example/avatar` |
+| `synara/src/app/matrix/__tests__/media.test.ts`               |   71 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
+| `synara/src/app/matrix/__tests__/media.test.ts`               |   84 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
+| `synara/src/app/utils/__tests__/remoteContent.test.ts`        |   37 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
 
 ## Aggregates: tooling
 
@@ -201,7 +199,6 @@ Scope: **tooling only**. Import files: 2. Files with any finding: 4.
 | ----------------------------------------------------------------------------------------------------------------------------- | ---------- | ------- | -------------- | ------------ | --------------- |
 | `scripts/__tests__/audit-matrix-public.test.mjs`                                                                              | test       | no      | —              | —            | —               |
 | `scripts/__tests__/check-matrix-rust-sdk-guardrails.test.mjs`                                                                 | test       | no      | —              | —            | —               |
-| `scripts/__tests__/feature-parity-audit-normalization.test.mjs`                                                               | test       | no      | —              | —            | —               |
 | `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`                                                                       | test       | no      | —              | —            | —               |
 | `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`                                                                      | test       | no      | —              | —            | —               |
 | `scripts/audit-matrix-public.mjs`                                                                                             | tooling    | no      | —              | —            | —               |

@@ -284,10 +284,10 @@
         },
         "direct_matrix_networking": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 7,
+          "fileCount": 6,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
-          "networkingOccurrences": 29
+          "networkingOccurrences": 27
         },
         "event_emitters_listeners": {
           "constructorCandidateOccurrences": 0,
@@ -388,7 +388,7 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 7,
+      "fileCount": 6,
       "importFileCount": 0,
       "methodCandidateFrequencies": [],
       "modelCoupling": {
@@ -480,18 +480,6 @@
           "kind": "matrix_cs_path_literal",
           "line": 131,
           "path": "scripts/__tests__/check-matrix-rust-sdk-guardrails.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/v3/sync",
-          "kind": "matrix_cs_path_literal",
-          "line": 2076,
-          "path": "scripts/__tests__/feature-parity-audit-normalization.test.mjs"
-        },
-        {
-          "indicator": "/_matrix/client/v3/sync",
-          "kind": "matrix_cs_path_literal",
-          "line": 2971,
-          "path": "scripts/__tests__/feature-parity-audit-normalization.test.mjs"
         },
         {
           "indicator": "/_matrix/client/versions\\",
@@ -626,8 +614,8 @@
           "path": "synara/src/app/utils/__tests__/remoteContent.test.ts"
         }
       ],
-      "networkingFileCount": 7,
-      "networkingFindingCount": 29,
+      "networkingFileCount": 6,
+      "networkingFindingCount": 27,
       "role": "test",
       "scope": "role",
       "symbols": []
@@ -966,32 +954,6 @@
         }
       ],
       "path": "scripts/__tests__/check-matrix-rust-sdk-guardrails.test.mjs",
-      "role": "test"
-    },
-    {
-      "bucket": null,
-      "categories": ["direct_matrix_networking"],
-      "constructorCandidates": [],
-      "desktopRuntime": false,
-      "imports": [],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v3/sync",
-          "kind": "matrix_cs_path_literal",
-          "line": 2076
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v3/sync",
-          "kind": "matrix_cs_path_literal",
-          "line": 2971
-        }
-      ],
-      "path": "scripts/__tests__/feature-parity-audit-normalization.test.mjs",
       "role": "test"
     },
     {
@@ -1392,8 +1354,8 @@
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 0,
-      "testNetworkingFiles": 7,
-      "testNetworkingFindings": 29,
+      "testNetworkingFiles": 6,
+      "testNetworkingFindings": 27,
       "toolingImportFiles": 2,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,

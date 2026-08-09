@@ -97,6 +97,7 @@ fn room_summary_round_trip_and_fixture() {
         membership: Membership::Join,
         is_direct: false,
         is_space: false,
+        is_call: false,
         is_favorite: false,
         is_low_priority: false,
         folder_id: None,
@@ -333,4 +334,40 @@ fn all_valid_fixtures_parse_as_json_objects() {
         });
         assert!(v.is_object(), "{name} must be a JSON object");
     }
+}
+
+#[test]
+fn room_summary_is_call_defaults_and_round_trips() {
+    let s = RoomSummary {
+        room_id: "!room:example.org".into(),
+        name: Some("Voice HQ".into()),
+        canonical_alias: None,
+        avatar_url: None,
+        membership: Membership::Join,
+        is_direct: false,
+        is_call: false,
+        is_space: false,
+        is_favorite: false,
+        is_low_priority: false,
+        folder_id: None,
+        is_encrypted: true,
+        join_rule: Some("invite".into()),
+        unread_count: 3,
+        highlight_count: 0,
+        marked_unread: false,
+        notification_mode: None,
+        last_activity_ts: None,
+        heroes: None,
+        tombstone_successor_room_id: None,
+    };
+    // Absent field deserializes to false (serde default) — backward compatible.
+    let raw = r#"{ "roomId": "!room:example.org", "membership": "join", "isDirect": false, "isEncrypted": true, "unreadCount": 0, "highlightCount": 0, "markedUnread": false }"#;
+    let parsed: RoomSummary = serde_json::from_str(raw).expect("default is_call");
+    assert!(!parsed.is_call);
+    // Explicit true round-trips.
+    let s = RoomSummary { is_call: true, ..s };
+    let wire = serde_json::to_string(&s).expect("serialize");
+    assert!(wire.contains("\"isCall\":true"));
+    let back: RoomSummary = serde_json::from_str(&wire).expect("deserialize");
+    assert!(back.is_call);
 }

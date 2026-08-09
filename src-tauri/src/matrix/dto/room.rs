@@ -82,6 +82,9 @@ pub struct RoomSummary {
     /// True when the room is a Matrix space (`m.space`).
     #[serde(default)]
     pub is_space: bool,
+    /// True when the room is a Matrix voice room (`m.room.create` type `m.call`).
+    #[serde(default)]
+    pub is_call: bool,
     /// Account-data favorite (m.tag `m.favourite`) projection.
     #[serde(default)]
     pub is_favorite: bool,
