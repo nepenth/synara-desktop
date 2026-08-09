@@ -34,20 +34,6 @@ jobs:
     needs: [changes]
     runs-on: macos-latest
 ${iosBuildStep}
-  synapse-integration:
-    name: Synapse two-client integration
-    needs: [changes]
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - run: npm ci
-        working-directory: synara
-      - run: scripts/synapse-integration.sh up
-      - run: npm run test:synapse-integration
-        env:
-          SYNARA_RECEIPT_MODE: both
-      - if: always()
-        run: scripts/synapse-integration.sh reset
   synapse-native-reactions:
     name: Synapse native reaction proof
     needs: [changes]
@@ -129,14 +115,13 @@ ${iosBuildStep}
   quality-gate:
     name: Quality gate
     if: always()
-    needs: [changes, validate, ios-tests, synapse-integration, synapse-native-reactions, synapse-native-attachments, synapse-native-call-media, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads]
+    needs: [changes, validate, ios-tests, synapse-native-reactions, synapse-native-attachments, synapse-native-call-media, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads]
     runs-on: ubuntu-latest
     steps:
       - name: Require every scheduled client validation job
         env:
           DESKTOP_RESULT: \${{ needs.validate.result }}
           IOS_RESULT: \${{ needs.ios-tests.result }}
-          SYNAPSE_RESULT: \${{ needs.synapse-integration.result }}
           SYNAPSE_NATIVE_REACTIONS_RESULT: \${{ needs.synapse-native-reactions.result }}
           SYNAPSE_NATIVE_ATTACHMENTS_RESULT: \${{ needs.synapse-native-attachments.result }}
           SYNAPSE_NATIVE_CALL_MEDIA_RESULT: \${{ needs.synapse-native-call-media.result }}
@@ -165,7 +150,6 @@ ${iosBuildStep}
           fail=0
           ok "Desktop/runtime validation" "$DESKTOP_RESULT" || fail=1
           ok "iOS simulator tests" "$IOS_RESULT" || fail=1
-          ok "Synapse two-client integration" "$SYNAPSE_RESULT" || fail=1
           ok "Synapse native reaction proof" "$SYNAPSE_NATIVE_REACTIONS_RESULT" || fail=1
           ok "Synapse native attachment proof" "$SYNAPSE_NATIVE_ATTACHMENTS_RESULT" || fail=1
           ok "Synapse native CallWidget media proof" "$SYNAPSE_NATIVE_CALL_MEDIA_RESULT" || fail=1
@@ -222,24 +206,10 @@ jobs:
     needs: [validate]
     runs-on: macos-latest
 ${iosBuildStep}
-  exact-tag-synapse-integration:
-    name: Exact-tag Synapse two-client integration
-    needs: [validate]
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - run: npm ci
-        working-directory: synara
-      - run: scripts/synapse-integration.sh up
-      - run: npm run test:synapse-integration
-        env:
-          SYNARA_RECEIPT_MODE: both
-      - if: always()
-        run: scripts/synapse-integration.sh reset
   quality-gate:
     name: Exact-tag quality gate
     if: always()
-    needs: [validate, exact-tag-desktop-quality, exact-tag-ios-quality, exact-tag-synapse-integration]
+    needs: [validate, exact-tag-desktop-quality, exact-tag-ios-quality]
     runs-on: ubuntu-latest
     steps:
       - name: Require full validation at the tagged SHA
@@ -247,9 +217,8 @@ ${iosBuildStep}
           TAG_RESULT: \${{ needs.validate.result }}
           DESKTOP_RESULT: \${{ needs.exact-tag-desktop-quality.result }}
           IOS_RESULT: \${{ needs.exact-tag-ios-quality.result }}
-          SYNAPSE_RESULT: \${{ needs.exact-tag-synapse-integration.result }}
         run: |
-          if [[ "$TAG_RESULT" != "success" || "$DESKTOP_RESULT" != "success" || "$IOS_RESULT" != "success" || "$SYNAPSE_RESULT" != "success" ]]; then
+          if [[ "$TAG_RESULT" != "success" || "$DESKTOP_RESULT" != "success" || "$IOS_RESULT" != "success" ]]; then
             exit 1
           fi
   linux-deb:
@@ -303,10 +272,7 @@ not run on tag refs. Use required human reviewers and exact-tag validation jobs.
 `;
 
 const rootPackage = JSON.stringify({
-  scripts: {
-    "test:synapse-integration":
-      "SYNARA_RUN_SYNAPSE_INTEGRATION=1 npm --prefix synara exec -- vite-node --config synara/scripts/vite-node.integration.config.mjs synara/scripts/run-synapse-two-client-integration.mjs",
-  },
+  scripts: {},
 });
 
 const inspect = (overrides = {}) =>
@@ -470,45 +436,17 @@ function resultOk(result) {
   return result.ok;
 }
 
-test("rejects missing and no-op Synapse integration execution", () => {
-  for (const workflow of [
-    ciWorkflow.replace("  synapse-integration:", "  removed-synapse-job:"),
-    ciWorkflow.replace(
-      "      - run: npm run test:synapse-integration",
-      "      - run: echo npm run test:synapse-integration"
+test("rejects an aggregate that drops a native synapse proof", () => {
+  // The legacy js-sdk two-client integration is retired (js-sdk fully removed);
+  // the native synapse proof family remains a required client-validation signal.
+  const result = inspect({
+    ciWorkflow: ciWorkflow.replace(
+      "validate, ios-tests, synapse-native-reactions, synapse-native-attachments",
+      "validate, ios-tests, synapse-native-attachments"
     ),
-    ciWorkflow.replace(
-      "      - if: always()\n        run: scripts/synapse-integration.sh reset",
-      "      - run: scripts/synapse-integration.sh reset"
-    ),
-  ]) {
-    const result = inspect({ ciWorkflow: workflow });
-    assert.equal(result.ok, false);
-    assert.match(result.errors.join("\n"), /Synapse integration/i);
-  }
-
-  const noOpPackage = inspect({
-    rootPackage: JSON.stringify({
-      scripts: { "test:synapse-integration": "echo skipped" },
-    }),
   });
-  assert.equal(noOpPackage.ok, false);
-  assert.match(noOpPackage.errors.join("\n"), /pinned two-client runner/i);
-
-  for (const workflow of [
-    releaseWorkflow.replace(
-      "  exact-tag-synapse-integration:",
-      "  removed-exact-tag-synapse-integration:"
-    ),
-    releaseWorkflow.replace(
-      "      - run: npm run test:synapse-integration\n        env:",
-      "      - run: echo npm run test:synapse-integration\n        env:"
-    ),
-  ]) {
-    const result = inspect({ releaseWorkflow: workflow });
-    assert.equal(result.ok, false);
-    assert.match(result.errors.join("\n"), /Exact-tag Synapse integration/i);
-  }
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /needs must be exactly/);
 });
 
 test("rejects a no-op exact-tag release aggregate", () => {
@@ -536,7 +474,7 @@ test("rejects an aggregate without if always", () => {
 test("rejects aggregate needs that are not exact", () => {
   const result = inspect({
     releaseWorkflow: releaseWorkflow.replace(
-      "needs: [validate, exact-tag-desktop-quality, exact-tag-ios-quality, exact-tag-synapse-integration]",
+      "needs: [validate, exact-tag-desktop-quality, exact-tag-ios-quality]",
       "needs: [validate, exact-tag-desktop-quality]"
     ),
   });

@@ -146,37 +146,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-  exact-tag-synapse-integration:
-    name: Exact-tag Synapse two-client integration
-    needs: [validate]
-    runs-on: ubuntu-22.04
-    timeout-minutes: 20
-    steps:
-      - name: Checkout tagged commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-          package-manager-cache: false
-
-      - name: Install runtime dependencies
-        run: npm ci
-        working-directory: synara
-
-      - name: Start disposable Synapse
-        run: scripts/synapse-integration.sh up
-
-      - name: Run public and private two-client scenarios
-        run: npm run test:synapse-integration
-        env:
-          SYNARA_RECEIPT_MODE: both
-
-      - name: Tear down disposable Synapse
-        if: always()
-        run: scripts/synapse-integration.sh reset
-
   quality-gate:
     name: Exact-tag quality gate
     if: always()
@@ -185,7 +154,6 @@ jobs:
         validate,
         exact-tag-desktop-quality,
         exact-tag-ios-quality,
-        exact-tag-synapse-integration,
       ]
     runs-on: ubuntu-22.04
     timeout-minutes: 5
@@ -195,13 +163,11 @@ jobs:
           TAG_RESULT: ${{ needs.validate.result }}
           DESKTOP_RESULT: ${{ needs.exact-tag-desktop-quality.result }}
           IOS_RESULT: ${{ needs.exact-tag-ios-quality.result }}
-          SYNAPSE_RESULT: ${{ needs.exact-tag-synapse-integration.result }}
         run: |
-          if [[ "$TAG_RESULT" != "success" || "$DESKTOP_RESULT" != "success" || "$IOS_RESULT" != "success" || "$SYNAPSE_RESULT" != "success" ]]; then
+          if [[ "$TAG_RESULT" != "success" || "$DESKTOP_RESULT" != "success" || "$IOS_RESULT" != "success" ]]; then
             echo "Tag/version validation: $TAG_RESULT" >&2
             echo "Desktop/runtime validation: $DESKTOP_RESULT" >&2
             echo "iOS simulator tests: $IOS_RESULT" >&2
-            echo "Synapse two-client integration: $SYNAPSE_RESULT" >&2
             exit 1
           fi
 

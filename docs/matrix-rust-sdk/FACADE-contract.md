@@ -101,7 +101,7 @@ Measured at tip `ac71e9bf`: **63 js-sdk client methods / 373 call sites** across
 | F4 | `1 → 0` media + profile | upload/media-config/mxc-resolve; displayname/avatar/threepid | — |
 | F5 | `1 → 0` crypto + extended | decrypt/keys stubs, matrixRTC/http/store/search unfold | — |
 | F6 | `1 → 0` INITMATRIX re-point | initMatrix constructs facade; **drop importer 1→0**; dependency removal begins | **1→0** |
-| F7 | `0` lockdown + dep control + V-BURN checklist | **LANDED** (F6c-2c): allowlist 0 (full ban); `matrix-js-sdk@42.0.0` → devDependencies-only (tooling harness); prod audit high-gate clean | **0** |
+| F7 | `0` lockdown + dep removal + V-BURN checklist | **LANDED** (F6c-2c/3): allowlist 0 (full ban); `matrix-js-sdk@42.0.0` **fully removed** from package.json + lockfile (incl. devDeps; two-client harness + CI job retired); audit high-gate clean | **0** |
 
 ## 5. Test & CI discipline
 - Each slice: unit tests registered in `run-modernization-tests.mjs`; Quality gate + Desktop package gate green;
@@ -110,6 +110,6 @@ Measured at tip `ac71e9bf`: **63 js-sdk client methods / 373 call sites** across
 - No secrets; D1C guarantees no tokens in renderer or IPC.
 
 ## 6. Sources
-- `inventory-matrix-sdk-usage` at tip: 0 production + 0 test import files; allowlist 0 (full ban).
+- `inventory-matrix-sdk-usage` at tip: 0 production + 0 test import files; allowlist 0 (full ban); repository-wide tooling 2 (guardrail fixtures only) — no js-sdk dynamic import remains.
 - Method/hit census: `git grep -hPo '\bmx\.[a-zA-Z_][a-zA-Z0-9_]*'` across `synara/src` at `ac71e9bf`.
 - Native surface: `src-tauri/src/lib.rs` registration list (135 commands).
