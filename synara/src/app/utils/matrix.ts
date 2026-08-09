@@ -51,14 +51,6 @@ export class MatrixError extends Error {
     const d = (this.data ?? {}) as { retry_after_ms?: number; __m_retry_after_ms?: number };
     return d.retry_after_ms ?? d.__m_retry_after_ms;
   }
-
-  asWidgetApiErrorData(): { code?: string; message?: string; data?: unknown } {
-    return {
-      code: this.errcode ?? 'M_ERROR',
-      message: this.message,
-      data: this.data,
-    };
-  }
 }
 
 type SdkRoomMemberReading = {

@@ -1,19 +1,15 @@
-feat(cut): remove V-CALL — remove embedded call plugin + matrix-widget-api for a fully zero-Matrix-JS tree
+chore(clean): legacy pass — remove dead native command + dead JS method + iOS CI path-filter accuracy
 
-Operator-authorized deep V-CALL cut (option B).
+Legacy/dangling cleanup pass (post V-CALL cut, zero-Matrix-JS tree).
 
-Removed:
-- plugins/call, features/call, features/call-status UI + hooks/atoms (CallEmbedProvider,
-  useCallEmbed/useCall/useCallSpeakers, callEmbed/callPreferences/callChat atoms, pages/CallStatusRenderer)
-- matrix-widget-api from dependencies + lockfile
-- native matrix/widgets module (registry, product_commands, error) + dto/widget.rs + WidgetId DTO
-- call-widget-media live Synapse proof + its CI job + aggregate wiring (native proof family now 6)
-- modernisation test registrations for deleted call tests
+- Remove dead native command `matrix_timeline_snapshot` (never invoked anywhere;
+  timeline reads use matrix_timeline_open/paginate). Dropped from product_commands.rs,
+  lib.rs registration, and capabilities ACL; collapsed the orphaned #[tauri::command]
+  attribute the removal exposed.
+- Remove dead `MatrixError.asWidgetApiErrorData()` (only consumer was the retired
+  CallWidgetDriver; no callers remain).
+- CI accuracy: fix iOS simulator path filter to watch `synara-ios/scripts/ci-build.sh`
+  (was root-relative `scripts/ci-build.sh`) so iOS re-runs when its build script changes.
 
-Preserved (general media, not call):
-- matrix_media_config / matrix_media_download native owners relocated into the media module
-  (matrix_call_media_config renamed -> matrix_media_config; capability ACL renamed accordingly)
-
-Strengthened:
-- check-v-burn-complete.mjs asserts matrix-widget-api absent from deps/devDeps/lock + no import
-  coupling (20 checks, fully zero-Matrix-JS). Docs record the removal while keeping V-BURN markers.
+Verification: cargo build + clippy --all-targets -D warnings clean; tsc/eslint/prettier
+clean; check:matrix-rust-guardrails chain green (V-BURN 20/20).
