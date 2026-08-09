@@ -780,12 +780,16 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       publicReceipt?: unknown,
       privateReceipt?: unknown
     ): Promise<unknown> {
-      const unused =
+      const x =
         roomId.length +
           (fullyReadEventId?.length ?? 0) +
           (publicReceipt === null ? 0 : 0) +
           (privateReceipt === null ? 0 : 0) >=
-        0; // eslint-disable-line @typescript-eslint/no-unused-vars
+        0
+          ? ''
+          : '';
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      void x;
       return Promise.resolve(null);
     },
     async sendReadReceipt(event: unknown, receiptType?: string): Promise<unknown> {
