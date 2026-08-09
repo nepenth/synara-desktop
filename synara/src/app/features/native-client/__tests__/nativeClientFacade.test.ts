@@ -251,14 +251,14 @@ test('F3 sendMessage proxies matrix_send_text', async () => {
     },
   });
   const client = createNativeMatrixClient(invoke);
-  const sent = await client.sendMessage({ roomId: '!r:example.org', body: 'hello' });
+  const sent = await client.sendMessage('!r:example.org', { body: 'hello' });
   assert.equal(sent?.eventId, '$e1');
   assert.deepEqual(callLog, ['matrix_send_text']);
 });
 
 test('F3 sendMessage fails closed when the command is unavailable', async () => {
   const client = createNativeMatrixClient(async () => unavailable);
-  assert.equal(await client.sendMessage({ roomId: '!r:example.org', body: 'x' }), null);
+  assert.equal(await client.sendMessage('!r:example.org', { body: 'x' }), null);
 });
 
 test('F3 sendEvent tunnels m.room.message to send_text and GAPs other types', async () => {
@@ -316,9 +316,9 @@ test('F4 uploadContent proxies matrix_upload_media', async () => {
   assert.deepEqual(callLog, ['matrix_upload_media']);
 });
 
-test('F4 uploadContent fails closed when unavailable', async () => {
+test('F4 uploadContent throws when unavailable (js-sdk non-null contract)', async () => {
   const client = createNativeMatrixClient(async () => unavailable);
-  assert.equal(await client.uploadContent({ mimeType: 'x', bytes: [1] }), null);
+  await assert.rejects(() => client.uploadContent({ mimeType: 'x', bytes: [1] }));
 });
 
 test('F4 getMediaConfig reads m.upload.size wire key', async () => {
@@ -434,7 +434,7 @@ test('F5 extended GAP stubs satisfy the anchor without data', async () => {
   const client = createNativeMatrixClient(async () => unavailable);
   assert.deepEqual(await client.getCapabilities(), {});
   assert.equal(await client.getOpenIdToken(), null);
-  assert.equal(await client.search({ term: 'x' }), null);
+  assert.equal(await client.search({ body: {}, next_batch: undefined }), null);
 });
 
 test('F6c redactEvent proxies matrix_timeline_redact', async () => {
@@ -460,7 +460,7 @@ test('F6c GAP-safe stubs (searchUserDirectory, queueToDevice, delayed events)', 
   });
   await client.queueToDevice({ eventType: 'm.test', batch: [] });
   assert.equal(await client._unstable_sendDelayedEvent('!r', {}, null, 'm.test', {}), null);
-  assert.equal(await client._unstable_sendDelayedStateEvent('!r', 'm.test', {}, '$k'), null);
+  assert.equal(await client._unstable_sendDelayedStateEvent('!r', {}, 'm.test', {}, '$k'), null);
   assert.equal(await client._unstable_updateDelayedEvent('$evt', '!r', {}, {}), null);
   assert.equal(await client.getOpenIdTokenData(), null);
 });
@@ -515,7 +515,7 @@ test('F6c-2a GAP stub batch (user/pusher/alias/upload/verification)', async () =
   assert.equal(await client.getThreePids(), null);
   assert.equal(await client.getPushers(), null);
   await client.setPusher({});
-  assert.deepEqual(await client.getLocalAliases('!r'), []);
+  assert.deepEqual(await client.getLocalAliases('!r'), { aliases: [] });
   assert.equal(await client.createAlias('#a', '!r'), null);
   assert.equal(await client.deleteAlias('#a'), null);
   assert.equal(await client.cancelUpload('tok'), null);

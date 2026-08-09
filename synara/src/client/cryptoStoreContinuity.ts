@@ -1,109 +1,42 @@
 /**
- * Continuity guard between the persisted Rust crypto store and the homeserver
- * device keys. The structural projections below mirror only the matrix-js-sdk
- * (CryptoApi / MatrixClient) surface read by this module; the module itself is
- * intentionally matrix-js-sdk-free so it can be exercised without a live client.
+ * D1C — renderer crypto-continuity surface.
+ *
+ * Under the native cutover (Option A + D1C) the renderer no longer owns crypto
+ * state, so it has no local device keys to reconcile with the server: the
+ * native layer owns the crypto store, keys, and continuity. This module keeps
+ * only the error type + retry-policy helper that the boot UI references; the
+ * native path never constructs these errors, so the safety screen stays inert.
  */
 
-type ContinuityDeviceKeys = { ed25519: string; curve25519: string };
-type ContinuityCryptoApi = { getOwnDeviceKeys(): Promise<ContinuityDeviceKeys> };
-type ContinuityDeviceKeysMap = { keys: Record<string, string> };
-type ContinuityDownloadKeysResult = {
-  failures?: Record<string, unknown>;
-  device_keys: Record<string, Record<string, ContinuityDeviceKeysMap | undefined> | undefined>;
-};
-type ContinuityClientReading = {
-  getCrypto(): ContinuityCryptoApi | undefined;
-  downloadKeysForUsers(userIds: string[]): Promise<ContinuityDownloadKeysResult>;
-};
+export type ContinuityDeviceKeys = { ed25519: string; curve25519: string };
 
-export type CryptoStoreContinuityFailureReason =
-  | 'crypto-unavailable'
-  | 'server-device-missing'
-  | 'server-keys-missing'
+/** Duck-typed js-sdk MatrixError with an `errcode` (kept for UI classification). */
+export const isMatrixErrorLike = (error: unknown): error is Error & { errcode?: string } =>
+  error instanceof Error && typeof (error as { errcode?: unknown } | null)?.errcode === 'string';
+
+export type CryptoStoreContinuityReason =
   | 'identity-key-mismatch'
-  | 'server-query-incomplete';
+  | 'server-device-missing'
+  | 'server-query-incomplete'
+  | 'crypto-unavailable';
 
 export class CryptoStoreContinuityError extends Error {
-  public readonly name = 'CryptoStoreContinuityError';
+  readonly userId: string;
+  readonly deviceId: string;
+  readonly reason: CryptoStoreContinuityReason;
 
-  public constructor(
-    public readonly userId: string,
-    public readonly deviceId: string,
-    public readonly reason: CryptoStoreContinuityFailureReason
-  ) {
-    super(
-      `Crypto safety check blocked startup for device ${deviceId} (${reason}). ` +
-        'The local crypto store was preserved. Do not sign out unless another trusted client can ' +
-        'decrypt your history or you have tested your recovery key/key backup; signing out removes ' +
-        "this device's local encryption data."
-    );
+  constructor(userId: string, deviceId: string, reason: CryptoStoreContinuityReason) {
+    super(`Crypto store continuity failed for ${userId}/${deviceId}: ${reason}`);
+    this.name = 'CryptoStoreContinuityError';
+    this.userId = userId;
+    this.deviceId = deviceId;
+    this.reason = reason;
   }
 }
 
-export type CryptoStoreContinuityResult = 'matched' | 'fresh-server-device';
-
-export const canRetryCryptoStoreContinuityFailure = (error: CryptoStoreContinuityError): boolean =>
-  error.reason === 'server-query-incomplete';
-
-const serverKeysMatchLocalIdentity = (
-  serverKeys: Record<string, string>,
-  deviceId: string,
-  localKeys: ContinuityDeviceKeys
-): boolean =>
-  serverKeys[`ed25519:${deviceId}`] === localKeys.ed25519 &&
-  serverKeys[`curve25519:${deviceId}`] === localKeys.curve25519;
-
 /**
- * Verify that the Rust crypto store still owns the keys registered for this
- * homeserver device. This intentionally uses MatrixClient.downloadKeysForUsers
- * so the answer comes from an authoritative /keys/query, not the local device
- * cache. It must run after initRustCrypto and before startClient.
+ * D1C: the renderer never runs a crypto-store continuity check (native owns the
+ * store), so no continuity error can be retried from the renderer.
  */
-export const assertCryptoStoreContinuity = async (
-  mx: ContinuityClientReading,
-  {
-    userId,
-    deviceId,
-    allowMissingServerDevice = false,
-  }: {
-    userId: string;
-    deviceId: string;
-    allowMissingServerDevice?: boolean;
-  }
-): Promise<CryptoStoreContinuityResult> => {
-  const crypto = mx.getCrypto();
-  if (!crypto) {
-    throw new CryptoStoreContinuityError(userId, deviceId, 'crypto-unavailable');
-  }
-
-  const localKeys = await crypto.getOwnDeviceKeys();
-  let serverResult: ContinuityDownloadKeysResult;
-  try {
-    serverResult = await mx.downloadKeysForUsers([userId]);
-  } catch {
-    throw new CryptoStoreContinuityError(userId, deviceId, 'server-query-incomplete');
-  }
-
-  if (Object.keys(serverResult.failures ?? {}).length > 0) {
-    throw new CryptoStoreContinuityError(userId, deviceId, 'server-query-incomplete');
-  }
-
-  const serverDevice = serverResult.device_keys[userId]?.[deviceId];
-  if (!serverDevice) {
-    if (allowMissingServerDevice) return 'fresh-server-device';
-    throw new CryptoStoreContinuityError(userId, deviceId, 'server-device-missing');
-  }
-
-  const serverEd25519 = serverDevice.keys[`ed25519:${deviceId}`];
-  const serverCurve25519 = serverDevice.keys[`curve25519:${deviceId}`];
-  if (!serverEd25519 || !serverCurve25519) {
-    throw new CryptoStoreContinuityError(userId, deviceId, 'server-keys-missing');
-  }
-
-  if (!serverKeysMatchLocalIdentity(serverDevice.keys, deviceId, localKeys)) {
-    throw new CryptoStoreContinuityError(userId, deviceId, 'identity-key-mismatch');
-  }
-
-  return 'matched';
-};
+export const canRetryCryptoStoreContinuityFailure = (_error: CryptoStoreContinuityError): boolean =>
+  false;

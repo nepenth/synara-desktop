@@ -141,24 +141,6 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
                     gap="400"
                   >
                     <NativeSessionStoreStatus />
-                    <SettingTile
-                      title="Access Token"
-                      description="Copy access token to clipboard."
-                      after={
-                        <Button
-                          onClick={() =>
-                            copyToClipboard(mx.getAccessToken() ?? '<NO_ACCESS_TOKEN_FOUND>')
-                          }
-                          variant="Secondary"
-                          fill="Soft"
-                          size="300"
-                          radii="300"
-                          outlined
-                        >
-                          <Text size="B300">Copy</Text>
-                        </Button>
-                      }
-                    />
                   </SequenceCard>
                 )}
               </Box>

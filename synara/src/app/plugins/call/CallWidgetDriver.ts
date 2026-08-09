@@ -133,7 +133,7 @@ export class CallWidgetDriver extends WidgetDriver {
 
     return {
       roomId,
-      delayId: r.delay_id,
+      delayId: r?.delay_id ?? '',
     };
   }
 
@@ -236,7 +236,7 @@ export class CallWidgetDriver extends WidgetDriver {
   public async askOpenID(observer: SimpleObservable<IOpenIDUpdate>): Promise<void> {
     return observer.update({
       state: OpenIDRequestState.Allowed,
-      token: await this.mx.getOpenIdToken(),
+      token: (await this.mx.getOpenIdToken()) ?? undefined,
     });
   }
 
@@ -286,8 +286,8 @@ export class CallWidgetDriver extends WidgetDriver {
 
     return {
       chunk: events.map((e) => e.getEffectiveEvent?.() as IRoomEvent),
-      nextBatch: nextBatch ?? undefined,
-      prevBatch: prevBatch ?? undefined,
+      nextBatch: typeof nextBatch === 'string' ? nextBatch : undefined,
+      prevBatch: typeof prevBatch === 'string' ? prevBatch : undefined,
     };
   }
 

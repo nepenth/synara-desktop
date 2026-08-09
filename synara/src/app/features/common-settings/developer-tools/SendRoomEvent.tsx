@@ -44,16 +44,16 @@ export function SendRoomEvent({ type, stateKey, requestClose }: SendRoomEventPro
   );
 
   const [submitState, submit] = useAsyncCallback<
-    object,
+    object | null,
     MatrixError,
     [string, string | undefined, object]
   >(
     useCallback(
       (evtType, evtStateKey, evtContent) => {
         if (typeof evtStateKey === 'string') {
-          return mx.sendStateEvent(room.roomId, evtType as any, evtContent, evtStateKey);
+          return mx.sendStateEvent(room.roomId, evtType as any, evtContent as Record<string, unknown>, evtStateKey);
         }
-        return mx.sendEvent(room.roomId, evtType as any, evtContent);
+        return mx.sendEvent(room.roomId, evtType as any, evtContent as Record<string, unknown>);
       },
       [mx, room]
     )

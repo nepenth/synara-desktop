@@ -79,7 +79,7 @@ export class CallEmbed {
     const params = new URLSearchParams({
       widgetId,
       parentUrl: clientOrigin,
-      baseUrl: mx.baseUrl,
+      baseUrl: mx.baseUrl ?? '',
       roomId: room.roomId,
       userId,
       deviceId,

@@ -17,14 +17,14 @@ export const useEmailNotifications = (): [
 
   const [emailState, refresh] = useAsyncCallbackValue<EmailNotificationResult, Error>(
     useCallback(async () => {
-      const tpIDs = (await mx.getThreePids())?.threepids;
+      const tpIDs = (await mx.getThreePids())?.threepids ?? [];
       const emailAddresses = tpIDs.filter((id) => id.medium === 'email').map((id) => id.address);
       if (emailAddresses.length === 0)
         return {
           enabled: false,
         };
 
-      const pushers = (await mx.getPushers())?.pushers;
+      const pushers = (await mx.getPushers())?.pushers ?? [];
       const emailPusher = pushers.find(
         (pusher) => pusher.app_id === 'm.email' && emailAddresses.includes(pusher.pushkey)
       );
