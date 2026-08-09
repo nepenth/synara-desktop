@@ -13,8 +13,8 @@
 
 | Field              | Value                                                                                                                                                                                 |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Last updated (UTC) | **2026-08-10** |
-| Integration tip    | **full-removal slice pending** — F0–F6c-2c + js-sdk complete removal (two-client harness + CI job retired); **0 importers, 0 js-sdk anywhere in tree** |
+| Last updated (UTC) | **2026-08-09** |
+| Integration tip    | **`11feb3b2`** — F0–F6c-3 landed: js-sdk fully removed (dep, devDeps, two-client harness, CI job); native two-client receipt+ordering proof (#627); V-BURN validation loop (`check-v-burn-complete.mjs`); 63 stale branches pruned |
 | Active work        | **Orchestrated burn active via this harness** — V-BURN epic (`initMatrix.ts`, sole importer) awaiting operator decision ([operating-instructions.md](operating-instructions.md)) |
 | Product runtime    | Native owns core D0 + V-CRYPTO + residual-empty slices through members/presence/directory/join-rule READ; long-tail JS importers remain                                               |
 | Execution model    | **prime-agent orchestrator + `deepseek-v4-flash-0731` sub-agents, max 2 concurrent** (locally hosted; only configured model) — [operating-instructions.md](operating-instructions.md) |
