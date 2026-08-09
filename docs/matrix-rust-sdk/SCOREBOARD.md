@@ -2,8 +2,8 @@
 
 | Field                                                  | Value                                                                                                                                                                                                                                  |
 | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Updated                                                | **2026-08-10** (tip `TBD` · **0 importers, js-sdk removed**) |
-| Tip                                                    | `TBD` (full-removal slice) on `feature/matrix-rust-sdk-full-replacement` |
+| Updated                                                | **2026-08-09** (tip `11feb3b2` · **0 importers, js-sdk removed**) |
+| Tip                                                    | `11feb3b2` on `feature/matrix-rust-sdk-full-replacement` |
 | Production `matrix-js-sdk` import files (`synara/src`) | **0** — plan baseline **220**; **220 removed, 100%** |
 | Allowlist `pathCount`                                  | **0** (empty = full ban; any new importer fails) |
 | Test `matrix-js-sdk` import files (`synara/src`)             | **0** (burned in #595; fixtures migrated to probed literals)  |
