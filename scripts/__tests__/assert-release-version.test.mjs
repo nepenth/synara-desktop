@@ -197,24 +197,30 @@ test("all GitHub Release pages are collected, including a later duplicate", asyn
 });
 
 test("tag push event must be a fresh immutable tag creation", () => {
+  // This is the real GitHub `push` payload shape. `ref_type` is a create-event
+  // field and is absent for a normal tag push.
   const valid = {
-    ref_type: "tag",
-    ref: "v2.0.0",
+    ref: "refs/tags/v2.0.0",
     created: true,
     deleted: false,
     forced: false,
   };
   assert.doesNotThrow(() => assertImmutableTagPush(valid, "v2.0.0"));
+  assert.doesNotThrow(() =>
+    assertImmutableTagPush({ ...valid, ref_type: "tag" }, "v2.0.0")
+  );
   for (const event of [
     { ...valid, created: false },
     { ...valid, deleted: true },
     { ...valid, forced: true },
-    { ...valid, ref: "v2.0.1" },
+    { ...valid, ref: "refs/tags/v2.0.1" },
+    { ...valid, ref: "v2.0.0" },
+    { ...valid, ref: "refs/heads/main" },
     { ...valid, ref_type: "branch" },
   ]) {
     policyError(
       () => assertImmutableTagPush(event, "v2.0.0"),
-      /tag|created|match/i
+      /tag|push|created/i
     );
   }
 });

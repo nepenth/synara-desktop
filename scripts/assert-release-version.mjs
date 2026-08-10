@@ -150,15 +150,25 @@ export function evaluateReleaseVersion({
   };
 }
 
+/**
+ * GitHub's `push` payload identifies tag creation through the full ref
+ * (`refs/tags/vX.Y.Z`); unlike the `create` event it does not include
+ * `ref_type`. Require that exact push shape rather than treating an absent
+ * `ref_type` as a branch push.
+ */
 export function assertImmutableTagPush(event, tag) {
   if (!event || typeof event !== "object") {
     throw new ReleaseVersionPolicyError(
       "Release workflow requires its GitHub push event payload."
     );
   }
-  if (event.ref_type !== "tag") {
+  const expectedRef = `refs/tags/${tag}`;
+  if (
+    event.ref !== expectedRef ||
+    (event.ref_type !== undefined && event.ref_type !== "tag")
+  ) {
     throw new ReleaseVersionPolicyError(
-      "Production releases may run only for a tag push."
+      `Production releases require a push of ${JSON.stringify(expectedRef)}.`
     );
   }
   if (
@@ -168,13 +178,6 @@ export function assertImmutableTagPush(event, tag) {
   ) {
     throw new ReleaseVersionPolicyError(
       "Release tags must be freshly created; deleted, recreated, or force-updated tags are rejected."
-    );
-  }
-  if (typeof event.ref === "string" && event.ref !== tag) {
-    throw new ReleaseVersionPolicyError(
-      `Push event tag ${JSON.stringify(
-        event.ref
-      )} does not match ${JSON.stringify(tag)}.`
     );
   }
 }
