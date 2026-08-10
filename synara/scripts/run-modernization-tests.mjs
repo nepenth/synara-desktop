@@ -82,6 +82,7 @@ const tests = [
   'src/app/features/room/__tests__/nativeEditMessageOwner.test.ts',
   'src/app/features/room/__tests__/nativeReactionOwner.test.ts',
   'src/app/features/room/__tests__/nativeTimelineActions.test.ts',
+  'src/app/features/room/__tests__/nativeTimelinePresenterActions.test.ts',
   'src/app/features/room/__tests__/nativeTimelineViewportPolicy.test.ts',
   'src/app/features/room/__tests__/nativeTimelineViewDelta.test.ts',
   'src/app/features/verification/__tests__/nativeVerification.test.ts',
