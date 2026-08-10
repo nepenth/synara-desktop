@@ -18,9 +18,10 @@ use tokio::time::timeout;
 /// Capability markers (any one suffices) a server may advertise for the
 /// interface-based / sliding syncs the SDK's `SyncService` depends on.
 const SLIDING_SYNC_MARKERS: &[&str] = &[
-    "org.matrix.msc3575", // classic sliding-sync proxy feature
-    "org.matrix.msc4186", // interface-based sync (MSC4186)
-    "org.matrix.simplified_sliding_sync",
+    "org.matrix.simplified_msc3575", // SDK 0.18 native / MSC4186 endpoint
+    "org.matrix.msc3575",            // classic sliding-sync proxy feature
+    "org.matrix.msc4186",            // legacy/server alias for interface-based sync
+    "org.matrix.simplified_sliding_sync", // legacy/server alias
 ];
 
 /// Best-effort probe of whether the configured homeserver supports the
@@ -77,6 +78,12 @@ mod tests {
         assert!(server_supports_sliding_sync(
             &versions(&["v1.11"]),
             &unstable(&[("org.matrix.msc4186", true)])
+        ));
+        // matrix-sdk 0.18's native SyncService uses
+        // /unstable/org.matrix.simplified_msc3575/sync (MSC4186).
+        assert!(server_supports_sliding_sync(
+            &versions(&["v1.11"]),
+            &unstable(&[("org.matrix.simplified_msc3575", true)])
         ));
     }
 
