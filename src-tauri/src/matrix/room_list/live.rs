@@ -75,7 +75,8 @@ async fn project_room(room: &Room) -> RoomSummary {
         Some(mode) => Some(map_notification_mode(mode)),
         None => room.notification_mode().await.map(map_notification_mode),
     };
-
+    // Room derefs to `BaseRoom`: `is_favourite`/`is_low_priority` read cached
+    // `notable_tags` derived from the room's m.tag account data.
     RoomSummary {
         room_id: room.room_id().to_string(),
         name: room.cached_display_name().map(|name| name.to_string()),
@@ -85,8 +86,8 @@ async fn project_room(room: &Room) -> RoomSummary {
         is_direct: room.is_direct().await.unwrap_or(false),
         is_space: room.is_space(),
         is_call: room.is_call(),
-        is_favorite: false,
-        is_low_priority: false,
+        is_favorite: room.is_favourite(),
+        is_low_priority: room.is_low_priority(),
         folder_id: None,
         is_encrypted: room
             .latest_encryption_state()
