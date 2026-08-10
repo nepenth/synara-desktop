@@ -45,6 +45,9 @@ export const useRoomCreators = (room: EventedRoomReading): Set<string> => {
     () => (createEvent ? getRoomCreators(createEvent) : new Set<string>()),
     [createEvent]
   );
+  // Keep loading permission dependencies stable until the authoritative native
+  // creator snapshot arrives. Consumers pass this set into memoized sorts.
+  const emptyCreators = useMemo(() => new Set<string>(), []);
 
   useEffect(() => {
     if (!nativeSession) return undefined;
@@ -82,7 +85,7 @@ export const useRoomCreators = (room: EventedRoomReading): Set<string> => {
   if (!nativeSession) return legacyCreators;
   if (nativeState.status === 'error') throw nativeState.error;
   if (nativeState.roomId !== room.roomId || nativeState.status !== 'ready') {
-    return new Set<string>();
+    return emptyCreators;
   }
   return nativeState.creators;
 };
