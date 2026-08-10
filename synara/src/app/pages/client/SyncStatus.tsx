@@ -1,12 +1,13 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Box, config, Line, Text } from 'folds';
 import type { ClientEventedReading } from '../../hooks/useSyncState';
 import { useSyncState } from '../../hooks/useSyncState';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 import {
-  getSyncStatusBannerCopy,
+  CONNECTED_STATUS_BANNER_DURATION_MS,
   getSlidingSyncCapabilityBannerCopy,
   getSyncStatusBannerVariant,
+  getTransientSyncStatusBannerCopy,
   type SyncState,
 } from './syncStatusCopy';
 
@@ -31,6 +32,7 @@ export function SyncStatus({ mx }: SyncStatusProps) {
   const [slidingSyncCapable, setSlidingSyncCapable] = useState<boolean | null | undefined>(
     undefined
   );
+  const [connectedTransitionVisible, setConnectedTransitionVisible] = useState(false);
 
   useSyncState(
     mx,
@@ -50,8 +52,27 @@ export function SyncStatus({ mx }: SyncStatusProps) {
     }, [])
   );
 
-  const bannerCopy = getSyncStatusBannerCopy(stateData.current);
-  const bannerVariant = getSyncStatusBannerVariant(stateData.current);
+  const currentSyncState = stateData.current;
+
+  // PREPARED means the native sync service is steadily ready. Surface it only
+  // for a short initial/reconnection transition; warnings and failures remain
+  // visible for as long as their actual sync state persists.
+  useEffect(() => {
+    if (currentSyncState !== 'PREPARED') {
+      setConnectedTransitionVisible(false);
+      return undefined;
+    }
+
+    setConnectedTransitionVisible(true);
+    const timer = setTimeout(
+      () => setConnectedTransitionVisible(false),
+      CONNECTED_STATUS_BANNER_DURATION_MS
+    );
+    return () => clearTimeout(timer);
+  }, [mx, currentSyncState]);
+
+  const bannerCopy = getTransientSyncStatusBannerCopy(currentSyncState, connectedTransitionVisible);
+  const bannerVariant = getSyncStatusBannerVariant(currentSyncState);
 
   const banners: React.ReactElement[] = [];
   if (slidingSyncCapable === false) {
