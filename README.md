@@ -13,6 +13,7 @@ Synara Desktop is a Tauri-based native desktop Matrix client focused on fast, se
 | Architecture decisions        | [`docs/adr/`](docs/adr/)                                                                                                                                                                                                                         |
 | Desktop validation & release  | [`docs/build-and-release.md`](docs/build-and-release.md), [`docs/production-smoke-checklist.md`](docs/production-smoke-checklist.md), [`docs/desktop-validation-status.md`](docs/desktop-validation-status.md), [`docs/linux.md`](docs/linux.md) |
 | Synapse audit guidance        | [`docs/synapse-production-audit-runbook.md`](docs/synapse-production-audit-runbook.md)                                                                                                                                                           |
+| js-sdk → rust-sdk migration     | [`docs/matrix-rust-sdk/`](docs/matrix-rust-sdk/) (plans, ADRs, capability reviews, burn-down tracking)                                                                                                               |
 | Timeline reliability          | [`docs/timeline-room-state-reliability-contract.md`](docs/timeline-room-state-reliability-contract.md)                                                                                                                                           |
 | Shared Matrix contracts       | [`synara/docs/synara-contracts.md`](synara/docs/synara-contracts.md), [`synara/docs/contracts/`](synara/docs/contracts/)                                                                                                                         |
 | App runtime (React/Vite)      | [`synara/README.md`](synara/README.md), [`synara/docs/`](synara/docs/)                                                                                                                                                                           |
@@ -122,6 +123,18 @@ For Linux workstation builds, install the required system packages and follow th
 - The page also links to:
   - [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
   - [Tauri distribution formats](https://v2.tauri.app/distribute/)
+
+## License & Attribution
+
+Synara Desktop is licensed under the **GNU Affero General Public License v3.0**
+(see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE)).
+
+The application is a derivative work of [Cinny](https://github.com/cinnyapp/cinny)
+(AGPL-3.0), © the original Cinny authors, whose copyright remains intact in the
+derived portions. Synara Desktop has been substantially rewritten by
+**Whyland Creative LLC** (© 2026) — most notably replacing the matrix-js-sdk
+renderer core with a native matrix-rust-sdk core. See `NOTICE` for third-party
+attribution.
 
 ## Desktop Features
 
