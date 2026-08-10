@@ -3,7 +3,7 @@
 //! `SyncService` (matrix-sdk-ui 0.18) requires a server that implements
 //! MSC3575 / MSC4186 sliding sync; without it the request fails with a 404
 //! `M_UNRECOGNIZED`. This module probes the server's advertised capabilities
-//! (`GET /_matrix/client/versions`) so the product can fail loudly — and
+//! (the standard client-versions endpoint) so the product can fail loudly — and
 //! diagnose — BEFORE the opaque sync error, instead of after.
 //!
 //! Additive and parallel to the live sync path: nothing here changes how the
