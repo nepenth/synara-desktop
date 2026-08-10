@@ -10,6 +10,7 @@ use std::sync::Arc;
 use matrix_sdk::Client;
 use matrix_sdk_ui::sync_service::{State as SdkSyncState, SyncService};
 
+use super::capability::probe_sliding_sync;
 use super::error::SyncError;
 use super::readiness::{snapshot_from_sdk_state, SyncReadiness, SyncReadinessSnapshot};
 use super::reconnect::{decide_reconnect, ReconnectAction, SyncIntent};
@@ -35,6 +36,8 @@ pub struct SyncServiceOwner {
     service: Arc<SyncService>,
     session_generation: u64,
     offline_mode_enabled: bool,
+    /// Best-effort preflight verdict for server sliding-sync support.
+    sliding_sync_capable: Option<bool>,
 }
 
 impl SyncServiceOwner {
@@ -56,6 +59,7 @@ impl SyncServiceOwner {
         let subscriber = self.service.state();
         let current: SdkSyncState = subscriber.get();
         snapshot_from_sdk_state(&current, self.session_generation, self.offline_mode_enabled)
+            .with_sliding_sync_capability(self.sliding_sync_capable)
     }
 
     /// Start (or restart) underlying sliding syncs.
@@ -113,11 +117,15 @@ pub async fn build_sync_service(
     }
 
     let service = builder.build().await.map_err(map_build_error)?;
+    // Best-effort server capability probe: purely informational, never gates
+    // the sync path. On probe failure `None` is stored and sync proceeds.
+    let sliding_sync_capable = probe_sliding_sync(client).await;
 
     Ok(SyncServiceOwner {
         service: Arc::new(service),
         session_generation,
         offline_mode_enabled: config.offline_mode,
+        sliding_sync_capable,
     })
 }
 
