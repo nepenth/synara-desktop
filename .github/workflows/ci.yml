@@ -311,6 +311,11 @@ jobs:
         run: cargo test --locked
         working-directory: src-tauri
 
+      - name: Check Matrix integration boundaries
+        # Runs on any src-tauri diff (the Node job only fires on frontend changes);
+        # node -- run directly so no npm ci / node_modules is required here.
+        run: node scripts/check-matrix-boundaries.mjs
+
   rust-dependency-audit:
     name: Rust dependency audit (cargo-audit)
     needs: [changes]
