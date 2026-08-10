@@ -1,0 +1,113 @@
+# 06 — Migration Phases (P1–P5)
+
+Methodology mirrors the js→rust burn-down: small additive slices, each a
+squashed PR onto `feature/matrix-rust-sdk-full-replacement` with green desktop
+CI (Quality + Desktop package + full matrix at tip), worktree isolation,
+provenance anchor maintained. **Never a big-bang move.**
+
+## P0 — ADR + plan + census (done)
+
+- ADR-0003 (`docs/adr/0003-shared-native-rust-core.md`), this doc set,
+  `PLAN.md`. Patch numbers cited in `02-module-boundary-census.md`.
+
+## P1 — Crate extraction (no behavior change)
+
+Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
+`ipc/` **by `git mv` + path updates only**; every test must pass identically.
+
+Slicing (each slice = one PR):
+1. Workspace scaffolding: root `Cargo.toml` workspace; `crates/synara-core`
+   with empty `lib.rs`; `src-tauri` stays as-is (nothing moved yet). Green.
+2. Move `matrix/dto/` → `crates/synara-core/src/dto/`; re-export from
+   `src-tauri` for local `use` paths; run cargo test/clippy/fmt. Green.
+3. Move `matrix/ipc/` → `crates/synara-core/src/transport/` (same content;
+   `ipc/` module name preserved via re-export if needed for the React-facing
+   stream names). Green.
+4. Move `matrix/tasks/` → `crates/synara-core/src/task/`. Green.
+5. Move `matrix/*` domain modules → `crates/synara-core/src/app/` in **domain
+   chunks** (sync+room_list+timeline first — the biggest consumers of the
+   `Platform` seam; then crypto group: verification/backup/cross_signing/
+   secret_storage/room_keys/utd_recovery/crypto_store; then the rest).
+   Each chunk: `git mv`, fix intra-crate paths, keep `src-tauri` re-exporting
+   what the 144 commands reference. Green per chunk.
+6. Introduce `platform/` mod + `Platform` trait with stubs wired to the
+   existing desktop impls (no behavior change: desktop continues using
+   `AppHandle` behind an adapter).
+
+Acceptance: `scripts/check-matrix-boundaries.mjs` green (no new
+`/_matrix/`-literal or boundary violations), `cargo test` count identical
+(832+/0), clippy `-D warnings` clean, frontend untouched.
+
+## P2 — Native transport API
+
+Goal: make `Core::command(envelope)` + `Platform::emit` the only entry points
+the shells use.
+
+- Add `synara-core::Core` with `command`, `open`, `close`, `new(platform)`.
+- Register the 144 handlers by **command name** in a single
+  `transport::registry` (purely mechanical: extract each `#[tauri::command]`
+  body's `(args) -> Result<T, Error>` into an envelope handler).
+- Commit per command-group (auth, session/lifecycle, room_list, timeline,
+  crypto, send/media, misc). Green per slice.
+
+Acceptance: React still calls the same `matrix_*` commands (desktop adapter
+unchanged in behavior); `ipc/contract_tests` extended to cover every registered
+command name (a coverage test asserts parity between the registry and the
+desktop invoke list).
+
+## P3 — Desktop adapter swap
+
+Goal: `src-tauri` becomes a thin shell.
+
+- `src-tauri/src/bridge/` builds `Arc<dyn Platform>` from the `AppHandle` and
+  registers the 144 `#[tauri::command]` fns that just call
+  `Core::command(envelope)`.
+- Delete the old `matrix/` path (now fully re-exported from the core) bit by
+  bit; final state: `src-tauri` imports only `synara_core` + `desktop_*`.
+- Keep the React-facing invocation contract byte-identical.
+
+Acceptance: full matrix green; package-smoke macOS/Linux green at tip;
+`matrix_sdk_link_smoke` remains; boundary check green.
+
+## P4 — iOS uniffi bindings + Swift adapter
+
+Goal: iOS consumes the same engine; Swift re-implementations retired.
+
+1. `xtask` (or `scripts/`) to build `synara-core` for the three Apple targets
+   and run `uniffi-bindgen` → `synara-core/Sources/SynaraCore/*.swift`.
+2. Swift `SynaraCore` package in `synara-ios` (or a workspace package) with
+   `Platform` callback impl (`SynaraPlatform`).
+3. Migrate iOS services onto it, in dependency-safe order:
+   - `HomeserverDiscovery`+`AuthService` → `Core::command(auth_*)`
+   - `SessionCoordinator`+`SecureSessionStore` → `Core::open/close` +
+     secret-store sink
+   - `RoomListService` → room_list commands/envelopes + `set_badge`
+   - `TimelineService` → timeline commands/envelopes
+   - `MatrixRustSDKService` (crypto delegates → core crypto supervisors;
+     the SAS verification delegate already mirrors `verification/inbox.rs`)
+   - `PushService`/NSE → read-only store API + notification delivery
+4. Remove `matrix-rust-components-swift` from `project.yml` when nothing
+   references `MatrixRustSDK` anymore.
+
+Acceptance: `ci.yml` `ios-tests` + `ios-skeleton.yml` green against the shared
+core; `grep -rn 'MatrixRustSDK' synara-ios/Synara --include='*.swift'` returns
+zero; a sample feature command implemented once in `synara-core` and exercised
+by a SwiftUI unit test and a React hook test.
+
+## P5 — Parity + release gates
+
+Goal: ship iOS on the shared engine.
+
+- Re-run the **full desktop matrix** (all 6 Synapse proofs + rust/audit) against
+  the shared core — this gates iOS correctness implicitly.
+- Close iOS release gates from `synara-ios/docs/device-readiness.md` against
+  the shared engine: physical-device run + profiling, APNs push validation,
+  TestFlight archive/upload, production E2EE completion (recovery,
+  verification/cross-signing, key backup restore, encrypted-media decryption).
+- Update parity matrix (`08-parity-matrix.md`) to "single engine".
+
+## Rollback
+
+Each slice is additive and reversible (git revert of a squashed PR returns to a
+green tip). No slice may ship if it removes a passing test or changes a
+renderer-facing command signature.

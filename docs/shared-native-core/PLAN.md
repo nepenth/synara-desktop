@@ -12,11 +12,15 @@ room list, timeline, and crypto logic.
 
 - ADR 0003: `docs/adr/0003-shared-native-rust-core.md`
 
+Full docs: see this directory's README and 01-09
+(architecture, census, platform sinks, transport/FFI, phases, risk,
+parity matrix, references).
+
 ## Phases
 
 - [x] P0 — ADR + plan + module-boundary census. Evidence:
   - 285 .rs files under src-tauri/src/matrix/
-  - 21 #[tauri::command] fns; 27 AppHandle refs in the matrix layer
+  - 144 #[tauri::command] fns; 38 AppHandle refs in the matrix layer
   - existing ipc/ protocol (envelope, stream, wire counter, contract tests)
   - iOS currently re-implements over matrix-rust-components-swift 26.06.06
 - [ ] P1 — Crate extraction (no behavior change). Move matrix/tasks/dto/ipc
