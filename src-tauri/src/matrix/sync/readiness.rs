@@ -84,6 +84,11 @@ pub struct SyncReadinessSnapshot {
     pub offline_mode_enabled: bool,
     /// Stable diagnostic code when `readiness == Failed`; never a raw SDK message.
     pub failure_diagnostic_id: Option<&'static str>,
+    /// Best-effort sliding-sync preflight verdict (`None` = not yet probed /
+    /// probe could not complete). Added 2026-08-10 (P1 capability preflight);
+    /// purely informational — never gates sync.
+    #[serde(default)]
+    pub sliding_sync_capable: Option<bool>,
 }
 
 impl SyncReadinessSnapshot {
@@ -93,11 +98,18 @@ impl SyncReadinessSnapshot {
             session_generation,
             offline_mode_enabled: false,
             failure_diagnostic_id: None,
+            sliding_sync_capable: None,
         }
     }
 
     pub fn is_product_ready(&self) -> bool {
         self.readiness.is_product_ready()
+    }
+
+    /// Attach a best-effort sliding-sync capability verdict (informational).
+    pub fn with_sliding_sync_capability(mut self, capable: Option<bool>) -> Self {
+        self.sliding_sync_capable = capable;
+        self
     }
 }
 
@@ -134,5 +146,6 @@ pub fn snapshot_from_sdk_state(
         session_generation,
         offline_mode_enabled,
         failure_diagnostic_id: failure_diagnostic_from_sdk_state(state),
+        sliding_sync_capable: None,
     }
 }
