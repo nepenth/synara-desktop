@@ -1,5 +1,11 @@
-import { Capabilities } from 'matrix-js-sdk';
 import { createContext, useContext } from 'react';
+
+/** Structural projection of the server capabilities object (MatrixClient.getCapabilities). */
+export type Capabilities = {
+  'm.room_versions'?: { default?: string; available?: Record<string, string> };
+  'm.set_avatar_url'?: { enabled?: boolean };
+  'm.set_displayname'?: { enabled?: boolean };
+};
 
 const CapabilitiesContext = createContext<Capabilities | null>(null);
 

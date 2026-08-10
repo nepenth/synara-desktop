@@ -1,0 +1,1000 @@
+{
+  "schema_version": 1,
+  "as_of_date": "2026-08-08",
+  "source_of_truth": "Original-plan inventory, strict gates, release runtime, and current full-vertical product execution. Dated evidence and audit artifacts remain historical sources.",
+  "integration_branch": "feature/matrix-rust-sdk-full-replacement",
+  "audited_snapshot": {
+    "sha": "bf1b565eb6163ded095e413ef88e3b22d7f21c01",
+    "review": "docs/matrix-rust-sdk/review-2026-07-25.md"
+  },
+  "original_plan": {
+    "path": "docs/matrix-rust-sdk-full-replacement-plan.md",
+    "task_count": 112,
+    "landed_task_count": 74,
+    "landed_task_ids": [
+      "P0.1",
+      "P0.2",
+      "P0.3",
+      "P0.4",
+      "P0.5",
+      "P0.6",
+      "P0.7",
+      "P1.1",
+      "P1.2",
+      "P1.3",
+      "P1.4",
+      "P1.5",
+      "P1.6",
+      "P2.1",
+      "P2.2",
+      "P2.3",
+      "P2.4",
+      "P2.5",
+      "P2.6",
+      "P3.1",
+      "P3.2",
+      "P3.3",
+      "P3.4",
+      "P3.5",
+      "P3.6",
+      "P3.7",
+      "P3.8",
+      "P4.1",
+      "P4.2",
+      "P4.3",
+      "P4.4",
+      "P4.5",
+      "P4.6",
+      "P4.7",
+      "P4.8",
+      "P5.1",
+      "P5.2",
+      "P5.3",
+      "P5.4",
+      "P5.5",
+      "P5.6",
+      "P5.7",
+      "P5.8",
+      "P5.9",
+      "P5.10",
+      "P6.1",
+      "P6.2",
+      "P6.3",
+      "P6.4",
+      "P6.5",
+      "P6.6",
+      "P6.7",
+      "P6.8",
+      "P7.1",
+      "P7.2",
+      "P7.3",
+      "P7.4",
+      "P7.5",
+      "P7.6",
+      "P7.7",
+      "P8.1",
+      "P8.2",
+      "P8.3",
+      "P8.4",
+      "P8.5",
+      "P8.6",
+      "P8.7",
+      "P8.8",
+      "P9.1",
+      "P9.2",
+      "P9.3",
+      "P9.4",
+      "P9.5",
+      "P10.4"
+    ]
+  },
+  "product_runtime": {
+    "matrix_client_sdk": "matrix-js-sdk-only",
+    "rust_sdk_state": "harness-foundation-only",
+    "dual_backend": false,
+    "cutover_state": "not_started"
+  },
+  "vertical_execution": {
+    "policy": "full-vertical-delete-per-vertical",
+    "integration_product_state": "between-slices-paused",
+    "active_slice": null,
+    "active_pr": null,
+    "completed_slices": [
+      "V-CRYPTO.1",
+      "V-CRYPTO.2",
+      "V-CRYPTO.3",
+      "V-CRYPTO.4",
+      "V-CRYPTO.5",
+      "V-CRYPTO.6",
+      "V-CRYPTO.7",
+      "V-AUTH.1",
+      "V-ROOMS.1",
+      "V-ROOMS.3",
+      "V-ROOMS.4",
+      "V-SEND.1",
+      "V-SEND.2",
+      "V-ROOMS.5",
+      "V-SEND.3"
+    ],
+    "wired_deletion_open": [],
+    "next_slices": [
+      "V-TIMELINE.1",
+      "V-AUTH.2",
+      "V-AUTH.3",
+      "V-AUTH.4",
+      "V-ROOMS.2",
+      "V-SEND.5"
+    ],
+    "held_prs": [
+      221,
+      240,
+      109,
+      193,
+      196,
+      198,
+      199,
+      201,
+      203,
+      204,
+      207,
+      208,
+      209
+    ],
+    "completion_evidence": {
+      "capability_owner_delta": "negative",
+      "global_direct_import_delta": "recorded-non-increasing"
+    },
+    "matrix_js_sdk_import_inventory": {
+      "baseline": {
+        "files": 232,
+        "import_lines": 292
+      },
+      "current": {
+        "files": 0,
+        "import_lines": 0,
+        "note": "tip post-full-removal: production importers 0; test import files 0; allowlist empty=full ban; matrix-js-sdk@42.0.0 FULLY REMOVED from package.json+lock (incl. devDeps) \u2014 two-client js-sdk harness + CI job retired; repo tree contains zero matrix-js-sdk. plan baseline 232 production+test files"
+      }
+    }
+  },
+  "current_execution": {
+    "active_task": null,
+    "next_task": null,
+    "blocked_tasks": []
+  },
+  "phase_gates": [
+    {
+      "phase": 0,
+      "planned_task_ids": [
+        "P0.1",
+        "P0.2",
+        "P0.3",
+        "P0.4",
+        "P0.5",
+        "P0.6",
+        "P0.7"
+      ],
+      "blocked_by": [
+        "R0.2",
+        "R0.8"
+      ],
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "phase": 1,
+      "planned_task_ids": [
+        "P1.1",
+        "P1.2",
+        "P1.3",
+        "P1.4",
+        "P1.5",
+        "P1.6"
+      ],
+      "blocked_by": [
+        "R0.1",
+        "R0.3",
+        "R0.8"
+      ],
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "phase": 2,
+      "planned_task_ids": [
+        "P2.1",
+        "P2.2",
+        "P2.3",
+        "P2.4",
+        "P2.5",
+        "P2.6"
+      ],
+      "blocked_by": [
+        "R0.4",
+        "R0.5",
+        "R0.6",
+        "R0.7",
+        "R0.8"
+      ],
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "phase": 3,
+      "planned_task_ids": [
+        "P3.1",
+        "P3.2",
+        "P3.3",
+        "P3.4",
+        "P3.5",
+        "P3.6",
+        "P3.7",
+        "P3.8"
+      ],
+      "blocked_by": [
+        "R0.7",
+        "R0.8"
+      ],
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "phase": 4,
+      "planned_task_ids": [
+        "P4.1",
+        "P4.2",
+        "P4.3",
+        "P4.4",
+        "P4.5",
+        "P4.6",
+        "P4.7",
+        "P4.8"
+      ],
+      "blocked_by": [],
+      "strict_acceptance_state": "not_reviewed",
+      "phase_gate_state": "open"
+    },
+    {
+      "phase": 5,
+      "planned_task_ids": [
+        "P5.1",
+        "P5.2",
+        "P5.3",
+        "P5.4",
+        "P5.5",
+        "P5.6",
+        "P5.7",
+        "P5.8",
+        "P5.9",
+        "P5.10"
+      ],
+      "blocked_by": [],
+      "strict_acceptance_state": "not_reviewed",
+      "phase_gate_state": "open"
+    },
+    {
+      "phase": 6,
+      "planned_task_ids": [
+        "P6.1",
+        "P6.2",
+        "P6.3",
+        "P6.4",
+        "P6.5",
+        "P6.6",
+        "P6.7",
+        "P6.8"
+      ],
+      "blocked_by": [],
+      "strict_acceptance_state": "not_reviewed",
+      "phase_gate_state": "open"
+    },
+    {
+      "phase": 7,
+      "planned_task_ids": [
+        "P7.1",
+        "P7.2",
+        "P7.3",
+        "P7.4",
+        "P7.5",
+        "P7.6",
+        "P7.7"
+      ],
+      "blocked_by": [],
+      "strict_acceptance_state": "not_reviewed",
+      "phase_gate_state": "open"
+    },
+    {
+      "phase": 8,
+      "planned_task_ids": [
+        "P8.1",
+        "P8.2",
+        "P8.3",
+        "P8.4",
+        "P8.5",
+        "P8.6",
+        "P8.7",
+        "P8.8"
+      ],
+      "blocked_by": [],
+      "strict_acceptance_state": "not_reviewed",
+      "phase_gate_state": "open"
+    },
+    {
+      "phase": 9,
+      "planned_task_ids": [
+        "P9.1",
+        "P9.2",
+        "P9.3",
+        "P9.4",
+        "P9.5",
+        "P9.6"
+      ],
+      "blocked_by": [],
+      "strict_acceptance_state": "not_reviewed",
+      "phase_gate_state": "open"
+    },
+    {
+      "phase": 10,
+      "planned_task_ids": [
+        "P10.1",
+        "P10.2",
+        "P10.3",
+        "P10.4",
+        "P10.5",
+        "P10.6",
+        "P10.7"
+      ],
+      "blocked_by": [],
+      "strict_acceptance_state": "not_reviewed",
+      "phase_gate_state": "open"
+    },
+    {
+      "phase": 11,
+      "planned_task_ids": [
+        "P11.1",
+        "P11.2",
+        "P11.3",
+        "P11.4",
+        "P11.5",
+        "P11.6",
+        "P11.7",
+        "P11.8",
+        "P11.9",
+        "P11.10"
+      ],
+      "blocked_by": [],
+      "strict_acceptance_state": "not_reviewed",
+      "phase_gate_state": "open"
+    },
+    {
+      "phase": 12,
+      "planned_task_ids": [
+        "P12.1",
+        "P12.2",
+        "P12.3",
+        "P12.4",
+        "P12.5",
+        "P12.6",
+        "P12.7"
+      ],
+      "blocked_by": [],
+      "strict_acceptance_state": "not_reviewed",
+      "phase_gate_state": "open"
+    },
+    {
+      "phase": 13,
+      "planned_task_ids": [
+        "P13.1",
+        "P13.2",
+        "P13.3",
+        "P13.4",
+        "P13.5",
+        "P13.6",
+        "P13.7",
+        "P13.8"
+      ],
+      "blocked_by": [],
+      "strict_acceptance_state": "not_reviewed",
+      "phase_gate_state": "open"
+    },
+    {
+      "phase": 14,
+      "planned_task_ids": [
+        "P14.1",
+        "P14.2",
+        "P14.3",
+        "P14.4",
+        "P14.5",
+        "P14.6"
+      ],
+      "blocked_by": [],
+      "strict_acceptance_state": "not_reviewed",
+      "phase_gate_state": "open"
+    }
+  ],
+  "task_records": [
+    {
+      "id": "P0.1",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P0.2",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P0.3",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P0.4",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P0.5",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P0.6",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P0.7",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P1.1",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P1.2",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P1.3",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P1.4",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P1.5",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P1.6",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P2.1",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P2.2",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P2.3",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P2.4",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P2.5",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P2.6",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P3.1",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P3.2",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P3.3",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P3.4",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P3.5",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P3.6",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P3.7",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P3.8",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P4.1",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P4.2",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P4.3",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P4.4",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P4.5",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P4.6",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P4.7",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P4.8",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P5.1",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P5.2",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P5.3",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P5.4",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P5.5",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P5.6",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P5.7",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P5.8",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P5.9",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P5.10",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P6.1",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P6.2",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P6.3",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P6.4",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P6.5",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P6.6",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P6.7",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P6.8",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P7.1",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P7.2",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P7.3",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P7.4",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P7.5",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P7.6",
+      "artifact_state": "landed",
+      "integration_state": "pr_open",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P7.7",
+      "artifact_state": "landed",
+      "integration_state": "pr_open",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P8.1",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P8.2",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P8.3",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P8.4",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P8.5",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P8.6",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P8.7",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P8.8",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P9.1",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P9.2",
+      "artifact_state": "landed",
+      "integration_state": "pr_open",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P9.3",
+      "artifact_state": "landed",
+      "integration_state": "pr_open",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P9.4",
+      "artifact_state": "landed",
+      "integration_state": "pr_open",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P9.5",
+      "artifact_state": "landed",
+      "integration_state": "pr_open",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P10.4",
+      "artifact_state": "landed",
+      "integration_state": "pr_open",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    }
+  ],
+  "remediation_tasks": [
+    {
+      "id": "R0.1",
+      "title": "Quality and metadata recovery",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "accepted",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "R0.2",
+      "title": "Governance and Phase 0 evidence",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "R0.3",
+      "title": "IPC wire-contract correctness",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "accepted",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "R0.4",
+      "title": "Store confinement and key management",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "accepted",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "R0.5",
+      "title": "Safe destructive lifecycle",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "accepted",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "R0.6",
+      "title": "Diagnostic privacy",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "accepted",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "R0.7",
+      "title": "Live Phase 2 and P3.1 adapters",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "R0.8",
+      "title": "Acceptance reports and CI evidence",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    }
+  ]
+}

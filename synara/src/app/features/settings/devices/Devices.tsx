@@ -4,28 +4,19 @@ import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
-import { useDeviceIds, useDeviceList, useSplitCurrentDevice } from '../../../hooks/useDeviceList';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
+import { useDeviceList, useSplitCurrentDevice } from '../../../hooks/useDeviceList';
 import { LocalBackup } from './LocalBackup';
-import { DeviceLogoutBtn, DeviceKeyDetails, DeviceTile, DeviceTilePlaceholder } from './DeviceTile';
+import { DeviceLogoutBtn, DeviceTile, DeviceTilePlaceholder } from './DeviceTile';
 import { OtherDevices } from './OtherDevices';
 import {
-  DeviceVerificationOptions,
   EnableVerification,
   VerificationStatusBadge,
   VerifyCurrentDeviceTile,
 } from './Verification';
-import {
-  useDeviceVerificationStatus,
-  useUnverifiedDeviceCount,
-  VerificationStatus,
-} from '../../../hooks/useDeviceVerificationStatus';
-import {
-  useSecretStorageDefaultKeyId,
-  useSecretStorageKeyContent,
-} from '../../../hooks/useSecretStorage';
-import { useCrossSigningActive } from '../../../hooks/useCrossSigning';
+import { useCrossSigning } from '../../../hooks/useCrossSigning';
 import { BackupRestoreTile } from '../../../components/BackupRestore';
+import { isNativeMatrixSession } from '../../verification/nativeVerification';
+import { NativeSecretStorageTile } from '../../../components/SecretStorage';
 
 function DevicesPlaceholder() {
   return (
@@ -40,29 +31,16 @@ type DevicesProps = {
   requestClose: () => void;
 };
 export function Devices({ requestClose }: DevicesProps) {
-  const mx = useMatrixClient();
-  const crypto = mx.getCrypto();
-  const crossSigningActive = useCrossSigningActive();
+  const nativeSession = isNativeMatrixSession();
+  const crossSigning = useCrossSigning();
+  const crossSigningActive = crossSigning.active;
   const [devices, refreshDeviceList] = useDeviceList();
 
   const [currentDevice, otherDevices] = useSplitCurrentDevice(devices);
-  const verificationStatus = useDeviceVerificationStatus(
-    crypto,
-    mx.getSafeUserId(),
-    currentDevice?.device_id
-  );
-
-  const otherDevicesId = useDeviceIds(otherDevices);
-  const unverifiedDeviceCount = useUnverifiedDeviceCount(
-    crypto,
-    mx.getSafeUserId(),
-    otherDevicesId
-  );
-
-  const defaultSecretStorageKeyId = useSecretStorageDefaultKeyId();
-  const defaultSecretStorageKeyContent = useSecretStorageKeyContent(
-    defaultSecretStorageKeyId ?? ''
-  );
+  const verificationStatus = currentDevice?.trust ?? 'unknown';
+  const unverifiedDeviceCount = otherDevices?.filter(
+    (device) => device.trust === 'unverified'
+  ).length;
 
   return (
     <Page>
@@ -97,20 +75,35 @@ export function Devices({ requestClose }: DevicesProps) {
                     description="To verify device identity and grant access to encrypted messages."
                     after={
                       <>
-                        <EnableVerification visible={!crossSigningActive} />
+                        <EnableVerification
+                          visible={!crossSigningActive}
+                          nativeStatus={crossSigning.nativeStatus}
+                          loading={crossSigning.loading}
+                          error={crossSigning.error}
+                        />
                         {crossSigningActive && (
                           <Box gap="200" alignItems="Center">
                             <VerificationStatusBadge
                               verificationStatus={verificationStatus}
                               otherUnverifiedCount={unverifiedDeviceCount}
                             />
-                            <DeviceVerificationOptions />
                           </Box>
                         )}
                       </>
                     }
                   />
                 </SequenceCard>
+                {nativeSession && (
+                  <SequenceCard
+                    className={SequenceCardStyle}
+                    variant="SurfaceVariant"
+                    direction="Column"
+                    gap="400"
+                  >
+                    <NativeSecretStorageTile />
+                    <BackupRestoreTile />
+                  </SequenceCard>
+                )}
               </Box>
               <Box direction="Column" gap="100">
                 <Text size="L400">Current</Text>
@@ -125,20 +118,9 @@ export function Devices({ requestClose }: DevicesProps) {
                       device={currentDevice}
                       refreshDeviceList={refreshDeviceList}
                       options={<DeviceLogoutBtn />}
-                    >
-                      {crypto && <DeviceKeyDetails crypto={crypto} />}
-                    </DeviceTile>
-                    {crossSigningActive &&
-                      verificationStatus === VerificationStatus.Unverified &&
-                      crypto && (
-                        <VerifyCurrentDeviceTile
-                          crypto={crypto}
-                          secretStorageKeyId={defaultSecretStorageKeyId}
-                          secretStorageKeyContent={defaultSecretStorageKeyContent}
-                        />
-                      )}
-                    {crypto && verificationStatus === VerificationStatus.Verified && (
-                      <BackupRestoreTile crypto={crypto} />
+                    ></DeviceTile>
+                    {crossSigningActive && verificationStatus === 'unverified' && (
+                      <VerifyCurrentDeviceTile />
                     )}
                   </SequenceCard>
                 ) : (
@@ -150,9 +132,7 @@ export function Devices({ requestClose }: DevicesProps) {
                 <OtherDevices
                   devices={otherDevices}
                   refreshDeviceList={refreshDeviceList}
-                  showVerification={
-                    crossSigningActive && verificationStatus === VerificationStatus.Verified
-                  }
+                  showVerification={crossSigningActive && verificationStatus === 'verified'}
                 />
               )}
               <LocalBackup />

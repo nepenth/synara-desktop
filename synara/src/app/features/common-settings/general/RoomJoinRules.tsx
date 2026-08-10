@@ -1,7 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
 import { color, Text } from 'folds';
-import { JoinRule, MatrixError, RestrictedAllowType } from 'matrix-js-sdk';
-import { RoomJoinRulesEventContent } from 'matrix-js-sdk/lib/types';
 import { useAtomValue } from 'jotai';
 import {
   ExtendedJoinRules,
@@ -30,7 +28,36 @@ import {
   knockSupported,
   restrictedSupported,
 } from '../../../utils/matrix';
+import type { MatrixError } from '../../../utils/matrix';
 import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
+
+type JoinRule = 'public' | 'invite' | 'private' | 'knock' | 'restricted';
+
+type RestrictedAllowType = 'm.room_membership' | 'restricted' | 'world_readable';
+
+/** Structural mirror of the js-sdk RoomJoinRulesEventContent shape. */
+type RoomJoinRulesEventContent = {
+  join_rule: JoinRule;
+  allow?: Array<{
+    type: RestrictedAllowType;
+    room_id?: string;
+    not_room_id?: string;
+  }>;
+};
+
+const JoinRule = {
+  Public: 'public',
+  Invite: 'invite',
+  Private: 'private',
+  Knock: 'knock',
+  Restricted: 'restricted',
+} as const;
+
+const RestrictedAllowType = {
+  RoomMembership: 'm.room_membership',
+  Restricted: 'restricted',
+  WorldReadable: 'world_readable',
+} as const;
 
 type RestrictedRoomAllowContent = {
   room_id: string;

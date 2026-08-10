@@ -31,9 +31,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import FocusTrap from 'focus-trap-react';
 import { useAtomValue } from 'jotai';
 import { useQuery } from '@tanstack/react-query';
-import { MatrixClient, Method, RoomType } from 'matrix-js-sdk';
 import { Page, PageContent, PageContentCenter, PageHeader } from '../../../components/page';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { RoomTopicViewer } from '../../../components/room-topic-viewer';
 import { RoomCard, RoomCardBase, RoomCardGrid } from '../../../components/room-card';
 import { ExploreServerPathSearchParams } from '../../paths';
@@ -41,10 +39,15 @@ import { getExploreServerPath, withSearchParam } from '../../pathUtils';
 import * as css from './style.css';
 import { allRoomsAtom } from '../../../state/room-list/roomList';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
-import { getMxIdServer } from '../../../utils/matrix';
 import { stopPropagation } from '../../../utils/keyboard';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../../components/BackRouteHandler';
+import { isSynaraDesktop, invokeDesktopWithAvailability } from '../../../utils/desktop';
+import {
+  createNativeRoomDirectoryOwner,
+  readNativeRoomDirectorySession,
+} from './nativeRoomDirectoryOwner';
+import type { DirectoryProtocolInstance, DirectoryRoomType } from '../../../features/matrix-dto';
 
 const useServerSearchParams = (searchParams: URLSearchParams): ExploreServerPathSearchParams =>
   useMemo(
@@ -71,11 +74,11 @@ const useRoomTypeFilters = (): RoomTypeFilter[] =>
       },
       {
         title: 'Spaces',
-        value: RoomType.Space,
+        value: 'space',
       },
       {
         title: 'Rooms',
-        value: 'null',
+        value: 'room',
       },
     ],
     []
@@ -149,17 +152,13 @@ const DEFAULT_INSTANCE_NAME = 'Matrix';
 function ThirdPartyProtocolsSelector({
   instanceId,
   onChange,
+  instances,
 }: {
   instanceId?: string;
   onChange: (instanceId?: string) => void;
+  instances?: DirectoryProtocolInstance[];
 }) {
-  const mx = useMatrixClient();
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
-
-  const { data } = useQuery({
-    queryKey: ['thirdparty', 'protocols'],
-    queryFn: () => mx.getThirdpartyProtocols(),
-  });
 
   const handleInstanceSelect: MouseEventHandler<HTMLButtonElement> = (evt): void => {
     const insId = evt.currentTarget.getAttribute('data-instance-id') ?? undefined;
@@ -171,9 +170,8 @@ function ThirdPartyProtocolsSelector({
     setMenuAnchor(evt.currentTarget.getBoundingClientRect());
   };
 
-  const instances = data && Object.keys(data).flatMap((protocol) => data[protocol].instances);
   if (!instances || instances.length === 0) return null;
-  const selectedInstance = instances.find((instance) => instanceId === instance.instance_id);
+  const selectedInstance = instances.find((instance) => instanceId === instance.instanceId);
 
   return (
     <PopOut
@@ -213,15 +211,14 @@ function ThirdPartyProtocolsSelector({
                 {instances.map((instance) => (
                   <MenuItem
                     size="300"
-                    key={instance.instance_id}
-                    data-instance-id={instance.instance_id}
-                    aria-pressed={instanceId === instance.instance_id}
+                    key={instance.instanceId}
+                    data-instance-id={instance.instanceId}
                     variant="Surface"
                     radii="300"
                     onClick={handleInstanceSelect}
                   >
                     <Text size="T200" truncate>
-                      {instance.desc}
+                      {instance.description}
                     </Text>
                   </MenuItem>
                 ))}
@@ -240,7 +237,7 @@ function ThirdPartyProtocolsSelector({
         after={<Icon size="100" src={Icons.ChevronBottom} />}
       >
         <Text size="T200" truncate>
-          {selectedInstance?.desc ?? DEFAULT_INSTANCE_NAME}
+          {selectedInstance?.description ?? DEFAULT_INSTANCE_NAME}
         </Text>
       </Chip>
     </PopOut>
@@ -342,9 +339,6 @@ function LimitButton({ limit, onLimitChange }: LimitButtonProps) {
 
 export function PublicRooms() {
   const { server } = useParams();
-  const mx = useMatrixClient();
-  const userId = mx.getUserId();
-  const userServer = userId && getMxIdServer(userId);
   const allRooms = useAtomValue(allRoomsAtom);
   const { navigateSpace, navigateRoom } = useRoomNavigate();
   const screenSize = useScreenSizeContext();
@@ -356,11 +350,35 @@ export function PublicRooms() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const roomTypeFilters = useRoomTypeFilters();
+  const selectedRoomType = serverSearchParams.type === 'null' ? 'room' : serverSearchParams.type;
+  const desktopAvailable = isSynaraDesktop();
+  const directoryOwner = useMemo(
+    () => createNativeRoomDirectoryOwner(desktopAvailable, invokeDesktopWithAvailability),
+    [desktopAvailable]
+  );
+
+  const { data: session } = useQuery({
+    queryKey: ['native', 'matrix-session'],
+    queryFn: () => readNativeRoomDirectorySession(desktopAvailable, invokeDesktopWithAvailability),
+    enabled: desktopAvailable,
+    retry: false,
+  });
+  const userServer = session?.serverName;
+
+  const { data: protocols } = useQuery({
+    queryKey: ['native', 'room-directory-protocols'],
+    queryFn: directoryOwner.getProtocols,
+    enabled: desktopAvailable && userServer === server,
+    retry: false,
+  });
 
   const currentLimit: number = useMemo(() => {
     const limitParam = serverSearchParams.limit;
     if (!limitParam) return FALLBACK_ROOMS_LIMIT;
-    return parseInt(limitParam, 10) || FALLBACK_ROOMS_LIMIT;
+    const parsed = parseInt(limitParam, 10);
+    return Number.isSafeInteger(parsed) && parsed > 0
+      ? Math.min(parsed, 100)
+      : FALLBACK_ROOMS_LIMIT;
   }, [serverSearchParams.limit]);
 
   const resetScroll = useCallback(() => {
@@ -368,44 +386,33 @@ export function PublicRooms() {
     if (scroll) scroll.scrollTop = 0;
   }, []);
 
-  const fetchPublicRooms = useCallback(() => {
-    const limit =
-      typeof serverSearchParams.limit === 'string'
-        ? parseInt(serverSearchParams.limit, 10)
-        : FALLBACK_ROOMS_LIMIT;
-    const roomType: string | null | undefined =
-      serverSearchParams.type === 'null' ? null : serverSearchParams.type;
-
-    return mx.http.authedRequest<Awaited<ReturnType<MatrixClient['publicRooms']>>>(
-      Method.Post,
-      '/publicRooms',
-      {
-        server,
-      },
-      {
-        limit,
-        since: serverSearchParams.since,
-        filter: {
-          generic_search_term: serverSearchParams.term,
-          room_types: roomType !== undefined ? [roomType] : undefined,
-        },
-        third_party_instance_id: serverSearchParams.instance,
-      }
-    );
-  }, [mx, server, serverSearchParams]);
-
   const { data, isLoading, error } = useQuery({
     queryKey: [
       server,
-      'publicRooms',
+      'roomDirectory',
       serverSearchParams.limit,
       serverSearchParams.since,
       serverSearchParams.term,
       serverSearchParams.type,
       serverSearchParams.instance,
     ],
-    queryFn: fetchPublicRooms,
+    queryFn: () =>
+      directoryOwner.search({
+        serverName: server ?? '',
+        term: serverSearchParams.term,
+        roomType:
+          serverSearchParams.type === 'null'
+            ? 'room'
+            : (serverSearchParams.type as DirectoryRoomType | undefined),
+        thirdPartyInstanceId: serverSearchParams.instance,
+        limit: currentLimit,
+        since: serverSearchParams.since,
+      }),
+    enabled: !!server,
+    retry: false,
   });
+
+  useEffect(() => () => void directoryOwner.dispose(), [directoryOwner]);
 
   useEffect(() => {
     if (isLoading) resetScroll();
@@ -426,12 +433,12 @@ export function PublicRooms() {
   };
 
   const paginateBack = () => {
-    const token = data?.prev_batch;
+    const token = data?.prevBatch;
     explore({ since: token });
   };
 
   const paginateFront = () => {
-    const token = data?.next_batch;
+    const token = data?.nextBatch;
     explore({ since: token });
   };
 
@@ -542,10 +549,10 @@ export function PublicRooms() {
                           key={filter.title}
                           onClick={handleRoomFilterClick}
                           data-room-filter={filter.value}
-                          variant={filter.value === serverSearchParams.type ? 'Success' : 'Surface'}
-                          aria-pressed={filter.value === serverSearchParams.type}
+                          variant={filter.value === selectedRoomType ? 'Success' : 'Surface'}
+                          aria-pressed={filter.value === selectedRoomType}
                           before={
-                            filter.value === serverSearchParams.type && (
+                            filter.value === selectedRoomType && (
                               <Icon size="100" src={Icons.Check} />
                             )
                           }
@@ -564,6 +571,7 @@ export function PublicRooms() {
                           />
                           <ThirdPartyProtocolsSelector
                             instanceId={serverSearchParams.instance}
+                            instances={protocols?.instances}
                             onChange={handleInstanceIdChange}
                           />
                         </>
@@ -585,25 +593,22 @@ export function PublicRooms() {
                       <Text size="T300">{error.message}</Text>
                     </Box>
                   )}
-                  {data &&
+                  {!error &&
+                    data &&
                     (data.chunk.length > 0 ? (
                       <>
                         <RoomCardGrid>
                           {data?.chunk.map((chunkRoom) => (
                             <RoomCard
-                              key={chunkRoom.room_id}
-                              roomIdOrAlias={chunkRoom.canonical_alias ?? chunkRoom.room_id}
+                              key={chunkRoom.roomId}
+                              roomIdOrAlias={chunkRoom.canonicalAlias ?? chunkRoom.roomId}
                               allRooms={allRooms}
-                              avatarUrl={chunkRoom.avatar_url}
+                              avatarUrl={chunkRoom.avatarUrl}
                               name={chunkRoom.name}
                               topic={chunkRoom.topic}
-                              memberCount={chunkRoom.num_joined_members}
-                              roomType={chunkRoom.room_type}
-                              onView={
-                                chunkRoom.room_type === RoomType.Space
-                                  ? navigateSpace
-                                  : navigateRoom
-                              }
+                              memberCount={chunkRoom.memberCount}
+                              roomType={chunkRoom.roomType === 'space' ? 'm.space' : undefined}
+                              onView={chunkRoom.roomType === 'space' ? navigateSpace : navigateRoom}
                               renderTopicViewer={(name, topic, requestClose) => (
                                 <RoomTopicViewer
                                   name={name}
@@ -615,13 +620,13 @@ export function PublicRooms() {
                           ))}
                         </RoomCardGrid>
 
-                        {(data.prev_batch || data.next_batch) && (
+                        {(data.prevBatch || data.nextBatch) && (
                           <Box justifyContent="Center" gap="200">
                             <Button
                               onClick={paginateBack}
                               size="300"
                               fill="Soft"
-                              disabled={!data.prev_batch}
+                              disabled={!data.prevBatch}
                             >
                               <Text size="B300" truncate>
                                 Previous Page
@@ -632,7 +637,7 @@ export function PublicRooms() {
                               onClick={paginateFront}
                               size="300"
                               fill="Solid"
-                              disabled={!data.next_batch}
+                              disabled={!data.nextBatch}
                             >
                               <Text size="B300" truncate>
                                 Next Page

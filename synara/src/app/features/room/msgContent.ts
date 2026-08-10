@@ -1,6 +1,5 @@
-import { IContent, MatrixClient, MsgType } from 'matrix-js-sdk';
 import to from 'await-to-js';
-import { EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
+import { IContent, MsgType } from '../../utils/messageContent';
 import {
   IThumbnailContent,
   MATRIX_BLUR_HASH_PROPERTY_NAME,
@@ -16,12 +15,11 @@ import {
 } from '../../utils/dom';
 import { encryptFile, getImageInfo, getThumbnailContent, getVideoInfo } from '../../utils/matrix';
 import { TUploadItem } from '../../state/room/roomInputDrafts';
+import { uploadMediaNative } from '../../state/nativeMediaUpload';
 import { encodeBlurHash } from '../../utils/blurHash';
 import { scaleYDimension } from '../../utils/common';
-import type { GifResult } from '../../utils/gifProvider';
 
 const generateThumbnailContent = async (
-  mx: MatrixClient,
   img: HTMLImageElement | HTMLVideoElement,
   dimensions: [number, number],
   encrypt: boolean
@@ -32,24 +30,20 @@ const generateThumbnailContent = async (
   const thumbnailFile = encThumbData?.file ?? thumbnail;
   if (!thumbnailFile) throw new Error('Can not create thumbnail!');
 
-  const data = await mx.uploadContent(thumbnailFile);
-  const thumbMxc = data?.content_uri;
-  if (!thumbMxc) throw new Error('Failed when uploading thumbnail!');
+  const bytes = Array.from(new Uint8Array(await thumbnailFile.arrayBuffer()));
+  const uploaded = await uploadMediaNative(thumbnailFile.type || 'application/octet-stream', bytes);
+  if (uploaded === 'legacy') throw new Error('Native Matrix media upload is unavailable.');
   const thumbnailContent = getThumbnailContent({
     thumbnail: thumbnailFile,
     encInfo: encThumbData?.encInfo,
-    mxc: thumbMxc,
+    mxc: uploaded.mxc,
     width: dimensions[0],
     height: dimensions[1],
   });
   return thumbnailContent;
 };
 
-export const getImageMsgContent = async (
-  mx: MatrixClient,
-  item: TUploadItem,
-  mxc: string
-): Promise<IContent> => {
+export const getImageMsgContent = async (item: TUploadItem, mxc: string): Promise<IContent> => {
   const { file, originalFile, encInfo, metadata } = item;
   const [imgError, imgEl] = await to(loadImageElement(getImageFileUrl(originalFile)));
   if (imgError) console.warn(imgError);
@@ -79,11 +73,7 @@ export const getImageMsgContent = async (
   return content;
 };
 
-export const getVideoMsgContent = async (
-  mx: MatrixClient,
-  item: TUploadItem,
-  mxc: string
-): Promise<IContent> => {
+export const getVideoMsgContent = async (item: TUploadItem, mxc: string): Promise<IContent> => {
   const { file, originalFile, encInfo, metadata } = item;
 
   const [videoError, videoEl] = await to(loadVideoElement(getVideoFileUrl(originalFile)));
@@ -96,22 +86,18 @@ export const getVideoMsgContent = async (
     [MATRIX_SPOILER_PROPERTY_NAME]: metadata.markedAsSpoiler,
   };
   if (videoEl) {
-    const [thumbError, thumbContent] = await to(
-      generateThumbnailContent(
-        mx,
-        videoEl,
-        getThumbnailDimensions(videoEl.videoWidth, videoEl.videoHeight),
-        !!encInfo
-      )
+    const thumbContent = await generateThumbnailContent(
+      videoEl,
+      getThumbnailDimensions(videoEl.videoWidth, videoEl.videoHeight),
+      !!encInfo
     );
-    if (thumbContent && thumbContent.thumbnail_info) {
+    if (thumbContent.thumbnail_info) {
       thumbContent.thumbnail_info[MATRIX_BLUR_HASH_PROPERTY_NAME] = encodeBlurHash(
         videoEl,
         512,
         scaleYDimension(videoEl.videoWidth, 512, videoEl.videoHeight)
       );
     }
-    if (thumbError) console.warn(thumbError);
     content.info = {
       ...getVideoInfo(videoEl, file),
       ...thumbContent,
@@ -169,41 +155,5 @@ export const getFileMsgContent = (item: TUploadItem, mxc: string): IContent => {
   } else {
     content.url = mxc;
   }
-  return content;
-};
-
-export const getGifMsgContent = (
-  gif: GifResult,
-  mxc: string,
-  size: number,
-  fileName: string,
-  encInfo?: EncryptedAttachmentInfo
-): IContent => {
-  const content: IContent = {
-    msgtype: MsgType.Image,
-    body: gif.title || 'GIF',
-    filename: fileName,
-    info: {
-      mimetype: 'image/gif',
-      size,
-      w: gif.width,
-      h: gif.height,
-    },
-    'in.synara.gif': {
-      provider: gif.provider,
-      id: gif.id,
-      source_url: gif.sourceUrl,
-    },
-  };
-
-  if (encInfo) {
-    content.file = {
-      ...encInfo,
-      url: mxc,
-    };
-  } else {
-    content.url = mxc;
-  }
-
   return content;
 };

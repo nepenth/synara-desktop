@@ -1,0 +1,280 @@
+{
+  "task_id": "P1.2",
+  "title": "Exact Matrix Rust SDK production dependencies",
+  "date": "2026-07-24",
+  "base_branch": "feature/matrix-rust-sdk-full-replacement",
+  "base_sha": "585409a54ec89faeb387ad5b395a3e39ae7a0713",
+  "work_branch": "matrix-rust/p1.2-exact-sdk-deps",
+  "human_doc": "docs/matrix-rust-sdk/p1.2-sdk-dependency-rationale.md",
+  "program_pin": {
+    "matrix_sdk_version": "=0.18.0",
+    "matrix_sdk_ui_version": "=0.18.0",
+    "upstream_tag": "matrix-sdk-0.18.0",
+    "upstream_commit": "1c44fb66214667c6d00acaf72ab592493653708b",
+    "source": "crates.io exact pin aligned to upstream tag commit (P0.3/P0.4)"
+  },
+  "production_posture": {
+    "edition": "2021",
+    "rust_version_msrv": "1.93",
+    "toolchain_changed": false,
+    "production_client_session_started": false,
+    "production_login": false,
+    "production_sync": false,
+    "dual_backend": false,
+    "frontend_matrix_client": "matrix-js-sdk@42.0.0",
+    "tauri_commands_for_matrix": false,
+    "experimental_matrix_features": false
+  },
+  "cargo_toml_lines": [
+    "matrix-sdk = { version = \"=0.18.0\", default-features = false }",
+    "matrix-sdk-ui = { version = \"=0.18.0\", default-features = false }"
+  ],
+  "requested_features": {
+    "matrix-sdk": {
+      "default_features": false,
+      "features": []
+    },
+    "matrix-sdk-ui": {
+      "default_features": false,
+      "features": []
+    }
+  },
+  "resolved_features_host": {
+    "matrix-sdk": ["e2e-encryption"],
+    "matrix-sdk-ui": [],
+    "notes": [
+      "e2e-encryption enabled solely via matrix-sdk-ui dependency feature unification",
+      "matrix-sdk-ui published dep: matrix-sdk default-features=false features=[e2e-encryption]"
+    ]
+  },
+  "feature_rationale": [
+    {
+      "feature": "(none direct on matrix-sdk)",
+      "enabled_how": "explicit empty request + default-features=false",
+      "why": "Minimum program-useful production pin aligned with P0.3/P0.5 probes"
+    },
+    {
+      "feature": "(none direct on matrix-sdk-ui)",
+      "enabled_how": "explicit empty request + default-features=false",
+      "why": "Timeline/UI types available without experimental UI flags"
+    },
+    {
+      "feature": "matrix-sdk/e2e-encryption",
+      "enabled_how": "transitive via matrix-sdk-ui",
+      "why": "Required by matrix-sdk-ui; product target is E2EE-capable; documented honestly; no live crypto session in P1.2"
+    }
+  ],
+  "deferred_features": [
+    {
+      "feature": "sqlite",
+      "why": "Store selection deferred until Client construction"
+    },
+    {
+      "feature": "bundled-sqlite",
+      "why": "Avoid bundling native sqlite until required"
+    },
+    {
+      "feature": "indexeddb",
+      "why": "Browser/wasm path; not desktop product store"
+    },
+    {
+      "feature": "sso-login",
+      "why": "No login in P1.2"
+    },
+    {
+      "feature": "local-server",
+      "why": "Auth helper surface deferred"
+    },
+    {
+      "feature": "markdown",
+      "why": "Not required for dependency acceptance"
+    },
+    {
+      "feature": "qrcode",
+      "why": "Not required for dependency acceptance"
+    },
+    {
+      "feature": "socks",
+      "why": "Not required for dependency acceptance"
+    },
+    {
+      "feature": "federation-api",
+      "why": "Not required for dependency acceptance"
+    },
+    {
+      "feature": "automatic-room-key-forwarding",
+      "why": "Policy-sensitive; later gated decision"
+    },
+    {
+      "feature": "experimental-*",
+      "why": "Program forbids ungate experimental Matrix features"
+    },
+    {
+      "feature": "unstable-msc*",
+      "why": "Not product desktop requirements for P1.2"
+    },
+    {
+      "feature": "uniffi",
+      "why": "Not used by desktop Tauri shell"
+    },
+    {
+      "feature": "kitchen-sink default features",
+      "why": "Rejected to keep binary/link surface reviewable"
+    }
+  ],
+  "link_smoke": {
+    "module": "src-tauri/src/matrix_sdk_link_smoke.rs",
+    "mod_registration": "src-tauri/src/lib.rs",
+    "test": "compiles_with_matrix_sdk_0_18",
+    "constructs_client": false,
+    "network": false,
+    "tauri_commands": false,
+    "types_referenced": [
+      "matrix_sdk::Client",
+      "matrix_sdk_ui::timeline::Timeline"
+    ]
+  },
+  "licenses": {
+    "direct": [
+      {
+        "crate": "matrix-sdk",
+        "version": "0.18.0",
+        "license": "Apache-2.0"
+      },
+      {
+        "crate": "matrix-sdk-ui",
+        "version": "0.18.0",
+        "license": "Apache-2.0"
+      }
+    ],
+    "notable_transitive": [
+      {
+        "crate": "matrix-sdk-base",
+        "license": "Apache-2.0"
+      },
+      {
+        "crate": "matrix-sdk-crypto",
+        "license": "Apache-2.0"
+      },
+      {
+        "crate": "matrix-sdk-common",
+        "license": "Apache-2.0"
+      },
+      {
+        "crate": "matrix-sdk-store-encryption",
+        "license": "Apache-2.0"
+      },
+      {
+        "crate": "vodozemac",
+        "license": "Apache-2.0"
+      },
+      {
+        "crate": "ruma",
+        "license": "MIT"
+      },
+      {
+        "crate": "reqwest",
+        "license": "MIT OR Apache-2.0"
+      },
+      {
+        "crate": "rustls",
+        "license": "Apache-2.0 OR ISC OR MIT"
+      },
+      {
+        "crate": "aws-lc-rs",
+        "license": "ISC AND (Apache-2.0 OR ISC)"
+      },
+      {
+        "crate": "curve25519-dalek",
+        "license": "BSD-3-Clause"
+      },
+      {
+        "crate": "ed25519-dalek",
+        "license": "BSD-3-Clause"
+      },
+      {
+        "crate": "eyeball",
+        "license": "MPL-2.0",
+        "note": "weak copyleft; expected in Matrix Rust stack"
+      },
+      {
+        "crate": "imbl",
+        "license": "MPL-2.0+",
+        "note": "weak copyleft; expected"
+      }
+    ],
+    "copyleft_attention": [
+      "MPL-2.0 family: eyeball*, imbl*, async-rx, readlock*, as_variant, bitmaps — weak file-level copyleft; no GPL surprise from matrix-sdk itself",
+      "r-efi dual/triple includes optional LGPL-2.1-or-later among permissive options"
+    ],
+    "unexpected_strong_copyleft_from_sdk": false
+  },
+  "security": {
+    "exact_version_pin": true,
+    "lockfile_committed": true,
+    "no_experimental_features": true,
+    "no_production_client_session": true,
+    "no_network_from_rust_matrix_client": true,
+    "supply_chain_notes": "crates.io exact =0.18.0; Cargo.lock committed; e2e-encryption present compile-time only"
+  },
+  "validation": {
+    "host_os": "macOS arm64",
+    "rustc": "1.93.1 (01f6ddf75 2026-02-11)",
+    "cargo": "1.93.1 (083ac5135 2025-12-15)",
+    "commands": [
+      {
+        "cmd": "cd src-tauri && cargo check --locked",
+        "result": "PASS"
+      },
+      {
+        "cmd": "cd src-tauri && cargo test --locked",
+        "result": "PASS",
+        "tests_passed": 102,
+        "notes": "101 prior + compiles_with_matrix_sdk_0_18"
+      },
+      {
+        "cmd": "cargo tree -p matrix-sdk --locked -f '{p} {f}' --depth 0",
+        "result": "matrix-sdk v0.18.0 e2e-encryption"
+      },
+      {
+        "cmd": "cargo tree -p matrix-sdk-ui --locked -f '{p} {f}' --depth 0",
+        "result": "matrix-sdk-ui v0.18.0 (no features)"
+      },
+      {
+        "cmd": "grep matrix-js-sdk synara/package.json",
+        "result": "matrix-js-sdk 42.0.0 still present"
+      },
+      {
+        "cmd": "grep matrix_sdk usage under src-tauri/src",
+        "result": "only matrix_sdk_link_smoke.rs + mod in lib.rs"
+      }
+    ]
+  },
+  "residual_risks": [
+    "Larger compile graph / CI time (aws-lc, crypto stack)",
+    "Linux and universal macOS / notarization not re-proven with SDK-linked product binary in P1.2",
+    "e2e-encryption code linked while matrix-sdk-ui is a direct dep even before product uses crypto session",
+    "sqlite/TLS store feature choices deferred to Client construction task",
+    "MPL-2.0 transitive obligations if those files are modified",
+    "No runtime Matrix security test (no session by design)",
+    "Optional multi-target packages may appear in lockfile/metadata without being host-active features"
+  ],
+  "files_touched": [
+    "src-tauri/Cargo.toml",
+    "src-tauri/Cargo.lock",
+    "src-tauri/src/matrix_sdk_link_smoke.rs",
+    "src-tauri/src/lib.rs",
+    "docs/matrix-rust-sdk/p1.2-sdk-dependency-rationale.md",
+    "docs/matrix-rust-sdk/p1.2-sdk-dependency-rationale.json",
+    "docs/matrix-rust-sdk/README.md"
+  ],
+  "confirmations": {
+    "no_dual_backend": true,
+    "no_production_login_sync": true,
+    "no_main_merge": true,
+    "no_frontend_matrix_switch": true,
+    "no_experimental_features": true,
+    "no_toolchain_upgrade_beyond_p1_1": true
+  },
+  "verdict": "pass-with-residuals"
+}

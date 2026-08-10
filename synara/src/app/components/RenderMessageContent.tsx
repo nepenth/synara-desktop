@@ -1,6 +1,5 @@
 import React, { lazy, Suspense } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
-import { MsgType } from 'matrix-js-sdk';
 import { HTMLReactParserOptions } from 'html-react-parser';
 import { Opts } from 'linkifyjs';
 import { config } from 'folds';
@@ -140,7 +139,7 @@ export function RenderMessageContent({
     </>
   );
 
-  if (msgType === MsgType.Text) {
+  if (msgType === 'm.text') {
     return (
       <MText
         edited={edited}
@@ -157,7 +156,7 @@ export function RenderMessageContent({
     );
   }
 
-  if (msgType === MsgType.Emote) {
+  if (msgType === 'm.emote') {
     return (
       <MEmote
         displayName={displayName}
@@ -175,7 +174,7 @@ export function RenderMessageContent({
     );
   }
 
-  if (msgType === MsgType.Notice) {
+  if (msgType === 'm.notice') {
     return (
       <MNotice
         edited={edited}
@@ -192,7 +191,7 @@ export function RenderMessageContent({
     );
   }
 
-  if (msgType === MsgType.Image) {
+  if (msgType === 'm.image') {
     return (
       <>
         <MImage
@@ -212,7 +211,7 @@ export function RenderMessageContent({
     );
   }
 
-  if (msgType === MsgType.Video) {
+  if (msgType === 'm.video') {
     return (
       <>
         <MVideo
@@ -245,7 +244,7 @@ export function RenderMessageContent({
     );
   }
 
-  if (msgType === MsgType.Audio) {
+  if (msgType === 'm.audio') {
     return (
       <>
         <MAudio
@@ -261,11 +260,11 @@ export function RenderMessageContent({
     );
   }
 
-  if (msgType === MsgType.File) {
+  if (msgType === 'm.file') {
     return renderFile();
   }
 
-  if (msgType === MsgType.Location) {
+  if (msgType === 'm.location') {
     return <MLocation content={getContent()} />;
   }
 

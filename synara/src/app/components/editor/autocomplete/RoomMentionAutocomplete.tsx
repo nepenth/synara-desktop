@@ -1,7 +1,7 @@
 import React, { KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect } from 'react';
 import { Editor } from 'slate';
 import { Avatar, Icon, Icons, MenuItem, Text } from 'folds';
-import { JoinRule, MatrixClient } from 'matrix-js-sdk';
+import type { MatrixClientReading } from '../../../utils/room';
 import { useAtomValue } from 'jotai';
 
 import { createMentionElement, moveCursor, replaceWithElement } from '../utils';
@@ -18,10 +18,11 @@ import { allRoomsAtom } from '../../../state/room-list/roomList';
 import { factoryRoomIdByActivity } from '../../../utils/sort';
 import { RoomAvatar, RoomIcon } from '../../room-avatar';
 import { getViaServers } from '../../../plugins/via-servers';
+import { normalizeRoomJoinRulePresentation } from '../../../features/matrix-dto/roomJoinRule';
 
-type MentionAutoCompleteHandler = (roomAliasOrId: string, name: string) => void;
+type MentionAutoCompleteHandler = (roomAliasOrId: string, name: string) => void | Promise<void>;
 
-const roomAliasFromQueryText = (mx: MatrixClient, text: string) =>
+const roomAliasFromQueryText = (mx: MatrixClientReading, text: string) =>
   isRoomAlias(`#${text}`)
     ? `#${text}`
     : `#${text}${text.endsWith(':') ? '' : ':'}${getMxIdServer(mx.getUserId() ?? '')}`;
@@ -103,9 +104,9 @@ export function RoomMentionAutocomplete({
     else resetSearch();
   }, [query.text, search, resetSearch]);
 
-  const handleAutocomplete: MentionAutoCompleteHandler = (roomAliasOrId, name) => {
+  const handleAutocomplete: MentionAutoCompleteHandler = async (roomAliasOrId, name) => {
     const mentionRoom = mx.getRoom(roomAliasOrId);
-    const viaServers = mentionRoom ? getViaServers(mentionRoom) : undefined;
+    const viaServers = mentionRoom ? await getViaServers(mentionRoom) : undefined;
     const mentionEl = createMentionElement(
       roomAliasOrId,
       name.startsWith('#') ? name : `#${name}`,
@@ -168,14 +169,18 @@ export function RoomMentionAutocomplete({
                       renderFallback={() => (
                         <RoomIcon
                           size="50"
-                          joinRule={room.getJoinRule() ?? JoinRule.Restricted}
+                          joinRule={normalizeRoomJoinRulePresentation(room.getJoinRule())}
                           roomType={room.getType()}
                           filled
                         />
                       )}
                     />
                   ) : (
-                    <RoomIcon size="100" joinRule={room.getJoinRule()} roomType={room.getType()} />
+                    <RoomIcon
+                      size="100"
+                      joinRule={normalizeRoomJoinRulePresentation(room.getJoinRule())}
+                      roomType={room.getType()}
+                    />
                   )}
                 </Avatar>
               }

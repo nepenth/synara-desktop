@@ -1,5 +1,7 @@
 import { createContext, useContext } from 'react';
-import type { MatrixClient } from 'matrix-js-sdk/lib/client';
+import type { initClient } from '../../client/initMatrix';
+
+type MatrixClient = Awaited<ReturnType<typeof initClient>>;
 
 const MatrixClientContext = createContext<MatrixClient | null>(null);
 

@@ -1,7 +1,5 @@
 /* eslint-disable react/destructuring-assignment */
 import React, { forwardRef, MouseEventHandler, useCallback, useMemo, useRef } from 'react';
-import { MatrixEvent, Room } from 'matrix-js-sdk';
-import { RoomPinnedEventsEventContent } from 'matrix-js-sdk/lib/types';
 import {
   Avatar,
   Box,
@@ -43,13 +41,11 @@ import {
 import { UserAvatar } from '../../../components/user-avatar';
 import { getMxIdLocalPart } from '../../../utils/matrix';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import {
-  getEditedEvent,
-  getMemberAvatarMxc,
-  getMemberDisplayName,
-  getStateEvent,
-} from '../../../utils/room';
+import { getEditedEvent, getMemberAvatarMxc, getMemberDisplayName } from '../../../utils/room';
+import type { EventTimelineSetReading, MatrixEventReading } from '../../../utils/room';
+import type { EventedRoomReading } from '../../../utils/roomEvents';
 import { GetContentCallback, MessageEvent, StateEvent } from '../../../../types/matrix/room';
+import { unpinWithNativeTimelineAction } from '../nativeTimelineAction';
 import { useMentionClickHandler } from '../../../hooks/useMentionClickHandler';
 import { useSpoilerClickHandler } from '../../../hooks/useSpoilerClickHandler';
 import {
@@ -64,7 +60,7 @@ import { RenderMessageContent } from '../../../components/RenderMessageContent';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 import * as customHtmlCss from '../../../styles/CustomHtml.css';
-import { EncryptedContent } from '../message';
+import { NativeEventContent, type NativeEventSource } from '../message';
 import { Image } from '../../../components/media';
 import { ImageViewer } from '../../../components/image-viewer';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
@@ -87,11 +83,28 @@ import {
 } from '../../../hooks/useMemberPowerTag';
 import { useRoomCreatorsTag } from '../../../hooks/useRoomCreatorsTag';
 import { resolveMatrixThumbnailUrl } from '../../../matrix/media';
+import { IImageContent } from '../../../../types/matrix/common';
+
+/** A js-sdk-backed MatrixEvent as read by the pin menu (renderer receives live SDK events). */
+type PinEventReading = MatrixEventReading & {
+  getUnsigned(): {
+    redacted_because?: { content: { reason?: string; [key: string]: unknown } };
+    [key: string]: unknown;
+  };
+  replacingEvent(): MatrixEventReading | null;
+};
+
+/** Room projection with the pin-menu timeline accessors synara already relies on. */
+type PinRoomReading = EventedRoomReading & {
+  getTimelineForEvent(
+    eventId: string
+  ): { getTimelineSet(): EventTimelineSetReading; getEvents(): MatrixEventReading[] } | null;
+};
 
 type PinnedMessageProps = {
-  room: Room;
+  room: PinRoomReading;
   eventId: string;
-  renderContent: RenderMatrixEvent<[MatrixEvent, string, GetContentCallback]>;
+  renderContent: RenderMatrixEvent<[PinEventReading, string, GetContentCallback]>;
   onOpen: (roomId: string, eventId: string) => void;
   canPinEvent: boolean;
   getMemberPowerTag: GetMemberPowerTag;
@@ -112,20 +125,15 @@ function PinnedMessage({
   hour24Clock,
   dateFormatString,
 }: PinnedMessageProps) {
-  const pinnedEvent = useRoomEvent(room, eventId);
+  const pinnedEvent = useRoomEvent(room as unknown as Parameters<typeof useRoomEvent>[0], eventId);
   const useAuthentication = useMediaAuthentication();
   const mx = useMatrixClient();
 
   const [unpinState, unpin] = useAsyncCallback(
-    useCallback(() => {
-      const pinEvent = getStateEvent(room, StateEvent.RoomPinnedEvents);
-      const content = pinEvent?.getContent<RoomPinnedEventsEventContent>() ?? { pinned: [] };
-      const newContent: RoomPinnedEventsEventContent = {
-        pinned: content.pinned.filter((id) => id !== eventId),
-      };
-
-      return mx.sendStateEvent(room.roomId, StateEvent.RoomPinnedEvents as any, newContent);
-    }, [room, eventId, mx])
+    useCallback(
+      () => unpinWithNativeTimelineAction({ roomId: room.roomId, eventId }),
+      [room.roomId, eventId]
+    )
   );
 
   const handleOpenClick: MouseEventHandler = (evt) => {
@@ -229,7 +237,7 @@ function PinnedMessage({
       </Box>
       {pinnedEvent.replyEventId && (
         <Reply
-          room={room}
+          room={room as unknown as Parameters<typeof useRoomEvent>[0]}
           replyEventId={pinnedEvent.replyEventId}
           threadRootId={pinnedEvent.threadRootId}
           onClick={handleOpenClick}
@@ -244,7 +252,7 @@ function PinnedMessage({
 }
 
 type RoomPinMenuProps = {
-  room: Room;
+  room: PinRoomReading;
   requestClose: () => void;
   mode?: 'menu' | 'drawer';
 };
@@ -314,7 +322,7 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
       [mx, room, linkifyOpts, mentionClickHandler, spoilerClickHandler, useAuthentication]
     );
 
-    const renderMatrixEvent = useMatrixEventRenderer<[MatrixEvent, string, GetContentCallback]>(
+    const renderMatrixEvent = useMatrixEventRenderer<[PinEventReading, string, GetContentCallback]>(
       {
         [MessageEvent.RoomMessage]: (event, displayName, getContent) => {
           if (event.isRedacted()) {
@@ -360,13 +368,16 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
           }
 
           return (
-            <EncryptedContent mEvent={mEvent}>
-              {() => {
-                if (mEvent.isRedacted()) return <RedactedContent />;
-                if (mEvent.getType() === MessageEvent.Sticker)
+            <NativeEventContent
+              roomId={room.roomId}
+              mEvent={mEvent as unknown as NativeEventSource}
+            >
+              {(resolvedEvent) => {
+                if (resolvedEvent.redacted) return <RedactedContent />;
+                if (resolvedEvent.type === MessageEvent.Sticker)
                   return (
                     <MSticker
-                      content={mEvent.getContent()}
+                      content={resolvedEvent.content as unknown as IImageContent}
                       renderImageContent={(props) => (
                         <ImageContent
                           {...props}
@@ -377,18 +388,27 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
                       )}
                     />
                   );
-                if (mEvent.getType() === MessageEvent.RoomMessage) {
-                  const editedEvent = getEditedEvent(eventId, mEvent, evtTimeline.getTimelineSet());
+                if (resolvedEvent.type === MessageEvent.RoomMessage) {
+                  const editedEvent = getEditedEvent(
+                    eventId,
+                    resolvedEvent,
+                    evtTimeline.getTimelineSet()
+                  );
                   const getContent = (() =>
-                    editedEvent?.getContent()['m.new_content'] ??
-                    mEvent.getContent()) as GetContentCallback;
+                    editedEvent?.getContent<Record<string, unknown>>()['m.new_content'] ??
+                    resolvedEvent.content) as GetContentCallback;
+
+                  const msgType =
+                    typeof resolvedEvent.content.msgtype === 'string'
+                      ? resolvedEvent.content.msgtype
+                      : '';
 
                   return (
                     <RenderMessageContent
                       displayName={displayName}
-                      msgType={mEvent.getContent().msgtype ?? ''}
-                      ts={mEvent.getTs()}
-                      edited={!!editedEvent || !!mEvent.replacingEvent()}
+                      msgType={msgType}
+                      ts={resolvedEvent.originServerTs}
+                      edited={!!editedEvent}
                       getContent={getContent}
                       mediaAutoLoad={mediaAutoLoad}
                       htmlReactParserOptions={htmlReactParserOptions}
@@ -401,7 +421,7 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
                     />
                   );
                 }
-                if (mEvent.getType() === MessageEvent.RoomMessageEncrypted)
+                if (resolvedEvent.type === MessageEvent.RoomMessageEncrypted)
                   return (
                     <Text>
                       <MessageNotDecryptedContent />
@@ -413,7 +433,7 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
                   </Text>
                 );
               }}
-            </EncryptedContent>
+            </NativeEventContent>
           );
         },
         [MessageEvent.Sticker]: (event, displayName, getContent) => {

@@ -1,0 +1,11 @@
+{
+  "kind": "state",
+  "itemId": "$state1",
+  "eventId": "$state1",
+  "roomId": "!room:example.org",
+  "sender": "@alice:example.org",
+  "originServerTs": 1720000001000,
+  "stateKey": "",
+  "stateType": "m.room.name",
+  "summary": "General"
+}

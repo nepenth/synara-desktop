@@ -19,7 +19,7 @@ import {
   PopOut,
   RectCords,
 } from 'folds';
-import { Direction, MatrixError } from 'matrix-js-sdk';
+import type { MatrixError } from '../../../utils/matrix';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { stopPropagation } from '../../../utils/keyboard';
@@ -70,7 +70,15 @@ export function JumpToTime({ onCancel, onSubmit }: JumpToTimeProps) {
   const [timestampState, timestampToEvent] = useAsyncCallback<string, MatrixError, [number]>(
     useCallback(
       async (newTs) => {
-        const result = await mx.timestampToEvent(room.roomId, newTs, Direction.Forward);
+        const result = await (
+          mx as unknown as {
+            timestampToEvent(
+              roomId: string,
+              timestamp: number,
+              dir: 'f' | 'b'
+            ): Promise<{ event_id: string }>;
+          }
+        ).timestampToEvent(room.roomId, newTs, 'f');
         return result.event_id;
       },
       [mx, room]

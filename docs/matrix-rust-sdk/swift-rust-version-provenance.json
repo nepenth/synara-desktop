@@ -1,0 +1,240 @@
+{
+  "schema_version": 1,
+  "task_id": "P0.4",
+  "title": "Swift/Rust version provenance and desktop/iOS alignment target",
+  "generation_date": "2026-07-24",
+  "base_integration_commit": "c76f4ff7cb19e3e6d1536e9b8f7b8d269f374dcb",
+  "base_integration_branch": "feature/matrix-rust-sdk-full-replacement",
+  "work_branch": "matrix-rust/p0.4-swift-rust-provenance",
+  "artifact_state": "landed",
+  "integration_state": "merged",
+  "strict_acceptance_state": "open",
+  "phase_gate_state": "open",
+  "current_status_ref": "docs/matrix-rust-sdk/program-status.json",
+  "historical_status_at_generation": "accepted_pending_integration_merge",
+  "historical_merged_at_generation": false,
+  "ios": {
+    "package": "matrix-rust-components-swift",
+    "package_url": "https://github.com/matrix-org/matrix-rust-components-swift.git",
+    "version_constraint": "26.06.06",
+    "version_constraint_kind": "exactVersion",
+    "resolved_version": "26.6.6",
+    "resolved_version_note": "SwiftPM normalizes CalVer 26.06.06 to resolved version string 26.6.6",
+    "resolved_revision": "ec3b2161ba371a13609e7181077d2f3baef188f5",
+    "release_tag": "26.06.06",
+    "release_url": "https://github.com/matrix-org/matrix-rust-components-swift/releases/tag/26.06.06",
+    "package_commit_url": "https://github.com/matrix-org/matrix-rust-components-swift/commit/ec3b2161ba371a13609e7181077d2f3baef188f5",
+    "published_at_utc": "2026-06-06T07:51:21Z",
+    "local_pins": {
+      "xcode_pbxproj": {
+        "path": "synara-ios/Synara.xcodeproj/project.pbxproj",
+        "repository_url": "https://github.com/matrix-org/matrix-rust-components-swift.git",
+        "requirement_kind": "exactVersion",
+        "version": "26.06.06"
+      },
+      "xcodegen_project_yml": {
+        "path": "synara-ios/project.yml",
+        "exactVersion": "26.06.06"
+      },
+      "app_package_resolved": {
+        "path": "synara-ios/Synara.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
+        "identity": "matrix-rust-components-swift",
+        "version": "26.6.6",
+        "revision": "ec3b2161ba371a13609e7181077d2f3baef188f5"
+      },
+      "spike_package_swift": {
+        "path": "synara-ios/spikes/matrix-sdk-probe/Package.swift",
+        "exact": "26.06.06"
+      },
+      "spike_package_resolved": {
+        "path": "synara-ios/spikes/matrix-sdk-probe/Package.resolved",
+        "version": "26.6.6",
+        "revision": "ec3b2161ba371a13609e7181077d2f3baef188f5"
+      }
+    },
+    "binary_target": {
+      "name": "MatrixSDKFFI",
+      "product_library": "MatrixRustSDK",
+      "asset_name": "MatrixSDKFFI.xcframework.zip",
+      "download_url": "https://github.com/matrix-org/matrix-rust-components-swift/releases/download/26.06.06/MatrixSDKFFI.xcframework.zip",
+      "package_swift_checksum_sha256": "e7f3a2abe6a3d516fc92ef04f9e04b60e45dfce39af98f36ffc4ce28d26f8a18",
+      "release_asset_digest_sha256": "e7f3a2abe6a3d516fc92ef04f9e04b60e45dfce39af98f36ffc4ce28d26f8a18",
+      "checksum_match": true
+    },
+    "embedded_matrix_rust_sdk": {
+      "git_commit": "1c44fb66214667c6d00acaf72ab592493653708b",
+      "git_commit_url": "https://github.com/matrix-org/matrix-rust-sdk/commit/1c44fb66214667c6d00acaf72ab592493653708b",
+      "tree_url": "https://github.com/matrix-org/matrix-rust-sdk/tree/1c44fb66214667c6d00acaf72ab592493653708b",
+      "release_tag": "matrix-sdk-0.18.0",
+      "release_tag_url": "https://github.com/matrix-org/matrix-rust-sdk/releases/tag/matrix-sdk-0.18.0",
+      "crate_versions": {
+        "matrix-sdk": "0.18.0",
+        "matrix-sdk-ui": "0.18.0"
+      },
+      "commit_date_utc": "2026-06-02T11:29:09Z",
+      "commit_subject": "chore: Release matrix-sdk version 0.18.0",
+      "confidence": "high",
+      "xcframework_binary_inspected": false,
+      "xcframework_inspection_needed": false,
+      "proof_summary": "Package bump commit message and GitHub release body both publish embedded commit 1c44fb66…; release tooling records git commitHash; matrix-sdk-0.18.0 annotated tag peels to the same commit."
+    }
+  },
+  "desktop": {
+    "matrix_sdk_version": "0.18.0",
+    "matrix_sdk_ui_version": "0.18.0",
+    "version_constraint": "=0.18.0",
+    "pinned_commit": "1c44fb66214667c6d00acaf72ab592493653708b",
+    "release_tag": "matrix-sdk-0.18.0",
+    "repository": "https://github.com/matrix-org/matrix-rust-sdk",
+    "commit_url": "https://github.com/matrix-org/matrix-rust-sdk/commit/1c44fb66214667c6d00acaf72ab592493653708b",
+    "release_url": "https://github.com/matrix-org/matrix-rust-sdk/releases/tag/matrix-sdk-0.18.0",
+    "packaging": "crates.io_direct_rust_crates",
+    "uses_uniffi": false,
+    "upstream_rust_version": "1.93",
+    "upstream_edition": "2024",
+    "provenance_artifact": "docs/matrix-rust-sdk/0.18.0-source-provenance.md",
+    "provenance_json": "docs/matrix-rust-sdk/0.18.0-source-provenance.json",
+    "probe_path": "probes/matrix-rust-sdk-0.18/",
+    "pin_locked_by": ["program_plan", "P0.3", "P0.3a"],
+    "pin_changed_by_p0_4": false
+  },
+  "comparison": {
+    "same_embedded_git_commit": true,
+    "same_crate_series": true,
+    "same_packaging": false,
+    "packaging_note": "iOS uses matrix-rust-components-swift UniFFI XCFramework; desktop embeds matrix-sdk/matrix-sdk-ui crates directly. Intentional full-replacement architecture, not dual-backend.",
+    "ios_package_published_utc": "2026-06-06T07:51:21Z",
+    "desktop_source_commit_utc": "2026-06-02T11:29:09Z",
+    "approximate_lag": "Swift CalVer 26.06.06 published ~4 days after Rust release commit 1c44fb66",
+    "element_x_ios_reference": {
+      "components_version_noted": "26.07.15",
+      "source": "docs/desktop-foundation-reference-audit.md",
+      "adopted_by_synara": false,
+      "note": "Context only; P0.4 does not bump iOS package versions."
+    }
+  },
+  "alignment": {
+    "decision": "exact_same_git_commit",
+    "decision_code": "A",
+    "decision_labels": {
+      "A": "exact same git commit now",
+      "B": "same published crate series",
+      "C": "intentionally divergent with convergence plan",
+      "D": "deferred iOS bump with shared semantic fixtures as interim parity method"
+    },
+    "same_commit": true,
+    "same_crate_series": true,
+    "shared_commit": "1c44fb66214667c6d00acaf72ab592493653708b",
+    "desktop_pin_policy": "Remain on matrix-sdk/matrix-sdk-ui =0.18.0 at commit 1c44fb66214667c6d00acaf72ab592493653708b for Phase 1+ unless a later program-approved crate bump.",
+    "ios_pin_policy": "Remain on matrix-rust-components-swift 26.06.06 (resolved 26.6.6 / ec3b2161…) until a separate approved iOS package upgrade task; do not follow Element X 26.07.15 in this task.",
+    "rationale": [
+      "Primary-source evidence proves iOS 26.06.06 embeds matrix-rust-sdk commit 1c44fb66…, which is exactly matrix-sdk-0.18.0 and the locked desktop pin.",
+      "Program alignment is source-revision and protocol/behavior parity, not sharing the same FFI package: desktop embeds crates; iOS uses Swift FFI components.",
+      "No iOS bump and no desktop pin change in P0.4 preserves proven exact-commit alignment during Phase 0/1 foundation work.",
+      "If a future iOS CalVer bump moves ahead of desktop 0.18.0, re-run provenance and reclassify; use shared semantic fixtures as interim cross-platform parity method until pins reconverge."
+    ],
+    "residual_risks": [
+      {
+        "id": "R1",
+        "risk": "Future iOS CalVer bump may embed a newer Rust commit than desktop 0.18.0",
+        "mitigation": "Re-run provenance before accepting any iOS components bump; decide desktop crate bump vs intentional temporary divergence"
+      },
+      {
+        "id": "R2",
+        "risk": "Element X / ecosystem pressure to adopt 26.07.x+ bindings",
+        "mitigation": "Treat as context only until a scoped iOS upgrade task with binding-diff review"
+      },
+      {
+        "id": "R3",
+        "risk": "UniFFI surface vs crates public API remain distinct integration layers even at the same commit",
+        "mitigation": "Same source commit minimizes semantic drift; cutover tests must exercise each platform binding surface"
+      },
+      {
+        "id": "R4",
+        "risk": "XCFramework binary not byte-inspected in this task",
+        "mitigation": "Package.swift checksum matches GitHub release asset digest; primary proof is published commit SHA in release metadata"
+      }
+    ],
+    "follow_up_gates": [
+      {
+        "id": "G1",
+        "gate": "Keep desktop crates =0.18.0 until program-approved crate bump"
+      },
+      {
+        "id": "G2",
+        "gate": "Keep iOS components-swift 26.06.06 until approved iOS package upgrade task"
+      },
+      {
+        "id": "G3",
+        "gate": "Prefer shared semantic fixtures for cross-platform parity if packaging pins ever diverge"
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "id": "E1",
+      "claim": "Swift package bump commit names embedded matrix-rust-sdk SHA",
+      "method": "git log -1 / GitHub commits API on ec3b2161ba371a13609e7181077d2f3baef188f5",
+      "result": "message: Bump to version 26.06.06 (matrix-rust-sdk/HEAD 1c44fb66214667c6d00acaf72ab592493653708b)"
+    },
+    {
+      "id": "E2",
+      "claim": "GitHub release body is matrix-rust-sdk tree URL at embedded commit",
+      "method": "GET https://api.github.com/repos/matrix-org/matrix-rust-components-swift/releases/tags/26.06.06",
+      "result": "body=https://github.com/matrix-org/matrix-rust-sdk/tree/1c44fb66214667c6d00acaf72ab592493653708b; published_at=2026-06-06T07:51:21Z"
+    },
+    {
+      "id": "E3",
+      "claim": "Upstream release tooling embeds git commitHash into the package bump commit message",
+      "method": "Inspect Tools/Release/Sources/Release.swift at tag 26.06.06",
+      "result": "build() reads git.commitHash; commitAndPush message format includes (matrix-rust-sdk/<branch> <commitHash>)"
+    },
+    {
+      "id": "E4",
+      "claim": "matrix-sdk-0.18.0 annotated tag peels to the same commit",
+      "method": "GitHub git refs/tags API + annotated tag object",
+      "result": "tag target commit 1c44fb66214667c6d00acaf72ab592493653708b"
+    },
+    {
+      "id": "E5",
+      "claim": "Desktop P0.3a pin matches embedded commit",
+      "method": "docs/matrix-rust-sdk/0.18.0-source-provenance.md|json",
+      "result": "desktop pinned_commit=1c44fb66214667c6d00acaf72ab592493653708b / matrix-sdk-0.18.0"
+    },
+    {
+      "id": "E6",
+      "claim": "Local iOS Package.resolved revision matches upstream tag commit",
+      "method": "Compare Package.resolved pins to git rev-parse at tag 26.06.06",
+      "result": "both ec3b2161ba371a13609e7181077d2f3baef188f5"
+    },
+    {
+      "id": "E7",
+      "claim": "Package.swift binary checksum matches release asset digest",
+      "method": "Package.swift checksum field vs GitHub release asset digest",
+      "result": "e7f3a2abe6a3d516fc92ef04f9e04b60e45dfce39af98f36ffc4ce28d26f8a18"
+    }
+  ],
+  "validation_commands": [
+    "git clone --depth 1 --branch 26.06.06 https://github.com/matrix-org/matrix-rust-components-swift components-swift && cd components-swift && git rev-parse HEAD && git log -1 --format=%B",
+    "curl -sL https://api.github.com/repos/matrix-org/matrix-rust-components-swift/releases/tags/26.06.06 | python3 -c \"import sys,json; d=json.load(sys.stdin); print(d['body']); print(d['published_at'])\"",
+    "git clone --depth 1 --branch matrix-sdk-0.18.0 https://github.com/matrix-org/matrix-rust-sdk matrix-rust-sdk && cd matrix-rust-sdk && git rev-parse HEAD",
+    "grep -A6 'matrix-rust-components-swift' synara-ios/Synara.xcodeproj/project.pbxproj",
+    "python3 -c \"import json; d=json.load(open('synara-ios/Synara.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved')); print([p for p in d['pins'] if 'matrix-rust' in p['identity']])\""
+  ],
+  "non_goals": [
+    "No iOS package version bump",
+    "No desktop crate pin change",
+    "No production app code, src-tauri Cargo.toml, package.json, or matrix-js-sdk usage changes",
+    "No dual-backend, SDK selector, or raw /_matrix/ HTTP paths",
+    "No re-opening of completed P0.2 FR rows 7.8-7.11; no re-promotion of FR-7.9-011",
+    "No XCFramework binary committed to the repo; no building XCFramework from source in this task",
+    "Alignment is protocol/behavior version strategy, not sharing the same FFI package"
+  ],
+  "related_artifacts": [
+    "docs/matrix-rust-sdk/0.18.0-source-provenance.md",
+    "docs/matrix-rust-sdk/0.18.0-source-provenance.json",
+    "docs/matrix-rust-sdk/README.md",
+    "docs/matrix-rust-sdk-full-replacement-plan.md",
+    "docs/desktop-foundation-reference-audit.md"
+  ]
+}

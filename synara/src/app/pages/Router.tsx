@@ -59,8 +59,7 @@ import { MobileFriendlyPageNav, MobileFriendlyClientNav } from './MobileFriendly
 import { ClientInitStorageAtom } from './client/ClientInitStorageAtom';
 import { ClientNonUIFeatures } from './client/ClientNonUIFeatures';
 import { AuthRouteThemeManager, UnAuthRouteThemeManager } from './ThemeManager';
-import { ReceiveSelfDeviceVerification } from '../components/DeviceVerification';
-import { AutoRestoreBackupOnVerification } from '../components/BackupRestore';
+import { NativeVerificationInboxRenderer } from '../features/verification/NativeDeviceVerification';
 import { RoomSettingsRenderer } from '../features/room-settings';
 import { ClientRoomsNotificationPreferences } from './client/ClientRoomsNotificationPreferences';
 import { SpaceSettingsRenderer } from '../features/space-settings';
@@ -71,8 +70,6 @@ import { Create } from './client/create';
 import { CreateSpaceModalRenderer } from '../features/create-space';
 import { SearchModalRenderer } from '../features/search';
 import { getActiveSession } from '../state/sessionBootstrap';
-import { CallStatusRenderer } from './CallStatusRenderer';
-import { CallEmbedProvider } from '../components/CallEmbedProvider';
 import { Settings } from '../features/settings';
 import { Modal500 } from '../components/Modal500';
 
@@ -142,26 +139,22 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
                 <ClientRoomsNotificationPreferences>
                   <ClientBindAtoms>
                     <ClientNonUIFeatures>
-                      <CallEmbedProvider>
-                        <ClientLayout
-                          nav={
-                            <MobileFriendlyClientNav>
-                              <SidebarNav />
-                            </MobileFriendlyClientNav>
-                          }
-                        >
-                          <Outlet />
-                        </ClientLayout>
-                        <CallStatusRenderer />
-                      </CallEmbedProvider>
+                      <ClientLayout
+                        nav={
+                          <MobileFriendlyClientNav>
+                            <SidebarNav />
+                          </MobileFriendlyClientNav>
+                        }
+                      >
+                        <Outlet />
+                      </ClientLayout>
                       <SearchModalRenderer />
                       <UserRoomProfileRenderer />
                       <CreateRoomModalRenderer />
                       <CreateSpaceModalRenderer />
                       <RoomSettingsRenderer />
                       <SpaceSettingsRenderer />
-                      <ReceiveSelfDeviceVerification />
-                      <AutoRestoreBackupOnVerification />
+                      <NativeVerificationInboxRenderer />
                     </ClientNonUIFeatures>
                   </ClientBindAtoms>
                 </ClientRoomsNotificationPreferences>

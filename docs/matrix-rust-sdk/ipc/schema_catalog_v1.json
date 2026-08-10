@@ -1,0 +1,75 @@
+{
+  "protocolVersion": 1,
+  "kinds": [
+    "hello",
+    "hello_ack",
+    "subscribe",
+    "unsubscribe",
+    "subscribed",
+    "unsubscribed",
+    "snapshot",
+    "delta",
+    "resync_required",
+    "cancel",
+    "error",
+    "ping",
+    "pong"
+  ],
+  "errorCategories": [
+    "authentication_rejected",
+    "user_deactivated",
+    "interactive_auth_required",
+    "forbidden",
+    "rate_limited",
+    "connectivity",
+    "homeserver_unavailable",
+    "unsupported_capability",
+    "store_locked",
+    "store_corrupt",
+    "store_unavailable",
+    "crypto_failure",
+    "recovery_failure",
+    "verification_failure",
+    "media_too_large",
+    "media_unsupported",
+    "media_decrypt_failed",
+    "cancellation",
+    "stale_session_generation",
+    "sdk_invariant",
+    "unknown"
+  ],
+  "streamTopics": [
+    "room_list",
+    "timeline",
+    "members",
+    "typing",
+    "receipts",
+    "account_data",
+    "presence",
+    "notification_candidates",
+    "crypto_status",
+    "send_queue"
+  ],
+  "resyncReasons": [
+    "sequence_gap",
+    "stale_session_generation",
+    "unknown_kind",
+    "snapshot_required",
+    "supervisor_reset"
+  ],
+  "cancelReasons": [
+    "client_request",
+    "timeout",
+    "session_ended",
+    "stream_closed",
+    "superseded"
+  ],
+  "bounds": {
+    "maxEnvelopePayloadJsonBytes": 1048576,
+    "maxStreamQueueDepth": 256,
+    "streamCoalesceWindowMs": 16,
+    "maxOpenStreamsPerSession": 64,
+    "forbidMediaBytesOverJsonIpc": true,
+    "maxWireCounter": 9007199254740991
+  }
+}

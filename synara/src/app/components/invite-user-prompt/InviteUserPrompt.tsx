@@ -1,3 +1,4 @@
+import type { EventedRoomReading } from '../../utils/roomEvents';
 import React, {
   ChangeEventHandler,
   FormEventHandler,
@@ -29,7 +30,7 @@ import {
   Scroll,
   MenuItem,
 } from 'folds';
-import { Room } from 'matrix-js-sdk';
+
 import { isKeyHotkey } from 'is-hotkey';
 import FocusTrap from 'focus-trap-react';
 import { stopPropagation } from '../../utils/keyboard';
@@ -39,9 +40,10 @@ import { Membership } from '../../../types/matrix/room';
 import { useAsyncSearch, UseAsyncSearchOptions } from '../../hooks/useAsyncSearch';
 import { highlightText, makeHighlightRegex } from '../../plugins/react-custom-html-parser';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { BreakWord } from '../../styles/Text.css';
 import { useAlive } from '../../hooks/useAlive';
+import { inviteUserWithNativeOwner } from '../nativeRoomModerationOwner';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 
 const SEARCH_OPTIONS: UseAsyncSearchOptions = {
   limit: 1000,
@@ -52,11 +54,10 @@ const SEARCH_OPTIONS: UseAsyncSearchOptions = {
 const getUserIdString = (userId: string) => getMxIdLocalPart(userId) ?? userId;
 
 type InviteUserProps = {
-  room: Room;
+  room: EventedRoomReading;
   requestClose: () => void;
 };
 export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
-  const mx = useMatrixClient();
   const alive = useAlive();
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -66,7 +67,7 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
   const filteredUsers = useMemo(
     () =>
       directUsers.filter((userId) => {
-        const membership = room.getMember(userId)?.membership;
+        const membership = (room.getMember(userId) as { membership?: string } | null)?.membership;
         return membership !== Membership.Join;
       }),
     [directUsers, room]
@@ -83,9 +84,15 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
   const [inviteState, invite] = useAsyncCallback<void, Error, [string, string | undefined]>(
     useCallback(
       async (userId, reason) => {
-        await mx.invite(room.roomId, userId, reason);
+        await inviteUserWithNativeOwner(
+          room.roomId,
+          userId,
+          reason,
+          isSynaraDesktop(),
+          invokeDesktopWithAvailability
+        );
       },
-      [mx, room]
+      [room]
     )
   );
 

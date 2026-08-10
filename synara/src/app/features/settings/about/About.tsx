@@ -136,6 +136,20 @@ export function About({ requestClose }: AboutProps) {
                   >
                     <li>
                       <Text size="T300">
+                        This app is a derivative work of{' '}
+                        <a
+                          href="https://github.com/cinnyapp/cinny"
+                          rel="noreferrer noopener"
+                          target="_blank"
+                        >
+                          Cinny
+                        </a>{' '}
+                        (AGPL-3.0), © the original Cinny authors. Substantially rewritten for Synara
+                        Desktop.
+                      </Text>
+                    </li>
+                    <li>
+                      <Text size="T300">
                         The{' '}
                         <a
                           href="https://github.com/matrix-org/matrix-js-sdk"

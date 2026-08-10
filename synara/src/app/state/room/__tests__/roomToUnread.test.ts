@@ -1,35 +1,44 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { type EventTimeline, type MatrixClient, type MatrixEvent, type Room } from 'matrix-js-sdk';
-import { EventType } from 'matrix-js-sdk/lib/@types/event';
-import { ReceiptType } from 'matrix-js-sdk/lib/@types/read_receipts';
-import { shouldKeepRoomUnreadAfterReceipt } from '../roomToUnread';
+import type { RoomSummary } from '../../../features/matrix-dto/room';
+import { unreadInfosFromNativeRooms } from '../roomToUnread';
 
-const roomAtTail = (markedUnread: boolean): Room => {
-  const tailEvent = { getId: () => '$tail' } as MatrixEvent;
-  const liveTimeline = { getEvents: () => [tailEvent] } as EventTimeline;
-
-  return {
-    client: { getUserId: () => '@alice:example.org' },
-    getLiveTimeline: () => liveTimeline,
-    getAccountData: (type: EventType | string) => {
-      if (type === EventType.MarkedUnread) {
-        return { getContent: () => ({ unread: markedUnread }) } as MatrixEvent;
-      }
-      return undefined;
-    },
-    getReadReceiptForUserId: (_userId: string, _ignoreSynthesized: boolean, type: ReceiptType) =>
-      type === ReceiptType.Read ? { eventId: '$tail', data: { ts: 100 } } : null,
-    compareEventOrdering: () => 0,
-  } as unknown as Room;
-};
-
-test('receipt cleanup discards stale unread counters when the durable frontier is at live tail', () => {
-  const mx = { getUserId: () => '@alice:example.org' } as MatrixClient;
-  assert.equal(shouldKeepRoomUnreadAfterReceipt(mx, roomAtTail(false)), false);
+const room = (overrides: Partial<RoomSummary> & Pick<RoomSummary, 'roomId'>): RoomSummary => ({
+  membership: 'join',
+  isDirect: false,
+  isSpace: false,
+  isCall: false,
+  isEncrypted: false,
+  unreadCount: 0,
+  highlightCount: 0,
+  markedUnread: false,
+  ...overrides,
 });
 
-test('receipt cleanup preserves an explicit marked-unread room even when its receipt is current', () => {
-  const mx = { getUserId: () => '@alice:example.org' } as MatrixClient;
-  assert.equal(shouldKeepRoomUnreadAfterReceipt(mx, roomAtTail(true)), true);
+test('native unread projection keeps joined rooms with counts or marked-unread', () => {
+  const infos = unreadInfosFromNativeRooms([
+    room({ roomId: '!a:example.org', unreadCount: 2, highlightCount: 1 }),
+    room({ roomId: '!b:example.org', markedUnread: true }),
+    room({ roomId: '!c:example.org' }),
+  ]);
+  assert.deepEqual(infos, [
+    { roomId: '!a:example.org', highlight: 1, total: 2 },
+    { roomId: '!b:example.org', highlight: 0, total: 0 },
+  ]);
+});
+
+test('native unread projection raises total to the highlight count', () => {
+  const infos = unreadInfosFromNativeRooms([
+    room({ roomId: '!a:example.org', unreadCount: 1, highlightCount: 4 }),
+  ]);
+  assert.deepEqual(infos, [{ roomId: '!a:example.org', highlight: 4, total: 4 }]);
+});
+
+test('native unread projection skips spaces, muted rooms, and non-joined membership', () => {
+  const infos = unreadInfosFromNativeRooms([
+    room({ roomId: '!space:example.org', isSpace: true, unreadCount: 3 }),
+    room({ roomId: '!mute:example.org', notificationMode: 'mute', unreadCount: 5 }),
+    room({ roomId: '!leave:example.org', membership: 'leave', unreadCount: 2 }),
+  ]);
+  assert.deepEqual(infos, []);
 });

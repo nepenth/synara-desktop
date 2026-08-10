@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-media-config"
+description = "Enables the matrix_media_config command without any pre-configured scope."
+commands.allow = ["matrix_media_config"]
+
+[[permission]]
+identifier = "deny-matrix-media-config"
+description = "Denies the matrix_media_config command without any pre-configured scope."
+commands.deny = ["matrix_media_config"]

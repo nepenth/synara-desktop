@@ -1,0 +1,15 @@
+chore(clean): legacy pass — remove dead native command + dead JS method + iOS CI path-filter accuracy
+
+Legacy/dangling cleanup pass (post V-CALL cut, zero-Matrix-JS tree).
+
+- Remove dead native command `matrix_timeline_snapshot` (never invoked anywhere;
+  timeline reads use matrix_timeline_open/paginate). Dropped from product_commands.rs,
+  lib.rs registration, and capabilities ACL; collapsed the orphaned #[tauri::command]
+  attribute the removal exposed.
+- Remove dead `MatrixError.asWidgetApiErrorData()` (only consumer was the retired
+  CallWidgetDriver; no callers remain).
+- CI accuracy: fix iOS simulator path filter to watch `synara-ios/scripts/ci-build.sh`
+  (was root-relative `scripts/ci-build.sh`) so iOS re-runs when its build script changes.
+
+Verification: cargo build + clippy --all-targets -D warnings clean; tsc/eslint/prettier
+clean; check:matrix-rust-guardrails chain green (V-BURN 20/20).

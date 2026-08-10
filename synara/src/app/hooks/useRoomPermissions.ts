@@ -17,6 +17,15 @@ export const getRoomPermissionsAPI = (
   creators: Set<string>,
   powerLevels: IPowerLevels
 ): RoomPermissionsAPI => {
+  if (powerLevels.nativeUnavailable) {
+    return {
+      event: () => false,
+      stateEvent: () => false,
+      action: () => false,
+      notificationAction: () => false,
+    };
+  }
+
   const api: RoomPermissionsAPI = {
     event: (type, userId) => {
       if (creators.has(userId)) return true;

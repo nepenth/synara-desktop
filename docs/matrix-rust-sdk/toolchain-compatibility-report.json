@@ -1,0 +1,245 @@
+{
+  "task_id": "P0.5",
+  "date": "2026-07-24",
+  "base_integration_commit": "4d318da9fdf0689b9cb085a6387fbf338fd67fd2",
+  "base_integration_branch": "feature/matrix-rust-sdk-full-replacement",
+  "work_branch": "matrix-rust/p0.5-toolchain-compatibility",
+  "desktop_sdk_pin": {
+    "crates": {
+      "matrix-sdk": "=0.18.0",
+      "matrix-sdk-ui": "=0.18.0"
+    },
+    "git_commit": "1c44fb66214667c6d00acaf72ab592493653708b"
+  },
+  "artifact_state": "landed",
+  "integration_state": "merged",
+  "strict_acceptance_state": "open",
+  "phase_gate_state": "open",
+  "current_status_ref": "docs/matrix-rust-sdk/program-status.json",
+  "historical_status_at_generation": "accepted_pending_integration_merge",
+  "verdict": "pass-with-residuals",
+  "host": {
+    "os": "macos",
+    "arch": "arm64",
+    "default_host_triple": "aarch64-apple-darwin",
+    "rustc": "1.93.0 (254b59607 2026-01-19)",
+    "cargo": "1.93.0 (083ac5135 2025-12-15)",
+    "active_toolchain": "stable-aarch64-apple-darwin",
+    "installed_targets": [
+      "aarch64-apple-darwin",
+      "aarch64-apple-ios-sim",
+      "x86_64-apple-darwin"
+    ],
+    "linux_targets_installed": false
+  },
+  "production_src_tauri": {
+    "path": "src-tauri/Cargo.toml",
+    "package": "synara",
+    "package_version": "1.2.59",
+    "edition": "2021",
+    "rust_version_msrv": "1.77.2",
+    "tauri_manifest": "2.11",
+    "tauri_lock": "2.11.2",
+    "matrix_sdk_present": false,
+    "modified_in_p0_5": false,
+    "cargo_check_locked_on_1_93": "pass"
+  },
+  "ci_current": {
+    "toolchain_action": "dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4",
+    "toolchain_action_comment": "stable 2026-07-22",
+    "channel_style": "floating_stable_sha_pin",
+    "workflows": {
+      "ci.yml": {
+        "runners": ["ubuntu-22.04", "macos-26 (ios-tests)"],
+        "desktop_cargo": ["check --locked", "test --locked"],
+        "triggers": ["push:main", "push:release/**", "pull_request:main", "pull_request:release/**", "workflow_dispatch"],
+        "cargo_cache": false,
+        "linux_tauri_deps": [
+          "libwebkit2gtk-4.1-dev",
+          "libayatana-appindicator3-dev",
+          "librsvg2-dev",
+          "patchelf"
+        ]
+      },
+      "desktop-package-smoke.yml": {
+        "runners": ["ubuntu-22.04", "macos"],
+        "toolchain_same_pin": true,
+        "cargo_cache": false
+      },
+      "macos-signed-build.yml": {
+        "runner": "macos-15",
+        "targets": ["aarch64-apple-darwin", "x86_64-apple-darwin"],
+        "bundle": "universal-apple-darwin dmg",
+        "signing": ["codesign", "notarytool", "stapler", "spctl"],
+        "cargo_cache": false
+      },
+      "release.yml": {
+        "runners": ["ubuntu-22.04", "macos-15"],
+        "universal_macos": true,
+        "signing_notarization": true,
+        "cargo_cache": false
+      }
+    },
+    "integration_branch_ci_default": false
+  },
+  "proofs": [
+    {
+      "id": "matrix-sdk-0.18-probe",
+      "path": "probes/matrix-rust-sdk-0.18",
+      "edition": "2024",
+      "rust_version": "1.93",
+      "command": "cargo check --locked",
+      "host_rustc": "1.93.0",
+      "result": "pass",
+      "exit_code": 0,
+      "notes": "matrix-sdk and matrix-sdk-ui =0.18.0 default-features=false"
+    },
+    {
+      "id": "src-tauri-shell-1.93",
+      "path": "src-tauri",
+      "edition": "2021",
+      "rust_version_declared": "1.77.2",
+      "command": "cargo check --locked",
+      "host_rustc": "1.93.0",
+      "result": "pass",
+      "exit_code": 0,
+      "notes": "No matrix-sdk; proves current product compiles on 1.93"
+    },
+    {
+      "id": "tauri-matrix-sdk-coexistence",
+      "path": "probes/tauri-matrix-sdk-compat",
+      "edition": "2024",
+      "rust_version": "1.93",
+      "dependencies": {
+        "tauri": "2.11 (lock 2.11.5, default features)",
+        "matrix-sdk": "=0.18.0 default-features=false",
+        "matrix-sdk-ui": "=0.18.0 default-features=false"
+      },
+      "commands": [
+        "cargo check --locked",
+        "cargo test --locked",
+        "cargo check --locked --target x86_64-apple-darwin"
+      ],
+      "host_rustc": "1.93.0",
+      "results": {
+        "check_aarch64": "pass",
+        "test_aarch64": "pass",
+        "check_x86_64_apple_darwin": "pass"
+      },
+      "feature_unification": {
+        "matrix_sdk_e2e_via_ui": true,
+        "resolution_conflict_with_tauri": false
+      },
+      "fixes_during_spike": [
+        "AppHandle requires Runtime generic → AppHandle<Wry>",
+        "Wry gated on wry feature → use tauri default features"
+      ],
+      "full_tauri_app": false
+    }
+  ],
+  "coexistence": {
+    "tauri_2_and_matrix_sdk_0_18": "pass",
+    "resolved_versions": {
+      "probe": {
+        "tauri": "2.11.5",
+        "matrix-sdk": "0.18.0",
+        "matrix-sdk-ui": "0.18.0",
+        "reqwest": "0.13.4",
+        "wry": "0.55.1",
+        "tokio": "1.53.1"
+      },
+      "production_src_tauri": {
+        "tauri": "2.11.2",
+        "reqwest": "0.13.4",
+        "wry": "0.55.1",
+        "tokio": "1.52.3"
+      }
+    },
+    "macos_aarch64": "local_pass",
+    "macos_x86_64_check": "local_pass_probe",
+    "macos_universal_full_bundle": "not_run",
+    "linux": "workflow_analysis_only",
+    "signing_notarization": "workflow_analysis_toolchain_orthogonal"
+  },
+  "platform_evidence": [
+    {
+      "concern": "macos_host_aarch64",
+      "status": "proven",
+      "evidence_level": "local_cargo"
+    },
+    {
+      "concern": "macos_universal",
+      "status": "partial",
+      "evidence_level": "local_x86_64_check_plus_existing_ci_workflow",
+      "local_proof": "cargo check --target x86_64-apple-darwin on coexistence probe pass",
+      "residual": "full tauri universal-apple-darwin product build not run with SDK"
+    },
+    {
+      "concern": "linux",
+      "status": "residual",
+      "evidence_level": "ci_workflow_analysis",
+      "residual": "must re-prove with 1.93 pin + matrix-sdk in Phase 1 CI"
+    },
+    {
+      "concern": "signing_notarization",
+      "status": "residual",
+      "evidence_level": "workflow_analysis",
+      "conclusion": "signing is toolchain-orthogonal if binary builds",
+      "residual": "not re-run with SDK-linked product binary"
+    }
+  ],
+  "ci_recommendations": [
+    "P1.1: add rust-toolchain.toml channel 1.93.0 (or exact selected pin)",
+    "P1.1: bump src-tauri rust-version from 1.77.2 to 1.93",
+    "Workflows: pin dtolnay/rust-toolchain to explicit 1.93.0 (not floating stable)",
+    "Keep universal targets aarch64-apple-darwin,x86_64-apple-darwin on macOS signed/release jobs",
+    "Add Swatinem/rust-cache (or equivalent) keyed by OS, lockfile hash, toolchain",
+    "Extend CI triggers to integration branch / matrix-rust/** once SDK lands",
+    "Optional: cargo check --locked for probes on probe/SDK-touching PRs",
+    "Expect longer cold compiles; watch runner disk with dual-target + SDK",
+    "Re-prove Linux package smoke after production SDK feature set chosen"
+  ],
+  "compile_cost_observations": {
+    "matrix_rust_sdk_0_18_target_mb_approx": 408,
+    "tauri_matrix_sdk_compat_target_mb_approx": 903,
+    "src_tauri_target_mb_approx": 1100,
+    "unit": "MiB approximate du -sh"
+  },
+  "residuals": [
+    "Linux not proven on this host; Phase 1 CI must green SDK-linked builds on ubuntu-22.04",
+    "Full universal product bundle with SDK not built; only x86_64 cargo check on coexistence probe",
+    "Signing/notarization not re-exercised with SDK-linked product binary",
+    "Production MSRV still 1.77.2; permanent pin is P1.1",
+    "Product edition 2021 vs edition 2024 SDK dependency crates (Cargo-ok; optional style)",
+    "CI does not default-run on integration/task branches (main/release/** only)",
+    "No cargo cache in current workflows; SDK will amplify cold compile cost",
+    "Production feature set for matrix-sdk still TBD (sqlite etc. may change deps)",
+    "Isolated probe lockfiles may drift from src-tauri until Phase 1 unifies"
+  ],
+  "non_goals": [
+    "No production src-tauri modifications",
+    "No production matrix-sdk dependency added",
+    "No .github/workflows edits",
+    "No dual-backend, SDK selector, or product raw /_matrix/ HTTP",
+    "No FR-7.8–7.11 re-open",
+    "No permanent production toolchain pin (owned by P1.1)",
+    "No full release/notarization/Linux package smoke run in this spike",
+    "No commit/push/PR/branch switch by writer harness"
+  ],
+  "gates_unblocked_for": ["P1.1"],
+  "historical_next_phase0_at_generation": ["P0.6", "P0.7"],
+  "historical_merged_at_generation": false,
+  "artifacts": {
+    "markdown": "docs/matrix-rust-sdk/toolchain-compatibility-report.md",
+    "json": "docs/matrix-rust-sdk/toolchain-compatibility-report.json",
+    "coexistence_probe": "probes/tauri-matrix-sdk-compat/",
+    "api_shape_probe": "probes/matrix-rust-sdk-0.18/"
+  },
+  "reviewer_commands": [
+    "rustc --version",
+    "cd probes/matrix-rust-sdk-0.18 && cargo check --locked",
+    "cd src-tauri && cargo check --locked",
+    "cd probes/tauri-matrix-sdk-compat && cargo check --locked && cargo test --locked",
+    "rustup target add x86_64-apple-darwin && cd probes/tauri-matrix-sdk-compat && cargo check --locked --target x86_64-apple-darwin"
+  ]
+}

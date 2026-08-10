@@ -1,16 +1,21 @@
-import { MatrixEvent, Room } from 'matrix-js-sdk';
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import produce from 'immer';
+import type { EventedRoomReading } from '../utils/roomEvents';
+import type { RoomReading, MatrixEventReading } from '../utils/room';
 import { useStateEvent } from './useStateEvent';
 import { StateEvent } from '../../types/matrix/room';
 import { useStateEventCallback } from './useStateEventCallback';
 import { useMatrixClient } from './useMatrixClient';
 import { getStateEvent } from '../utils/room';
+import { isNativeMatrixSession } from '../features/verification/nativeVerification';
+import { readRoomPowerLevelsWithNativeOwner } from './nativeRoomPowerLevelsOwner';
 
 export type PowerLevelActions = 'invite' | 'redact' | 'kick' | 'ban' | 'historical';
 export type PowerLevelNotificationsAction = 'room';
 
 export type IPowerLevels = {
+  /** Native read is not ready; permission consumers must deny all actions. */
+  nativeUnavailable?: true;
   users_default?: number;
   state_default?: number;
   events_default?: number;
@@ -25,7 +30,9 @@ export type IPowerLevels = {
   notifications?: Record<string, number>;
 };
 
-const DEFAULT_POWER_LEVELS: Required<IPowerLevels> = {
+type CompletePowerLevels = Omit<Required<IPowerLevels>, 'nativeUnavailable'>;
+
+const DEFAULT_POWER_LEVELS: CompletePowerLevels = {
   users_default: 0,
   state_default: 50,
   events_default: 0,
@@ -41,9 +48,13 @@ const DEFAULT_POWER_LEVELS: Required<IPowerLevels> = {
   },
 };
 
+export const NATIVE_UNAVAILABLE_POWER_LEVELS: IPowerLevels = {
+  nativeUnavailable: true,
+};
+
 const fillMissingPowers = (powerLevels: IPowerLevels): IPowerLevels =>
   produce(powerLevels, (draftPl: IPowerLevels) => {
-    const keys = Object.keys(DEFAULT_POWER_LEVELS) as unknown as (keyof IPowerLevels)[];
+    const keys = Object.keys(DEFAULT_POWER_LEVELS) as (keyof CompletePowerLevels)[];
     keys.forEach((key) => {
       if (draftPl[key] === undefined) {
         // eslint-disable-next-line no-param-reassign
@@ -57,7 +68,7 @@ const fillMissingPowers = (powerLevels: IPowerLevels): IPowerLevels =>
     return draftPl;
   });
 
-export const getPowersLevelFromMatrixEvent = (mEvent?: MatrixEvent): IPowerLevels => {
+export const getPowersLevelFromMatrixEvent = (mEvent?: MatrixEventReading): IPowerLevels => {
   const plContent = mEvent?.getContent<IPowerLevels>();
 
   const powerLevels = !plContent ? DEFAULT_POWER_LEVELS : fillMissingPowers(plContent);
@@ -65,12 +76,60 @@ export const getPowersLevelFromMatrixEvent = (mEvent?: MatrixEvent): IPowerLevel
   return powerLevels;
 };
 
-export function usePowerLevels(room: Room): IPowerLevels {
-  const powerLevelsEvent = useStateEvent(room, StateEvent.RoomPowerLevels);
+export function usePowerLevels(room: EventedRoomReading): IPowerLevels {
+  const nativeSession = isNativeMatrixSession();
+  const powerLevelsEvent = useStateEvent(room, StateEvent.RoomPowerLevels, '', !nativeSession);
+  const [nativeState, setNativeState] = useState<
+    | { roomId: string; status: 'idle' | 'loading' }
+    | { roomId: string; status: 'ready'; content: IPowerLevels }
+    | { roomId: string; status: 'error'; error: Error }
+  >({ roomId: room.roomId, status: 'idle' });
+
+  useEffect(() => {
+    if (!nativeSession) return undefined;
+
+    let disposed = false;
+    setNativeState({ roomId: room.roomId, status: 'loading' });
+    void readRoomPowerLevelsWithNativeOwner(room.roomId, true)
+      .then((snapshot) => {
+        if (!disposed && snapshot) {
+          setNativeState({
+            roomId: room.roomId,
+            status: 'ready',
+            content: snapshot.content as IPowerLevels,
+          });
+        }
+      })
+      .catch((error: unknown) => {
+        if (!disposed) {
+          setNativeState({
+            roomId: room.roomId,
+            status: 'error',
+            error:
+              error instanceof Error
+                ? error
+                : new Error('Native Matrix room power levels are unavailable.'),
+          });
+        }
+      });
+
+    return () => {
+      disposed = true;
+    };
+  }, [nativeSession, room.roomId]);
+
   const powerLevels: IPowerLevels = useMemo(
     () => getPowersLevelFromMatrixEvent(powerLevelsEvent),
     [powerLevelsEvent]
   );
+
+  if (nativeSession) {
+    if (nativeState.status === 'error') throw nativeState.error;
+    if (nativeState.roomId !== room.roomId || nativeState.status !== 'ready') {
+      return NATIVE_UNAVAILABLE_POWER_LEVELS;
+    }
+    return fillMissingPowers(nativeState.content);
+  }
 
   return powerLevels;
 }
@@ -85,8 +144,10 @@ export const usePowerLevelsContext = (): IPowerLevels => {
   return pl;
 };
 
-export const useRoomsPowerLevels = (rooms: Room[]): Map<string, IPowerLevels> => {
+export const useRoomsPowerLevels = (rooms: RoomReading[]): Map<string, IPowerLevels> => {
   const mx = useMatrixClient();
+  const nativeSession = isNativeMatrixSession();
+  const roomIdsKey = rooms.map((room) => room.roomId).join('\u0000');
   const getRoomsPowerLevels = useCallback(() => {
     const rToPl = new Map<string, IPowerLevels>();
 
@@ -98,12 +159,53 @@ export const useRoomsPowerLevels = (rooms: Room[]): Map<string, IPowerLevels> =>
     return rToPl;
   }, [rooms]);
 
-  const [roomToPowerLevels, setRoomToPowerLevels] = useState(() => getRoomsPowerLevels());
+  const [roomToPowerLevels, setRoomToPowerLevels] = useState(() =>
+    nativeSession ? new Map<string, IPowerLevels>() : getRoomsPowerLevels()
+  );
+  const [nativeState, setNativeState] = useState<
+    | { roomIdsKey: string; status: 'idle' | 'loading' }
+    | { roomIdsKey: string; status: 'ready'; values: Map<string, IPowerLevels> }
+    | { roomIdsKey: string; status: 'error'; error: Error }
+  >({ roomIdsKey, status: 'idle' });
+
+  useEffect(() => {
+    if (!nativeSession) return undefined;
+
+    let disposed = false;
+    setNativeState({ roomIdsKey, status: 'loading' });
+    void Promise.all(rooms.map((room) => readRoomPowerLevelsWithNativeOwner(room.roomId, true)))
+      .then((snapshots) => {
+        if (disposed) return;
+        const values = new Map<string, IPowerLevels>();
+        rooms.forEach((room, index) => {
+          const snapshot = snapshots[index];
+          if (snapshot) values.set(room.roomId, snapshot.content as IPowerLevels);
+        });
+        setNativeState({ roomIdsKey, status: 'ready', values });
+      })
+      .catch((error: unknown) => {
+        if (!disposed) {
+          setNativeState({
+            roomIdsKey,
+            status: 'error',
+            error:
+              error instanceof Error
+                ? error
+                : new Error('Native Matrix room power levels are unavailable.'),
+          });
+        }
+      });
+
+    return () => {
+      disposed = true;
+    };
+  }, [nativeSession, roomIdsKey, rooms]);
 
   useStateEventCallback(
     mx,
     useCallback(
       (event) => {
+        if (nativeSession) return;
         const roomId = event.getRoomId();
         if (
           roomId &&
@@ -114,9 +216,17 @@ export const useRoomsPowerLevels = (rooms: Room[]): Map<string, IPowerLevels> =>
           setRoomToPowerLevels(getRoomsPowerLevels());
         }
       },
-      [rooms, getRoomsPowerLevels]
+      [rooms, getRoomsPowerLevels, nativeSession]
     )
   );
+
+  if (nativeSession) {
+    if (nativeState.status === 'error') throw nativeState.error;
+    if (nativeState.roomIdsKey !== roomIdsKey || nativeState.status !== 'ready') {
+      return new Map(rooms.map((room) => [room.roomId, NATIVE_UNAVAILABLE_POWER_LEVELS]));
+    }
+    return nativeState.values;
+  }
 
   return roomToPowerLevels;
 };

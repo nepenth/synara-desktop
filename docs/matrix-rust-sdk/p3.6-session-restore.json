@@ -1,0 +1,72 @@
+{
+  "task_id": "P3.6",
+  "title": "Session restore and account switching foundation",
+  "date": "2026-07-27",
+  "artifact_state": "landed",
+  "integration_state": "merged",
+  "strict_acceptance_state": "open",
+  "phase_gate_state": "open",
+  "current_status_ref": "docs/matrix-rust-sdk/program-status.json",
+  "historical_status_at_generation": "implemented",
+  "base_branch": "feature/matrix-rust-sdk-full-replacement",
+  "base_sha": "8b7d39e",
+  "work_branch": "matrix-rust/p3.6-session-restore",
+  "human_doc": "docs/matrix-rust-sdk/p3.6-session-restore.md",
+  "fr_ids": [
+    "FR-7.1-007"
+  ],
+  "decisions": [
+    "D-TOKEN-CONTINUITY",
+    "D-NO-DUAL-BACKEND"
+  ],
+  "production_posture": {
+    "production_client_session_started": false,
+    "production_login": false,
+    "production_sync": false,
+    "dual_backend": false,
+    "tauri_commands_for_matrix": false,
+    "session_secret_persist_harness": true,
+    "session_restore_harness": true,
+    "restore_session_api_enabled_under_lifecycle": true,
+    "account_switch_identity_scoped": true,
+    "live_synapse_restore_evidence": false,
+    "exercised_by": "unit_tests_offline_sqlite_restore_plus_identity_binding"
+  },
+  "artifacts": {
+    "rust_module": "src-tauri/src/matrix/lifecycle/",
+    "session_restore_rs": "src-tauri/src/matrix/lifecycle/session_restore.rs",
+    "session_material_rs": "src-tauri/src/matrix/lifecycle/session_material.rs",
+    "design_note": "docs/matrix-rust-sdk/p3.6-session-restore.md",
+    "guardrails": "scripts/check-matrix-rust-sdk-guardrails.mjs"
+  },
+  "api_surface": {
+    "types": [
+      "SessionRestoreOutcome"
+    ],
+    "ops": [
+      "matrix_session_from_host_secrets",
+      "restore_session_onto_client",
+      "restore_session_from_vault",
+      "has_persisted_session"
+    ]
+  },
+  "guardrail_zones": {
+    "restore_session_allow": [
+      "src-tauri/src/matrix/lifecycle/"
+    ],
+    "still_banned": [
+      "client_builder",
+      "auth",
+      "supervisor",
+      "other matrix/"
+    ]
+  },
+  "out_of_scope": [
+    "production Tauri Matrix commands",
+    "dual-backend",
+    "sync loop",
+    "OAuth restore",
+    "JS to Rust token migration",
+    "phase gate close"
+  ]
+}

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-invites-snapshot"
+description = "Enables the matrix_invites_snapshot command without any pre-configured scope."
+commands.allow = ["matrix_invites_snapshot"]
+
+[[permission]]
+identifier = "deny-matrix-invites-snapshot"
+description = "Denies the matrix_invites_snapshot command without any pre-configured scope."
+commands.deny = ["matrix_invites_snapshot"]

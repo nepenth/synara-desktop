@@ -8,8 +8,6 @@ import { makeNavToActivePathAtom } from '../../state/navToActivePath';
 import { NavToActivePathProvider } from '../../state/hooks/navToActivePath';
 import { makeOpenedSidebarFolderAtom } from '../../state/openedSidebarFolder';
 import { OpenedSidebarFolderProvider } from '../../state/hooks/openedSidebarFolder';
-import { makeCallPreferencesAtom } from '../../state/callPreferences';
-import { CallPreferencesProvider } from '../../state/hooks/callPreferences';
 
 type ClientInitStorageAtomProps = {
   children: ReactNode;
@@ -26,16 +24,12 @@ export function ClientInitStorageAtom({ children }: ClientInitStorageAtomProps) 
 
   const openedSidebarFolderAtom = useMemo(() => makeOpenedSidebarFolderAtom(userId), [userId]);
 
-  const callPreferencesAtom = useMemo(() => makeCallPreferencesAtom(userId), [userId]);
-
   return (
     <ClosedNavCategoriesProvider value={closedNavCategoriesAtom}>
       <ClosedLobbyCategoriesProvider value={closedLobbyCategoriesAtom}>
         <NavToActivePathProvider value={navToActivePathAtom}>
           <OpenedSidebarFolderProvider value={openedSidebarFolderAtom}>
-            <CallPreferencesProvider value={callPreferencesAtom}>
-              {children}
-            </CallPreferencesProvider>
+            {children}
           </OpenedSidebarFolderProvider>
         </NavToActivePathProvider>
       </ClosedLobbyCategoriesProvider>

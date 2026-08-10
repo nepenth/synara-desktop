@@ -18,6 +18,10 @@ mod desktop_shortcuts;
 mod desktop_spellcheck;
 mod desktop_tray;
 mod desktop_url;
+// P1.2: compile-only Matrix Rust SDK linkage; no production client session.
+mod matrix_sdk_link_smoke;
+// P1.3: Matrix IPC schema foundation (types/helpers only; no production commands).
+mod matrix;
 #[cfg(target_os = "macos")]
 mod menu;
 
@@ -28,6 +32,203 @@ use tauri::{
     DragDropEvent, Emitter, LogicalSize, Manager, Size, WebviewUrl, WindowEvent,
 };
 use tauri_plugin_opener::OpenerExt;
+
+const SYNARA_MEDIA_PROTOCOL: &str = "synara-media";
+const INVITE_AVATAR_MAX_BYTES: usize = 1_048_576;
+const TIMELINE_MEDIA_MAX_BYTES: usize = 64 * 1_048_576;
+
+fn synara_media_response(
+    status: tauri::http::StatusCode,
+    body: Vec<u8>,
+    content_type: Option<&str>,
+) -> tauri::http::Response<Vec<u8>> {
+    let mut builder = tauri::http::Response::builder()
+        .status(status)
+        .header(tauri::http::header::CACHE_CONTROL, "no-store")
+        .header(tauri::http::header::X_CONTENT_TYPE_OPTIONS, "nosniff");
+    if let Some(content_type) = content_type {
+        builder = builder.header(tauri::http::header::CONTENT_TYPE, content_type);
+    }
+    builder
+        .body(body)
+        .expect("fixed invite avatar response headers are valid")
+}
+
+fn image_content_type(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some("image/png")
+    } else if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
+        Some("image/jpeg")
+    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        Some("image/gif")
+    } else if bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        Some("image/webp")
+    } else if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" && &bytes[8..12] == b"avif" {
+        Some("image/avif")
+    } else {
+        None
+    }
+}
+
+fn timeline_media_content_type(bytes: &[u8], declared: Option<&str>) -> Option<&'static str> {
+    let candidates: &[&'static str] = if let Some(image) = image_content_type(bytes) {
+        &[image]
+    } else if bytes.starts_with(b"%PDF-") {
+        &["application/pdf"]
+    } else if bytes.starts_with(b"ID3")
+        || matches!(bytes, [0xff, second, ..] if second & 0xe0 == 0xe0)
+    {
+        &["audio/mpeg"]
+    } else if bytes.starts_with(b"fLaC") {
+        &["audio/flac"]
+    } else if bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE" {
+        &["audio/wav"]
+    } else if bytes.starts_with(b"OggS") {
+        &["audio/ogg", "video/ogg", "application/ogg"]
+    } else if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" {
+        &["video/mp4", "audio/mp4"]
+    } else if bytes.starts_with(&[0x1a, 0x45, 0xdf, 0xa3]) {
+        &["video/webm", "audio/webm"]
+    } else {
+        return None;
+    };
+    let declared = declared.map(str::trim).filter(|value| !value.is_empty());
+    match declared {
+        None | Some("application/octet-stream") => candidates.first().copied(),
+        Some("image/jpg") if candidates.contains(&"image/jpeg") => Some("image/jpeg"),
+        Some(value) => candidates
+            .iter()
+            .copied()
+            .find(|candidate| candidate.eq_ignore_ascii_case(value)),
+    }
+}
+
+fn register_synara_media_protocol<R: tauri::Runtime>(
+    builder: tauri::Builder<R>,
+) -> tauri::Builder<R> {
+    builder.register_asynchronous_uri_scheme_protocol(
+        SYNARA_MEDIA_PROTOCOL,
+        |context, request, responder| {
+            if context.webview_label() != desktop::MAIN_WINDOW_LABEL
+                || request.method() != tauri::http::Method::GET
+                || request.uri().query().is_some()
+            {
+                responder.respond(synara_media_response(
+                    tauri::http::StatusCode::NOT_FOUND,
+                    Vec::new(),
+                    None,
+                ));
+                return;
+            }
+            let Some(handle) = request.uri().path().strip_prefix('/') else {
+                responder.respond(synara_media_response(
+                    tauri::http::StatusCode::NOT_FOUND,
+                    Vec::new(),
+                    None,
+                ));
+                return;
+            };
+            let app = context.app_handle().clone();
+            let handle = handle.to_owned();
+            tauri::async_runtime::spawn(async move {
+                let state = app.state::<matrix::auth::MatrixAuthState>();
+                if matrix::timeline::is_timeline_media_handle(&handle) {
+                    let Some((client, source)) = state.resolve_timeline_media(&handle).await else {
+                        responder.respond(synara_media_response(
+                            tauri::http::StatusCode::NOT_FOUND,
+                            Vec::new(),
+                            None,
+                        ));
+                        return;
+                    };
+                    let request = matrix_sdk::media::MediaRequestParameters {
+                        source: source.source,
+                        format: matrix_sdk::media::MediaFormat::File,
+                    };
+                    let Ok(bytes) = client.media().get_media_content(&request, false).await else {
+                        responder.respond(synara_media_response(
+                            tauri::http::StatusCode::NOT_FOUND,
+                            Vec::new(),
+                            None,
+                        ));
+                        return;
+                    };
+                    let Some(content_type) = (bytes.len() <= TIMELINE_MEDIA_MAX_BYTES)
+                        .then(|| {
+                            timeline_media_content_type(
+                                &bytes,
+                                source.declared_mime_type.as_deref(),
+                            )
+                        })
+                        .flatten()
+                    else {
+                        responder.respond(synara_media_response(
+                            tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                            Vec::new(),
+                            None,
+                        ));
+                        return;
+                    };
+                    responder.respond(synara_media_response(
+                        tauri::http::StatusCode::OK,
+                        bytes,
+                        Some(content_type),
+                    ));
+                    return;
+                }
+                if handle.len() != 64 || !handle.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                    responder.respond(synara_media_response(
+                        tauri::http::StatusCode::NOT_FOUND,
+                        Vec::new(),
+                        None,
+                    ));
+                    return;
+                }
+                let Some((client, source)) = state.resolve_invite_avatar(&handle).await else {
+                    responder.respond(synara_media_response(
+                        tauri::http::StatusCode::NOT_FOUND,
+                        Vec::new(),
+                        None,
+                    ));
+                    return;
+                };
+                let request = matrix_sdk::media::MediaRequestParameters {
+                    source: matrix_sdk::ruma::events::room::MediaSource::Plain(source.mxc_uri),
+                    format: matrix_sdk::media::MediaFormat::Thumbnail(
+                        matrix_sdk::media::MediaThumbnailSettings::new(
+                            matrix_sdk::ruma::UInt::from(96_u8),
+                            matrix_sdk::ruma::UInt::from(96_u8),
+                        ),
+                    ),
+                };
+                let Ok(bytes) = client.media().get_media_content(&request, false).await else {
+                    responder.respond(synara_media_response(
+                        tauri::http::StatusCode::NOT_FOUND,
+                        Vec::new(),
+                        None,
+                    ));
+                    return;
+                };
+                let Some(content_type) = (bytes.len() <= INVITE_AVATAR_MAX_BYTES)
+                    .then(|| image_content_type(&bytes))
+                    .flatten()
+                else {
+                    responder.respond(synara_media_response(
+                        tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                        Vec::new(),
+                        None,
+                    ));
+                    return;
+                };
+                responder.respond(synara_media_response(
+                    tauri::http::StatusCode::OK,
+                    bytes,
+                    Some(content_type),
+                ));
+            });
+        },
+    )
+}
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -102,25 +303,6 @@ fn select_localhost_port() -> Result<u16, String> {
     select_localhost_port_with(is_localhost_port_available)
 }
 
-#[cfg(test)]
-mod localhost_port_tests {
-    use super::{select_localhost_port_with, PREFERRED_LOCALHOST_PORT};
-
-    #[test]
-    fn select_localhost_port_returns_first_available_port() {
-        let port =
-            select_localhost_port_with(|_| true).expect("localhost port should be available");
-        assert_eq!(port, PREFERRED_LOCALHOST_PORT);
-    }
-
-    #[test]
-    fn select_localhost_port_skips_busy_preferred_port() {
-        let port = select_localhost_port_with(|port| port != PREFERRED_LOCALHOST_PORT)
-            .expect("fallback localhost port should be available");
-        assert_eq!(port, PREFERRED_LOCALHOST_PORT + 1);
-    }
-}
-
 pub fn run() {
     let port = match select_localhost_port() {
         Ok(port) => port,
@@ -134,7 +316,8 @@ pub fn run() {
     let updater_configured = updater_plugin_configured(&context);
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let updater_configured = false;
-    let mut builder = tauri::Builder::default()
+    let mut builder = register_synara_media_protocol(tauri::Builder::default())
+        .manage(matrix::auth::MatrixAuthState::new())
         .plugin(tauri_plugin_localhost::Builder::new(port).build())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -172,7 +355,139 @@ pub fn run() {
             desktop_logging::desktop_read_diagnostics,
             desktop_logging::desktop_clear_diagnostics,
             desktop_spellcheck::desktop_enable_spellcheck,
-            desktop_agent_actions::desktop_agent_action
+            desktop_agent_actions::desktop_agent_action,
+            matrix::auth::product::matrix_login_password,
+            matrix::auth::product::matrix_login_flows,
+            matrix::auth::product::matrix_password_reset_request_email_token,
+            matrix::auth::product::matrix_password_reset_complete,
+            matrix::auth::product::matrix_register_flows,
+            matrix::auth::product::matrix_register_request_email_token,
+            matrix::auth::product::matrix_register,
+            matrix::auth::product::matrix_session_snapshot,
+            matrix::auth::product::matrix_sync_status,
+            matrix::auth::product::matrix_crypto_status,
+            matrix::auth::product::matrix_cross_signing_status,
+            matrix::auth::product::matrix_cross_signing_setup,
+            matrix::auth::product::matrix_cross_signing_setup_password,
+            matrix::auth::product::matrix_backup_status,
+            matrix::auth::product::matrix_backup_setup,
+            matrix::auth::product::matrix_backup_restore,
+            matrix::auth::product::matrix_backup_repair,
+            matrix::auth::product::matrix_secret_storage_status,
+            matrix::auth::product::matrix_secret_storage_bootstrap,
+            matrix::auth::product::matrix_secret_storage_unlock,
+            matrix::auth::product::matrix_secret_storage_reset,
+            matrix::auth::product::matrix_room_key_transfer_status,
+            matrix::auth::product::matrix_room_key_export,
+            matrix::auth::product::matrix_room_key_import_select,
+            matrix::auth::product::matrix_room_key_import,
+            matrix::auth::product::matrix_verification_list,
+            matrix::auth::product::matrix_verification_start,
+            matrix::auth::product::matrix_verification_accept,
+            matrix::auth::product::matrix_verification_begin_sas,
+            matrix::auth::product::matrix_verification_confirm,
+            matrix::auth::product::matrix_verification_mismatch,
+            matrix::auth::product::matrix_verification_cancel,
+            matrix::auth::product::matrix_verification_dismiss,
+            matrix::auth::product::matrix_device_snapshot,
+            matrix::auth::product::matrix_device_rename,
+            matrix::auth::product::matrix_device_delete_start,
+            matrix::auth::product::matrix_device_delete_password,
+            matrix::auth::product::matrix_device_delete_cancel,
+            matrix::auth::product::matrix_room_list_snapshot,
+            matrix::auth::product::matrix_room_members_snapshot,
+            matrix::auth::product::matrix_room_power_levels_snapshot,
+            matrix::auth::product::matrix_room_creators_snapshot,
+            matrix::auth::product::matrix_room_power_level_tags_snapshot,
+            matrix::auth::product::matrix_room_directory_protocols,
+            matrix::auth::product::matrix_room_directory_search,
+            matrix::auth::product::matrix_room_directory_cancel,
+            matrix::auth::product::matrix_invites_snapshot,
+            matrix::auth::product::matrix_invites_accept,
+            matrix::auth::product::matrix_invites_decline,
+            matrix::auth::product::matrix_room_create,
+            matrix::auth::product::matrix_room_leave,
+            matrix::auth::product::matrix_room_join,
+            matrix::auth::product::matrix_room_invite,
+            matrix::auth::product::matrix_room_kick,
+            matrix::auth::product::matrix_room_ban,
+            matrix::auth::product::matrix_room_unban,
+            matrix::auth::product::matrix_room_set_power_level,
+            matrix::auth::product::matrix_room_set_power_levels,
+            matrix::auth::product::matrix_room_set_power_level_tags,
+            matrix::auth::product::matrix_invites_report_spam,
+            matrix::auth::product::matrix_invites_block_sender,
+            matrix::auth::product::matrix_space_parents_snapshot,
+            matrix::auth::product::matrix_space_hierarchy_snapshot,
+            matrix::auth::product::matrix_space_children_snapshot,
+            matrix::auth::product::matrix_space_child_set,
+            matrix::auth::product::matrix_space_child_remove,
+            matrix::auth::product::matrix_restricted_join_reparent,
+            matrix::auth::product::matrix_mdirect_snapshot,
+            matrix::auth::product::matrix_mdirect_add,
+            matrix::auth::product::matrix_mdirect_remove,
+            matrix::auth::product::matrix_get_user_image_pack,
+            matrix::auth::product::matrix_get_room_image_packs,
+            matrix::auth::product::matrix_get_global_image_packs,
+            matrix::auth::product::matrix_set_user_image_pack,
+            matrix::auth::product::matrix_set_global_image_packs,
+            matrix::auth::product::matrix_set_room_image_pack,
+            matrix::auth::product::matrix_media_config,
+            matrix::auth::product::matrix_media_download,
+            matrix::auth::product::matrix_later_snapshot,
+            matrix::auth::product::matrix_later_upsert,
+            matrix::auth::product::matrix_later_complete,
+            matrix::auth::product::matrix_later_snooze,
+            matrix::auth::product::matrix_later_clear_completed,
+            matrix::auth::product::matrix_later_mark_reminded,
+            matrix::auth::product::matrix_room_notes_snapshot,
+            matrix::auth::product::matrix_room_notes_upsert,
+            matrix::auth::product::matrix_room_notes_delete,
+            matrix::auth::product::matrix_room_notes_complete_todo,
+            matrix::auth::product::matrix_room_notes_move_todo,
+            matrix::auth::product::matrix_typing_snapshot,
+            matrix::auth::product::matrix_typing_set,
+            matrix::auth::product::matrix_presence_snapshot,
+            matrix::auth::product::matrix_presence_subscribe,
+            matrix::auth::product::matrix_presence_unsubscribe,
+            matrix::auth::product::matrix_timeline_open,
+            matrix::auth::product::matrix_timeline_close,
+            matrix::auth::product::matrix_timeline_jump_latest,
+            matrix::auth::product::matrix_timeline_paginate,
+            matrix::auth::product::matrix_timeline_set_read_state,
+            matrix::auth::product::matrix_timeline_event_readback,
+            matrix::auth::product::matrix_timeline_reaction_toggle,
+            matrix::auth::product::matrix_reaction_ensure,
+            matrix::auth::product::matrix_reaction_redact,
+            matrix::auth::product::matrix_timeline_edit_text,
+            matrix::auth::product::matrix_timeline_redact,
+            matrix::auth::product::matrix_timeline_forward_text,
+            matrix::auth::product::matrix_timeline_report,
+            matrix::auth::product::matrix_timeline_pin,
+            matrix::auth::product::matrix_timeline_unpin,
+            matrix::auth::product::matrix_composer_set_reply_draft,
+            matrix::auth::product::matrix_composer_clear_reply_draft,
+            matrix::auth::product::matrix_composer_get_reply_draft,
+            matrix::auth::product::matrix_timeline_forward_media,
+            matrix::auth::product::matrix_timeline_poll_vote,
+            matrix::auth::product::matrix_timeline_call_decline,
+            matrix::auth::product::matrix_send_text,
+            matrix::auth::product::matrix_edit_message,
+            matrix::auth::product::matrix_send_attachment,
+            matrix::auth::product::matrix_send_sticker,
+            matrix::auth::product::matrix_send_poll,
+            matrix::auth::product::matrix_poll_respond,
+            matrix::auth::product::matrix_set_own_display_name,
+            matrix::auth::product::matrix_set_own_avatar,
+            matrix::auth::product::matrix_set_room_name,
+            matrix::auth::product::matrix_set_room_topic,
+            matrix::auth::product::matrix_set_room_avatar,
+            matrix::auth::product::matrix_get_room_directory_visibility,
+            matrix::auth::product::matrix_set_room_directory_visibility,
+            matrix::auth::product::matrix_room_join_rule_snapshot,
+            matrix::auth::product::matrix_upload_media,
+            matrix::auth::product::matrix_logout,
+            matrix::auth::product::matrix_restore_session
         ])
         .on_window_event(|window, event| {
             if window.label() != desktop::MAIN_WINDOW_LABEL {
@@ -323,4 +638,39 @@ pub fn run() {
             #[cfg(not(target_os = "macos"))]
             let _ = (app, event);
         });
+}
+
+#[cfg(test)]
+mod localhost_port_tests {
+    use super::{
+        select_localhost_port_with, timeline_media_content_type, PREFERRED_LOCALHOST_PORT,
+    };
+
+    #[test]
+    fn select_localhost_port_returns_first_available_port() {
+        let port =
+            select_localhost_port_with(|_| true).expect("localhost port should be available");
+        assert_eq!(port, PREFERRED_LOCALHOST_PORT);
+    }
+
+    #[test]
+    fn select_localhost_port_skips_busy_preferred_port() {
+        let port = select_localhost_port_with(|port| port != PREFERRED_LOCALHOST_PORT)
+            .expect("fallback localhost port should be available");
+        assert_eq!(port, PREFERRED_LOCALHOST_PORT + 1);
+    }
+
+    #[test]
+    fn timeline_media_requires_allowlisted_bytes_and_matching_mime() {
+        let png = b"\x89PNG\r\n\x1a\nrest";
+        assert_eq!(
+            timeline_media_content_type(png, Some("image/png")),
+            Some("image/png")
+        );
+        assert_eq!(timeline_media_content_type(png, Some("image/jpeg")), None);
+        assert_eq!(
+            timeline_media_content_type(b"arbitrary file bytes", None),
+            None
+        );
+    }
 }

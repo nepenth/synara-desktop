@@ -1,22 +1,9 @@
 import produce from 'immer';
 import { atom, useSetAtom } from 'jotai';
-import {
-  ClientEvent,
-  MatrixClient,
-  MatrixEvent,
-  Room,
-  RoomEvent,
-  RoomStateEvent,
-} from 'matrix-js-sdk';
 import { useEffect } from 'react';
-import { Membership, RoomToParents, StateEvent } from '../../../types/matrix/room';
-import {
-  getRoomToParents,
-  getSpaceChildren,
-  isSpace,
-  isValidChild,
-  mapParentWithChildren,
-} from '../../utils/room';
+import { RoomToParents } from '../../../types/matrix/room';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { mapParentWithChildren } from '../../utils/room';
 
 export type RoomToParentsAction =
   | {
@@ -32,6 +19,16 @@ export type RoomToParentsAction =
       type: 'DELETE';
       roomId: string;
     };
+
+type NativeSpaceParentEntry = {
+  roomId: string;
+  parentIds: string[];
+};
+
+type NativeSpaceParentsSnapshot = {
+  sessionGeneration: number;
+  entries: NativeSpaceParentEntry[];
+};
 
 const baseRoomToParents = atom<RoomToParents>(new Map());
 export const roomToParentsAtom = atom<RoomToParents, [RoomToParentsAction], undefined>(
@@ -67,58 +64,73 @@ export const roomToParentsAtom = atom<RoomToParents, [RoomToParentsAction], unde
   }
 );
 
+/** Invert native child→parents entries into the product RoomToParents map. */
+export const roomToParentsFromNativeSnapshot = (
+  entries: NativeSpaceParentEntry[]
+): RoomToParents => {
+  const map: RoomToParents = new Map();
+  for (const entry of entries) {
+    if (!entry.parentIds.length) continue;
+    map.set(entry.roomId, new Set(entry.parentIds));
+  }
+  return map;
+};
+
+/**
+ * Drive space parent map from the native Rust projection.
+ * Lobby hierarchy mutations are owned by V-ROOMS.2c native commands.
+ */
 export const useBindRoomToParentsAtom = (
-  mx: MatrixClient,
-  roomToParents: typeof roomToParentsAtom
+  roomToParents: typeof roomToParentsAtom = roomToParentsAtom
 ) => {
   const setRoomToParents = useSetAtom(roomToParents);
 
   useEffect(() => {
-    setRoomToParents({ type: 'INITIALIZE', roomToParents: getRoomToParents(mx) });
+    let disposed = false;
+    let inFlight = false;
 
-    const handleAddRoom = (room: Room) => {
-      if (isSpace(room) && room.getMyMembership() !== Membership.Invite) {
-        setRoomToParents({ type: 'PUT', parent: room.roomId, children: getSpaceChildren(room) });
-      }
+    const clear = () => {
+      setRoomToParents({ type: 'INITIALIZE', roomToParents: new Map() });
     };
 
-    const handleMembershipChange = (room: Room, membership: string) => {
-      if (isSpace(room) && room.getMyMembership() === Membership.Leave) {
-        setRoomToParents({ type: 'DELETE', roomId: room.roomId });
-        return;
-      }
-      if (isSpace(room) && membership === Membership.Join) {
-        setRoomToParents({ type: 'PUT', parent: room.roomId, children: getSpaceChildren(room) });
-      }
-    };
-
-    const handleStateChange = (mEvent: MatrixEvent) => {
-      if (mEvent.getType() === StateEvent.SpaceChild) {
-        const childId = mEvent.getStateKey();
-        const roomId = mEvent.getRoomId();
-        if (childId && roomId) {
-          if (isValidChild(mEvent)) {
-            setRoomToParents({ type: 'PUT', parent: roomId, children: [childId] });
-          } else {
-            setRoomToParents({ type: 'DELETE', roomId: childId });
-          }
+    const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const session = await invokeDesktopWithAvailability<{
+          status: 'logged_out' | 'logged_in';
+        }>('matrix_session_snapshot');
+        if (disposed) return;
+        if (!session.available || session.value?.status !== 'logged_in') {
+          clear();
+          return;
         }
+        const result = await invokeDesktopWithAvailability<NativeSpaceParentsSnapshot>(
+          'matrix_space_parents_snapshot'
+        );
+        if (!disposed && result.available && result.value) {
+          setRoomToParents({
+            type: 'INITIALIZE',
+            roomToParents: roomToParentsFromNativeSnapshot(result.value.entries),
+          });
+        }
+      } catch {
+        // Preserve the last known parent map during transient failures.
+      } finally {
+        inFlight = false;
       }
     };
 
-    const handleDeleteRoom = (roomId: string) => {
-      setRoomToParents({ type: 'DELETE', roomId });
-    };
+    if (!isSynaraDesktop()) {
+      clear();
+      return undefined;
+    }
 
-    mx.on(ClientEvent.Room, handleAddRoom);
-    mx.on(RoomEvent.MyMembership, handleMembershipChange);
-    mx.on(RoomStateEvent.Events, handleStateChange);
-    mx.on(ClientEvent.DeleteRoom, handleDeleteRoom);
+    void refresh();
+    const pollId = window.setInterval(() => void refresh(), 1_000);
     return () => {
-      mx.removeListener(ClientEvent.Room, handleAddRoom);
-      mx.removeListener(RoomEvent.MyMembership, handleMembershipChange);
-      mx.removeListener(RoomStateEvent.Events, handleStateChange);
-      mx.removeListener(ClientEvent.DeleteRoom, handleDeleteRoom);
+      disposed = true;
+      window.clearInterval(pollId);
     };
-  }, [mx, setRoomToParents]);
+  }, [setRoomToParents]);
 };

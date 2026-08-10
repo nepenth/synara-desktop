@@ -1,68 +1,93 @@
-import { ReactNode, useCallback, useState } from 'react';
-import { MatrixClient, Room } from 'matrix-js-sdk';
+import { type ReactNode, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { IHierarchyRoom } from 'matrix-js-sdk/lib/@types/spaces';
-import { useMatrixClient } from '../hooks/useMatrixClient';
-import { LocalRoomSummary, useLocalRoomSummary } from '../hooks/useLocalRoomSummary';
 import { AsyncState, AsyncStatus } from '../hooks/useAsyncCallback';
+import { fetchNativeSpaceHierarchyLevel, SpaceHierarchyRoom } from '../hooks/useSpaceHierarchy';
+import {
+  isNativeRoomId,
+  readSpaceHierarchyRoomWithNativeOwner,
+  type NativeSpaceHierarchyRoom,
+} from '../features/lobby/nativeSpaceHierarchyOwner';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../utils/desktop';
 
-export type IRoomSummary = Awaited<ReturnType<MatrixClient['getRoomSummary']>>;
+export type IRoomSummary = {
+  room_id: string;
+  name?: string;
+  canonical_alias?: string;
+  topic?: string;
+  avatar_url?: string;
+  room_type?: string;
+  num_joined_members: number;
+  join_rule: string;
+  world_readable: boolean;
+  guest_can_join: boolean;
+};
+
+export const toRoomSummaryView = (room: NativeSpaceHierarchyRoom): IRoomSummary => ({
+  room_id: room.roomId,
+  name: room.name,
+  canonical_alias: room.canonicalAlias,
+  topic: room.topic,
+  avatar_url: room.avatarUrl,
+  room_type: room.roomType,
+  num_joined_members: room.numJoinedMembers,
+  join_rule: room.joinRule,
+  world_readable: room.worldReadable,
+  guest_can_join: room.guestCanJoin,
+});
 
 type RoomSummaryLoaderProps = {
   roomIdOrAlias: string;
-  children: (roomSummary?: IRoomSummary) => ReactNode;
+  children: (roomSummary: IRoomSummary) => ReactNode;
 };
 
 export function RoomSummaryLoader({ roomIdOrAlias, children }: RoomSummaryLoaderProps) {
-  const mx = useMatrixClient();
+  const isRoomId = isNativeRoomId(roomIdOrAlias);
+  const fetchSummary = useCallback(async () => {
+    const room = await readSpaceHierarchyRoomWithNativeOwner(
+      roomIdOrAlias,
+      isSynaraDesktop(),
+      (command, args) => invokeDesktopWithAvailability(command, args)
+    );
+    return toRoomSummaryView(room);
+  }, [roomIdOrAlias]);
 
-  const fetchSummary = useCallback(() => mx.getRoomSummary(roomIdOrAlias), [mx, roomIdOrAlias]);
-
-  const { data } = useQuery({
-    queryKey: [roomIdOrAlias, `summary`],
+  const { data, isError, isFetching } = useQuery({
+    enabled: isRoomId,
+    queryKey: [roomIdOrAlias, 'native-room-summary'],
     queryFn: fetchSummary,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
+  if (isFetching || isError || !data || data.room_id !== roomIdOrAlias) return null;
   return children(data);
 }
 
-export function LocalRoomSummaryLoader({
-  room,
-  children,
-}: {
-  room: Room;
-  children: (roomSummary: LocalRoomSummary) => ReactNode;
-}) {
-  const summary = useLocalRoomSummary(room);
-
-  return children(summary);
-}
+export { LocalRoomSummaryLoader } from './LocalRoomSummaryLoader';
 
 export function HierarchyRoomSummaryLoader({
   roomId,
   children,
 }: {
   roomId: string;
-  children: (state: AsyncState<IHierarchyRoom, Error>) => ReactNode;
+  children: (state: AsyncState<SpaceHierarchyRoom, Error>) => ReactNode;
 }) {
-  const mx = useMatrixClient();
-
-  const fetchSummary = useCallback(() => mx.getRoomHierarchy(roomId, 1, 1), [mx, roomId]);
-  const [errorMemo, setError] = useState<Error>();
+  const fetchSummary = useCallback(async () => {
+    const rooms = await fetchNativeSpaceHierarchyLevel(roomId);
+    const summary = rooms.find((room) => room.room_id === roomId);
+    if (!summary) throw new Error('Native Matrix room summary is unavailable.');
+    return summary;
+  }, [roomId]);
 
   const { data, error } = useQuery({
     queryKey: [roomId, `hierarchy`],
     queryFn: fetchSummary,
     retryOnMount: false,
     refetchOnWindowFocus: false,
-    retry: (failureCount, err) => {
-      setError(err);
-      if (failureCount > 3) return false;
-      return true;
-    },
+    retry: 3,
   });
 
-  let state: AsyncState<IHierarchyRoom, Error> = {
+  let state: AsyncState<SpaceHierarchyRoom, Error> = {
     status: AsyncStatus.Loading,
   };
   if (error) {
@@ -71,18 +96,10 @@ export function HierarchyRoomSummaryLoader({
       error,
     };
   }
-  if (errorMemo) {
-    state = {
-      status: AsyncStatus.Error,
-      error: errorMemo,
-    };
-  }
-
-  const summary = data?.rooms[0] ?? undefined;
-  if (summary) {
+  if (data) {
     state = {
       status: AsyncStatus.Success,
-      data: summary,
+      data,
     };
   }
 

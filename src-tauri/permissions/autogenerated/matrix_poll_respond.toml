@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-poll-respond"
+description = "Enables the matrix_poll_respond command without any pre-configured scope."
+commands.allow = ["matrix_poll_respond"]
+
+[[permission]]
+identifier = "deny-matrix-poll-respond"
+description = "Denies the matrix_poll_respond command without any pre-configured scope."
+commands.deny = ["matrix_poll_respond"]

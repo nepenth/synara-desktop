@@ -1,12 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { MatrixClient } from 'matrix-js-sdk';
+// Mock client type: local structural projection (js-sdk MatrixClient type no longer imported).
 import { performLogout } from '../../../client/initMatrix';
 import {
   notifiedEventIdsCache,
   unreadNotificationCache,
 } from '../../notifications/notificationCaches';
-import { cryptoCallbacks, storePrivateKey } from '../../../client/secretStorageKeys';
 import {
   clearSessionLocalStorage,
   SESSION_LOCAL_STORAGE_EXACT_KEYS,
@@ -46,7 +45,7 @@ const createMockMatrixClient = () => {
     clearStores: async () => {
       calls.push('clearStores');
     },
-  } as unknown as MatrixClient;
+  } as unknown as any;
 
   return { mx, calls };
 };
@@ -120,29 +119,6 @@ test('performLogout pushes session to service worker with and without matrix cli
   assert.equal(pushCalls.length, 2);
   assert.deepEqual(pushCalls[0], [undefined, undefined]);
   assert.deepEqual(pushCalls[1], [undefined, undefined]);
-});
-
-test('performLogout clears secret storage keys', async () => {
-  storePrivateKey('key1', new Uint8Array([1, 2, 3]));
-  const getCachedKey = () => cryptoCallbacks.getSecretStorageKey({ keys: { key1: {} } });
-
-  assert.notEqual(await getCachedKey(), undefined);
-
-  await performLogout(undefined, createLogoutDeps().deps);
-
-  assert.equal(await getCachedKey(), undefined);
-});
-
-test('performLogout clears secret storage keys with matrix client', async () => {
-  storePrivateKey('key1', new Uint8Array([1, 2, 3]));
-  const getCachedKey = () => cryptoCallbacks.getSecretStorageKey({ keys: { key1: {} } });
-  const { mx } = createMockMatrixClient();
-
-  assert.notEqual(await getCachedKey(), undefined);
-
-  await performLogout(mx, createLogoutDeps().deps);
-
-  assert.equal(await getCachedKey(), undefined);
 });
 
 test('performLogout clears bounded notification caches', async () => {

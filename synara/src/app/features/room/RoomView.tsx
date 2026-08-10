@@ -1,6 +1,5 @@
 import React, { useCallback, useRef } from 'react';
 import { Box, Text, config } from 'folds';
-import { EventType } from 'matrix-js-sdk';
 import { ReactEditor } from 'slate-react';
 import { isKeyHotkey } from 'is-hotkey';
 import { useStateEvent } from '../../hooks/useStateEvent';
@@ -9,7 +8,7 @@ import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useEditor } from '../../components/editor';
 import { RoomInputPlaceholder } from './RoomInputPlaceholder';
-import { RoomTimeline } from './RoomTimeline';
+import { NativeTimelinePresenter } from './NativeTimelinePresenter';
 import { RoomViewTyping } from './RoomViewTyping';
 import { RoomTombstone } from './RoomTombstone';
 import { RoomInput } from './RoomInput';
@@ -21,6 +20,7 @@ import { settingsAtom } from '../../state/settings';
 import { useSetting } from '../../state/hooks/settings';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
+import { VoiceRoom } from './VoiceRoom';
 import { useRoom } from '../../hooks/useRoom';
 
 const FN_KEYS_REGEX = /^F\d+$/;
@@ -71,7 +71,10 @@ export function RoomView({ eventId }: { eventId?: string }) {
   const creators = useRoomCreators(room);
 
   const permissions = useRoomPermissions(creators, powerLevels);
-  const canMessage = permissions.event(EventType.RoomMessage, mx.getSafeUserId());
+  const canMessage = permissions.event(
+    'm.room.message',
+    (mx as unknown as { getSafeUserId(): string }).getSafeUserId()
+  );
 
   useKeyDown(
     window,
@@ -93,13 +96,8 @@ export function RoomView({ eventId }: { eventId?: string }) {
   return (
     <Page ref={roomViewRef}>
       <Box grow="Yes" direction="Column">
-        <RoomTimeline
-          key={roomId}
-          room={room}
-          eventId={eventId}
-          roomInputRef={roomInputRef}
-          editor={editor}
-        />
+        {room.isCallRoom() && <VoiceRoom />}
+        <NativeTimelinePresenter key={roomId} roomId={roomId} eventId={eventId} />
         <RoomViewTyping room={room} />
       </Box>
       <Box shrink="No" direction="Column">

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-sync-status"
+description = "Enables the matrix_sync_status command without any pre-configured scope."
+commands.allow = ["matrix_sync_status"]
+
+[[permission]]
+identifier = "deny-matrix-sync-status"
+description = "Denies the matrix_sync_status command without any pre-configured scope."
+commands.deny = ["matrix_sync_status"]

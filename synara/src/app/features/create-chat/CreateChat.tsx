@@ -1,15 +1,16 @@
 import { Box, Button, color, config, Icon, Icons, Input, Spinner, Switch, Text } from 'folds';
 import React, { FormEventHandler, useCallback, useState } from 'react';
-import { ICreateRoomStateEvent, MatrixError, Preset, Visibility } from 'matrix-js-sdk';
+import type { MatrixError } from '../../utils/matrix';
 import { useNavigate } from 'react-router-dom';
 import { SettingTile } from '../../components/setting-tile';
 import { SequenceCard } from '../../components/sequence-card';
-import { addRoomIdToMDirect, isUserId } from '../../utils/matrix';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
+import { isUserId } from '../../utils/matrix';
+import { addRoomIdToMDirect } from '../room/nativeMDirect';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { ErrorCode } from '../../cs-errorcode';
 import { millisecondsToMinutes } from '../../utils/common';
-import { createRoomEncryptionState } from '../../components/create-room';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { createRoomWithNativeOwner } from '../../components/nativeRoomCreateOwner';
 import { useAlive } from '../../hooks/useAlive';
 import { getDirectRoomPath } from '../../pages/pathUtils';
 
@@ -17,7 +18,6 @@ type CreateChatProps = {
   defaultUserId?: string;
 };
 export function CreateChat({ defaultUserId }: CreateChatProps) {
-  const mx = useMatrixClient();
   const alive = useAlive();
   const navigate = useNavigate();
 
@@ -25,26 +25,23 @@ export function CreateChat({ defaultUserId }: CreateChatProps) {
   const [invalidUserId, setInvalidUserId] = useState(false);
 
   const [createState, create] = useAsyncCallback<string, Error | MatrixError, [string, boolean]>(
-    useCallback(
-      async (userId, encrypted) => {
-        const initialState: ICreateRoomStateEvent[] = [];
-
-        if (encrypted) initialState.push(createRoomEncryptionState());
-
-        const result = await mx.createRoom({
-          is_direct: true,
+    useCallback(async (userId, encrypted) => {
+      const roomId = await createRoomWithNativeOwner(
+        {
+          isDirect: true,
           invite: [userId],
-          visibility: Visibility.Private,
-          preset: Preset.TrustedPrivateChat,
-          initial_state: initialState,
-        });
+          visibility: 'private',
+          preset: 'trusted_private_chat',
+          encryption: encrypted,
+        },
+        isSynaraDesktop(),
+        (command, args) => invokeDesktopWithAvailability(command, args)
+      );
 
-        addRoomIdToMDirect(mx, result.room_id, userId);
+      await addRoomIdToMDirect(roomId, userId);
 
-        return result.room_id;
-      },
-      [mx]
-    )
+      return roomId;
+    }, [])
   );
   const loading = createState.status === AsyncStatus.Loading;
   const error = createState.status === AsyncStatus.Error ? createState.error : undefined;
@@ -124,9 +121,11 @@ export function CreateChat({ defaultUserId }: CreateChatProps) {
           <Icon src={Icons.Warning} filled size="100" />
           <Text size="T300" style={{ color: color.Critical.Main }}>
             <b>
-              {error instanceof MatrixError && error.name === ErrorCode.M_LIMIT_EXCEEDED
+              {(error as { name?: string } | null)?.name === ErrorCode.M_LIMIT_EXCEEDED
                 ? `Server rate-limited your request for ${millisecondsToMinutes(
-                    (error.data.retry_after_ms as number | undefined) ?? 0
+                    ((error as { data?: { retry_after_ms?: unknown } }).data?.retry_after_ms as
+                      | number
+                      | undefined) ?? 0
                   )} minutes!`
                 : error.message}
             </b>

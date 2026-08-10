@@ -187,66 +187,6 @@ function hasRequiredCommandStep(jobLines, command, workingDirectory) {
   });
 }
 
-function synapseIntegrationJobError(
-  jobLines,
-  expectedName = "Synapse two-client integration"
-) {
-  if (!jobLines) return "job is missing";
-  if (getScalar(jobLines, "name", 4) !== expectedName) {
-    return `job name must be ${expectedName}`;
-  }
-
-  const timeout = Number(getScalar(jobLines, "timeout-minutes", 4));
-  if (!Number.isInteger(timeout) || timeout < 1 || timeout > 20) {
-    return "job timeout-minutes must be between 1 and 20";
-  }
-
-  const steps = parseSteps(jobLines);
-  const singleCommandIndex = (command) =>
-    steps.findIndex((step) => {
-      const lines = executableLines(getStepRun(step));
-      return lines.length === 1 && lines[0] === command;
-    });
-  const installIndex = steps.findIndex(
-    (step) =>
-      executableLines(getStepRun(step)).length === 1 &&
-      executableLines(getStepRun(step))[0] === "npm ci" &&
-      getScalar(step, "working-directory", 8) === "synara"
-  );
-  const startIndex = singleCommandIndex("scripts/synapse-integration.sh up");
-  const testIndex = singleCommandIndex("npm run test:synapse-integration");
-  const resetIndex = singleCommandIndex("scripts/synapse-integration.sh reset");
-
-  if (installIndex < 0)
-    return "job must install the locked runtime dependencies";
-  if (startIndex < 0)
-    return "job must execute the disposable harness up command";
-  if (testIndex < 0)
-    return "job must execute the two-client integration runner";
-  if (
-    getStepEnvironment(steps[testIndex] ?? []).get("SYNARA_RECEIPT_MODE") !==
-    "both"
-  ) {
-    return "integration runner must execute both public and private receipts";
-  }
-  if (resetIndex < 0)
-    return "job must execute the disposable harness reset command";
-  if (getScalar(steps[resetIndex], "if", 8) !== "always()") {
-    return "harness reset step must use if: always()";
-  }
-  if (
-    !(
-      installIndex < startIndex &&
-      startIndex < testIndex &&
-      testIndex < resetIndex
-    )
-  ) {
-    return "install, up, integration test, and reset steps must remain ordered";
-  }
-
-  return undefined;
-}
-
 function aggregateGateError(jobLines, expectedName, expectedNeeds) {
   if (!jobLines) return "job is missing";
   if (getScalar(jobLines, "name", 4) !== expectedName) {
@@ -288,6 +228,165 @@ function aggregateGateError(jobLines, expectedName, expectedNeeds) {
   return "job must explicitly exit 1 unless every required job result is success";
 }
 
+/**
+ * CI quality gate after path filters: needs include `changes` plus heavy jobs.
+ * Desktop validation may be a single `validate` job or split
+ * `validate-rust` + `validate-frontend` (parallel wall-clock speedup).
+ * `changes` must be success; heavy jobs may be success or skipped.
+ */
+function pathFilteredCiAggregateError(jobLines) {
+  if (!jobLines) return "job is missing";
+  if (getScalar(jobLines, "name", 4) !== "Quality gate") {
+    return "job name must be Quality gate";
+  }
+  if (getScalar(jobLines, "if", 4) !== "always()") {
+    return "job must use if: always()";
+  }
+  const expectedNeedsMonolith = [
+    "changes",
+    "validate",
+    "ios-tests",
+    "synapse-native-reactions",
+    "synapse-native-attachments",
+    "synapse-native-polls",
+    "synapse-native-rich-messages",
+    "synapse-native-threads",
+    "synapse-native-receipts",
+  ];
+  const expectedNeedsSplit = [
+    "changes",
+    "validate-rust",
+    "validate-frontend",
+    "ios-tests",
+    "synapse-native-reactions",
+    "synapse-native-attachments",
+    "synapse-native-polls",
+    "synapse-native-rich-messages",
+    "synapse-native-threads",
+    "synapse-native-receipts",
+  ];
+  const needs = getList(jobLines, "needs", 4);
+  const splitDesktop = sameList(needs, expectedNeedsSplit);
+  const monolithDesktop = sameList(needs, expectedNeedsMonolith);
+  if (!splitDesktop && !monolithDesktop) {
+    return `job needs must be exactly [${expectedNeedsSplit.join(
+      ", "
+    )}] (or legacy monolith [${expectedNeedsMonolith.join(", ")}])`;
+  }
+
+  for (const step of parseSteps(jobLines)) {
+    const environment = getStepEnvironment(step);
+    const changesVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.changes.result }}"
+    )?.[0];
+    const desktopVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.validate.result }}"
+    )?.[0];
+    const desktopRustVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.validate-rust.result }}"
+    )?.[0];
+    const desktopFrontendVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.validate-frontend.result }}"
+    )?.[0];
+    const iosVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.ios-tests.result }}"
+    )?.[0];
+    const synapseNativeReactionsVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.synapse-native-reactions.result }}"
+    )?.[0];
+    const synapseNativeAttachmentsVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.synapse-native-attachments.result }}"
+    )?.[0];
+    const synapseNativePollsVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.synapse-native-polls.result }}"
+    )?.[0];
+    const synapseNativeRichMessagesVar = [...environment.entries()].find(
+      ([, value]) =>
+        value === "${{ needs.synapse-native-rich-messages.result }}"
+    )?.[0];
+    const synapseNativeThreadsVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.synapse-native-threads.result }}"
+    )?.[0];
+    const synapseNativeReceiptsVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.synapse-native-receipts.result }}"
+    )?.[0];
+    const desktopOk = splitDesktop
+      ? Boolean(desktopRustVar && desktopFrontendVar)
+      : Boolean(desktopVar);
+    if (
+      !changesVar ||
+      !desktopOk ||
+      !iosVar ||
+      !synapseNativeReactionsVar ||
+      !synapseNativeAttachmentsVar ||
+      !synapseNativePollsVar ||
+      !synapseNativeRichMessagesVar ||
+      !synapseNativeThreadsVar ||
+      !synapseNativeReceiptsVar
+    ) {
+      continue;
+    }
+
+    const runLines = executableLines(getStepRun(step));
+    const runText = runLines.join("\n");
+
+    // changes must hard-fail unless success.
+    const changesGuard = runLines.findIndex(
+      (line) =>
+        line.includes(`"$${changesVar}" != "success"`) ||
+        line.includes(`"$${changesVar}" == "success"`)
+    );
+    if (changesGuard < 0) continue;
+    const changesExit = runLines
+      .slice(changesGuard)
+      .findIndex((line) => line === "exit 1");
+    if (changesExit < 0) continue;
+
+    // Path-filtered heavy jobs: success|skipped accepted via case arm.
+    if (!runText.includes("success|skipped")) continue;
+
+    // Each heavy result variable must be referenced in an ok()/case path.
+    const desktopRefsOk = splitDesktop
+      ? runText.includes(`"$${desktopRustVar}"`) &&
+        runText.includes(`"$${desktopFrontendVar}"`)
+      : runText.includes(`"$${desktopVar}"`);
+    if (
+      !desktopRefsOk ||
+      !runText.includes(`"$${iosVar}"`) ||
+      !runText.includes(`"$${synapseNativeReactionsVar}"`) ||
+      !runText.includes(`"$${synapseNativeAttachmentsVar}"`) ||
+      !runText.includes(`"$${synapseNativePollsVar}"`) ||
+      !runText.includes(`"$${synapseNativeRichMessagesVar}"`) ||
+      !runText.includes(`"$${synapseNativeThreadsVar}"`) ||
+      !runText.includes(`"$${synapseNativeReceiptsVar}"`)
+    ) {
+      continue;
+    }
+
+    // Aggregate fail flag must force a bare exit 1 (not quoted/echoed/short-circuited).
+    const failExit = runLines.findIndex(
+      (line, idx) =>
+        line === "exit 1" &&
+        idx > changesGuard + changesExit &&
+        runLines[idx - 1]?.includes("fail")
+    );
+    // Also accept: `if [[ "$fail" -ne 0 ]]; then` then `exit 1`
+    const failBlock = runLines.findIndex((line) =>
+      /\[\[\s*"\$fail"\s*-ne\s*0\s*\]\]/.test(line)
+    );
+    if (failBlock >= 0) {
+      const body = runLines.slice(failBlock + 1);
+      const end = body.indexOf("fi");
+      if (end > 0 && body.slice(0, end).includes("exit 1")) {
+        return undefined;
+      }
+    }
+    if (failExit >= 0) return undefined;
+  }
+
+  return "job must require changes=success, allow success|skipped for validate/ios/native-synapse, and exit 1 on failure";
+}
+
 export function inspectQualityGates({
   ciWorkflow,
   iosWorkflow,
@@ -306,14 +405,6 @@ export function inspectQualityGates({
   } catch {
     errors.push("Root package metadata must be valid JSON.");
   }
-  if (
-    packageScripts["test:synapse-integration"] !==
-    "SYNARA_RUN_SYNAPSE_INTEGRATION=1 npm --prefix synara exec -- vite-node --config synara/scripts/vite-node.integration.config.mjs synara/scripts/run-synapse-two-client-integration.mjs"
-  ) {
-    errors.push(
-      "Root test:synapse-integration must execute the pinned two-client runner."
-    );
-  }
 
   if (!hasIosTestBuildStep(ciJobs.get("ios-tests"))) {
     errors.push(
@@ -331,8 +422,11 @@ export function inspectQualityGates({
     );
   }
 
+  // Desktop Node gates may live on monolithic `validate` or split `validate-frontend`.
+  const ciDesktopNodeJob =
+    ciJobs.get("validate-frontend") ?? ciJobs.get("validate");
   for (const [jobLines, label] of [
-    [ciJobs.get("validate"), "CI desktop validation"],
+    [ciDesktopNodeJob, "CI desktop validation"],
     [
       releaseJobs.get("exact-tag-desktop-quality"),
       "Exact-tag desktop validation",
@@ -351,7 +445,7 @@ export function inspectQualityGates({
   }
 
   for (const [jobLines, label] of [
-    [ciJobs.get("validate"), "CI desktop validation"],
+    [ciDesktopNodeJob, "CI desktop validation"],
     [
       releaseJobs.get("exact-tag-desktop-quality"),
       "Exact-tag desktop validation",
@@ -359,42 +453,13 @@ export function inspectQualityGates({
   ]) {
     if (!hasRequiredCommandStep(jobLines, "npm run check:release-updater")) {
       errors.push(
-        `${label} must execute npm run check:release-updater at repository root.`,
+        `${label} must execute npm run check:release-updater at repository root.`
       );
     }
   }
 
-  const synapseError = synapseIntegrationJobError(
-    ciJobs.get("synapse-integration")
-  );
-  if (synapseError) errors.push(`CI Synapse integration ${synapseError}.`);
-
-  const releaseSynapseError = synapseIntegrationJobError(
-    releaseJobs.get("exact-tag-synapse-integration"),
-    "Exact-tag Synapse two-client integration"
-  );
-  if (releaseSynapseError) {
-    errors.push(`Exact-tag Synapse integration ${releaseSynapseError}.`);
-  }
-  if (
-    !sameList(
-      getList(
-        releaseJobs.get("exact-tag-synapse-integration") ?? [],
-        "needs",
-        4
-      ),
-      ["validate"]
-    )
-  ) {
-    errors.push(
-      "Release workflow exact-tag-synapse-integration needs must be exactly [validate]."
-    );
-  }
-
-  const ciAggregateError = aggregateGateError(
-    ciJobs.get("quality-gate"),
-    "Quality gate",
-    ["validate", "ios-tests", "synapse-integration"]
+  const ciAggregateError = pathFilteredCiAggregateError(
+    ciJobs.get("quality-gate")
   );
   if (ciAggregateError) errors.push(`CI aggregate ${ciAggregateError}.`);
 
@@ -437,12 +502,7 @@ export function inspectQualityGates({
   const releaseAggregateError = aggregateGateError(
     releaseJobs.get("quality-gate"),
     "Exact-tag quality gate",
-    [
-      "validate",
-      "exact-tag-desktop-quality",
-      "exact-tag-ios-quality",
-      "exact-tag-synapse-integration",
-    ]
+    ["validate", "exact-tag-desktop-quality", "exact-tag-ios-quality"]
   );
   if (releaseAggregateError) {
     errors.push(`Release aggregate ${releaseAggregateError}.`);

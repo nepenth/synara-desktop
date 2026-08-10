@@ -1,18 +1,7 @@
-import {
-  Direction,
-  IContextResponse,
-  MatrixClient,
-  Method,
-  Preset,
-  Room,
-  RoomMember,
-  Visibility,
-} from 'matrix-js-sdk';
-import { RoomServerAclEventContent } from 'matrix-js-sdk/lib/types';
 import { useMemo } from 'react';
+import type { MatrixClientReading, MemberReading, RoomReading } from '../utils/room';
 import { useTranslation } from 'react-i18next';
 import {
-  addRoomIdToMDirect,
   getDMRoomFor,
   guessDmRoomUserId,
   isRoomAlias,
@@ -20,15 +9,76 @@ import {
   isServerName,
   isUserId,
   rateLimitedActions,
-  removeRoomIdFromMDirect,
 } from '../utils/matrix';
+import { addRoomIdToMDirect, removeRoomIdFromMDirect } from '../features/room/nativeMDirect';
 import { useRoomNavigate } from './useRoomNavigate';
 import { Membership, StateEvent } from '../../types/matrix/room';
 import { getStateEvent } from '../utils/room';
 import { splitWithSpace } from '../utils/common';
-import { createRoomEncryptionState } from '../components/create-room';
-import { makePollStartContentFromCommand, POLL_START_EVENT_TYPE } from '../utils/polls';
+import { sendPollWithNativeDesktopOwner } from '../features/room/nativePoll';
+import { parsePollCommand } from '../utils/polls';
 import { getRoomCurrentState } from '../utils/timelineLifecycle';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../utils/desktop';
+import { createRoomWithNativeOwner } from '../components/nativeRoomCreateOwner';
+import { joinRoomWithNativeOwner } from '../components/nativeRoomJoinOwner';
+import { leaveRoomWithNativeOwner } from '../components/nativeRoomLeaveOwner';
+import {
+  banUserWithNativeOwner,
+  inviteUserWithNativeOwner,
+  kickUserWithNativeOwner,
+  unbanUserWithNativeOwner,
+} from '../components/nativeRoomModerationOwner';
+
+type ServerMemberReading = MemberReading & { membership: string };
+
+type CommandsClientReading = MatrixClientReading & {
+  getSafeUserId(): string;
+  getIgnoredUsers(): string[];
+  setIgnoredUsers(ids: string[]): Promise<unknown>;
+  sendStateEvent(
+    roomId: string,
+    eventType: string,
+    content: unknown,
+    stateKey?: string
+  ): Promise<unknown>;
+  timestampToEvent(
+    roomId: string,
+    timestamp: number,
+    direction: 'f' | 'b'
+  ): Promise<{ event_id: string }>;
+  http: {
+    authedRequest<T>(method: string, path: string, opts: { limit: number }): Promise<T>;
+  };
+  createMessagesRequest(
+    roomId: string,
+    fromToken: string,
+    limit: number,
+    direction: 'f' | 'b',
+    filter?: unknown
+  ): Promise<{
+    end?: string;
+    chunk: {
+      type: string;
+      sender: string;
+      unsigned?: { redacted_because?: unknown };
+      event_id: string;
+    }[];
+  }>;
+  redactEvent(
+    roomId: string,
+    eventId: string,
+    txnId?: string,
+    opts?: { reason?: string }
+  ): Promise<unknown>;
+};
+
+type ContextResponseReading = { start?: string; end?: string };
+
+type RoomServerAclEventContent = {
+  allow?: string[];
+  deny?: string[];
+  allow_ip_literals?: boolean;
+};
 
 export const SHRUG = '¯\\_(ツ)_/¯';
 export const TABLEFLIP = '(╯°□°)╯︵ ┻━┻';
@@ -95,12 +145,9 @@ export const parseServers = (payload: string): string[] => {
   return servers;
 };
 
-const getServerMembers = (room: Room, server: string): RoomMember[] => {
-  const members: RoomMember[] = room
-    .getMembers()
-    .filter((member) => member.userId.endsWith(`:${server}`));
-
-  return members;
+const getServerMembers = (room: RoomReading, server: string): ServerMemberReading[] => {
+  const members = room.getMembers() as ServerMemberReading[];
+  return members.filter((member) => member.userId.endsWith(`:${server}`));
 };
 
 export const parseTimestampFlag = (input: string): number | undefined => {
@@ -172,7 +219,8 @@ export type CommandContent = {
 
 export type CommandRecord = Record<Command, CommandContent>;
 
-export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
+export const useCommands = (mx: MatrixClientReading, room: RoomReading): CommandRecord => {
+  const c = useMemo(() => mx as unknown as CommandsClientReading, [mx]);
   const { navigateRoom } = useRoomNavigate();
   const { t } = useTranslation();
 
@@ -208,7 +256,7 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         description: 'Start direct message with user. Example: /startdm userId1',
         exe: async (payload) => {
           const rawIds = splitWithSpace(payload);
-          const userIds = rawIds.filter((id) => isUserId(id) && id !== mx.getSafeUserId());
+          const userIds = rawIds.filter((id) => isUserId(id) && id !== c.getSafeUserId());
           if (userIds.length === 0) return;
           if (userIds.length === 1) {
             const dmRoomId = getDMRoomFor(mx, userIds[0])?.roomId;
@@ -217,15 +265,19 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
               return;
             }
           }
-          const result = await mx.createRoom({
-            is_direct: true,
-            invite: userIds,
-            visibility: Visibility.Private,
-            preset: Preset.TrustedPrivateChat,
-            initial_state: [createRoomEncryptionState()],
-          });
-          addRoomIdToMDirect(mx, result.room_id, userIds[0]);
-          navigateRoom(result.room_id);
+          const roomId = await createRoomWithNativeOwner(
+            {
+              isDirect: true,
+              invite: userIds,
+              visibility: 'private',
+              preset: 'trusted_private_chat',
+              encryption: true,
+            },
+            isSynaraDesktop(),
+            (command, args) => invokeDesktopWithAvailability(command, args)
+          );
+          await addRoomIdToMDirect(roomId, userIds[0]);
+          navigateRoom(roomId);
         },
       },
       [Command.Join]: {
@@ -236,22 +288,31 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           const roomIdOrAliases = rawIds.filter(
             (idOrAlias) => isRoomId(idOrAlias) || isRoomAlias(idOrAlias)
           );
-          roomIdOrAliases.forEach(async (idOrAlias) => {
-            await mx.joinRoom(idOrAlias);
-          });
+          await Promise.all(
+            roomIdOrAliases.map((idOrAlias) =>
+              joinRoomWithNativeOwner(
+                idOrAlias,
+                undefined,
+                isSynaraDesktop(),
+                invokeDesktopWithAvailability
+              )
+            )
+          );
         },
       },
       [Command.Leave]: {
         name: Command.Leave,
         description: 'Leave current room.',
         exe: async (payload) => {
-          if (payload.trim() === '') {
-            mx.leave(room.roomId);
-            return;
-          }
-          const rawIds = splitWithSpace(payload);
-          const roomIds = rawIds.filter((id) => isRoomId(id));
-          roomIds.map((id) => mx.leave(id));
+          const roomIds =
+            payload.trim() === ''
+              ? [room.roomId]
+              : splitWithSpace(payload).filter((id) => isRoomId(id));
+          await Promise.all(
+            roomIds.map((id) =>
+              leaveRoomWithNativeOwner(id, isSynaraDesktop(), invokeDesktopWithAvailability)
+            )
+          );
         },
       },
       [Command.Invite]: {
@@ -262,7 +323,15 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           const users = parseUsers(content);
           const flagToContent = parseFlags(flags);
           const reason = flagToContent.r;
-          users.map((id) => mx.invite(room.roomId, id, reason));
+          await rateLimitedActions(users, (id) =>
+            inviteUserWithNativeOwner(
+              room.roomId,
+              id,
+              reason,
+              isSynaraDesktop(),
+              invokeDesktopWithAvailability
+            )
+          );
         },
       },
       [Command.DisInvite]: {
@@ -273,7 +342,15 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           const users = parseUsers(content);
           const flagToContent = parseFlags(flags);
           const reason = flagToContent.r;
-          users.map((id) => mx.kick(room.roomId, id, reason));
+          await rateLimitedActions(users, (id) =>
+            kickUserWithNativeOwner(
+              room.roomId,
+              id,
+              reason,
+              isSynaraDesktop(),
+              invokeDesktopWithAvailability
+            )
+          );
         },
       },
       [Command.Kick]: {
@@ -297,7 +374,15 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
             });
           }
 
-          rateLimitedActions(users, (id) => mx.kick(room.roomId, id, reason));
+          await rateLimitedActions(users, (id) =>
+            kickUserWithNativeOwner(
+              room.roomId,
+              id,
+              reason,
+              isSynaraDesktop(),
+              invokeDesktopWithAvailability
+            )
+          );
         },
       },
       [Command.Ban]: {
@@ -319,7 +404,15 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
             });
           }
 
-          rateLimitedActions(users, (id) => mx.ban(room.roomId, id, reason));
+          await rateLimitedActions(users, (id) =>
+            banUserWithNativeOwner(
+              room.roomId,
+              id,
+              reason,
+              isSynaraDesktop(),
+              invokeDesktopWithAvailability
+            )
+          );
         },
       },
       [Command.UnBan]: {
@@ -328,7 +421,14 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         exe: async (payload) => {
           const rawIds = splitWithSpace(payload);
           const users = rawIds.filter((id) => isUserId(id));
-          users.map((id) => mx.unban(room.roomId, id));
+          await rateLimitedActions(users, (id) =>
+            unbanUserWithNativeOwner(
+              room.roomId,
+              id,
+              isSynaraDesktop(),
+              invokeDesktopWithAvailability
+            )
+          );
         },
       },
       [Command.Ignore]: {
@@ -338,9 +438,9 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           const rawIds = splitWithSpace(payload);
           const userIds = rawIds.filter((id) => isUserId(id));
           if (userIds.length > 0) {
-            let ignoredUsers = mx.getIgnoredUsers().concat(userIds);
+            let ignoredUsers = c.getIgnoredUsers().concat(userIds);
             ignoredUsers = [...new Set(ignoredUsers)];
-            await mx.setIgnoredUsers(ignoredUsers);
+            await c.setIgnoredUsers(ignoredUsers);
           }
         },
       },
@@ -351,8 +451,8 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           const rawIds = splitWithSpace(payload);
           const userIds = rawIds.filter((id) => isUserId(id));
           if (userIds.length > 0) {
-            const ignoredUsers = mx.getIgnoredUsers();
-            await mx.setIgnoredUsers(ignoredUsers.filter((id) => !userIds.includes(id)));
+            const ignoredUsers = c.getIgnoredUsers();
+            await c.setIgnoredUsers(ignoredUsers.filter((id) => !userIds.includes(id)));
           }
         },
       },
@@ -362,20 +462,19 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         exe: async (payload) => {
           const nick = payload.trim();
           if (nick === '') return;
-          const mEvent = getRoomCurrentState(room)?.getStateEvents(
-            StateEvent.RoomMember,
-            mx.getSafeUserId()
-          );
+          const mEvent = getRoomCurrentState(
+            room as unknown as Parameters<typeof getRoomCurrentState>[0]
+          )?.getStateEvents(StateEvent.RoomMember, c.getSafeUserId());
           const content = mEvent?.getContent();
           if (!content) return;
-          await mx.sendStateEvent(
+          await c.sendStateEvent(
             room.roomId,
             StateEvent.RoomMember as any,
             {
               ...content,
               displayname: nick,
             },
-            mx.getSafeUserId()
+            c.getSafeUserId()
           );
         },
       },
@@ -384,20 +483,19 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         description: 'Change profile picture in current room. Example /myroomavatar mxc://xyzabc',
         exe: async (payload) => {
           if (payload.match(/^mxc:\/\/\S+$/)) {
-            const mEvent = getRoomCurrentState(room)?.getStateEvents(
-              StateEvent.RoomMember,
-              mx.getSafeUserId()
-            );
+            const mEvent = getRoomCurrentState(
+              room as unknown as Parameters<typeof getRoomCurrentState>[0]
+            )?.getStateEvents(StateEvent.RoomMember, c.getSafeUserId());
             const content = mEvent?.getContent();
             if (!content) return;
-            await mx.sendStateEvent(
+            await c.sendStateEvent(
               room.roomId,
               StateEvent.RoomMember as any,
               {
                 ...content,
                 avatar_url: payload,
               },
-              mx.getSafeUserId()
+              c.getSafeUserId()
             );
           }
         },
@@ -406,15 +504,15 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         name: Command.ConvertToDm,
         description: 'Convert room to direct message',
         exe: async () => {
-          const dmUserId = guessDmRoomUserId(room, mx.getSafeUserId());
-          await addRoomIdToMDirect(mx, room.roomId, dmUserId);
+          const dmUserId = guessDmRoomUserId(room, c.getSafeUserId());
+          await addRoomIdToMDirect(room.roomId, dmUserId);
         },
       },
       [Command.ConvertToRoom]: {
         name: Command.ConvertToRoom,
         description: 'Convert direct message to room',
         exe: async () => {
-          await removeRoomIdFromMDirect(mx, room.roomId);
+          await removeRoomIdFromMDirect(room.roomId);
         },
       },
       [Command.Delete]: {
@@ -444,26 +542,20 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
             });
           }
 
-          const result = await mx.timestampToEvent(room.roomId, ts, Direction.Forward);
+          const result = await c.timestampToEvent(room.roomId, ts, 'f');
           const startEventId = result.event_id;
 
           const path = `/rooms/${encodeURIComponent(room.roomId)}/context/${encodeURIComponent(
             startEventId
           )}`;
-          const eventContext = await mx.http.authedRequest<IContextResponse>(Method.Get, path, {
+          const eventContext = await c.http.authedRequest<ContextResponseReading>('GET', path, {
             limit: 0,
           });
 
           let token: string | undefined = eventContext.start;
           while (token) {
             // eslint-disable-next-line no-await-in-loop
-            const response = await mx.createMessagesRequest(
-              room.roomId,
-              token,
-              20,
-              Direction.Forward,
-              undefined
-            );
+            const response = await c.createMessagesRequest(room.roomId, token, 20, 'f', undefined);
             const { end, chunk } = response;
             // remove until the latest event;
             token = end;
@@ -479,7 +571,7 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
 
             // eslint-disable-next-line no-await-in-loop
             await rateLimitedActions(eventIds, (eventId) =>
-              mx.redactEvent(room.roomId, eventId, undefined, { reason })
+              c.redactEvent(room.roomId, eventId, undefined, { reason })
             );
           }
         },
@@ -532,7 +624,7 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           aclContent.allow?.sort();
           aclContent.deny?.sort();
 
-          await mx.sendStateEvent(room.roomId, StateEvent.RoomServerAcl as any, aclContent);
+          await c.sendStateEvent(room.roomId, StateEvent.RoomServerAcl as any, aclContent);
         },
       },
       [Command.Poll]: {
@@ -542,13 +634,21 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           'Create a poll. Example: /poll Deploy now? | Yes | No | max=2'
         ),
         exe: async (payload) => {
-          const content = makePollStartContentFromCommand(payload);
-          if (!content) return;
-          await mx.sendEvent(room.roomId, POLL_START_EVENT_TYPE as any, content as any);
+          const poll = parsePollCommand(payload);
+          if (!poll) return;
+          const owner = await sendPollWithNativeDesktopOwner({
+            roomId: room.roomId,
+            question: poll.question,
+            answers: poll.answers.map((answer) => answer.text),
+            maxSelections: poll.maxSelections,
+          });
+          if (owner === 'legacy') {
+            throw new Error('Native Matrix session is required to send polls on desktop.');
+          }
         },
       },
     }),
-    [mx, room, navigateRoom, t]
+    [c, mx, room, navigateRoom, t]
   );
 
   return commands;

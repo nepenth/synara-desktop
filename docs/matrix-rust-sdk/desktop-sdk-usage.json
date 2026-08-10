@@ -1,0 +1,1365 @@
+{
+  "aggregates": {
+    "production": {
+      "categories": {
+        "account_data": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "authenticated_media": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 1,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "client_events": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "client_methods": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "crypto_verification_recovery": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "custom_raw_event_sends": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "direct_matrix_networking": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 2,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 3
+        },
+        "event_emitters_listeners": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "indexeddb_matrix_stores": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "matrixrtc_calls": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "notifications_push_rules": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "receipts": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "room_lists": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "room_methods": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "searches": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "spaces": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "sync_lifecycle": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "threads": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "timelines": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "typing": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "uia_auth": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        }
+      },
+      "fileCount": 2,
+      "importFileCount": 0,
+      "methodCandidateFrequencies": [],
+      "modelCoupling": {
+        "CallMembership": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "CryptoApi": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "EventTimeline": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "IndexedDBCryptoStore": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "IndexedDBStore": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "MatrixClient": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "MatrixError": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "MatrixEvent": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "Relations": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "Room": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "RoomMember": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "RoomState": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "VerificationRequest": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "createClient": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        }
+      },
+      "modules": [],
+      "networking": [
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 117,
+          "path": "synara/src/app/cs-api.ts"
+        },
+        {
+          "indicator": "/_matrix/client/v1/media/download",
+          "kind": "matrix_cs_path_literal",
+          "line": 107,
+          "path": "synara/src/sw.ts"
+        },
+        {
+          "indicator": "/_matrix/client/v1/media/thumbnail",
+          "kind": "matrix_cs_path_literal",
+          "line": 107,
+          "path": "synara/src/sw.ts"
+        }
+      ],
+      "networkingFileCount": 2,
+      "networkingFindingCount": 3,
+      "role": "production",
+      "scope": "role",
+      "symbols": []
+    },
+    "test": {
+      "categories": {
+        "account_data": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "authenticated_media": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 1,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "client_events": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "client_methods": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "crypto_verification_recovery": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "custom_raw_event_sends": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "direct_matrix_networking": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 6,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 27
+        },
+        "event_emitters_listeners": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "indexeddb_matrix_stores": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "matrixrtc_calls": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "notifications_push_rules": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "receipts": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "room_lists": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "room_methods": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "searches": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "spaces": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "sync_lifecycle": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "threads": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "timelines": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "typing": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "uia_auth": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        }
+      },
+      "fileCount": 6,
+      "importFileCount": 0,
+      "methodCandidateFrequencies": [],
+      "modelCoupling": {
+        "CallMembership": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "CryptoApi": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "EventTimeline": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "IndexedDBCryptoStore": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "IndexedDBStore": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "MatrixClient": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "MatrixError": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "MatrixEvent": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "Relations": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "Room": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "RoomMember": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "RoomState": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "VerificationRequest": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "createClient": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        }
+      },
+      "modules": [],
+      "networking": [
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 45,
+          "path": "scripts/__tests__/audit-matrix-public.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/federation/v1/version",
+          "kind": "matrix_cs_path_literal",
+          "line": 47,
+          "path": "scripts/__tests__/audit-matrix-public.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/key/v2/server",
+          "kind": "matrix_cs_path_literal",
+          "line": 51,
+          "path": "scripts/__tests__/audit-matrix-public.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/v3/login",
+          "kind": "matrix_cs_path_literal",
+          "line": 55,
+          "path": "scripts/__tests__/audit-matrix-public.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/v3/sync",
+          "kind": "matrix_cs_path_literal",
+          "line": 131,
+          "path": "scripts/__tests__/check-matrix-rust-sdk-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions\\",
+          "kind": "matrix_cs_path_template",
+          "line": 340,
+          "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/v1/media/download",
+          "kind": "matrix_cs_path_literal",
+          "line": 343,
+          "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/v1/media/download",
+          "kind": "matrix_cs_path_literal",
+          "line": 361,
+          "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/v1/media/thumbnail",
+          "kind": "matrix_cs_path_literal",
+          "line": 361,
+          "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/v3/sync",
+          "kind": "matrix_cs_path_literal",
+          "line": 365,
+          "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 133,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 133,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 137,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 137,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/v1/media/download",
+          "kind": "matrix_cs_path_literal",
+          "line": 297,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/v1/media/download",
+          "kind": "matrix_cs_path_template",
+          "line": 297,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 298,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 298,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/v3/sync",
+          "kind": "matrix_cs_path_literal",
+          "line": 324,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/v3/sync",
+          "kind": "matrix_cs_path_template",
+          "line": 324,
+          "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs"
+        },
+        {
+          "indicator": "/_matrix/media/v3/download/example/media",
+          "kind": "matrix_cs_path_literal",
+          "line": 14,
+          "path": "synara/src/app/matrix/__tests__/media.test.ts"
+        },
+        {
+          "indicator": "/_matrix/media/v3/download/example/media",
+          "kind": "matrix_cs_path_literal",
+          "line": 27,
+          "path": "synara/src/app/matrix/__tests__/media.test.ts"
+        },
+        {
+          "indicator": "/_matrix/media/v3/thumbnail/example/avatar",
+          "kind": "matrix_cs_path_literal",
+          "line": 48,
+          "path": "synara/src/app/matrix/__tests__/media.test.ts"
+        },
+        {
+          "indicator": "/_matrix/media/v3/thumbnail/example/avatar",
+          "kind": "matrix_cs_path_literal",
+          "line": 56,
+          "path": "synara/src/app/matrix/__tests__/media.test.ts"
+        },
+        {
+          "indicator": "/_matrix/media/v3/download/example/media",
+          "kind": "matrix_cs_path_literal",
+          "line": 71,
+          "path": "synara/src/app/matrix/__tests__/media.test.ts"
+        },
+        {
+          "indicator": "/_matrix/media/v3/download/example/media",
+          "kind": "matrix_cs_path_literal",
+          "line": 84,
+          "path": "synara/src/app/matrix/__tests__/media.test.ts"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 37,
+          "path": "synara/src/app/utils/__tests__/remoteContent.test.ts"
+        }
+      ],
+      "networkingFileCount": 6,
+      "networkingFindingCount": 27,
+      "role": "test",
+      "scope": "role",
+      "symbols": []
+    },
+    "tooling": {
+      "categories": {
+        "account_data": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "authenticated_media": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "client_events": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "client_methods": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 2,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "crypto_verification_recovery": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "custom_raw_event_sends": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "direct_matrix_networking": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 2,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 5
+        },
+        "event_emitters_listeners": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "indexeddb_matrix_stores": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "matrixrtc_calls": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "notifications_push_rules": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "receipts": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "room_lists": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "room_methods": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "searches": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "spaces": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "sync_lifecycle": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "threads": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "timelines": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "typing": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 0,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 0,
+          "networkingOccurrences": 0
+        },
+        "uia_auth": {
+          "constructorCandidateOccurrences": 0,
+          "fileCount": 1,
+          "listenerCandidateOccurrences": 0,
+          "methodCandidateOccurrences": 1,
+          "networkingOccurrences": 0
+        }
+      },
+      "fileCount": 4,
+      "importFileCount": 2,
+      "methodCandidateFrequencies": [
+        {
+          "count": 1,
+          "name": "getUserId"
+        }
+      ],
+      "modelCoupling": {
+        "CallMembership": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "CryptoApi": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "EventTimeline": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "IndexedDBCryptoStore": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "IndexedDBStore": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "MatrixClient": {
+          "fileCount": 1,
+          "importOccurrences": 1
+        },
+        "MatrixError": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "MatrixEvent": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "Relations": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "Room": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "RoomMember": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "RoomState": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "VerificationRequest": {
+          "fileCount": 0,
+          "importOccurrences": 0
+        },
+        "createClient": {
+          "fileCount": 1,
+          "importOccurrences": 1
+        }
+      },
+      "modules": [
+        {
+          "fileCount": 2,
+          "importCount": 2,
+          "path": "matrix-js-sdk"
+        }
+      ],
+      "networking": [
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 97,
+          "path": "scripts/audit-matrix-public.mjs"
+        },
+        {
+          "indicator": "/_matrix/federation/v1/version",
+          "kind": "matrix_cs_path_literal",
+          "line": 98,
+          "path": "scripts/audit-matrix-public.mjs"
+        },
+        {
+          "indicator": "/_matrix/key/v2/server",
+          "kind": "matrix_cs_path_literal",
+          "line": 99,
+          "path": "scripts/audit-matrix-public.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/v3/login",
+          "kind": "matrix_cs_path_literal",
+          "line": 100,
+          "path": "scripts/audit-matrix-public.mjs"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 6,
+          "path": "scripts/fixtures/matrix-rust-p1.6/prohibited/raw-matrix-http/synara/src/app/features/matrix-ipc/rawHttp.ts"
+        }
+      ],
+      "networkingFileCount": 2,
+      "networkingFindingCount": 5,
+      "role": "tooling",
+      "scope": "role",
+      "symbols": [
+        {
+          "fileCount": 1,
+          "importCount": 1,
+          "name": "MatrixClient",
+          "typeImports": 0,
+          "valueImports": 1
+        },
+        {
+          "fileCount": 1,
+          "importCount": 1,
+          "name": "createClient",
+          "typeImports": 0,
+          "valueImports": 1
+        }
+      ]
+    }
+  },
+  "files": [
+    {
+      "bucket": null,
+      "categories": ["direct_matrix_networking"],
+      "constructorCandidates": [],
+      "desktopRuntime": false,
+      "imports": [],
+      "listenerCandidates": [],
+      "methodCandidates": [],
+      "modelCoupling": [],
+      "networking": [
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 45
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/federation/v1/version",
+          "kind": "matrix_cs_path_literal",
+          "line": 47
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/key/v2/server",
+          "kind": "matrix_cs_path_literal",
+          "line": 51
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v3/login",
+          "kind": "matrix_cs_path_literal",
+          "line": 55
+        }
+      ],
+      "path": "scripts/__tests__/audit-matrix-public.test.mjs",
+      "role": "test"
+    },
+    {
+      "bucket": null,
+      "categories": ["direct_matrix_networking"],
+      "constructorCandidates": [],
+      "desktopRuntime": false,
+      "imports": [],
+      "listenerCandidates": [],
+      "methodCandidates": [],
+      "modelCoupling": [],
+      "networking": [
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v3/sync",
+          "kind": "matrix_cs_path_literal",
+          "line": 131
+        }
+      ],
+      "path": "scripts/__tests__/check-matrix-rust-sdk-guardrails.test.mjs",
+      "role": "test"
+    },
+    {
+      "bucket": null,
+      "categories": ["authenticated_media", "direct_matrix_networking"],
+      "constructorCandidates": [],
+      "desktopRuntime": false,
+      "imports": [],
+      "listenerCandidates": [],
+      "methodCandidates": [],
+      "modelCoupling": [],
+      "networking": [
+        {
+          "description": "Template literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions\\",
+          "kind": "matrix_cs_path_template",
+          "line": 340
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v1/media/download",
+          "kind": "matrix_cs_path_literal",
+          "line": 343
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v1/media/download",
+          "kind": "matrix_cs_path_literal",
+          "line": 361
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v1/media/thumbnail",
+          "kind": "matrix_cs_path_literal",
+          "line": 361
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v3/sync",
+          "kind": "matrix_cs_path_literal",
+          "line": 365
+        }
+      ],
+      "path": "scripts/__tests__/inventory-matrix-sdk-usage.test.mjs",
+      "role": "test"
+    },
+    {
+      "bucket": null,
+      "categories": ["direct_matrix_networking"],
+      "constructorCandidates": [],
+      "desktopRuntime": false,
+      "imports": [],
+      "listenerCandidates": [],
+      "methodCandidates": [],
+      "modelCoupling": [],
+      "networking": [
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 133
+        },
+        {
+          "description": "Template literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 133
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 137
+        },
+        {
+          "description": "Template literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 137
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v1/media/download",
+          "kind": "matrix_cs_path_literal",
+          "line": 297
+        },
+        {
+          "description": "Template literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v1/media/download",
+          "kind": "matrix_cs_path_template",
+          "line": 297
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 298
+        },
+        {
+          "description": "Template literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 298
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v3/sync",
+          "kind": "matrix_cs_path_literal",
+          "line": 324
+        },
+        {
+          "description": "Template literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v3/sync",
+          "kind": "matrix_cs_path_template",
+          "line": 324
+        }
+      ],
+      "path": "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs",
+      "role": "test"
+    },
+    {
+      "bucket": null,
+      "categories": ["direct_matrix_networking"],
+      "constructorCandidates": [],
+      "desktopRuntime": false,
+      "imports": [],
+      "listenerCandidates": [],
+      "methodCandidates": [],
+      "modelCoupling": [],
+      "networking": [
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 97
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/federation/v1/version",
+          "kind": "matrix_cs_path_literal",
+          "line": 98
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/key/v2/server",
+          "kind": "matrix_cs_path_literal",
+          "line": 99
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v3/login",
+          "kind": "matrix_cs_path_literal",
+          "line": 100
+        }
+      ],
+      "path": "scripts/audit-matrix-public.mjs",
+      "role": "tooling"
+    },
+    {
+      "bucket": null,
+      "categories": ["client_methods", "uia_auth"],
+      "constructorCandidates": [],
+      "desktopRuntime": false,
+      "imports": [
+        {
+          "defaultImport": null,
+          "form": "static",
+          "isTypeOnly": false,
+          "line": 5,
+          "module": "matrix-js-sdk",
+          "namedImports": [
+            {
+              "alias": null,
+              "isTypeOnly": false,
+              "name": "MatrixClient"
+            }
+          ],
+          "namespaceImport": null
+        }
+      ],
+      "listenerCandidates": [],
+      "methodCandidates": [
+        {
+          "category": "uia_auth",
+          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+          "kind": "property_call_candidate",
+          "line": 8,
+          "name": "getUserId"
+        }
+      ],
+      "modelCoupling": ["MatrixClient"],
+      "networking": [],
+      "path": "scripts/fixtures/matrix-rust-p1.6/prohibited/js-sdk-in-matrix-ipc/synara/src/app/features/matrix-ipc/leakyImport.ts",
+      "role": "tooling"
+    },
+    {
+      "bucket": null,
+      "categories": ["client_methods"],
+      "constructorCandidates": [],
+      "desktopRuntime": false,
+      "imports": [
+        {
+          "defaultImport": null,
+          "form": "static",
+          "isTypeOnly": false,
+          "line": 5,
+          "module": "matrix-js-sdk",
+          "namedImports": [
+            {
+              "alias": null,
+              "isTypeOnly": false,
+              "name": "createClient"
+            }
+          ],
+          "namespaceImport": null
+        }
+      ],
+      "listenerCandidates": [],
+      "methodCandidates": [],
+      "modelCoupling": ["createClient"],
+      "networking": [],
+      "path": "scripts/fixtures/matrix-rust-p1.6/prohibited/js-sdk-new-file/synara/src/app/features/brand-new-migration/NewClientBridge.ts",
+      "role": "tooling"
+    },
+    {
+      "bucket": null,
+      "categories": ["direct_matrix_networking"],
+      "constructorCandidates": [],
+      "desktopRuntime": false,
+      "imports": [],
+      "listenerCandidates": [],
+      "methodCandidates": [],
+      "modelCoupling": [],
+      "networking": [
+        {
+          "description": "Template literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 6
+        }
+      ],
+      "path": "scripts/fixtures/matrix-rust-p1.6/prohibited/raw-matrix-http/synara/src/app/features/matrix-ipc/rawHttp.ts",
+      "role": "tooling"
+    },
+    {
+      "bucket": "app-other",
+      "categories": ["direct_matrix_networking"],
+      "constructorCandidates": [],
+      "desktopRuntime": true,
+      "imports": [],
+      "listenerCandidates": [],
+      "methodCandidates": [],
+      "modelCoupling": [],
+      "networking": [
+        {
+          "description": "Template literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_template",
+          "line": 117
+        }
+      ],
+      "path": "synara/src/app/cs-api.ts",
+      "role": "production"
+    },
+    {
+      "bucket": "media-boundary",
+      "categories": ["direct_matrix_networking"],
+      "constructorCandidates": [],
+      "desktopRuntime": true,
+      "imports": [],
+      "listenerCandidates": [],
+      "methodCandidates": [],
+      "modelCoupling": [],
+      "networking": [
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/media/v3/download/example/media",
+          "kind": "matrix_cs_path_literal",
+          "line": 14
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/media/v3/download/example/media",
+          "kind": "matrix_cs_path_literal",
+          "line": 27
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/media/v3/thumbnail/example/avatar",
+          "kind": "matrix_cs_path_literal",
+          "line": 48
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/media/v3/thumbnail/example/avatar",
+          "kind": "matrix_cs_path_literal",
+          "line": 56
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/media/v3/download/example/media",
+          "kind": "matrix_cs_path_literal",
+          "line": 71
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/media/v3/download/example/media",
+          "kind": "matrix_cs_path_literal",
+          "line": 84
+        }
+      ],
+      "path": "synara/src/app/matrix/__tests__/media.test.ts",
+      "role": "test"
+    },
+    {
+      "bucket": "utility",
+      "categories": ["direct_matrix_networking"],
+      "constructorCandidates": [],
+      "desktopRuntime": true,
+      "imports": [],
+      "listenerCandidates": [],
+      "methodCandidates": [],
+      "modelCoupling": [],
+      "networking": [
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 37
+        }
+      ],
+      "path": "synara/src/app/utils/__tests__/remoteContent.test.ts",
+      "role": "test"
+    },
+    {
+      "bucket": "service-worker",
+      "categories": ["authenticated_media", "direct_matrix_networking"],
+      "constructorCandidates": [],
+      "desktopRuntime": true,
+      "imports": [],
+      "listenerCandidates": [],
+      "methodCandidates": [],
+      "modelCoupling": [],
+      "networking": [
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v1/media/download",
+          "kind": "matrix_cs_path_literal",
+          "line": 107
+        },
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/v1/media/thumbnail",
+          "kind": "matrix_cs_path_literal",
+          "line": 107
+        }
+      ],
+      "path": "synara/src/sw.ts",
+      "role": "production"
+    }
+  ],
+  "schemaVersion": 2,
+  "scope": {
+    "desktopRuntimePrefix": "synara/src/",
+    "extensions": [".cjs", ".js", ".jsx", ".mjs", ".ts", ".tsx"],
+    "methodAnalysis": "Method and listener findings are AST property-name candidates in files that import matrix-js-sdk. Receivers are not type-checked; counts are candidates, not verified SDK API calls.",
+    "notes": [
+      "Repository-wide totals include production, test, and tooling roles.",
+      "Desktop runtime baseline counts only import files under synara/src/ and matches plan §4 (220 production / 12 test).",
+      "Aggregates under aggregates.{production,test,tooling} never mix roles.",
+      "Direct networking uses false-positive-resistant /_matrix/{client,media,federation,key}/ path literals.",
+      "Generated inventory; no wall-clock timestamps or absolute paths.",
+      "JSON/Markdown artifacts are formatted with Prettier using config resolved from each artifact path (same as the root CLI)."
+    ],
+    "roles": {
+      "production": "Non-test product runtime sources under synara/src/",
+      "test": "Test/mock paths (__tests__, __mocks__, *.test.*, *.spec.*)",
+      "tooling": "Scripts, integration harnesses, configs, and other non-runtime sources outside synara/src/"
+    },
+    "selection": "git-ls-files-tracked-source"
+  },
+  "summary": {
+    "desktopRuntimeBaseline": {
+      "buckets": {},
+      "planComparison": {
+        "expectedProductionImportFiles": 220,
+        "expectedTestImportFiles": 12,
+        "matchesProduction": false,
+        "matchesTest": false
+      },
+      "productionImportFiles": 0,
+      "sourcePrefix": "synara/src/",
+      "testImportFiles": 0,
+      "totalImportFiles": 0
+    },
+    "repositoryWide": {
+      "productionImportFiles": 0,
+      "productionNetworkingFiles": 2,
+      "productionNetworkingFindings": 3,
+      "testImportFiles": 0,
+      "testNetworkingFiles": 6,
+      "testNetworkingFindings": 27,
+      "toolingImportFiles": 2,
+      "toolingNetworkingFiles": 2,
+      "toolingNetworkingFindings": 5,
+      "totalImportFiles": 2
+    }
+  }
+}

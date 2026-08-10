@@ -2,19 +2,16 @@ import React, { useMemo, useRef, useState } from 'react';
 import { Box, Button, Chip, Icon, IconButton, Icons, Scroll, Text, config, toRem } from 'folds';
 import { useTranslation } from 'react-i18next';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { useAtomValue } from 'jotai';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { useAccountData } from '../../../hooks/useAccountData';
+import { SynaraLaterItem } from '../../../../types/matrix/accountData';
+import { getSortedLaterItems } from '../../../utils/later';
+import { laterContentAtom } from '../../../state/laterList';
 import {
-  AccountDataEvent,
-  SynaraLaterContent,
-  SynaraLaterItem,
-} from '../../../../types/matrix/accountData';
-import {
-  clearCompletedLaterItemsAccountData,
-  completeLaterItemAccountData,
-  getSortedLaterItems,
-  snoozeLaterItemAccountData,
-} from '../../../utils/later';
+  clearCompletedLaterWithNativeOwner,
+  completeLaterWithNativeOwner,
+  snoozeLaterWithNativeOwner,
+} from '../../../features/room/nativeLaterOwner';
 import { Page, PageContent, PageContentCenter, PageHeader } from '../../../components/page';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../../components/BackRouteHandler';
@@ -99,8 +96,12 @@ function LaterItemCard({ item }: LaterItemCardProps) {
 
   const openEventId = getThreadRootEventId(event) ?? item.eventId;
   const handleOpen = () => navigateRoom(item.roomId, openEventId);
-  const handleDone = () => completeLaterItemAccountData(mx, item.id);
-  const handleSnooze = (dueTs: number) => snoozeLaterItemAccountData(mx, item.id, dueTs);
+  const handleDone = () => {
+    void completeLaterWithNativeOwner(item.id).catch(() => undefined);
+  };
+  const handleSnooze = (dueTs: number) => {
+    void snoozeLaterWithNativeOwner(item.id, dueTs).catch(() => undefined);
+  };
   const handleSaveCustomDue = () => {
     const dueTs = fromDateTimeLocal(customDue);
     if (dueTs) {
@@ -240,13 +241,10 @@ function LaterItemCard({ item }: LaterItemCardProps) {
 
 export function Later() {
   const { t } = useTranslation();
-  const mx = useMatrixClient();
   const screenSize = useScreenSizeContext();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showDone, setShowDone] = useState(false);
-  const laterContent = useAccountData(AccountDataEvent.SynaraLater)?.getContent() as
-    | SynaraLaterContent
-    | undefined;
+  const laterContent = useAtomValue(laterContentAtom);
   const sortedItems = useMemo(() => getSortedLaterItems(laterContent), [laterContent]);
   const activeItems = sortedItems.filter((item) => !item.completedAt);
   const doneItems = sortedItems.filter((item) => !!item.completedAt);
@@ -259,7 +257,9 @@ export function Later() {
   });
   const virtualItems = virtualizer.getVirtualItems();
 
-  const handleClearDone = () => clearCompletedLaterItemsAccountData(mx);
+  const handleClearDone = () => {
+    void clearCompletedLaterWithNativeOwner().catch(() => undefined);
+  };
 
   return (
     <Page>

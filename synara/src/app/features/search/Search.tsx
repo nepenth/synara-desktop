@@ -27,7 +27,7 @@ import React, {
 } from 'react';
 import { isKeyHotkey } from 'is-hotkey';
 import { useAtom, useAtomValue } from 'jotai';
-import { Room } from 'matrix-js-sdk';
+import type { RoomReading } from '../../utils/room';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useDirects, useOrphanSpaces, useRooms, useSpaces } from '../../state/hooks/roomList';
@@ -61,6 +61,7 @@ import { useKeyDown } from '../../hooks/useKeyDown';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { KeySymbol } from '../../utils/key-symbol';
 import { isMacOS } from '../../utils/user-agent';
+import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 import {
   getExplorePath,
   getHomeCreatePath,
@@ -122,7 +123,7 @@ const useTopActiveRooms = (
 
 const getDmUserId = (
   roomId: string,
-  getRoom: (roomId: string) => Room | undefined,
+  getRoom: (roomId: string) => RoomReading | undefined,
   myUserId: string
 ): string | undefined => {
   const room = getRoom(roomId);
@@ -263,7 +264,11 @@ export function Search({ requestClose }: SearchProps) {
     (roomId: string) => {
       const roomName = getRoom(roomId)?.name ?? roomId;
       if (mDirects.has(roomId)) {
-        const targetUserId = getDmUserId(roomId, getRoom, mx.getSafeUserId());
+        const targetUserId = getDmUserId(
+          roomId,
+          getRoom,
+          (mx as unknown as { getSafeUserId(): string }).getSafeUserId()
+        );
         const targetUsername = targetUserId && getMxIdLocalPart(targetUserId);
         if (targetUsername) return [roomName, targetUsername];
       }
@@ -465,7 +470,13 @@ export function Search({ requestClose }: SearchProps) {
                         if (!room) return null;
 
                         const dm = mDirects.has(roomId);
-                        const dmUserId = dm && getDmUserId(roomId, getRoom, mx.getSafeUserId());
+                        const dmUserId =
+                          dm &&
+                          getDmUserId(
+                            roomId,
+                            getRoom,
+                            (mx as unknown as { getSafeUserId(): string }).getSafeUserId()
+                          );
                         const dmUsername = dmUserId && getMxIdLocalPart(dmUserId);
                         const dmUserServer = dmUserId && getMxIdServer(dmUserId);
 
@@ -536,7 +547,7 @@ export function Search({ requestClose }: SearchProps) {
                                 ) : (
                                   <RoomIcon
                                     size="100"
-                                    joinRule={room.getJoinRule()}
+                                    joinRule={normalizeRoomJoinRulePresentation(room.getJoinRule())}
                                     roomType={room.getType()}
                                   />
                                 )}

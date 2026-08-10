@@ -1,5 +1,6 @@
 import { useSetAtom, WritableAtom } from 'jotai';
-import { ClientEvent, MatrixClient, Room, RoomEvent } from 'matrix-js-sdk';
+import type { MatrixClientReading, RoomReading } from '../../utils/room';
+import { ClientEvent, RoomEvent } from '../../utils/roomEvents';
 import { useEffect } from 'react';
 import { Membership } from '../../../types/matrix/room';
 
@@ -13,15 +14,20 @@ export type RoomsAction =
       roomId: string;
     };
 
+type ClientEventedReading = MatrixClientReading & {
+  on(event: string, listener: (...args: any[]) => unknown): unknown;
+  removeListener(event: string, listener: (...args: any[]) => unknown): unknown;
+};
+
 export const useBindRoomsWithMembershipsAtom = (
-  mx: MatrixClient,
+  mx: ClientEventedReading,
   roomsAtom: WritableAtom<string[], [RoomsAction], undefined>,
   memberships: Membership[]
 ) => {
   const setRoomsAtom = useSetAtom(roomsAtom);
 
   useEffect(() => {
-    const satisfyMembership = (room: Room): boolean =>
+    const satisfyMembership = (room: RoomReading): boolean =>
       !!memberships.find((membership) => membership === room.getMyMembership());
     setRoomsAtom({
       type: 'INITIALIZE',
@@ -31,13 +37,13 @@ export const useBindRoomsWithMembershipsAtom = (
         .map((room) => room.roomId),
     });
 
-    const handleAddRoom = (room: Room) => {
+    const handleAddRoom = (room: RoomReading) => {
       if (satisfyMembership(room)) {
         setRoomsAtom({ type: 'PUT', roomId: room.roomId });
       }
     };
 
-    const handleMembershipChange = (room: Room) => {
+    const handleMembershipChange = (room: RoomReading) => {
       if (satisfyMembership(room)) {
         setRoomsAtom({ type: 'PUT', roomId: room.roomId });
       } else {

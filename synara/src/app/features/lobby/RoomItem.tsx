@@ -19,12 +19,11 @@ import {
   toRem,
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
-import { JoinRule, MatrixError, Room } from 'matrix-js-sdk';
-import { IHierarchyRoom } from 'matrix-js-sdk/lib/@types/spaces';
+import type { RoomReading } from '../../utils/room';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
 import { SequenceCard } from '../../components/sequence-card';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
-import { HierarchyItem } from '../../hooks/useSpaceHierarchy';
+import { HierarchyItem, SpaceHierarchyRoom } from '../../hooks/useSpaceHierarchy';
 import { millify } from '../../plugins/millify';
 import { LocalRoomSummaryLoader } from '../../components/RoomSummaryLoader';
 import { UseStateProvider } from '../../components/UseStateProvider';
@@ -38,16 +37,23 @@ import { getDirectRoomAvatarUrl, getRoomAvatarUrl } from '../../utils/room';
 import { ItemDraggableTarget, useDraggableItem } from './DnD';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { joinRoomWithNativeOwner } from '../../components/nativeRoomJoinOwner';
+import {
+  normalizeRoomJoinRulePresentation,
+  type RoomJoinRulePresentation,
+} from '../matrix-dto/roomJoinRule';
 
 type RoomJoinButtonProps = {
   roomId: string;
   via?: string[];
 };
 function RoomJoinButton({ roomId, via }: RoomJoinButtonProps) {
-  const mx = useMatrixClient();
-
-  const [joinState, join] = useAsyncCallback<Room, MatrixError, []>(
-    useCallback(() => mx.joinRoom(roomId, { viaServers: via }), [mx, roomId, via])
+  const [joinState, join] = useAsyncCallback<void, Error, []>(
+    useCallback(
+      () => joinRoomWithNativeOwner(roomId, via, isSynaraDesktop(), invokeDesktopWithAvailability),
+      [roomId, via]
+    )
   );
 
   const canJoin = joinState.status === AsyncStatus.Idle || joinState.status === AsyncStatus.Error;
@@ -60,7 +66,7 @@ function RoomJoinButton({ roomId, via }: RoomJoinButtonProps) {
             <Tooltip variant="Critical" style={{ maxWidth: toRem(200) }}>
               <Box direction="Column" gap="100">
                 <Text style={{ wordBreak: 'break-word' }} size="T400">
-                  {joinState.error.data?.error || joinState.error.message}
+                  {joinState.error.message}
                 </Text>
                 <Text size="T200">{joinState.error.name}</Text>
               </Box>
@@ -75,7 +81,7 @@ function RoomJoinButton({ roomId, via }: RoomJoinButtonProps) {
               size="400"
               filled
               tabIndex={0}
-              aria-label={joinState.error.data?.error || joinState.error.message}
+              aria-label={joinState.error.message}
             />
           )}
         </TooltipProvider>
@@ -137,7 +143,9 @@ function RoomProfileError({ roomId, suggested, inaccessibleRoom, via }: RoomProf
           renderFallback={() => (
             <RoomIcon
               size="300"
-              joinRule={inaccessibleRoom ? JoinRule.Invite : JoinRule.Restricted}
+              joinRule={normalizeRoomJoinRulePresentation(
+                inaccessibleRoom ? 'invite' : 'restricted'
+              )}
               filled
             />
           )}
@@ -181,7 +189,7 @@ type RoomProfileProps = {
   avatarUrl?: string;
   suggested?: boolean;
   memberCount?: number;
-  joinRule?: JoinRule;
+  joinRule?: RoomJoinRulePresentation | null;
   options?: ReactNode;
 };
 function RoomProfile({
@@ -280,7 +288,7 @@ type RoomItemCardProps = {
   item: HierarchyItem;
   loading: boolean;
   error: Error | null;
-  summary: IHierarchyRoom | undefined;
+  summary: SpaceHierarchyRoom | undefined;
   dm?: boolean;
   firstChild?: boolean;
   lastChild?: boolean;
@@ -290,7 +298,7 @@ type RoomItemCardProps = {
   after?: ReactNode;
   onDragging: (item?: HierarchyItem) => void;
   canReorder: boolean;
-  getRoom: (roomId: string) => Room | undefined;
+  getRoom: (roomId: string) => RoomReading | undefined;
 };
 export const RoomItemCard = as<'div', RoomItemCardProps>(
   (
@@ -334,7 +342,9 @@ export const RoomItemCard = as<'div', RoomItemCardProps>(
         <Box ref={canReorder ? targetRef : null} grow="Yes">
           {canReorder && <ItemDraggableTarget ref={targetHandleRef} />}
           {room ? (
-            <LocalRoomSummaryLoader room={room}>
+            <LocalRoomSummaryLoader
+              room={room as unknown as Parameters<typeof LocalRoomSummaryLoader>[0]['room']}
+            >
               {(localSummary) => (
                 <RoomProfile
                   roomId={roomId}
@@ -348,7 +358,7 @@ export const RoomItemCard = as<'div', RoomItemCardProps>(
                   }
                   memberCount={localSummary.memberCount}
                   suggested={content.suggested}
-                  joinRule={localSummary.joinRule}
+                  joinRule={normalizeRoomJoinRulePresentation(localSummary.joinRule)}
                   options={
                     joined ? (
                       <Box shrink="No" gap="100" alignItems="Center">
@@ -407,7 +417,7 @@ export const RoomItemCard = as<'div', RoomItemCardProps>(
                   }
                   memberCount={summary.num_joined_members}
                   suggested={content.suggested}
-                  joinRule={summary.join_rule}
+                  joinRule={normalizeRoomJoinRulePresentation(summary.join_rule)}
                   options={<RoomJoinButton roomId={roomId} via={content.via} />}
                 />
               )}

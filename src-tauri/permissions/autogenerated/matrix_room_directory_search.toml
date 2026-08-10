@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-room-directory-search"
+description = "Enables the matrix_room_directory_search command without any pre-configured scope."
+commands.allow = ["matrix_room_directory_search"]
+
+[[permission]]
+identifier = "deny-matrix-room-directory-search"
+description = "Denies the matrix_room_directory_search command without any pre-configured scope."
+commands.deny = ["matrix_room_directory_search"]

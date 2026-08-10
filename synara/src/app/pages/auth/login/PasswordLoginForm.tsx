@@ -19,7 +19,6 @@ import {
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
 import { Link } from 'react-router-dom';
-import { MatrixError } from 'matrix-js-sdk';
 import { getMxIdLocalPart, getMxIdServer, isUserId } from '../../../utils/matrix';
 import { EMAIL_REGEX } from '../../../utils/regex';
 import { useAutoDiscoveryInfo } from '../../../hooks/useAutoDiscoveryInfo';
@@ -27,10 +26,11 @@ import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useAuthServer } from '../../../hooks/useAuthServer';
 import { useClientConfig } from '../../../hooks/useClientConfig';
 import {
-  CustomLoginResponse,
   LoginError,
+  PasswordLoginError,
+  PasswordLoginResponse,
   factoryGetBaseUrl,
-  login,
+  loginPassword,
   useLoginComplete,
 } from './loginUtil';
 import { PasswordInput } from '../../../components/password-input';
@@ -119,10 +119,10 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
   const baseUrl = serverDiscovery['m.homeserver'].base_url;
 
   const [loginState, startLogin] = useAsyncCallback<
-    CustomLoginResponse,
-    MatrixError,
-    Parameters<typeof login>
-  >(useCallback(login, []));
+    PasswordLoginResponse,
+    PasswordLoginError,
+    Parameters<typeof loginPassword>
+  >(useCallback(loginPassword, []));
 
   useLoginComplete(loginState.status === AsyncStatus.Success ? loginState.data : undefined);
 
@@ -131,7 +131,7 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
       type: 'm.login.password',
       identifier: {
         type: 'm.id.user',
-        user: username,
+        user: `@${username}:${server}`,
       },
       password,
       initial_device_display_name: synaraDeviceDisplayName(),
@@ -149,7 +149,7 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
       type: 'm.login.password',
       identifier: {
         type: 'm.id.user',
-        user: mxIdUsername,
+        user: mxId,
       },
       password,
       initial_device_display_name: synaraDeviceDisplayName(),

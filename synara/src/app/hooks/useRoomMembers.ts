@@ -1,15 +1,62 @@
-import { MatrixClient, MatrixEvent, RoomMember, RoomMemberEvent } from 'matrix-js-sdk';
 import { useEffect, useState } from 'react';
+import { readRoomMembersWithNativeOwner } from './nativeRoomMembersOwner';
+import type { RoomMember as NativeRoomMember } from '../features/matrix-dto/member';
+import type { MatrixClientReading, MatrixEventReading } from '../utils/room';
+import { RoomMemberEvent, type JsRoomMemberReading } from '../utils/roomEvents';
 
-export const useRoomMembers = (mx: MatrixClient, roomId: string): RoomMember[] => {
-  const [members, setMembers] = useState<RoomMember[]>([]);
+export type RoomMemberListItem = JsRoomMemberReading | NativeRoomMember;
+
+type EventedRoomMembersReading = {
+  getRoomId(): string;
+  getMembers(): JsRoomMemberReading[];
+  loadMembersIfNeeded(): Promise<unknown>;
+  on(event: string, listener: (...args: any[]) => void): void;
+  removeListener(event: string, listener: (...args: any[]) => void): void;
+};
+
+export function useRoomMembers(mx: MatrixClientReading, roomId: string): JsRoomMemberReading[];
+export function useRoomMembers(
+  mx: MatrixClientReading,
+  roomId: string,
+  nativeSession: boolean
+): RoomMemberListItem[] | null;
+
+export function useRoomMembers(
+  mx: MatrixClientReading,
+  roomId: string,
+  nativeSession = false
+): RoomMemberListItem[] | null {
+  const [members, setMembers] = useState<JsRoomMemberReading[]>([]);
+  const [nativeMembers, setNativeMembers] = useState<NativeRoomMember[] | null>(null);
+  const eventedClient = mx as unknown as {
+    on(event: string, listener: (...args: any[]) => void): void;
+    removeListener(event: string, listener: (...args: any[]) => void): void;
+  };
 
   useEffect(() => {
-    const room = mx.getRoom(roomId);
+    if (nativeSession) {
+      let disposed = false;
+      setNativeMembers([]);
+      void readRoomMembersWithNativeOwner(roomId, true)
+        .then((nextMembers) => {
+          if (!disposed && nextMembers) setNativeMembers(nextMembers);
+        })
+        .catch(() => {
+          // Native ownership is fail-closed. Keep the list empty instead of
+          // falling through to mx.getRoom().getMembers().
+          if (!disposed) setNativeMembers([]);
+        });
+
+      return () => {
+        disposed = true;
+      };
+    }
+
+    const room = mx.getRoom(roomId) as unknown as EventedRoomMembersReading | null;
     let loadingMembers = true;
     let disposed = false;
 
-    const updateMemberList = (event?: MatrixEvent) => {
+    const updateMemberList = (event?: MatrixEventReading) => {
       if (!room || disposed || (event && event.getRoomId() !== roomId)) return;
       if (loadingMembers) return;
       setMembers(room.getMembers());
@@ -24,14 +71,14 @@ export const useRoomMembers = (mx: MatrixClient, roomId: string): RoomMember[] =
       });
     }
 
-    mx.on(RoomMemberEvent.Membership, updateMemberList);
-    mx.on(RoomMemberEvent.PowerLevel, updateMemberList);
+    eventedClient.on(RoomMemberEvent.Membership, updateMemberList);
+    eventedClient.on(RoomMemberEvent.PowerLevel, updateMemberList);
     return () => {
       disposed = true;
-      mx.removeListener(RoomMemberEvent.Membership, updateMemberList);
-      mx.removeListener(RoomMemberEvent.PowerLevel, updateMemberList);
+      eventedClient.removeListener(RoomMemberEvent.Membership, updateMemberList);
+      eventedClient.removeListener(RoomMemberEvent.PowerLevel, updateMemberList);
     };
-  }, [mx, roomId]);
+  }, [mx, roomId, nativeSession, eventedClient]);
 
-  return members;
-};
+  return nativeSession ? nativeMembers : members;
+}

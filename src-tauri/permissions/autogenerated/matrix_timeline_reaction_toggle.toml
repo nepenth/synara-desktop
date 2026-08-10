@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-timeline-reaction-toggle"
+description = "Enables the matrix_timeline_reaction_toggle command without any pre-configured scope."
+commands.allow = ["matrix_timeline_reaction_toggle"]
+
+[[permission]]
+identifier = "deny-matrix-timeline-reaction-toggle"
+description = "Denies the matrix_timeline_reaction_toggle command without any pre-configured scope."
+commands.deny = ["matrix_timeline_reaction_toggle"]

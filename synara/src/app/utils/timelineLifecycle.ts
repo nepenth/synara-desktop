@@ -1,5 +1,4 @@
-import { Direction, MatrixClient, MatrixEvent, Room, RoomState } from 'matrix-js-sdk';
-import type { EventTimeline } from 'matrix-js-sdk/lib/models/event-timeline';
+import type { MatrixClientReading, MatrixEventReading, RoomReading } from './room';
 
 export const ROOM_TIMELINE_VIEWPORT_RESTORE_TTL_MS = 10 * 60 * 1000;
 export const TIMELINE_BOTTOM_TOLERANCE_PX = 1;
@@ -57,13 +56,21 @@ export const shouldRestoreRoomTimelineViewport = (
   return Math.max(0, nowMs - updatedAtMs) <= maxAgeMs;
 };
 
-export const getRoomCurrentState = (room: Room): RoomState | undefined =>
-  room.currentState ?? room.getLiveTimeline().getState(Direction.Forward);
+/** Narrow structural projection of a room state mirroring the js-sdk RoomState
+ * surface read by Synara: state-event lookups plus the indexed event map. */
+type RoomStateReading = {
+  getStateEvents(eventType: string): MatrixEventReading[];
+  getStateEvents(eventType: string, stateKey: string): MatrixEventReading | null;
+  events: Map<string, Map<string, MatrixEventReading>>;
+};
 
-export const getLoadedLiveTimelineEvents = (room: Room): MatrixEvent[] =>
-  room.getLiveTimeline().getEvents() as MatrixEvent[];
+export const getRoomCurrentState = (room: RoomReading): RoomStateReading | undefined =>
+  (room.currentState ?? room.getLiveTimeline().getState('f')) as RoomStateReading | undefined;
 
-export const getLoadedLiveTailEventId = (room: Room): string | undefined => {
+export const getLoadedLiveTimelineEvents = (room: RoomReading): MatrixEventReading[] =>
+  room.getLiveTimeline().getEvents();
+
+export const getLoadedLiveTailEventId = (room: RoomReading): string | undefined => {
   const events = getLoadedLiveTimelineEvents(room);
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const eventId = events[index]?.getId();
@@ -73,9 +80,9 @@ export const getLoadedLiveTailEventId = (room: Room): string | undefined => {
 };
 
 export const getLatestReceiptEventFromEvents = (
-  events: MatrixEvent[],
+  events: MatrixEventReading[],
   readEventId?: string
-): MatrixEvent | undefined => {
+): MatrixEventReading | undefined => {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
     if (!event) continue;
@@ -86,10 +93,28 @@ export const getLatestReceiptEventFromEvents = (
   return undefined;
 };
 
+/** Narrow structural projection of a latest-timeline result: just the events
+ * accessor Synara reads off the resolved js-sdk EventTimeline. */
+type LatestTimelineReading = {
+  getEvents(): MatrixEventReading[];
+};
+
+/** MatrixClient reading extended with the latest-timeline accessor (satisfied
+ * by the js-sdk MatrixClient at runtime). */
+type LatestTimelineClientReading = MatrixClientReading & {
+  getLatestTimeline(timelineSet: unknown): Promise<LatestTimelineReading | null | undefined>;
+};
+
+/** RoomReading extended with the unfiltered timeline set accessor used only by
+ * the latest-timeline lookup (satisfied by the js-sdk Room at runtime). */
+type RoomWithTimelineSetReading = RoomReading & {
+  getUnfilteredTimelineSet(): unknown;
+};
+
 export const getLatestRoomTimeline = async (
-  mx: MatrixClient,
-  room: Room
-): Promise<EventTimeline | undefined> => {
+  mx: LatestTimelineClientReading,
+  room: RoomWithTimelineSetReading
+): Promise<LatestTimelineReading | undefined> => {
   try {
     return (await mx.getLatestTimeline(room.getUnfilteredTimelineSet())) ?? undefined;
   } catch {

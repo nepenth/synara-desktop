@@ -12,47 +12,101 @@ import {
   toRem,
 } from 'folds';
 import classNames from 'classnames';
-import { Room } from 'matrix-js-sdk';
-import { type Relations } from 'matrix-js-sdk/lib/models/relations';
 import FocusTrap from 'focus-trap-react';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { factoryEventSentBy } from '../../../utils/matrix';
-import { Reaction, ReactionTooltipMsg } from '../../../components/message';
-import { useRelations } from '../../../hooks/useRelations';
+import { Reaction } from '../../../components/message';
 import * as css from './styles.css';
 import { ReactionViewer } from '../reaction-viewer';
 import { stopPropagation } from '../../../utils/keyboard';
+import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
+import { getHexcodeForEmoji, getShortcodeFor } from '../../../plugins/emoji';
+import { toggleReactionWithNativeOwner, type NativeReactionReadback } from '../nativeReactionOwner';
 
 export type ReactionsProps = {
-  room: Room;
+  roomId: string;
   mEventId: string;
   canSendReaction?: boolean;
-  relations: Relations;
+  reactions: readonly NativeReactionReadback[];
   canRedact?: boolean;
-  onReactionToggle: (targetEventId: string, key: string, shortcode?: string) => void;
 };
+
+type NativeReactionSender = NativeReactionReadback['senders'][number];
+
+const NativeReactionTooltipMsg = ({
+  reaction,
+  senders,
+}: {
+  reaction: string;
+  senders: readonly NativeReactionSender[];
+}) => {
+  const shortcode = getShortcodeFor(getHexcodeForEmoji(reaction)) ?? reaction;
+  const names = senders.map((sender) => sender.userId);
+
+  return (
+    <>
+      {names.length === 1 && <b>{names[0]}</b>}
+      {names.length === 2 && (
+        <>
+          <b>{names[0]}</b>
+          <Text as="span" size="Inherit" priority="300">
+            {' and '}
+          </Text>
+          <b>{names[1]}</b>
+        </>
+      )}
+      {names.length === 3 && (
+        <>
+          <b>{names[0]}</b>
+          <Text as="span" size="Inherit" priority="300">
+            {', '}
+          </Text>
+          <b>{names[1]}</b>
+          <Text as="span" size="Inherit" priority="300">
+            {' and '}
+          </Text>
+          <b>{names[2]}</b>
+        </>
+      )}
+      {names.length > 3 && (
+        <>
+          <b>{names[0]}</b>
+          <Text as="span" size="Inherit" priority="300">
+            {', '}
+          </Text>
+          <b>{names[1]}</b>
+          <Text as="span" size="Inherit" priority="300">
+            {', '}
+          </Text>
+          <b>{names[2]}</b>
+          <Text as="span" size="Inherit" priority="300">
+            {' and '}
+          </Text>
+          <b>{names.length - 3} others</b>
+        </>
+      )}
+      <Text as="span" size="Inherit" priority="300">
+        {' reacted with '}
+      </Text>
+      :<b>{shortcode}</b>:
+    </>
+  );
+};
+
 export const Reactions = as<'div', ReactionsProps>(
-  (
-    {
-      className,
-      room,
-      relations,
-      mEventId,
-      canSendReaction,
-      canRedact,
-      onReactionToggle,
-      ...props
-    },
-    ref
-  ) => {
+  ({ className, roomId, mEventId, canSendReaction, reactions, canRedact, ...props }, ref) => {
     const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
     const [viewer, setViewer] = useState<boolean | string>(false);
-    const myUserId = mx.getUserId();
-    const reactions = useRelations(
-      relations,
-      useCallback((rel) => [...(rel.getSortedAnnotationsByKey() ?? [])], [])
+    const [reactionError, setReactionError] = useState<string>();
+
+    const handleReactionToggle = useCallback(
+      (key: string) => {
+        setReactionError(undefined);
+        void toggleReactionWithNativeOwner({ roomId, eventId: mEventId, key }).catch(() => {
+          setReactionError('Failed to update reaction.');
+        });
+      },
+      [mEventId, roomId]
     );
 
     const handleViewReaction: MouseEventHandler<HTMLButtonElement> = (evt) => {
@@ -71,42 +125,35 @@ export const Reactions = as<'div', ReactionsProps>(
         {...props}
         ref={ref}
       >
-        {reactions.map(([key, events]) => {
-          const rEvents = Array.from(events);
-          if (rEvents.length === 0 || typeof key !== 'string') return null;
-          const myREvent = myUserId ? rEvents.find(factoryEventSentBy(myUserId)) : undefined;
-          const isPressed = !!myREvent?.getRelation();
-
-          return (
-            <TooltipProvider
-              key={key}
-              position="Top"
-              tooltip={
-                <Tooltip style={{ maxWidth: toRem(200) }}>
-                  <Text className={css.ReactionsTooltipText} size="T300">
-                    <ReactionTooltipMsg room={room} reaction={key} events={rEvents} />
-                  </Text>
-                </Tooltip>
-              }
-            >
-              {(targetRef) => (
-                <Reaction
-                  ref={targetRef}
-                  data-reaction-key={key}
-                  aria-pressed={isPressed}
-                  key={key}
-                  mx={mx}
-                  reaction={key}
-                  count={events.size}
-                  onClick={canSendReaction ? () => onReactionToggle(mEventId, key) : undefined}
-                  onContextMenu={handleViewReaction}
-                  aria-disabled={!canSendReaction}
-                  useAuthentication={useAuthentication}
-                />
-              )}
-            </TooltipProvider>
-          );
-        })}
+        {reactions.map((reaction) => (
+          <TooltipProvider
+            key={reaction.key}
+            position="Top"
+            tooltip={
+              <Tooltip style={{ maxWidth: toRem(200) }}>
+                <Text className={css.ReactionsTooltipText} size="T300">
+                  <NativeReactionTooltipMsg reaction={reaction.key} senders={reaction.senders} />
+                </Text>
+              </Tooltip>
+            }
+          >
+            {(targetRef) => (
+              <Reaction
+                ref={targetRef}
+                data-reaction-key={reaction.key}
+                aria-pressed={reaction.me}
+                mx={mx}
+                reaction={reaction.key}
+                count={reaction.count}
+                onClick={canSendReaction ? () => handleReactionToggle(reaction.key) : undefined}
+                onContextMenu={handleViewReaction}
+                aria-disabled={!canSendReaction}
+                useAuthentication={useAuthentication}
+              />
+            )}
+          </TooltipProvider>
+        ))}
+        {reactionError && <Text size="T200">{reactionError}</Text>}
         {reactions.length > 0 && (
           <Overlay
             onContextMenu={(evt: any) => {
@@ -127,9 +174,10 @@ export const Reactions = as<'div', ReactionsProps>(
               >
                 <Modal variant="Surface" size="300">
                   <ReactionViewer
-                    room={room}
+                    roomId={roomId}
+                    targetEventId={mEventId}
                     initialKey={typeof viewer === 'string' ? viewer : undefined}
-                    relations={relations}
+                    reactions={reactions}
                     canRedact={canRedact}
                     requestClose={() => setViewer(false)}
                   />

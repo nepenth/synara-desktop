@@ -8,6 +8,8 @@ import { Membership } from '../../../types/matrix/room';
 import { RoomInputPlaceholder } from './RoomInputPlaceholder';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { getViaServers } from '../../plugins/via-servers';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { joinRoomWithNativeOwner } from '../../components/nativeRoomJoinOwner';
 
 type RoomTombstoneProps = { roomId: string; body?: string; replacementRoomId: string };
 export function RoomTombstone({ roomId, body, replacementRoomId }: RoomTombstoneProps) {
@@ -15,19 +17,23 @@ export function RoomTombstone({ roomId, body, replacementRoomId }: RoomTombstone
   const { navigateRoom } = useRoomNavigate();
 
   const [joinState, handleJoin] = useAsyncCallback(
-    useCallback(() => {
+    useCallback(async () => {
       const currentRoom = mx.getRoom(roomId);
-      const via = currentRoom ? getViaServers(currentRoom) : [];
-      return mx.joinRoom(replacementRoomId, {
-        viaServers: via,
-      });
+      if (!currentRoom) throw new Error('Source room is unavailable.');
+      const via = await getViaServers(currentRoom);
+      return joinRoomWithNativeOwner(
+        replacementRoomId,
+        via,
+        isSynaraDesktop(),
+        invokeDesktopWithAvailability
+      );
     }, [mx, roomId, replacementRoomId])
   );
   const replacementRoom = mx.getRoom(replacementRoomId);
 
   const handleOpen = () => {
     if (replacementRoom) navigateRoom(replacementRoom.roomId);
-    if (joinState.status === AsyncStatus.Success) navigateRoom(joinState.data.roomId);
+    if (joinState.status === AsyncStatus.Success) navigateRoom(replacementRoomId);
   };
 
   return (

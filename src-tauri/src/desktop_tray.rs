@@ -86,11 +86,7 @@ fn should_apply_tray_state_now(last_applied_at: Option<Instant>, now: Instant) -
 }
 
 fn clamp_count(value: i64) -> i64 {
-    match value {
-        value if value < 0 => 0,
-        value if value > MAX_TRAY_COUNT => MAX_TRAY_COUNT,
-        value => value,
-    }
+    value.clamp(0, MAX_TRAY_COUNT)
 }
 
 fn normalize_tray_state(state: DesktopTrayState) -> DesktopTrayState {
@@ -417,7 +413,7 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     app.manage(tray_items);
 
     let mut builder = TrayIconBuilder::with_id(TRAY_ICON_ID)
-        .tooltip(&tray_tooltip(&initial_state))
+        .tooltip(tray_tooltip(&initial_state))
         .menu(&menu)
         .show_menu_on_left_click(true)
         .on_menu_event(handle_menu_event);

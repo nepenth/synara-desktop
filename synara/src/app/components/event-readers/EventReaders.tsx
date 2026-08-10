@@ -13,7 +13,7 @@ import {
   as,
   config,
 } from 'folds';
-import { Room } from 'matrix-js-sdk';
+import type { EventedRoomReading } from '../../utils/roomEvents';
 import { useRoomEventReaders } from '../../hooks/useRoomEventReaders';
 import { getMemberDisplayName } from '../../utils/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
@@ -27,7 +27,7 @@ import { getMouseEventCords } from '../../utils/dom';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 
 export type EventReadersProps = {
-  room: Room;
+  room: EventedRoomReading;
   eventId: string;
   requestClose: () => void;
 };

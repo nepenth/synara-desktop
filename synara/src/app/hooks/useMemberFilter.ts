@@ -1,20 +1,25 @@
 import { useMemo } from 'react';
-import { RoomMember } from 'matrix-js-sdk';
 import { Membership } from '../../types/matrix/room';
+import type { RoomMember as NativeRoomMember } from '../features/matrix-dto/member';
+import type { RoomMemberListItem } from './useRoomMembers';
+
+const isNativeRoomMember = (member: RoomMemberListItem): member is NativeRoomMember =>
+  !('getMxcAvatarUrl' in member);
 
 export const MembershipFilter = {
-  filterJoined: (m: RoomMember) => m.membership === Membership.Join,
-  filterInvited: (m: RoomMember) => m.membership === Membership.Invite,
-  filterLeaved: (m: RoomMember) =>
+  filterJoined: (m: RoomMemberListItem) => m.membership === Membership.Join,
+  filterInvited: (m: RoomMemberListItem) => m.membership === Membership.Invite,
+  filterLeaved: (m: RoomMemberListItem) =>
     m.membership === Membership.Leave &&
-    m.events.member?.getStateKey() === m.events.member?.getSender(),
-  filterKicked: (m: RoomMember) =>
+    (isNativeRoomMember(m) || m.events.member?.getStateKey() === m.events.member?.getSender()),
+  filterKicked: (m: RoomMemberListItem) =>
     m.membership === Membership.Leave &&
+    !isNativeRoomMember(m) &&
     m.events.member?.getStateKey() !== m.events.member?.getSender(),
-  filterBanned: (m: RoomMember) => m.membership === Membership.Ban,
+  filterBanned: (m: RoomMemberListItem) => m.membership === Membership.Ban,
 };
 
-export type MembershipFilterFn = (m: RoomMember) => boolean;
+export type MembershipFilterFn = (m: RoomMemberListItem) => boolean;
 
 export type MembershipFilterItem = {
   name: string;

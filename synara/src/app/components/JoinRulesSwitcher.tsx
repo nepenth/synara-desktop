@@ -13,39 +13,46 @@ import {
   Button,
   Spinner,
 } from 'folds';
-import { JoinRule } from 'matrix-js-sdk';
 import FocusTrap from 'focus-trap-react';
 import { stopPropagation } from '../utils/keyboard';
 import { getRoomIconSrc } from '../utils/room';
+import {
+  normalizeRoomJoinRulePresentation,
+  type RoomJoinRulePresentation,
+} from '../features/matrix-dto/roomJoinRule';
 
-export type ExtraJoinRules = 'knock_restricted';
-export type ExtendedJoinRules = JoinRule | ExtraJoinRules;
+export type ExtraJoinRules = Extract<RoomJoinRulePresentation, 'knock_restricted'>;
+export type ExtendedJoinRules = RoomJoinRulePresentation;
 
-type JoinRuleIcons = Record<ExtendedJoinRules, IconSrc>;
+type JoinRuleIcons = Record<RoomJoinRulePresentation, IconSrc>;
 
 export const useJoinRuleIcons = (roomType?: string): JoinRuleIcons =>
   useMemo(
     () => ({
-      [JoinRule.Invite]: getRoomIconSrc(Icons, roomType, JoinRule.Invite),
-      [JoinRule.Knock]: getRoomIconSrc(Icons, roomType, JoinRule.Knock),
-      knock_restricted: getRoomIconSrc(Icons, roomType, JoinRule.Restricted),
-      [JoinRule.Restricted]: getRoomIconSrc(Icons, roomType, JoinRule.Restricted),
-      [JoinRule.Public]: getRoomIconSrc(Icons, roomType, JoinRule.Public),
-      [JoinRule.Private]: getRoomIconSrc(Icons, roomType, JoinRule.Private),
+      invite: getRoomIconSrc(Icons, roomType, normalizeRoomJoinRulePresentation('invite')),
+      knock: getRoomIconSrc(Icons, roomType, normalizeRoomJoinRulePresentation('knock')),
+      knock_restricted: getRoomIconSrc(
+        Icons,
+        roomType,
+        normalizeRoomJoinRulePresentation('knock_restricted')
+      ),
+      restricted: getRoomIconSrc(Icons, roomType, normalizeRoomJoinRulePresentation('restricted')),
+      public: getRoomIconSrc(Icons, roomType, normalizeRoomJoinRulePresentation('public')),
+      private: getRoomIconSrc(Icons, roomType, normalizeRoomJoinRulePresentation('private')),
     }),
     [roomType]
   );
 
-type JoinRuleLabels = Record<ExtendedJoinRules, string>;
+type JoinRuleLabels = Record<RoomJoinRulePresentation, string>;
 export const useRoomJoinRuleLabel = (): JoinRuleLabels =>
   useMemo(
     () => ({
-      [JoinRule.Invite]: 'Invite Only',
-      [JoinRule.Knock]: 'Knock & Invite',
+      invite: 'Invite Only',
+      knock: 'Knock & Invite',
       knock_restricted: 'Space Members or Knock',
-      [JoinRule.Restricted]: 'Space Members',
-      [JoinRule.Public]: 'Public',
-      [JoinRule.Private]: 'Invite Only',
+      restricted: 'Space Members',
+      public: 'Public',
+      private: 'Invite Only',
     }),
     []
   );
@@ -75,12 +82,16 @@ export function JoinRulesSwitcher<T extends ExtendedJoinRules[]>({
   };
 
   const handleChange = useCallback(
-    (selectedRule: ExtendedJoinRules) => {
+    (selectedRule: unknown) => {
+      const normalizedRule = normalizeRoomJoinRulePresentation(selectedRule);
+      if (!normalizedRule) return;
       setCords(undefined);
-      onChange(selectedRule);
+      onChange(normalizedRule);
     },
     [onChange]
   );
+
+  const normalizedValue = normalizeRoomJoinRulePresentation(value);
 
   return (
     <PopOut
@@ -100,22 +111,29 @@ export function JoinRulesSwitcher<T extends ExtendedJoinRules[]>({
         >
           <Menu>
             <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
-              {rules.map((rule) => (
-                <MenuItem
-                  key={rule}
-                  size="300"
-                  variant="Surface"
-                  radii="300"
-                  aria-pressed={value === rule}
-                  onClick={() => handleChange(rule)}
-                  before={<Icon size="100" src={icons[rule]} />}
-                  disabled={disabled}
-                >
-                  <Box grow="Yes">
-                    <Text size="T300">{labels[rule]}</Text>
-                  </Box>
-                </MenuItem>
-              ))}
+              {rules.map((rule) => {
+                const normalizedRule = normalizeRoomJoinRulePresentation(rule);
+                return (
+                  <MenuItem
+                    key={rule}
+                    size="300"
+                    variant="Surface"
+                    radii="300"
+                    aria-pressed={normalizedValue === normalizedRule}
+                    onClick={() => {
+                      if (normalizedRule) handleChange(normalizedRule);
+                    }}
+                    before={<Icon size="100" src={icons[normalizedRule ?? 'restricted']} />}
+                    disabled={disabled || normalizedRule === null}
+                  >
+                    <Box grow="Yes">
+                      <Text size="T300">
+                        {normalizedRule ? labels[normalizedRule] : 'Unsupported'}
+                      </Text>
+                    </Box>
+                  </MenuItem>
+                );
+              })}
             </Box>
           </Menu>
         </FocusTrap>
@@ -127,7 +145,7 @@ export function JoinRulesSwitcher<T extends ExtendedJoinRules[]>({
         fill="Soft"
         radii="300"
         outlined
-        before={<Icon size="100" src={icons[value] ?? icons[JoinRule.Restricted]} />}
+        before={<Icon size="100" src={icons[normalizedValue ?? 'restricted']} />}
         after={
           changing ? (
             <Spinner size="100" variant="Secondary" fill="Soft" />
@@ -138,7 +156,7 @@ export function JoinRulesSwitcher<T extends ExtendedJoinRules[]>({
         onClick={handleOpenMenu}
         disabled={disabled}
       >
-        <Text size="B300">{labels[value] ?? 'Unsupported'}</Text>
+        <Text size="B300">{normalizedValue ? labels[normalizedValue] : 'Unsupported'}</Text>
       </Button>
     </PopOut>
   );

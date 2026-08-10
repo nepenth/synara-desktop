@@ -20,7 +20,7 @@ and human smoke checklist have passed.
 ## Local Prerequisites
 
 1. Install Node from `.node-version`.
-2. Install Rust stable.
+2. Install Rust 1.93 (repo root `rust-toolchain.toml` pins the channel).
 3. Install Tauri platform prerequisites.
 4. Run dependency installation from both package roots:
 

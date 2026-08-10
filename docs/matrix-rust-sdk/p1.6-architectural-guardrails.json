@@ -1,0 +1,83 @@
+{
+  "taskId": "P1.6",
+  "title": "Architectural CI guardrails",
+  "date": "2026-07-25",
+  "artifact_state": "landed",
+  "integration_state": "merged",
+  "strict_acceptance_state": "open",
+  "phase_gate_state": "open",
+  "current_status_ref": "docs/matrix-rust-sdk/program-status.json",
+  "historical_status_at_generation": "merged",
+  "baseBranch": "feature/matrix-rust-sdk-full-replacement",
+  "baseSha": "7e54fd3",
+  "workBranch": "matrix-rust/p1.6-architectural-guardrails",
+  "pr": "https://github.com/nepenth/synara-desktop/pull/56",
+  "artifacts": {
+    "designNote": "docs/matrix-rust-sdk/p1.6-architectural-guardrails.md",
+    "allowlistScript": "scripts/matrix-rust-p1.6-guardrails.mjs",
+    "supplementalScript": "scripts/check-matrix-rust-sdk-guardrails.mjs",
+    "jsSdkImportAllowlist": "docs/matrix-rust-sdk/p1.6-js-sdk-import-allowlist.json",
+    "jsSdkImportAllowlistCount": 220,
+    "prohibitedFixtures": "scripts/fixtures/matrix-rust-p1.6/prohibited/",
+    "unitTests": [
+      "scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs",
+      "scripts/__tests__/check-matrix-rust-sdk-guardrails.test.mjs"
+    ],
+    "legacyBoundaryCheck": "scripts/check-matrix-boundaries.mjs",
+    "npmScripts": ["check:matrix-rust-guardrails", "check:matrix-boundaries"],
+    "ciWorkflow": ".github/workflows/ci.yml"
+  },
+  "rules": [
+    "js-sdk-hard-ban-wire",
+    "js-sdk-new-importer",
+    "raw-matrix-http",
+    "sdk-types-in-wire",
+    "unversioned-ipc",
+    "no-production-matrix-client-in-matrix-module",
+    "no-dual-backend-selector",
+    "no-matrix-product-tauri-commands"
+  ],
+  "allowed": [
+    "product_matrix_js_sdk_on_allowlist",
+    "matrix_sdk_link_smoke_outside_dto_ipc",
+    "doc_comments_mentioning_sdk_names",
+    "legacy_desktop_rest_exceptions"
+  ],
+  "residuals": [
+    {
+      "id": "full-js-sdk-ban",
+      "description": "Full ban of matrix-js-sdk across all product paths",
+      "waitsFor": "Phase 11/14 cutover"
+    },
+    {
+      "id": "allowlist-ratchet-only-shrink",
+      "description": "Allowlist may only shrink during burn-down; intentional adds need review",
+      "waitsFor": "ongoing migration"
+    },
+    {
+      "id": "live-ipc-supervisor",
+      "description": "Runtime stream supervisor enforcing bounds",
+      "waitsFor": "Phase 2+"
+    },
+    {
+      "id": "matrix-product-tauri-commands",
+      "description": "Matrix product Tauri commands require matching allow-matrix-* capability ACL entries",
+      "waitsFor": "per-vertical cutover ACL registration"
+    }
+  ],
+  "outOfScope": [
+    "production_login_sync_client",
+    "removing_matrix_js_sdk_product_usage",
+    "phase_2_supervisor",
+    "merge_to_main"
+  ],
+  "productRuntimeRemains": "matrix-js-sdk",
+  "constraints": {
+    "noProductionMatrixLoginSync": true,
+    "noDualBackend": true,
+    "noSdkTypesInIpcDtoWireModules": true,
+    "noNewProductionTauriMatrixCommands": false,
+    "matrixProductTauriCommandsRequireCapabilityAcl": true,
+    "prTarget": "feature/matrix-rust-sdk-full-replacement"
+  }
+}

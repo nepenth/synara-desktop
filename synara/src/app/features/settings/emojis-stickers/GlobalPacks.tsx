@@ -23,7 +23,6 @@ import {
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
 import { useAtomValue } from 'jotai';
-import { Room } from 'matrix-js-sdk';
 import { useGlobalImagePacks, useRoomsImagePacks } from '../../../hooks/useImagePacks';
 import { SequenceCardStyle } from '../styles.css';
 import { SequenceCard } from '../../../components/sequence-card';
@@ -43,6 +42,7 @@ import { AccountDataEvent } from '../../../../types/matrix/accountData';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { stopPropagation } from '../../../utils/keyboard';
 import { resolveOptionalMatrixMediaUrl } from '../../../matrix/media';
+import { setGlobalImagePacksNative } from '../../../features/room/nativeImagePack';
 
 function GlobalPackSelector({
   packs,
@@ -257,15 +257,8 @@ export function GlobalPacks({ onViewPack }: GlobalPacksProps) {
   const [menuCords, setMenuCords] = useState<RectCords>();
 
   const roomIds = useAtomValue(allRoomsAtom);
-  const rooms = useMemo(() => {
-    const rs: Room[] = [];
-    roomIds.forEach((rId) => {
-      const r = mx.getRoom(rId);
-      if (r) rs.push(r);
-    });
-    return rs;
-  }, [mx, roomIds]);
-  const roomsImagePack = useRoomsImagePacks(rooms);
+  // V-SEND.R-PACK-READ: pack loads by room id (native get); no mx.getRoom list.
+  const roomsImagePack = useRoomsImagePacks(roomIds);
   const nonGlobalPacks = useMemo(
     () =>
       roomsImagePack.filter(
@@ -322,7 +315,12 @@ export function GlobalPacks({ onViewPack }: GlobalPacksProps) {
         }
       });
 
-      await mx.setAccountData(AccountDataEvent.PoniesEmoteRooms as any, updatedContent as any);
+      // V-SEND.R-PACK-WRITE: native global-pack write is fail-closed on
+      // desktop. The JS mx.setAccountData path is only for non-native web.
+      const result = await setGlobalImagePacksNative(updatedContent);
+      if (result === 'legacy') {
+        await mx.setAccountData(AccountDataEvent.PoniesEmoteRooms as any, updatedContent as any);
+      }
     }, [mx, selectedPacks, removedPacks])
   );
 

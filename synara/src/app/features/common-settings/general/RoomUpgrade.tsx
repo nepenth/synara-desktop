@@ -16,8 +16,7 @@ import {
   Icons,
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
-import { MatrixError, Method } from 'matrix-js-sdk';
-import { RoomTombstoneEventContent } from 'matrix-js-sdk/lib/types';
+import type { MatrixError } from '../../../utils/matrix';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../../room-settings/styles.css';
 import { SettingTile } from '../../../components/setting-tile';
@@ -40,6 +39,16 @@ import { creatorsSupported } from '../../../utils/matrix';
 import { useRoomCreators } from '../../../hooks/useRoomCreators';
 import { BreakWord } from '../../../styles/Text.css';
 
+type RoomTombstoneEventContent = {
+  body: string;
+  replacement_room: string;
+};
+
+const Method = {
+  Post: 'POST',
+  Get: 'GET',
+} as const;
+
 function RoomUpgradeDialog({ requestClose }: { requestClose: () => void }) {
   const mx = useMatrixClient();
   const room = useRoom();
@@ -61,7 +70,16 @@ function RoomUpgradeDialog({ requestClose }: { requestClose: () => void }) {
   const [upgradeState, upgrade] = useAsyncCallback(
     useCallback(
       async (version: string, newAdditionalCreators?: string[]) => {
-        await mx.http.authedRequest(Method.Post, `/rooms/${room.roomId}/upgrade`, undefined, {
+        await (
+          mx.http as unknown as {
+            authedRequest(
+              method: string,
+              path: string,
+              queryParams?: unknown,
+              body?: unknown
+            ): Promise<unknown>;
+          }
+        ).authedRequest(Method.Post, `/rooms/${room.roomId}/upgrade`, undefined, {
           new_version: version,
           additional_creators: newAdditionalCreators,
         });

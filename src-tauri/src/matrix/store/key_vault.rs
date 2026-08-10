@@ -1,0 +1,285 @@
+//! Abstract vault for Matrix store encryption keys.
+//!
+//! Production uses the OS credential store via [`KeyringStoreKeyVault`]
+//! (macOS Keychain / Linux Secret Service through the `keyring` crate).
+//! Unit tests use [`InMemoryStoreKeyVault`] (test-only harness).
+//! Missing keys and IO failures must **not** delete on-disk Matrix stores
+//! (plan §8.3 — no automatic wipe).
+
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+use super::key_material::{StoreKeyId, StoreKeyMaterial, STORE_KEY_LEN};
+
+/// Privacy-safe vault errors (never include key bytes).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StoreKeyVaultError {
+    /// No key stored for this id (caller may generate — must not wipe stores).
+    NotFound,
+    /// Backend unavailable / locked / denied.
+    BackendUnavailable { diagnostic_id: &'static str },
+    /// Stored payload corrupt or wrong length.
+    CorruptPayload,
+    /// Serialization / encoding failure.
+    Encoding,
+}
+
+impl std::fmt::Display for StoreKeyVaultError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotFound => write!(f, "store key not found"),
+            Self::BackendUnavailable { diagnostic_id } => {
+                write!(f, "store key vault unavailable ({diagnostic_id})")
+            }
+            Self::CorruptPayload => write!(f, "store key payload corrupt"),
+            Self::Encoding => write!(f, "store key encoding error"),
+        }
+    }
+}
+
+impl std::error::Error for StoreKeyVaultError {}
+
+/// Read/write/delete store encryption keys by [`StoreKeyId`].
+pub trait StoreKeyVault: Send {
+    fn get(&self, id: &StoreKeyId) -> Result<Option<StoreKeyMaterial>, StoreKeyVaultError>;
+    fn set(&self, id: &StoreKeyId, key: &StoreKeyMaterial) -> Result<(), StoreKeyVaultError>;
+    fn delete(&self, id: &StoreKeyId) -> Result<bool, StoreKeyVaultError>;
+}
+
+/// Process-local vault for **unit/integration harnesses only**.
+///
+/// R0.4: must not be used as the production product vault (use
+/// [`KeyringStoreKeyVault`] on supported platforms).
+#[derive(Debug, Default)]
+pub struct InMemoryStoreKeyVault {
+    inner: Mutex<HashMap<(String, String), [u8; STORE_KEY_LEN]>>,
+}
+
+impl InMemoryStoreKeyVault {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.lock().map(|g| g.len()).unwrap_or(0)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl StoreKeyVault for InMemoryStoreKeyVault {
+    fn get(&self, id: &StoreKeyId) -> Result<Option<StoreKeyMaterial>, StoreKeyVaultError> {
+        let guard = self
+            .inner
+            .lock()
+            .map_err(|_| StoreKeyVaultError::BackendUnavailable {
+                diagnostic_id: "p2.2-memory-vault-poisoned",
+            })?;
+        Ok(guard
+            .get(&(id.service().to_owned(), id.account().to_owned()))
+            .copied()
+            .map(StoreKeyMaterial::from_bytes))
+    }
+
+    fn set(&self, id: &StoreKeyId, key: &StoreKeyMaterial) -> Result<(), StoreKeyVaultError> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|_| StoreKeyVaultError::BackendUnavailable {
+                diagnostic_id: "p2.2-memory-vault-poisoned",
+            })?;
+        guard.insert(
+            (id.service().to_owned(), id.account().to_owned()),
+            *key.as_bytes(),
+        );
+        Ok(())
+    }
+
+    fn delete(&self, id: &StoreKeyId) -> Result<bool, StoreKeyVaultError> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|_| StoreKeyVaultError::BackendUnavailable {
+                diagnostic_id: "p2.2-memory-vault-poisoned",
+            })?;
+        Ok(guard
+            .remove(&(id.service().to_owned(), id.account().to_owned()))
+            .is_some())
+    }
+}
+
+/// Non-secret service/account refs for the keyring-backed vault.
+///
+/// Stable naming contract for collision tests and diagnostics (never contains
+/// key material). Live IO goes through [`KeyringStoreKeyVault`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeyringStoreKeyRefs {
+    pub service: String,
+    pub account: String,
+}
+
+impl KeyringStoreKeyRefs {
+    pub fn from_id(id: &StoreKeyId) -> Self {
+        Self {
+            service: id.service().to_owned(),
+            account: id.account().to_owned(),
+        }
+    }
+}
+
+/// OS credential-store vault for Matrix store encryption keys (R0.4 residual).
+///
+/// - macOS: Keychain via `keyring` apple-native backend
+/// - Linux: Secret Service / keyutils via `keyring` linux-native backends
+/// - Other platforms: operations return [`StoreKeyVaultError::BackendUnavailable`]
+///
+/// Keys are stored as lowercase hex (64 chars for 32 bytes). Secrets never
+/// appear in error messages or `Debug` output.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct KeyringStoreKeyVault;
+
+impl KeyringStoreKeyVault {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// True when this process build targets a supported native secret store.
+    pub fn platform_supported() -> bool {
+        cfg!(any(target_os = "macos", target_os = "linux"))
+    }
+
+    fn entry(id: &StoreKeyId) -> Result<keyring::Entry, StoreKeyVaultError> {
+        if !Self::platform_supported() {
+            return Err(StoreKeyVaultError::BackendUnavailable {
+                diagnostic_id: "r0.4-keyring-unsupported-platform",
+            });
+        }
+        keyring::Entry::new(id.service(), id.account()).map_err(map_keyring_error)
+    }
+}
+
+impl StoreKeyVault for KeyringStoreKeyVault {
+    fn get(&self, id: &StoreKeyId) -> Result<Option<StoreKeyMaterial>, StoreKeyVaultError> {
+        let entry = Self::entry(id)?;
+        match entry.get_password() {
+            Ok(secret) => Ok(Some(decode_store_key_payload(&secret)?)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(err) => Err(map_keyring_error(err)),
+        }
+    }
+
+    fn set(&self, id: &StoreKeyId, key: &StoreKeyMaterial) -> Result<(), StoreKeyVaultError> {
+        let entry = Self::entry(id)?;
+        let payload = encode_store_key_payload(key);
+        entry.set_password(&payload).map_err(map_keyring_error)
+    }
+
+    fn delete(&self, id: &StoreKeyId) -> Result<bool, StoreKeyVaultError> {
+        let entry = Self::entry(id)?;
+        match entry.delete_credential() {
+            Ok(()) => Ok(true),
+            Err(keyring::Error::NoEntry) => Ok(false),
+            Err(err) => Err(map_keyring_error(err)),
+        }
+    }
+}
+
+/// Encode key bytes as lowercase hex for credential-store string payloads.
+fn encode_store_key_payload(key: &StoreKeyMaterial) -> String {
+    let mut out = String::with_capacity(STORE_KEY_LEN * 2);
+    for b in key.as_bytes() {
+        use std::fmt::Write as _;
+        let _ = write!(out, "{b:02x}");
+    }
+    out
+}
+
+/// Decode a hex payload into store key material (strict length + hex only).
+fn decode_store_key_payload(secret: &str) -> Result<StoreKeyMaterial, StoreKeyVaultError> {
+    let trimmed = secret.trim();
+    if trimmed.len() != STORE_KEY_LEN * 2 {
+        return Err(StoreKeyVaultError::CorruptPayload);
+    }
+    let mut bytes = [0u8; STORE_KEY_LEN];
+    for (i, chunk) in trimmed.as_bytes().chunks(2).enumerate() {
+        let hex = std::str::from_utf8(chunk).map_err(|_| StoreKeyVaultError::CorruptPayload)?;
+        bytes[i] = u8::from_str_radix(hex, 16).map_err(|_| StoreKeyVaultError::CorruptPayload)?;
+    }
+    Ok(StoreKeyMaterial::from_bytes(bytes))
+}
+
+fn map_keyring_error(error: keyring::Error) -> StoreKeyVaultError {
+    // Privacy: never include the raw keyring message (may mention paths/service).
+    match error {
+        keyring::Error::NoEntry => StoreKeyVaultError::NotFound,
+        keyring::Error::BadEncoding(_) | keyring::Error::TooLong(_, _) => {
+            StoreKeyVaultError::Encoding
+        }
+        keyring::Error::Invalid(_, _) => StoreKeyVaultError::Encoding,
+        keyring::Error::Ambiguous(_) => StoreKeyVaultError::BackendUnavailable {
+            diagnostic_id: "r0.4-keyring-ambiguous",
+        },
+        keyring::Error::NoStorageAccess(_) => StoreKeyVaultError::BackendUnavailable {
+            diagnostic_id: "r0.4-keyring-no-storage-access",
+        },
+        keyring::Error::PlatformFailure(_) => StoreKeyVaultError::BackendUnavailable {
+            diagnostic_id: "r0.4-keyring-platform-failure",
+        },
+        _ => StoreKeyVaultError::BackendUnavailable {
+            diagnostic_id: "r0.4-keyring-unavailable",
+        },
+    }
+}
+
+/// Get-or-create helper: never deletes store dirs on vault miss.
+pub fn get_or_create_store_key<V: StoreKeyVault + ?Sized>(
+    vault: &V,
+    id: &StoreKeyId,
+) -> Result<StoreKeyMaterial, StoreKeyVaultError> {
+    if let Some(existing) = vault.get(id)? {
+        return Ok(existing);
+    }
+    let key = StoreKeyMaterial::generate().map_err(|_| StoreKeyVaultError::BackendUnavailable {
+        diagnostic_id: "p2.2-entropy-unavailable",
+    })?;
+    vault.set(id, &key)?;
+    Ok(key)
+}
+
+#[cfg(test)]
+mod key_payload_tests {
+    use super::*;
+
+    #[test]
+    fn hex_payload_round_trip() {
+        let key = StoreKeyMaterial::generate().unwrap();
+        let encoded = encode_store_key_payload(&key);
+        assert_eq!(encoded.len(), STORE_KEY_LEN * 2);
+        assert!(encoded.chars().all(|c| c.is_ascii_hexdigit()));
+        let decoded = decode_store_key_payload(&encoded).unwrap();
+        assert!(decoded.equals(&key));
+    }
+
+    #[test]
+    fn hex_payload_rejects_wrong_length_and_non_hex() {
+        assert!(matches!(
+            decode_store_key_payload("abcd"),
+            Err(StoreKeyVaultError::CorruptPayload)
+        ));
+        let bad = "g".repeat(STORE_KEY_LEN * 2);
+        assert!(matches!(
+            decode_store_key_payload(&bad),
+            Err(StoreKeyVaultError::CorruptPayload)
+        ));
+    }
+
+    #[test]
+    fn map_no_entry_is_not_found() {
+        assert_eq!(
+            map_keyring_error(keyring::Error::NoEntry),
+            StoreKeyVaultError::NotFound
+        );
+    }
+}

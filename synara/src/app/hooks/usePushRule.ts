@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   IPushRule,
   IPushRules,
@@ -5,8 +6,7 @@ import {
   PushRuleCondition,
   PushRuleKind,
   RuleId,
-} from 'matrix-js-sdk';
-import { useMemo } from 'react';
+} from '../utils/pushRules';
 
 export type PushRuleData = {
   kind: PushRuleKind;

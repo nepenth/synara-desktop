@@ -2,14 +2,14 @@
 
 [package]
 name = "synara"
-version = "1.2.59"
+version = "2.0.2"
 description = "A modern Matrix client"
 authors = ["Synara contributors"]
 license = "AGPL-3.0-only"
 repository = "https://github.com/nepenth/synara-desktop"
 default-run = "synara"
 edition = "2021"
-rust-version = "1.77.2"
+rust-version = "1.93"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -24,12 +24,42 @@ keyring = { version = "3.6.3", default-features = false, features = [
 ] }
 tauri = { version = "2.11", features = ["tray-icon", "image-png"] }
 getrandom = "0.3"
+sha2 = "0.10"
+zeroize = "1"
+rfd = "0.17.2"
+# R0.7: live CS-API discovery/login-types transports (read-only; no login).
+reqwest = { version = "0.13", default-features = false, features = [
+  "rustls",
+  "http2",
+] }
 tauri-plugin-localhost = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
 url = "2"
+mime = "0.3"
+# P1.2 + P2.3: Matrix Rust SDK exact pin (program: matrix-sdk-0.18.0 @ 1c44fb66…).
+# default-features=false; approved features only (sqlite + bundled-sqlite for desktop stores).
+# matrix-sdk-ui transitively enables matrix-sdk/e2e-encryption via feature unification.
+# No production login/sync loop yet — client builder opens unauthenticated clients only.
+matrix-sdk = { version = "=0.18.0", default-features = false, features = [
+  "sqlite",
+  "bundled-sqlite",
+  # SDK capability features (2026-08-10 best-practice pass):
+  # - markdown: timeline/event formatting (ruma/markdown)
+  # - qrcode: QR verification (also enables e2e-encryption, already on via
+  #   matrix-sdk-ui feature unification)
+  "markdown",
+  "qrcode",
+] }
+matrix-sdk-ui = { version = "=0.18.0", default-features = false }
+matrix-sdk-crypto = { version = "=0.18.0", default-features = false }
+eyeball-im = "0.8"
+futures-util = "0.3"
+# Runtime for Matrix client open/drop (also used by matrix-sdk). Kept direct so
+# SdkClientHandle can shut down SQLite pools outside an ambient async context.
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time"] }
 
 [features]
 # by default Tauri runs in production mode
@@ -58,3 +88,9 @@ security-framework = "3.7"
 [lib]
 name = "app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dev-dependencies]
+hmac = "0.12"
+sha1 = "0.10"
+hex = "0.4"
+

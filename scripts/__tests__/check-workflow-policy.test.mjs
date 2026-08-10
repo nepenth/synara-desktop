@@ -7,6 +7,8 @@ import {
 } from "../check-workflow-policy.mjs";
 
 const valid = loadWorkflowPolicyInputs();
+const integrationBranch = "feature/matrix-rust-sdk-full-replacement";
+const validationWorkflows = ["ci.yml", "desktop-package-smoke.yml"];
 
 const inspect = (workflowName, transform) =>
   inspectWorkflowPolicy({
@@ -52,15 +54,91 @@ test("rejects secrets exposed to an entire job", () => {
   assert.match(result.errors.join("\n"), /scope secrets/);
 });
 
+test("requires task PR validation on the Matrix Rust integration branch", () => {
+  for (const workflowName of validationWorkflows) {
+    const result = inspect(workflowName, (workflow) =>
+      workflow.replace(`, "${integrationBranch}"`, "")
+    );
+    assert.equal(result.ok, false, workflowName);
+    assert.match(
+      result.errors.join("\n"),
+      /must validate pull requests targeting/,
+      workflowName
+    );
+  }
+});
+
+test("requires event- and pull-request-specific cancellable validation lanes", () => {
+  for (const workflowName of validationWorkflows) {
+    const noEvent = inspect(workflowName, (workflow) =>
+      workflow.replace("-${{ github.event_name }}", "")
+    );
+    assert.match(
+      noEvent.errors.join("\n"),
+      /must separate workflow event types/,
+      workflowName
+    );
+
+    const noPullRequest = inspect(workflowName, (workflow) =>
+      workflow.replace(
+        "${{ github.event.pull_request.number || github.ref }}",
+        "${{ github.ref }}"
+      )
+    );
+    assert.match(
+      noPullRequest.errors.join("\n"),
+      /must isolate each pull request/,
+      workflowName
+    );
+
+    const noCancellation = inspect(workflowName, (workflow) =>
+      workflow.replace("cancel-in-progress: true", "cancel-in-progress: false")
+    );
+    assert.match(
+      noCancellation.errors.join("\n"),
+      /must cancel obsolete runs only within the same event/,
+      workflowName
+    );
+  }
+});
+
 test("rejects an unstable or skippable package gate", () => {
   const result = inspect("desktop-package-smoke.yml", (workflow) =>
     workflow.replace(
-      '  pull_request:\n    branches: [main, "release/**"]',
-      '  pull_request:\n    branches: [main, "release/**"]\n    paths: ["src-tauri/**"]'
+      `  pull_request:\n    branches: [main, "${integrationBranch}", "release/**"]`,
+      `  pull_request:\n    branches: [main, "${integrationBranch}", "release/**"]\n    paths: ["src-tauri/**"]`
     )
   );
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /stable aggregate check/);
+});
+
+test("rejects weakened package change detection", () => {
+  const missingPath = inspect("desktop-package-smoke.yml", (workflow) =>
+    workflow.replace("            src-tauri \\\n", "")
+  );
+  assert.match(missingPath.errors.join("\n"), /must retain the src-tauri path/);
+
+  const noDiff = inspect("desktop-package-smoke.yml", (workflow) =>
+    workflow.replace(
+      'git diff --quiet "$BASE_SHA" "$HEAD_SHA" --',
+      "git diff --quiet --"
+    )
+  );
+  assert.match(noDiff.errors.join("\n"), /PR diff-based package change/);
+});
+
+test("requires strict Rust formatting and lint in CI", () => {
+  for (const [command, expected] of [
+    ["cargo fmt --check", /strict Rust formatting/],
+    ["cargo clippy --locked --all-targets -- -D warnings", /strict Rust lint/],
+  ]) {
+    const result = inspect("ci.yml", (workflow) =>
+      workflow.replace(command, "cargo --version")
+    );
+    assert.equal(result.ok, false, command);
+    assert.match(result.errors.join("\n"), expected, command);
+  }
 });
 
 test("rejects per-tag production release concurrency", () => {
@@ -78,4 +156,45 @@ test("rejects ungrouped dependency update fan-out", () => {
   });
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /grouped github-actions-updates/);
+});
+
+test("requires immutable version guards before validation and publication", () => {
+  const missingValidationGuard = inspect("release.yml", (workflow) =>
+    workflow.replace(
+      "      - name: Require a fresh incremented release version\n        env:\n          GH_TOKEN: ${{ github.token }}\n        run: node scripts/assert-release-version.mjs\n\n",
+      ""
+    )
+  );
+  assert.match(
+    missingValidationGuard.errors.join("\n"),
+    /immutable release-version guard/
+  );
+
+  const misplacedPublishGuard = inspect("release.yml", (workflow) =>
+    workflow
+      .replace(
+        "      - name: Recheck immutable release version before publication\n        run: node scripts/assert-release-version.mjs\n\n",
+        ""
+      )
+      .replace(
+        "      - name: Create fixed pacman repository release\n",
+        "      - name: Recheck immutable release version before publication\n        run: node scripts/assert-release-version.mjs\n\n      - name: Create fixed pacman repository release\n"
+      )
+  );
+  assert.match(
+    misplacedPublishGuard.errors.join("\n"),
+    /must run immediately before/
+  );
+});
+
+test("rejects a retained alternate semantic-release publisher", () => {
+  const result = inspectWorkflowPolicy({
+    ...valid,
+    runtimePackage: `${valid.runtimePackage}\n@semantic-release/github`,
+  });
+  assert.equal(result.ok, false);
+  assert.match(
+    result.errors.join("\n"),
+    /alternate semantic-release publisher/
+  );
 });

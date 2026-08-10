@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-typing-snapshot"
+description = "Enables the matrix_typing_snapshot command without any pre-configured scope."
+commands.allow = ["matrix_typing_snapshot"]
+
+[[permission]]
+identifier = "deny-matrix-typing-snapshot"
+description = "Denies the matrix_typing_snapshot command without any pre-configured scope."
+commands.deny = ["matrix_typing_snapshot"]

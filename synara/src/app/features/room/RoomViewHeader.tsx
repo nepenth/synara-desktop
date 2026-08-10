@@ -1,4 +1,5 @@
 import React, { MouseEventHandler, forwardRef, useState } from 'react';
+import { useAtomValue } from 'jotai';
 import FocusTrap from 'focus-trap-react';
 import {
   Box,
@@ -23,7 +24,6 @@ import {
   Spinner,
 } from 'folds';
 import { useNavigate } from 'react-router-dom';
-import { Room } from 'matrix-js-sdk';
 import { useStateEvent } from '../../hooks/useStateEvent';
 import { PageHeader } from '../../components/page';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
@@ -37,6 +37,7 @@ import { settingsAtom } from '../../state/settings';
 import { useSpaceOptionally } from '../../hooks/useSpace';
 import { getHomeSearchPath, getSpaceSearchPath, withSearchParam } from '../../pages/pathUtils';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
+import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 import { getCanonicalAliasOrRoomId, isRoomAlias } from '../../utils/matrix';
 import { _SearchPathSearchParams } from '../../pages/paths';
 import * as css from './RoomViewHeader.css';
@@ -68,12 +69,12 @@ import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { ContainerColor } from '../../styles/ContainerColor.css';
-import { RoomSettingsPage } from '../../state/roomSettings';
-import { useAccountData } from '../../hooks/useAccountData';
-import { AccountDataEvent, SynaraRoomNotesContent } from '../../../types/matrix/accountData';
 import { getRoomNotesSummary } from '../../utils/roomNotes';
+import { roomNotesContentAtom } from '../../state/roomNotesList';
 import { RoomNotesPanel } from './room-notes/RoomNotesPanel';
 import type { RoomSidePanelType } from './RoomSidePanel';
+
+type Room = ReturnType<typeof useRoom>;
 
 type RoomMenuProps = {
   room: Room;
@@ -108,9 +109,9 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
     setInvitePrompt(true);
   };
 
-  const handleCopyLink = () => {
+  const handleCopyLink = async () => {
     const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, room.roomId);
-    const viaServers = isRoomAlias(roomIdOrAlias) ? undefined : getViaServers(room);
+    const viaServers = isRoomAlias(roomIdOrAlias) ? undefined : await getViaServers(room);
     copyToClipboard(getMatrixToRoom(roomIdOrAlias, viaServers));
     requestClose();
   };
@@ -264,14 +265,12 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
 });
 
 type RoomViewHeaderProps = {
-  callView?: boolean;
   activeSidePanel?: RoomSidePanelType | 'members';
   onToggleSidePanel?: (panel: RoomSidePanelType) => void;
   onToggleMembers?: () => void;
 };
 
 export function RoomViewHeader({
-  callView,
   activeSidePanel,
   onToggleSidePanel,
   onToggleMembers,
@@ -288,9 +287,7 @@ export function RoomViewHeader({
   const direct = useIsDirectRoom();
 
   const pinnedEvents = useRoomPinnedEvents(room);
-  const notesContent = useAccountData(AccountDataEvent.SynaraRoomNotes)?.getContent() as
-    | SynaraRoomNotesContent
-    | undefined;
+  const notesContent = useAtomValue(roomNotesContentAtom);
   const notesSummary = getRoomNotesSummary(notesContent, room.roomId);
   const encryptionEvent = useStateEvent(room, StateEvent.RoomEncryption);
   const encryptedRoom = !!encryptionEvent;
@@ -339,13 +336,7 @@ export function RoomViewHeader({
     setNotesOverlayOpen(true);
   };
 
-  const openSettings = useOpenRoomSettings();
-  const parentSpace = useSpaceOptionally();
   const handleMemberToggle = () => {
-    if (callView) {
-      openSettings(room.roomId, parentSpace?.roomId, RoomSettingsPage.MembersPage);
-      return;
-    }
     if (onToggleMembers) {
       onToggleMembers();
       return;
@@ -378,7 +369,11 @@ export function RoomViewHeader({
                 src={avatarUrl}
                 alt={name}
                 renderFallback={() => (
-                  <RoomIcon size="200" joinRule={room.getJoinRule()} roomType={room.getType()} />
+                  <RoomIcon
+                    size="200"
+                    joinRule={normalizeRoomJoinRulePresentation(room.getJoinRule())}
+                    roomType={room.getType()}
+                  />
                 )}
               />
             </Avatar>
@@ -499,7 +494,10 @@ export function RoomViewHeader({
                     escapeDeactivates: stopPropagation,
                   }}
                 >
-                  <RoomPinMenu room={room} requestClose={() => setPinMenuAnchor(undefined)} />
+                  <RoomPinMenu
+                    room={room as unknown as React.ComponentProps<typeof RoomPinMenu>['room']}
+                    requestClose={() => setPinMenuAnchor(undefined)}
+                  />
                 </FocusTrap>
               }
             />
@@ -567,15 +565,11 @@ export function RoomViewHeader({
               offset={4}
               tooltip={
                 <Tooltip>
-                  {callView ? (
-                    <Text>Members</Text>
-                  ) : (
-                    <Text>
-                      {activeSidePanel === 'members' || peopleDrawer
-                        ? 'Hide Members'
-                        : 'Show Members'}
-                    </Text>
-                  )}
+                  <Text>
+                    {activeSidePanel === 'members' || peopleDrawer
+                      ? 'Hide Members'
+                      : 'Show Members'}
+                  </Text>
                 </Tooltip>
               }
             >

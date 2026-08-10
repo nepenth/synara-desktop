@@ -1,49 +1,90 @@
-import { Direction, EventTimeline, MatrixEvent, Room } from 'matrix-js-sdk';
+/**
+ * SDK-neutral structural projections used by this utility boundary.
+ *
+ * These are narrow, read-only interfaces satisfied by live SDK runtime objects
+ * and by the test doubles. They deliberately do not re-export any SDK type so
+ * this file stays SDK-free, while callers that still hold live SDK objects
+ * keep typechecking.
+ */
 
-export const getLiveTimeline = (room: Room): EventTimeline =>
+/** String-literal mirror of the SDK Direction enum. */
+export type TimelineDirection = 'b' | 'f';
+
+/** Narrow string-literal mirror of the SDK Direction enum values. */
+export const TimelineDirection = {
+  Backward: 'b',
+  Forward: 'f',
+} as const;
+
+/** Narrow structural projection of a room event used by the timeline links. */
+export type TimelineEventReading = {
+  getId(): string | undefined;
+};
+
+/** Narrow structural projection of an event timeline. */
+export type EventTimelineReading = {
+  getNeighbouringTimeline(direction: TimelineDirection): EventTimelineReading | null;
+  getEvents(): TimelineEventReading[];
+};
+
+/** Narrow structural projection of an event timeline set. */
+export type EventTimelineSetReading = {
+  getLiveTimeline(): EventTimelineReading;
+  getTimelineForEvent(eventId: string): EventTimelineReading | null;
+};
+
+/** Narrow structural projection of a room used by the timeline links. */
+export type RoomReading = {
+  getUnfilteredTimelineSet(): EventTimelineSetReading;
+};
+
+export const getLiveTimeline = (room: RoomReading): EventTimelineReading =>
   room.getUnfilteredTimelineSet().getLiveTimeline();
 
-export const getEventTimeline = (room: Room, eventId: string): EventTimeline | undefined => {
+export const getEventTimeline = (
+  room: RoomReading,
+  eventId: string
+): EventTimelineReading | undefined => {
   const timelineSet = room.getUnfilteredTimelineSet();
   return timelineSet.getTimelineForEvent(eventId) ?? undefined;
 };
 
 export const getFirstLinkedTimeline = (
-  timeline: EventTimeline,
-  direction: Direction
-): EventTimeline => {
+  timeline: EventTimelineReading,
+  direction: TimelineDirection
+): EventTimelineReading => {
   const linkedTimeline = timeline.getNeighbouringTimeline(direction);
   if (!linkedTimeline) return timeline;
   return getFirstLinkedTimeline(linkedTimeline, direction);
 };
 
-export const getLinkedTimelines = (timeline: EventTimeline): EventTimeline[] => {
-  const firstTimeline = getFirstLinkedTimeline(timeline, Direction.Backward);
-  const timelines: EventTimeline[] = [];
+export const getLinkedTimelines = (timeline: EventTimelineReading): EventTimelineReading[] => {
+  const firstTimeline = getFirstLinkedTimeline(timeline, TimelineDirection.Backward);
+  const timelines: EventTimelineReading[] = [];
 
   for (
-    let nextTimeline: EventTimeline | null = firstTimeline;
+    let nextTimeline: EventTimelineReading | null = firstTimeline;
     nextTimeline;
-    nextTimeline = nextTimeline.getNeighbouringTimeline(Direction.Forward)
+    nextTimeline = nextTimeline.getNeighbouringTimeline(TimelineDirection.Forward)
   ) {
     timelines.push(nextTimeline);
   }
   return timelines;
 };
 
-export const timelineToEventsCount = (timeline: EventTimeline): number =>
+export const timelineToEventsCount = (timeline: EventTimelineReading): number =>
   timeline.getEvents().length;
 
-export const getTimelinesEventsCount = (timelines: EventTimeline[]): number => {
-  const timelineEventCountReducer = (count: number, timeline: EventTimeline) =>
+export const getTimelinesEventsCount = (timelines: EventTimelineReading[]): number => {
+  const timelineEventCountReducer = (count: number, timeline: EventTimelineReading) =>
     count + timelineToEventsCount(timeline);
   return timelines.reduce(timelineEventCountReducer, 0);
 };
 
 export const getTimelineAndBaseIndex = (
-  timelines: EventTimeline[],
+  timelines: EventTimelineReading[],
   index: number
-): [EventTimeline | undefined, number] => {
+): [EventTimelineReading | undefined, number] => {
   let uptoTimelineLength = 0;
   const timeline = timelines.find((candidateTimeline) => {
     uptoTimelineLength += candidateTimeline.getEvents().length;
@@ -59,12 +100,14 @@ export const getTimelineRelativeIndex = (
   timelineBaseIndex: number
 ): number => absoluteIndex - timelineBaseIndex;
 
-export const getTimelineEvent = (timeline: EventTimeline, index: number): MatrixEvent | undefined =>
-  timeline.getEvents()[index];
+export const getTimelineEvent = (
+  timeline: EventTimelineReading,
+  index: number
+): TimelineEventReading | undefined => timeline.getEvents()[index];
 
 export const getEventIdAbsoluteIndex = (
-  timelines: EventTimeline[],
-  eventTimeline: EventTimeline,
+  timelines: EventTimelineReading[],
+  eventTimeline: EventTimelineReading,
   eventId: string
 ): number | undefined => {
   const timelineIndex = timelines.findIndex((timeline) => timeline === eventTimeline);
