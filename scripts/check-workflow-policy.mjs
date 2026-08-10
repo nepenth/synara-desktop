@@ -5,10 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const indentation = (line) => line.length - line.trimStart().length;
 const integrationBranch = "feature/matrix-rust-sdk-full-replacement";
-const cancellableValidationWorkflows = [
-  "ci.yml",
-  "desktop-package-smoke.yml",
-];
+const cancellableValidationWorkflows = ["ci.yml", "desktop-package-smoke.yml"];
 
 function parseJobs(workflow) {
   const jobs = new Map();
@@ -91,7 +88,11 @@ function hasIntegrationPullRequestTarget(workflow) {
   return pullRequestBlock(workflow).includes(`"${integrationBranch}"`);
 }
 
-export function inspectWorkflowPolicy({ workflows, dependabot }) {
+export function inspectWorkflowPolicy({
+  workflows,
+  dependabot,
+  runtimePackage = "",
+}) {
   const errors = [];
 
   for (const [filename, workflow] of Object.entries(workflows).sort()) {
@@ -222,10 +223,8 @@ export function inspectWorkflowPolicy({ workflows, dependabot }) {
     }
   }
 
-  const releaseConcurrency = topLevelBlock(
-    workflows["release.yml"] ?? "",
-    "concurrency"
-  )
+  const releaseWorkflow = workflows["release.yml"] ?? "";
+  const releaseConcurrency = topLevelBlock(releaseWorkflow, "concurrency")
     .map((line) => line.trim())
     .filter(Boolean);
   if (
@@ -234,6 +233,68 @@ export function inspectWorkflowPolicy({ workflows, dependabot }) {
   ) {
     errors.push(
       "Production release tags must share a non-cancelling serialized concurrency lane."
+    );
+  }
+
+  const releaseVersionGuard = "node scripts/assert-release-version.mjs";
+  const guardCount = releaseWorkflow.split(releaseVersionGuard).length - 1;
+  const releaseJobs = parseJobs(releaseWorkflow);
+  const releaseValidate = (releaseJobs.get("validate") ?? []).join("\n");
+  const releasePublish = (releaseJobs.get("publish-gh-release") ?? []).join(
+    "\n"
+  );
+  const validationTagCheck = releaseValidate.indexOf(
+    "Require tag to match the shared version"
+  );
+  const validationGuard = releaseValidate.indexOf(releaseVersionGuard);
+  if (
+    guardCount !== 2 ||
+    validationGuard < 0 ||
+    validationTagCheck < 0 ||
+    validationGuard < validationTagCheck
+  ) {
+    errors.push(
+      "Production release validation must run the immutable release-version guard exactly once after the exact tag check and before builds."
+    );
+  }
+  if (!releasePublish.includes(releaseVersionGuard)) {
+    errors.push(
+      "Production release publication must recheck the immutable release-version guard."
+    );
+  }
+  const guardBeforePublish = releasePublish.indexOf(releaseVersionGuard);
+  const ghReleasePublish = releasePublish.indexOf(
+    "softprops/action-gh-release"
+  );
+  const directlyPrecedesGhRelease =
+    /Recheck immutable release version before publication\n        run: node scripts\/assert-release-version\.mjs\n      - name: Create GitHub Release with all client artifacts/.test(
+      releasePublish
+    );
+  if (
+    guardBeforePublish < 0 ||
+    ghReleasePublish < 0 ||
+    guardBeforePublish > ghReleasePublish ||
+    !directlyPrecedesGhRelease
+  ) {
+    errors.push(
+      "Production release version guard must run immediately before the mutating GitHub release action."
+    );
+  }
+  if (
+    !releaseValidate.includes("GH_TOKEN: ${{ github.token }}") ||
+    !releasePublish.includes("GH_TOKEN: ${{ github.token }}") ||
+    !releasePublish.includes("fetch-depth: 0")
+  ) {
+    errors.push(
+      "Production release version guard must have ledger access and an immutable full-history tag checkout."
+    );
+  }
+  if (
+    typeof runtimePackage !== "string" ||
+    /semantic-release/i.test(runtimePackage)
+  ) {
+    errors.push(
+      "Runtime package must not retain an alternate semantic-release publisher."
     );
   }
 
@@ -282,6 +343,10 @@ export function loadWorkflowPolicyInputs(repositoryRoot = root) {
     workflows,
     dependabot: readFileSync(
       path.join(repositoryRoot, ".github", "dependabot.yml"),
+      "utf8"
+    ),
+    runtimePackage: readFileSync(
+      path.join(repositoryRoot, "synara", "package.json"),
       "utf8"
     ),
   };

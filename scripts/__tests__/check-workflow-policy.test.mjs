@@ -117,10 +117,7 @@ test("rejects weakened package change detection", () => {
   const missingPath = inspect("desktop-package-smoke.yml", (workflow) =>
     workflow.replace("            src-tauri \\\n", "")
   );
-  assert.match(
-    missingPath.errors.join("\n"),
-    /must retain the src-tauri path/
-  );
+  assert.match(missingPath.errors.join("\n"), /must retain the src-tauri path/);
 
   const noDiff = inspect("desktop-package-smoke.yml", (workflow) =>
     workflow.replace(
@@ -134,10 +131,7 @@ test("rejects weakened package change detection", () => {
 test("requires strict Rust formatting and lint in CI", () => {
   for (const [command, expected] of [
     ["cargo fmt --check", /strict Rust formatting/],
-    [
-      "cargo clippy --locked --all-targets -- -D warnings",
-      /strict Rust lint/,
-    ],
+    ["cargo clippy --locked --all-targets -- -D warnings", /strict Rust lint/],
   ]) {
     const result = inspect("ci.yml", (workflow) =>
       workflow.replace(command, "cargo --version")
@@ -162,4 +156,45 @@ test("rejects ungrouped dependency update fan-out", () => {
   });
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /grouped github-actions-updates/);
+});
+
+test("requires immutable version guards before validation and publication", () => {
+  const missingValidationGuard = inspect("release.yml", (workflow) =>
+    workflow.replace(
+      "      - name: Require a fresh incremented release version\n        env:\n          GH_TOKEN: ${{ github.token }}\n        run: node scripts/assert-release-version.mjs\n\n",
+      ""
+    )
+  );
+  assert.match(
+    missingValidationGuard.errors.join("\n"),
+    /immutable release-version guard/
+  );
+
+  const misplacedPublishGuard = inspect("release.yml", (workflow) =>
+    workflow
+      .replace(
+        "      - name: Recheck immutable release version before publication\n        run: node scripts/assert-release-version.mjs\n\n",
+        ""
+      )
+      .replace(
+        "      - name: Create fixed pacman repository release\n",
+        "      - name: Recheck immutable release version before publication\n        run: node scripts/assert-release-version.mjs\n\n      - name: Create fixed pacman repository release\n"
+      )
+  );
+  assert.match(
+    misplacedPublishGuard.errors.join("\n"),
+    /must run immediately before/
+  );
+});
+
+test("rejects a retained alternate semantic-release publisher", () => {
+  const result = inspectWorkflowPolicy({
+    ...valid,
+    runtimePackage: `${valid.runtimePackage}\n@semantic-release/github`,
+  });
+  assert.equal(result.ok, false);
+  assert.match(
+    result.errors.join("\n"),
+    /alternate semantic-release publisher/
+  );
 });
