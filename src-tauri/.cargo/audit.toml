@@ -1,0 +1,13 @@
+# RustSec audit allowlist (src-tauri) — enforced by the `rust-dependency-audit`
+# CI job (ci.yml). Keep this as small as possible; each entry is a documented
+# exception with a fix-forward plan, never a silent swallow.
+[advisories]
+# quick-xml < 0.41 (two advisories) is reachable only via plist 1.10, pulled by
+# tauri-bundler: plist WRITES our generated macOS Info.plist (we never parse
+# attacker-controlled XML through it), and plist currently pins quick-xml <0.41
+# with no patched release reachable at top-of-tree. Revisit on the next
+# tauri/plist upgrade that carries quick-xml >= 0.41.0.
+ignore = [
+  "RUSTSEC-2026-0194",
+  "RUSTSEC-2026-0195",
+]
