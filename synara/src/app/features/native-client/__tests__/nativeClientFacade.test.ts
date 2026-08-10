@@ -44,6 +44,7 @@ test('getSyncState proxies matrix_sync_status and caches PREPARED when running',
     readiness: 'running',
     sessionGeneration: 7,
     failureDiagnosticId: null,
+    slidingSyncCapable: null,
   });
 });
 
@@ -53,6 +54,35 @@ test('getSyncState fails closed when the native command is unavailable', async (
   await client.refresh();
   assert.equal(client.getSyncState(), null);
   assert.equal(client.clientRunning(), false);
+});
+test('slidingSyncCapable tri-state: true/false/null propagate through getSyncStateData', async () => {
+  for (const capable of [true, false, null]) {
+    const { invoke } = invokingWith({
+      matrix_sync_status: {
+        readiness: 'running',
+        sessionGeneration: 1,
+        offlineModeEnabled: false,
+        ...(capable === null ? {} : { slidingSyncCapable: capable }),
+      },
+    });
+    const client = createNativeMatrixClient(invoke);
+    await client.refresh();
+    assert.equal(client.getSyncStateData()?.slidingSyncCapable, capable);
+  }
+});
+
+test('slidingSyncCapable absent on the wire yields null (unknown)', async () => {
+  const { invoke } = invokingWith({
+    matrix_sync_status: {
+      readiness: 'idle',
+      sessionGeneration: 2,
+      offlineModeEnabled: false,
+    },
+  });
+  const client = createNativeMatrixClient(invoke);
+  await client.refresh();
+  assert.equal(client.getSyncState(), 'STOPPED');
+  assert.equal(client.getSyncStateData()?.slidingSyncCapable, null);
 });
 
 test('sync emitter delivers the sync payload to listeners and removeListener detaches', async () => {
