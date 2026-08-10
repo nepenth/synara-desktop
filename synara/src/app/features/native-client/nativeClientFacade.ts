@@ -81,13 +81,15 @@ export type NativeSyncStateData = {
 };
 
 /** Structural mirror of the Rust `MatrixSessionSnapshot` DTO. */
-export type NativeSessionSnapshot = {
-  status: 'logged_out' | 'logged_in';
-  userId?: string;
-  deviceId?: string;
-  homeserverUrl?: string;
-  sessionGeneration?: number;
-};
+export type NativeSessionSnapshot =
+  | { status: 'logged_out' }
+  | {
+      status: 'logged_in';
+      userId: string;
+      deviceId: string;
+      homeserverUrl: string;
+      sessionGeneration: number;
+    };
 
 export type NativeClientIdentity = {
   userId?: string;
@@ -165,21 +167,24 @@ const parseSyncStatus = (value: unknown): NativeSyncStatus | null => {
   };
 };
 
-const parseSessionSnapshot = (value: unknown): NativeSessionSnapshot => {
-  if (!isObject(value) || hasForbiddenWireFields(value)) {
-    return { status: 'logged_out' };
+const parseSessionSnapshot = (value: unknown): NativeSessionSnapshot | null => {
+  if (!isObject(value) || hasForbiddenWireFields(value)) return null;
+  if (value.status === 'logged_out') return { status: 'logged_out' };
+  if (value.status !== 'logged_in') return null;
+  const userId = reqString(value, 'user_id') ?? reqString(value, 'userId');
+  const deviceId = reqString(value, 'device_id') ?? reqString(value, 'deviceId');
+  const homeserverUrl = reqString(value, 'homeserver_url') ?? reqString(value, 'homeserverUrl');
+  const sessionGeneration = reqNumber(value, 'sessionGeneration');
+  if (
+    userId === null ||
+    deviceId === null ||
+    homeserverUrl === null ||
+    sessionGeneration === null ||
+    !isSafeGeneration(sessionGeneration)
+  ) {
+    return null;
   }
-  if (value.status !== 'logged_in') {
-    return { status: 'logged_out' };
-  }
-  return {
-    status: 'logged_in',
-    userId: reqString(value, 'user_id') ?? reqString(value, 'userId') ?? undefined,
-    deviceId: reqString(value, 'device_id') ?? reqString(value, 'deviceId') ?? undefined,
-    homeserverUrl:
-      reqString(value, 'homeserver_url') ?? reqString(value, 'homeserverUrl') ?? undefined,
-    sessionGeneration: reqNumber(value, 'sessionGeneration') ?? undefined,
-  };
+  return { status: 'logged_in', userId, deviceId, homeserverUrl, sessionGeneration };
 };
 
 /** Structural mirror of the Rust `NativeRoomListSnapshot` DTO (room_list/live.rs). */
@@ -242,9 +247,17 @@ const EMPTY_STATE: EmptyStateReading = {
   getStateEvents: (eventType: string, stateKey?: string) => (stateKey === undefined ? [] : null),
 } as EmptyStateReading;
 
-/** F6a — full structural RoomReading projection (fail-closed deep surface). */
+type FacadeRoomSummaryRef = { current: RoomSummary };
+
+/**
+ * F6a — full structural RoomReading projection (fail-closed deep surface).
+ *
+ * The native room-list poll replaces a summary frequently. Keep a stable room
+ * wrapper and read through this ref so consumers holding a room object do not
+ * keep a stale name, avatar, membership, or unread count.
+ */
 const toRoomReading = (
-  summary: RoomSummary,
+  summaryRef: FacadeRoomSummaryRef,
   roomClient?: {
     on: (event: string, listener: (payload?: unknown) => void) => void;
     removeListener: (event: string, listener: (payload?: unknown) => void) => void;
@@ -255,39 +268,46 @@ const toRoomReading = (
   removeListener?: (event: string, listener: (payload?: unknown) => void) => void;
   getUsersReadUpTo?: (event: MatrixEventReading) => string[];
   findEventById?: () => unknown;
-} => ({
-  roomId: summary.roomId,
-  name: summary.name ?? '',
-  currentState: EMPTY_STATE as RoomReading['currentState'],
-  getLiveTimeline: () => ({
-    getState: () => undefined,
-    getEvents: () => [],
-  }),
-  getMember: () => null,
-  getMembers: () => [],
-  getMxcAvatarUrl: () => summary.avatarUrl ?? null,
-  getAvatarFallbackMember: () => undefined,
-  getUnreadNotificationCount: () => summary.unreadCount,
-  getEventReadUpTo: () => null,
-  getLastActiveTimestamp: () => summary.lastActivityTs,
-  getBumpStamp: () => summary.lastActivityTs,
-  getThreads: () => [],
-  accountData: { get: () => undefined },
-  getMyMembership: () => summary.membership,
-  getJoinRule: () => summary.joinRule ?? '',
-  getJoinedMemberCount: () => 0,
-  getCanonicalAlias: () => summary.canonicalAlias ?? null,
-  getType: () => (summary.isCall ? RoomType.Call : undefined),
-  getVersion: () => '',
-  isCallRoom: () => summary.isCall,
-  isSpaceRoom: () => summary.isSpace,
-  getTimelineForEvent: () => null,
-  hasMembershipState: () => summary.membership === 'join',
-  on: roomClient?.on,
-  removeListener: roomClient?.removeListener,
-  getUsersReadUpTo: () => [],
-  findEventById: () => undefined,
-});
+} => {
+  const summary = (): RoomSummary => summaryRef.current;
+  return {
+    get roomId() {
+      return summary().roomId;
+    },
+    get name() {
+      return summary().name ?? '';
+    },
+    currentState: EMPTY_STATE as RoomReading['currentState'],
+    getLiveTimeline: () => ({
+      getState: () => undefined,
+      getEvents: () => [],
+    }),
+    getMember: () => null,
+    getMembers: () => [],
+    getMxcAvatarUrl: () => summary().avatarUrl ?? null,
+    getAvatarFallbackMember: () => undefined,
+    getUnreadNotificationCount: () => summary().unreadCount,
+    getEventReadUpTo: () => null,
+    getLastActiveTimestamp: () => summary().lastActivityTs,
+    getBumpStamp: () => summary().lastActivityTs,
+    getThreads: () => [],
+    accountData: { get: () => undefined },
+    getMyMembership: () => summary().membership,
+    getJoinRule: () => summary().joinRule ?? '',
+    getJoinedMemberCount: () => 0,
+    getCanonicalAlias: () => summary().canonicalAlias ?? null,
+    getType: () => (summary().isCall ? RoomType.Call : undefined),
+    getVersion: () => '',
+    isCallRoom: () => summary().isCall,
+    isSpaceRoom: () => summary().isSpace,
+    getTimelineForEvent: () => null,
+    hasMembershipState: () => summary().membership === 'join',
+    on: roomClient?.on,
+    removeListener: roomClient?.removeListener,
+    getUsersReadUpTo: () => [],
+    findEventById: () => undefined,
+  };
+};
 
 const parseTimelineEventReadback = (value: unknown): FacadeTimelineEventReading | null => {
   if (!isObject(value) || hasForbiddenWireFields(value)) return null;
@@ -513,30 +533,85 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
   let cachedSyncState: NativeSyncState | null = null;
   let cachedSyncData: NativeSyncStateData | null = null;
   let cachedRooms: FacadeEventedRoomReading[] = [];
+  let cachedRoomEntries = new Map<
+    string,
+    { summaryRef: FacadeRoomSummaryRef; room: FacadeEventedRoomReading }
+  >();
+  let cachedSessionGeneration: number | undefined;
+
+  // F6b: the facade object fills this holder after construction so rooms can
+  // reference it as their `client` (EventedRoomReading contract).
+  let facadeClient: unknown = null;
+
+  const clearCachedRooms = (): void => {
+    cachedRooms = [];
+    cachedRoomEntries = new Map();
+  };
 
   const readSyncStatus = (): Promise<NativeSyncStatus | null> =>
     invoke('matrix_sync_status').then((result) =>
       result.available ? parseSyncStatus(result.value) : null
     );
 
-  const readIdentity = async (): Promise<NativeClientIdentity> => {
+  const readSession = async (): Promise<NativeSessionSnapshot | null> => {
     const result = await invoke('matrix_session_snapshot');
-    if (!result.available) return {};
-    return parseSessionSnapshot(result.value) as NativeClientIdentity;
+    return result.available ? parseSessionSnapshot(result.value) : null;
   };
 
-  const readRooms = async (): Promise<RoomReading[]> => {
+  const readRooms = async (): Promise<NativeRoomListSnapshot | null> => {
     const result = await invoke('matrix_room_list_snapshot');
-    if (!result.available) return [];
-    const snapshot = parseRoomListSnapshot(result.value);
-    return snapshot
-      ? snapshot.rooms.map((r) =>
-          toRoomReading(r, {
-            on: emitter.on.bind(emitter),
-            removeListener: emitter.removeListener.bind(emitter),
-          })
-        )
-      : [];
+    return result.available ? parseRoomListSnapshot(result.value) : null;
+  };
+
+  const createEventedRoom = (summaryRef: FacadeRoomSummaryRef): FacadeEventedRoomReading => {
+    const room = toRoomReading(summaryRef, {
+      on: emitter.on.bind(emitter),
+      removeListener: emitter.removeListener.bind(emitter),
+    }) as unknown as FacadeEventedRoomReading;
+    room.client = facadeClient as MatrixClientReading;
+    room.on = (event, listener) => {
+      emitter.on(event, listener as (...args: unknown[]) => void);
+    };
+    room.removeListener = (event, listener) => {
+      emitter.removeListener(event, listener as (...args: unknown[]) => void);
+    };
+    room.getUsersReadUpTo = () => [];
+    room.hasEncryptionStateEvent = () => false;
+    room.findEventById = () => undefined;
+    return room;
+  };
+
+  /**
+   * Apply one already-validated native room-list projection. This is called by
+   * both facade refreshes and the atom owner, so `getRoom()` observes the same
+   * snapshot that drives sidebar ordering. Existing room wrapper identities
+   * remain stable while their summary reads become current.
+   */
+  const applyRoomListSnapshot = (snapshot: NativeRoomListSnapshot): void => {
+    if (
+      cachedSessionGeneration !== undefined &&
+      snapshot.sessionGeneration !== cachedSessionGeneration
+    ) {
+      return;
+    }
+    const nextEntries = new Map<
+      string,
+      { summaryRef: FacadeRoomSummaryRef; room: FacadeEventedRoomReading }
+    >();
+    const nextRooms: FacadeEventedRoomReading[] = [];
+    for (const summary of snapshot.rooms) {
+      let entry = cachedRoomEntries.get(summary.roomId);
+      if (entry) {
+        entry.summaryRef.current = summary;
+      } else {
+        const summaryRef = { current: summary };
+        entry = { summaryRef, room: createEventedRoom(summaryRef) };
+      }
+      nextEntries.set(summary.roomId, entry);
+      nextRooms.push(entry.room);
+    }
+    cachedRoomEntries = nextEntries;
+    cachedRooms = nextRooms;
   };
 
   const applySyncStatus = (status: NativeSyncStatus): void => {
@@ -553,51 +628,86 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     if (cachedSyncState !== null) emitter.emit('sync', cachedSyncState);
   };
 
+  const clearSession = ({
+    clearIdentity = false,
+    notifyLoggedOut = false,
+  }: { clearIdentity?: boolean; notifyLoggedOut?: boolean } = {}): void => {
+    const hadIdentity = Boolean(cachedIdentity.userId || cachedIdentity.deviceId);
+    const hadSessionState = hadIdentity || cachedSyncState !== null || cachedRooms.length > 0;
+    if (clearIdentity) cachedIdentity = {};
+    cachedSyncState = null;
+    cachedSyncData = null;
+    cachedSessionGeneration = undefined;
+    clearCachedRooms();
+    if (hadSessionState) emitter.emit('sync', 'STOPPED');
+    if (notifyLoggedOut && hadIdentity) {
+      emitter.emit('session', { status: 'logged_out' } satisfies NativeSessionSnapshot);
+      // ClientRoot retains the js-sdk-compatible session notification name.
+      emitter.emit('Session.logged_out');
+    }
+  };
+
+  /**
+   * Apply a definitive native session snapshot before its room-list projection.
+   * A new generation/user/device must never reuse the previous session's room
+   * wrappers, and stale projections are rejected by applyRoomListSnapshot.
+   */
+  const applyNativeSessionSnapshot = (session: NativeSessionSnapshot): boolean => {
+    if (session.status === 'logged_out') {
+      clearSession({ clearIdentity: true, notifyLoggedOut: true });
+      return false;
+    }
+
+    const sessionChanged =
+      (cachedSessionGeneration !== undefined &&
+        session.sessionGeneration !== undefined &&
+        cachedSessionGeneration !== session.sessionGeneration) ||
+      (cachedIdentity.userId !== undefined &&
+        session.userId !== undefined &&
+        cachedIdentity.userId !== session.userId) ||
+      (cachedIdentity.deviceId !== undefined &&
+        session.deviceId !== undefined &&
+        cachedIdentity.deviceId !== session.deviceId);
+    if (sessionChanged) {
+      const hadSyncState = cachedSyncState !== null;
+      clearCachedRooms();
+      cachedSyncState = null;
+      cachedSyncData = null;
+      if (hadSyncState) emitter.emit('sync', 'STOPPED');
+      // A replacement is not a logout: callers can rebuild user-scoped state
+      // without issuing matrix_logout against the newly active native session.
+      emitter.emit('session', session);
+    }
+
+    cachedIdentity = {
+      userId: session.userId,
+      deviceId: session.deviceId,
+      homeserverUrl: session.homeserverUrl,
+    };
+    cachedSessionGeneration = session.sessionGeneration;
+    return true;
+  };
+
   /**
    * F6a — hydrate the whole read cache from native commands. Call this after
    * construct (or on demand) before relying on synchronous reads. Fail-closed:
-   * unavailable commands leave the corresponding cache slot at its default.
+   * unavailable commands preserve their corresponding last-known cache slot.
    */
   const refresh = async (): Promise<void> => {
-    const [status, identity, rooms] = await Promise.all([
+    const [status, session, rooms] = await Promise.all([
       readSyncStatus(),
-      readIdentity(),
+      readSession(),
       readRooms(),
     ]);
+
+    if (session && !applyNativeSessionSnapshot(session)) return;
+
+    const syncStateBeforeStatus = cachedSyncState;
     if (status) applySyncStatus(status);
-    cachedIdentity = { ...cachedIdentity, ...identity };
-    if (rooms.length > 0 || !identity.userId) {
-      cachedRooms = rooms.map((room) => {
-        const evented = room as unknown as FacadeEventedRoomReading;
-        evented.client = facadeClient as MatrixClientReading;
-        evented.on = (event, listener) => {
-          emitter.on(event, listener as (...args: unknown[]) => void);
-        };
-        evented.removeListener = (event, listener) => {
-          emitter.removeListener(event, listener as (...args: unknown[]) => void);
-        };
-        evented.getUsersReadUpTo = () => [];
-        (evented as unknown as { hasEncryptionStateEvent(): boolean }).hasEncryptionStateEvent =
-          () => false;
-        (
-          evented as unknown as { findEventById(_eventId: string): MatrixEventReading | undefined }
-        ).findEventById = () => undefined;
-        return evented;
-      });
-    }
-    emitSyncState();
+    if (rooms) applyRoomListSnapshot(rooms);
+    if (cachedSyncState !== syncStateBeforeStatus) emitSyncState();
   };
 
-  const clearSession = (): void => {
-    cachedSyncState = null;
-    cachedSyncData = null;
-    cachedRooms = [];
-    emitter.emit('sync', 'STOPPED');
-  };
-
-  // F6b: the facade object fills this holder after construction so rooms can
-  // reference it as their `client` (EventedRoomReading contract).
-  let facadeClient: unknown = null;
   const clientObj = {
     emitter,
     on: emitter.on.bind(emitter),
@@ -607,6 +717,10 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     emit: emitter.emit.bind(emitter),
     setMaxListeners: emitter.setMaxListeners.bind(emitter),
     refresh,
+    /** Native room-list atom owner supplies its validated, live snapshot here. */
+    applyRoomListSnapshot,
+    /** Native room-list owner applies its session snapshot before room IDs. */
+    applyNativeSessionSnapshot,
 
     /** F6a — SYNCHRONOUS identity reads (js-sdk object model). */
     getIdentity(): NativeClientIdentity {
@@ -647,12 +761,13 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       await refresh();
     },
     async stopClient(): Promise<void> {
+      // Keep identity until the caller has finished user-keyed local cleanup.
       clearSession();
     },
     async logout(): Promise<void> {
       const result = await invoke('matrix_logout');
       if (!result.available) throw new Error(UNAVAILABLE_MESSAGE);
-      clearSession();
+      clearSession({ clearIdentity: true });
     },
 
     /** F6a — SYNCHRONOUS room reads from the cache (evented projection). */
@@ -686,20 +801,26 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       return result.value as NativeInvokeResult;
     },
 
-    /** Poll matrix_sync_status and emit 'sync' on change; returns unsubscribe. */
+    /** Poll native sync readiness and emit only transitions; returns unsubscribe. */
     watchSync(pollMs = 1500): () => void {
       let stopped = false;
+      let inFlight = false;
       let last: NativeSyncState | null = cachedSyncState;
       const tick = async (): Promise<void> => {
-        if (stopped) return;
-        const status = await readSyncStatus();
-        if (status) {
+        if (stopped || inFlight) return;
+        inFlight = true;
+        try {
+          const status = await readSyncStatus();
+          if (stopped || !status) return;
           const next = readinessToSyncState(status.readiness);
-          if (next !== last) {
-            last = next;
-            applySyncStatus(status);
-            emitSyncState();
-          }
+          if (next === last && cachedSyncState === next) return;
+          last = next;
+          applySyncStatus(status);
+          emitSyncState();
+        } catch {
+          // A transient IPC failure must not strand or stop the lifecycle poll.
+        } finally {
+          inFlight = false;
         }
       };
       void tick();

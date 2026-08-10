@@ -255,6 +255,13 @@ export function ClientRoot({ children }: ClientRootProps) {
   useSyncResumeRetry(mx);
   useProactiveTokenRefresh(mx);
 
+  // One ClientRoot owns the facade's readiness poll. Other consumers only
+  // subscribe to sync events, avoiding duplicate timers per mounted widget.
+  useEffect(() => {
+    if (!mx) return undefined;
+    return mx.watchSync();
+  }, [mx]);
+
   useEffect(() => {
     if (loadState.status === AsyncStatus.Idle) {
       loadMatrix();

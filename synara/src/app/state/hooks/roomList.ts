@@ -4,6 +4,7 @@ import type { MatrixClientReading } from '../../utils/room';
 import { useCallback, useMemo } from 'react';
 import { getAllParents, isRoom, isSpace, isUnsupportedRoom } from '../../utils/room';
 import { compareRoomsEqual } from '../room-list/utils';
+import { useNativeRoomListSnapshot } from '../room-list/roomList';
 import { RoomToParents } from '../../../types/matrix/room';
 
 export type RoomsAtom = Atom<string[]>;
@@ -11,11 +12,29 @@ export type RoomSelector = (roomId: string) => boolean | undefined;
 
 export const selectedRoomsAtom = (
   roomsAtom: RoomsAtom,
-  selector: (roomId: string) => boolean | undefined
-) => selectAtom(roomsAtom, (rooms) => rooms.filter(selector), compareRoomsEqual);
+  selector: (roomId: string) => boolean | undefined,
+  nativeSnapshot?: unknown
+) =>
+  selectAtom(
+    roomsAtom,
+    (rooms) => {
+      // Capture the native revision: summary mutations retain room IDs but
+      // must still cause callers to read the updated facade wrapper.
+      void nativeSnapshot;
+      return rooms.filter(selector);
+    },
+    compareRoomsEqual
+  );
 
 export const useSelectedRooms = (roomsAtom: RoomsAtom, selector: RoomSelector) => {
-  const anAtom = useMemo(() => selectedRoomsAtom(roomsAtom, selector), [roomsAtom, selector]);
+  // Native room wrappers update their summaries in place. Observe the native
+  // projection as a revision source so a same-ID list still re-renders names,
+  // avatars, membership, and unread state after a live snapshot.
+  const nativeSnapshot = useNativeRoomListSnapshot();
+  const anAtom = useMemo(
+    () => selectedRoomsAtom(roomsAtom, selector, nativeSnapshot),
+    [roomsAtom, selector, nativeSnapshot]
+  );
 
   return useAtomValue(anAtom);
 };
