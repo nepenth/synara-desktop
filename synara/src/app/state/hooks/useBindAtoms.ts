@@ -1,17 +1,27 @@
-import { MatrixClient } from 'matrix-js-sdk';
-import { allInvitesAtom, useBindAllInvitesAtom } from '../room-list/inviteList';
-import { allRoomsAtom, useBindAllRoomsAtom } from '../room-list/roomList';
-import { mDirectAtom, useBindMDirectAtom } from '../mDirectList';
-import { roomToUnreadAtom, useBindRoomToUnreadAtom } from '../room/roomToUnread';
-import { roomToParentsAtom, useBindRoomToParentsAtom } from '../room/roomToParents';
-import { roomIdToTypingMembersAtom, useBindRoomIdToTypingMembersAtom } from '../typingMembers';
+import { useBindAllInvitesAtom } from '../room-list/inviteList';
+import {
+  useBindAllRoomsAtom,
+  type NativeRoomListSnapshot,
+  type NativeSessionSnapshot,
+} from '../room-list/roomList';
+import { useBindMDirectAtom } from '../mDirectList';
+import { useBindLaterContentAtom } from '../laterList';
+import { useBindRoomNotesContentAtom } from '../roomNotesList';
+import { useBindRoomToUnreadAtom } from '../room/roomToUnread';
+import { useBindRoomToParentsAtom } from '../room/roomToParents';
+import { useBindRoomIdToTypingMembersAtom } from '../typingMembers';
 
-export const useBindAtoms = (mx: MatrixClient) => {
-  useBindMDirectAtom(mx, mDirectAtom);
-  useBindAllInvitesAtom(mx, allInvitesAtom);
-  useBindAllRoomsAtom(mx, allRoomsAtom);
-  useBindRoomToParentsAtom(mx, roomToParentsAtom);
-  useBindRoomToUnreadAtom(mx, roomToUnreadAtom);
+export const useBindAtoms = (
+  onRoomListSnapshot?: (snapshot: NativeRoomListSnapshot) => void,
+  onNativeSessionSnapshot?: (snapshot: NativeSessionSnapshot) => void
+) => {
+  useBindMDirectAtom();
+  useBindLaterContentAtom();
+  useBindRoomNotesContentAtom();
+  useBindAllInvitesAtom();
+  useBindAllRoomsAtom(onRoomListSnapshot, onNativeSessionSnapshot);
+  useBindRoomToParentsAtom();
+  useBindRoomToUnreadAtom();
 
-  useBindRoomIdToTypingMembersAtom(mx, roomIdToTypingMembersAtom);
+  useBindRoomIdToTypingMembersAtom();
 };

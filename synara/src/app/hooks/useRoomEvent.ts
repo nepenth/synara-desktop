@@ -1,43 +1,41 @@
-import { IEvent, MatrixEvent, Room } from 'matrix-js-sdk';
 import { useCallback, useMemo } from 'react';
-import to from 'await-to-js';
-import { CryptoBackend } from 'matrix-js-sdk/lib/common-crypto/CryptoBackend';
 import { useQuery } from '@tanstack/react-query';
 import { useMatrixClient } from './useMatrixClient';
+import type { MatrixEventReading } from '../utils/room';
+import type { EventedRoomReading } from '../utils/roomEvents';
+import { eventFromWire, type RoomEventReading } from '../utils/nativeEventAdapter';
 
-const useFetchEvent = (room: Room, eventId: string) => {
+export type { RoomEventReading } from '../utils/nativeEventAdapter';
+export type { RoomEventUnsignedReading } from '../utils/nativeEventAdapter';
+
+/** Room projection with a local event resolver (real js-sdk Room satisfies this). */
+export type RoomEventSourceReading = EventedRoomReading & {
+  findEventById(eventId: string): MatrixEventReading | undefined;
+};
+
+const useFetchEvent = (room: RoomEventSourceReading, eventId: string) => {
   const mx = useMatrixClient();
 
   const fetchEventCallback = useCallback(async () => {
     const evt = await mx.fetchRoomEvent(room.roomId, eventId);
-    const mEvent = new MatrixEvent(evt);
-
-    if (evt.unsigned?.['m.relations'] && evt.unsigned?.['m.relations']['m.replace']) {
-      const replaceEvt = evt.unsigned?.['m.relations']['m.replace'] as IEvent;
-      const replaceEvent = new MatrixEvent(replaceEvt);
-      mEvent.makeReplaced(replaceEvent);
+    if (!evt) {
+      throw new Error('Room event not found');
     }
-
-    if (mEvent.isEncrypted() && mx.getCrypto()) {
-      await to(mEvent.attemptDecryption(mx.getCrypto() as CryptoBackend));
-    }
-
-    return mEvent;
+    return eventFromWire(evt, room.roomId);
   }, [mx, room.roomId, eventId]);
 
   return fetchEventCallback;
 };
 
 /**
- *
  * @param room
  * @param eventId
- * @returns `MatrixEvent`, `undefined` means loading, `null` means failure
+ * @returns `RoomEventReading`, `undefined` means loading, `null` means failure
  */
 export const useRoomEvent = (
-  room: Room,
+  room: RoomEventSourceReading,
   eventId: string,
-  getLocally?: () => MatrixEvent | undefined
+  getLocally?: () => MatrixEventReading | undefined
 ) => {
   const event = useMemo(() => {
     if (getLocally) return getLocally();
@@ -54,7 +52,7 @@ export const useRoomEvent = (
     gcTime: 60 * 60 * 1000, // 1hour
   });
 
-  if (event) return event;
+  if (event) return event as RoomEventReading;
   if (data) return data;
   if (error) return null;
 

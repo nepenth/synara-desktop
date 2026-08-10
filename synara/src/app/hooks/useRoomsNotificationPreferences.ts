@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useMemo } from 'react';
-import { ConditionKind, IPushRules, MatrixClient, PushRuleKind } from 'matrix-js-sdk';
+import { ConditionKind, IPushRules, PushRuleKind, asPushRuleClient } from '../utils/pushRules';
+import type { MatrixClientReading } from '../utils/room';
 import { Icons, IconSrc } from 'folds';
 import { AccountDataEvent } from '../../types/matrix/accountData';
 import { useAccountData } from './useAccountData';
@@ -108,20 +109,22 @@ export const getRoomNotificationModeIcon = (mode?: RoomNotificationMode): IconSr
 };
 
 export const setRoomNotificationPreference = async (
-  mx: MatrixClient,
+  mx: MatrixClientReading,
   roomId: string,
   mode: RoomNotificationMode,
   previousMode: RoomNotificationMode
 ): Promise<void> => {
+  const pushRuleClient = asPushRuleClient(mx);
+
   // remove the old preference
   if (
     previousMode === RoomNotificationMode.AllMessages ||
     previousMode === RoomNotificationMode.SpecialMessages
   ) {
-    await mx.deletePushRule('global', PushRuleKind.RoomSpecific, roomId);
+    await pushRuleClient.deletePushRule('global', PushRuleKind.RoomSpecific, roomId);
   }
   if (previousMode === RoomNotificationMode.Mute) {
-    await mx.deletePushRule('global', PushRuleKind.Override, roomId);
+    await pushRuleClient.deletePushRule('global', PushRuleKind.Override, roomId);
   }
 
   // set new preference
@@ -130,7 +133,7 @@ export const setRoomNotificationPreference = async (
   }
 
   if (mode === RoomNotificationMode.Mute) {
-    await mx.addPushRule('global', PushRuleKind.Override, roomId, {
+    await pushRuleClient.addPushRule('global', PushRuleKind.Override, roomId, {
       conditions: [
         {
           kind: ConditionKind.EventMatch,
@@ -143,7 +146,7 @@ export const setRoomNotificationPreference = async (
     return;
   }
 
-  await mx.addPushRule('global', PushRuleKind.RoomSpecific, roomId, {
+  await pushRuleClient.addPushRule('global', PushRuleKind.RoomSpecific, roomId, {
     actions:
       mode === RoomNotificationMode.AllMessages
         ? getNotificationModeActions(NotificationMode.NotifyLoud)

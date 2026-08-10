@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback } from 'react';
 import { Dialog, Text, Box, Button, config } from 'folds';
-import { AuthType } from 'matrix-js-sdk';
+import { AuthStageType } from '../../utils/matrix-uia';
 import { StageComponentProps } from './types';
 
 function TermsErrorDialog({
@@ -42,7 +42,7 @@ export function AutoTermsStageDialog({ stageData, submitAuthDict, onCancel }: St
   const handleSubmit = useCallback(
     () =>
       submitAuthDict({
-        type: AuthType.Terms,
+        type: AuthStageType.Terms,
         session,
       }),
     [session, submitAuthDict]

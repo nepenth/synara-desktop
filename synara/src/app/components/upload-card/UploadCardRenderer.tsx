@@ -100,6 +100,8 @@ function MediaPreview({ fileItem, onSpoiler, children }: MediaPreviewProps) {
 
 type UploadCardRendererProps = {
   isEncrypted?: boolean;
+  /** When true, skip JS uploadContent; native Rust owns upload+send. */
+  nativeComposerSend?: boolean;
   fileItem: TUploadItem;
   setMetadata: (fileItem: TUploadItem, metadata: TUploadMetadata) => void;
   onRemove: (file: TUploadContent) => void;
@@ -107,6 +109,7 @@ type UploadCardRendererProps = {
 };
 export function UploadCardRenderer({
   isEncrypted,
+  nativeComposerSend = false,
   fileItem,
   setMetadata,
   onRemove,
@@ -118,12 +121,20 @@ export function UploadCardRenderer({
 
   const uploadAtom = roomUploadAtomFamily(fileItem.file);
   const { metadata } = fileItem;
-  const { upload, startUpload, cancelUpload } = useBindUploadAtom(mx, uploadAtom, isEncrypted);
+  const { upload, startUpload, cancelUpload, markNativeStaged } = useBindUploadAtom(
+    mx,
+    uploadAtom,
+    isEncrypted
+  );
   const { file } = upload;
   const fileSizeExceeded = file.size >= allowSize;
 
   if (upload.status === UploadStatus.Idle && !fileSizeExceeded) {
-    startUpload();
+    if (nativeComposerSend) {
+      markNativeStaged();
+    } else {
+      startUpload();
+    }
   }
 
   const handleSpoiler = (marked: boolean) => {

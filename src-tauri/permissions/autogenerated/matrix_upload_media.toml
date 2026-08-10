@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-upload-media"
+description = "Enables the matrix_upload_media command without any pre-configured scope."
+commands.allow = ["matrix_upload_media"]
+
+[[permission]]
+identifier = "deny-matrix-upload-media"
+description = "Denies the matrix_upload_media command without any pre-configured scope."
+commands.deny = ["matrix_upload_media"]

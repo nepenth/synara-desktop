@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "report_id": "p3.1-task-acceptance-report",
+  "task_id": "R0.8",
+  "report_kind": "task_formal_acceptance",
+  "original_task_id": "P3.1",
+  "title": "P3.1 discovery/login-flow task acceptance report",
+  "issued_by": "R0.8",
+  "as_of_utc": "2026-07-27T09:40:00Z",
+  "subject": {
+    "integration_branch": "feature/matrix-rust-sdk-full-replacement",
+    "integration_tip_sha": "e7d9cb992b8f7e648a232b8d006f7f3e5f3c77d2",
+    "product_evidence_sha": "3a2fa6f400762f95b4851d02206d5be8ee550c66"
+  },
+  "verdict": "not_accepted",
+  "strict_acceptance_state": "open",
+  "artifact_state": "landed",
+  "integration_state": "merged",
+  "delivery_note": "P3.1 foundation (discovery + login-flow list, mock transports) landed; R0.7 live HTTP transports and loopback login-types evidence merged. Password/token login remains P3.2.",
+  "blocking_residuals": [
+    {
+      "id": "RES-R0.7-LIVE-AUTH",
+      "summary": "Authenticated disposable-Synapse residual for full P3.1 live accept remains open"
+    },
+    {
+      "id": "RES-R0.8-P3.1-ACCEPT",
+      "summary": "No independent attestation accepts P3.1 strict on this subject"
+    }
+  ],
+  "evidence_refs": [
+    "docs/matrix-rust-sdk/p3.1-discovery-login-flow.md",
+    "docs/matrix-rust-sdk/r0.8-phase-gate-readiness-inventory.json",
+    "docs/matrix-rust-sdk/program-status.json"
+  ],
+  "attestation": {
+    "decision": "P3.1 remains strict-open. Truthful residual formal record only.",
+    "independent_reviewer_required_for_accept": true,
+    "implementer_cannot_self_accept": true
+  }
+}

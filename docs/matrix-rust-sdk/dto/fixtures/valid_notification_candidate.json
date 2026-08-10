@@ -1,0 +1,11 @@
+{
+  "candidateId": "notif-1",
+  "roomId": "!room:example.org",
+  "eventId": "$msg1",
+  "kind": "message",
+  "title": "General",
+  "body": "Alice: hello world",
+  "route": "/home/!room:example.org",
+  "suppressIfFocusedRoom": true,
+  "isEncrypted": true
+}

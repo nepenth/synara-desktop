@@ -12,7 +12,9 @@ export function ContactInformation() {
     useCallback(() => mx.getThreePids(), [mx])
   );
   const threePIds =
-    threePIdsState.status === AsyncStatus.Success ? threePIdsState.data.threepids : undefined;
+    threePIdsState.status === AsyncStatus.Success
+      ? threePIdsState.data?.threepids ?? []
+      : undefined;
 
   const emailIds = threePIds?.filter((id) => id.medium === 'email');
 

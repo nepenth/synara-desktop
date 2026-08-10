@@ -1,0 +1,1051 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synara.invalid/schemas/matrix-rust-sdk/review-report.schema.json",
+  "title": "Synara implementation review report",
+  "description": "Draft authoritative contract, ready for independent review, for independent review of a bounded native-agent task. Merge state is not acceptance evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "schema_id",
+    "report_id",
+    "task_id",
+    "task_packet_path",
+    "subject",
+    "review_context",
+    "reviewer",
+    "scope_audit",
+    "packet_conformance",
+    "requirement_matrix",
+    "upstream_api_verification",
+    "final_diff_review",
+    "audit_domains",
+    "validation_runs",
+    "ci_checks",
+    "findings",
+    "residuals",
+    "verdict",
+    "signature"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "schema_id": {
+      "const": "https://synara.invalid/schemas/matrix-rust-sdk/review-report.schema.json"
+    },
+    "report_id": {
+      "$ref": "#/$defs/nonEmptyId"
+    },
+    "task_id": {
+      "$ref": "#/$defs/taskId"
+    },
+    "task_packet_path": {
+      "$ref": "#/$defs/repositoryPath"
+    },
+    "subject": {
+      "$ref": "#/$defs/exactSubject"
+    },
+    "review_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "integration_branch",
+        "work_branch",
+        "base_sha",
+        "head_sha",
+        "pr_url"
+      ],
+      "properties": {
+        "integration_branch": {
+          "const": "feature/matrix-rust-sdk-full-replacement"
+        },
+        "work_branch": {
+          "$ref": "#/$defs/gitRef"
+        },
+        "base_sha": {
+          "$ref": "#/$defs/fullSha"
+        },
+        "head_sha": {
+          "$ref": "#/$defs/fullSha"
+        },
+        "pr_url": {
+          "type": "string",
+          "pattern": "^https://github\\.com/nepenth/synara-desktop/pull/[1-9][0-9]*$"
+        }
+      }
+    },
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "role",
+        "independent_of_implementation",
+        "attestation",
+        "reviewed_at"
+      ],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/principal"
+        },
+        "role": {
+          "const": "independent_reviewer"
+        },
+        "independent_of_implementation": {
+          "const": true
+        },
+        "attestation": {
+          "const": "I reviewed the complete final diff and did not implement the reviewed changes."
+        },
+        "reviewed_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "scope_audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_paths",
+        "actual_changed_paths",
+        "generated_paths",
+        "prohibited_changed_paths",
+        "verdict",
+        "evidence"
+      ],
+      "properties": {
+        "allowed_paths": {
+          "$ref": "#/$defs/nonEmptyScopeEntries"
+        },
+        "actual_changed_paths": {
+          "$ref": "#/$defs/uniqueStrings"
+        },
+        "generated_paths": {
+          "$ref": "#/$defs/uniqueStrings"
+        },
+        "prohibited_changed_paths": {
+          "$ref": "#/$defs/uniqueStrings"
+        },
+        "verdict": {
+          "$ref": "#/$defs/auditVerdict"
+        },
+        "evidence": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        }
+      }
+    },
+    "packet_conformance": {
+      "$ref": "#/$defs/packetConformance"
+    },
+    "requirement_matrix": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/requirementReview"
+      }
+    },
+    "upstream_api_verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository_url",
+        "release_tag",
+        "commit_sha",
+        "permalinks",
+        "verdict",
+        "notes"
+      ],
+      "properties": {
+        "repository_url": {
+          "const": "https://github.com/matrix-org/matrix-rust-sdk"
+        },
+        "release_tag": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "commit_sha": {
+          "$ref": "#/$defs/fullSha"
+        },
+        "permalinks": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/upstreamPermalinkReview"
+          }
+        },
+        "verdict": {
+          "$ref": "#/$defs/auditVerdict"
+        },
+        "notes": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "final_diff_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "base_sha",
+        "head_sha",
+        "reviewed_range",
+        "reviewed_complete_final_diff",
+        "correction_rounds",
+        "last_correction_reviewed",
+        "evidence"
+      ],
+      "properties": {
+        "base_sha": {
+          "$ref": "#/$defs/fullSha"
+        },
+        "head_sha": {
+          "$ref": "#/$defs/fullSha"
+        },
+        "reviewed_range": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}\\.\\.[0-9a-f]{40}$"
+        },
+        "reviewed_complete_final_diff": {
+          "const": true
+        },
+        "correction_rounds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_correction_reviewed": {
+          "type": "boolean"
+        },
+        "evidence": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        }
+      }
+    },
+    "audit_domains": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "security_privacy",
+        "lifecycle_concurrency",
+        "ipc_contracts",
+        "shared_ios",
+        "raw_matrix_http",
+        "dual_matrix_owner",
+        "legacy_deletion",
+        "error_handling"
+      ],
+      "properties": {
+        "security_privacy": {
+          "$ref": "#/$defs/domainAudit"
+        },
+        "lifecycle_concurrency": {
+          "$ref": "#/$defs/domainAudit"
+        },
+        "ipc_contracts": {
+          "$ref": "#/$defs/domainAudit"
+        },
+        "shared_ios": {
+          "$ref": "#/$defs/domainAudit"
+        },
+        "raw_matrix_http": {
+          "$ref": "#/$defs/domainAudit"
+        },
+        "dual_matrix_owner": {
+          "$ref": "#/$defs/domainAudit"
+        },
+        "legacy_deletion": {
+          "$ref": "#/$defs/domainAudit"
+        },
+        "error_handling": {
+          "$ref": "#/$defs/domainAudit"
+        }
+      }
+    },
+    "validation_runs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/validationRun"
+      }
+    },
+    "ci_checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/ciCheck"
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "residuals": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/residual"
+      }
+    },
+    "verdict": {
+      "enum": ["accept", "request_changes", "blocked"]
+    },
+    "signature": {
+      "$ref": "#/$defs/signature"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "accept"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "scope_audit": {
+            "properties": {
+              "prohibited_changed_paths": {
+                "maxItems": 0
+              },
+              "verdict": {
+                "const": "pass"
+              }
+            }
+          },
+          "packet_conformance": {
+            "properties": {
+              "dependency_policy": {
+                "properties": { "verdict": { "const": "pass" } }
+              },
+              "prerequisites": {
+                "properties": { "verdict": { "const": "pass" } }
+              }
+            }
+          },
+          "requirement_matrix": {
+            "items": {
+              "properties": {
+                "verdict": {
+                  "const": "pass"
+                }
+              }
+            }
+          },
+          "upstream_api_verification": {
+            "properties": {
+              "verdict": {
+                "const": "pass"
+              }
+            }
+          },
+          "final_diff_review": {
+            "properties": {
+              "last_correction_reviewed": {
+                "const": true
+              }
+            }
+          },
+          "audit_domains": {
+            "additionalProperties": false,
+            "properties": {
+              "security_privacy": {
+                "$ref": "#/$defs/nonFailingDomainAudit"
+              },
+              "lifecycle_concurrency": {
+                "$ref": "#/$defs/nonFailingDomainAudit"
+              },
+              "ipc_contracts": {
+                "$ref": "#/$defs/nonFailingDomainAudit"
+              },
+              "shared_ios": {
+                "$ref": "#/$defs/nonFailingDomainAudit"
+              },
+              "raw_matrix_http": {
+                "$ref": "#/$defs/nonFailingDomainAudit"
+              },
+              "dual_matrix_owner": {
+                "$ref": "#/$defs/nonFailingDomainAudit"
+              },
+              "legacy_deletion": {
+                "$ref": "#/$defs/nonFailingDomainAudit"
+              },
+              "error_handling": {
+                "$ref": "#/$defs/nonFailingDomainAudit"
+              }
+            }
+          },
+          "validation_runs": {
+            "items": {
+              "properties": {
+                "result": {
+                  "const": "pass"
+                }
+              }
+            }
+          },
+          "ci_checks": {
+            "items": {
+              "if": {
+                "properties": {
+                  "required": {
+                    "const": true
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "status": {
+                    "const": "success"
+                  },
+                  "cancelled": {
+                    "const": false
+                  }
+                }
+              }
+            }
+          },
+          "findings": {
+            "items": {
+              "not": {
+                "properties": {
+                  "status": {
+                    "const": "open"
+                  }
+                },
+                "required": ["status"]
+              }
+            }
+          },
+          "signature": {
+            "properties": {
+              "decision": {
+                "const": "accept"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "request_changes"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "signature": {
+            "properties": {
+              "decision": {
+                "const": "request_changes"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "blocked"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "signature": {
+            "properties": {
+              "decision": {
+                "const": "blocked"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "exactSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_sha", "head_sha"],
+      "properties": {
+        "base_sha": { "$ref": "#/$defs/fullSha" },
+        "head_sha": { "$ref": "#/$defs/fullSha" }
+      }
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "principal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^(?=\\S)(?:[^\\u0000-\\u001F\\u007F]*\\S)$"
+    },
+    "repositoryPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\\\\\u0000-\\u001F\\u007F])(?!.*\\/$).+$"
+    },
+    "scopeEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "kind"],
+      "properties": {
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "kind": { "enum": ["file", "directory"] }
+      }
+    },
+    "nonEmptyScopeEntries": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/scopeEntry" }
+    },
+    "nonEmptyId": {
+      "type": "string",
+      "minLength": 2,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "taskId": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9]*(?:\\.[0-9]+)?(?:-[A-Za-z0-9][A-Za-z0-9._-]*)*$"
+    },
+    "fullSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "gitRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:\\.\\.|//|@\\{|\\\\|[ ~^:?*\\[]))(?!.*\\.$).+$"
+    },
+    "httpUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "uniqueStrings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    },
+    "nonEmptyUniqueStrings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    },
+    "auditVerdict": {
+      "enum": ["pass", "fail", "blocked"]
+    },
+    "packetConformance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dependency_policy", "prerequisites"],
+      "properties": {
+        "dependency_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "changes_detected",
+            "actual_changes",
+            "verdict",
+            "evidence"
+          ],
+          "properties": {
+            "changes_detected": { "type": "boolean" },
+            "actual_changes": { "$ref": "#/$defs/uniqueStrings" },
+            "verdict": { "$ref": "#/$defs/auditVerdict" },
+            "evidence": { "$ref": "#/$defs/nonEmptyUniqueStrings" }
+          }
+        },
+        "prerequisites": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "gates",
+            "required_artifacts",
+            "blocking_assumptions",
+            "verdict",
+            "evidence"
+          ],
+          "properties": {
+            "gates": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/prerequisiteGateReview" }
+            },
+            "required_artifacts": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/prerequisiteArtifactReview" }
+            },
+            "blocking_assumptions": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/blockingAssumptionReview" }
+            },
+            "verdict": { "$ref": "#/$defs/auditVerdict" },
+            "evidence": { "$ref": "#/$defs/nonEmptyUniqueStrings" }
+          }
+        }
+      }
+    },
+    "prerequisiteGateReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "required_state", "packet_evidence", "verified"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonEmptyId" },
+        "required_state": {
+          "enum": ["accepted", "closed", "green", "reviewed"]
+        },
+        "packet_evidence": { "$ref": "#/$defs/nonEmptyString" },
+        "verified": { "type": "boolean" }
+      }
+    },
+    "prerequisiteArtifactReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "purpose", "verified"],
+      "properties": {
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "purpose": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "verified": { "type": "boolean" }
+      }
+    },
+    "blockingAssumptionReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assumption", "verified", "evidence"],
+      "properties": {
+        "assumption": { "$ref": "#/$defs/nonEmptyString" },
+        "verified": { "type": "boolean" },
+        "evidence": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "requirementReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["criterion_id", "verdict", "evidence", "notes"],
+      "properties": {
+        "criterion_id": {
+          "$ref": "#/$defs/nonEmptyId"
+        },
+        "verdict": {
+          "$ref": "#/$defs/auditVerdict"
+        },
+        "evidence": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        },
+        "notes": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "upstreamPermalinkReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "url", "claim", "required", "verified"],
+      "properties": {
+        "label": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "url": {
+          "$ref": "#/$defs/httpUrl"
+        },
+        "claim": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "verified": {
+          "type": "boolean"
+        }
+      }
+    },
+    "domainAudit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verdict", "evidence", "rationale"],
+      "properties": {
+        "verdict": {
+          "enum": ["pass", "fail", "blocked", "not-applicable"]
+        },
+        "evidence": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        },
+        "rationale": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "nonFailingDomainAudit": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/domainAudit"
+        },
+        {
+          "properties": {
+            "verdict": {
+              "enum": ["pass", "not-applicable"]
+            }
+          }
+        }
+      ]
+    },
+    "validationRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "required",
+        "execution_kind",
+        "execution",
+        "cwd",
+        "environment",
+        "base_sha",
+        "head_sha",
+        "started_at",
+        "finished_at",
+        "exit_code",
+        "result",
+        "evidence"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonEmptyId"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "execution_kind": {
+          "enum": ["command", "procedure"]
+        },
+        "execution": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "cwd": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "environment": {
+          "$ref": "#/$defs/uniqueStrings"
+        },
+        "base_sha": {
+          "$ref": "#/$defs/fullSha"
+        },
+        "head_sha": {
+          "$ref": "#/$defs/fullSha"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "finished_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "exit_code": {
+          "type": ["integer", "null"]
+        },
+        "result": {
+          "$ref": "#/$defs/auditVerdict"
+        },
+        "evidence": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "execution_kind": { "const": "command" } },
+            "required": ["execution_kind"]
+          },
+          "then": {
+            "properties": { "exit_code": { "type": "integer" } }
+          },
+          "else": {
+            "properties": { "exit_code": { "type": "null" } }
+          }
+        }
+      ]
+    },
+    "ciCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "required": {
+                "const": true
+              }
+            },
+            "required": ["required"]
+          },
+          "then": {
+            "properties": {
+              "url": {
+                "pattern": "^https://github\\.com/nepenth/synara-desktop/actions/runs/[1-9][0-9]*(?:/job/[1-9][0-9]*)?$"
+              }
+            }
+          }
+        }
+      ],
+      "required": [
+        "name",
+        "url",
+        "base_sha",
+        "head_sha",
+        "required",
+        "status",
+        "cancelled"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "url": {
+          "$ref": "#/$defs/httpUrl"
+        },
+        "base_sha": {
+          "$ref": "#/$defs/fullSha"
+        },
+        "head_sha": {
+          "$ref": "#/$defs/fullSha"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "status": {
+          "enum": ["success", "failure", "cancelled", "pending"]
+        },
+        "cancelled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "severity",
+        "status",
+        "title",
+        "rationale",
+        "required_correction",
+        "disposition",
+        "evidence"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonEmptyId"
+        },
+        "severity": {
+          "enum": ["critical", "high", "medium", "low", "nit"]
+        },
+        "status": {
+          "enum": ["open", "resolved", "accepted-risk"]
+        },
+        "title": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "file": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "rationale": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "required_correction": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "disposition": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "evidence": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        },
+        "risk_acceptance": {
+          "$ref": "#/$defs/riskAcceptance"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "accepted-risk"
+              }
+            },
+            "required": ["status"]
+          },
+          "then": {
+            "required": ["risk_acceptance"]
+          },
+          "else": {
+            "not": {
+              "required": ["risk_acceptance"]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "severity": {
+                "enum": ["critical", "high"]
+              },
+              "status": {
+                "const": "accepted-risk"
+              }
+            },
+            "required": ["severity", "status"]
+          },
+          "then": {
+            "properties": {
+              "risk_acceptance": {
+                "properties": {
+                  "authority_role": {
+                    "enum": [
+                      "user",
+                      "product_owner",
+                      "program_owner",
+                      "security_owner"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "riskAcceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authority_identity",
+        "authority_role",
+        "approval_reference",
+        "bounded_rationale",
+        "review_by"
+      ],
+      "properties": {
+        "authority_identity": {
+          "$ref": "#/$defs/principal"
+        },
+        "authority_role": {
+          "$ref": "#/$defs/principal"
+        },
+        "approval_reference": {
+          "type": "string",
+          "minLength": 8,
+          "pattern": "^(?:https://[^\\s]+|(?:docs|security|governance|reviews|\\.github)/[^#\\s]+#[A-Za-z0-9._:-]+)$"
+        },
+        "bounded_rationale": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "pattern": "\\S"
+        },
+        "review_by": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "residual": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "description",
+        "status",
+        "owner",
+        "owning_task",
+        "gate",
+        "disposition_evidence"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonEmptyId"
+        },
+        "description": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "status": {
+          "enum": ["open", "closed", "approved-scope-exception"]
+        },
+        "owner": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "owning_task": {
+          "$ref": "#/$defs/taskId"
+        },
+        "gate": {
+          "$ref": "#/$defs/nonEmptyId"
+        },
+        "disposition_evidence": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "role",
+        "signed_at",
+        "reviewed_base_sha",
+        "reviewed_head_sha",
+        "decision",
+        "method",
+        "reference"
+      ],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/principal"
+        },
+        "role": {
+          "const": "independent_reviewer"
+        },
+        "signed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reviewed_base_sha": {
+          "$ref": "#/$defs/fullSha"
+        },
+        "reviewed_head_sha": {
+          "$ref": "#/$defs/fullSha"
+        },
+        "decision": {
+          "enum": ["accept", "request_changes", "blocked"]
+        },
+        "method": {
+          "enum": ["github-review", "git-signed-commit", "document-attestation"]
+        },
+        "reference": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    }
+  }
+}

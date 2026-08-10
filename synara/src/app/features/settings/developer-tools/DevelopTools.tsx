@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Badge, Box, Text, IconButton, Icon, Icons, Scroll, Switch, Button } from 'folds';
+import { Badge, Box, Text, IconButton, Icon, Icons, Scroll, Switch } from 'folds';
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../styles.css';
@@ -11,7 +11,6 @@ import {
   AccountDataEditor,
   AccountDataSubmitCallback,
 } from '../../../components/AccountDataEditor';
-import { copyToClipboard } from '../../../utils/dom';
 import { AccountData } from './AccountData';
 import {
   getPlatformSecretStoreBackendLabel,
@@ -141,24 +140,6 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
                     gap="400"
                   >
                     <NativeSessionStoreStatus />
-                    <SettingTile
-                      title="Access Token"
-                      description="Copy access token to clipboard."
-                      after={
-                        <Button
-                          onClick={() =>
-                            copyToClipboard(mx.getAccessToken() ?? '<NO_ACCESS_TOKEN_FOUND>')
-                          }
-                          variant="Secondary"
-                          fill="Soft"
-                          size="300"
-                          radii="300"
-                          outlined
-                        >
-                          <Text size="B300">Copy</Text>
-                        </Button>
-                      }
-                    />
                   </SequenceCard>
                 )}
               </Box>

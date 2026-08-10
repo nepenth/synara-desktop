@@ -1,0 +1,9 @@
+{
+  "roomId": "!room:example.org",
+  "rootEventId": "$msg1",
+  "replyCount": 4,
+  "latestEventId": "$reply4",
+  "latestOriginServerTs": 1720000005000,
+  "participated": true,
+  "unreadCount": 1
+}

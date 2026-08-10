@@ -1,7 +1,6 @@
 import React, { KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo } from 'react';
 import { Editor } from 'slate';
 import { Box, MenuItem, Text, toRem } from 'folds';
-import { Room } from 'matrix-js-sdk';
 
 import { AutocompleteQuery } from './autocompleteQuery';
 import { AutocompleteMenu } from './AutocompleteMenu';
@@ -23,7 +22,7 @@ type EmoticonCompleteHandler = (key: string, shortcode: string) => void;
 type EmoticonSearchItem = PackImageReader | IEmoji;
 
 type EmoticonAutocompleteProps = {
-  imagePackRooms: Room[];
+  imagePackRooms: string[];
   editor: Editor;
   query: AutocompleteQuery<string>;
   requestClose: () => void;

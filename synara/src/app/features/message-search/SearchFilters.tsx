@@ -28,7 +28,6 @@ import {
   Badge,
   RectCords,
 } from 'folds';
-import { SearchOrderBy } from 'matrix-js-sdk';
 import { useTranslation } from 'react-i18next';
 import FocusTrap from 'focus-trap-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -44,6 +43,7 @@ import { DebounceOptions, useDebounce } from '../../hooks/useDebounce';
 import { VirtualTile } from '../../components/virtualizer';
 import { stopPropagation } from '../../utils/keyboard';
 import { MessageSearchTypeFilter, parseSenderFilter } from '../../utils/messageSearchFilters';
+import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 
 type OrderButtonProps = {
   order?: string;
@@ -51,7 +51,7 @@ type OrderButtonProps = {
 };
 function OrderButton({ order, onChange }: OrderButtonProps) {
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
-  const rankOrder = order === SearchOrderBy.Rank;
+  const rankOrder = order === 'rank';
 
   const setOrder = (o?: string) => {
     setMenuAnchor(undefined);
@@ -91,7 +91,7 @@ function OrderButton({ order, onChange }: OrderButtonProps) {
                 <Text size="T300">Recent</Text>
               </MenuItem>
               <MenuItem
-                onClick={() => setOrder(SearchOrderBy.Rank)}
+                onClick={() => setOrder('rank')}
                 variant="Surface"
                 size="300"
                 radii="300"
@@ -279,7 +279,11 @@ function SelectRoomButton({ roomList, selectedRooms, onChange }: SelectRoomButto
                             before={
                               <Icon
                                 size="50"
-                                src={getRoomIconSrc(Icons, room.getType(), room.getJoinRule())}
+                                src={getRoomIconSrc(
+                                  Icons,
+                                  room.getType(),
+                                  normalizeRoomJoinRulePresentation(room.getJoinRule())
+                                )}
                               />
                             }
                           >
@@ -460,7 +464,14 @@ export function SearchFilters({
               onClick={() => onSelectedRoomsChange(selectedRooms.filter((rId) => rId !== roomId))}
               radii="Pill"
               before={
-                <Icon size="50" src={getRoomIconSrc(Icons, room.getType(), room.getJoinRule())} />
+                <Icon
+                  size="50"
+                  src={getRoomIconSrc(
+                    Icons,
+                    room.getType(),
+                    normalizeRoomJoinRulePresentation(room.getJoinRule())
+                  )}
+                />
               }
               after={<Icon size="50" src={Icons.Cross} />}
             >

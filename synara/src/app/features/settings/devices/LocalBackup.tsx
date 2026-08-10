@@ -1,56 +1,39 @@
-import React, { FormEventHandler, useCallback, useEffect, useState } from 'react';
+import React, { FormEventHandler, useCallback, useState } from 'react';
 import { Box, Button, color, Icon, Icons, Spinner, Text, toRem } from 'folds';
-import FileSaver from 'file-saver';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SettingTile } from '../../../components/setting-tile';
 import { SequenceCardStyle } from '../styles.css';
 import { PasswordInput } from '../../../components/password-input';
 import { ConfirmPasswordMatch } from '../../../components/ConfirmPasswordMatch';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
-import { decryptMegolmKeyFile, encryptMegolmKeyFile } from '../../../../util/cryptE2ERoomKeys';
 import { useAlive } from '../../../hooks/useAlive';
-import { useFilePicker } from '../../../hooks/useFilePicker';
+import {
+  exportNativeRoomKeys,
+  importNativeRoomKeys,
+  NativeRoomKeyFileSelection,
+  NativeRoomKeyTransferResult,
+  selectNativeRoomKeyImport,
+} from '../../room-keys/nativeRoomKeys';
 
-function ExportKeys() {
-  const mx = useMatrixClient();
+function NativeExportKeys() {
   const alive = useAlive();
-
+  const [result, setResult] = useState<NativeRoomKeyTransferResult>();
   const [exportState, exportKeys] = useAsyncCallback<void, Error, [string]>(
-    useCallback(
-      async (password) => {
-        const crypto = mx.getCrypto();
-        if (!crypto) throw new Error('Unexpected Error! Crypto module not found!');
-        const keysJSON = await crypto.exportRoomKeysAsJson();
-
-        const encKeys = await encryptMegolmKeyFile(keysJSON, password);
-
-        const blob = new Blob([encKeys], {
-          type: 'text/plain;charset=us-ascii',
-        });
-        FileSaver.saveAs(blob, 'synara-keys.txt');
-      },
-      [mx]
-    )
+    useCallback(async (passphrase) => {
+      setResult(await exportNativeRoomKeys(passphrase));
+    }, [])
   );
-
   const exporting = exportState.status === AsyncStatus.Loading;
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = (evt) => {
     evt.preventDefault();
     if (exporting) return;
-
     const { passwordInput, confirmPasswordInput } = evt.target as HTMLFormElement & {
       passwordInput: HTMLInputElement;
       confirmPasswordInput: HTMLInputElement;
     };
-
-    const password = passwordInput.value;
-    const confirmPassword = confirmPasswordInput.value;
-
-    if (password !== confirmPassword) return;
-
-    exportKeys(password).then(() => {
+    if (passwordInput.value !== confirmPasswordInput.value) return;
+    exportKeys(passwordInput.value).then(() => {
       if (alive()) {
         passwordInput.value = '';
         confirmPasswordInput.value = '';
@@ -111,6 +94,12 @@ function ExportKeys() {
             </Text>
           </Button>
         </Box>
+        {result && (
+          <Text size="T200">
+            Exported {result.keysProcessed} keys from {result.roomsTouched} rooms to{' '}
+            {result.fileLabel} in Downloads.
+          </Text>
+        )}
         {exportState.status === AsyncStatus.Error && (
           <Text size="T200" style={{ color: color.Critical.Main }}>
             <b>{exportState.error.message}</b>
@@ -121,86 +110,60 @@ function ExportKeys() {
   );
 }
 
-function ExportKeysTile() {
+function NativeExportKeysTile() {
   const [expand, setExpand] = useState(false);
-
   return (
     <>
       <SettingTile
         title="Export Messages Data"
-        description="Save password protected copy of encryption data on your device to decrypt messages later."
+        description="Save a password-protected copy of room keys directly to Downloads."
         after={
-          <Box>
-            <Button
-              type="button"
-              onClick={() => setExpand(!expand)}
-              size="300"
-              variant="Secondary"
-              fill="Soft"
-              outlined
-              radii="300"
-              before={
-                <Icon size="100" src={expand ? Icons.ChevronTop : Icons.ChevronBottom} filled />
-              }
-            >
-              <Text as="span" size="B300" truncate>
-                {expand ? 'Collapse' : 'Expand'}
-              </Text>
-            </Button>
-          </Box>
+          <Button
+            type="button"
+            onClick={() => setExpand(!expand)}
+            size="300"
+            variant="Secondary"
+            fill="Soft"
+            outlined
+            radii="300"
+            before={
+              <Icon size="100" src={expand ? Icons.ChevronTop : Icons.ChevronBottom} filled />
+            }
+          >
+            <Text as="span" size="B300">
+              {expand ? 'Collapse' : 'Expand'}
+            </Text>
+          </Button>
         }
       />
-      {expand && <ExportKeys />}
+      {expand && <NativeExportKeys />}
     </>
   );
 }
 
-type ImportKeysProps = {
-  file: File;
-  onDone?: () => void;
-};
-function ImportKeys({ file, onDone }: ImportKeysProps) {
-  const mx = useMatrixClient();
+function NativeImportKeys({
+  selection,
+  onDone,
+}: {
+  selection: NativeRoomKeyFileSelection;
+  onDone: () => void;
+}) {
   const alive = useAlive();
-
-  const [decryptState, decryptFile] = useAsyncCallback<void, Error, [string]>(
+  const [importState, importKeys] = useAsyncCallback<NativeRoomKeyTransferResult, Error, [string]>(
     useCallback(
-      async (password) => {
-        const crypto = mx.getCrypto();
-        if (!crypto) throw new Error('Unexpected Error! Crypto module not found!');
-
-        const arrayBuffer = await file.arrayBuffer();
-        const keys = await decryptMegolmKeyFile(arrayBuffer, password);
-
-        await crypto.importRoomKeysAsJson(keys);
-      },
-      [file, mx]
+      (passphrase) => importNativeRoomKeys(selection.selectionId, passphrase),
+      [selection.selectionId]
     )
   );
-
-  const decrypting = decryptState.status === AsyncStatus.Loading;
-
-  useEffect(() => {
-    if (decryptState.status === AsyncStatus.Success) {
-      onDone?.();
-    }
-  }, [onDone, decryptState]);
-
+  const importing = importState.status === AsyncStatus.Loading;
   const handleSubmit: FormEventHandler<HTMLFormElement> = (evt) => {
     evt.preventDefault();
-    if (decrypting) return;
-
+    if (importing) return;
     const { passwordInput } = evt.target as HTMLFormElement & {
       passwordInput: HTMLInputElement;
     };
-
-    const password = passwordInput.value;
-
-    if (!password) return;
-    decryptFile(password).then(() => {
-      if (alive()) {
-        passwordInput.value = '';
-      }
+    importKeys(passwordInput.value).then(() => {
+      if (alive()) passwordInput.value = '';
     });
   };
 
@@ -217,7 +180,7 @@ function ImportKeys({ file, onDone }: ImportKeysProps) {
               radii="300"
               required
               autoFocus
-              readOnly={decrypting}
+              readOnly={importing}
             />
           </Box>
           <Button
@@ -227,17 +190,30 @@ function ImportKeys({ file, onDone }: ImportKeysProps) {
             fill="Soft"
             outlined
             radii="300"
-            disabled={decrypting}
-            before={decrypting ? <Spinner size="200" variant="Secondary" fill="Soft" /> : undefined}
+            disabled={importing}
+            before={importing ? <Spinner size="200" variant="Secondary" fill="Soft" /> : undefined}
           >
             <Text as="span" size="B400">
-              Decrypt
+              Decrypt and Import
             </Text>
           </Button>
         </Box>
-        {decryptState.status === AsyncStatus.Error && (
+        {importState.status === AsyncStatus.Success && (
+          <Box direction="Column" gap="100">
+            <Text size="T200">
+              Imported {importState.data.keysProcessed} of{' '}
+              {importState.data.totalKeysFound ?? importState.data.keysProcessed} keys.
+            </Text>
+            <Button type="button" size="300" variant="Secondary" fill="Soft" onClick={onDone}>
+              <Text as="span" size="B300">
+                Done
+              </Text>
+            </Button>
+          </Box>
+        )}
+        {importState.status === AsyncStatus.Error && (
           <Text size="T200" style={{ color: color.Critical.Main }}>
-            <b>{decryptState.error.message}</b>
+            <b>{importState.error.message}</b>
           </Text>
         )}
       </Box>
@@ -245,57 +221,78 @@ function ImportKeys({ file, onDone }: ImportKeysProps) {
   );
 }
 
-function ImportKeysTile() {
-  const [file, setFile] = useState<File>();
-  const pickFile = useFilePicker(setFile);
-
-  const handleDone = useCallback(() => {
-    setFile(undefined);
-  }, []);
+function NativeImportKeysTile() {
+  const [selection, setSelection] = useState<NativeRoomKeyFileSelection>();
+  const [selectionError, setSelectionError] = useState<string>();
+  const [selecting, setSelecting] = useState(false);
+  const selectFile = async () => {
+    setSelecting(true);
+    setSelectionError(undefined);
+    try {
+      const selected = await selectNativeRoomKeyImport();
+      if (selected) setSelection(selected);
+    } catch (error) {
+      setSelectionError(error instanceof Error ? error.message : 'Room-key file selection failed.');
+    } finally {
+      setSelecting(false);
+    }
+  };
 
   return (
     <>
       <SettingTile
         title="Import Messages Data"
-        description="Load password protected copy of encryption data from device to decrypt your messages."
+        description="Choose an encrypted room-key file; decryption and import stay in the native host."
         after={
-          <Box>
-            {file ? (
-              <Button
-                style={{ maxWidth: toRem(200) }}
-                type="button"
-                onClick={() => setFile(undefined)}
-                size="300"
-                variant="Warning"
-                fill="Solid"
-                radii="300"
-                before={<Icon size="100" src={Icons.File} filled />}
-                after={<Icon size="100" src={Icons.Cross} />}
-              >
-                <Text as="span" size="B300" truncate>
-                  {file.name}
-                </Text>
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                onClick={() => pickFile('text/plain')}
-                size="300"
-                variant="Secondary"
-                fill="Soft"
-                outlined
-                radii="300"
-                before={<Icon size="100" src={Icons.ArrowRight} />}
-              >
-                <Text as="span" size="B300">
-                  Import
-                </Text>
-              </Button>
-            )}
-          </Box>
+          selection ? (
+            <Button
+              style={{ maxWidth: toRem(200) }}
+              type="button"
+              onClick={() => setSelection(undefined)}
+              size="300"
+              variant="Warning"
+              fill="Solid"
+              radii="300"
+              before={<Icon size="100" src={Icons.File} filled />}
+              after={<Icon size="100" src={Icons.Cross} />}
+            >
+              <Text as="span" size="B300" truncate>
+                {selection.fileLabel}
+              </Text>
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              onClick={selectFile}
+              size="300"
+              variant="Secondary"
+              fill="Soft"
+              outlined
+              radii="300"
+              disabled={selecting}
+              before={
+                selecting ? (
+                  <Spinner size="200" variant="Secondary" fill="Soft" />
+                ) : (
+                  <Icon size="100" src={Icons.ArrowRight} />
+                )
+              }
+            >
+              <Text as="span" size="B300">
+                Choose File
+              </Text>
+            </Button>
+          )
         }
       />
-      {file && <ImportKeys file={file} onDone={handleDone} />}
+      {selectionError && (
+        <Text size="T200" style={{ color: color.Critical.Main }}>
+          <b>{selectionError}</b>
+        </Text>
+      )}
+      {selection && (
+        <NativeImportKeys selection={selection} onDone={() => setSelection(undefined)} />
+      )}
     </>
   );
 }
@@ -310,7 +307,7 @@ export function LocalBackup() {
         direction="Column"
         gap="400"
       >
-        <ExportKeysTile />
+        <NativeExportKeysTile />
       </SequenceCard>
       <SequenceCard
         className={SequenceCardStyle}
@@ -318,7 +315,7 @@ export function LocalBackup() {
         direction="Column"
         gap="400"
       >
-        <ImportKeysTile />
+        <NativeImportKeysTile />
       </SequenceCard>
     </Box>
   );

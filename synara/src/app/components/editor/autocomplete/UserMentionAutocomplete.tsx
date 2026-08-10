@@ -1,11 +1,11 @@
 import React, { useEffect, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Editor } from 'slate';
 import { Avatar, Icon, Icons, MenuItem, Text } from 'folds';
-import { MatrixClient, Room, RoomMember } from 'matrix-js-sdk';
+import type { MatrixClientReading, RoomReading } from '../../../utils/room';
 
 import { AutocompleteQuery } from './autocompleteQuery';
 import { AutocompleteMenu } from './AutocompleteMenu';
-import { useRoomMembers } from '../../../hooks/useRoomMembers';
+import { useRoomMembers, type RoomMemberListItem } from '../../../hooks/useRoomMembers';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import {
   SearchItemStrGetter,
@@ -21,10 +21,12 @@ import { UserAvatar } from '../../user-avatar';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { Membership } from '../../../../types/matrix/room';
 import { resolveMatrixThumbnailUrl } from '../../../matrix/media';
+import { getSessionBootstrapResult } from '../../../state/sessionBootstrap';
+import { isSynaraDesktop } from '../../../utils/desktop';
 
 type MentionAutoCompleteHandler = (userId: string, name: string) => void;
 
-const userIdFromQueryText = (mx: MatrixClient, text: string) =>
+const userIdFromQueryText = (mx: MatrixClientReading, text: string) =>
   isUserId(`@${text}`)
     ? `@${text}`
     : `@${text}${text.endsWith(':') ? '' : ':'}${getMxIdServer(mx.getUserId() ?? '')}`;
@@ -63,13 +65,13 @@ function UnknownMentionItem({
 }
 
 type UserMentionAutocompleteProps = {
-  room: Room;
+  room: RoomReading;
   editor: Editor;
   query: AutocompleteQuery<string>;
   requestClose: () => void;
 };
 
-const withAllowedMembership = (member: RoomMember): boolean =>
+const withAllowedMembership = (member: RoomMemberListItem): boolean =>
   member.membership === Membership.Join ||
   member.membership === Membership.Invite ||
   member.membership === Membership.Knock;
@@ -82,8 +84,9 @@ const SEARCH_OPTIONS: UseAsyncSearchOptions = {
 };
 
 const mxIdToName = (mxId: string) => getMxIdLocalPart(mxId) ?? mxId;
-const getRoomMemberStr: SearchItemStrGetter<RoomMember> = (m, query) =>
+const getRoomMemberStr: SearchItemStrGetter<RoomMemberListItem> = (m, query) =>
   getMemberSearchStr(m, query, mxIdToName);
+const EMPTY_ROOM_MEMBERS: RoomMemberListItem[] = [];
 
 export function UserMentionAutocomplete({
   room,
@@ -95,7 +98,9 @@ export function UserMentionAutocomplete({
   const useAuthentication = useMediaAuthentication();
   const roomId: string = room.roomId!;
   const roomAliasOrId = room.getCanonicalAlias() || roomId;
-  const members = useRoomMembers(mx, roomId);
+  const nativeSession = isSynaraDesktop() && getSessionBootstrapResult().source === 'native';
+  const memberSnapshot = useRoomMembers(mx, roomId, nativeSession);
+  const members = memberSnapshot ?? EMPTY_ROOM_MEMBERS;
 
   const [result, search, resetSearch] = useAsyncSearch(members, getRoomMemberStr, SEARCH_OPTIONS);
   const autoCompleteMembers = (result ? result.items.slice(0, 20) : members.slice(0, 20)).filter(
@@ -118,6 +123,13 @@ export function UserMentionAutocomplete({
     requestClose();
   };
 
+  const getName = (member: RoomMemberListItem) =>
+    (!('getMxcAvatarUrl' in member)
+      ? member.displayName
+      : getMemberDisplayName(room, member.userId)) ??
+    getMxIdLocalPart(member.userId) ??
+    member.userId;
+
   useKeyDown(window, (evt: KeyboardEvent) => {
     onTabPress(evt, () => {
       if (query.text === 'room') {
@@ -130,12 +142,9 @@ export function UserMentionAutocomplete({
         return;
       }
       const roomMember = autoCompleteMembers[0];
-      handleAutocomplete(roomMember.userId, roomMember.name);
+      handleAutocomplete(roomMember.userId, getName(roomMember));
     });
   });
-
-  const getName = (member: RoomMember) =>
-    getMemberDisplayName(room, member.userId) ?? getMxIdLocalPart(member.userId) ?? member.userId;
 
   return (
     <AutocompleteMenu headerContent={<Text size="L400">Mentions</Text>} requestClose={requestClose}>
@@ -154,7 +163,9 @@ export function UserMentionAutocomplete({
         />
       ) : (
         autoCompleteMembers.map((roomMember) => {
-          const avatarMxcUrl = roomMember.getMxcAvatarUrl();
+          const avatarMxcUrl = !('getMxcAvatarUrl' in roomMember)
+            ? roomMember.avatarUrl
+            : roomMember.getMxcAvatarUrl();
           const avatarUrl = avatarMxcUrl
             ? resolveMatrixThumbnailUrl(mx, avatarMxcUrl, 32, { useAuthentication })
             : undefined;

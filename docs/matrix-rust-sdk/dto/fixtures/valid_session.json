@@ -1,0 +1,10 @@
+{
+  "sessionGeneration": 3,
+  "userId": "@alice:example.org",
+  "deviceId": "DEVICEABC",
+  "homeserverUrl": "https://matrix.example.org",
+  "displayName": "Alice",
+  "avatarUrl": "mxc://example.org/avatar1",
+  "lifecycle": "ready",
+  "cryptoReady": true
+}

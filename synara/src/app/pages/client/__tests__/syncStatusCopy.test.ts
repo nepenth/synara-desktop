@@ -1,13 +1,34 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { SyncState } from 'matrix-js-sdk';
-import { getSyncStatusBannerCopy } from '../syncStatusCopy';
+// SyncState literals are the probed js-sdk enum values.
+import {
+  CONNECTED_STATUS_BANNER_DURATION_MS,
+  getSlidingSyncCapabilityBannerCopy,
+  getSyncStatusBannerCopy,
+  getTransientSyncStatusBannerCopy,
+} from '../syncStatusCopy';
 
 test('sync status copy distinguishes catchup from prepared', () => {
-  const catchupCopy = getSyncStatusBannerCopy(SyncState.Catchup);
-  const preparedCopy = getSyncStatusBannerCopy(SyncState.Prepared);
+  const catchupCopy = getSyncStatusBannerCopy('CATCHUP');
+  const preparedCopy = getSyncStatusBannerCopy('PREPARED');
 
   assert.match(catchupCopy ?? '', /history|syncing/i);
   assert.notEqual(catchupCopy, preparedCopy);
   assert.equal(preparedCopy, 'Connected');
+});
+
+test('sliding-sync capability copy warns about homeserver support', () => {
+  assert.match(getSlidingSyncCapabilityBannerCopy(), /sliding-sync|MSC4186/i);
+  assert.match(getSlidingSyncCapabilityBannerCopy(), /sync/i);
+});
+
+test('connected is transient while steady prepared sync is bannerless', () => {
+  assert.equal(getTransientSyncStatusBannerCopy('PREPARED', true), 'Connected');
+  assert.equal(getTransientSyncStatusBannerCopy('PREPARED', false), null);
+  assert.equal(
+    getTransientSyncStatusBannerCopy('RECONNECTING', false),
+    'Connection Lost! Reconnecting...'
+  );
+  assert.equal(getTransientSyncStatusBannerCopy('ERROR', false), 'Connection Lost!');
+  assert.ok(CONNECTED_STATUS_BANNER_DURATION_MS > 0);
 });

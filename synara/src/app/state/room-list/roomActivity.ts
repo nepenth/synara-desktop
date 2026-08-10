@@ -1,15 +1,7 @@
-import {
-  ClientEvent,
-  EventStatus,
-  MatrixClient,
-  MatrixEvent,
-  MatrixEventEvent,
-  Room,
-  RoomEvent,
-} from 'matrix-js-sdk';
+import type { MatrixClientReading, MatrixEventReading, RoomReading } from '../../utils/room';
 import { isNotificationEvent } from '../../utils/room';
 import { recordFoundationDiagnostic } from '../../utils/foundationDiagnostics';
-import { getLoadedLiveTimelineEvents } from '../../utils/timelineLifecycle';
+import { ClientEvent, MatrixEventEvent, RoomEvent } from '../../utils/roomEvents';
 
 export const RECENT_ROOM_WINDOW_MS = 24 * 60 * 60 * 1000;
 const MAX_RECENT_ROOM_TIMEOUT_MS = 2_147_483_647;
@@ -44,18 +36,23 @@ export type RoomActivitySnapshotSource = {
   getSnapshot: () => RoomActivitySnapshot;
 };
 
-export const isRoomActivityEvent = (event: MatrixEvent): boolean =>
-  event.status !== EventStatus.CANCELLED &&
-  event.status !== EventStatus.NOT_SENT &&
+type ClientEventedReading = MatrixClientReading & {
+  on(event: string, listener: (...args: any[]) => unknown): unknown;
+  removeListener(event: string, listener: (...args: any[]) => unknown): unknown;
+};
+
+export const isRoomActivityEvent = (event: MatrixEventReading): boolean =>
+  event.status !== 'cancelled' &&
+  event.status !== 'not_sent' &&
   event.getType() !== 'm.room.create' &&
   isNotificationEvent(event);
 
-const getLatestActivityEvent = (room: Room): MatrixEvent | undefined => {
-  const timelines = [
-    getLoadedLiveTimelineEvents(room),
-    ...room.getThreads().map((thread) => thread.events),
+const getLatestActivityEvent = (room: RoomReading): MatrixEventReading | undefined => {
+  const timelines: MatrixEventReading[][] = [
+    room.getLiveTimeline().getEvents(),
+    ...(room.getThreads?.() ?? []).map((thread) => thread.events),
   ];
-  let latest: MatrixEvent | undefined;
+  let latest: MatrixEventReading | undefined;
 
   for (const events of timelines) {
     for (let index = events.length - 1; index >= 0; index -= 1) {
@@ -70,12 +67,12 @@ const getLatestActivityEvent = (room: Room): MatrixEvent | undefined => {
   return latest;
 };
 
-const getRoomBumpStamp = (room: Room): number | undefined => {
-  const bumpStamp = room.getBumpStamp();
+const getRoomBumpStamp = (room: RoomReading): number | undefined => {
+  const bumpStamp = room.getBumpStamp?.();
   return typeof bumpStamp === 'number' && Number.isFinite(bumpStamp) ? bumpStamp : undefined;
 };
 
-const eventActivityTimestamp = (event: MatrixEvent): number => {
+const eventActivityTimestamp = (event: MatrixEventReading): number => {
   const timestamp = event.getTs();
   return typeof timestamp === 'number' && Number.isFinite(timestamp) ? timestamp : 0;
 };
@@ -145,7 +142,7 @@ export const getRecentRoomExpiryDelay = (
 };
 
 export const getLegacyRoomActivitySnapshot = (
-  mx: MatrixClient,
+  mx: MatrixClientReading,
   roomIds: readonly string[]
 ): RoomActivitySnapshot => ({
   revision: 0,
@@ -158,7 +155,7 @@ export const getLegacyRoomActivitySnapshot = (
           roomId,
           {
             roomId,
-            activityTs: room.getLastActiveTimestamp(),
+            activityTs: room.getLastActiveTimestamp?.() ?? 0,
             bumpStamp: getRoomBumpStamp(room),
             revision: 0,
           },
@@ -177,7 +174,7 @@ export class RoomActivityStore {
 
   private started = false;
 
-  public constructor(private readonly mx: MatrixClient) {
+  public constructor(private readonly mx: ClientEventedReading) {
     this.refreshAll(false);
   }
 
@@ -232,8 +229,8 @@ export class RoomActivityStore {
   }
 
   private updateRoom(
-    room: Room,
-    event?: MatrixEvent,
+    room: RoomReading,
+    event?: MatrixEventReading,
     missingPolicy: 'preserve' | 'summary' = 'preserve'
   ): void {
     const previous = this.snapshot.entries.get(room.roomId);
@@ -241,8 +238,8 @@ export class RoomActivityStore {
     const latestTimestamp = latestEvent ? eventActivityTimestamp(latestEvent) : 0;
     const fallbackTimestamp =
       missingPolicy === 'preserve'
-        ? previous?.activityTs ?? room.getLastActiveTimestamp()
-        : room.getLastActiveTimestamp();
+        ? previous?.activityTs ?? room.getLastActiveTimestamp?.() ?? 0
+        : room.getLastActiveTimestamp?.() ?? 0;
     const candidateTimestamp = latestTimestamp || fallbackTimestamp;
     const activityTs =
       previous && event && candidateTimestamp < previous.activityTs
@@ -295,7 +292,7 @@ export class RoomActivityStore {
         activityTs:
           (latestEvent && eventActivityTimestamp(latestEvent)) ||
           previous?.activityTs ||
-          room.getLastActiveTimestamp(),
+          (room.getLastActiveTimestamp?.() ?? 0),
         latestEventId: latestEvent?.getId() ?? previous?.latestEventId,
         bumpStamp: getRoomBumpStamp(room),
         revision: (previous?.revision ?? 0) + 1,
@@ -320,8 +317,8 @@ export class RoomActivityStore {
   }
 
   private readonly handleTimeline = (
-    event: MatrixEvent,
-    room: Room | undefined,
+    event: MatrixEventReading,
+    room: RoomReading | undefined,
     toStartOfTimeline?: boolean,
     removed = false,
     data?: { liveEvent?: boolean }
@@ -332,22 +329,22 @@ export class RoomActivityStore {
     this.updateRoom(room, event);
   };
 
-  private readonly handleLocalEcho = (event: MatrixEvent, room: Room): void => {
-    if (event.status === EventStatus.CANCELLED || event.status === EventStatus.NOT_SENT) {
+  private readonly handleLocalEcho = (event: MatrixEventReading, room: RoomReading): void => {
+    if (event.status === 'cancelled' || event.status === 'not_sent') {
       this.updateRoom(room, undefined, 'summary');
       return;
     }
     if (isRoomActivityEvent(event)) this.updateRoom(room, event);
   };
 
-  private readonly handleTimelineReset = (room?: Room): void => {
+  private readonly handleTimelineReset = (room?: RoomReading): void => {
     if (room) this.updateRoom(room);
   };
 
-  private readonly handleRoomRefresh = (room: Room): void => this.updateRoom(room);
+  private readonly handleRoomRefresh = (room: RoomReading): void => this.updateRoom(room);
 
-  private readonly handleRedaction = (event: MatrixEvent, room: Room): void => {
-    const redactedEventId = event.getAssociatedId();
+  private readonly handleRedaction = (event: MatrixEventReading, room: RoomReading): void => {
+    const redactedEventId = event.getAssociatedId?.();
     if (
       redactedEventId &&
       this.snapshot.entries.get(room.roomId)?.latestEventId !== redactedEventId
@@ -357,11 +354,14 @@ export class RoomActivityStore {
     this.updateRoom(room);
   };
 
-  private readonly handleRedactionCancelled = (_event: MatrixEvent, room: Room): void => {
+  private readonly handleRedactionCancelled = (
+    _event: MatrixEventReading,
+    room: RoomReading
+  ): void => {
     this.updateRoom(room);
   };
 
-  private readonly handleDecrypted = (event: MatrixEvent): void => {
+  private readonly handleDecrypted = (event: MatrixEventReading): void => {
     const roomId = event.getRoomId();
     const room = roomId ? this.mx.getRoom(roomId) : null;
     const eventId = event.getId();
@@ -372,7 +372,7 @@ export class RoomActivityStore {
     this.updateRoom(room);
   };
 
-  private readonly handleAddRoom = (room: Room): void => this.updateRoom(room);
+  private readonly handleAddRoom = (room: RoomReading): void => this.updateRoom(room);
 
   private readonly handleDeleteRoom = (roomId: string): void => this.deleteRoom(roomId);
 
@@ -408,9 +408,9 @@ export class RoomActivityStore {
   }
 }
 
-const activityStores = new WeakMap<MatrixClient, RoomActivityStore>();
+const activityStores = new WeakMap<ClientEventedReading, RoomActivityStore>();
 
-export const getRoomActivityStore = (mx: MatrixClient): RoomActivityStore => {
+export const getRoomActivityStore = (mx: ClientEventedReading): RoomActivityStore => {
   let store = activityStores.get(mx);
   if (!store) {
     store = new RoomActivityStore(mx);

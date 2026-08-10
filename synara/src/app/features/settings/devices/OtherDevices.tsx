@@ -1,43 +1,48 @@
-import React, { useCallback, useState } from 'react';
+import React, { FormEventHandler, useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Button, config, Menu, Spinner, Text } from 'folds';
-import { AuthDict, IMyDevice, MatrixError } from 'matrix-js-sdk';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../styles.css';
-import { ActionUIA, ActionUIAFlowsLoader } from '../../../components/ActionUIA';
 import { DeviceDeleteBtn, DeviceTile } from './DeviceTile';
-import { AsyncState, AsyncStatus, useAsync } from '../../../hooks/useAsyncCallback';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { useUIAMatrixError } from '../../../hooks/useUIAFlows';
-import { DeviceVerificationStatus } from '../../../components/DeviceVerificationStatus';
 import { VerifyOtherDeviceTile } from './Verification';
-import { VerificationStatus } from '../../../hooks/useDeviceVerificationStatus';
 import { useAuthMetadata } from '../../../hooks/useAuthMetadata';
 import { withSearchParam } from '../../../pages/pathUtils';
 import { useAccountManagementActions } from '../../../hooks/useAccountManagement';
 import { SettingTile } from '../../../components/setting-tile';
 import { openExternalUrl } from '../../../utils/appLinks';
+import { PasswordInput } from '../../../components/password-input';
+import {
+  authenticateNativeDeviceDeletePassword,
+  cancelNativeDeviceDelete,
+  NativeDevice,
+  NativeDeviceDeleteChallenge,
+  NativeDeviceDeleteResult,
+  startNativeDeviceDelete,
+} from './nativeDevices';
+import { RefreshDeviceList } from '../../../hooks/useDeviceList';
 
 type OtherDevicesProps = {
-  devices: IMyDevice[];
-  refreshDeviceList: () => Promise<void>;
+  devices: NativeDevice[];
+  refreshDeviceList: RefreshDeviceList;
   showVerification?: boolean;
 };
+
 export function OtherDevices({ devices, refreshDeviceList, showVerification }: OtherDevicesProps) {
-  const mx = useMatrixClient();
-  const crypto = mx.getCrypto();
   const authMetadata = useAuthMetadata();
   const accountManagementActions = useAccountManagementActions();
-
   const [deleted, setDeleted] = useState<Set<string>>(new Set());
+  const [challenge, setChallenge] = useState<NativeDeviceDeleteChallenge>();
+  const [working, setWorking] = useState(false);
+  const [deleteFailed, setDeleteFailed] = useState(false);
+  const pendingOperationRef = useRef<
+    { operationId: number; sessionGeneration: number } | undefined
+  >(undefined);
+  const authentication = challenge?.authentication;
 
   const handleDashboardOIDC = useCallback(() => {
     const authUrl = authMetadata?.account_management_uri ?? authMetadata?.issuer;
     if (!authUrl) return;
-
     void openExternalUrl(
-      withSearchParam(authUrl, {
-        action: accountManagementActions.sessionsList,
-      })
+      withSearchParam(authUrl, { action: accountManagementActions.sessionsList })
     );
   }, [authMetadata, accountManagementActions]);
 
@@ -45,7 +50,6 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
     (deviceId: string) => {
       const authUrl = authMetadata?.account_management_uri ?? authMetadata?.issuer;
       if (!authUrl) return;
-
       void openExternalUrl(
         withSearchParam(authUrl, {
           action: accountManagementActions.sessionEnd,
@@ -58,47 +62,103 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
 
   const handleToggleDelete = useCallback((deviceId: string) => {
     setDeleted((deviceIds) => {
-      const newIds = new Set(deviceIds);
-      if (newIds.has(deviceId)) {
-        newIds.delete(deviceId);
-      } else {
-        newIds.add(deviceId);
-      }
-      return newIds;
+      const next = new Set(deviceIds);
+      if (next.has(deviceId)) next.delete(deviceId);
+      else next.add(deviceId);
+      return next;
     });
   }, []);
 
-  const [deleteState, setDeleteState] = useState<AsyncState<void, MatrixError>>({
-    status: AsyncStatus.Idle,
-  });
+  const applyDeleteResult = useCallback(
+    async (result: NativeDeviceDeleteResult) => {
+      if (result.outcome === 'authentication_required') {
+        pendingOperationRef.current = {
+          operationId: result.challenge.operationId,
+          sessionGeneration: result.challenge.sessionGeneration,
+        };
+        setChallenge(result.challenge);
+        setDeleteFailed(false);
+        return;
+      }
+      pendingOperationRef.current = undefined;
+      setChallenge(undefined);
+      setDeleted(new Set());
+      setDeleteFailed(false);
+      await refreshDeviceList(result.snapshot);
+    },
+    [refreshDeviceList]
+  );
 
-  const deleteDevices = useAsync(
-    useCallback(
-      async (authDict?: AuthDict) => {
-        await mx.deleteMultipleDevices(Array.from(deleted), authDict);
-      },
-      [mx, deleted]
-    ),
-    useCallback(
-      (state: typeof deleteState) => {
-        if (state.status === AsyncStatus.Success) {
-          setDeleted(new Set());
-          refreshDeviceList();
+  const startDelete = useCallback(async () => {
+    if (working || deleted.size === 0) return;
+    setWorking(true);
+    setDeleteFailed(false);
+    try {
+      await applyDeleteResult(await startNativeDeviceDelete(Array.from(deleted)));
+    } catch {
+      setDeleteFailed(true);
+    } finally {
+      setWorking(false);
+    }
+  }, [applyDeleteResult, deleted, working]);
+
+  const submitPassword: FormEventHandler<HTMLFormElement> = async (event) => {
+    event.preventDefault();
+    if (!challenge || working) return;
+    const passwordInput = event.currentTarget.elements.namedItem(
+      'password'
+    ) as HTMLInputElement | null;
+    const password = passwordInput?.value ?? '';
+    setWorking(true);
+    setDeleteFailed(false);
+    try {
+      await applyDeleteResult(
+        await authenticateNativeDeviceDeletePassword(
+          challenge.operationId,
+          challenge.sessionGeneration,
+          password
+        )
+      );
+    } catch {
+      setDeleteFailed(true);
+    } finally {
+      if (passwordInput) passwordInput.value = '';
+      setWorking(false);
+    }
+  };
+
+  const cancelDelete = useCallback(async () => {
+    const pendingOperation = challenge
+      ? {
+          operationId: challenge.operationId,
+          sessionGeneration: challenge.sessionGeneration,
         }
-        setDeleteState(state);
-      },
-      [refreshDeviceList]
-    )
-  );
-  const [authData, deleteError] = useUIAMatrixError(
-    deleteState.status === AsyncStatus.Error ? deleteState.error : undefined
-  );
-  const deleting = deleteState.status === AsyncStatus.Loading || authData !== undefined;
+      : undefined;
+    pendingOperationRef.current = undefined;
+    setChallenge(undefined);
+    setDeleted(new Set());
+    setDeleteFailed(false);
+    if (pendingOperation) {
+      await cancelNativeDeviceDelete(
+        pendingOperation.operationId,
+        pendingOperation.sessionGeneration
+      ).catch(() => undefined);
+    }
+  }, [challenge]);
 
-  const handleCancelDelete = () => setDeleted(new Set());
-  const handleCancelAuth = useCallback(() => {
-    setDeleteState({ status: AsyncStatus.Idle });
-  }, []);
+  useEffect(
+    () => () => {
+      const pendingOperation = pendingOperationRef.current;
+      pendingOperationRef.current = undefined;
+      if (pendingOperation) {
+        void cancelNativeDeviceDelete(
+          pendingOperation.operationId,
+          pendingOperation.sessionGeneration
+        ).catch(() => undefined);
+      }
+    },
+    []
+  );
 
   return devices.length > 0 ? (
     <>
@@ -129,58 +189,43 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
             />
           </SequenceCard>
         )}
-        {devices
-          .sort((d1, d2) => {
-            if (!d1.last_seen_ts || !d2.last_seen_ts) return 0;
-            return d1.last_seen_ts < d2.last_seen_ts ? 1 : -1;
-          })
-          .map((device) => (
-            <SequenceCard
-              key={device.device_id}
-              className={SequenceCardStyle}
-              variant={deleted.has(device.device_id) ? 'Critical' : 'SurfaceVariant'}
-              direction="Column"
-              gap="400"
-            >
-              <DeviceTile
-                device={device}
-                deleted={deleted.has(device.device_id)}
-                refreshDeviceList={refreshDeviceList}
-                disabled={deleting}
-                options={
-                  authMetadata ? (
-                    <DeviceDeleteBtn
-                      deviceId={device.device_id}
-                      deleted={false}
-                      onDeleteToggle={handleDeleteOIDC}
-                    />
-                  ) : (
-                    <DeviceDeleteBtn
-                      deviceId={device.device_id}
-                      deleted={deleted.has(device.device_id)}
-                      onDeleteToggle={handleToggleDelete}
-                      disabled={deleting}
-                    />
-                  )
-                }
-              />
-              {showVerification && crypto && (
-                <DeviceVerificationStatus
-                  crypto={crypto}
-                  userId={mx.getSafeUserId()}
-                  deviceId={device.device_id}
-                >
-                  {(status) =>
-                    status === VerificationStatus.Unverified && (
-                      <VerifyOtherDeviceTile crypto={crypto} deviceId={device.device_id} />
-                    )
-                  }
-                </DeviceVerificationStatus>
-              )}
-            </SequenceCard>
-          ))}
+        {devices.map((device) => (
+          <SequenceCard
+            key={device.deviceId}
+            className={SequenceCardStyle}
+            variant={deleted.has(device.deviceId) ? 'Critical' : 'SurfaceVariant'}
+            direction="Column"
+            gap="400"
+          >
+            <DeviceTile
+              device={device}
+              deleted={deleted.has(device.deviceId)}
+              refreshDeviceList={refreshDeviceList}
+              disabled={working || challenge !== undefined}
+              options={
+                authMetadata ? (
+                  <DeviceDeleteBtn
+                    deviceId={device.deviceId}
+                    deleted={false}
+                    onDeleteToggle={handleDeleteOIDC}
+                  />
+                ) : (
+                  <DeviceDeleteBtn
+                    deviceId={device.deviceId}
+                    deleted={deleted.has(device.deviceId)}
+                    onDeleteToggle={handleToggleDelete}
+                    disabled={working || challenge !== undefined}
+                  />
+                )
+              }
+            />
+            {showVerification && device.trust === 'unverified' && (
+              <VerifyOtherDeviceTile deviceId={device.deviceId} />
+            )}
+          </SequenceCard>
+        ))}
       </Box>
-      {deleted.size > 0 && (
+      {deleted.size > 0 && !authMetadata && (
         <Menu
           style={{
             position: 'sticky',
@@ -193,58 +238,71 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
           }}
           variant="Critical"
         >
-          <Box alignItems="Center" gap="400">
-            <Box grow="Yes" direction="Column">
-              {deleteError ? (
+          <Box
+            as={authentication === 'password' ? 'form' : undefined}
+            onSubmit={authentication === 'password' ? submitPassword : undefined}
+            alignItems="Center"
+            gap="400"
+          >
+            <Box grow="Yes" direction="Column" gap="200">
+              <Text size="T200">
+                <b>Logout from selected devices. ({deleted.size} selected)</b>
+              </Text>
+              {deleteFailed && <Text size="T200">Failed to logout devices. Please try again.</Text>}
+              {challenge?.authenticationFailed && (
                 <Text size="T200">
-                  <b>Failed to logout devices! Please try again. {deleteError.message}</b>
-                </Text>
-              ) : (
-                <Text size="T200">
-                  <b>Logout from selected devices. ({deleted.size} selected)</b>
+                  Authentication was not completed. Check your password and try again.
                 </Text>
               )}
-              {authData && (
-                <ActionUIAFlowsLoader
-                  authData={authData}
-                  unsupported={() => (
-                    <Text size="T200">
-                      Authentication steps to perform this action are not supported by client.
-                    </Text>
-                  )}
-                >
-                  {(ongoingFlow) => (
-                    <ActionUIA
-                      authData={authData}
-                      ongoingFlow={ongoingFlow}
-                      action={deleteDevices}
-                      onCancel={handleCancelAuth}
-                    />
-                  )}
-                </ActionUIAFlowsLoader>
+              {authentication === 'password' && (
+                <PasswordInput
+                  name="password"
+                  size="400"
+                  outlined
+                  required
+                  autoFocus
+                  readOnly={working}
+                />
               )}
             </Box>
             <Box shrink="No" gap="200">
               <Button
+                type="button"
                 size="300"
                 variant="Critical"
                 fill="None"
                 radii="300"
-                disabled={deleting}
-                onClick={handleCancelDelete}
+                disabled={working}
+                onClick={() => void cancelDelete()}
               >
                 <Text size="B300">Cancel</Text>
               </Button>
-              <Button
-                size="300"
-                variant="Critical"
-                radii="300"
-                disabled={deleting}
-                before={deleting && <Spinner variant="Critical" fill="Solid" size="100" />}
-                onClick={() => deleteDevices()}
-              >
-                <Text size="B300">Logout</Text>
-              </Button>
+              {authentication === 'password' ? (
+                <Button
+                  type="submit"
+                  size="300"
+                  variant="Critical"
+                  radii="300"
+                  disabled={working}
+                  before={working && <Spinner variant="Critical" fill="Solid" size="100" />}
+                >
+                  <Text size="B300">Authenticate</Text>
+                </Button>
+              ) : (
+                challenge === undefined && (
+                  <Button
+                    type="button"
+                    size="300"
+                    variant="Critical"
+                    radii="300"
+                    disabled={working}
+                    before={working && <Spinner variant="Critical" fill="Solid" size="100" />}
+                    onClick={() => void startDelete()}
+                  >
+                    <Text size="B300">Logout</Text>
+                  </Button>
+                )
+              )}
             </Box>
           </Box>
         </Menu>

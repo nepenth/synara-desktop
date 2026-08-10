@@ -18,9 +18,8 @@ import {
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
 import classNames from 'classnames';
-import { MatrixError, Room } from 'matrix-js-sdk';
-import { IHierarchyRoom } from 'matrix-js-sdk/lib/@types/spaces';
-import { HierarchyItem } from '../../hooks/useSpaceHierarchy';
+import type { RoomReading } from '../../utils/room';
+import { HierarchyItem, SpaceHierarchyRoom } from '../../hooks/useSpaceHierarchy';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { RoomAvatar } from '../../components/room-avatar';
 import { nameInitials } from '../../utils/common';
@@ -38,6 +37,8 @@ import { AddExistingModal } from '../add-existing';
 import { CreateRoomType } from '../../components/create-room/types';
 import { BetaNoticeBadge } from '../../components/BetaNoticeBadge';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { joinRoomWithNativeOwner } from '../../components/nativeRoomJoinOwner';
 
 function SpaceProfileLoading() {
   return (
@@ -110,10 +111,11 @@ function UnjoinedSpaceProfile({
   avatarUrl,
   suggested,
 }: UnjoinedSpaceProfileProps) {
-  const mx = useMatrixClient();
-
-  const [joinState, join] = useAsyncCallback<Room, MatrixError, []>(
-    useCallback(() => mx.joinRoom(roomId, { viaServers: via }), [mx, roomId, via])
+  const [joinState, join] = useAsyncCallback<void, Error, []>(
+    useCallback(
+      () => joinRoomWithNativeOwner(roomId, via, isSynaraDesktop(), invokeDesktopWithAvailability),
+      [roomId, via]
+    )
   );
 
   const canJoin = joinState.status === AsyncStatus.Idle || joinState.status === AsyncStatus.Error;
@@ -388,7 +390,7 @@ function AddSpaceButton({ item }: { item: HierarchyItem }) {
 }
 
 type SpaceItemCardProps = {
-  summary: IHierarchyRoom | undefined;
+  summary: SpaceHierarchyRoom | undefined;
   loading?: boolean;
   item: HierarchyItem;
   joined?: boolean;
@@ -401,7 +403,7 @@ type SpaceItemCardProps = {
   canEditChild: boolean;
   canReorder: boolean;
   onDragging: (item?: HierarchyItem) => void;
-  getRoom: (roomId: string) => Room | undefined;
+  getRoom: (roomId: string) => RoomReading | undefined;
 };
 export const SpaceItemCard = as<'div', SpaceItemCardProps>(
   (
@@ -445,7 +447,9 @@ export const SpaceItemCard = as<'div', SpaceItemCardProps>(
         <Box grow="Yes" gap="100" alignItems="Inherit" justifyContent="SpaceBetween">
           <Box ref={canReorder ? targetRef : null}>
             {space ? (
-              <LocalRoomSummaryLoader room={space}>
+              <LocalRoomSummaryLoader
+                room={space as unknown as Parameters<typeof LocalRoomSummaryLoader>[0]['room']}
+              >
                 {(localSummary) =>
                   item.parentId ? (
                     <SpaceProfile

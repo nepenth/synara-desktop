@@ -1,18 +1,35 @@
-import {
-  IEventWithRoomId,
-  IResultContext,
-  ISearchRequestBody,
-  ISearchResponse,
-  ISearchResult,
-  SearchOrderBy,
-} from 'matrix-js-sdk';
+/** Structural mirrors of the js-sdk message-search wire types (fields read here). */
+type SearchEventReading = {
+  event_id: string;
+  type: string;
+  sender: string;
+  origin_server_ts: number;
+  content: Record<string, any>;
+  [key: string]: any;
+};
+type SearchResultReading = {
+  rank: number;
+  result: SearchEventReading;
+  context: { [key: string]: any };
+  [key: string]: any;
+};
+type SearchResponseReading = {
+  search_categories: {
+    room_events?: {
+      next_batch?: string;
+      highlights?: string[];
+      results?: SearchResultReading[];
+    };
+  };
+  [key: string]: any;
+};
 import { useCallback } from 'react';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 
 export type ResultItem = {
   rank: number;
-  event: IEventWithRoomId;
-  context: IResultContext;
+  event: SearchEventReading;
+  context: { [key: string]: any };
 };
 
 export type ResultGroup = {
@@ -26,7 +43,7 @@ export type SearchResult = {
   groups: ResultGroup[];
 };
 
-const groupSearchResult = (results: ISearchResult[]): ResultGroup[] => {
+const groupSearchResult = (results: SearchResultReading[]): ResultGroup[] => {
   const groups: ResultGroup[] = [];
 
   results.forEach((item) => {
@@ -51,7 +68,7 @@ const groupSearchResult = (results: ISearchResult[]): ResultGroup[] => {
   return groups;
 };
 
-const parseSearchResult = (result: ISearchResponse): SearchResult => {
+const parseSearchResult = (result: SearchResponseReading): SearchResult => {
   const roomEvents = result.search_categories.room_events;
 
   const searchResult: SearchResult = {
@@ -82,7 +99,7 @@ export const useMessageSearch = (params: MessageSearchParams) => {
         };
       const limit = 20;
 
-      const requestBody: ISearchRequestBody = {
+      const requestBody: SearchRequestBody = {
         search_categories: {
           room_events: {
             event_context: {
@@ -96,17 +113,33 @@ export const useMessageSearch = (params: MessageSearchParams) => {
               senders,
             },
             include_state: false,
-            order_by: order as SearchOrderBy.Recent,
+            order_by: order as 'recent',
             search_term: term,
           },
         },
       };
 
+      type LocalMx = ReturnType<typeof useMatrixClient>;
+      type SearchRequestBody = SearchResponseReading extends never
+        ? never
+        : {
+            search_categories: {
+              room_events: {
+                search_term: string;
+                order_by?: string;
+                filter?: Record<string, unknown>;
+                event_context?: Record<string, unknown>;
+                include_state?: boolean;
+              };
+            };
+          };
       const r = await mx.search({
         body: requestBody,
         next_batch: nextBatch === '' ? undefined : nextBatch,
-      });
-      return parseSearchResult(r);
+      } as unknown as Parameters<LocalMx['search']>[0]);
+      return r
+        ? parseSearchResult(r as SearchResponseReading)
+        : { nextToken: undefined, highlights: [], groups: [] };
     },
     [mx, term, order, rooms, senders]
   );

@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import test from 'node:test';
-import { EventStatus, MatrixEventEvent, RoomEvent } from 'matrix-js-sdk';
+// Event/status literals are the probed js-sdk values:
+// EventStatus CANCELLED/NOT_SENT = 'cancelled'/'not_sent';
+// RoomEvent Timeline/LocalEchoUpdated/Redaction/RedactionCancelled =
+//   'Room.timeline'/'Room.localEchoUpdated'/'Room.redaction'/'Room.redactionCancelled';
+// MatrixEventEvent.Decrypted = 'Event.decrypted'.
 import {
   RECENT_ROOM_WINDOW_MS,
   RoomActivityStore,
@@ -25,7 +29,7 @@ const createEvent = (
   }: {
     type?: string;
     relation?: { rel_type: string };
-    status?: EventStatus | null;
+    status?: string | null;
   } = {}
 ) =>
   ({
@@ -126,7 +130,7 @@ test('a live message moves an old room directly into Recent without losing it fr
 
   const liveMessage = createEvent('$live', now - 1);
   events.push(liveMessage);
-  mx.emit(RoomEvent.Timeline, liveMessage, room, false, false, { liveEvent: true });
+  mx.emit('Room.timeline', liveMessage, room, false, false, { liveEvent: true });
 
   const partition = partitionRoomIdsByActivity([room.roomId], store.getSnapshot(), now);
   assert.deepEqual(partition.recentRoomIds, [room.roomId]);
@@ -165,11 +169,11 @@ test('back-pagination, reactions, and edits do not change room activity', () => 
   const unsubscribe = store.subscribe(() => undefined);
 
   const reaction = createEvent('$reaction', 200, { type: 'm.reaction' });
-  mx.emit(RoomEvent.Timeline, reaction, room, false, false, { liveEvent: true });
+  mx.emit('Room.timeline', reaction, room, false, false, { liveEvent: true });
   const edit = createEvent('$edit', 300, { relation: { rel_type: 'm.replace' } });
-  mx.emit(RoomEvent.Timeline, edit, room, false, false, { liveEvent: true });
+  mx.emit('Room.timeline', edit, room, false, false, { liveEvent: true });
   const paginated = createEvent('$paginated', 400);
-  mx.emit(RoomEvent.Timeline, paginated, room, true, false, { liveEvent: false });
+  mx.emit('Room.timeline', paginated, room, true, false, { liveEvent: false });
 
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 100);
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, '$message');
@@ -185,11 +189,11 @@ test('cancelled local echoes fall back to the previous relevant event', () => {
   const store = new RoomActivityStore(mx as any);
   const unsubscribe = store.subscribe(() => undefined);
 
-  mx.emit(RoomEvent.LocalEchoUpdated, localMessage, room);
+  mx.emit('Room.localEchoUpdated', localMessage, room);
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 200);
 
-  localMessage.status = EventStatus.CANCELLED;
-  mx.emit(RoomEvent.LocalEchoUpdated, localMessage, room);
+  localMessage.status = 'cancelled';
+  mx.emit('Room.localEchoUpdated', localMessage, room);
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 100);
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, '$old');
   unsubscribe();
@@ -204,15 +208,15 @@ test('directly failed local echoes fall back to the previous relevant event', ()
   const store = new RoomActivityStore(mx as any);
   const unsubscribe = store.subscribe(() => undefined);
 
-  localMessage.status = EventStatus.NOT_SENT;
-  mx.emit(RoomEvent.LocalEchoUpdated, localMessage, room);
+  localMessage.status = 'not_sent';
+  mx.emit('Room.localEchoUpdated', localMessage, room);
 
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 100);
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, '$old');
   unsubscribe();
 });
 
-for (const terminalStatus of [EventStatus.CANCELLED, EventStatus.NOT_SENT]) {
+for (const terminalStatus of ['cancelled', 'not_sent']) {
   test(`${terminalStatus} summary-only local echoes retain the room summary timestamp`, () => {
     const localMessage = createEvent('~local', 200);
     const events = [localMessage];
@@ -225,7 +229,7 @@ for (const terminalStatus of [EventStatus.CANCELLED, EventStatus.NOT_SENT]) {
     const unsubscribe = store.subscribe(() => undefined);
 
     localMessage.status = terminalStatus;
-    mx.emit(RoomEvent.LocalEchoUpdated, localMessage, room);
+    mx.emit('Room.localEchoUpdated', localMessage, room);
 
     assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 123);
     assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, undefined);
@@ -251,18 +255,18 @@ test('decryption rescans only an ineligible live activity head', () => {
   const unsubscribe = store.subscribe(() => undefined);
   const baselineScans = scans;
 
-  events.slice(0, -1).forEach((event) => mx.emit(MatrixEventEvent.Decrypted, event));
+  events.slice(0, -1).forEach((event) => mx.emit('Event.decrypted', event));
   assert.equal(scans, baselineScans);
 
-  mx.emit(MatrixEventEvent.Decrypted, head);
+  mx.emit('Event.decrypted', head);
   assert.equal(scans, baselineScans);
 
   head.getRelation = () => ({ rel_type: 'm.replace' });
-  mx.emit(MatrixEventEvent.Decrypted, head);
+  mx.emit('Event.decrypted', head);
   assert.equal(scans, baselineScans + 1);
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, '$event-98');
 
-  mx.emit(MatrixEventEvent.Decrypted, head);
+  mx.emit('Event.decrypted', head);
   assert.equal(scans, baselineScans + 1);
   unsubscribe();
 });
@@ -277,7 +281,7 @@ test('an ineligible decrypted head preserves prior activity when no concrete fal
 
   head.getType = () => 'm.room.message';
   head.getRelation = () => ({ rel_type: 'm.replace' });
-  mx.emit(MatrixEventEvent.Decrypted, head);
+  mx.emit('Event.decrypted', head);
 
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 200);
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, undefined);
@@ -295,7 +299,7 @@ test('redacting the only concrete activity head preserves the prior summary time
   redaction.getAssociatedId = () => '$head';
   head.isRedacted = () => true;
 
-  mx.emit(RoomEvent.Redaction, redaction, room);
+  mx.emit('Room.redaction', redaction, room);
 
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 200);
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, undefined);
@@ -314,11 +318,11 @@ test('cancelling a redaction restores the formerly eligible activity head', () =
   let redacted = true;
   head.isRedacted = () => redacted;
 
-  mx.emit(RoomEvent.Redaction, redaction, room);
+  mx.emit('Room.redaction', redaction, room);
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, undefined);
 
   redacted = false;
-  mx.emit(RoomEvent.RedactionCancelled, redaction, room);
+  mx.emit('Room.redactionCancelled', redaction, room);
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 200);
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, '$head');
   unsubscribe();
@@ -377,14 +381,14 @@ test('5k-room snapshot sources ignore unrelated updates without copying the acti
   const initialEntries = initialSnapshot.entries;
 
   const unrelatedMessage = createEvent('$unrelated-live', 10_000);
-  mx.emit(RoomEvent.Timeline, unrelatedMessage, unrelatedRoom, false, false, { liveEvent: true });
+  mx.emit('Room.timeline', unrelatedMessage, unrelatedRoom, false, false, { liveEvent: true });
 
   assert.equal(notifications, 0);
   assert.equal(source.getSnapshot(), initialSnapshot);
   assert.equal(source.getSnapshot().entries, initialEntries);
 
   const subscribedMessage = createEvent('$subscribed-live', 20_000);
-  mx.emit(RoomEvent.Timeline, subscribedMessage, subscribedRoom, false, false, { liveEvent: true });
+  mx.emit('Room.timeline', subscribedMessage, subscribedRoom, false, false, { liveEvent: true });
 
   assert.equal(notifications, 1);
   assert.notEqual(source.getSnapshot(), initialSnapshot);

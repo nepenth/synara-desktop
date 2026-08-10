@@ -1,9 +1,10 @@
 import { Atom, useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
-import { MatrixClient } from 'matrix-js-sdk';
+import type { MatrixClientReading } from '../../utils/room';
 import { useCallback, useMemo } from 'react';
 import { getAllParents, isRoom, isSpace, isUnsupportedRoom } from '../../utils/room';
 import { compareRoomsEqual } from '../room-list/utils';
+import { useNativeRoomListSnapshot } from '../room-list/roomList';
 import { RoomToParents } from '../../../types/matrix/room';
 
 export type RoomsAtom = Atom<string[]>;
@@ -11,11 +12,29 @@ export type RoomSelector = (roomId: string) => boolean | undefined;
 
 export const selectedRoomsAtom = (
   roomsAtom: RoomsAtom,
-  selector: (roomId: string) => boolean | undefined
-) => selectAtom(roomsAtom, (rooms) => rooms.filter(selector), compareRoomsEqual);
+  selector: (roomId: string) => boolean | undefined,
+  nativeSnapshot?: unknown
+) =>
+  selectAtom(
+    roomsAtom,
+    (rooms) => {
+      // Capture the native revision: summary mutations retain room IDs but
+      // must still cause callers to read the updated facade wrapper.
+      void nativeSnapshot;
+      return rooms.filter(selector);
+    },
+    compareRoomsEqual
+  );
 
 export const useSelectedRooms = (roomsAtom: RoomsAtom, selector: RoomSelector) => {
-  const anAtom = useMemo(() => selectedRoomsAtom(roomsAtom, selector), [roomsAtom, selector]);
+  // Native room wrappers update their summaries in place. Observe the native
+  // projection as a revision source so a same-ID list still re-renders names,
+  // avatars, membership, and unread state after a live snapshot.
+  const nativeSnapshot = useNativeRoomListSnapshot();
+  const anAtom = useMemo(
+    () => selectedRoomsAtom(roomsAtom, selector, nativeSnapshot),
+    [roomsAtom, selector, nativeSnapshot]
+  );
 
   return useAtomValue(anAtom);
 };
@@ -23,7 +42,7 @@ export const useSelectedRooms = (roomsAtom: RoomsAtom, selector: RoomSelector) =
 export type SpaceChildSelectorFactory = (parentId: string) => RoomSelector;
 
 export const useRecursiveChildScopeFactory = (
-  mx: MatrixClient,
+  mx: MatrixClientReading,
   roomToParents: RoomToParents
 ): SpaceChildSelectorFactory =>
   useCallback(
@@ -35,7 +54,7 @@ export const useRecursiveChildScopeFactory = (
   );
 
 export const useChildSpaceScopeFactory = (
-  mx: MatrixClient,
+  mx: MatrixClientReading,
   roomToParents: RoomToParents
 ): SpaceChildSelectorFactory =>
   useCallback(
@@ -45,7 +64,7 @@ export const useChildSpaceScopeFactory = (
   );
 
 export const useRecursiveChildSpaceScopeFactory = (
-  mx: MatrixClient,
+  mx: MatrixClientReading,
   roomToParents: RoomToParents
 ): SpaceChildSelectorFactory =>
   useCallback(
@@ -57,7 +76,7 @@ export const useRecursiveChildSpaceScopeFactory = (
   );
 
 export const useChildRoomScopeFactory = (
-  mx: MatrixClient,
+  mx: MatrixClientReading,
   mDirects: Set<string>,
   roomToParents: RoomToParents
 ): SpaceChildSelectorFactory =>
@@ -70,7 +89,7 @@ export const useChildRoomScopeFactory = (
   );
 
 export const useRecursiveChildRoomScopeFactory = (
-  mx: MatrixClient,
+  mx: MatrixClientReading,
   mDirects: Set<string>,
   roomToParents: RoomToParents
 ): SpaceChildSelectorFactory =>
@@ -84,7 +103,7 @@ export const useRecursiveChildRoomScopeFactory = (
   );
 
 export const useChildDirectScopeFactory = (
-  mx: MatrixClient,
+  mx: MatrixClientReading,
   mDirects: Set<string>,
   roomToParents: RoomToParents
 ): SpaceChildSelectorFactory =>
@@ -97,7 +116,7 @@ export const useChildDirectScopeFactory = (
   );
 
 export const useRecursiveChildDirectScopeFactory = (
-  mx: MatrixClient,
+  mx: MatrixClientReading,
   mDirects: Set<string>,
   roomToParents: RoomToParents
 ): SpaceChildSelectorFactory =>
@@ -122,13 +141,13 @@ export const useSpaceChildren = (
   return useSelectedRooms(roomsAtom, recursiveChildRoomSelector);
 };
 
-export const useSpaces = (mx: MatrixClient, roomsAtom: RoomsAtom) => {
+export const useSpaces = (mx: MatrixClientReading, roomsAtom: RoomsAtom) => {
   const selector: RoomSelector = useCallback((roomId) => isSpace(mx.getRoom(roomId)), [mx]);
   return useSelectedRooms(roomsAtom, selector);
 };
 
 export const useOrphanSpaces = (
-  mx: MatrixClient,
+  mx: MatrixClientReading,
   roomsAtom: RoomsAtom,
   roomToParents: RoomToParents
 ) => {
@@ -139,7 +158,7 @@ export const useOrphanSpaces = (
   return useSelectedRooms(roomsAtom, selector);
 };
 
-export const useRooms = (mx: MatrixClient, roomsAtom: RoomsAtom, mDirects: Set<string>) => {
+export const useRooms = (mx: MatrixClientReading, roomsAtom: RoomsAtom, mDirects: Set<string>) => {
   const selector: RoomSelector = useCallback(
     (roomId: string) => isRoom(mx.getRoom(roomId)) && !mDirects.has(roomId),
     [mx, mDirects]
@@ -148,7 +167,7 @@ export const useRooms = (mx: MatrixClient, roomsAtom: RoomsAtom, mDirects: Set<s
 };
 
 export const useOrphanRooms = (
-  mx: MatrixClient,
+  mx: MatrixClientReading,
   roomsAtom: RoomsAtom,
   mDirects: Set<string>,
   roomToParents: RoomToParents
@@ -160,7 +179,11 @@ export const useOrphanRooms = (
   return useSelectedRooms(roomsAtom, selector);
 };
 
-export const useDirects = (mx: MatrixClient, roomsAtom: RoomsAtom, mDirects: Set<string>) => {
+export const useDirects = (
+  mx: MatrixClientReading,
+  roomsAtom: RoomsAtom,
+  mDirects: Set<string>
+) => {
   const selector: RoomSelector = useCallback(
     (roomId) => isRoom(mx.getRoom(roomId)) && mDirects.has(roomId),
     [mx, mDirects]
@@ -168,7 +191,7 @@ export const useDirects = (mx: MatrixClient, roomsAtom: RoomsAtom, mDirects: Set
   return useSelectedRooms(roomsAtom, selector);
 };
 
-export const useUnsupportedRooms = (mx: MatrixClient, roomsAtom: RoomsAtom) => {
+export const useUnsupportedRooms = (mx: MatrixClientReading, roomsAtom: RoomsAtom) => {
   const selector: RoomSelector = useCallback(
     (roomId) => isUnsupportedRoom(mx.getRoom(roomId)),
     [mx]

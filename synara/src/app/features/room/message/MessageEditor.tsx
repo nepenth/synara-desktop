@@ -22,7 +22,8 @@ import {
 } from 'folds';
 import { Editor, Transforms } from 'slate';
 import { ReactEditor } from 'slate-react';
-import { IContent, IMentions, MatrixEvent, RelationType, Room } from 'matrix-js-sdk';
+import type { EventTimelineSetReading, MatrixEventReading, RoomReading } from '../../../utils/room';
+import { IContent, IMentions, RelationType } from '../../../utils/messageContent';
 import { isKeyHotkey } from 'is-hotkey';
 import {
   AUTOCOMPLETE_PREFIXES,
@@ -53,15 +54,18 @@ import { UseStateProvider } from '../../../components/UseStateProvider';
 import { EmojiBoard } from '../../../components/emoji-board';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
+import { editMessageWithNativeDesktopOwner } from '../nativeEditMessage';
 import { getEditedEvent, getMentionContent, trimReplyFromFormattedBody } from '../../../utils/room';
 import { mobileOrTablet } from '../../../utils/user-agent';
 import { useComposingCheck } from '../../../hooks/useComposingCheck';
 
 type MessageEditorProps = {
   roomId: string;
-  room: Room;
-  mEvent: MatrixEvent;
-  imagePackRooms?: Room[];
+  room: RoomReading & {
+    getTimelineForEvent(eventId: string): { getTimelineSet(): EventTimelineSetReading } | null;
+  };
+  mEvent: MatrixEventReading;
+  imagePackRooms?: string[];
   onCancel: () => void;
 };
 export const MessageEditor = as<'div', MessageEditorProps>(
@@ -90,7 +94,7 @@ export const MessageEditor = as<'div', MessageEditorProps>(
       const content: IContent = editedEvent?.getContent()['m.new_content'] ?? mEvent.getContent();
       const { body, formatted_body: customHtml }: Record<string, unknown> = content;
 
-      const mMentions: IMentions | undefined = content['m.mentions'];
+      const mMentions: IMentions | undefined = content['m.mentions'] as IMentions | undefined;
 
       return [
         typeof body === 'string' ? body : undefined,
@@ -140,9 +144,31 @@ export const MessageEditor = as<'div', MessageEditorProps>(
         const mMentions = getMentionContent(Array.from(mentionData.users), mentionData.room);
         newContent['m.mentions'] = mMentions;
 
-        if (!customHtmlEqualsPlainText(customHtml, plainText)) {
+        const hasFormatted = !customHtmlEqualsPlainText(customHtml, plainText);
+        if (hasFormatted) {
           newContent.format = 'org.matrix.custom.html';
           newContent.formatted_body = customHtml;
+        }
+
+        // V-SEND.R-EDIT: a live native Matrix session is the sole edit owner.
+        // The legacy `mx.sendMessage` replace path is only used when no native
+        // session is live (web / logged-out). A native command failure throws
+        // (fail-closed) rather than silently falling through to mx.sendMessage.
+        const eventId = mEvent.getId();
+        if (!eventId) {
+          throw new Error('Cannot edit a message without an event id.');
+        }
+        const owner = await editMessageWithNativeDesktopOwner({
+          roomId,
+          eventId,
+          body: plainText,
+          msgType: mEvent.getContent().msgtype,
+          formattedBody: hasFormatted ? customHtml : undefined,
+          mentionUserIds: Array.from(mentionData.users),
+          mentionRoom: mentionData.room,
+        });
+        if (owner === 'native') {
+          return undefined;
         }
 
         const content: IContent = {
@@ -150,12 +176,16 @@ export const MessageEditor = as<'div', MessageEditorProps>(
           body: `* ${plainText}`,
           'm.new_content': newContent,
           'm.relates_to': {
-            event_id: mEvent.getId(),
+            event_id: eventId,
             rel_type: RelationType.Replace,
           },
         };
 
-        return mx.sendMessage(roomId, content as any);
+        return (
+          mx as unknown as {
+            sendMessage(roomId: string, content: IContent): Promise<unknown>;
+          }
+        ).sendMessage(roomId, content as any);
       }, [mx, editor, roomId, mEvent, isMarkdown, getPrevBodyAndFormattedBody])
     );
 

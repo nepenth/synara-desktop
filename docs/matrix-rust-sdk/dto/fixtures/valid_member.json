@@ -1,0 +1,9 @@
+{
+  "roomId": "!room:example.org",
+  "userId": "@bob:example.org",
+  "displayName": "Bob",
+  "avatarUrl": "mxc://example.org/bob",
+  "membership": "join",
+  "powerLevel": 50,
+  "isDirectTarget": true
+}

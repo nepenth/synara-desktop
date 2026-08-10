@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-set-room-topic"
+description = "Enables the matrix_set_room_topic command without any pre-configured scope."
+commands.allow = ["matrix_set_room_topic"]
+
+[[permission]]
+identifier = "deny-matrix-set-room-topic"
+description = "Denies the matrix_set_room_topic command without any pre-configured scope."
+commands.deny = ["matrix_set_room_topic"]

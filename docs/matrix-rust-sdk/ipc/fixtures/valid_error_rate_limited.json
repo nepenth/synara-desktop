@@ -1,0 +1,14 @@
+{
+  "protocolVersion": 1,
+  "sessionGeneration": 1,
+  "sequence": 3,
+  "requestId": "req-op-9",
+  "kind": "error",
+  "payload": {
+    "category": "rate_limited",
+    "message": "Request rate limited",
+    "diagnosticId": "mxipc-rate-0001",
+    "retryAfterMs": 5000,
+    "requestId": "req-op-9"
+  }
+}

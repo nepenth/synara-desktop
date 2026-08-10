@@ -1,0 +1,137 @@
+/**
+ * Room summary DTO — list/nav projection.
+ */
+
+import type { RoomId, UserId } from './ids';
+import {
+  hasForbiddenWireFields,
+  isObject,
+  optNumber,
+  optString,
+  optBoolean,
+  reqBoolean,
+  reqNumber,
+  reqString,
+} from './parseUtil';
+
+export const MEMBERSHIPS = ['invite', 'join', 'knock', 'leave', 'ban'] as const;
+export type Membership = typeof MEMBERSHIPS[number];
+const MEMBERSHIP_SET = new Set<string>(MEMBERSHIPS);
+
+export function isMembership(value: unknown): value is Membership {
+  return typeof value === 'string' && MEMBERSHIP_SET.has(value);
+}
+
+export const NOTIFICATION_MODES = ['all', 'mentions', 'mute', 'default'] as const;
+export type NotificationMode = typeof NOTIFICATION_MODES[number];
+const NOTIFICATION_MODE_SET = new Set<string>(NOTIFICATION_MODES);
+
+export function isNotificationMode(value: unknown): value is NotificationMode {
+  return typeof value === 'string' && NOTIFICATION_MODE_SET.has(value);
+}
+
+export type RoomHero = {
+  userId: UserId;
+  displayName?: string;
+};
+
+export type RoomSummary = {
+  roomId: RoomId;
+  name?: string;
+  canonicalAlias?: string;
+  avatarUrl?: string;
+  membership: Membership;
+  isDirect: boolean;
+  isSpace: boolean;
+  isCall: boolean;
+  isEncrypted: boolean;
+  joinRule?: string;
+  unreadCount: number;
+  highlightCount: number;
+  markedUnread: boolean;
+  notificationMode?: NotificationMode;
+  lastActivityTs?: number;
+  heroes?: RoomHero[];
+  tombstoneSuccessorRoomId?: string;
+};
+
+function parseHero(value: unknown): RoomHero | null {
+  if (!isObject(value)) return null;
+  const userId = reqString(value, 'userId');
+  const displayName = optString(value, 'displayName');
+  if (userId === null || displayName === null) return null;
+  return { userId, displayName };
+}
+
+export function parseRoomSummary(value: unknown): RoomSummary | null {
+  if (!isObject(value) || hasForbiddenWireFields(value)) return null;
+  const roomId = reqString(value, 'roomId');
+  const name = optString(value, 'name');
+  const canonicalAlias = optString(value, 'canonicalAlias');
+  const avatarUrl = optString(value, 'avatarUrl');
+  const isDirect = reqBoolean(value, 'isDirect');
+  const isSpace = optBoolean(value, 'isSpace');
+  const isCall = optBoolean(value, 'isCall') ?? false;
+  const isEncrypted = reqBoolean(value, 'isEncrypted');
+  const joinRule = optString(value, 'joinRule');
+  const unreadCount = reqNumber(value, 'unreadCount');
+  const highlightCount = reqNumber(value, 'highlightCount');
+  const markedUnread = reqBoolean(value, 'markedUnread');
+  const lastActivityTs = optNumber(value, 'lastActivityTs');
+  const tombstoneSuccessorRoomId = optString(value, 'tombstoneSuccessorRoomId');
+  if (
+    roomId === null ||
+    name === null ||
+    canonicalAlias === null ||
+    avatarUrl === null ||
+    isDirect === null ||
+    isSpace === null ||
+    isEncrypted === null ||
+    joinRule === null ||
+    unreadCount === null ||
+    highlightCount === null ||
+    markedUnread === null ||
+    lastActivityTs === null ||
+    tombstoneSuccessorRoomId === null ||
+    !isMembership(value.membership)
+  ) {
+    return null;
+  }
+
+  let notificationMode: NotificationMode | undefined;
+  if (value.notificationMode !== undefined) {
+    if (!isNotificationMode(value.notificationMode)) return null;
+    notificationMode = value.notificationMode;
+  }
+
+  let heroes: RoomHero[] | undefined;
+  if (value.heroes !== undefined) {
+    if (!Array.isArray(value.heroes)) return null;
+    heroes = [];
+    for (const h of value.heroes) {
+      const parsed = parseHero(h);
+      if (!parsed) return null;
+      heroes.push(parsed);
+    }
+  }
+
+  return {
+    roomId,
+    name,
+    canonicalAlias,
+    avatarUrl,
+    membership: value.membership,
+    isDirect,
+    isSpace: isSpace ?? false,
+    isCall: isCall ?? false,
+    isEncrypted,
+    joinRule,
+    unreadCount,
+    highlightCount,
+    markedUnread,
+    notificationMode,
+    lastActivityTs,
+    heroes,
+    tombstoneSuccessorRoomId,
+  };
+}

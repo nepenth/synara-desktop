@@ -6,6 +6,8 @@
   "include": [
     "src/ext.d.ts",
     "src/app/components/hermes/HermesAgentCard.tsx",
+    "src/app/features/native-client/__tests__/nativeClientFacade.test.ts",
+    "src/app/features/native-client/nativeClientFacade.ts",
     "src/app/utils/__tests__/agentApprovals.test.ts",
     "src/app/utils/__tests__/desktop.test.ts",
     "src/app/utils/__tests__/matrix.test.ts",

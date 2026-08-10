@@ -17,7 +17,6 @@ import {
   OverlayCenter,
   PopOut,
   RectCords,
-  Scroll,
   Spinner,
   Text,
   as,
@@ -29,16 +28,11 @@ import React, {
   MouseEventHandler,
   ReactNode,
   useCallback,
-  useMemo,
   useState,
 } from 'react';
 import FocusTrap from 'focus-trap-react';
 import { useHover, useFocusWithin } from 'react-aria';
-import { MatrixEvent, Room } from 'matrix-js-sdk';
-import { Relations } from 'matrix-js-sdk/lib/models/relations';
 import classNames from 'classnames';
-import { RoomPinnedEventsEventContent } from 'matrix-js-sdk/lib/types';
-import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import {
   AvatarBase,
@@ -58,6 +52,8 @@ import {
   getMemberDisplayName,
   trimReplyFromBody,
 } from '../../../utils/room';
+import type { EventTimelineSetReading, MatrixEventReading } from '../../../utils/room';
+import type { EventedRoomReading } from '../../../utils/roomEvents';
 import { getMxIdLocalPart } from '../../../utils/matrix';
 import { MessageLayout, MessageSpacing } from '../../../state/settings';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
@@ -77,18 +73,35 @@ import { resolveMatrixThumbnailUrl } from '../../../matrix/media';
 import { getViaServers } from '../../../plugins/via-servers';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { useRoomPinnedEvents } from '../../../hooks/useRoomPinnedEvents';
-import { MemberPowerTag, StateEvent } from '../../../../types/matrix/room';
+import { MemberPowerTag } from '../../../../types/matrix/room';
 import { PowerIcon } from '../../../components/power';
 import colorMXID from '../../../../util/colorMXID';
 import { getPowerTagIconSrc } from '../../../hooks/useMemberPowerTag';
 import {
-  getForwardableEventContent,
-  getForwardableEventContents,
-  getRoomForwardTargets,
-} from '../../../utils/forward';
-import { allRoomsAtom } from '../../../state/room-list/roomList';
+  pinWithNativeTimelineAction,
+  redactWithNativeTimelineAction,
+  reportWithNativeTimelineAction,
+  unpinWithNativeTimelineAction,
+} from '../nativeTimelineAction';
 
 export type ReactionHandler = (keyOrMxc: string, shortcode: string) => void;
+
+/**
+ * Room projection used by the message surface: the app's evented room reading
+ * plus the pinned/edited-event timeline lookup this surface relies on. js-sdk
+ * Rooms satisfy it structurally.
+ */
+type MessageRoomReading = EventedRoomReading & {
+  getTimelineForEvent(
+    eventId: string
+  ): { getTimelineSet(): EventTimelineSetReading; getEvents(): MatrixEventReading[] } | null;
+};
+
+/** Narrow structural projection of a reactions/threads aggregation (js-sdk Relations). */
+type MessageRelationsReading = {
+  getRelationsForEvent?(eventId: string, relationType: string, eventType: string): unknown;
+  [key: string]: unknown;
+};
 
 const CopyIcon = () => (
   <>
@@ -160,8 +173,8 @@ export const MessageQuickReactions = as<'div', MessageQuickReactionsProps>(
 export const MessageAllReactionItem = as<
   'button',
   {
-    room: Room;
-    relations: Relations;
+    room: MessageRoomReading;
+    relations: MessageRelationsReading;
     canRedact?: boolean;
     onClose?: () => void;
   }
@@ -223,7 +236,7 @@ export const MessageAllReactionItem = as<
 export const MessageReadReceiptItem = as<
   'button',
   {
-    room: Room;
+    room: MessageRoomReading;
     eventId: string;
     onClose?: () => void;
   }
@@ -273,20 +286,20 @@ export const MessageReadReceiptItem = as<
 export const MessageSourceCodeItem = as<
   'button',
   {
-    room: Room;
-    mEvent: MatrixEvent;
+    room: MessageRoomReading;
+    mEvent: MatrixEventReading;
     onClose?: () => void;
   }
 >(({ room, mEvent, onClose, ...props }, ref) => {
   const [open, setOpen] = useState(false);
 
-  const getContent = (evt: MatrixEvent) =>
-    evt.isEncrypted()
-      ? {
-          [`<== DECRYPTED_EVENT ==>`]: evt.getEffectiveEvent(),
-          [`<== ORIGINAL_EVENT ==>`]: evt.event,
-        }
-      : evt.event;
+  const getContent = (evt: MatrixEventReading) => {
+    if (!evt.isEncrypted || !evt.isEncrypted()) return evt.event;
+    return {
+      [`<== DECRYPTED_EVENT ==>`]: evt.getEffectiveEvent ? evt.getEffectiveEvent() : evt.event,
+      [`<== ORIGINAL_EVENT ==>`]: evt.event,
+    };
+  };
 
   const getText = (): string => {
     const evtId = mEvent.getId()!;
@@ -353,7 +366,7 @@ export const MessageSourceCodeItem = as<
   );
 });
 
-const getMessageCopyText = (room: Room, mEvent: MatrixEvent): string => {
+const getMessageCopyText = (room: MessageRoomReading, mEvent: MatrixEventReading): string => {
   const eventId = mEvent.getId();
   const evtTimeline = eventId ? room.getTimelineForEvent(eventId) : undefined;
   const editedEvent =
@@ -402,15 +415,16 @@ export const MessageCopyItem = as<
 export const MessageCopyLinkItem = as<
   'button',
   {
-    room: Room;
-    mEvent: MatrixEvent;
+    room: MessageRoomReading;
+    mEvent: MatrixEventReading;
     onClose?: () => void;
   }
 >(({ room, mEvent, onClose, ...props }, ref) => {
-  const handleCopy = () => {
+  const handleCopy = async () => {
     const eventId = mEvent.getId();
     if (!eventId) return;
-    copyToClipboard(getMatrixToRoomEvent(room.roomId, eventId, getViaServers(room)));
+    const viaServers = await getViaServers(room);
+    copyToClipboard(getMatrixToRoomEvent(room.roomId, eventId, viaServers));
     onClose?.();
   };
 
@@ -427,252 +441,6 @@ export const MessageCopyLinkItem = as<
         Copy Link
       </Text>
     </MenuItem>
-  );
-});
-
-export const MessageForwardItem = as<
-  'button',
-  {
-    room: Room;
-    mEvent?: MatrixEvent;
-    mEvents?: MatrixEvent[];
-    label?: string;
-    onClose?: () => void;
-  }
->(({ room, mEvent, mEvents, label, onClose, ...props }, ref) => {
-  const mx = useMatrixClient();
-  const { t } = useTranslation();
-  const allRoomIds = useAtomValue(allRoomsAtom);
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [sendingRoomId, setSendingRoomId] = useState<string>();
-  const [error, setError] = useState(false);
-  const [confirmTargetRoom, setConfirmTargetRoom] = useState<Room>();
-  const [quoteMode, setQuoteMode] = useState(false);
-  const events = useMemo(() => mEvents ?? (mEvent ? [mEvent] : []), [mEvent, mEvents]);
-  const contents = useMemo(
-    () =>
-      events.length === 1
-        ? [getForwardableEventContent(events[0], quoteMode)].filter(
-            (content): content is Record<string, unknown> => !!content
-          )
-        : getForwardableEventContents(events, quoteMode),
-    [events, quoteMode]
-  );
-  const targets = useMemo(() => {
-    const rooms = allRoomIds
-      .map((roomId) => mx.getRoom(roomId))
-      .filter((targetRoom): targetRoom is Room => !!targetRoom);
-    const trimmedQuery = query.trim().toLowerCase();
-    return getRoomForwardTargets(rooms, room.roomId, mx.getUserId()).filter(
-      (targetRoom) =>
-        !trimmedQuery ||
-        targetRoom.name.toLowerCase().includes(trimmedQuery) ||
-        targetRoom.roomId.toLowerCase().includes(trimmedQuery)
-    );
-  }, [mx, allRoomIds, room.roomId, query]);
-
-  if (contents.length === 0) return null;
-
-  const handleClose = () => {
-    setConfirmTargetRoom(undefined);
-    setOpen(false);
-    onClose?.();
-  };
-
-  const handleForwardConfirmed = async (targetRoom: Room) => {
-    setConfirmTargetRoom(undefined);
-    setSendingRoomId(targetRoom.roomId);
-    setError(false);
-    try {
-      await contents.reduce<Promise<void>>(
-        (prev, content) =>
-          prev.then(() => mx.sendMessage(targetRoom.roomId, content as any).then(() => undefined)),
-        Promise.resolve()
-      );
-      handleClose();
-    } catch {
-      setError(true);
-      setSendingRoomId(undefined);
-    }
-  };
-
-  const handleForward = async (targetRoom: Room) => {
-    if (room.hasEncryptionStateEvent() && !targetRoom.hasEncryptionStateEvent()) {
-      setConfirmTargetRoom(targetRoom);
-      return;
-    }
-    await handleForwardConfirmed(targetRoom);
-  };
-
-  return (
-    <>
-      <Overlay open={open} backdrop={<OverlayBackdrop />}>
-        <OverlayCenter>
-          <FocusTrap
-            focusTrapOptions={{
-              initialFocus: false,
-              onDeactivate: handleClose,
-              clickOutsideDeactivates: true,
-              escapeDeactivates: stopPropagation,
-            }}
-          >
-            <Dialog variant="Surface">
-              {confirmTargetRoom ? (
-                <>
-                  <Header
-                    style={{
-                      padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
-                      borderBottomWidth: config.borderWidth.B300,
-                    }}
-                    variant="Surface"
-                    size="500"
-                  >
-                    <Box grow="Yes">
-                      <Text size="H4">Forward to Unencrypted Room?</Text>
-                    </Box>
-                    <IconButton
-                      size="300"
-                      onClick={() => setConfirmTargetRoom(undefined)}
-                      radii="300"
-                    >
-                      <Icon src={Icons.Cross} />
-                    </IconButton>
-                  </Header>
-                  <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
-                    <Text priority="300">
-                      This message is from an encrypted room. Forwarding it to{' '}
-                      {confirmTargetRoom.name || confirmTargetRoom.roomId} will make the forwarded
-                      copy visible in an unencrypted room.
-                    </Text>
-                    <Box justifyContent="End" gap="200">
-                      <Button
-                        size="300"
-                        variant="Secondary"
-                        fill="None"
-                        onClick={() => setConfirmTargetRoom(undefined)}
-                      >
-                        <Text size="B300">Cancel</Text>
-                      </Button>
-                      <Button
-                        size="300"
-                        variant="Critical"
-                        onClick={() => handleForwardConfirmed(confirmTargetRoom)}
-                      >
-                        <Text size="B300">Forward anyway</Text>
-                      </Button>
-                    </Box>
-                  </Box>
-                </>
-              ) : (
-                <>
-                  <Header
-                    style={{
-                      padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
-                      borderBottomWidth: config.borderWidth.B300,
-                    }}
-                    variant="Surface"
-                    size="500"
-                  >
-                    <Box grow="Yes">
-                      <Text size="H4">
-                        {contents.length > 1
-                          ? t('modernization.forward.title_plural', { count: contents.length })
-                          : t('modernization.forward.title')}
-                      </Text>
-                    </Box>
-                    <IconButton size="300" onClick={handleClose} radii="300">
-                      <Icon src={Icons.Cross} />
-                    </IconButton>
-                  </Header>
-                  <Box direction="Column" gap="300" style={{ padding: config.space.S400 }}>
-                    <Input
-                      autoFocus
-                      variant="Background"
-                      placeholder="Search rooms"
-                      aria-label="Search rooms to forward to"
-                      value={query}
-                      onChange={(evt) => setQuery(evt.currentTarget.value)}
-                    />
-                    <MenuItem
-                      as="label"
-                      size="300"
-                      radii="300"
-                      after={
-                        <input
-                          type="checkbox"
-                          checked={quoteMode}
-                          aria-label="Forward as quote with context"
-                          onChange={(evt) => setQuoteMode(evt.currentTarget.checked)}
-                        />
-                      }
-                    >
-                      <Text className={css.MessageMenuItemText} as="span" size="T300" truncate>
-                        Forward as quote with context
-                      </Text>
-                    </MenuItem>
-                    {error && (
-                      <Text size="T300" style={{ color: color.Critical.Main }}>
-                        Failed to forward message. Please try again.
-                      </Text>
-                    )}
-                    <Scroll size="300" hideTrack visibility="Hover">
-                      <Box direction="Column" gap="100" style={{ maxHeight: '40vh' }}>
-                        {targets.map((targetRoom) => (
-                          <MenuItem
-                            key={targetRoom.roomId}
-                            size="300"
-                            radii="300"
-                            after={
-                              sendingRoomId === targetRoom.roomId ? (
-                                <Spinner size="100" />
-                              ) : (
-                                <Icon size="100" src={Icons.ArrowRight} />
-                              )
-                            }
-                            disabled={!!sendingRoomId}
-                            onClick={() => {
-                              handleForward(targetRoom);
-                            }}
-                          >
-                            <Text
-                              className={css.MessageMenuItemText}
-                              as="span"
-                              size="T300"
-                              truncate
-                            >
-                              {targetRoom.name || targetRoom.roomId}
-                            </Text>
-                          </MenuItem>
-                        ))}
-                        {targets.length === 0 && (
-                          <Text size="T300" priority="300">
-                            No rooms found.
-                          </Text>
-                        )}
-                      </Box>
-                    </Scroll>
-                  </Box>
-                </>
-              )}
-            </Dialog>
-          </FocusTrap>
-        </OverlayCenter>
-      </Overlay>
-      <MenuItem
-        size="300"
-        after={<Icon size="100" src={Icons.ArrowGoRight} />}
-        radii="300"
-        onClick={() => setOpen(true)}
-        {...props}
-        ref={ref}
-        aria-pressed={open}
-      >
-        <Text className={css.MessageMenuItemText} as="span" size="T300" truncate>
-          {label ?? t('modernization.forward.action')}
-        </Text>
-      </MenuItem>
-    </>
   );
 });
 
@@ -774,25 +542,24 @@ export const MessageCustomReminderItem = as<
 export const MessagePinItem = as<
   'button',
   {
-    room: Room;
-    mEvent: MatrixEvent;
+    room: MessageRoomReading;
+    mEvent: MatrixEventReading;
     onClose?: () => void;
   }
 >(({ room, mEvent, onClose, ...props }, ref) => {
-  const mx = useMatrixClient();
   const pinnedEvents = useRoomPinnedEvents(room);
   const isPinned = pinnedEvents.includes(mEvent.getId() ?? '');
 
   const handlePin = () => {
     const eventId = mEvent.getId();
-    const pinContent: RoomPinnedEventsEventContent = {
-      pinned: Array.from(pinnedEvents).filter((id) => id !== eventId),
-    };
-    if (!isPinned && eventId) {
-      pinContent.pinned.push(eventId);
-    }
-    mx.sendStateEvent(room.roomId, StateEvent.RoomPinnedEvents as any, pinContent);
-    onClose?.();
+    if (!eventId) return;
+    void (
+      isPinned
+        ? unpinWithNativeTimelineAction({ roomId: room.roomId, eventId })
+        : pinWithNativeTimelineAction({ roomId: room.roomId, eventId })
+    )
+      .catch(() => undefined)
+      .finally(() => onClose?.());
   };
 
   return (
@@ -814,19 +581,22 @@ export const MessagePinItem = as<
 export const MessageDeleteItem = as<
   'button',
   {
-    room: Room;
-    mEvent: MatrixEvent;
+    room: MessageRoomReading;
+    mEvent: MatrixEventReading;
     onClose?: () => void;
   }
 >(({ room, mEvent, onClose, ...props }, ref) => {
-  const mx = useMatrixClient();
   const [open, setOpen] = useState(false);
 
   const [deleteState, deleteMessage] = useAsyncCallback(
     useCallback(
       (eventId: string, reason?: string) =>
-        mx.redactEvent(room.roomId, eventId, undefined, reason ? { reason } : undefined),
-      [mx, room]
+        redactWithNativeTimelineAction({
+          roomId: room.roomId,
+          eventId,
+          reason,
+        }),
+      [room]
     )
   );
 
@@ -943,19 +713,22 @@ export const MessageDeleteItem = as<
 export const MessageReportItem = as<
   'button',
   {
-    room: Room;
-    mEvent: MatrixEvent;
+    room: MessageRoomReading;
+    mEvent: MatrixEventReading;
     onClose?: () => void;
   }
 >(({ room, mEvent, onClose, ...props }, ref) => {
-  const mx = useMatrixClient();
   const [open, setOpen] = useState(false);
 
   const [reportState, reportMessage] = useAsyncCallback(
     useCallback(
-      (eventId: string, score: number, reason: string) =>
-        mx.reportEvent(room.roomId, eventId, score, reason),
-      [mx, room]
+      (eventId: string, _score: number, reason: string) =>
+        reportWithNativeTimelineAction({
+          roomId: room.roomId,
+          eventId,
+          reason,
+        }),
+      [room]
     )
   );
 
@@ -1075,8 +848,8 @@ export const MessageReportItem = as<
 });
 
 export type MessageProps = {
-  room: Room;
-  mEvent: MatrixEvent;
+  room: MessageRoomReading;
+  mEvent: MatrixEventReading;
   timelineItem: number;
   collapse: boolean;
   highlight: boolean;
@@ -1085,8 +858,8 @@ export type MessageProps = {
   canSendReaction?: boolean;
   canRedactReactions?: boolean;
   canPinEvent?: boolean;
-  imagePackRooms?: Room[];
-  relations?: Relations;
+  imagePackRooms?: string[];
+  relations?: MessageRelationsReading;
   messageLayout: MessageLayout;
   messageSpacing: MessageSpacing;
   onUserClick: MouseEventHandler<HTMLButtonElement>;
@@ -1705,11 +1478,6 @@ export const Message = as<'div', MessageProps>(
                                       </Text>
                                     </MenuItem>
                                   )}
-                                  <MessageForwardItem
-                                    room={room}
-                                    mEvent={mEvent}
-                                    onClose={closeMenu}
-                                  />
                                   {canPinEvent && (
                                     <MessagePinItem
                                       room={room}
@@ -1802,8 +1570,8 @@ export const Message = as<'div', MessageProps>(
 );
 
 export type EventProps = {
-  room: Room;
-  mEvent: MatrixEvent;
+  room: MessageRoomReading;
+  mEvent: MatrixEventReading;
   highlight: boolean;
   canDelete?: boolean;
   messageSpacing: MessageSpacing;

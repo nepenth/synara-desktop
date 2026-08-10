@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useState } from 'react';
 import classNames from 'classnames';
 import {
   Avatar,
@@ -16,71 +16,79 @@ import {
   color,
   config,
 } from 'folds';
-import { MatrixEvent, Room, RoomMember } from 'matrix-js-sdk';
-import { Relations } from 'matrix-js-sdk/lib/models/relations';
-import { getMemberDisplayName } from '../../../utils/room';
-import { eventWithShortcode, getMxIdLocalPart } from '../../../utils/matrix';
 import * as css from './ReactionViewer.css';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { useRelations } from '../../../hooks/useRelations';
 import { Reaction } from '../../../components/message';
 import { getHexcodeForEmoji, getShortcodeFor } from '../../../plugins/emoji';
 import { UserAvatar } from '../../../components/user-avatar';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { useOpenUserRoomProfile } from '../../../state/hooks/userRoomProfile';
-import { useSpaceOptionally } from '../../../hooks/useSpace';
 import { getMouseEventCords } from '../../../utils/dom';
-import { resolveMatrixThumbnailUrl } from '../../../matrix/media';
+import { redactReactionWithNativeOwner, type NativeReactionReadback } from '../nativeReactionOwner';
+
+type LegacyRoomReference = { roomId: string };
 
 export type ReactionViewerProps = {
-  room: Room;
+  /** Native room identity and target event identity. */
+  roomId?: string;
+  targetEventId?: string;
+  reactions?: readonly NativeReactionReadback[];
   initialKey?: string;
-  relations: Relations;
   canRedact?: boolean;
   requestClose: () => void;
+  /**
+   * Compatibility fields for the retired JS message surface. They are not
+   * read: without a native projection this viewer is intentionally empty.
+   */
+  room?: LegacyRoomReference;
+  relations?: unknown;
 };
+
 export const ReactionViewer = as<'div', ReactionViewerProps>(
-  ({ className, room, initialKey, relations, canRedact, requestClose, ...props }, ref) => {
+  (
+    {
+      className,
+      roomId,
+      targetEventId,
+      reactions = [],
+      initialKey,
+      canRedact,
+      requestClose,
+      room,
+      relations: legacyRelations,
+      ...props
+    },
+    ref
+  ) => {
+    void legacyRelations;
     const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
-    const reactions = useRelations(
-      relations,
-      useCallback((rel) => [...(rel.getSortedAnnotationsByKey() ?? [])], [])
-    );
-    const space = useSpaceOptionally();
     const openProfile = useOpenUserRoomProfile();
+    const resolvedRoomId = roomId ?? room?.roomId;
 
     const [selectedKey, setSelectedKey] = useState<string>(() => {
       if (initialKey) return initialKey;
-      const defaultReaction = reactions.find((reaction) => typeof reaction[0] === 'string');
-      return defaultReaction ? defaultReaction[0] : '';
+      const defaultReaction = reactions[0];
+      return defaultReaction?.key ?? '';
     });
     const [redactingEventId, setRedactingEventId] = useState<string>();
     const [redactError, setRedactError] = useState<string>();
 
-    const getName = (member: RoomMember) =>
-      getMemberDisplayName(room, member.userId) ?? getMxIdLocalPart(member.userId) ?? member.userId;
+    const selectedReaction = reactions.find(({ key }) => key === selectedKey);
+    const selectedSenders = selectedReaction?.senders ?? [];
+    const selectedShortcode = getShortcodeFor(getHexcodeForEmoji(selectedKey)) ?? selectedKey;
 
-    const getReactionsForKey = (key: string): MatrixEvent[] => {
-      const reactSet = reactions.find(([k]) => k === key)?.[1];
-      if (!reactSet) return [];
-      return Array.from(reactSet);
-    };
-
-    const selectedReactions = getReactionsForKey(selectedKey);
-    const selectedShortcode =
-      selectedReactions.find(eventWithShortcode)?.getContent().shortcode ??
-      getShortcodeFor(getHexcodeForEmoji(selectedKey)) ??
-      selectedKey;
-
-    const handleRedactReaction = async (mEvent: MatrixEvent) => {
-      if (!canRedact) return;
-      const eventId = mEvent.getId();
-      if (!eventId) return;
-      setRedactingEventId(eventId);
+    const handleRedactReaction = async (key: string, reactionEventId: string | undefined) => {
+      if (!canRedact || !resolvedRoomId || !targetEventId || !reactionEventId) return;
+      setRedactingEventId(reactionEventId);
       setRedactError(undefined);
       try {
-        await mx.redactEvent(room.roomId, eventId, undefined, { reason: 'Removed reaction' });
+        await redactReactionWithNativeOwner({
+          roomId: resolvedRoomId,
+          eventId: targetEventId,
+          reactionEventId,
+          key,
+        });
       } catch {
         setRedactError('Failed to remove reaction.');
       } finally {
@@ -98,20 +106,17 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
         <Box shrink="No" className={css.Sidebar}>
           <Scroll visibility="Hover" hideTrack size="300">
             <Box className={css.SidebarContent} direction="Column" gap="200">
-              {reactions.map(([key, evts]) => {
-                if (typeof key !== 'string') return null;
-                return (
-                  <Reaction
-                    key={key}
-                    mx={mx}
-                    reaction={key}
-                    count={evts.size}
-                    aria-selected={key === selectedKey}
-                    onClick={() => setSelectedKey(key)}
-                    useAuthentication={useAuthentication}
-                  />
-                );
-              })}
+              {reactions.map((reaction) => (
+                <Reaction
+                  key={reaction.key}
+                  mx={mx}
+                  reaction={reaction.key}
+                  count={reaction.count}
+                  aria-selected={reaction.key === selectedKey}
+                  onClick={() => setSelectedKey(reaction.key)}
+                  useAuthentication={useAuthentication}
+                />
+              ))}
             </Box>
           </Scroll>
         </Box>
@@ -136,28 +141,22 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
           <Box grow="Yes">
             <Scroll visibility="Hover" hideTrack size="300">
               <Box className={css.Content} direction="Column">
-                {selectedReactions.map((mEvent) => {
-                  const senderId = mEvent.getSender();
-                  if (!senderId) return null;
-                  const member = room.getMember(senderId);
-                  const name = (member ? getName(member) : getMxIdLocalPart(senderId)) ?? senderId;
-
-                  const avatarMxcUrl = member?.getMxcAvatarUrl();
-                  const avatarUrl = avatarMxcUrl
-                    ? resolveMatrixThumbnailUrl(mx, avatarMxcUrl, 100, { useAuthentication })
-                    : undefined;
-                  const eventId = mEvent.getId();
+                {selectedSenders.map((sender) => {
+                  const senderId = sender.userId;
+                  const reactionEventId = sender.reactionEventId;
+                  const isRedacting = redactingEventId === reactionEventId;
 
                   return (
                     <MenuItem
                       as="div"
-                      key={mEvent.getId() ?? senderId}
+                      key={`${senderId}:${reactionEventId ?? 'local'}`}
                       style={{ padding: `0 ${config.space.S200}` }}
                       radii="400"
                       onClick={(event: React.MouseEvent<HTMLElement>) => {
+                        if (!resolvedRoomId) return;
                         openProfile(
-                          room.roomId,
-                          space?.roomId,
+                          resolvedRoomId,
+                          undefined,
                           senderId,
                           getMouseEventCords(event.nativeEvent),
                           'Bottom'
@@ -167,28 +166,27 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
                         <Avatar size="200">
                           <UserAvatar
                             userId={senderId}
-                            src={avatarUrl ?? undefined}
-                            alt={name}
+                            alt={senderId}
                             renderFallback={() => <Icon size="50" src={Icons.User} filled />}
                           />
                         </Avatar>
                       }
                       after={
-                        canRedact ? (
+                        canRedact && reactionEventId ? (
                           <IconButton
                             size="300"
                             radii="300"
                             variant="Critical"
                             fill="None"
                             aria-label="Remove reaction"
-                            disabled={redactingEventId === eventId}
+                            disabled={isRedacting}
                             onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
                               event.preventDefault();
                               event.stopPropagation();
-                              handleRedactReaction(mEvent);
+                              void handleRedactReaction(selectedKey, reactionEventId);
                             }}
                           >
-                            {redactingEventId === eventId ? (
+                            {isRedacting ? (
                               <Spinner size="100" variant="Critical" />
                             ) : (
                               <Icon size="100" src={Icons.Delete} />
@@ -199,7 +197,7 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
                     >
                       <Box grow="Yes">
                         <Text size="T400" truncate>
-                          {name}
+                          {senderId}
                         </Text>
                       </Box>
                     </MenuItem>

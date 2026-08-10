@@ -1,5 +1,11 @@
 import React, { useCallback, useMemo } from 'react';
-import { ConditionKind, IPushRules, PushRuleKind, RuleId } from 'matrix-js-sdk';
+import {
+  ConditionKind,
+  IPushRules,
+  PushRuleKind,
+  RuleId,
+  asPushRuleClient,
+} from '../../../utils/pushRules';
 import { Box, Text, Badge } from 'folds';
 import { useAccountData } from '../../../hooks/useAccountData';
 import { AccountDataEvent } from '../../../../types/matrix/accountData';
@@ -103,7 +109,7 @@ function MentionModeSwitcher({ ruleId, pushRules, defaultPushRuleData }: PushRul
   const handleChange = useCallback(
     async (mode: NotificationMode) => {
       const actions = getModeActions(mode);
-      await mx.setPushRuleActions('global', kind, ruleId, actions);
+      await asPushRuleClient(mx).setPushRuleActions('global', kind, ruleId, actions);
     },
     [mx, getModeActions, kind, ruleId]
   );

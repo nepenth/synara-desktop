@@ -112,8 +112,6 @@ export const useAsyncSearch = <TSearchItem extends object | string | number>(
   const [result, setResult] = useState<UseAsyncSearchResult<TSearchItem>>();
 
   const [searchCallback, terminateSearch] = useMemo(() => {
-    setResult(undefined);
-
     const handleMatch: MatchHandler<TSearchItem> = (item, query) => {
       const itemStr = getItemStr(item, query);
 
@@ -130,6 +128,17 @@ export const useAsyncSearch = <TSearchItem extends object | string | number>(
     return AsyncSearch(list, handleMatch, handleResult, options);
   }, [list, options, getItemStr]);
 
+  // Source changes invalidate a prior result after React commits. Doing this in
+  // the useMemo above is a render-phase state update: callers with an unstable
+  // list (for example native room creators while loading) would retry forever.
+  useEffect(() => {
+    setResult(undefined);
+    return () => {
+      // Terminate the previous source's pending search on replacement/unmount.
+      terminateSearch();
+    };
+  }, [terminateSearch]);
+
   const searchHandler: AsyncSearchHandler = useCallback(
     (query) => {
       const normalizedQuery = normalize(query, options?.normalizeOptions);
@@ -142,14 +151,6 @@ export const useAsyncSearch = <TSearchItem extends object | string | number>(
     terminateSearch();
     setResult(undefined);
   }, [terminateSearch]);
-
-  useEffect(
-    () => () => {
-      // terminate any ongoing search request on unmount.
-      terminateSearch();
-    },
-    [terminateSearch]
-  );
 
   return [result, searchHandler, resetHandler];
 };

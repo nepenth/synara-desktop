@@ -1,0 +1,12 @@
+{
+  "kind": "message",
+  "itemId": "$msg1",
+  "eventId": "$msg1",
+  "roomId": "!room:example.org",
+  "sender": "@alice:example.org",
+  "originServerTs": 1720000000000,
+  "body": "hello world",
+  "msgtype": "m.text",
+  "isEdited": false,
+  "isRedacted": false
+}

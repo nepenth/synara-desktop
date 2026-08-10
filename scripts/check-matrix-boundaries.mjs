@@ -3,6 +3,12 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  formatViolations,
+  runGuardrails,
+} from "./check-matrix-rust-sdk-guardrails.mjs";
+import { runGuardrails as runP16AllowlistGuardrails } from "./matrix-rust-p1.6-guardrails.mjs";
+
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
 const trackedFiles = execFileSync("git", ["ls-files"], {
@@ -40,6 +46,10 @@ const DESKTOP_ALLOWED_DIRECT_MATRIX_PATHS = new Map([
   [
     "synara/src/app/cs-api.ts",
     "DESKTOP-REST-EXCEPTION-002: login-time homeserver version discovery helper.",
+  ],
+  [
+    "src-tauri/src/matrix/auth/http_transport.rs",
+    "DESKTOP-REST-EXCEPTION-003 / R0.7-CS-API-001: read-only well-known + login-types listing (no credentials; no dual-backend).",
   ],
 ]);
 
@@ -137,3 +147,34 @@ console.log(
   `Matrix boundary check passed with ${activeIOSExceptions.size} active iOS exceptions and ` +
     `${activeDesktopExceptions.size} active desktop exceptions.`
 );
+
+// P1.6 — Matrix Rust SDK replacement architectural guardrails.
+// (1) JS SDK allowlist freeze + wire-module bans + raw HTTP + versioned IPC
+const p16 = runP16AllowlistGuardrails({ root, files: repositoryFiles });
+if (!p16.ok) {
+  console.error(
+    `[matrix-boundaries] P1.6 allowlist/wire guardrails failed with ${p16.findingCount} finding(s)`
+  );
+  for (const f of p16.findings) {
+    console.error(`  - [${f.rule}] ${f.path}: ${f.message}`);
+  }
+  console.error(
+    "\nSee docs/matrix-rust-sdk/p1.6-architectural-guardrails.md for rules."
+  );
+  process.exit(1);
+}
+console.log(
+  `[matrix-boundaries] P1.6 allowlist/wire guardrails passed (${p16.fileCount} files; allowlist ${p16.allowlistSize}).`
+);
+
+// (2) Dual-backend ban, no production Client under matrix/, no matrix_* Tauri cmds
+const rustGuardrails = runGuardrails({ root, files: repositoryFiles });
+if (!rustGuardrails.ok) {
+  console.error(`[matrix-boundaries] ${rustGuardrails.summary}`);
+  console.error(formatViolations(rustGuardrails.violations));
+  console.error(
+    "\nSee docs/matrix-rust-sdk/p1.6-architectural-guardrails.md for rules."
+  );
+  process.exit(1);
+}
+console.log(`[matrix-boundaries] ${rustGuardrails.summary}`);

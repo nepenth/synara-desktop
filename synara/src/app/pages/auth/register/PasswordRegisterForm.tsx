@@ -10,27 +10,21 @@ import {
   Text,
   color,
 } from 'folds';
-import React, { ChangeEventHandler, useCallback, useMemo, useState } from 'react';
-import {
-  AuthDict,
-  AuthType,
-  IAuthData,
-  MatrixError,
-  RegisterRequest,
-  UIAFlow,
-  createClient,
-} from 'matrix-js-sdk';
+import React, { ChangeEventHandler, useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PasswordInput } from '../../../components/password-input';
 import {
+  AuthStageType,
   getLoginTermUrl,
   getUIAFlowForStages,
   hasStageInFlows,
   requiredStageInFlows,
+  type UIAAuthData,
+  type UIAFlow,
 } from '../../../utils/matrix-uia';
 import { useUIACompleted, useUIAFlow, useUIAParams } from '../../../hooks/useUIAFlows';
-import { AsyncState, AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
+import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useAutoDiscoveryInfo } from '../../../hooks/useAutoDiscoveryInfo';
-import { RegisterError, RegisterResult, register, useRegisterComplete } from './registerUtil';
 import { FieldError } from '../FiledError';
 import {
   AutoDummyStageDialog,
@@ -38,21 +32,33 @@ import {
   EmailStageDialog,
   ReCaptchaStageDialog,
   RegistrationTokenStageDialog,
+  type RegisterAuthDict,
+  type RegisterEmailTokenResult,
 } from '../../../components/uia-stages';
-import { useRegisterEmail } from '../../../hooks/useRegisterEmail';
 import { ConfirmPasswordMatch } from '../../../components/ConfirmPasswordMatch';
 import { UIAFlowOverlay } from '../../../components/UIAFlowOverlay';
-import { RequestEmailTokenCallback, RequestEmailTokenResponse } from '../../../hooks/types';
 import { synaraDeviceDisplayName } from '../../../utils/user-agent';
+import { completeNativeLoginBootstrap } from '../login/loginUtil';
 import { openExternalUrlFromClick } from '../../../utils/appLinks';
+import {
+  deleteAfterLoginRedirectPath,
+  getAfterLoginRedirectPath,
+} from '../../afterLoginRedirectPath';
+import { getHomePath } from '../../pathUtils';
+import {
+  generateRegisterClientSecret,
+  NativeRegisterError,
+  RegisterErrorCode,
+  requestRegisterEmailToken,
+  submitRegister,
+  SUPPORTED_REGISTER_STAGES,
+  type NativeRegisterAuthStage,
+  type NativeRegisterOutcome,
+  uiaAuthDataFromChallenge,
+} from './nativeRegister';
 
-export const SUPPORTED_REGISTER_STAGES = [
-  AuthType.RegistrationToken,
-  AuthType.Terms,
-  AuthType.Recaptcha,
-  AuthType.Email,
-  AuthType.Dummy,
-];
+export { SUPPORTED_REGISTER_STAGES };
+
 type RegisterFormInputs = {
   usernameInput: HTMLInputElement;
   passwordInput: HTMLInputElement;
@@ -73,23 +79,55 @@ type FormData = {
 
 const pickStages = (uiaFlows: UIAFlow[], formData: FormData): string[] => {
   const pickedStages: string[] = [];
-  if (formData.token) pickedStages.push(AuthType.RegistrationToken);
-  if (formData.email) pickedStages.push(AuthType.Email);
-  if (formData.terms) pickedStages.push(AuthType.Terms);
-  if (hasStageInFlows(uiaFlows, AuthType.Recaptcha)) {
-    pickedStages.push(AuthType.Recaptcha);
+  if (formData.token) pickedStages.push(AuthStageType.RegistrationToken);
+  if (formData.email) pickedStages.push(AuthStageType.Email);
+  if (formData.terms) pickedStages.push(AuthStageType.Terms);
+  if (hasStageInFlows(uiaFlows, AuthStageType.Recaptcha)) {
+    pickedStages.push(AuthStageType.Recaptcha);
   }
 
   return pickedStages;
 };
 
+const toNativeAuthStage = (dict: RegisterAuthDict): NativeRegisterAuthStage => {
+  switch (dict.type) {
+    case AuthStageType.Dummy:
+      return { type: 'dummy', session: dict.session };
+    case AuthStageType.Terms:
+      return { type: 'terms', session: dict.session };
+    case AuthStageType.RegistrationToken:
+      return {
+        type: 'registration_token',
+        token: dict.token,
+        session: dict.session,
+      };
+    case AuthStageType.Recaptcha:
+      return {
+        type: 'recaptcha',
+        response: dict.response,
+        session: dict.session,
+      };
+    case AuthStageType.Email:
+      return {
+        type: 'email_identity',
+        sid: dict.sid,
+        clientSecret: dict.clientSecret,
+        session: dict.session,
+      };
+    default:
+      return { type: 'session_only' };
+  }
+};
+
 type RegisterUIAFlowProps = {
   formData: FormData;
   flow: UIAFlow;
-  authData: IAuthData;
-  registerEmailState: AsyncState<RequestEmailTokenResponse, MatrixError>;
-  registerEmail: RequestEmailTokenCallback;
-  onRegister: (registerReqData: RegisterRequest) => void;
+  authData: UIAAuthData;
+  registerEmailState: ReturnType<
+    typeof useAsyncCallback<RegisterEmailTokenResult, Error, [string, string]>
+  >[0];
+  registerEmail: (email: string, clientSecret: string) => Promise<RegisterEmailTokenResult>;
+  onRegisterStage: (dict: RegisterAuthDict) => void;
 };
 function RegisterUIAFlow({
   formData,
@@ -97,7 +135,7 @@ function RegisterUIAFlow({
   authData,
   registerEmailState,
   registerEmail,
-  onRegister,
+  onRegisterStage,
 }: RegisterUIAFlowProps) {
   const completed = useUIACompleted(authData);
   const { getStageToComplete } = useUIAFlow(authData, flow);
@@ -105,16 +143,10 @@ function RegisterUIAFlow({
   const stageToComplete = getStageToComplete();
 
   const handleAuthDict = useCallback(
-    (authDict: AuthDict) => {
-      const { password, username } = formData;
-      onRegister({
-        auth: authDict,
-        password,
-        username,
-        initial_device_display_name: synaraDeviceDisplayName(),
-      });
+    (authDict: RegisterAuthDict) => {
+      onRegisterStage(authDict);
     },
-    [onRegister, formData]
+    [onRegisterStage]
   );
 
   const handleCancel = useCallback(() => {
@@ -128,7 +160,7 @@ function RegisterUIAFlow({
       stepCount={flow.stages.length}
       onCancel={handleCancel}
     >
-      {stageToComplete.type === AuthType.RegistrationToken && (
+      {stageToComplete.type === AuthStageType.RegistrationToken && (
         <RegistrationTokenStageDialog
           token={formData.token}
           stageData={stageToComplete}
@@ -136,21 +168,21 @@ function RegisterUIAFlow({
           onCancel={handleCancel}
         />
       )}
-      {stageToComplete.type === AuthType.Terms && (
+      {stageToComplete.type === AuthStageType.Terms && (
         <AutoTermsStageDialog
           stageData={stageToComplete}
           submitAuthDict={handleAuthDict}
           onCancel={handleCancel}
         />
       )}
-      {stageToComplete.type === AuthType.Recaptcha && (
+      {stageToComplete.type === AuthStageType.Recaptcha && (
         <ReCaptchaStageDialog
           stageData={stageToComplete}
           submitAuthDict={handleAuthDict}
           onCancel={handleCancel}
         />
       )}
-      {stageToComplete.type === AuthType.Email && (
+      {stageToComplete.type === AuthStageType.Email && (
         <EmailStageDialog
           email={formData.email}
           clientSecret={formData.clientSecret}
@@ -161,7 +193,7 @@ function RegisterUIAFlow({
           onCancel={handleCancel}
         />
       )}
-      {stageToComplete.type === AuthType.Dummy && (
+      {stageToComplete.type === AuthStageType.Dummy && (
         <AutoDummyStageDialog
           stageData={stageToComplete}
           submitAuthDict={handleAuthDict}
@@ -173,7 +205,7 @@ function RegisterUIAFlow({
 }
 
 type PasswordRegisterFormProps = {
-  authData: IAuthData;
+  authData: UIAAuthData;
   uiaFlows: UIAFlow[];
   defaultUsername?: string;
   defaultEmail?: string;
@@ -186,28 +218,69 @@ export function PasswordRegisterForm({
   defaultEmail,
   defaultRegisterToken,
 }: PasswordRegisterFormProps) {
+  const navigate = useNavigate();
   const serverDiscovery = useAutoDiscoveryInfo();
   const baseUrl = serverDiscovery['m.homeserver'].base_url;
-  const mx = useMemo(() => createClient({ baseUrl }), [baseUrl]);
   const params = useUIAParams(authData);
   const termUrl = getLoginTermUrl(params);
   const [formData, setFormData] = useState<FormData>();
-
   const [ongoingFlow, setOngoingFlow] = useState<UIAFlow>();
+  const [ongoingAuthData, setOngoingAuthData] = useState<UIAAuthData>();
 
-  const [registerEmailState, registerEmail] = useRegisterEmail(mx);
+  const [registerEmailState, registerEmail] = useAsyncCallback<
+    RegisterEmailTokenResult,
+    Error,
+    [string, string]
+  >(
+    useCallback(
+      async (email, clientSecret) => {
+        const result = await requestRegisterEmailToken(baseUrl, email, clientSecret, 1);
+        return {
+          email,
+          clientSecret,
+          sid: result.sid,
+        };
+      },
+      [baseUrl]
+    )
+  );
 
   const [registerState, handleRegister] = useAsyncCallback<
-    RegisterResult,
-    MatrixError,
-    [RegisterRequest]
-  >(useCallback(async (registerReqData) => register(mx, registerReqData), [mx]));
-  const [ongoingAuthData, customRegisterResp] =
-    registerState.status === AsyncStatus.Success ? registerState.data : [];
+    NativeRegisterOutcome,
+    NativeRegisterError,
+    [FormData, NativeRegisterAuthStage]
+  >(
+    useCallback(
+      async (data, auth) =>
+        submitRegister(baseUrl, data.username, data.password, auth, synaraDeviceDisplayName()),
+      [baseUrl]
+    )
+  );
+
   const registerError =
     registerState.status === AsyncStatus.Error ? registerState.error : undefined;
 
-  useRegisterComplete(customRegisterResp);
+  useEffect(() => {
+    if (registerState.status !== AsyncStatus.Success) return;
+    const outcome = registerState.data;
+    if (outcome.status === 'complete') {
+      // Registration installed the native session host-side (vault + desktop
+      // session envelope). Rehydrate the frontend bootstrap from the envelope
+      // before entering the app; without it the router gate sees no active
+      // session. Fail-closed: no navigation if the envelope is missing.
+      void completeNativeLoginBootstrap()
+        .then(() => {
+          const afterLoginRedirectPath = getAfterLoginRedirectPath();
+          deleteAfterLoginRedirectPath();
+          navigate(afterLoginRedirectPath ?? getHomePath(), { replace: true });
+        })
+        .catch(() => {
+          // No navigation without a native bootstrap session.
+        });
+      return;
+    }
+    setOngoingAuthData(uiaAuthDataFromChallenge(outcome));
+  }, [registerState, navigate]);
 
   const handleSubmit: ChangeEventHandler<HTMLFormElement> = (evt) => {
     evt.preventDefault();
@@ -240,21 +313,33 @@ export function PasswordRegisterForm({
       token,
       email,
       terms,
-      clientSecret: mx.generateClientSecret(),
+      clientSecret: generateRegisterClientSecret(),
     };
     const pickedStages = pickStages(uiaFlows, fData);
     const pickedFlow = getUIAFlowForStages(uiaFlows, pickedStages);
     setOngoingFlow(pickedFlow);
     setFormData(fData);
-    handleRegister({
-      username,
-      password,
-      auth: {
-        session: authData.session,
-      },
-      initial_device_display_name: synaraDeviceDisplayName(),
+    setOngoingAuthData(undefined);
+    handleRegister(fData, {
+      type: 'session_only',
+      session: authData.session,
     });
   };
+
+  const handleStage = useCallback(
+    (dict: RegisterAuthDict) => {
+      if (!formData) return;
+      handleRegister(formData, toNativeAuthStage(dict));
+    },
+    [formData, handleRegister]
+  );
+
+  const activeAuthData = ongoingAuthData ?? authData;
+  const showUia =
+    Boolean(formData) &&
+    Boolean(ongoingFlow) &&
+    Boolean(ongoingAuthData) &&
+    registerState.status !== AsyncStatus.Loading;
 
   return (
     <>
@@ -271,13 +356,13 @@ export function PasswordRegisterForm({
             outlined
             required
           />
-          {registerError?.errcode === RegisterError.UserTaken && (
+          {registerError?.code === RegisterErrorCode.UserTaken && (
             <FieldError message="This username is already taken." />
           )}
-          {registerError?.errcode === RegisterError.UserInvalid && (
+          {registerError?.code === RegisterErrorCode.UserInvalid && (
             <FieldError message="This username contains invalid characters." />
           )}
-          {registerError?.errcode === RegisterError.UserExclusive && (
+          {registerError?.code === RegisterErrorCode.UserExclusive && (
             <FieldError message="This username is reserved." />
           )}
         </Box>
@@ -297,18 +382,18 @@ export function PasswordRegisterForm({
                   outlined
                   required
                 />
-                {registerError?.errcode === RegisterError.PasswordWeak && (
+                {registerError?.code === RegisterErrorCode.PasswordWeak && (
                   <FieldError
                     message={
-                      registerError.data.error ??
+                      registerError.message ||
                       'Weak Password. Password rejected by server please choosing more strong Password.'
                     }
                   />
                 )}
-                {registerError?.errcode === RegisterError.PasswordShort && (
+                {registerError?.code === RegisterErrorCode.PasswordShort && (
                   <FieldError
                     message={
-                      registerError.data.error ??
+                      registerError.message ||
                       'Short Password. Password rejected by server please choosing more long Password.'
                     }
                   />
@@ -332,10 +417,10 @@ export function PasswordRegisterForm({
             </>
           )}
         </ConfirmPasswordMatch>
-        {hasStageInFlows(uiaFlows, AuthType.RegistrationToken) && (
+        {hasStageInFlows(uiaFlows, AuthStageType.RegistrationToken) && (
           <Box direction="Column" gap="100">
             <Text as="label" size="L400" priority="300">
-              {requiredStageInFlows(uiaFlows, AuthType.RegistrationToken)
+              {requiredStageInFlows(uiaFlows, AuthStageType.RegistrationToken)
                 ? 'Registration Token'
                 : 'Registration Token (Optional)'}
             </Text>
@@ -344,15 +429,15 @@ export function PasswordRegisterForm({
               defaultValue={defaultRegisterToken}
               name="tokenInput"
               size="500"
-              required={requiredStageInFlows(uiaFlows, AuthType.RegistrationToken)}
+              required={requiredStageInFlows(uiaFlows, AuthStageType.RegistrationToken)}
               outlined
             />
           </Box>
         )}
-        {hasStageInFlows(uiaFlows, AuthType.Email) && (
+        {hasStageInFlows(uiaFlows, AuthStageType.Email) && (
           <Box direction="Column" gap="100">
             <Text as="label" size="L400" priority="300">
-              {requiredStageInFlows(uiaFlows, AuthType.Email) ? 'Email' : 'Email (Optional)'}
+              {requiredStageInFlows(uiaFlows, AuthStageType.Email) ? 'Email' : 'Email (Optional)'}
             </Text>
             <Input
               variant="Background"
@@ -360,13 +445,13 @@ export function PasswordRegisterForm({
               name="emailInput"
               type="email"
               size="500"
-              required={requiredStageInFlows(uiaFlows, AuthType.Email)}
+              required={requiredStageInFlows(uiaFlows, AuthStageType.Email)}
               outlined
             />
           </Box>
         )}
 
-        {hasStageInFlows(uiaFlows, AuthType.Terms) && termUrl && (
+        {hasStageInFlows(uiaFlows, AuthStageType.Terms) && termUrl && (
           <Box alignItems="Center" gap="200">
             <Checkbox name="termsInput" size="300" variant="Primary" required />
             <Text size="T300">
@@ -383,17 +468,20 @@ export function PasswordRegisterForm({
             </Text>
           </Box>
         )}
-        {registerError?.errcode === RegisterError.RateLimited && (
+        {registerError?.code === RegisterErrorCode.RateLimited && (
           <FieldError message="Failed to register. Your register request has been rate-limited by server, Please try after some time." />
         )}
-        {registerError?.errcode === RegisterError.Forbidden && (
+        {registerError?.code === RegisterErrorCode.Forbidden && (
           <FieldError message="Failed to register. The homeserver does not permit registration." />
         )}
-        {registerError?.errcode === RegisterError.InvalidRequest && (
+        {registerError?.code === RegisterErrorCode.InvalidRequest && (
           <FieldError message="Failed to register. Invalid request." />
         )}
-        {registerError?.errcode === RegisterError.Unknown && (
-          <FieldError message={registerError.data.error ?? 'Failed to register. Unknown Reason.'} />
+        {registerError?.code === RegisterErrorCode.Unsupported && (
+          <FieldError message="Failed to register. This application does not support a required authentication stage." />
+        )}
+        {registerError?.code === RegisterErrorCode.Unknown && (
+          <FieldError message={registerError.message || 'Failed to register. Unknown Reason.'} />
         )}
         <span data-spacing-node />
         <Button variant="Primary" size="500" type="submit">
@@ -402,19 +490,16 @@ export function PasswordRegisterForm({
           </Text>
         </Button>
       </Box>
-      {registerState.status === AsyncStatus.Success &&
-        formData &&
-        ongoingFlow &&
-        ongoingAuthData && (
-          <RegisterUIAFlow
-            formData={formData}
-            flow={ongoingFlow}
-            authData={ongoingAuthData}
-            registerEmail={registerEmail}
-            registerEmailState={registerEmailState}
-            onRegister={handleRegister}
-          />
-        )}
+      {showUia && formData && ongoingFlow && ongoingAuthData && (
+        <RegisterUIAFlow
+          formData={formData}
+          flow={ongoingFlow}
+          authData={activeAuthData}
+          registerEmail={registerEmail}
+          registerEmailState={registerEmailState}
+          onRegisterStage={handleStage}
+        />
+      )}
       {registerState.status === AsyncStatus.Loading && (
         <Overlay open backdrop={<OverlayBackdrop />}>
           <OverlayCenter>

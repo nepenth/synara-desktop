@@ -11,8 +11,16 @@ import React, {
 } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import { isKeyHotkey } from 'is-hotkey';
-import { IContent, MsgType, RelationType, Room } from 'matrix-js-sdk';
-import { EventType } from 'matrix-js-sdk/lib/@types/event';
+import type { EventedRoomReading } from '../../utils/roomEvents';
+
+type RelationTypeRelatesTo = {
+  'm.in_reply_to'?: { event_id: string };
+  event_id?: string;
+  rel_type?: string;
+  is_falling_back?: boolean;
+  [key: string]: unknown;
+};
+import { IContent, MsgType, RelationType } from '../../utils/messageContent';
 import { useTranslation } from 'react-i18next';
 import { ReactEditor } from 'slate-react';
 import { Transforms, Editor } from 'slate';
@@ -102,7 +110,6 @@ import { settingsAtom } from '../../state/settings';
 import {
   getAudioMsgContent,
   getFileMsgContent,
-  getGifMsgContent,
   getImageMsgContent,
   getVideoMsgContent,
 } from './msgContent';
@@ -131,17 +138,26 @@ import {
   readPlatformClipboardImage,
   readPlatformClipboardText,
 } from '../../platform';
-import { fetchGifForUpload, gifPickerEnabled, gifSearchAvailable } from '../../utils/gifProvider';
+import { gifPickerEnabled, gifSearchAvailable } from '../../utils/gifProvider';
 import type { GifResult } from '../../utils/gifProvider';
 import { GifPicker } from './gif/GifPicker';
 import { clearRoomDraft, loadRoomDraft, saveRoomDraft } from '../../utils/drafts';
 import {
   DEFAULT_POLL_SELECTIONS,
   MAX_POLL_SELECTIONS,
-  makePollStartContent,
-  POLL_START_EVENT_TYPE,
+  normalizePollParts,
 } from '../../utils/polls';
 import { RoomComposer } from './RoomComposer';
+import {
+  fileToNativeAttachmentBytes,
+  nativeComposerAttachmentReady,
+  sendComposerAttachmentsWithNativeOwner,
+} from './nativeSendAttachment';
+import { sendComposerGifWithNativeOwner } from './nativeSendGif';
+import { sendComposerStickerWithNativeOwner } from './nativeSendSticker';
+import { sendPollWithNativeDesktopOwner } from './nativePoll';
+import { sendPlainTextWithNativeOwner } from './nativeSendText';
+import { clearNativeComposerReplyDraft } from './nativeComposerDraft';
 
 const NATIVE_PASTE_EVENT = 'synara://native-paste';
 
@@ -149,7 +165,7 @@ interface RoomInputProps {
   editor: Editor;
   fileDropContainerRef: RefObject<HTMLElement | null>;
   roomId: string;
-  room: Room;
+  room: EventedRoomReading;
 }
 export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
   ({ editor, fileDropContainerRef, roomId, room }, ref) => {
@@ -167,7 +183,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     );
     const { t } = useTranslation();
     const direct = useIsDirectRoom();
-    const commands = useCommands(mx, room);
+    const commands = useCommands(mx, room as unknown as Parameters<typeof useCommands>[1]);
     const emojiBtnRef = useRef<HTMLButtonElement>(null);
     const gifBtnRef = useRef<HTMLButtonElement>(null);
     const pollBtnRef = useRef<HTMLButtonElement>(null);
@@ -177,6 +193,10 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     const [msgDraft, setMsgDraft] = useAtom(roomIdToMsgDraftAtomFamily(roomId));
     const [replyDraft, setReplyDraft] = useAtom(roomIdToReplyDraftAtomFamily(roomId));
+    const clearReplyDraft = useCallback(() => {
+      setReplyDraft(undefined);
+      void clearNativeComposerReplyDraft({ roomId });
+    }, [roomId, setReplyDraft]);
     const replyUserID = replyDraft?.userId;
 
     const powerLevelTags = usePowerLevelTags(room, powerLevels);
@@ -198,13 +218,24 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     const [uploadBoard, setUploadBoard] = useState(true);
     const [selectedFiles, setSelectedFiles] = useAtom(roomIdToUploadItemsAtomFamily(roomId));
+    const [nativeComposerSend, setNativeComposerSend] = useState(false);
     const uploadFamilyObserverAtom = createUploadFamilyObserverAtom(
       roomUploadAtomFamily,
       selectedFiles.map((f) => f.file)
     );
     const uploadBoardHandlers = useRef<UploadBoardImperativeHandlers | undefined>(undefined);
 
-    const imagePackRooms: Room[] = useImagePackRooms(roomId, roomToParents);
+    useEffect(() => {
+      let cancelled = false;
+      void nativeComposerAttachmentReady().then((ready) => {
+        if (!cancelled) setNativeComposerSend(ready);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [roomId]);
+
+    const imagePackRooms: string[] = useImagePackRooms(roomId, roomToParents);
 
     const [toolbar, setToolbar] = useSetting(settingsAtom, 'editorToolbar');
     const [autocompleteQuery, setAutocompleteQuery] =
@@ -224,15 +255,21 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const gifOnboardingVisible =
       gifProviderAvailable && !gifSearchEnabled && !gifOnboardingDismissed;
 
-    const sendTypingStatus = useTypingStatusUpdater(mx, roomId);
+    const sendTypingStatus = useTypingStatusUpdater(roomId);
 
     const handleFiles = useCallback(
       async (files: File[]) => {
         setUploadBoard(true);
         const safeFiles = files.map(safeFile);
         const fileItems: TUploadItem[] = [];
+        // Native Rust encrypts in e2e rooms; do not dual-encrypt via JS.
+        const nativeReady = await nativeComposerAttachmentReady();
+        setNativeComposerSend(nativeReady);
 
-        if (room.hasEncryptionStateEvent()) {
+        if (
+          !nativeReady &&
+          (room as unknown as { hasEncryptionStateEvent(): boolean }).hasEncryptionStateEvent()
+        ) {
           const encryptFiles = fulfilledPromiseSettledResult(
             await Promise.allSettled(safeFiles.map((f) => encryptFile(f)))
           );
@@ -399,7 +436,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const getReplyRelation = useCallback(() => {
       if (!replyDraft) return undefined;
 
-      const relation: IContent['m.relates_to'] = {
+      const relation: RelationTypeRelatesTo = {
         'm.in_reply_to': {
           event_id: replyDraft.eventId,
         },
@@ -505,15 +542,47 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     };
 
     const handleSendUpload = async (uploads: UploadSuccess[]) => {
+      const replyTo = typeof replyDraft?.eventId === 'string' ? replyDraft.eventId : undefined;
+      const threadRoot =
+        replyDraft?.relation?.rel_type === RelationType.Thread &&
+        typeof replyDraft.relation.event_id === 'string'
+          ? replyDraft.relation.event_id
+          : undefined;
+      const nativeFiles = await Promise.all(
+        uploads.map(async (upload) => {
+          const fileItem = selectedFiles.find((f) => f.file === upload.file);
+          if (!fileItem) throw new Error('Broken upload');
+          const source = fileItem.originalFile;
+          return {
+            filename: source.name || 'attachment',
+            mimeType: source.type || 'application/octet-stream',
+            bytes: await fileToNativeAttachmentBytes(source),
+          };
+        })
+      );
+      const owner = await sendComposerAttachmentsWithNativeOwner(
+        roomId,
+        nativeFiles,
+        replyTo,
+        threadRoot
+      );
+      if (owner === 'native') {
+        handleCancelUpload(uploads);
+        if (nativeFiles.length > 0) {
+          setReplyDraft(undefined);
+        }
+        return;
+      }
+
       const contentsPromises = uploads.map(async (upload) => {
         const fileItem = selectedFiles.find((f) => f.file === upload.file);
         if (!fileItem) throw new Error('Broken upload');
 
         if (fileItem.file.type.startsWith('image')) {
-          return getImageMsgContent(mx, fileItem, upload.mxc);
+          return getImageMsgContent(fileItem, upload.mxc);
         }
         if (fileItem.file.type.startsWith('video')) {
-          return getVideoMsgContent(mx, fileItem, upload.mxc);
+          return getVideoMsgContent(fileItem, upload.mxc);
         }
         if (fileItem.file.type.startsWith('audio')) {
           return getAudioMsgContent(fileItem, upload.mxc);
@@ -526,7 +595,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         mx.sendMessage(roomId, addReplyRelationToContent(content) as any)
       );
       if (contents.length > 0) {
-        setReplyDraft(undefined);
+        clearReplyDraft();
       }
     };
 
@@ -543,7 +612,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           allowInlineMarkdown: isMarkdown,
         })
       );
-      let msgType = MsgType.Text;
+      let msgType: 'm.text' | 'm.emote' | 'm.notice' = MsgType.Text;
 
       if (commandName) {
         plainText = trimCommand(commandName, plainText);
@@ -595,18 +664,37 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         content.format = 'org.matrix.custom.html';
         content.formatted_body = formattedBody;
       }
+      // Thread/reply relations for the native owner travel as IPC fields, not
+      // via a JS-built m.relates_to blob. Legacy web keeps getReplyRelation.
       const relation = getReplyRelation();
       if (relation) {
         content['m.relates_to'] = relation;
       }
+      const threadRoot =
+        replyDraft?.relation?.rel_type === RelationType.Thread &&
+        typeof replyDraft.relation.event_id === 'string'
+          ? replyDraft.relation.event_id
+          : undefined;
       try {
         setSendingMessage(true);
         setSendError(undefined);
-        await mx.sendMessage(roomId, content as any);
+        const nativeOwner = await sendPlainTextWithNativeOwner({
+          roomId,
+          body,
+          msgType,
+          formattedBody: content.formatted_body,
+          mentionUserIds: Array.from(mentionData.users),
+          mentionRoom: mentionData.room,
+          replyTo: replyDraft?.eventId as string | undefined,
+          threadRoot,
+        });
+        if (nativeOwner === 'legacy') {
+          await mx.sendMessage(roomId, content as any);
+        }
         resetEditor(editor);
         resetEditorHistory(editor);
         clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
-        setReplyDraft(undefined);
+        clearReplyDraft();
         sendTypingStatus(false);
       } catch (err) {
         const reason =
@@ -628,7 +716,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       editor,
       replyDraft,
       sendTypingStatus,
-      setReplyDraft,
+      clearReplyDraft,
       isMarkdown,
       commands,
       getReplyRelation,
@@ -662,15 +750,36 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     const handleSendPoll = async () => {
       setPollError(undefined);
-      const content = makePollStartContent(pollQuestion, pollAnswers, pollMaxSelections);
-      if (!content) {
+      const poll = normalizePollParts(pollQuestion, pollAnswers, pollMaxSelections);
+      if (!poll) {
         setPollError(
           t('modernization.poll.invalid', 'Add a question and at least two answer options.')
         );
         return;
       }
       try {
-        await mx.sendEvent(roomId, POLL_START_EVENT_TYPE as any, content as any);
+        const threadRoot =
+          replyDraft?.relation?.rel_type === RelationType.Thread &&
+          typeof replyDraft.relation.event_id === 'string'
+            ? replyDraft.relation.event_id
+            : undefined;
+        const owner = await sendPollWithNativeDesktopOwner({
+          roomId,
+          question: poll.question,
+          answers: poll.answers.map((answer) => answer.text),
+          maxSelections: poll.maxSelections,
+          threadRoot,
+          replyTo: replyDraft?.eventId as string | undefined,
+        });
+        if (owner === 'legacy') {
+          setPollError(
+            t(
+              'modernization.poll.native_required',
+              'Native Matrix session is required to send polls on desktop.'
+            )
+          );
+          return;
+        }
         setPollQuestion('');
         setPollAnswers(['', '']);
         setPollMaxSelections(DEFAULT_POLL_SELECTIONS);
@@ -695,10 +804,10 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             setAutocompleteQuery(undefined);
             return;
           }
-          setReplyDraft(undefined);
+          clearReplyDraft();
         }
       },
-      [submit, setReplyDraft, enterForNewline, autocompleteQuery, isComposing]
+      [submit, clearReplyDraft, enterForNewline, autocompleteQuery, isComposing]
     );
 
     const handleKeyUp: KeyboardEventHandler = useCallback(
@@ -732,47 +841,72 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     };
 
     const handleStickerSelect = async (mxc: string, shortcode: string, label: string) => {
+      const replyTo = typeof replyDraft?.eventId === 'string' ? replyDraft.eventId : undefined;
+      const threadRoot =
+        replyDraft?.relation?.rel_type === RelationType.Thread &&
+        typeof replyDraft.relation.event_id === 'string'
+          ? replyDraft.relation.event_id
+          : undefined;
+
+      // Prefer pack media info when resolvable; native send still works without it.
+      let info: { w?: number; h?: number; mimetype?: string; size?: number } | undefined;
       const stickerUrl = resolveOptionalMatrixMediaUrl(mx, mxc, { useAuthentication });
-      if (!stickerUrl) return;
+      if (stickerUrl) {
+        try {
+          info = await getImageInfo(
+            await loadImageElement(stickerUrl),
+            await getImageUrlBlob(stickerUrl)
+          );
+        } catch {
+          info = undefined;
+        }
+      }
 
-      const info = await getImageInfo(
-        await loadImageElement(stickerUrl),
-        await getImageUrlBlob(stickerUrl)
-      );
+      const nativeOwner = await sendComposerStickerWithNativeOwner({
+        roomId,
+        body: label || shortcode || 'sticker',
+        mxc,
+        info: info
+          ? {
+              width: info.w,
+              height: info.h,
+              mimetype: info.mimetype,
+              size: info.size,
+            }
+          : undefined,
+        replyTo,
+        threadRoot,
+      });
+      if (nativeOwner === 'native') {
+        setReplyDraft(undefined);
+        return;
+      }
 
+      // Legacy web path — only when no native Matrix session is live.
+      if (!stickerUrl || !info) return;
       mx.sendEvent(
         roomId,
-        EventType.Sticker as any,
+        'm.sticker' as any,
         addReplyRelationToContent({
           body: label,
           url: mxc,
           info,
         }) as any
       );
-      setReplyDraft(undefined);
+      clearReplyDraft();
     };
 
     const handleGifSelect = async (gif: GifResult) => {
       setGifSending(true);
       setGifSendError(undefined);
+      const replyTo = typeof replyDraft?.eventId === 'string' ? replyDraft.eventId : undefined;
+      const threadRoot =
+        replyDraft?.relation?.rel_type === RelationType.Thread &&
+        typeof replyDraft.relation.event_id === 'string'
+          ? replyDraft.relation.event_id
+          : undefined;
       try {
-        const { blob, fileName } = await fetchGifForUpload(gif);
-        const gifFile = new File([blob], fileName, { type: 'image/gif' });
-        const encrypted = room.hasEncryptionStateEvent() ? await encryptFile(gifFile) : undefined;
-        const uploadFile = encrypted?.file ?? gifFile;
-        const upload = await mx.uploadContent(uploadFile, {
-          name: fileName,
-          type: 'image/gif',
-          includeFilename: true,
-        });
-        const mxc = upload.content_uri;
-        if (!mxc) throw new Error('Failed to upload GIF.');
-        await mx.sendMessage(
-          roomId,
-          addReplyRelationToContent(
-            getGifMsgContent(gif, mxc, blob.size, fileName, encrypted?.encInfo)
-          ) as any
-        );
+        await sendComposerGifWithNativeOwner(roomId, gif, replyTo, threadRoot);
         setReplyDraft(undefined);
         setGifPickerAnchor(undefined);
       } catch (err) {
@@ -807,6 +941,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                         // eslint-disable-next-line react/no-array-index-key
                         key={index}
                         isEncrypted={!!fileItem.encInfo}
+                        nativeComposerSend={nativeComposerSend}
                         fileItem={fileItem}
                         setMetadata={handleFileMetadata}
                         onRemove={handleRemoveUpload}
@@ -895,7 +1030,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                   style={{ padding: `${config.space.S200} ${config.space.S300} 0` }}
                 >
                   <IconButton
-                    onClick={() => setReplyDraft(undefined)}
+                    onClick={() => clearReplyDraft()}
                     variant="SurfaceVariant"
                     size="300"
                     radii="300"

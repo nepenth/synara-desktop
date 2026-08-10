@@ -1,6 +1,7 @@
 import type { EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
-import type { MatrixClient } from 'matrix-js-sdk';
 import { decryptFile, downloadEncryptedMedia, downloadMedia, mxcUrlToHttp } from '../utils/matrix';
+
+type MatrixMediaClient = Parameters<typeof mxcUrlToHttp>[0];
 
 export type MatrixMediaUrlOptions = {
   useAuthentication?: boolean;
@@ -17,7 +18,7 @@ export type MatrixMediaDownloadOptions = MatrixMediaUrlOptions & {
 };
 
 export function resolveMatrixMediaUrl(
-  mx: MatrixClient,
+  mx: MatrixMediaClient,
   mxcUrl: string,
   options: MatrixMediaUrlOptions = {}
 ): string {
@@ -36,7 +37,7 @@ export function resolveMatrixMediaUrl(
 }
 
 export function resolveOptionalMatrixMediaUrl(
-  mx: MatrixClient,
+  mx: MatrixMediaClient,
   mxcUrl: string | undefined,
   options: MatrixMediaUrlOptions = {}
 ): string | undefined {
@@ -50,7 +51,7 @@ export function resolveOptionalMatrixMediaUrl(
 }
 
 export function resolveMatrixThumbnailUrl(
-  mx: MatrixClient,
+  mx: MatrixMediaClient,
   mxcUrl: string,
   size: number,
   options: Omit<MatrixMediaUrlOptions, 'width' | 'height' | 'resizeMethod'> = {}
@@ -68,7 +69,7 @@ export function resolveMatrixThumbnailUrl(
 }
 
 export async function downloadMatrixMedia(
-  mx: MatrixClient,
+  mx: MatrixMediaClient,
   mxcUrl: string,
   options: MatrixMediaDownloadOptions
 ): Promise<Blob> {
@@ -83,7 +84,7 @@ export async function downloadMatrixMedia(
 }
 
 export async function createMatrixMediaObjectUrl(
-  mx: MatrixClient,
+  mx: MatrixMediaClient,
   mxcUrl: string,
   options: MatrixMediaDownloadOptions
 ): Promise<string> {

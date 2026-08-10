@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "taskId": "P1.6",
+  "description": "Baseline production files under synara/src allowed to import matrix-js-sdk during migration. **EMPTY = full ban** (F6c-2c: 0 production importers; any new importer fails). Full replacement reached; matrix-js-sdk dependency removed.",
+  "scope": "synara/src production (non-test) files",
+  "generatedFrom": "feature/matrix-rust-sdk-full-replacement @ 0f93424e (F6c-2c drop)",
+  "pathCount": 0,
+  "paths": []
+}

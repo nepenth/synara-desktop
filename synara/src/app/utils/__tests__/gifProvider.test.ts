@@ -39,7 +39,7 @@ test('gifPickerEnabled requires a safe endpoint and hosted provider API keys', (
     gifPickerEnabled({
       enabled: true,
       provider: 'tenor',
-      apiKey: '<SET_IN_CONFIG>',
+      apiKey: 'secret',
       endpoint: '',
     }),
     true
@@ -63,7 +63,7 @@ test('buildGifSearchUrl normalizes search terms and provider params', () => {
     enabled: true,
     provider: 'giphy',
     endpoint: 'https://api.giphy.com/v1/gifs/search',
-    apiKey: '<SET_IN_CONFIG>',
+    apiKey: 'secret',
   };
   const url = new URL(buildGifSearchUrl(config, '  hello   world  ', 10)!);
 

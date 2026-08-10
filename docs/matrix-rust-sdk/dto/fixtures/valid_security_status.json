@@ -1,0 +1,8 @@
+{
+  "crossSigningActive": true,
+  "backupStatus": "enabled",
+  "recoveryStatus": "ready",
+  "verificationState": "verified",
+  "deviceCount": 3,
+  "hasPendingVerificationRequests": false
+}

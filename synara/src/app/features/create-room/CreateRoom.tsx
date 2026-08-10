@@ -1,5 +1,4 @@
 import React, { FormEventHandler, useCallback, useEffect, useState } from 'react';
-import { MatrixError, Room, JoinRule } from 'matrix-js-sdk';
 import {
   Box,
   Button,
@@ -22,7 +21,7 @@ import {
   knockSupported,
   restrictedSupported,
 } from '../../utils/matrix';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
+import type { MatrixError } from '../../utils/matrix';
 import { millisecondsToMinutes, replaceSpaceWithDash } from '../../utils/common';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { useCapabilities } from '../../hooks/useCapabilities';
@@ -41,16 +40,24 @@ import {
 } from '../../components/create-room';
 import { RoomType } from '../../../types/matrix/room';
 import { CreateRoomTypeSelector } from '../../components/create-room/CreateRoomTypeSelector';
-import { getRoomIconSrc } from '../../utils/room';
+import { getRoomIconSrc, type RoomReading } from '../../utils/room';
+import {
+  normalizeRoomJoinRulePresentation,
+  type RoomJoinRulePresentation,
+} from '../matrix-dto/roomJoinRule';
 
 const getCreateRoomAccessToIcon = (access: CreateRoomAccess, type?: CreateRoomType) => {
   const isVoiceRoom = type === CreateRoomType.VoiceRoom;
 
-  let joinRule: JoinRule = JoinRule.Public;
-  if (access === CreateRoomAccess.Restricted) joinRule = JoinRule.Restricted;
-  if (access === CreateRoomAccess.Private) joinRule = JoinRule.Knock;
+  let joinRule: RoomJoinRulePresentation = 'public';
+  if (access === CreateRoomAccess.Restricted) joinRule = 'restricted';
+  if (access === CreateRoomAccess.Private) joinRule = 'knock';
 
-  return getRoomIconSrc(Icons, isVoiceRoom ? RoomType.Call : undefined, joinRule);
+  return getRoomIconSrc(
+    Icons,
+    isVoiceRoom ? RoomType.Call : undefined,
+    normalizeRoomJoinRulePresentation(joinRule)
+  );
 };
 
 const getCreateRoomTypeToIcon = (type: CreateRoomType) => {
@@ -61,7 +68,7 @@ const getCreateRoomTypeToIcon = (type: CreateRoomType) => {
 type CreateRoomFormProps = {
   defaultAccess?: CreateRoomAccess;
   defaultType?: CreateRoomType;
-  space?: Room;
+  space?: RoomReading;
   onCreate?: (roomId: string) => void;
 };
 export function CreateRoomForm({
@@ -70,7 +77,6 @@ export function CreateRoomForm({
   space,
   onCreate,
 }: CreateRoomFormProps) {
-  const mx = useMatrixClient();
   const alive = useAlive();
 
   const capabilities = useCapabilities();
@@ -107,7 +113,7 @@ export function CreateRoomForm({
   };
 
   const [createState, create] = useAsyncCallback<string, Error | MatrixError, [CreateRoomData]>(
-    useCallback((data) => createRoom(mx, data), [mx])
+    useCallback((data) => createRoom(data), [])
   );
   const loading = createState.status === AsyncStatus.Loading;
   const error = createState.status === AsyncStatus.Error ? createState.error : undefined;
@@ -142,7 +148,7 @@ export function CreateRoomForm({
     create({
       version: selectedRoomVersion,
       type: roomType,
-      parent: space,
+      parentRoomId: space?.roomId,
       access,
       name: roomName,
       topic: roomTopic || undefined,
@@ -315,9 +321,11 @@ export function CreateRoomForm({
           <Icon src={Icons.Warning} filled size="100" />
           <Text size="T300" style={{ color: color.Critical.Main }}>
             <b>
-              {error instanceof MatrixError && error.name === ErrorCode.M_LIMIT_EXCEEDED
+              {(error as { name?: string } | null)?.name === ErrorCode.M_LIMIT_EXCEEDED
                 ? `Server rate-limited your request for ${millisecondsToMinutes(
-                    (error.data.retry_after_ms as number | undefined) ?? 0
+                    ((error as { data?: { retry_after_ms?: unknown } }).data?.retry_after_ms as
+                      | number
+                      | undefined) ?? 0
                   )} minutes!`
                 : error.message}
             </b>

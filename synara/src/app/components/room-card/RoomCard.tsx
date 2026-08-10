@@ -1,5 +1,4 @@
 import React, { ReactNode, useCallback, useRef, useState } from 'react';
-import { MatrixError, Room } from 'matrix-js-sdk';
 import {
   Avatar,
   Badge,
@@ -26,6 +25,8 @@ import { getMxIdLocalPart } from '../../utils/matrix';
 import { nameInitials } from '../../utils/common';
 import { millify } from '../../plugins/millify';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { joinRoomWithNativeOwner } from '../nativeRoomJoinOwner';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { onEnterOrSpace, stopPropagation } from '../../utils/keyboard';
 import { RoomType, StateEvent } from '../../../types/matrix/room';
@@ -198,8 +199,17 @@ export const RoomCard = as<'div', RoomCardProps>(
       )
     );
 
-    const [joinState, join] = useAsyncCallback<Room, MatrixError, []>(
-      useCallback(() => mx.joinRoom(roomIdOrAlias, { viaServers }), [mx, roomIdOrAlias, viaServers])
+    const [joinState, join] = useAsyncCallback<void, Error, []>(
+      useCallback(
+        () =>
+          joinRoomWithNativeOwner(
+            roomIdOrAlias,
+            viaServers,
+            isSynaraDesktop(),
+            invokeDesktopWithAvailability
+          ),
+        [roomIdOrAlias, viaServers]
+      )
     );
     const joining =
       joinState.status === AsyncStatus.Loading || joinState.status === AsyncStatus.Success;

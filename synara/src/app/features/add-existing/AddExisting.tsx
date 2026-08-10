@@ -1,3 +1,4 @@
+import type { RoomReading } from '../../utils/room';
 import FocusTrap from 'focus-trap-react';
 import {
   Avatar,
@@ -29,7 +30,7 @@ import React, {
 } from 'react';
 import { useAtomValue } from 'jotai';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Room } from 'matrix-js-sdk';
+
 import { stopPropagation } from '../../utils/keyboard';
 import { useDirects, useRooms, useSpaces } from '../../state/hooks/roomList';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -50,10 +51,11 @@ import {
 } from '../../hooks/useAsyncSearch';
 import { highlightText, makeHighlightRegex } from '../../plugins/react-custom-html-parser';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
-import { StateEvent } from '../../../types/matrix/room';
 import { getViaServers } from '../../plugins/via-servers';
+import { setSpaceChild } from '../lobby/nativeSpaceChild';
 import { rateLimitedActions } from '../../utils/matrix';
 import { useAlive } from '../../hooks/useAlive';
+import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 
 const SEARCH_OPTS: UseAsyncSearchOptions = {
   limit: 500,
@@ -128,25 +130,20 @@ export function AddExistingModal({ parentId, space, requestClose }: AddExistingM
     searchRoom(value);
   };
 
-  const [applyState, applyChanges] = useAsyncCallback<undefined, Error, [Room[]]>(
+  const [applyState, applyChanges] = useAsyncCallback<undefined, Error, [RoomReading[]]>(
     useCallback(
       async (selectedRooms) => {
-        await rateLimitedActions(selectedRooms, async (room) => {
-          const via = getViaServers(room);
-
-          await mx.sendStateEvent(
-            parentId,
-            StateEvent.SpaceChild as any,
-            {
-              auto_join: false,
-              suggested: false,
-              via,
-            },
-            room.roomId
-          );
+        const roomsWithVia = await Promise.all(
+          selectedRooms.map(async (room) => ({ room, via: await getViaServers(room) }))
+        );
+        await rateLimitedActions(roomsWithVia, async ({ room, via }) => {
+          await setSpaceChild(parentId, room.roomId, {
+            suggested: false,
+            via,
+          });
         });
       },
-      [mx, parentId]
+      [parentId]
     )
   );
   const applyingChanges = applyState.status === AsyncStatus.Loading;
@@ -293,7 +290,9 @@ export function AddExistingModal({ parentId, space, requestClose }: AddExistingM
                                   ) : (
                                     <RoomIcon
                                       size="200"
-                                      joinRule={room.getJoinRule()}
+                                      joinRule={normalizeRoomJoinRulePresentation(
+                                        room.getJoinRule()
+                                      )}
                                       roomType={room.getType()}
                                     />
                                   )}

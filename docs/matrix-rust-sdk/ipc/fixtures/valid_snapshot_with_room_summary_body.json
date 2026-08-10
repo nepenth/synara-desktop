@@ -1,0 +1,36 @@
+{
+  "protocolVersion": 1,
+  "sessionGeneration": 1,
+  "streamId": "stream-room-list-1",
+  "sequence": 1,
+  "kind": "snapshot",
+  "payload": {
+    "streamId": "stream-room-list-1",
+    "topic": "room_list",
+    "snapshotId": "snap-room-summary-001",
+    "body": {
+      "rooms": [
+        {
+          "roomId": "!room:example.org",
+          "name": "General",
+          "canonicalAlias": "#general:example.org",
+          "membership": "join",
+          "isDirect": false,
+          "isEncrypted": true,
+          "joinRule": "invite",
+          "unreadCount": 2,
+          "highlightCount": 1,
+          "markedUnread": false,
+          "notificationMode": "mentions",
+          "lastActivityTs": 1720000000000,
+          "heroes": [
+            {
+              "userId": "@bob:example.org",
+              "displayName": "Bob"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

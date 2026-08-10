@@ -15,7 +15,7 @@ import React, { FormEventHandler, useCallback, useMemo, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import Linkify from 'linkify-react';
 import classNames from 'classnames';
-import { JoinRule, MatrixError } from 'matrix-js-sdk';
+import type { MatrixError } from '../../../utils/matrix';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../../room-settings/styles.css';
 import { useRoom } from '../../../hooks/useRoom';
@@ -40,6 +40,8 @@ import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useAlive } from '../../../hooks/useAlive';
 import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
 import { resolveMatrixThumbnailUrl, resolveOptionalMatrixMediaUrl } from '../../../matrix/media';
+import { setRoomAvatarNative, setRoomNameNative, setRoomTopicNative } from './nativeRoomProfile';
+import { normalizeRoomJoinRulePresentation } from '../../matrix-dto/roomJoinRule';
 
 type RoomProfileEditProps = {
   canEditAvatar: boolean;
@@ -64,6 +66,7 @@ export function RoomProfileEdit({
   const alive = useAlive();
   const useAuthentication = useMediaAuthentication();
   const joinRule = useRoomJoinRule(room);
+  const joinRulePresentation = normalizeRoomJoinRulePresentation(joinRule?.join_rule);
   const [roomAvatar, setRoomAvatar] = useState(avatar);
 
   const avatarUrl = resolveOptionalMatrixMediaUrl(mx, roomAvatar, { useAuthentication });
@@ -90,16 +93,28 @@ export function RoomProfileEdit({
   const [submitState, submit] = useAsyncCallback(
     useCallback(
       async (roomAvatarMxc?: string | null, roomName?: string, roomTopic?: string) => {
+        // R-ROOM-PROFILE: native room name/topic/avatar writes are fail-closed
+        // on desktop. The JS mx.sendStateEvent paths are only for non-native web.
         if (roomAvatarMxc !== undefined) {
-          await mx.sendStateEvent(room.roomId, StateEvent.RoomAvatar as any, {
-            url: roomAvatarMxc,
-          });
+          const mxc = roomAvatarMxc || '';
+          const result = await setRoomAvatarNative(room.roomId, mxc);
+          if (result === 'legacy') {
+            await mx.sendStateEvent(room.roomId, StateEvent.RoomAvatar as any, {
+              url: roomAvatarMxc,
+            });
+          }
         }
         if (roomName !== undefined) {
-          await mx.sendStateEvent(room.roomId, StateEvent.RoomName as any, { name: roomName });
+          const result = await setRoomNameNative(room.roomId, roomName);
+          if (result === 'legacy') {
+            await mx.sendStateEvent(room.roomId, StateEvent.RoomName as any, { name: roomName });
+          }
         }
         if (roomTopic !== undefined) {
-          await mx.sendStateEvent(room.roomId, StateEvent.RoomTopic as any, { topic: roomTopic });
+          const result = await setRoomTopicNative(room.roomId, roomTopic);
+          if (result === 'legacy') {
+            await mx.sendStateEvent(room.roomId, StateEvent.RoomTopic as any, { topic: roomTopic });
+          }
         }
       },
       [mx, room.roomId]
@@ -199,7 +214,7 @@ export function RoomProfileEdit({
                 <RoomIcon
                   roomType={room.getType()}
                   size="400"
-                  joinRule={joinRule?.join_rule ?? JoinRule.Invite}
+                  joinRule={joinRulePresentation}
                   filled
                 />
               )}
@@ -271,6 +286,7 @@ export function RoomProfile({ permissions }: RoomProfileProps) {
   const name = useRoomName(room);
   const topic = useRoomTopic(room);
   const joinRule = useRoomJoinRule(room);
+  const joinRulePresentation = normalizeRoomJoinRulePresentation(joinRule?.join_rule);
 
   const canEditAvatar = permissions.stateEvent(StateEvent.RoomAvatar, mx.getSafeUserId());
   const canEditName = permissions.stateEvent(StateEvent.RoomName, mx.getSafeUserId());
@@ -342,7 +358,7 @@ export function RoomProfile({ permissions }: RoomProfileProps) {
                     <RoomIcon
                       roomType={room.getType()}
                       size="400"
-                      joinRule={joinRule?.join_rule ?? JoinRule.Invite}
+                      joinRule={joinRulePresentation}
                       filled
                     />
                   )}

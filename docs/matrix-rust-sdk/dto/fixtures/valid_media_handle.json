@@ -1,0 +1,10 @@
+{
+  "handleId": "media-handle-1",
+  "mxcUri": "mxc://example.org/media1",
+  "source": "mxc",
+  "mimeType": "image/jpeg",
+  "sizeBytes": 102400,
+  "width": 800,
+  "height": 600,
+  "thumbnailHandleId": "media-handle-1-thumb"
+}

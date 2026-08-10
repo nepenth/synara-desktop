@@ -4,6 +4,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const indentation = (line) => line.length - line.trimStart().length;
+const integrationBranch = "feature/matrix-rust-sdk-full-replacement";
+const cancellableValidationWorkflows = ["ci.yml", "desktop-package-smoke.yml"];
 
 function parseJobs(workflow) {
   const jobs = new Map();
@@ -82,7 +84,15 @@ function pullRequestBlock(workflow) {
   );
 }
 
-export function inspectWorkflowPolicy({ workflows, dependabot }) {
+function hasIntegrationPullRequestTarget(workflow) {
+  return pullRequestBlock(workflow).includes(`"${integrationBranch}"`);
+}
+
+export function inspectWorkflowPolicy({
+  workflows,
+  dependabot,
+  runtimePackage = "",
+}) {
   const errors = [];
 
   for (const [filename, workflow] of Object.entries(workflows).sort()) {
@@ -94,6 +104,37 @@ export function inspectWorkflowPolicy({ workflows, dependabot }) {
     }
     if (topLevelBlock(workflow, "concurrency").length === 0) {
       errors.push(`${filename} must declare workflow-level concurrency.`);
+    }
+
+    if (cancellableValidationWorkflows.includes(filename)) {
+      if (!hasIntegrationPullRequestTarget(workflow)) {
+        errors.push(
+          `${filename} must validate pull requests targeting ${integrationBranch}.`
+        );
+      }
+
+      const concurrency = topLevelBlock(workflow, "concurrency")
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const group = concurrency.find((line) => line.startsWith("group:")) ?? "";
+      if (!group.includes("github.event_name")) {
+        errors.push(
+          `${filename} concurrency must separate workflow event types.`
+        );
+      }
+      if (
+        !group.includes("github.event.pull_request.number") ||
+        !group.includes("github.ref")
+      ) {
+        errors.push(
+          `${filename} concurrency must isolate each pull request and retain a ref fallback.`
+        );
+      }
+      if (!concurrency.includes("cancel-in-progress: true")) {
+        errors.push(
+          `${filename} must cancel obsolete runs only within the same event and pull-request/ref lane.`
+        );
+      }
     }
 
     for (const match of workflow.matchAll(/^\s*uses:\s*([^\s#]+)/gm)) {
@@ -127,6 +168,7 @@ export function inspectWorkflowPolicy({ workflows, dependabot }) {
 
   const packageWorkflow = workflows["desktop-package-smoke.yml"] ?? "";
   const packageJobs = parseJobs(packageWorkflow);
+  const packageChanges = packageJobs.get("changes") ?? [];
   const packageGate = packageJobs.get("package-gate") ?? [];
   if (/^\s{4}paths:/m.test(pullRequestBlock(packageWorkflow))) {
     errors.push(
@@ -144,11 +186,45 @@ export function inspectWorkflowPolicy({ workflows, dependabot }) {
       "Desktop package smoke must retain an always-running aggregate package gate."
     );
   }
+  const packageChangeContract = packageChanges.join("\n");
+  for (const pathRoot of ["scripts", "packaging/arch", "src-tauri", "synara"]) {
+    if (!packageChangeContract.includes(pathRoot)) {
+      errors.push(
+        `Desktop package change detection must retain the ${pathRoot} path.`
+      );
+    }
+  }
+  if (
+    !packageChangeContract.includes(
+      'git diff --quiet "$BASE_SHA" "$HEAD_SHA" --'
+    ) ||
+    !packageChangeContract.includes('echo "packages=false"') ||
+    !packageChangeContract.includes('echo "packages=true"')
+  ) {
+    errors.push(
+      "Desktop package smoke must retain PR diff-based package change detection."
+    );
+  }
 
-  const releaseConcurrency = topLevelBlock(
-    workflows["release.yml"] ?? "",
-    "concurrency"
-  )
+  // Rust gates may live in the monolithic `validate` job or the split
+  // `validate-rust` job (parallel with `validate-frontend` for wall-clock speed).
+  const ciJobs = parseJobs(workflows["ci.yml"] ?? "");
+  const ciValidateRust = [
+    ...(ciJobs.get("validate") ?? []),
+    ...(ciJobs.get("validate-rust") ?? []),
+  ];
+  const ciValidationContract = ciValidateRust.join("\n");
+  for (const [label, command] of [
+    ["formatting", "cargo fmt --check"],
+    ["lint", "cargo clippy --locked --all-targets -- -D warnings"],
+  ]) {
+    if (!ciValidationContract.includes(command)) {
+      errors.push(`CI must retain strict Rust ${label}: ${command}.`);
+    }
+  }
+
+  const releaseWorkflow = workflows["release.yml"] ?? "";
+  const releaseConcurrency = topLevelBlock(releaseWorkflow, "concurrency")
     .map((line) => line.trim())
     .filter(Boolean);
   if (
@@ -157,6 +233,68 @@ export function inspectWorkflowPolicy({ workflows, dependabot }) {
   ) {
     errors.push(
       "Production release tags must share a non-cancelling serialized concurrency lane."
+    );
+  }
+
+  const releaseVersionGuard = "node scripts/assert-release-version.mjs";
+  const guardCount = releaseWorkflow.split(releaseVersionGuard).length - 1;
+  const releaseJobs = parseJobs(releaseWorkflow);
+  const releaseValidate = (releaseJobs.get("validate") ?? []).join("\n");
+  const releasePublish = (releaseJobs.get("publish-gh-release") ?? []).join(
+    "\n"
+  );
+  const validationTagCheck = releaseValidate.indexOf(
+    "Require tag to match the shared version"
+  );
+  const validationGuard = releaseValidate.indexOf(releaseVersionGuard);
+  if (
+    guardCount !== 2 ||
+    validationGuard < 0 ||
+    validationTagCheck < 0 ||
+    validationGuard < validationTagCheck
+  ) {
+    errors.push(
+      "Production release validation must run the immutable release-version guard exactly once after the exact tag check and before builds."
+    );
+  }
+  if (!releasePublish.includes(releaseVersionGuard)) {
+    errors.push(
+      "Production release publication must recheck the immutable release-version guard."
+    );
+  }
+  const guardBeforePublish = releasePublish.indexOf(releaseVersionGuard);
+  const ghReleasePublish = releasePublish.indexOf(
+    "softprops/action-gh-release"
+  );
+  const directlyPrecedesGhRelease =
+    /Recheck immutable release version before publication\n        run: node scripts\/assert-release-version\.mjs\n      - name: Create GitHub Release with all client artifacts/.test(
+      releasePublish
+    );
+  if (
+    guardBeforePublish < 0 ||
+    ghReleasePublish < 0 ||
+    guardBeforePublish > ghReleasePublish ||
+    !directlyPrecedesGhRelease
+  ) {
+    errors.push(
+      "Production release version guard must run immediately before the mutating GitHub release action."
+    );
+  }
+  if (
+    !releaseValidate.includes("GH_TOKEN: ${{ github.token }}") ||
+    !releasePublish.includes("GH_TOKEN: ${{ github.token }}") ||
+    !releasePublish.includes("fetch-depth: 0")
+  ) {
+    errors.push(
+      "Production release version guard must have ledger access and an immutable full-history tag checkout."
+    );
+  }
+  if (
+    typeof runtimePackage !== "string" ||
+    /semantic-release/i.test(runtimePackage)
+  ) {
+    errors.push(
+      "Runtime package must not retain an alternate semantic-release publisher."
     );
   }
 
@@ -207,6 +345,10 @@ export function loadWorkflowPolicyInputs(repositoryRoot = root) {
       path.join(repositoryRoot, ".github", "dependabot.yml"),
       "utf8"
     ),
+    runtimePackage: readFileSync(
+      path.join(repositoryRoot, "synara", "package.json"),
+      "utf8"
+    ),
   };
 }
 
@@ -216,7 +358,7 @@ function main() {
     console.error(`[workflow-policy] ${error}`);
   if (!result.ok) process.exit(1);
   console.log(
-    "[workflow-policy] permissions, timeouts, action pins, release secret scope, and aggregate gates are valid."
+    "[workflow-policy] permissions, timeouts, action pins, integration CI, concurrency, Rust quality, release secret scope, and package gates are valid."
   );
 }
 

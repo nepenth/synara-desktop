@@ -2,7 +2,6 @@ import React, { useCallback, useState } from 'react';
 import { Box, Line } from 'folds';
 import { useParams } from 'react-router-dom';
 import { isKeyHotkey } from 'is-hotkey';
-import { useAtomValue } from 'jotai';
 import { RoomView } from './RoomView';
 import { MembersDrawer } from './MembersDrawer';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
@@ -13,11 +12,7 @@ import { useRoom } from '../../hooks/useRoom';
 import { useKeyDown } from '../../hooks/useKeyDown';
 import { markAsReadInBackground } from '../../utils/notifications';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
-import { useRoomMembers } from '../../hooks/useRoomMembers';
-import { CallView } from '../call/CallView';
 import { RoomViewHeader } from './RoomViewHeader';
-import { callChatAtom } from '../../state/callEmbed';
-import { CallChatView } from './CallChatView';
 import { RoomSidePanel, RoomSidePanelType } from './RoomSidePanel';
 
 export function Room() {
@@ -30,8 +25,6 @@ export function Room() {
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const screenSize = useScreenSizeContext();
   const powerLevels = usePowerLevels(room);
-  const members = useRoomMembers(mx, room.roomId);
-  const chat = useAtomValue(callChatAtom);
 
   useKeyDown(
     window,
@@ -45,7 +38,6 @@ export function Room() {
     )
   );
 
-  const callView = room.isCallRoom();
   const activeSidePanel = isDrawer ? 'members' : roomSidePanel;
   const handleToggleSidePanel = useCallback(
     (panel: RoomSidePanelType) => {
@@ -66,40 +58,22 @@ export function Room() {
   return (
     <PowerLevelsContextProvider value={powerLevels}>
       <Box grow="Yes">
-        {callView && (screenSize === ScreenSize.Desktop || !chat) && (
-          <Box grow="Yes" direction="Column">
-            <RoomViewHeader callView />
-            <Box grow="Yes">
-              <CallView />
-            </Box>
+        <Box grow="Yes" direction="Column">
+          <RoomViewHeader
+            activeSidePanel={activeSidePanel}
+            onToggleSidePanel={handleToggleSidePanel}
+            onToggleMembers={handleToggleMembers}
+          />
+          <Box grow="Yes">
+            <RoomView eventId={eventId} />
           </Box>
-        )}
-        {!callView && (
-          <Box grow="Yes" direction="Column">
-            <RoomViewHeader
-              activeSidePanel={activeSidePanel}
-              onToggleSidePanel={handleToggleSidePanel}
-              onToggleMembers={handleToggleMembers}
-            />
-            <Box grow="Yes">
-              <RoomView eventId={eventId} />
-            </Box>
-          </Box>
-        )}
+        </Box>
 
-        {callView && chat && (
-          <>
-            {screenSize === ScreenSize.Desktop && (
-              <Line variant="Background" direction="Vertical" size="300" />
-            )}
-            <CallChatView />
-          </>
-        )}
-        {!callView && screenSize === ScreenSize.Desktop && activeSidePanel && (
+        {screenSize === ScreenSize.Desktop && activeSidePanel && (
           <>
             <Line variant="Background" direction="Vertical" size="300" />
             {activeSidePanel === 'members' ? (
-              <MembersDrawer key={room.roomId} room={room} members={members} />
+              <MembersDrawer key={room.roomId} room={room} />
             ) : (
               <RoomSidePanel
                 key={`${room.roomId}-${activeSidePanel}`}

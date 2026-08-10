@@ -16,7 +16,7 @@ import {
   IconButton,
   Menu,
 } from 'folds';
-import { MatrixError } from 'matrix-js-sdk';
+import type { MatrixError } from '../../../utils/matrix';
 import { SequenceCard } from '../../../components/sequence-card';
 import {
   ImagePack,
@@ -40,6 +40,7 @@ import { useAlive } from '../../../hooks/useAlive';
 import { useRoomCreators } from '../../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../../hooks/useRoomPermissions';
 import { resolveOptionalMatrixMediaUrl } from '../../../matrix/media';
+import { setRoomImagePackNative } from '../../room/nativeImagePack';
 
 type CreatePackTileProps = {
   packs: ImagePack[];
@@ -57,7 +58,13 @@ function CreatePackTile({ packs, roomId }: CreatePackTileProps) {
             display_name: name,
           },
         };
-        await mx.sendStateEvent(roomId, StateEvent.PoniesRoomEmotes as any, content, stateKey);
+        // V-SEND.R-PACK-WRITE: native room-pack create is fail-closed on
+        // desktop. The JS mx.sendStateEvent(PoniesRoomEmotes) path is only for
+        // non-native web.
+        const result = await setRoomImagePackNative(roomId, stateKey, content);
+        if (result === 'legacy') {
+          await mx.sendStateEvent(roomId, StateEvent.PoniesRoomEmotes as any, content, stateKey);
+        }
       },
       [mx, roomId]
     )
@@ -163,8 +170,20 @@ export function RoomPacks({ onViewPack }: RoomPacksProps) {
     useCallback(async () => {
       for (let i = 0; i < removedPacks.length; i += 1) {
         const addr = removedPacks[i];
+        // V-SEND.R-PACK-WRITE: native room-pack delete (empty content) is
+        // fail-closed on desktop. The JS mx.sendStateEvent(PoniesRoomEmotes)
+        // path is only for non-native web.
         // eslint-disable-next-line no-await-in-loop
-        await mx.sendStateEvent(room.roomId, StateEvent.PoniesRoomEmotes as any, {}, addr.stateKey);
+        const result = await setRoomImagePackNative(room.roomId, addr.stateKey, {});
+        if (result === 'legacy') {
+          // eslint-disable-next-line no-await-in-loop
+          await mx.sendStateEvent(
+            room.roomId,
+            StateEvent.PoniesRoomEmotes as any,
+            {},
+            addr.stateKey
+          );
+        }
       }
     }, [mx, room, removedPacks])
   );

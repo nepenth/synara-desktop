@@ -1,9 +1,15 @@
 import { atom, useAtom } from 'jotai';
 import { atomFamily } from 'jotai/utils';
-import { MatrixClient, UploadResponse, UploadProgress, MatrixError } from 'matrix-js-sdk';
+import type { MatrixClientReading } from '../utils/room';
+import {
+  MatrixError,
+  type TUploadContent,
+  type UploadProgress,
+  type UploadResponse,
+  uploadContent,
+} from '../utils/matrix';
 import { useCallback } from 'react';
 import { useThrottle } from '../hooks/useThrottle';
-import { uploadContent, TUploadContent } from '../utils/matrix';
 
 export enum UploadStatus {
   Idle = 'idle',
@@ -35,6 +41,11 @@ export type UploadError = {
   status: UploadStatus.Error;
   error: MatrixError;
 };
+
+/** Build a MatrixError for native upload failures without new js-sdk importers. */
+export function makeUploadError(message: string): MatrixError {
+  return new MatrixError({ error: message });
+}
 
 export type Upload = UploadIdle | UploadLoading | UploadSuccess | UploadError;
 
@@ -98,7 +109,7 @@ export const createUploadAtom = (file: TUploadContent) => {
 export type TUploadAtom = ReturnType<typeof createUploadAtom>;
 
 export const useBindUploadAtom = (
-  mx: MatrixClient,
+  mx: MatrixClientReading,
   uploadAtom: TUploadAtom,
   hideFilename?: boolean
 ) => {
@@ -124,14 +135,25 @@ export const useBindUploadAtom = (
 
   const cancelUpload = useCallback(async () => {
     if (upload.status === UploadStatus.Loading) {
-      await mx.cancelUpload(upload.promise);
+      await (
+        mx as unknown as {
+          cancelUpload(promise: Promise<UploadResponse>): Promise<void>;
+        }
+      ).cancelUpload(upload.promise);
     }
   }, [mx, upload]);
+
+  /** Mark a composer file staged for native Rust upload+send (no JS upload). */
+  const markNativeStaged = useCallback(() => {
+    setUpload({ mxc: 'mxc://synara.native/staged' });
+  }, [setUpload]);
 
   return {
     upload,
     startUpload,
     cancelUpload,
+    markNativeStaged,
+    setUpload,
   };
 };
 

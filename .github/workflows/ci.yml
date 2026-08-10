@@ -4,33 +4,286 @@ on:
   push:
     branches: [main, "release/**"]
   pull_request:
-    branches: [main, "release/**"]
+    branches: [main, "feature/matrix-rust-sdk-full-replacement", "release/**"]
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  validate:
-    name: Validate desktop and runtime
+  # Job-level path filters (not workflow-level): required checks stay reported.
+  # Skipped jobs do not block merge; quality-gate treats skipped as OK.
+  changes:
+    name: Detect CI scopes
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    outputs:
+      validate: ${{ steps.scope.outputs.validate }}
+      validate_rust: ${{ steps.scope.outputs.validate_rust }}
+      validate_frontend: ${{ steps.scope.outputs.validate_frontend }}
+      ios: ${{ steps.scope.outputs.ios }}
+      synapse_native_reactions: ${{ steps.scope.outputs.synapse_native_reactions }}
+      synapse_native_attachments: ${{ steps.scope.outputs.synapse_native_attachments }}
+      synapse_native_polls: ${{ steps.scope.outputs.synapse_native_polls }}
+      synapse_native_rich_messages: ${{ steps.scope.outputs.synapse_native_rich_messages }}
+      synapse_native_threads: ${{ steps.scope.outputs.synapse_native_threads }}
+      synapse_native_receipts: ${{ steps.scope.outputs.synapse_native_receipts }}
+    steps:
+      - name: Checkout repository history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Determine which heavy CI jobs must run
+        id: scope
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          # Full suite on push (main/release) and manual dispatch.
+          if [[ "${GITHUB_EVENT_NAME}" != "pull_request" ]]; then
+            echo "validate=true" >> "$GITHUB_OUTPUT"
+            echo "validate_rust=true" >> "$GITHUB_OUTPUT"
+            echo "validate_frontend=true" >> "$GITHUB_OUTPUT"
+            echo "ios=true" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_reactions=true" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_attachments=true" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_polls=true" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_rich_messages=true" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_threads=true" >> "$GITHUB_OUTPUT"
+            echo "CI scope: full (event=${GITHUB_EVENT_NAME})"
+            exit 0
+          fi
+
+          if [[ -z "${BASE_SHA:-}" || -z "${HEAD_SHA:-}" ]]; then
+            echo "validate=true" >> "$GITHUB_OUTPUT"
+            echo "validate_rust=true" >> "$GITHUB_OUTPUT"
+            echo "validate_frontend=true" >> "$GITHUB_OUTPUT"
+            echo "ios=true" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_reactions=true" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_attachments=true" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_polls=true" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_rich_messages=true" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_threads=true" >> "$GITHUB_OUTPUT"
+            echo "CI scope: full (missing PR SHAs)"
+            exit 0
+          fi
+
+          # Desktop / runtime validation (Node + Rust Tauri shell + synara frontend).
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            .github/workflows/ci.yml \
+            .node-version \
+            config.json \
+            package.json \
+            package-lock.json \
+            scripts \
+            src-tauri \
+            synara; then
+            echo "validate=false" >> "$GITHUB_OUTPUT"
+            VALIDATE=false
+          else
+            echo "validate=true" >> "$GITHUB_OUTPUT"
+            VALIDATE=true
+          fi
+
+          # Finer scopes so Rust and frontend Validate can run in parallel jobs
+          # without dropping any gate that currently runs when validate=true.
+          if [[ "$VALIDATE" == "true" ]]; then
+            if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+              .github/workflows/ci.yml \
+              src-tauri \
+              rust-toolchain.toml; then
+              echo "validate_rust=false" >> "$GITHUB_OUTPUT"
+              VALIDATE_RUST=false
+            else
+              echo "validate_rust=true" >> "$GITHUB_OUTPUT"
+              VALIDATE_RUST=true
+            fi
+            if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+              .github/workflows/ci.yml \
+              .node-version \
+              config.json \
+              package.json \
+              package-lock.json \
+              scripts \
+              synara; then
+              echo "validate_frontend=false" >> "$GITHUB_OUTPUT"
+              VALIDATE_FRONTEND=false
+            else
+              echo "validate_frontend=true" >> "$GITHUB_OUTPUT"
+              VALIDATE_FRONTEND=true
+            fi
+            # Safety: if only one side matched oddly, still run both when validate=true
+            # and neither finer flag fired (should not happen).
+            if [[ "$VALIDATE_RUST" == "false" && "$VALIDATE_FRONTEND" == "false" ]]; then
+              echo "validate_rust=true" >> "$GITHUB_OUTPUT"
+              echo "validate_frontend=true" >> "$GITHUB_OUTPUT"
+              VALIDATE_RUST=true
+              VALIDATE_FRONTEND=true
+            fi
+          else
+            echo "validate_rust=false" >> "$GITHUB_OUTPUT"
+            echo "validate_frontend=false" >> "$GITHUB_OUTPUT"
+            VALIDATE_RUST=false
+            VALIDATE_FRONTEND=false
+          fi
+
+          # iOS simulator suite — only when iOS tree or shared CI build entrypoints change.
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            .github/workflows/ci.yml \
+            synara-ios \
+            synara-ios/scripts/ci-build.sh; then
+            echo "ios=false" >> "$GITHUB_OUTPUT"
+            IOS=false
+          else
+            echo "ios=true" >> "$GITHUB_OUTPUT"
+            IOS=true
+          fi
+
+          # Two-client Synapse integration (JS runtime scenarios).
+          # src-tauri-only Matrix harness work does not require this job.
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            .github/workflows/ci.yml \
+            package.json \
+            package-lock.json \
+            scripts/synapse-integration.sh \
+            scripts/__tests__ \
+            synara; then
+            SYNAPSE=false
+          else
+            SYNAPSE=true
+          fi
+
+          # Native V-SEND.2 reaction owner proof against disposable Synapse.
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            .github/workflows/ci.yml \
+            scripts/synapse-integration.sh \
+            integration/synapse \
+            src-tauri/Cargo.toml \
+            src-tauri/Cargo.lock \
+            src-tauri/src/matrix/timeline; then
+            echo "synapse_native_reactions=false" >> "$GITHUB_OUTPUT"
+            SYNAPSE_NATIVE_REACTIONS=false
+          else
+            echo "synapse_native_reactions=true" >> "$GITHUB_OUTPUT"
+            SYNAPSE_NATIVE_REACTIONS=true
+          fi
+
+          # Native V-SEND.1 attachment owner proof against disposable Synapse.
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            .github/workflows/ci.yml \
+            scripts/synapse-integration.sh \
+            integration/synapse \
+            src-tauri/Cargo.toml \
+            src-tauri/Cargo.lock \
+            src-tauri/src/matrix/send \
+            src-tauri/src/matrix/auth/product.rs; then
+            echo "synapse_native_attachments=false" >> "$GITHUB_OUTPUT"
+            SYNAPSE_NATIVE_ATTACHMENTS=false
+          else
+            echo "synapse_native_attachments=true" >> "$GITHUB_OUTPUT"
+            SYNAPSE_NATIVE_ATTACHMENTS=true
+          fi
+
+          # Native V-SEND.3 poll owner proof against disposable Synapse.
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            .github/workflows/ci.yml \
+            scripts/synapse-integration.sh \
+            integration/synapse \
+            src-tauri/Cargo.toml \
+            src-tauri/Cargo.lock \
+            src-tauri/src/matrix/send \
+            src-tauri/src/matrix/auth/product.rs; then
+            echo "synapse_native_polls=false" >> "$GITHUB_OUTPUT"
+            SYNAPSE_NATIVE_POLLS=false
+          else
+            echo "synapse_native_polls=true" >> "$GITHUB_OUTPUT"
+            SYNAPSE_NATIVE_POLLS=true
+          fi
+
+          # Native V-SEND.4 rich composer message proof against disposable Synapse.
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            .github/workflows/ci.yml \
+            scripts/synapse-integration.sh \
+            integration/synapse \
+            src-tauri/Cargo.toml \
+            src-tauri/Cargo.lock \
+            src-tauri/src/matrix/send/live_synapse_proof \
+            src-tauri/src/matrix/auth/product.rs; then
+            echo "synapse_native_rich_messages=false" >> "$GITHUB_OUTPUT"
+            SYNAPSE_NATIVE_RICH_MESSAGES=false
+          else
+            echo "synapse_native_rich_messages=true" >> "$GITHUB_OUTPUT"
+            SYNAPSE_NATIVE_RICH_MESSAGES=true
+          fi
+
+          # Native V-SEND.5 thread send/relation proof against disposable Synapse.
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            .github/workflows/ci.yml \
+            scripts/synapse-integration.sh \
+            integration/synapse \
+            src-tauri/Cargo.toml \
+            src-tauri/Cargo.lock \
+            src-tauri/src/matrix/send/live_synapse_proof \
+            src-tauri/src/matrix/auth/product.rs; then
+            echo "synapse_native_threads=false" >> "$GITHUB_OUTPUT"
+            SYNAPSE_NATIVE_THREADS=false
+          else
+            echo "synapse_native_threads=true" >> "$GITHUB_OUTPUT"
+            SYNAPSE_NATIVE_THREADS=true
+          fi
+
+          # Native two-client receipt + ordered-delivery proof against disposable
+          # Synapse (replaces the retired js-sdk two-client harness).
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            .github/workflows/ci.yml \
+            scripts/synapse-integration.sh \
+            integration/synapse \
+            src-tauri/Cargo.toml \
+            src-tauri/Cargo.lock \
+            src-tauri/src/matrix/timeline/live_synapse_proof \
+            src-tauri/src/matrix/auth/product.rs; then
+            echo "synapse_native_receipts=false" >> "$GITHUB_OUTPUT"
+            SYNAPSE_NATIVE_RECEIPTS=false
+          else
+            echo "synapse_native_receipts=true" >> "$GITHUB_OUTPUT"
+            SYNAPSE_NATIVE_RECEIPTS=true
+          fi
+
+          echo "CI scope: validate=${VALIDATE} rust=${VALIDATE_RUST:-n/a} frontend=${VALIDATE_FRONTEND:-n/a} ios=${IOS} synapse=${SYNAPSE} synapse_native_reactions=${SYNAPSE_NATIVE_REACTIONS} synapse_native_attachments=${SYNAPSE_NATIVE_ATTACHMENTS} synapse_native_polls=${SYNAPSE_NATIVE_POLLS} synapse_native_rich_messages=${SYNAPSE_NATIVE_RICH_MESSAGES} synapse_native_threads=${SYNAPSE_NATIVE_THREADS} synapse_native_receipts=${SYNAPSE_NATIVE_RECEIPTS}"
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" | head -80 || true
+
+  validate-rust:
+    name: Validate Rust desktop shell
+    needs: [changes]
+    if: needs.changes.outputs.validate_rust == 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version-file: .node-version
-          package-manager-cache: false
+          fetch-depth: 0
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable 2026-07-22
+      - name: Install Rust 1.93
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+        with:
+          toolchain: 1.93
+          components: rustfmt, clippy
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: validate-rust-desktop
 
       - name: Install Linux Tauri dependencies
         run: |
@@ -41,6 +294,71 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             patchelf
+
+      - name: Check Rust formatting
+        run: cargo fmt --check
+        working-directory: src-tauri
+
+      - name: Lint Rust desktop shell
+        run: cargo clippy --locked --all-targets -- -D warnings
+        working-directory: src-tauri
+
+      - name: Check Rust desktop shell
+        run: cargo check --locked
+        working-directory: src-tauri
+
+      - name: Test Rust desktop shell
+        run: cargo test --locked
+        working-directory: src-tauri
+
+      - name: Check Matrix integration boundaries
+        # Runs on any src-tauri diff (the Node job only fires on frontend changes);
+        # node -- run directly so no npm ci / node_modules is required here.
+        run: node scripts/check-matrix-boundaries.mjs
+
+  rust-dependency-audit:
+    name: Rust dependency audit (cargo-audit)
+    needs: [changes]
+    if: needs.changes.outputs.validate_rust == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust 1.93
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+        with:
+          toolchain: 1.93
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      # .cargo/audit.toml holds the short documented allowlist (quick-xml via
+      # plist=tauri-bundler, fixed upstream at >=0.41.0, unreachable in-chain).
+      - name: Audit Rust dependencies (RustSec advisory DB)
+        run: cargo audit
+        working-directory: src-tauri
+  validate-frontend:
+    name: Validate Node desktop runtime
+    needs: [changes]
+    if: needs.changes.outputs.validate_frontend == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            synara/package-lock.json
 
       - name: Install desktop dependencies
         run: npm ci
@@ -62,6 +380,9 @@ jobs:
       - name: Check Matrix integration boundaries
         run: npm run check:matrix-boundaries
 
+      - name: Check Matrix Rust SDK architectural guardrails
+        run: npm run check:matrix-rust-guardrails
+
       - name: Check reliability delivery gates
         run: npm run check:quality-gates
 
@@ -76,14 +397,6 @@ jobs:
 
       - name: Test repository delivery scripts
         run: node --test scripts/__tests__/*.test.mjs
-
-      - name: Check Rust desktop shell
-        run: cargo check --locked
-        working-directory: src-tauri
-
-      - name: Test Rust desktop shell
-        run: cargo test --locked
-        working-directory: src-tauri
 
       - name: Typecheck desktop runtime
         run: npm run typecheck
@@ -115,6 +428,8 @@ jobs:
 
   ios-tests:
     name: iOS simulator tests
+    needs: [changes]
+    if: needs.changes.outputs.ios == 'true'
     runs-on: macos-26
     timeout-minutes: 45
     steps:
@@ -139,31 +454,253 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  synapse-integration:
-    name: Synapse two-client integration
+  synapse-native-reactions:
+    name: Synapse native reaction proof
+    needs: [changes]
+    if: needs.changes.outputs.synapse_native_reactions == 'true'
     runs-on: ubuntu-22.04
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - name: Install Rust 1.93
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
         with:
-          node-version-file: .node-version
-          package-manager-cache: false
+          toolchain: 1.93
 
-      - name: Install runtime dependencies
-        run: npm ci
-        working-directory: synara
+      - name: Install Linux Tauri dependencies
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.list /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
 
       - name: Start disposable Synapse
         run: scripts/synapse-integration.sh up
 
-      - name: Run public and private two-client scenarios
-        run: npm run test:synapse-integration
+      - name: Prove native reaction toggle/ensure/redact against Synapse
+        working-directory: src-tauri
         env:
-          SYNARA_RECEIPT_MODE: both
+          SYNARA_RUN_MATRIX_RUST_REACTION_LIVE: "1"
+          SYNARA_MATRIX_HOMESERVER_URL: http://127.0.0.1:8008
+        run: >
+          cargo test --locked
+          live_native_reaction_paths_against_disposable_synapse_when_configured
+          -- --nocapture
+
+      - name: Tear down disposable Synapse
+        if: always()
+        run: scripts/synapse-integration.sh reset
+
+  synapse-native-attachments:
+    name: Synapse native attachment proof
+    needs: [changes]
+    if: needs.changes.outputs.synapse_native_attachments == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust 1.93
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+        with:
+          toolchain: 1.93
+
+      - name: Install Linux Tauri dependencies
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.list /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Start disposable Synapse
+        run: scripts/synapse-integration.sh up
+
+      - name: Prove native attachment send against Synapse
+        working-directory: src-tauri
+        env:
+          SYNARA_RUN_MATRIX_RUST_ATTACHMENT_LIVE: "1"
+          SYNARA_MATRIX_HOMESERVER_URL: http://127.0.0.1:8008
+        run: >
+          cargo test --locked
+          live_native_attachment_send_against_disposable_synapse_when_configured
+          -- --nocapture
+
+      - name: Tear down disposable Synapse
+        if: always()
+        run: scripts/synapse-integration.sh reset
+
+  synapse-native-polls:
+    name: Synapse native poll proof
+    needs: [changes]
+    if: needs.changes.outputs.synapse_native_polls == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust 1.93
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+        with:
+          toolchain: 1.93
+
+      - name: Install Linux Tauri dependencies
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.list /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Start disposable Synapse
+        run: scripts/synapse-integration.sh up
+
+      - name: Prove native poll start/respond against Synapse
+        working-directory: src-tauri
+        env:
+          SYNARA_RUN_MATRIX_RUST_POLL_LIVE: "1"
+          SYNARA_MATRIX_HOMESERVER_URL: http://127.0.0.1:8008
+        run: >
+          cargo test --locked
+          live_native_poll_send_and_respond_against_disposable_synapse_when_configured
+          -- --nocapture
+
+      - name: Tear down disposable Synapse
+        if: always()
+        run: scripts/synapse-integration.sh reset
+
+  synapse-native-rich-messages:
+    name: Synapse native rich-message proof
+    needs: [changes]
+    if: needs.changes.outputs.synapse_native_rich_messages == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust 1.93
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+        with:
+          toolchain: 1.93
+
+      - name: Install Linux Tauri dependencies
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.list /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Start disposable Synapse
+        run: scripts/synapse-integration.sh up
+
+      - name: Prove native rich composer send against Synapse
+        working-directory: src-tauri
+        env:
+          SYNARA_RUN_MATRIX_RUST_RICH_MESSAGE_LIVE: "1"
+          SYNARA_MATRIX_HOMESERVER_URL: http://127.0.0.1:8008
+        run: >
+          cargo test --locked
+          live_native_rich_message_send_against_disposable_synapse_when_configured
+          -- --nocapture
+
+      - name: Tear down disposable Synapse
+        if: always()
+        run: scripts/synapse-integration.sh reset
+
+  synapse-native-threads:
+    name: Synapse native thread-send proof
+    needs: [changes]
+    if: needs.changes.outputs.synapse_native_threads == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust 1.93
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+        with:
+          toolchain: 1.93
+
+      - name: Install Linux Tauri dependencies
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.list /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Start disposable Synapse
+        run: scripts/synapse-integration.sh up
+
+      - name: Prove native thread send against Synapse
+        working-directory: src-tauri
+        env:
+          SYNARA_RUN_MATRIX_RUST_THREAD_SEND_LIVE: "1"
+          SYNARA_MATRIX_HOMESERVER_URL: http://127.0.0.1:8008
+        run: >
+          cargo test --locked
+          live_native_thread_send_against_disposable_synapse_when_configured
+          -- --nocapture
+
+      - name: Tear down disposable Synapse
+        if: always()
+        run: scripts/synapse-integration.sh reset
+
+  synapse-native-receipts:
+    name: Synapse native two-client receipt proof
+    needs: [changes]
+    if: needs.changes.outputs.synapse_native_receipts == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust 1.93
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+        with:
+          toolchain: 1.93
+
+      - name: Install Linux Tauri dependencies
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.list /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Start disposable Synapse
+        run: scripts/synapse-integration.sh up
+
+      - name: Prove native two-client receipt + ordered delivery against Synapse
+        working-directory: src-tauri
+        env:
+          SYNARA_RUN_MATRIX_RUST_RECEIPT_LIVE: "1"
+          SYNARA_MATRIX_HOMESERVER_URL: http://127.0.0.1:8008
+        run: >
+          cargo test --locked
+          live_native_two_client_receipt_and_ordering_against_disposable_synapse_when_configured
+          -- --nocapture
 
       - name: Tear down disposable Synapse
         if: always()
@@ -172,19 +709,51 @@ jobs:
   quality-gate:
     name: Quality gate
     if: always()
-    needs: [validate, ios-tests, synapse-integration]
+    needs: [changes, validate-rust, validate-frontend, ios-tests, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads, synapse-native-receipts]
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
-      - name: Require every client validation job
+      - name: Require every scheduled client validation job
         env:
-          DESKTOP_RESULT: ${{ needs.validate.result }}
+          DESKTOP_RUST_RESULT: ${{ needs.validate-rust.result }}
+          DESKTOP_FRONTEND_RESULT: ${{ needs.validate-frontend.result }}
           IOS_RESULT: ${{ needs.ios-tests.result }}
-          SYNAPSE_RESULT: ${{ needs.synapse-integration.result }}
+          SYNAPSE_NATIVE_REACTIONS_RESULT: ${{ needs.synapse-native-reactions.result }}
+          SYNAPSE_NATIVE_ATTACHMENTS_RESULT: ${{ needs.synapse-native-attachments.result }}
+          SYNAPSE_NATIVE_POLLS_RESULT: ${{ needs.synapse-native-polls.result }}
+          SYNAPSE_NATIVE_RICH_MESSAGES_RESULT: ${{ needs.synapse-native-rich-messages.result }}
+          SYNAPSE_NATIVE_THREADS_RESULT: ${{ needs.synapse-native-threads.result }}
+          SYNAPSE_NATIVE_RECEIPTS_RESULT: ${{ needs.synapse-native-receipts.result }}
+          CHANGES_RESULT: ${{ needs.changes.result }}
         run: |
-          if [[ "$DESKTOP_RESULT" != "success" || "$IOS_RESULT" != "success" || "$SYNAPSE_RESULT" != "success" ]]; then
-            echo "Desktop/runtime validation: $DESKTOP_RESULT" >&2
-            echo "iOS simulator tests: $IOS_RESULT" >&2
-            echo "Synapse two-client integration: $SYNAPSE_RESULT" >&2
+          set -euo pipefail
+          if [[ "$CHANGES_RESULT" != "success" ]]; then
+            echo "Detect CI scopes: $CHANGES_RESULT" >&2
+            exit 1
+          fi
+          # success = ran and passed; skipped = path filter omitted the job (OK).
+          ok() {
+            local name="$1" result="$2"
+            case "$result" in
+              success|skipped)
+                echo "$name: $result"
+                ;;
+              *)
+                echo "$name: $result" >&2
+                return 1
+                ;;
+            esac
+          }
+          fail=0
+          ok "Desktop/runtime Rust validation" "$DESKTOP_RUST_RESULT" || fail=1
+          ok "Desktop/runtime Node validation" "$DESKTOP_FRONTEND_RESULT" || fail=1
+          ok "iOS simulator tests" "$IOS_RESULT" || fail=1
+          ok "Synapse native reaction proof" "$SYNAPSE_NATIVE_REACTIONS_RESULT" || fail=1
+          ok "Synapse native attachment proof" "$SYNAPSE_NATIVE_ATTACHMENTS_RESULT" || fail=1
+          ok "Synapse native poll proof" "$SYNAPSE_NATIVE_POLLS_RESULT" || fail=1
+          ok "Synapse native rich-message proof" "$SYNAPSE_NATIVE_RICH_MESSAGES_RESULT" || fail=1
+          ok "Synapse native thread-send proof" "$SYNAPSE_NATIVE_THREADS_RESULT" || fail=1
+          ok "Synapse native two-client receipt proof" "$SYNAPSE_NATIVE_RECEIPTS_RESULT" || fail=1
+          if [[ "$fail" -ne 0 ]]; then
             exit 1
           fi

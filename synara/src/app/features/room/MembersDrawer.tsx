@@ -2,6 +2,7 @@ import React, {
   ChangeEventHandler,
   MouseEventHandler,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -26,7 +27,8 @@ import {
   TooltipProvider,
   config,
 } from 'folds';
-import { MatrixClient, Room, RoomMember } from 'matrix-js-sdk';
+import type { MatrixClientReading } from '../../utils/room';
+import type { EventedRoomReading } from '../../utils/roomEvents';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import classNames from 'classnames';
 
@@ -48,10 +50,12 @@ import { millify } from '../../plugins/millify';
 import { ScrollTopContainer } from '../../components/scroll-top-container';
 import { UserAvatar } from '../../components/user-avatar';
 import { useRoomTypingMember } from '../../hooks/useRoomTypingMembers';
+import { useRoomMembers, type RoomMemberListItem } from '../../hooks/useRoomMembers';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useMembershipFilter, useMembershipFilterMenu } from '../../hooks/useMemberFilter';
 import { useMemberPowerSort, useMemberSort, useMemberSortMenu } from '../../hooks/useMemberSort';
 import { useGetMemberPowerLevel, usePowerLevelsContext } from '../../hooks/usePowerLevels';
+import { Membership } from '../../../types/matrix/room';
 import { MembershipFilterMenu } from '../../components/MembershipFilterMenu';
 import { MemberSortMenu } from '../../components/MemberSortMenu';
 import { useOpenUserRoomProfile, useUserRoomProfileState } from '../../state/hooks/userRoomProfile';
@@ -60,19 +64,21 @@ import { ContainerColor } from '../../styles/ContainerColor.css';
 import { useFlattenPowerTagMembers, useGetMemberPowerTag } from '../../hooks/useMemberPowerTag';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
+import { getSessionBootstrapResult } from '../../state/sessionBootstrap';
+import { isSynaraDesktop } from '../../utils/desktop';
 
 type MemberDrawerHeaderProps = {
-  room: Room;
+  joinedMemberCount: number;
 };
-function MemberDrawerHeader({ room }: MemberDrawerHeaderProps) {
+function MemberDrawerHeader({ joinedMemberCount }: MemberDrawerHeaderProps) {
   const setPeopleDrawer = useSetSetting(settingsAtom, 'isPeopleDrawer');
 
   return (
     <Header className={css.MembersDrawerHeader} variant="Background" size="600">
       <Box grow="Yes" alignItems="Center" gap="200">
         <Box grow="Yes" alignItems="Center" gap="200">
-          <Text title={`${room.getJoinedMemberCount()} Members`} size="H5" truncate>
-            {`${millify(room.getJoinedMemberCount())} Members`}
+          <Text title={`${joinedMemberCount} Members`} size="H5" truncate>
+            {`${millify(joinedMemberCount)} Members`}
           </Text>
         </Box>
         <Box shrink="No" alignItems="Center">
@@ -103,10 +109,10 @@ function MemberDrawerHeader({ room }: MemberDrawerHeaderProps) {
 }
 
 type MemberItemProps = {
-  mx: MatrixClient;
+  mx: MatrixClientReading;
   useAuthentication: boolean;
-  room: Room;
-  member: RoomMember;
+  room: EventedRoomReading;
+  member: RoomMemberListItem;
   onClick: MouseEventHandler<HTMLButtonElement>;
   pressed?: boolean;
   typing?: boolean;
@@ -121,8 +127,12 @@ function MemberItem({
   typing,
 }: MemberItemProps) {
   const name =
-    getMemberDisplayName(room, member.userId) ?? getMxIdLocalPart(member.userId) ?? member.userId;
-  const avatarMxcUrl = member.getMxcAvatarUrl();
+    (!('getMxcAvatarUrl' in member)
+      ? member.displayName
+      : getMemberDisplayName(room, member.userId)) ??
+    getMxIdLocalPart(member.userId) ??
+    member.userId;
+  const avatarMxcUrl = !('getMxcAvatarUrl' in member) ? member.avatarUrl : member.getMxcAvatarUrl();
   const avatarUrl = avatarMxcUrl
     ? resolveMatrixThumbnailUrl(mx, avatarMxcUrl, 100, { useAuthentication })
     : undefined;
@@ -170,16 +180,22 @@ const SEARCH_OPTIONS: UseAsyncSearchOptions = {
 };
 
 const mxIdToName = (mxId: string) => getMxIdLocalPart(mxId) ?? mxId;
-const getRoomMemberStr: SearchItemStrGetter<RoomMember> = (m, query) =>
+const getRoomMemberStr: SearchItemStrGetter<RoomMemberListItem> = (m, query) =>
   getMemberSearchStr(m, query, mxIdToName);
+const EMPTY_ROOM_MEMBERS: RoomMemberListItem[] = [];
 
 type MembersDrawerProps = {
-  room: Room;
-  members: RoomMember[];
+  room: EventedRoomReading;
 };
-export function MembersDrawer({ room, members }: MembersDrawerProps) {
+export function MembersDrawer({ room }: MembersDrawerProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
+  const nativeSession = isSynaraDesktop() && getSessionBootstrapResult().source === 'native';
+  const memberSnapshot = useRoomMembers(mx, room.roomId, nativeSession);
+  const members = memberSnapshot ?? EMPTY_ROOM_MEMBERS;
+  const joinedMemberCount = nativeSession
+    ? members.filter((member) => member.membership === Membership.Join).length
+    : room.getJoinedMemberCount();
   const scrollRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollTopAnchorRef = useRef<HTMLDivElement>(null);
@@ -188,7 +204,9 @@ export function MembersDrawer({ room, members }: MembersDrawerProps) {
   const getPowerTag = useGetMemberPowerTag(room, creators, powerLevels);
   const getPowerLevel = useGetMemberPowerLevel(powerLevels);
 
-  const fetchingMembers = members.length < room.getJoinedMemberCount();
+  const fetchingMembers = nativeSession
+    ? memberSnapshot === null
+    : members.length < joinedMemberCount;
   const openUserRoomProfile = useOpenUserRoomProfile();
   const space = useSpaceOptionally();
   const openProfileUserId = useUserRoomProfileState()?.userId;
@@ -214,7 +232,11 @@ export function MembersDrawer({ room, members }: MembersDrawerProps) {
     getRoomMemberStr,
     SEARCH_OPTIONS
   );
-  if (!result && searchInputRef.current?.value) search(searchInputRef.current.value);
+  // Re-run an existing input query only after commit; `search` can synchronously
+  // publish a result for small member lists and must not run during render.
+  useEffect(() => {
+    if (!result && searchInputRef.current?.value) search(searchInputRef.current.value);
+  }, [result, search]);
 
   const processMembers = result ? result.items : filteredMembers;
 
@@ -251,7 +273,7 @@ export function MembersDrawer({ room, members }: MembersDrawerProps) {
       shrink="No"
       direction="Column"
     >
-      <MemberDrawerHeader room={room} />
+      <MemberDrawerHeader joinedMemberCount={joinedMemberCount} />
       <Box className={css.MemberDrawerContentBase} grow="Yes">
         <Scroll ref={scrollRef} variant="Background" size="300" visibility="Hover" hideTrack>
           <Box className={css.MemberDrawerContent} direction="Column" gap="200">

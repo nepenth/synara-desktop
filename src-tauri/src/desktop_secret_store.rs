@@ -401,7 +401,7 @@ enum LinuxSecretServiceProbeError {
 
 #[cfg(target_os = "linux")]
 fn linux_secret_service_probe_with_timeout(
-    probe: impl LinuxSecretServiceProbe + Send + 'static,
+    probe: impl LinuxSecretServiceProbe + 'static,
 ) -> Result<(), LinuxSecretServiceProbeError> {
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -458,7 +458,7 @@ fn has_linux_dbus_session_bus() -> bool {
 
 #[cfg(target_os = "linux")]
 fn linux_secret_store_status_from_live_probes(
-    secret_service_probe: impl LinuxSecretServiceProbe + Send + 'static,
+    secret_service_probe: impl LinuxSecretServiceProbe + 'static,
 ) -> DesktopSecretStoreStatus {
     let mut unavailable_reason = None;
     let has_secret_service = if !has_linux_dbus_session_bus() {

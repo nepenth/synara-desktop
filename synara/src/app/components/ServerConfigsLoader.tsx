@@ -1,5 +1,12 @@
 import { ReactNode, useCallback, useMemo } from 'react';
-import { Capabilities, ValidatedAuthMetadata } from 'matrix-js-sdk';
+import type { Capabilities } from '../hooks/useCapabilities';
+
+/** Structural subset of the js-sdk ValidatedAuthMetadata used by Synara. */
+export type ValidatedAuthMetadata = {
+  issuer?: string;
+  account_management_uri?: string;
+  homeserver_url?: string;
+};
 import { AsyncStatus, useAsyncCallbackValue } from '../hooks/useAsyncCallback';
 import { useMatrixClient } from '../hooks/useMatrixClient';
 import { MediaConfig } from '../hooks/useMediaConfig';

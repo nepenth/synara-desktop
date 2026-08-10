@@ -1,4 +1,14 @@
-import { SyncState } from 'matrix-js-sdk';
+/** SDK-neutral mirror of the js-sdk SyncState string values. */
+const SyncState = {
+  Error: 'ERROR',
+  Prepared: 'PREPARED',
+  Stopped: 'STOPPED',
+  Syncing: 'SYNCING',
+  Catchup: 'CATCHUP',
+  Reconnecting: 'RECONNECTING',
+} as const;
+
+export type SyncState = typeof SyncState[keyof typeof SyncState];
 
 export const getSyncStatusBannerCopy = (state: SyncState | null): string | null => {
   if (state === SyncState.Catchup) {
@@ -15,6 +25,24 @@ export const getSyncStatusBannerCopy = (state: SyncState | null): string | null 
   }
   return null;
 };
+
+/**
+ * A ready sync service is a steady state, not a permanent success alert. The
+ * component owns the short transition window and asks this helper whether the
+ * otherwise persistent PREPARED copy may be shown.
+ */
+export const getTransientSyncStatusBannerCopy = (
+  state: SyncState | null,
+  connectedTransitionVisible: boolean
+): string | null => {
+  if (state === SyncState.Prepared && !connectedTransitionVisible) return null;
+  return getSyncStatusBannerCopy(state);
+};
+
+export const CONNECTED_STATUS_BANNER_DURATION_MS = 4_000;
+
+export const getSlidingSyncCapabilityBannerCopy = (): string =>
+  'This homeserver does not advertise sliding-sync (MSC4186) support, so sync may not start. Contact your server administrator.';
 
 export const getSyncStatusBannerVariant = (
   state: SyncState | null

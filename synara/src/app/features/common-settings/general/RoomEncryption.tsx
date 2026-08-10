@@ -16,7 +16,7 @@ import {
   Text,
 } from 'folds';
 import React, { useCallback, useState } from 'react';
-import { MatrixError } from 'matrix-js-sdk';
+import type { MatrixError } from '../../../utils/matrix';
 import FocusTrap from 'focus-trap-react';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../../room-settings/styles.css';

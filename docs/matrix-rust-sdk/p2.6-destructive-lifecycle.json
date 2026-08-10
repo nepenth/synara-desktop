@@ -1,0 +1,111 @@
+{
+  "task_id": "P2.6",
+  "title": "Destructive lifecycle operations",
+  "date": "2026-07-24",
+  "artifact_state": "landed",
+  "integration_state": "merged",
+  "strict_acceptance_state": "open",
+  "phase_gate_state": "open",
+  "current_status_ref": "docs/matrix-rust-sdk/program-status.json",
+  "historical_status_at_generation": "implemented",
+  "base_branch": "feature/matrix-rust-sdk-full-replacement",
+  "base_sha": "603b58f",
+  "work_branch": "matrix-rust/p2.6-destructive-lifecycle",
+  "human_doc": "docs/matrix-rust-sdk/p2.6-destructive-lifecycle.md",
+  "production_posture": {
+    "production_client_session_started": false,
+    "production_login": false,
+    "production_sync": false,
+    "dual_backend": false,
+    "tauri_commands_for_matrix": false,
+    "auto_wipe_on_store_failure": false,
+    "destructive_lifecycle_harness": true,
+    "exercised_by": "unit_tests_and_temp_dir_integration_only"
+  },
+  "artifacts": {
+    "rust_module": "src-tauri/src/matrix/lifecycle/",
+    "mod_wire": "src-tauri/src/matrix/mod.rs",
+    "design_note": "docs/matrix-rust-sdk/p2.6-destructive-lifecycle.md"
+  },
+  "module_files": [
+    "error.rs",
+    "wipe.rs",
+    "logout.rs",
+    "recovery.rs",
+    "session_material.rs",
+    "tests.rs",
+    "mod.rs"
+  ],
+  "api_surface": {
+    "types": [
+      "LifecycleError",
+      "WipeTarget",
+      "WipeReport",
+      "LogoutOutcome",
+      "WipeOutcome",
+      "StoreFailure",
+      "StoreFailureKind",
+      "RecoveryAction",
+      "SessionMaterial",
+      "SessionMaterialId",
+      "SessionMaterialVault",
+      "InMemorySessionMaterialVault"
+    ],
+    "ops": [
+      "WipeTarget::resolve",
+      "wipe_account_store",
+      "assert_exact_account_root",
+      "assert_path_is_wipe_allowed",
+      "perform_logout",
+      "perform_local_wipe",
+      "recovery_action_for",
+      "apply_store_failure",
+      "surface_store_corrupt",
+      "surface_store_unavailable",
+      "clear_session_material"
+    ]
+  },
+  "safeguards": [
+    "exact_account_segment_under_matrix_root_only",
+    "refuse_relative_or_unresolved_app_data_root",
+    "refuse_wrong_path_and_matrix_root_wipe",
+    "sibling_account_untouched",
+    "refuse_symlink_wipe_targets",
+    "wipe_idempotent_when_absent",
+    "store_failure_never_requests_wipe",
+    "ensure_dirs_or_open_failure_not_wipe_signal",
+    "logout_does_not_delete_stores"
+  ],
+  "integrations": [
+    "MatrixSupervisor.BeginStop/CompleteLogout",
+    "MatrixSupervisor.BeginWipe/CompleteWipe",
+    "TaskSupervisor.follow_supervisor_generation",
+    "MatrixMetrics.observe_supervisor/observe_tasks/set_store_status/record_error",
+    "StoreKeyVault.delete on wipe only",
+    "SessionMaterialVault.clear on logout and wipe"
+  ],
+  "invariants": [
+    "D-LOGOUT-WIPE",
+    "P0.7_no_auto_delete_on_store_failure",
+    "D-NO-DUAL-BACKEND",
+    "no_production_matrix_tauri_commands"
+  ],
+  "validation": {
+    "matrix_lifecycle_tests": 17,
+    "matrix_module_tests": 165,
+    "guardrails": "pass"
+  },
+  "residuals": [
+    { "id": "remote-logout-product", "waitsFor": "P3.8" },
+    { "id": "recovery-copy-confirmations", "waitsFor": "P3.8" },
+    { "id": "live-keyring-adapters", "waitsFor": "P3.5 / cutover" },
+    { "id": "production-tauri-matrix-commands", "waitsFor": "Phase 11+ cutover" },
+    { "id": "legacy-transition-coordinator", "waitsFor": "P3.7" }
+  ],
+  "decisions_respected": [
+    "D-LOGOUT-WIPE",
+    "D-NO-DUAL-BACKEND",
+    "D-ACCOUNT-SWITCH",
+    "D-TOKEN-CONTINUITY"
+  ]
+}

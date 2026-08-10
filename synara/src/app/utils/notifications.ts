@@ -1,8 +1,33 @@
-import type { MatrixClient } from 'matrix-js-sdk/lib/client';
-import { ReceiptType } from 'matrix-js-sdk/lib/@types/read_receipts';
-import type { MatrixEvent } from 'matrix-js-sdk/lib/models/event';
-import type { Room } from 'matrix-js-sdk/lib/models/room';
-import { EventType } from 'matrix-js-sdk/lib/@types/event';
+/** Structural projections of the js-sdk receipt/account-data surface. */
+import type { MatrixClientReading, MatrixEventReading, RoomReading } from './room';
+
+/** Client surface used by the read-marker engine (js-sdk ReceiptClientReading satisfies). */
+export type ReceiptClientReading = MatrixClientReading & {
+  setAccountData(eventType: string, content: unknown): Promise<unknown>;
+  setRoomAccountData(roomId: string, eventType: string, content: unknown): Promise<unknown>;
+  setRoomReadMarkers(
+    roomId: string,
+    fullyReadEventId: string,
+    publicReceipt?: MatrixEventReading,
+    privateReceipt?: MatrixEventReading
+  ): Promise<unknown>;
+  sendReadReceipt(event: unknown, receiptType?: string): Promise<unknown>;
+  getLatestTimeline(
+    timelineSet: unknown
+  ): Promise<{ getEvents(): MatrixEventReading[] } | null | undefined>;
+};
+
+/** ReceiptRoomReading surface used by the read-marker engine (js-sdk ReceiptRoomReading satisfies). */
+export type ReceiptRoomReading = RoomReading & {
+  getAccountData?(eventType: string): MatrixEventReading | undefined;
+  getReadReceiptForUserId?(
+    userId: string,
+    ignoreSynthesized?: boolean,
+    receiptType?: string
+  ): { eventId?: string } | null | undefined;
+  compareEventOrdering(a: string, b: string): number | null;
+  getUnfilteredTimelineSet(): unknown;
+};
 import { AccountDataEvent, SynaraUnreadAnchorContent } from '../../types/matrix/accountData';
 import { isFoundationFeatureEnabled } from '../config/foundationFeatures';
 import { recordFoundationDiagnostic } from './foundationDiagnostics';
@@ -14,12 +39,12 @@ import {
 } from './timelineLifecycle';
 
 const UNREAD_ANCHOR_ACCOUNT_DATA_VERSION = 1;
-const unreadAnchorWriteQueues = new WeakMap<MatrixClient, Promise<void>>();
+const unreadAnchorWriteQueues = new WeakMap<ReceiptClientReading, Promise<void>>();
 type MarkAsReadMode = 'latest-room' | 'loaded-live-tail';
 type ReadMarkerSource = MarkAsReadMode | 'confirmed-event';
 
 type ReadMarkerRequest = {
-  event: MatrixEvent;
+  event: MatrixEventReading;
   privateReceipt: boolean;
 };
 
@@ -31,7 +56,7 @@ type ReadMarkerWaiter = {
 type ReadReceiptChannel = 'public' | 'private';
 
 type ReadMarkerChannelTarget = {
-  event: MatrixEvent;
+  event: MatrixEventReading;
   waiters: Set<ReadMarkerWaiter>;
 };
 
@@ -40,20 +65,20 @@ type ReadMarkerChannels = Partial<Record<ReadReceiptChannel, ReadMarkerChannelTa
 type PendingReadMarkerChannels = Partial<Record<ReadReceiptChannel, ReadMarkerChannelTarget[]>>;
 
 type ReadMarkerBatch = {
-  fullyReadEvent: MatrixEvent;
+  fullyReadEvent: MatrixEventReading;
   channels: ReadMarkerChannels;
 };
 
 type RoomReadMarkerQueue = {
   active?: ReadMarkerBatch;
   pending: PendingReadMarkerChannels;
-  completed: Partial<Record<ReadReceiptChannel, MatrixEvent>>;
-  fullyReadCompleted?: MatrixEvent;
-  furthestKnown?: MatrixEvent;
+  completed: Partial<Record<ReadReceiptChannel, MatrixEventReading>>;
+  fullyReadCompleted?: MatrixEventReading;
+  furthestKnown?: MatrixEventReading;
   running: boolean;
 };
 
-const roomReadMarkerQueues = new WeakMap<MatrixClient, Map<string, RoomReadMarkerQueue>>();
+const roomReadMarkerQueues = new WeakMap<ReceiptClientReading, Map<string, RoomReadMarkerQueue>>();
 
 const normalizeUnreadAnchorContent = (
   content?: Partial<SynaraUnreadAnchorContent>
@@ -63,7 +88,7 @@ const normalizeUnreadAnchorContent = (
 });
 
 const updateUnreadAnchorContent = (
-  mx: MatrixClient,
+  mx: ReceiptClientReading,
   update: (current: SynaraUnreadAnchorContent) => SynaraUnreadAnchorContent
 ): Promise<void> => {
   const previous = unreadAnchorWriteQueues.get(mx) ?? Promise.resolve();
@@ -84,7 +109,11 @@ const updateUnreadAnchorContent = (
   return next;
 };
 
-export const setUnreadAnchor = (mx: MatrixClient, roomId: string, eventId: string): Promise<void> =>
+export const setUnreadAnchor = (
+  mx: ReceiptClientReading,
+  roomId: string,
+  eventId: string
+): Promise<void> =>
   updateUnreadAnchorContent(mx, (content) => ({
     ...content,
     anchors: {
@@ -93,7 +122,7 @@ export const setUnreadAnchor = (mx: MatrixClient, roomId: string, eventId: strin
     },
   }));
 
-export const clearUnreadAnchor = (mx: MatrixClient, roomId: string): Promise<void> =>
+export const clearUnreadAnchor = (mx: ReceiptClientReading, roomId: string): Promise<void> =>
   updateUnreadAnchorContent(mx, (content) => {
     if (!content.anchors?.[roomId]) return content;
     const anchors = { ...(content.anchors ?? {}) };
@@ -101,17 +130,25 @@ export const clearUnreadAnchor = (mx: MatrixClient, roomId: string): Promise<voi
     return { ...content, anchors };
   });
 
-export async function setRoomMarkedUnread(mx: MatrixClient, roomId: string, unread: boolean) {
-  await mx.setRoomAccountData(roomId, EventType.MarkedUnread, { unread });
+export async function setRoomMarkedUnread(
+  mx: ReceiptClientReading,
+  roomId: string,
+  unread: boolean
+) {
+  await mx.setRoomAccountData(roomId, 'm.marked_unread', { unread });
 }
 
-export async function markAsUnread(mx: MatrixClient, roomId: string) {
+export async function markAsUnread(mx: ReceiptClientReading, roomId: string) {
   await setRoomMarkedUnread(mx, roomId, true);
 }
 
-export async function markEventAsUnread(mx: MatrixClient, room: Room, eventId: string) {
-  const timeline = (room.getTimelineForEvent(eventId)?.getEvents() ??
-    getLoadedLiveTimelineEvents(room)) as MatrixEvent[];
+export async function markEventAsUnread(
+  mx: ReceiptClientReading,
+  room: ReceiptRoomReading,
+  eventId: string
+) {
+  const timeline = (room.getTimelineForEvent?.(eventId)?.getEvents() ??
+    getLoadedLiveTimelineEvents(room)) as MatrixEventReading[];
   const eventIndex = timeline.findIndex((event) => event.getId() === eventId);
   const anchorEvent =
     eventIndex > 0
@@ -127,9 +164,9 @@ export async function markEventAsUnread(mx: MatrixClient, room: Room, eventId: s
 }
 
 const compareReadMarkerEvents = (
-  room: Room,
-  left: MatrixEvent,
-  right: MatrixEvent
+  room: ReceiptRoomReading,
+  left: MatrixEventReading,
+  right: MatrixEventReading
 ): number | null => {
   const leftId = left.getId();
   const rightId = right.getId();
@@ -153,16 +190,20 @@ const compareReadMarkerEvents = (
 };
 
 const advanceKnownEvent = (
-  room: Room,
-  current: MatrixEvent | undefined,
-  candidate: MatrixEvent
-): MatrixEvent => {
+  room: ReceiptRoomReading,
+  current: MatrixEventReading | undefined,
+  candidate: MatrixEventReading
+): MatrixEventReading => {
   if (!current) return candidate;
   const ordering = compareReadMarkerEvents(room, candidate, current);
   return ordering !== null && ordering > 0 ? candidate : current;
 };
 
-const eventSatisfiesTarget = (room: Room, event: MatrixEvent, target: MatrixEvent): boolean => {
+const eventSatisfiesTarget = (
+  room: ReceiptRoomReading,
+  event: MatrixEventReading,
+  target: MatrixEventReading
+): boolean => {
   const ordering = compareReadMarkerEvents(room, event, target);
   return ordering !== null && ordering >= 0;
 };
@@ -170,7 +211,7 @@ const eventSatisfiesTarget = (room: Room, event: MatrixEvent, target: MatrixEven
 const getReceiptChannel = (privateReceipt: boolean): ReadReceiptChannel =>
   privateReceipt ? 'private' : 'public';
 
-const getRoomReadMarkerQueue = (mx: MatrixClient, roomId: string): RoomReadMarkerQueue => {
+const getRoomReadMarkerQueue = (mx: ReceiptClientReading, roomId: string): RoomReadMarkerQueue => {
   let clientQueues = roomReadMarkerQueues.get(mx);
   if (!clientQueues) {
     clientQueues = new Map();
@@ -186,8 +227,8 @@ const getRoomReadMarkerQueue = (mx: MatrixClient, roomId: string): RoomReadMarke
 };
 
 const commitReadMarker = async (
-  mx: MatrixClient,
-  room: Room,
+  mx: ReceiptClientReading,
+  room: ReceiptRoomReading,
   batch: ReadMarkerBatch
 ): Promise<void> => {
   const eventId = batch.fullyReadEvent.getId();
@@ -211,7 +252,10 @@ const commitReadMarker = async (
   });
 };
 
-const clearCustomUnread = async (mx: MatrixClient, room: Room): Promise<void> => {
+const clearCustomUnread = async (
+  mx: ReceiptClientReading,
+  room: ReceiptRoomReading
+): Promise<void> => {
   if (isRoomMarkedUnread(room)) {
     await setRoomMarkedUnread(mx, room.roomId, false);
   }
@@ -235,7 +279,10 @@ const rejectReadMarkerBatch = (batch: ReadMarkerBatch, error: unknown): void => 
 const hasPendingReadMarker = (queue: RoomReadMarkerQueue): boolean =>
   Boolean(queue.pending.public?.length || queue.pending.private?.length);
 
-const createReadMarkerBatch = (room: Room, queue: RoomReadMarkerQueue): ReadMarkerBatch => {
+const createReadMarkerBatch = (
+  room: ReceiptRoomReading,
+  queue: RoomReadMarkerQueue
+): ReadMarkerBatch => {
   const channels: ReadMarkerChannels = {};
   (['public', 'private'] as const).forEach((channel) => {
     const targets = queue.pending[channel];
@@ -246,7 +293,7 @@ const createReadMarkerBatch = (room: Room, queue: RoomReadMarkerQueue): ReadMark
 
   const pendingEvents = Object.values(channels)
     .map((target) => target?.event)
-    .filter((event): event is MatrixEvent => Boolean(event));
+    .filter((event): event is MatrixEventReading => Boolean(event));
   const fullyReadEvent = pendingEvents.reduce(
     (furthest, event) => advanceKnownEvent(room, furthest, event),
     queue.furthestKnown ?? queue.fullyReadCompleted
@@ -260,8 +307,8 @@ const readMarkerWaiterCount = (batch: ReadMarkerBatch): number =>
   Object.values(batch.channels).reduce((count, target) => count + (target?.waiters.size ?? 0), 0);
 
 const drainReadMarkerQueue = async (
-  mx: MatrixClient,
-  room: Room,
+  mx: ReceiptClientReading,
+  room: ReceiptRoomReading,
   queue: RoomReadMarkerQueue
 ): Promise<void> => {
   try {
@@ -309,15 +356,19 @@ const drainReadMarkerQueue = async (
   }
 };
 
-const startReadMarkerQueue = (mx: MatrixClient, room: Room, queue: RoomReadMarkerQueue): void => {
+const startReadMarkerQueue = (
+  mx: ReceiptClientReading,
+  room: ReceiptRoomReading,
+  queue: RoomReadMarkerQueue
+): void => {
   if (queue.running) return;
   queue.running = true;
   void drainReadMarkerQueue(mx, room, queue);
 };
 
 const enqueueReadMarker = (
-  mx: MatrixClient,
-  room: Room,
+  mx: ReceiptClientReading,
+  room: ReceiptRoomReading,
   request: ReadMarkerRequest
 ): Promise<void> => {
   const queue = getRoomReadMarkerQueue(mx, room.roomId);
@@ -367,10 +418,10 @@ const enqueueReadMarker = (
 };
 
 const markResolvedEventAsRead = async (
-  mx: MatrixClient,
-  room: Room,
+  mx: ReceiptClientReading,
+  room: ReceiptRoomReading,
   privateReceipt: boolean,
-  latestEvent: MatrixEvent,
+  latestEvent: MatrixEventReading,
   source: ReadMarkerSource
 ): Promise<void> => {
   const roomId = room.roomId;
@@ -380,12 +431,12 @@ const markResolvedEventAsRead = async (
   const latestEventId = latestEvent.getId();
   if (!latestEventId || latestEvent.isSending()) return;
   const fullyReadEventId = room
-    .getAccountData?.(ReceiptType.FullyRead)
+    .getAccountData?.('m.fully_read')
     ?.getContent<{ event_id?: string }>().event_id;
   const receiptEventId = room.getReadReceiptForUserId?.(
     userId,
     false,
-    privateReceipt ? ReceiptType.ReadPrivate : ReceiptType.Read
+    privateReceipt ? 'm.read.private' : 'm.read'
   )?.eventId;
   if (fullyReadEventId === latestEventId && receiptEventId === latestEventId) {
     await clearCustomUnread(mx, room);
@@ -399,10 +450,7 @@ const markResolvedEventAsRead = async (
 
   if (!isFoundationFeatureEnabled('exactReadMarkers')) {
     try {
-      await mx.sendReadReceipt(
-        latestEvent,
-        privateReceipt ? ReceiptType.ReadPrivate : ReceiptType.Read
-      );
+      await mx.sendReadReceipt(latestEvent, privateReceipt ? 'm.read.private' : 'm.read');
       await clearCustomUnread(mx, room);
       recordFoundationDiagnostic('read', 'marker.legacy-success', {
         roomId,
@@ -428,12 +476,12 @@ const markResolvedEventAsRead = async (
 };
 
 export async function markAsRead(
-  mx: MatrixClient,
+  mx: ReceiptClientReading,
   roomId: string,
   privateReceipt: boolean,
   mode: MarkAsReadMode = 'latest-room'
 ): Promise<void> {
-  const room = mx.getRoom(roomId);
+  const room = mx.getRoom(roomId) as ReceiptRoomReading | null;
   if (!room) return;
 
   const timeline =
@@ -444,7 +492,7 @@ export async function markAsRead(
 
   if (!latestEvent) return;
 
-  await markResolvedEventAsRead(mx, room, privateReceipt, latestEvent, mode);
+  await markResolvedEventAsRead(mx, room, privateReceipt, latestEvent as MatrixEventReading, mode);
 }
 
 /**
@@ -452,7 +500,7 @@ export async function markAsRead(
  * markAsRead API remains awaitable so workflows and tests can observe failures.
  */
 export function markAsReadInBackground(
-  mx: MatrixClient,
+  mx: ReceiptClientReading,
   roomId: string,
   privateReceipt: boolean,
   mode: MarkAsReadMode = 'latest-room'
@@ -466,12 +514,12 @@ export function markAsReadInBackground(
  * operation has returned an event, including detached latest timelines.
  */
 export async function markAsReadAtEvent(
-  mx: MatrixClient,
+  mx: ReceiptClientReading,
   roomId: string,
   privateReceipt: boolean,
-  event: MatrixEvent
+  event: MatrixEventReading
 ): Promise<void> {
-  const room = mx.getRoom(roomId);
+  const room = mx.getRoom(roomId) as ReceiptRoomReading | null;
   if (!room) return;
 
   await markResolvedEventAsRead(mx, room, privateReceipt, event, 'confirmed-event');

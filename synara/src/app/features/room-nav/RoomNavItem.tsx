@@ -1,5 +1,4 @@
 import React, { MouseEventHandler, forwardRef, useState } from 'react';
-import { Room } from 'matrix-js-sdk';
 import {
   Avatar,
   Box,
@@ -19,16 +18,15 @@ import {
 } from 'folds';
 import { useFocusWithin, useHover } from 'react-aria';
 import FocusTrap from 'focus-trap-react';
-import { useAtom, useAtomValue } from 'jotai';
 import { NavItem, NavItemContent, NavItemOptions, NavLink } from '../../components/nav';
 import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
-import { getDirectRoomAvatarUrl, getRoomAvatarUrl, getStateEvent } from '../../utils/room';
+import { getDirectRoomAvatarUrl, getRoomAvatarUrl } from '../../utils/room';
 import { nameInitials } from '../../utils/common';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRoomUnread } from '../../state/hooks/unread';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
-import { getPowersLevelFromMatrixEvent, usePowerLevels } from '../../hooks/usePowerLevels';
+import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { copyToClipboard } from '../../utils/dom';
 import { markAsReadInBackground, markAsUnread } from '../../utils/notifications';
 import { UseStateProvider } from '../../components/UseStateProvider';
@@ -36,6 +34,7 @@ import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
 import { useRoomTypingMember } from '../../hooks/useRoomTypingMembers';
 import { TypingIndicator } from '../../components/typing-indicator';
 import { stopPropagation } from '../../utils/keyboard';
+import type { EventedRoomReading } from '../../utils/roomEvents';
 import { getMatrixToRoom } from '../../plugins/matrix-to';
 import { getCanonicalAliasOrRoomId, isRoomAlias } from '../../utils/matrix';
 import { getViaServers } from '../../plugins/via-servers';
@@ -49,20 +48,14 @@ import {
   RoomNotificationMode,
 } from '../../hooks/useRoomsNotificationPreferences';
 import { RoomNotificationModeSwitcher } from '../../components/RoomNotificationSwitcher';
-import { getRoomCreatorsForRoomId, useRoomCreators } from '../../hooks/useRoomCreators';
-import { getRoomPermissionsAPI, useRoomPermissions } from '../../hooks/useRoomPermissions';
+import { useRoomCreators } from '../../hooks/useRoomCreators';
+import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { useRoomName } from '../../hooks/useRoomMeta';
-import { useCallMembers, useCallSession } from '../../hooks/useCall';
-import { useCallEmbed, useCallStart } from '../../hooks/useCallEmbed';
-import { callChatAtom } from '../../state/callEmbed';
-import { useCallPreferencesAtom } from '../../state/hooks/callPreferences';
-import { useAutoDiscoveryInfo } from '../../hooks/useAutoDiscoveryInfo';
-import { livekitSupport } from '../../hooks/useLivekitSupport';
-import { StateEvent } from '../../../types/matrix/room';
+import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 
 type RoomNavItemMenuProps = {
-  room: Room;
+  room: EventedRoomReading;
   requestClose: () => void;
   notificationMode?: RoomNotificationMode;
 };
@@ -95,9 +88,9 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
       setInvitePrompt(true);
     };
 
-    const handleCopyLink = () => {
+    const handleCopyLink = async () => {
       const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, room.roomId);
-      const viaServers = isRoomAlias(roomIdOrAlias) ? undefined : getViaServers(room);
+      const viaServers = isRoomAlias(roomIdOrAlias) ? undefined : await getViaServers(room);
       copyToClipboard(getMatrixToRoom(roomIdOrAlias, viaServers));
       requestClose();
     };
@@ -222,26 +215,8 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
   }
 );
 
-function CallChatToggle() {
-  const [chat, setChat] = useAtom(callChatAtom);
-
-  return (
-    <IconButton
-      onClick={() => setChat(!chat)}
-      aria-pressed={chat}
-      aria-label="Toggle Chat"
-      variant="Background"
-      fill="None"
-      size="300"
-      radii="300"
-    >
-      <Icon size="50" src={Icons.Message} filled={chat} />
-    </IconButton>
-  );
-}
-
 type RoomNavItemProps = {
-  room: Room;
+  room: EventedRoomReading;
   selected: boolean;
   linkPath: string;
   notificationMode?: RoomNotificationMode;
@@ -284,39 +259,6 @@ function RoomNavItemImpl({
   };
 
   const optionsVisible = hover || !!menuAnchor;
-  const callSession = useCallSession(room);
-  const callMembers = useCallMembers(room, callSession);
-  const startCall = useCallStart(direct);
-  const callEmbed = useCallEmbed();
-  const callPref = useAtomValue(useCallPreferencesAtom());
-  const autoDiscoveryInfo = useAutoDiscoveryInfo();
-
-  const handleStartCall: MouseEventHandler<HTMLAnchorElement> = (evt) => {
-    const powerLevelsEvent = getStateEvent(room, StateEvent.RoomPowerLevels);
-    const powerLevels = getPowersLevelFromMatrixEvent(powerLevelsEvent);
-    const creators = getRoomCreatorsForRoomId(mx, room.roomId);
-    const permissions = getRoomPermissionsAPI(creators, powerLevels);
-
-    const hasCallPermission = permissions.event(
-      StateEvent.GroupCallMemberPrefix,
-      mx.getSafeUserId()
-    );
-
-    // Do not join if missing permissions or no livekit support and call is not started by others
-    if (!hasCallPermission || (!livekitSupport(autoDiscoveryInfo) && callMembers.length === 0)) {
-      return;
-    }
-
-    // Do not join if already in call
-    if (callEmbed) {
-      return;
-    }
-    // Start call in second click
-    if (selected) {
-      evt.preventDefault();
-      startCall(room, callPref);
-    }
-  };
 
   return (
     <NavItem
@@ -329,7 +271,7 @@ function RoomNavItemImpl({
       {...hoverProps}
       {...focusWithinProps}
     >
-      <NavLink to={linkPath} onClick={room.isCallRoom() ? handleStartCall : undefined}>
+      <NavLink to={linkPath}>
         <NavItemContent>
           <Box as="span" grow="Yes" alignItems="Center" gap="200">
             <Avatar size="200" radii="400">
@@ -355,7 +297,7 @@ function RoomNavItemImpl({
                   }}
                   filled={selected}
                   size="100"
-                  joinRule={room.getJoinRule()}
+                  joinRule={normalizeRoomJoinRulePresentation(room.getJoinRule())}
                   roomType={room.getType()}
                 />
               )}
@@ -382,21 +324,11 @@ function RoomNavItemImpl({
                 aria-label={notificationMode}
               />
             )}
-            {room.isCallRoom() && callMembers.length > 0 && (
-              <Badge variant="Critical" fill="Solid" size="400">
-                <Text as="span" size="L400" truncate>
-                  {callMembers.length} Live
-                </Text>
-              </Badge>
-            )}
           </Box>
         </NavItemContent>
       </NavLink>
       {optionsVisible && (
         <NavItemOptions>
-          {selected && (callEmbed?.roomId === room.roomId || room.isCallRoom()) && (
-            <CallChatToggle />
-          )}
           <PopOut
             id={`menu-${room.roomId}`}
             aria-expanded={!!menuAnchor}

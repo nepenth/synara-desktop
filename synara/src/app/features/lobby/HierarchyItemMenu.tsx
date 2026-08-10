@@ -17,8 +17,9 @@ import {
 } from 'folds';
 import { HierarchyItem } from '../../hooks/useSpaceHierarchy';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
-import { MSpaceChildContent, StateEvent } from '../../../types/matrix/room';
+import { MSpaceChildContent } from '../../../types/matrix/room';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
+import { removeSpaceChild, setSpaceChild } from './nativeSpaceChild';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { LeaveSpacePrompt } from '../../components/leave-space-prompt';
 import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
@@ -27,7 +28,6 @@ import { useOpenRoomSettings } from '../../state/hooks/roomSettings';
 import { useSpaceOptionally } from '../../hooks/useSpace';
 import { useOpenSpaceSettings } from '../../state/hooks/spaceSettings';
 import { IPowerLevels } from '../../hooks/usePowerLevels';
-import { getRoomCreatorsForRoomId } from '../../hooks/useRoomCreators';
 import { getRoomPermissionsAPI } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 
@@ -42,14 +42,13 @@ function SuggestMenuItem({
   item: HierarchyItemWithParent;
   requestClose: () => void;
 }) {
-  const mx = useMatrixClient();
   const { roomId, parentId, content } = item;
 
   const [toggleState, handleToggleSuggested] = useAsyncCallback(
     useCallback(() => {
       const newContent: MSpaceChildContent = { ...content, suggested: !content.suggested };
-      return mx.sendStateEvent(parentId, StateEvent.SpaceChild as any, newContent, roomId);
-    }, [mx, parentId, roomId, content])
+      return setSpaceChild(parentId, roomId, newContent);
+    }, [parentId, roomId, content])
   );
 
   useEffect(() => {
@@ -80,14 +79,10 @@ function RemoveMenuItem({
   item: HierarchyItemWithParent;
   requestClose: () => void;
 }) {
-  const mx = useMatrixClient();
   const { roomId, parentId } = item;
 
   const [removeState, handleRemove] = useAsyncCallback(
-    useCallback(
-      () => mx.sendStateEvent(parentId, StateEvent.SpaceChild as any, {}, roomId),
-      [mx, parentId, roomId]
-    )
+    useCallback(() => removeSpaceChild(parentId, roomId), [parentId, roomId])
   );
 
   useEffect(() => {
@@ -199,6 +194,7 @@ type HierarchyItemMenuProps = {
   };
   joined: boolean;
   powerLevels?: IPowerLevels;
+  creators?: Set<string>;
   canEditChild: boolean;
   pinned?: boolean;
   onTogglePin?: (roomId: string) => void;
@@ -207,6 +203,7 @@ export function HierarchyItemMenu({
   item,
   joined,
   powerLevels,
+  creators,
   canEditChild,
   pinned,
   onTogglePin,
@@ -216,8 +213,7 @@ export function HierarchyItemMenu({
 
   const canInvite = (): boolean => {
     if (!powerLevels) return false;
-    const creators = getRoomCreatorsForRoomId(mx, item.roomId);
-    const permissions = getRoomPermissionsAPI(creators, powerLevels);
+    const permissions = getRoomPermissionsAPI(creators ?? new Set<string>(), powerLevels);
 
     return permissions.action('invite', mx.getSafeUserId());
   };

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-device-delete-start"
+description = "Enables the matrix_device_delete_start command without any pre-configured scope."
+commands.allow = ["matrix_device_delete_start"]
+
+[[permission]]
+identifier = "deny-matrix-device-delete-start"
+description = "Denies the matrix_device_delete_start command without any pre-configured scope."
+commands.deny = ["matrix_device_delete_start"]

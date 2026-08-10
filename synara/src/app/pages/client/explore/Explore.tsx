@@ -1,4 +1,4 @@
-import React, { FormEventHandler, useCallback, useRef, useState } from 'react';
+import React, { FormEventHandler, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FocusTrap from 'focus-trap-react';
 import {
@@ -15,7 +15,6 @@ import {
   OverlayBackdrop,
   OverlayCenter,
   Text,
-  color,
   config,
 } from 'folds';
 import {
@@ -31,22 +30,16 @@ import {
   useExploreFeaturedSelected,
   useExploreServer,
 } from '../../../hooks/router/useExploreSelected';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { getMxIdServer } from '../../../utils/matrix';
-import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
 import { stopPropagation } from '../../../utils/keyboard';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../../utils/desktop';
+import { readNativeRoomDirectorySession } from './nativeRoomDirectoryOwner';
 
 export function AddServer() {
-  const mx = useMatrixClient();
   const navigate = useNavigate();
   const [dialog, setDialog] = useState(false);
   const serverInputRef = useRef<HTMLInputElement>(null);
-
-  const [exploreState] = useAsyncCallback(
-    useCallback((server: string) => mx.publicRooms({ server, limit: 1 }), [mx])
-  );
 
   const getInputServer = (): string | undefined => {
     const serverInput = serverInputRef.current;
@@ -61,13 +54,6 @@ export function AddServer() {
     if (!server) return;
     // explore(server);
 
-    navigate(getExploreServerPath(server));
-    setDialog(false);
-  };
-
-  const handleView = () => {
-    const server = getInputServer();
-    if (!server) return;
     navigate(getExploreServerPath(server));
     setDialog(false);
   };
@@ -111,27 +97,9 @@ export function AddServer() {
                 <Box direction="Column" gap="100">
                   <Text size="L400">Server Name</Text>
                   <Input ref={serverInputRef} name="serverInput" variant="Background" required />
-                  {exploreState.status === AsyncStatus.Error && (
-                    <Text style={{ color: color.Critical.Main }} size="T300">
-                      Failed to load public rooms. Please try again.
-                    </Text>
-                  )}
                 </Box>
                 <Box direction="Column" gap="200">
-                  {/* <Button
-                    type="submit"
-                    variant="Secondary"
-                    before={
-                      exploreState.status === AsyncStatus.Loading ? (
-                        <Spinner fill="Solid" variant="Secondary" size="200" />
-                      ) : undefined
-                    }
-                    aria-disabled={exploreState.status === AsyncStatus.Loading}
-                  >
-                    <Text size="B400">Save</Text>
-                  </Button> */}
-
-                  <Button type="submit" onClick={handleView} variant="Secondary" fill="Soft">
+                  <Button type="submit" variant="Secondary" fill="Soft">
                     <Text size="B400">View</Text>
                   </Button>
                 </Box>
@@ -156,11 +124,23 @@ export function AddServer() {
 }
 
 export function Explore() {
-  const mx = useMatrixClient();
   useNavToActivePathMapper('explore');
-  const userId = mx.getUserId();
+  const [userServer, setUserServer] = useState<string>();
+  useEffect(() => {
+    let mounted = true;
+    if (!isSynaraDesktop()) return undefined;
+    void readNativeRoomDirectorySession(true, invokeDesktopWithAvailability)
+      .then((session) => {
+        if (mounted) setUserServer(session?.serverName);
+      })
+      .catch(() => {
+        if (mounted) setUserServer(undefined);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
   const clientConfig = useClientConfig();
-  const userServer = userId ? getMxIdServer(userId) : undefined;
   const servers =
     clientConfig.featuredCommunities?.servers?.filter((server) => server !== userServer) ?? [];
 

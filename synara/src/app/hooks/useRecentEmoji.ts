@@ -1,21 +1,31 @@
 import { useEffect, useState } from 'react';
-import { ClientEvent, MatrixClient, MatrixEvent } from 'matrix-js-sdk';
 import { getRecentEmojis } from '../plugins/recent-emoji';
+import type { MatrixClientReading, MatrixEventReading } from '../utils/room';
 import { AccountDataEvent } from '../../types/matrix/accountData';
 import { IEmoji } from '../plugins/emoji';
 
-export const useRecentEmoji = (mx: MatrixClient, limit?: number): IEmoji[] => {
+export const useRecentEmoji = (mx: MatrixClientReading, limit?: number): IEmoji[] => {
   const [recentEmoji, setRecentEmoji] = useState(() => getRecentEmojis(mx, limit));
 
   useEffect(() => {
-    const handleAccountData = (event: MatrixEvent) => {
+    const handleAccountData = (event: MatrixEventReading) => {
       if (event.getType() !== AccountDataEvent.ElementRecentEmoji) return;
       setRecentEmoji(getRecentEmojis(mx, limit));
     };
 
-    mx.on(ClientEvent.AccountData, handleAccountData);
+    (
+      mx as unknown as {
+        on(event: string, listener: (event: MatrixEventReading) => void): void;
+        removeListener(event: string, listener: (event: MatrixEventReading) => void): void;
+      }
+    ).on('AccountData', handleAccountData);
     return () => {
-      mx.removeListener(ClientEvent.AccountData, handleAccountData);
+      (
+        mx as unknown as {
+          on(event: string, listener: (event: MatrixEventReading) => void): void;
+          removeListener(event: string, listener: (event: MatrixEventReading) => void): void;
+        }
+      ).removeListener('AccountData', handleAccountData);
     };
   }, [mx, limit]);
 

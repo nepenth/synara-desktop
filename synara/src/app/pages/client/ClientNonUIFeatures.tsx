@@ -2,7 +2,14 @@ import { useAtomValue } from 'jotai';
 import { isKeyHotkey } from 'is-hotkey';
 import React, { ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClientEvent, MatrixEvent, Room, RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
+import type { MatrixEventReading } from '../../utils/room';
+import type { EventedRoomReading } from '../../utils/roomEvents';
+import { eventFromWire } from '../../utils/nativeEventAdapter';
+
+type NonUIRoomReading = EventedRoomReading & {
+  findEventById(eventId: string): MatrixEventReading | undefined;
+};
+type LocalMx = ReturnType<typeof useMatrixClient>;
 import { roomToUnreadAtom, unreadEqual, unreadInfoToUnread } from '../../state/room/roomToUnread';
 import LogoPNG from '../../../../public/res/png/synara.png';
 import LogoUnreadPNG from '../../../../public/res/png/synara-unread.png';
@@ -12,27 +19,24 @@ import InviteSound from '../../../../public/sound/invite.ogg';
 import { notificationPermission, setFavicon } from '../../utils/dom';
 import { useSetting } from '../../state/hooks/settings';
 import { desktopPlatformSettingsAtom, settingsAtom } from '../../state/settings';
-import { allInvitesAtom } from '../../state/room-list/inviteList';
+import { allInvitesAtom, useNativeInviteSyncing } from '../../state/room-list/inviteList';
 import { usePreviousValue } from '../../hooks/usePreviousValue';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { getInboxInvitesPath } from '../pathUtils';
 import {
-  getEventReactions,
-  getReactionContent,
   getMemberDisplayName,
   getNotificationType,
   getThreadRootEventId,
   getUnreadInfo,
   isNotificationEvent,
 } from '../../utils/room';
-import { MessageEvent, NotificationType } from '../../../types/matrix/room';
+import { NotificationType } from '../../../types/matrix/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
-import { useAccountData } from '../../hooks/useAccountData';
-import { AccountDataEvent, SynaraLaterContent } from '../../../types/matrix/accountData';
-import { getSortedLaterItems, updateLaterContent } from '../../utils/later';
+import { getSortedLaterItems } from '../../utils/later';
+import { laterContentAtom } from '../../state/laterList';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { PerformanceDebugOverlay } from '../../components/performance/PerformanceDebugOverlay';
 import {
@@ -57,7 +61,6 @@ import {
   buildAgentApprovalNativeActionDedupeKey,
   createAgentApprovalNativeActionDedupeStore,
   detectAgentApprovalPrompt,
-  hasLocalAgentApprovalReactionFromSenders,
   planAgentApprovalNativeNotificationAction,
 } from '../../utils/agentApprovals';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
@@ -68,6 +71,8 @@ import {
 } from '../../notifications/notificationCaches';
 import { getLoadedLiveTimelineEvents } from '../../utils/timelineLifecycle';
 import { DesktopUpdaterProvider } from '../../features/desktop-updater/DesktopUpdaterProvider';
+import { ensureReactionWithNativeOwner } from '../../features/room/nativeReactionOwner';
+import { markLaterRemindedWithNativeOwner } from '../../features/room/nativeLaterOwner';
 
 const RECENT_AGENT_APPROVAL_MS = AGENT_APPROVAL_NATIVE_ACTION_TTL_MS;
 
@@ -83,38 +88,19 @@ const resolveAgentApprovalTargetEvent = async (
   mx: ReturnType<typeof useMatrixClient>,
   roomId: string,
   eventId: string
-): Promise<MatrixEvent | undefined> => {
+): Promise<MatrixEventReading | undefined> => {
   const room = mx.getRoom(roomId);
   const local = room?.findEventById(eventId);
   if (local) return local;
 
   try {
     const raw = await mx.fetchRoomEvent(roomId, eventId);
-    return new MatrixEvent(raw);
+    return eventFromWire(raw, roomId);
   } catch {
     return undefined;
   }
 };
 
-const userHasLocalApprovalReaction = (
-  room: Room | null,
-  eventId: string,
-  userId: string | null | undefined
-): boolean => {
-  if (!room || !userId) return false;
-  const reactions = getEventReactions(room.getUnfilteredTimelineSet(), eventId);
-  const sorted = reactions?.getSortedAnnotationsByKey();
-  if (!sorted) return false;
-  return hasLocalAgentApprovalReactionFromSenders(
-    sorted.map(([key, events]) => [
-      key,
-      [...events]
-        .map((event) => event.getSender())
-        .filter((sender): sender is string => Boolean(sender)),
-    ]),
-    userId
-  );
-};
 const NATIVE_PASTE_EVENT = 'synara://native-paste';
 const TEXT_INPUT_TYPES = new Set(['', 'email', 'password', 'search', 'tel', 'text', 'url']);
 
@@ -262,8 +248,7 @@ function TrayDoNotDisturbSync() {
 function PlatformBadgeAndTrayUpdater() {
   const roomToUnread = useAtomValue(roomToUnreadAtom);
   const invites = useAtomValue(allInvitesAtom);
-  const laterEvent = useAccountData(AccountDataEvent.SynaraLater);
-  const laterContent = laterEvent?.getContent() as SynaraLaterContent | undefined;
+  const laterContent = useAtomValue(laterContentAtom);
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
 
   useEffect(() => {
@@ -295,7 +280,7 @@ function InviteNotifications() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const invites = useAtomValue(allInvitesAtom);
   const perviousInviteLen = usePreviousValue(invites.length, 0);
-  const mx = useMatrixClient();
+  const nativeInviteSyncing = useNativeInviteSyncing();
 
   const navigate = useNavigate();
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
@@ -332,7 +317,7 @@ function InviteNotifications() {
   }, []);
 
   useEffect(() => {
-    if (invites.length > perviousInviteLen && mx.getSyncState() === 'SYNCING') {
+    if (invites.length > perviousInviteLen && nativeInviteSyncing) {
       if (
         showNotifications &&
         (supportsPlatformSystemNotifications() || notificationPermission('granted'))
@@ -344,7 +329,15 @@ function InviteNotifications() {
         playSound();
       }
     }
-  }, [mx, invites, perviousInviteLen, showNotifications, notificationSound, notify, playSound]);
+  }, [
+    invites,
+    perviousInviteLen,
+    nativeInviteSyncing,
+    showNotifications,
+    notificationSound,
+    notify,
+    playSound,
+  ]);
 
   return (
     // eslint-disable-next-line jsx-a11y/media-has-caption
@@ -415,12 +408,12 @@ function MessageNotifications() {
   }, []);
 
   useEffect(() => {
-    const handleTimelineEvent: RoomEventHandlerMap[RoomEvent.Timeline] = (
-      mEvent,
-      room,
-      toStartOfTimeline,
-      removed,
-      data
+    const handleTimelineEvent = (
+      mEvent: MatrixEventReading,
+      room: NonUIRoomReading | undefined,
+      toStartOfTimeline: boolean,
+      removed: boolean,
+      data: { liveEvent?: boolean; [key: string]: unknown }
     ) => {
       if (mx.getSyncState() !== 'SYNCING') return;
       if (document.hasFocus() && (selectedRoomId === room?.roomId || notificationSelected)) return;
@@ -472,9 +465,15 @@ function MessageNotifications() {
         playSound();
       }
     };
-    mx.on(RoomEvent.Timeline, handleTimelineEvent);
+    mx.on(
+      'Room.timeline' as unknown as Parameters<LocalMx['on']>[0],
+      handleTimelineEvent as unknown as Parameters<LocalMx['on']>[1]
+    );
     return () => {
-      mx.removeListener(RoomEvent.Timeline, handleTimelineEvent);
+      mx.removeListener(
+        'Room.timeline' as unknown as Parameters<LocalMx['removeListener']>[0],
+        handleTimelineEvent as unknown as Parameters<LocalMx['removeListener']>[1]
+      );
     };
   }, [
     mx,
@@ -607,9 +606,6 @@ function AgentApprovalNotifications() {
       }
 
       const targetEvent = await resolveAgentApprovalTargetEvent(mx, roomId, eventId);
-      const room = mx.getRoom(roomId);
-      const userId = mx.getUserId();
-      const alreadyReactedLocally = userHasLocalApprovalReaction(room, eventId, userId);
       const isApprovalPrompt = targetEvent
         ? Boolean(detectAgentApprovalPrompt(targetEvent.getContent<Record<string, unknown>>()))
         : false;
@@ -620,7 +616,9 @@ function AgentApprovalNotifications() {
         nowMs: Date.now(),
         eventTsMs: targetEvent?.getTs(),
         alreadyActed: dedupe.has(provisionalDedupeKey),
-        alreadyReactedLocally,
+        // The Rust owner reads its own timeline aggregation and performs an
+        // idempotent ensure. JS does not inspect or write reactions here.
+        alreadyReactedLocally: false,
         eventResolved: Boolean(targetEvent),
         isApprovalPrompt,
       });
@@ -644,11 +642,11 @@ function AgentApprovalNotifications() {
 
       dedupe.add(plan.dedupeKey);
       try {
-        await mx.sendEvent(
-          plan.roomId,
-          MessageEvent.Reaction as any,
-          getReactionContent(plan.eventId, plan.reaction) as any
-        );
+        await ensureReactionWithNativeOwner({
+          roomId: plan.roomId,
+          eventId: plan.eventId,
+          key: plan.reaction,
+        });
       } catch {
         dedupe.remove(plan.dedupeKey);
       }
@@ -681,7 +679,7 @@ function AgentApprovalNotifications() {
   }, []);
 
   const notifyApprovalEvent = useCallback(
-    (mEvent: MatrixEvent, room: Room) => {
+    (mEvent: MatrixEventReading, room: NonUIRoomReading) => {
       if (room.isSpaceRoom()) return;
       if (mEvent.getSender() === mx.getUserId()) return;
       if (Date.now() - mEvent.getTs() > RECENT_AGENT_APPROVAL_MS) return;
@@ -717,19 +715,25 @@ function AgentApprovalNotifications() {
   );
 
   useEffect(() => {
-    const handleTimelineEvent: RoomEventHandlerMap[RoomEvent.Timeline] = (
-      mEvent,
-      room,
-      toStartOfTimeline,
-      removed
+    const handleTimelineEvent = (
+      mEvent: MatrixEventReading,
+      room: NonUIRoomReading,
+      toStartOfTimeline: boolean,
+      removed: boolean
     ) => {
       if (!room || toStartOfTimeline || removed) return;
       notifyApprovalEvent(mEvent, room);
     };
 
-    mx.on(RoomEvent.Timeline, handleTimelineEvent);
+    mx.on(
+      'Room.timeline' as unknown as Parameters<LocalMx['on']>[0],
+      handleTimelineEvent as unknown as Parameters<LocalMx['on']>[1]
+    );
     return () => {
-      mx.removeListener(RoomEvent.Timeline, handleTimelineEvent);
+      mx.removeListener(
+        'Room.timeline' as unknown as Parameters<LocalMx['removeListener']>[0],
+        handleTimelineEvent as unknown as Parameters<LocalMx['removeListener']>[1]
+      );
     };
   }, [mx, notifyApprovalEvent]);
 
@@ -742,17 +746,20 @@ function AgentApprovalNotifications() {
           const event = events[index];
           if (!event) continue;
           if (Date.now() - event.getTs() > RECENT_AGENT_APPROVAL_MS) break;
-          notifyApprovalEvent(event, room);
+          notifyApprovalEvent(event as MatrixEventReading, room);
         }
       });
     };
 
     scanRecentApprovalEvents();
     const interval = window.setInterval(scanRecentApprovalEvents, 30_000);
-    mx.on(ClientEvent.Sync, scanRecentApprovalEvents);
+    mx.on('sync' as unknown as Parameters<LocalMx['on']>[0], scanRecentApprovalEvents);
     return () => {
       window.clearInterval(interval);
-      mx.removeListener(ClientEvent.Sync, scanRecentApprovalEvents);
+      mx.removeListener(
+        'sync' as unknown as Parameters<LocalMx['removeListener']>[0],
+        scanRecentApprovalEvents
+      );
     };
   }, [mx, notifyApprovalEvent]);
 
@@ -767,8 +774,7 @@ function AgentApprovalNotifications() {
 function LaterReminderNotifications() {
   const mx = useMatrixClient();
   const { navigateRoom } = useRoomNavigate();
-  const laterEvent = useAccountData(AccountDataEvent.SynaraLater);
-  const laterContent = laterEvent?.getContent() as SynaraLaterContent | undefined;
+  const laterContent = useAtomValue(laterContentAtom);
   const reminders = useMemo(
     () => getSortedLaterItems(laterContent).filter((item) => item.kind === 'reminder'),
     [laterContent]
@@ -825,15 +831,8 @@ function LaterReminderNotifications() {
           notify('A saved reminder is due.', dueReminder.roomId, openEventId);
         }
       });
-      updateLaterContent(mx, (current) => {
-        const items = { ...(current.items ?? {}) };
-        dueReminders.forEach((dueReminder) => {
-          const item = items[dueReminder.id];
-          if (item?.kind === 'reminder' && item.dueTs === dueReminder.dueTs && !item.remindedAt) {
-            items[dueReminder.id] = { ...item, remindedAt: now };
-          }
-        });
-        return { ...current, items };
+      dueReminders.forEach((dueReminder) => {
+        void markLaterRemindedWithNativeOwner(dueReminder.id, now).catch(() => undefined);
       });
     };
 

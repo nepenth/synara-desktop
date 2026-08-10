@@ -1,29 +1,17 @@
 import { useMemo } from 'react';
-import { ILoginFlow, IPasswordFlow, ISSOFlow, LoginFlow } from 'matrix-js-sdk/lib/@types/auth';
+import { getPasswordFlow, type LoginFlowDto } from '../pages/auth/login/nativeLoginFlows';
 
-export const getSSOFlow = (loginFlows: LoginFlow[]): ISSOFlow | undefined =>
-  loginFlows.find((flow) => flow.type === 'm.login.sso' || flow.type === 'm.login.cas') as
-    | ISSOFlow
-    | undefined;
-
-export const getPasswordFlow = (loginFlows: LoginFlow[]): IPasswordFlow | undefined =>
-  loginFlows.find((flow) => flow.type === 'm.login.password') as IPasswordFlow;
-export const getTokenFlow = (loginFlows: LoginFlow[]): LoginFlow | undefined =>
-  loginFlows.find((flow) => flow.type === 'm.login.token') as ILoginFlow & {
-    type: 'm.login.token';
-  };
+export type { LoginFlowDto };
+export { getPasswordFlow };
 
 export type ParsedLoginFlows = {
-  password?: LoginFlow;
-  token?: LoginFlow;
-  sso?: ISSOFlow;
+  password?: LoginFlowDto;
 };
-export const useParsedLoginFlows = (loginFlows: LoginFlow[]) => {
+
+export const useParsedLoginFlows = (loginFlows: LoginFlowDto[]) => {
   const parsedFlow: ParsedLoginFlows = useMemo<ParsedLoginFlows>(
     () => ({
       password: getPasswordFlow(loginFlows),
-      token: <SET_IN_CONFIG>
-      sso: getSSOFlow(loginFlows),
     }),
     [loginFlows]
   );

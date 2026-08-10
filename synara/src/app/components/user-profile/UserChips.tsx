@@ -1,8 +1,9 @@
+import type { RoomReading } from '../../utils/room';
 import React, { MouseEventHandler, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FocusTrap from 'focus-trap-react';
 import { isKeyHotkey } from 'is-hotkey';
-import { Room } from 'matrix-js-sdk';
+
 import {
   PopOut,
   Menu,
@@ -42,6 +43,7 @@ import { useTimeoutToggle } from '../../hooks/useTimeoutToggle';
 import { useIgnoredUsers } from '../../hooks/useIgnoredUsers';
 import { CutoutCard } from '../cutout-card';
 import { SettingTile } from '../setting-tile';
+import { normalizeRoomJoinRulePresentation } from '../../features/matrix-dto/roomJoinRule';
 
 export function ServerChip({ server }: { server: string }) {
   const mx = useMatrixClient();
@@ -226,9 +228,9 @@ export function ShareChip({ userId }: { userId: string }) {
 }
 
 type MutualRoomsData = {
-  rooms: Room[];
-  spaces: Room[];
-  directs: Room[];
+  rooms: RoomReading[];
+  spaces: RoomReading[];
+  directs: RoomReading[];
 };
 
 export function MutualRoomsChip({ userId }: { userId: string }) {
@@ -286,7 +288,7 @@ export function MutualRoomsChip({ userId }: { userId: string }) {
     return null;
   }
 
-  const renderItem = (room: Room) => {
+  const renderItem = (room: RoomReading) => {
     const { roomId } = room;
     const dm = directs.includes(roomId);
 
@@ -324,7 +326,11 @@ export function MutualRoomsChip({ userId }: { userId: string }) {
                 )}
               />
             ) : (
-              <RoomIcon size="100" joinRule={room.getJoinRule()} roomType={room.getType()} />
+              <RoomIcon
+                size="100"
+                joinRule={normalizeRoomJoinRulePresentation(room.getJoinRule())}
+                roomType={room.getType()}
+              />
             )}
           </Avatar>
         }

@@ -77,7 +77,7 @@ final class RoomReadMarkerCache {
         eventID: String,
         roomID: String,
         userID: String,
-        token: <SET_IN_CONFIG>
+        token: FetchToken
     ) -> String {
         lock.lock()
         defer { lock.unlock() }
@@ -161,7 +161,7 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
                 eventID: eventID,
                 roomID: roomID,
                 userID: session.userID,
-                token: <SET_IN_CONFIG>
+                token: fetchToken
             )
         } catch {
             guard sessionStore.currentState == .signedIn(session),

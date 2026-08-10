@@ -6,45 +6,25 @@ import {
   SidebarItemBadge,
   SidebarItemTooltip,
 } from '../../../components/sidebar';
-import { useDeviceIds, useDeviceList, useSplitCurrentDevice } from '../../../hooks/useDeviceList';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
+import { useDeviceList, useSplitCurrentDevice } from '../../../hooks/useDeviceList';
 import * as css from './UnverifiedTab.css';
-import {
-  useDeviceVerificationStatus,
-  useUnverifiedDeviceCount,
-  VerificationStatus,
-} from '../../../hooks/useDeviceVerificationStatus';
 import { useCrossSigningActive } from '../../../hooks/useCrossSigning';
 import { Modal500 } from '../../../components/Modal500';
 import { Settings, SettingsPages } from '../../../features/settings';
 
 function UnverifiedIndicator() {
-  const mx = useMatrixClient();
-
-  const crypto = mx.getCrypto();
   const [devices] = useDeviceList();
 
   const [currentDevice, otherDevices] = useSplitCurrentDevice(devices);
 
-  const verificationStatus = useDeviceVerificationStatus(
-    crypto,
-    mx.getSafeUserId(),
-    currentDevice?.device_id
-  );
-  const unverified = verificationStatus === VerificationStatus.Unverified;
-
-  const otherDevicesId = useDeviceIds(otherDevices);
-  const unverifiedDeviceCount = useUnverifiedDeviceCount(
-    crypto,
-    mx.getSafeUserId(),
-    otherDevicesId
-  );
+  const unverified = currentDevice?.trust === 'unverified';
+  const unverifiedDeviceCount =
+    otherDevices?.filter((device) => device.trust === 'unverified').length ?? 0;
 
   const [settings, setSettings] = useState(false);
   const closeSettings = () => setSettings(false);
 
-  const hasUnverified =
-    unverified || (unverifiedDeviceCount !== undefined && unverifiedDeviceCount > 0);
+  const hasUnverified = unverified || unverifiedDeviceCount > 0;
   return (
     <>
       {hasUnverified && (

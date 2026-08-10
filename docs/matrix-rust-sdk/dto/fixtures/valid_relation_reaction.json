@@ -1,0 +1,7 @@
+{
+  "relType": "annotation",
+  "eventId": "$msg1",
+  "roomId": "!room:example.org",
+  "sender": "@bob:example.org",
+  "key": "👍"
+}

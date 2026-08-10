@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-set-own-display-name"
+description = "Enables the matrix_set_own_display_name command without any pre-configured scope."
+commands.allow = ["matrix_set_own_display_name"]
+
+[[permission]]
+identifier = "deny-matrix-set-own-display-name"
+description = "Denies the matrix_set_own_display_name command without any pre-configured scope."
+commands.deny = ["matrix_set_own_display_name"]

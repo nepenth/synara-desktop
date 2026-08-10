@@ -1,18 +1,77 @@
-import { Direction, type EventTimeline, type MatrixEvent, type Room } from 'matrix-js-sdk';
-import { EventType } from 'matrix-js-sdk/lib/@types/event';
-import {
-  ReceiptType,
-  type ReceiptContent,
-  type WrappedReceipt,
-} from 'matrix-js-sdk/lib/@types/read_receipts';
-import { type Unread } from '../../types/matrix/room';
+/**
+ * SDK-neutral structural projections used by this utility boundary.
+ *
+ * These are narrow, read-only interfaces satisfied by live SDK runtime objects
+ * and by the test doubles. They deliberately do not re-export any SDK type so
+ * this file stays SDK-free, while callers that still hold live SDK objects
+ * keep typechecking.
+ */
+
 import {
   getEventTimeline,
   getFirstLinkedTimeline,
   getLinkedTimelines,
   getLiveTimeline,
   getTimelinesEventsCount,
+  TimelineDirection,
+  type EventTimelineReading,
+  type EventTimelineSetReading,
+  type TimelineEventReading as LinksTimelineEventReading,
 } from './timelineLinks';
+import type { Unread } from '../../types/matrix/room';
+
+type EventContentReading = { [key: string]: any };
+
+/** Narrow structural projection of a room event used by timeline opening. */
+export type TimelineEventReading = {
+  getId(): string | undefined;
+  getContent<T extends EventContentReading = EventContentReading>(): T;
+};
+
+/** Narrow structural projection of a wrapped read receipt. */
+export type TimelineWrappedReceiptReading = {
+  eventId: string;
+  data: { ts: number };
+};
+
+/** Narrow structural projection of a room used by timeline opening. */
+export type RoomReading = {
+  client: { getUserId(): string | null };
+  getAccountData(eventType: string): TimelineEventReading | undefined;
+  getLiveTimeline(): EventTimelineReading;
+  getUnfilteredTimelineSet(): EventTimelineSetReading;
+  getReadReceiptForUserId(
+    userId: string,
+    ignoreSynthesized?: boolean,
+    receiptType?: string
+  ): TimelineWrappedReceiptReading | null;
+  compareEventOrdering(leftEventId: string, rightEventId: string): number | null;
+};
+
+/**
+ * String-literal mirrors of the SDK account-data event types used below, so
+ * live account-data reads receive the exact same wire strings as the previous
+ * enum constants.
+ */
+const EventTypeReading = {
+  FullyRead: 'm.fully_read',
+  MarkedUnread: 'm.marked_unread',
+} as const;
+
+/** String-literal mirror of the SDK receipt types used below. */
+const ReceiptTypeReading = {
+  Read: 'm.read',
+  ReadPrivate: 'm.read.private',
+} as const;
+
+/** Structural shape of an m.receipt event content read from a room event. */
+type ReceiptContent = {
+  [eventId: string]: {
+    [receiptType: string]: {
+      [userId: string]: { ts: number };
+    };
+  };
+};
 
 export type TimelineRange = {
   start: number;
@@ -20,7 +79,7 @@ export type TimelineRange = {
 };
 
 export type TimelineWindow = {
-  linkedTimelines: EventTimeline[];
+  linkedTimelines: EventTimelineReading[];
   range: TimelineRange;
 };
 
@@ -45,7 +104,7 @@ type RoomReadFrontierCandidate = {
 };
 
 export type TimelineWindowIdentitySnapshot = {
-  provider?: EventTimeline;
+  provider?: EventTimelineReading;
   eventCount: number;
   range: TimelineRange;
   tailEventId?: string;
@@ -181,7 +240,7 @@ export type RoomUnreadInfo = {
 };
 
 export const getTimelineEndWindow = (
-  linkedTimelines: EventTimeline[],
+  linkedTimelines: EventTimelineReading[],
   windowLimit: number
 ): TimelineWindow => {
   const eventsLength = getTimelinesEventsCount(linkedTimelines);
@@ -194,7 +253,7 @@ export const getTimelineEndWindow = (
   };
 };
 
-export const getInitialTimeline = (room: Room, windowLimit: number): TimelineWindow => {
+export const getInitialTimeline = (room: RoomReading, windowLimit: number): TimelineWindow => {
   const linkedTimelines = getLinkedTimelines(getLiveTimeline(room));
   return getTimelineEndWindow(linkedTimelines, windowLimit);
 };
@@ -244,7 +303,7 @@ const readFrontierSourcePriority: Record<RoomReadFrontierCandidate['source'], nu
 };
 
 const receiptCandidate = (
-  receipt: WrappedReceipt | null | undefined,
+  receipt: TimelineWrappedReceiptReading | null | undefined,
   source: 'public-receipt' | 'private-receipt'
 ): RoomReadFrontierCandidate | undefined => {
   if (!receipt?.eventId) return undefined;
@@ -256,7 +315,7 @@ const receiptCandidate = (
 };
 
 const compareReadFrontierCandidates = (
-  room: Room,
+  room: RoomReading,
   left: RoomReadFrontierCandidate,
   right: RoomReadFrontierCandidate
 ): number => {
@@ -280,11 +339,11 @@ const compareReadFrontierCandidates = (
   // m.fully_read has no timestamp of its own and is commonly left behind by
   // clients which only advance receipts. When the SDK cannot order the events,
   // prefer a real server receipt; private wins an otherwise ambiguous tie, in
-  // line with matrix-js-sdk's own receipt selection.
+  // line with the SDK's own receipt selection.
   return readFrontierSourcePriority[left.source] - readFrontierSourcePriority[right.source];
 };
 
-const getLoadedLiveTailEventId = (room: Room): string | undefined => {
+const getLoadedLiveTailEventId = (room: RoomReading): string | undefined => {
   const liveEvents = room.getLiveTimeline().getEvents();
   for (let index = liveEvents.length - 1; index >= 0; index -= 1) {
     const eventId = liveEvents[index]?.getId();
@@ -301,12 +360,12 @@ const getLoadedLiveTailEventId = (room: Room): string | undefined => {
  * data entry from dragging future room opens back into old history.
  */
 export const resolveRoomReadFrontier = (
-  room: Room,
+  room: RoomReading,
   unreadAnchorEventId?: string
 ): RoomReadFrontier => {
   const isExplicitlyMarkedUnread =
-    room.getAccountData?.(EventType.MarkedUnread)?.getContent<{ unread?: boolean }>().unread ===
-    true;
+    room.getAccountData?.(EventTypeReading.MarkedUnread)?.getContent<{ unread?: boolean }>()
+      .unread === true;
 
   let eventId: string | undefined;
   let source: RoomReadFrontierSource = 'absent';
@@ -319,11 +378,11 @@ export const resolveRoomReadFrontier = (
     const candidates: RoomReadFrontierCandidate[] = [];
     if (userId) {
       const publicReceipt = receiptCandidate(
-        room.getReadReceiptForUserId?.(userId, true, ReceiptType.Read),
+        room.getReadReceiptForUserId?.(userId, true, ReceiptTypeReading.Read),
         'public-receipt'
       );
       const privateReceipt = receiptCandidate(
-        room.getReadReceiptForUserId?.(userId, true, ReceiptType.ReadPrivate),
+        room.getReadReceiptForUserId?.(userId, true, ReceiptTypeReading.ReadPrivate),
         'private-receipt'
       );
       if (publicReceipt) candidates.push(publicReceipt);
@@ -331,7 +390,7 @@ export const resolveRoomReadFrontier = (
     }
 
     const fullyReadEventId = room
-      .getAccountData?.(EventType.FullyRead)
+      .getAccountData?.(EventTypeReading.FullyRead)
       ?.getContent<{ event_id?: string }>().event_id;
     if (fullyReadEventId) {
       candidates.push({ eventId: fullyReadEventId, source: 'fully-read' });
@@ -363,11 +422,11 @@ export const resolveRoomReadFrontier = (
 };
 
 export const getRoomReadFrontierRevisionKey = (frontier: RoomReadFrontier): string =>
-  `${frontier.source}\u0000${frontier.eventId ?? ''}\u0000${
-    frontier.isExplicitlyMarkedUnread ? 1 : 0
-  }\u0000${frontier.isAtLiveTail ? 1 : 0}`;
+  `${frontier.source} ${frontier.eventId ?? ''} ${frontier.isExplicitlyMarkedUnread ? 1 : 0} ${
+    frontier.isAtLiveTail ? 1 : 0
+  }`;
 
-export const receiptEventContainsUser = (event: MatrixEvent, userId: string): boolean => {
+export const receiptEventContainsUser = (event: TimelineEventReading, userId: string): boolean => {
   const content = event.getContent<ReceiptContent>();
   return Object.values(content).some((receiptTypes) =>
     Object.values(receiptTypes).some((receiptsByUser) => Boolean(receiptsByUser?.[userId]))
@@ -375,14 +434,15 @@ export const receiptEventContainsUser = (event: MatrixEvent, userId: string): bo
 };
 
 export const getRoomUnreadInfo = (
-  room: Room,
+  room: RoomReading,
   readFrontier: RoomReadFrontier = resolveRoomReadFrontier(room),
   scrollTo = false
 ): RoomUnreadInfo | undefined => {
   const readUptoEventId = readFrontier.eventId;
   if (!readUptoEventId) return undefined;
   const eventTimeline = getEventTimeline(room, readUptoEventId);
-  const latestTimeline = eventTimeline && getFirstLinkedTimeline(eventTimeline, Direction.Forward);
+  const latestTimeline =
+    eventTimeline && getFirstLinkedTimeline(eventTimeline, TimelineDirection.Forward);
   return {
     readUptoEventId,
     inLiveTimeline: latestTimeline === room.getLiveTimeline(),
@@ -391,7 +451,7 @@ export const getRoomUnreadInfo = (
 };
 
 export const getRoomUnreadInfoInTimelineWindow = (
-  room: Room,
+  room: RoomReading,
   timelineWindow: TimelineWindow,
   readFrontier: RoomReadFrontier = resolveRoomReadFrontier(room),
   scrollTo = false
@@ -428,7 +488,7 @@ export const timelineHasEvents = (timeline: TimelineWindow): boolean =>
 
 export const getTimelineWindowTailEvent = (
   timelineWindow: TimelineWindow
-): MatrixEvent | undefined => {
+): LinksTimelineEventReading | undefined => {
   if (timelineWindow.range.end <= timelineWindow.range.start) return undefined;
 
   const targetIndex = timelineWindow.range.end - 1;
@@ -480,7 +540,7 @@ export const shouldAdoptTimelineRefresh = (
  * window. Markers that sit in the live chain but outside that window must still
  * expose Jump to Unread so the user can recover without walking history on open.
  *
- * Bounded row rendering uses this range as the authoritative visible SDK window.
+ * Bounded row rendering uses this range as the authoritative visible window.
  * Markers outside the window remain explicit navigation targets rather than
  * triggering an unbounded history walk during room open.
  */

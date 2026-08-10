@@ -13,7 +13,8 @@ import {
   Spinner,
   Text,
 } from 'folds';
-import { HttpApiEvent, HttpApiEventHandlerMap, MatrixClient, type SyncState } from 'matrix-js-sdk';
+/** The live client's type, derived like useMatrixClient (js-sdk-free here). */
+type ClientMatrix = Awaited<ReturnType<typeof initClient>>;
 import FocusTrap from 'focus-trap-react';
 import React, {
   MouseEventHandler,
@@ -27,9 +28,7 @@ import {
   clearCacheAndReload,
   initClient,
   performLogout,
-  scheduleProactiveTokenRefresh,
   startClient,
-  type ProactiveTokenRefreshHandle,
 } from '../../../client/initMatrix';
 import {
   canRetryCryptoStoreContinuityFailure,
@@ -46,9 +45,9 @@ import { useSyncState } from '../../hooks/useSyncState';
 import { stopPropagation } from '../../utils/keyboard';
 import { SyncStatus } from './SyncStatus';
 import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
-import { getActiveSession } from '../../state/sessionBootstrap';
+import { getActiveSession, getSessionBootstrapResult } from '../../state/sessionBootstrap';
 import { AutoDiscovery } from './AutoDiscovery';
-import { platformSessionStore, repairPlatformDeviceDisplayName } from '../../platform';
+import { platformSessionStore } from '../../platform';
 import { migrateLegacySessionToNativeAfterClientInit } from '../../state/sessionPersistence';
 import { shouldRetrySyncOnResume } from '../../utils/syncLifecycle';
 import {
@@ -58,6 +57,7 @@ import {
   SYNC_PREPARED_TIMEOUT_MS,
 } from '../../utils/syncSplashRecovery';
 import { recordClientDiagnostic } from '../../utils/clientDiagnostics';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 
 function ClientRootLoading({ status }: { status: string }) {
   return (
@@ -75,7 +75,7 @@ function ClientRootLoading({ status }: { status: string }) {
   );
 }
 
-function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
+function ClientRootOptions({ mx }: { mx?: ClientMatrix }) {
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
 
   const handleToggle: MouseEventHandler<HTMLButtonElement> = (evt) => {
@@ -144,20 +144,23 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
   );
 }
 
-const useLogoutListener = (mx?: MatrixClient) => {
+const useLogoutListener = (mx?: ClientMatrix) => {
   useEffect(() => {
-    const handleLogout: HttpApiEventHandlerMap[HttpApiEvent.SessionLoggedOut] = async () => {
+    const handleLogout = async () => {
       await performLogout(mx);
     };
 
-    mx?.on(HttpApiEvent.SessionLoggedOut, handleLogout);
+    mx?.on('Session.logged_out' as unknown as Parameters<ClientMatrix['on']>[0], handleLogout);
     return () => {
-      mx?.removeListener(HttpApiEvent.SessionLoggedOut, handleLogout);
+      mx?.removeListener(
+        'Session.logged_out' as unknown as Parameters<ClientMatrix['on']>[0],
+        handleLogout
+      );
     };
   }, [mx]);
 };
 
-const useSyncResumeRetry = (mx?: MatrixClient) => {
+const useSyncResumeRetry = (mx?: ClientMatrix) => {
   useEffect(() => {
     if (!mx) return undefined;
 
@@ -202,38 +205,12 @@ const useSyncResumeRetry = (mx?: MatrixClient) => {
   }, [mx]);
 };
 
-const useProactiveTokenRefresh = (mx?: MatrixClient) => {
-  useEffect(() => {
-    if (!mx) return undefined;
-
-    const session = getActiveSession();
-    if (!session?.refreshToken) return undefined;
-
-    const handle: ProactiveTokenRefreshHandle = scheduleProactiveTokenRefresh(mx, session, {
-      nativeSessionStore: platformSessionStore,
-    });
-
-    return () => {
-      handle.dispose();
-    };
-  }, [mx]);
-};
-
-const usePlatformDeviceDisplayNameRepair = (mx?: MatrixClient) => {
-  useEffect(() => {
-    const deviceId = mx?.getDeviceId();
-    if (!mx || !deviceId) return undefined;
-
-    let cancelled = false;
-    void (async () => {
-      if (cancelled) return;
-      await repairPlatformDeviceDisplayName(mx);
-    })().catch(() => undefined);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [mx]);
+const useProactiveTokenRefresh = (_mx?: ClientMatrix) => {
+  // D1C: the renderer ceded token custody to native — native owns refresh via
+  // `session_updated` (readiness/generation only). No renderer timer/handle.
+  const clientArg = _mx !== undefined ? 1 : 0; // eslint-disable-line @typescript-eslint/no-unused-vars
+  useEffect(() => undefined, []);
+  void clientArg;
 };
 
 type ClientRootProps = {
@@ -242,35 +219,48 @@ type ClientRootProps = {
 export function ClientRoot({ children }: ClientRootProps) {
   const [loading, setLoading] = useState(true);
   const [syncTimedOut, setSyncTimedOut] = useState(false);
-  const [syncState, setSyncState] = useState<SyncState | null>(null);
-  const syncStateRef = useRef<SyncState | null>(syncState);
+  const [syncState, setSyncState] = useState<string | null>(null);
+  const syncStateRef = useRef<string | null>(syncState);
   syncStateRef.current = syncState;
   const syncRetryInFlightRef = useRef(false);
   const { baseUrl, userId } = getActiveSession() ?? {};
 
-  const [loadState, loadMatrix] = useAsyncCallback<MatrixClient, Error, []>(
+  const [loadState, loadMatrix] = useAsyncCallback<ClientMatrix, Error, []>(
     useCallback(() => {
       const session = getActiveSession();
       if (!session) {
         throw new Error('No session Found!');
       }
-      return initClient(session).then(async (client) => {
+      return (async () => {
+        if (isSynaraDesktop() && getSessionBootstrapResult().source === 'native') {
+          const restored = await invokeDesktopWithAvailability('matrix_restore_session');
+          if (!restored.available || !restored.value) {
+            throw new Error('Native Matrix session is unavailable.');
+          }
+        }
+        const client = await initClient(session);
         await migrateLegacySessionToNativeAfterClientInit({
           nativeSessionStore: platformSessionStore,
         });
         return client;
-      });
+      })();
     }, [])
   );
   const mx = loadState.status === AsyncStatus.Success ? loadState.data : undefined;
-  const [startState, startMatrix] = useAsyncCallback<void, Error, [MatrixClient]>(
+  const [startState, startMatrix] = useAsyncCallback<void, Error, [ClientMatrix]>(
     useCallback((m) => startClient(m), [])
   );
 
   useLogoutListener(mx);
   useSyncResumeRetry(mx);
   useProactiveTokenRefresh(mx);
-  usePlatformDeviceDisplayNameRepair(mx);
+
+  // One ClientRoot owns the facade's readiness poll. Other consumers only
+  // subscribe to sync events, avoiding duplicate timers per mounted widget.
+  useEffect(() => {
+    if (!mx) return undefined;
+    return mx.watchSync();
+  }, [mx]);
 
   useEffect(() => {
     if (loadState.status === AsyncStatus.Idle) {
@@ -335,7 +325,7 @@ export function ClientRoot({ children }: ClientRootProps) {
     });
 
     try {
-      if (mx.clientRunning) {
+      if (mx.clientRunning()) {
         mx.retryImmediately();
         return;
       }
@@ -347,7 +337,10 @@ export function ClientRoot({ children }: ClientRootProps) {
     }
   }, [mx, startMatrix, startState.status, syncState]);
 
-  const splashStatus = formatSyncSplashStatus(syncState, Boolean(mx));
+  const splashStatus = formatSyncSplashStatus(
+    syncState as Parameters<typeof formatSyncSplashStatus>[0],
+    Boolean(mx)
+  );
   const splashView = selectSyncSplashView({
     hasError: loadState.status === AsyncStatus.Error || startState.status === AsyncStatus.Error,
     hasClient: Boolean(mx),
