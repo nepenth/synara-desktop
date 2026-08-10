@@ -2,6 +2,7 @@ import React, {
   ChangeEventHandler,
   MouseEventHandler,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -124,7 +125,11 @@ export function Members({ requestClose }: MembersProps) {
     getRoomMemberStr,
     SEARCH_OPTIONS
   );
-  if (!result && searchInputRef.current?.value) search(searchInputRef.current.value);
+  // Re-run an existing input query only after commit; `search` can synchronously
+  // publish a result for small member lists and must not run during render.
+  useEffect(() => {
+    if (!result && searchInputRef.current?.value) search(searchInputRef.current.value);
+  }, [result, search]);
 
   const flattenTagMembers = useFlattenPowerTagMembers(result?.items ?? sortedMembers, getPowerTag);
 
