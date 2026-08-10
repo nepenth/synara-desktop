@@ -26,6 +26,9 @@ export const getSyncStatusBannerCopy = (state: SyncState | null): string | null 
   return null;
 };
 
+export const getSlidingSyncCapabilityBannerCopy = (): string =>
+  'This homeserver does not advertise sliding-sync (MSC4186) support, so sync may not start. Contact your server administrator.';
+
 export const getSyncStatusBannerVariant = (
   state: SyncState | null
 ): 'Success' | 'Warning' | 'Critical' | null => {

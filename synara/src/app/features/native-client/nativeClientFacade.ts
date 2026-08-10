@@ -60,6 +60,8 @@ export type NativeSyncStatus = {
   sessionGeneration: number;
   offlineModeEnabled: boolean;
   failureDiagnosticId?: string | null;
+  /** Tri-state server capability probe: true=support, false=absent, null=unprobed. */
+  slidingSyncCapable?: boolean | null;
 };
 
 /** js-sdk-compatible sync-state strings the app UI already consumes. */
@@ -75,6 +77,7 @@ export type NativeSyncStateData = {
   readiness: NativeReadiness;
   sessionGeneration: number;
   failureDiagnosticId?: string | null;
+  slidingSyncCapable?: boolean | null;
 };
 
 /** Structural mirror of the Rust `MatrixSessionSnapshot` DTO. */
@@ -158,6 +161,7 @@ const parseSyncStatus = (value: unknown): NativeSyncStatus | null => {
     sessionGeneration,
     offlineModeEnabled,
     failureDiagnosticId: optString(value, 'failureDiagnosticId') ?? null,
+    slidingSyncCapable: optBoolean(value, 'slidingSyncCapable') ?? null,
   };
 };
 
@@ -541,6 +545,7 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       readiness: status.readiness,
       sessionGeneration: status.sessionGeneration,
       failureDiagnosticId: status.failureDiagnosticId,
+      slidingSyncCapable: status.slidingSyncCapable,
     };
   };
 
