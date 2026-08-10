@@ -3361,6 +3361,7 @@ dependencies = [
  "itertools 0.14.0",
  "js_option",
  "matrix-sdk-common",
+ "matrix-sdk-qrcode",
  "pbkdf2",
  "rand 0.10.2",
  "rmp-serde",
@@ -3410,6 +3411,19 @@ dependencies = [
  "wasm-bindgen",
  "web-sys",
  "zeroize",
+]
+
+[[package]]
+name = "matrix-sdk-qrcode"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc199f424cd31ad8a63717965779f6ecc877b3ecebe31db8030ef3be8200b0cd"
+dependencies = [
+ "byteorder",
+ "qrcode",
+ "ruma",
+ "thiserror 2.0.18",
+ "vodozemac",
 ]
 
 [[package]]
@@ -4508,10 +4522,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "pulldown-cmark"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9f068eba8e7071c5f9511831b44f32c740d5adf574e990f946ddb53db2f314e"
+dependencies = [
+ "bitflags 2.13.0",
+ "memchr",
+ "pulldown-cmark-escape",
+ "unicase",
+]
+
+[[package]]
+name = "pulldown-cmark-escape"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "007d8adb5ddab6f8e3f491ac63566a7d5002cc7ed73901f72057943fa71ae1ae"
+
+[[package]]
 name = "pxfm"
 version = "0.1.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0c5ccf5294c6ccd63a74f1565028353830a9c2f5eb0c682c355c471726a6e3f"
+
+[[package]]
+name = "qrcode"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d68782463e408eb1e668cf6152704bd856c78c5b6417adaee3203d8f4c1fc9ec"
 
 [[package]]
 name = "quick-error"
@@ -4983,6 +5021,7 @@ dependencies = [
  "indexmap 2.14.0",
  "js_int",
  "js_option",
+ "pulldown-cmark",
  "ruma-common",
  "ruma-html",
  "ruma-macros",
@@ -6877,6 +6916,12 @@ checksum = "96bd2f2237fe450fcd0a1d2f5f4e91711124f7857ba2e964247776ebeeb7b0c4"
 dependencies = [
  "unic-common",
 ]
+
+[[package]]
+name = "unicase"
+version = "2.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dbc4bc3a9f746d862c45cb89d705aa10f187bb96c76001afab07a0d35ce60142"
 
 [[package]]
 name = "unicode-ident"

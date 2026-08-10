@@ -46,6 +46,12 @@ mime = "0.3"
 matrix-sdk = { version = "=0.18.0", default-features = false, features = [
   "sqlite",
   "bundled-sqlite",
+  # SDK capability features (2026-08-10 best-practice pass):
+  # - markdown: timeline/event formatting (ruma/markdown)
+  # - qrcode: QR verification (also enables e2e-encryption, already on via
+  #   matrix-sdk-ui feature unification)
+  "markdown",
+  "qrcode",
 ] }
 matrix-sdk-ui = { version = "=0.18.0", default-features = false }
 matrix-sdk-crypto = { version = "=0.18.0", default-features = false }
