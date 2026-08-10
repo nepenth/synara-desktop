@@ -6,6 +6,7 @@ import {
   filterNativeForwardTargets,
   isNativeTimelineEventPinned,
   nativeThreadFocusEventId,
+  nativeTimelineCommandError,
   needsNativeForwardEncryptionConfirm,
   shouldAttachFormattedBody,
   type NativeTimelineViewSnapshot,
@@ -84,6 +85,41 @@ test('applies pagination and pin-list metadata and rejects empty batches', () =>
       ops: [],
     }),
     undefined
+  );
+});
+
+test('native command rejections surface the native diagnostic (no paper-over)', () => {
+  // Tauri v2 rejects a serialized MatrixAuthCommandError as a plain object;
+  // it is never an Error instance, so the catch previously collapsed every
+  // native failure to the generic "Native timeline open failed." literal.
+  const structured = nativeTimelineCommandError({
+    code: 'Unknown',
+    message: 'The native Matrix timeline is unavailable.',
+    diagnosticId: 'v-timeline-normal-unread-frontier-unavailable',
+  });
+  assert.equal(structured.message, 'The native Matrix timeline is unavailable.');
+  assert.equal(
+    (structured as Error & { diagnosticId?: string }).diagnosticId,
+    'v-timeline-normal-unread-frontier-unavailable'
+  );
+  assert.ok(structured instanceof Error);
+
+  const NotFound = nativeTimelineCommandError({
+    code: 'NotFound',
+    message: 'The native Matrix timeline is not available.',
+    diagnosticId: 'd0.3-timeline-room-not-found',
+  });
+  assert.equal(NotFound.message, 'The native Matrix timeline is not available.');
+
+  const passthrough = new Error('native boom');
+  assert.equal(nativeTimelineCommandError(passthrough), passthrough);
+
+  assert.equal(nativeTimelineCommandError('string reject').message, 'string reject');
+  assert.equal(nativeTimelineCommandError(undefined).message, 'Native timeline open failed.');
+  assert.equal(nativeTimelineCommandError(null).message, 'Native timeline open failed.');
+  assert.equal(
+    nativeTimelineCommandError({ diagnosticId: 'd0.3-timeline-open-failed' }).message,
+    'The native Matrix timeline is unavailable.'
   );
 });
 

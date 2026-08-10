@@ -375,6 +375,43 @@ export type NativeTimelineOpenInput = {
     | { kind: 'focused'; eventId: string };
 };
 
+export type NativeTimelineCommandError = {
+  code?: string;
+  message?: string;
+  diagnosticId?: string;
+};
+
+/**
+ * Convert a native `matrix_timeline_*` rejection into a real `Error` without
+ * papering over the native diagnostic. Tauri v2 rejects a
+ * `MatrixAuthCommandError` as its serialized `{ code, message, diagnosticId }`
+ * object (never an `Error` instance); only non-structured rejections fall back
+ * to the generic literal.
+ */
+export const nativeTimelineCommandError = (error: unknown): Error => {
+  if (error instanceof Error) return error;
+  if (error && typeof error === 'object') {
+    const e = error as NativeTimelineCommandError;
+    const message =
+      typeof e.message === 'string' && e.message.trim().length > 0
+        ? e.message
+        : 'The native Matrix timeline is unavailable.';
+    const diagnosticId =
+      typeof e.diagnosticId === 'string' && e.diagnosticId.trim().length > 0
+        ? e.diagnosticId
+        : undefined;
+    const result = new Error(message);
+    if (diagnosticId) {
+      (result as Error & { diagnosticId?: string }).diagnosticId = diagnosticId;
+    }
+    return result;
+  }
+  if (typeof error === 'string' && error.trim().length > 0) {
+    return new Error(error.trim());
+  }
+  return new Error('Native timeline open failed.');
+};
+
 const toNativeTimelineOpenRequest = (input: NativeTimelineOpenInput) => {
   const { position } = input;
   return {
@@ -630,7 +667,7 @@ export const useNativeTimelineView = (
         if (!disposed) {
           setState({
             status: 'error',
-            error: error instanceof Error ? error : new Error('Native timeline open failed.'),
+            error: nativeTimelineCommandError(error),
           });
         }
       }

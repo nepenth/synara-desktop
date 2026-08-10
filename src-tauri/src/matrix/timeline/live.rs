@@ -1342,8 +1342,15 @@ fn resolve_normal_open_position(
         return Ok(TimelineViewPosition::LiveBottom);
     }
     if has_unread {
-        let anchor_event_id =
-            fully_read_event_id.ok_or("v-timeline-normal-unread-frontier-unavailable")?;
+        // A supported room can be unread without an `m.fully_read` marker, for
+        // example a channel this device has never opened or read. With no
+        // authoritative native frontier there is no unread anchor to place, so
+        // fall back to the live bottom instead of failing the whole room open.
+        // The explicit `Unread` position kind remains strict in `open_at`.
+        let anchor_event_id = match fully_read_event_id {
+            Some(anchor_event_id) => anchor_event_id,
+            None => return Ok(TimelineViewPosition::LiveBottom),
+        };
         return Ok(TimelineViewPosition::Unread { anchor_event_id });
     }
     if can_restore {
@@ -2121,7 +2128,9 @@ mod tests {
     }
 
     #[test]
-    fn normal_open_rejects_unread_without_a_native_frontier() {
+    fn normal_open_falls_back_to_live_bottom_when_unread_has_no_frontier() {
+        // A supported channel with unread activity but no `m.fully_read`
+        // marker (a room this device has never opened/read) must still open.
         assert_eq!(
             resolve_normal_open_position(
                 true,
@@ -2134,7 +2143,28 @@ mod tests {
                     ..NativeTimelineViewportHint::default()
                 },
             ),
-            Err("v-timeline-normal-unread-frontier-unavailable")
+            Ok(TimelineViewPosition::LiveBottom)
+        );
+    }
+
+    #[test]
+    fn normal_open_keeps_unread_frontier_when_present() {
+        assert_eq!(
+            resolve_normal_open_position(
+                true,
+                Some("$fully-read:example.org".into()),
+                None,
+                1_700_000_000_000,
+                &NativeTimelineViewportHint {
+                    restored_anchor_event_id: Some("$restored:example.org".into()),
+                    updated_at_ms: Some(1_700_000_000_000),
+                    ..NativeTimelineViewportHint::default()
+                },
+            )
+            .unwrap(),
+            TimelineViewPosition::Unread {
+                anchor_event_id: "$fully-read:example.org".into(),
+            }
         );
     }
 
