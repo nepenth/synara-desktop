@@ -177,6 +177,9 @@ export const getAccountData = (
 
 export const isSpace = (room: RoomReading | null): boolean => {
   if (!room) return false;
+  // Native room-list summaries carry this classification without exposing a
+  // fabricated m.room.create event. Live SDK rooms also provide this method.
+  if (room.isSpaceRoom?.() === true) return true;
   const event = getStateEvent(room, StateEvent.RoomCreate);
   if (!event) return false;
   return event.getContent().type === RoomType.Space;
@@ -184,6 +187,7 @@ export const isSpace = (room: RoomReading | null): boolean => {
 
 export const isRoom = (room: RoomReading | null): boolean => {
   if (!room) return false;
+  if (room.isSpaceRoom?.() === true) return false;
   const event = getStateEvent(room, StateEvent.RoomCreate);
   if (!event) return true;
   return event.getContent().type !== RoomType.Space;

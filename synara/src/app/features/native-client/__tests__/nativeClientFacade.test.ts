@@ -1,14 +1,38 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import type { DesktopInvokeResult } from '../../../utils/desktop';
+import { isRoom, isSpace } from '../../../utils/room';
 import {
   createNativeMatrixClient,
   readinessToSyncState,
   type NativeInvoke,
+  type NativeRoomListSnapshot,
 } from '../nativeClientFacade';
 
 const ok = (value: unknown): DesktopInvokeResult<unknown> => ({ available: true, value });
 const unavailable: DesktopInvokeResult<unknown> = { available: false };
+
+const roomSnapshot = (
+  overrides: Partial<NativeRoomListSnapshot['rooms'][number]> = {}
+): NativeRoomListSnapshot => ({
+  sessionGeneration: 8,
+  rooms: [
+    {
+      roomId: '!r:example.org',
+      name: 'Engineering',
+      membership: 'join',
+      isDirect: false,
+      isSpace: false,
+      isCall: false,
+      isEncrypted: false,
+      unreadCount: 0,
+      highlightCount: 0,
+      markedUnread: false,
+      ...overrides,
+    },
+  ],
+});
 
 const invokingWith = (routes: Record<string, unknown>) => {
   const callLog: string[] = [];
@@ -169,6 +193,79 @@ test('watchSync emits on readiness change into PREPARED', async () => {
   assert.ok(seen.includes('PREPARED'), `expected PREPARED emission, saw: ${JSON.stringify(seen)}`);
 });
 
+test('watchSync ignores an in-flight result after disposal', async () => {
+  let resolveStatus!: (result: DesktopInvokeResult<unknown>) => void;
+  let markRequested!: () => void;
+  const requested = new Promise<void>((resolve) => {
+    markRequested = resolve;
+  });
+  const invoke: NativeInvoke = async (command) => {
+    if (command !== 'matrix_sync_status') return unavailable;
+    markRequested();
+    return new Promise<DesktopInvokeResult<unknown>>((resolve) => {
+      resolveStatus = resolve;
+    });
+  };
+  const client = createNativeMatrixClient(invoke);
+  const seen: unknown[] = [];
+  client.on('sync', (state) => seen.push(state));
+  const unwatch = client.watchSync(10_000);
+  await requested;
+  unwatch();
+  resolveStatus(ok({ readiness: 'running', sessionGeneration: 4, offlineModeEnabled: false }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.deepEqual(seen, []);
+  assert.equal(client.getSyncState(), null);
+});
+
+test('watchSync never overlaps a slow native status read', async () => {
+  let calls = 0;
+  let resolveStatus!: (result: DesktopInvokeResult<unknown>) => void;
+  const invoke: NativeInvoke = async (command) => {
+    if (command !== 'matrix_sync_status') return unavailable;
+    calls += 1;
+    return new Promise<DesktopInvokeResult<unknown>>((resolve) => {
+      resolveStatus = resolve;
+    });
+  };
+  const client = createNativeMatrixClient(invoke);
+  const unwatch = client.watchSync(5);
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  assert.equal(calls, 1);
+
+  unwatch();
+  resolveStatus(ok({ readiness: 'running', sessionGeneration: 4, offlineModeEnabled: false }));
+});
+
+test('room-list bridge hydrates the facade before atom writes and ClientRoot owns one watcher', () => {
+  const roomListSource = readFileSync('src/app/state/room-list/roomList.ts', 'utf8');
+  const successfulSnapshotStart = roomListSource.indexOf(
+    'latestNativeRoomListSnapshot = snapshot;'
+  );
+  const successfulSnapshotBranch = roomListSource.slice(successfulSnapshotStart);
+  const applyIndex = successfulSnapshotBranch.indexOf('onSnapshot?.(snapshot);');
+  const snapshotAtomIndex = successfulSnapshotBranch.indexOf('setSnapshot(snapshot);');
+  const roomsAtomIndex = successfulSnapshotBranch.indexOf(
+    "setRooms({ type: 'INITIALIZE', rooms: snapshot.orderedRoomIds });"
+  );
+  assert.ok(
+    applyIndex >= 0 && applyIndex < snapshotAtomIndex && snapshotAtomIndex < roomsAtomIndex
+  );
+  assert.ok(
+    roomListSource.indexOf('onSessionSnapshot?.(session);') < successfulSnapshotStart + applyIndex
+  );
+
+  const roomSelectorsSource = readFileSync('src/app/state/hooks/roomList.ts', 'utf8');
+  assert.ok(roomSelectorsSource.includes('useNativeRoomListSnapshot'));
+  assert.ok(roomSelectorsSource.includes('nativeSnapshot'));
+
+  const clientRootSource = readFileSync('src/app/pages/client/ClientRoot.tsx', 'utf8');
+  assert.equal(clientRootSource.match(/\.watchSync\(/g)?.length, 1);
+  const syncHookSource = readFileSync('src/app/hooks/useSyncState.ts', 'utf8');
+  assert.equal(syncHookSource.includes('watchSync'), false);
+});
+
 test('F2 getRooms proxies matrix_room_list_snapshot and maps summaries', async () => {
   const summary = {
     roomId: '!r:example.org',
@@ -240,6 +337,159 @@ test('F2 getRooms fails closed when the command is unavailable', async () => {
   await client.refresh();
   assert.deepEqual(client.getRooms(), []);
   assert.equal(client.getRoom('!r:example.org'), null);
+});
+
+test('room-list snapshots update held facade wrappers and clear a valid empty list', async () => {
+  let snapshot = roomSnapshot({ name: 'Before', unreadCount: 1 });
+  const invoke: NativeInvoke = async (command) => {
+    if (command === 'matrix_room_list_snapshot') return ok(snapshot);
+    return unavailable;
+  };
+  const client = createNativeMatrixClient(invoke);
+  await client.refresh();
+  const heldRoom = client.getRoom('!r:example.org');
+  assert.ok(heldRoom);
+
+  const updated = roomSnapshot({ name: 'After', unreadCount: 4, isSpace: true });
+  client.applyRoomListSnapshot(updated);
+
+  assert.equal(client.getRoom('!r:example.org'), heldRoom);
+  assert.equal(heldRoom.name, 'After');
+  assert.equal(heldRoom.getUnreadNotificationCount(), 4);
+  assert.equal(heldRoom.isSpaceRoom(), true);
+
+  snapshot = { sessionGeneration: 8, rooms: [] };
+  await client.refresh();
+  assert.deepEqual(client.getRooms(), []);
+  assert.equal(client.getRoom('!r:example.org'), null);
+});
+
+test('a native Space summary is classified without a fabricated create event', () => {
+  const client = createNativeMatrixClient(async () => unavailable);
+  client.applyRoomListSnapshot(roomSnapshot({ isSpace: true }));
+  const space = client.getRoom('!r:example.org');
+
+  assert.ok(space);
+  assert.equal(isSpace(space), true);
+  assert.equal(isRoom(space), false);
+});
+
+test('a native logged-out transition clears facade identity once and notifies the session listener', async () => {
+  let session: unknown = {
+    status: 'logged_in',
+    user_id: '@alice:example.org',
+    device_id: 'DEVICE',
+    homeserver_url: 'https://matrix.example.org',
+    sessionGeneration: 8,
+  };
+  const invoke: NativeInvoke = async (command) => {
+    if (command === 'matrix_session_snapshot') return ok(session);
+    if (command === 'matrix_room_list_snapshot') return ok(roomSnapshot());
+    return unavailable;
+  };
+  const client = createNativeMatrixClient(invoke);
+  await client.refresh();
+  assert.equal(client.getUserId(), '@alice:example.org');
+  assert.ok(client.getRoom('!r:example.org'));
+
+  let loggedOutEvents = 0;
+  client.on('Session.logged_out', () => {
+    loggedOutEvents += 1;
+  });
+  session = { status: 'logged_out' };
+  await client.refresh();
+
+  assert.equal(client.getUserId(), null);
+  assert.equal(client.getSafeUserId(), '');
+  assert.deepEqual(client.getRooms(), []);
+  assert.equal(loggedOutEvents, 1);
+
+  await client.refresh();
+  assert.equal(loggedOutEvents, 1);
+});
+
+test('an invalid session snapshot preserves a previously hydrated identity', async () => {
+  let session: unknown = {
+    status: 'logged_in',
+    user_id: '@alice:example.org',
+    device_id: 'DEVICE',
+    homeserver_url: 'https://matrix.example.org',
+    sessionGeneration: 8,
+  };
+  const invoke: NativeInvoke = async (command) =>
+    command === 'matrix_session_snapshot' ? ok(session) : unavailable;
+  const client = createNativeMatrixClient(invoke);
+  await client.refresh();
+  session = { status: 'unexpected' };
+  await client.refresh();
+
+  assert.equal(client.getUserId(), '@alice:example.org');
+});
+
+test('a replacement session clears old rooms and rejects a stale-generation snapshot', async () => {
+  let snapshot = roomSnapshot({ name: 'Alice room' });
+  const session: unknown = {
+    status: 'logged_in',
+    user_id: '@alice:example.org',
+    device_id: 'ALICE',
+    homeserver_url: 'https://matrix.example.org',
+    sessionGeneration: 8,
+  };
+  const invoke: NativeInvoke = async (command) => {
+    if (command === 'matrix_session_snapshot') return ok(session);
+    if (command === 'matrix_room_list_snapshot') return ok(snapshot);
+    return unavailable;
+  };
+  const client = createNativeMatrixClient(invoke);
+  await client.refresh();
+  assert.ok(client.getRoom('!r:example.org'));
+
+  const sessionEvents: unknown[] = [];
+  const loggedOutEvents: unknown[] = [];
+  client.on('session', (event) => sessionEvents.push(event));
+  client.on('Session.logged_out', (event) => loggedOutEvents.push(event));
+  const replacement = {
+    status: 'logged_in' as const,
+    userId: '@bob:example.org',
+    deviceId: 'BOB',
+    homeserverUrl: 'https://matrix.example.org',
+    sessionGeneration: 9,
+  };
+  client.applyNativeSessionSnapshot(replacement);
+
+  assert.equal(client.getUserId(), '@bob:example.org');
+  assert.equal(client.getRoom('!r:example.org'), null);
+  assert.deepEqual(sessionEvents, [replacement]);
+  assert.deepEqual(loggedOutEvents, []);
+
+  // The preceding A-generation snapshot must not repopulate B's cache.
+  client.applyRoomListSnapshot(snapshot);
+  assert.equal(client.getRoom('!r:example.org'), null);
+  snapshot = {
+    ...roomSnapshot({ name: 'Bob room' }),
+    sessionGeneration: 9,
+  };
+  client.applyRoomListSnapshot(snapshot);
+  assert.equal(client.getRoom('!r:example.org')?.name, 'Bob room');
+});
+
+test('logout clears the facade identity after the native command succeeds', async () => {
+  const { invoke } = invokingWith({
+    matrix_session_snapshot: {
+      status: 'logged_in',
+      user_id: '@alice:example.org',
+      device_id: 'DEVICE',
+      homeserver_url: 'https://matrix.example.org',
+      sessionGeneration: 8,
+    },
+    matrix_logout: { status: 'ok' },
+  });
+  const client = createNativeMatrixClient(invoke);
+  await client.refresh();
+  await client.logout();
+
+  assert.equal(client.getUserId(), null);
+  assert.equal(client.getSafeUserId(), '');
 });
 
 test('F2 fetchRoomEvent proxies matrix_timeline_event_readback', async () => {

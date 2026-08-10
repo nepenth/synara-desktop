@@ -10,6 +10,16 @@ export type NativeRoomListSnapshot = {
   rooms: RoomSummary[];
 };
 
+export type NativeSessionSnapshot =
+  | { status: 'logged_out' }
+  | {
+      status: 'logged_in';
+      userId: string;
+      deviceId: string;
+      homeserverUrl: string;
+      sessionGeneration: number;
+    };
+
 const emptyRoomListSnapshot: NativeRoomListSnapshot = {
   sessionGeneration: 0,
   orderedRoomIds: [],
@@ -69,11 +79,34 @@ const parseNativeRoomListSnapshot = (value: unknown): NativeRoomListSnapshot | n
   };
 };
 
+const parseNativeSessionSnapshot = (value: unknown): NativeSessionSnapshot | null => {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  if (record.status === 'logged_out') return { status: 'logged_out' };
+  if (record.status !== 'logged_in') return null;
+  const { user_id: userId, device_id: deviceId, homeserver_url: homeserverUrl } = record;
+  const sessionGeneration = record.sessionGeneration;
+  if (
+    typeof userId !== 'string' ||
+    typeof deviceId !== 'string' ||
+    typeof homeserverUrl !== 'string' ||
+    typeof sessionGeneration !== 'number' ||
+    !Number.isSafeInteger(sessionGeneration) ||
+    sessionGeneration < 0
+  ) {
+    return null;
+  }
+  return { status: 'logged_in', userId, deviceId, homeserverUrl, sessionGeneration };
+};
+
 /**
  * Sole desktop owner for joined-room ids and unread-bearing room summaries.
  * Dual-backend / JS MatrixClient room-list fallback is forbidden.
  */
-export const useBindAllRoomsAtom = () => {
+export const useBindAllRoomsAtom = (
+  onSnapshot?: (snapshot: NativeRoomListSnapshot) => void,
+  onSessionSnapshot?: (snapshot: NativeSessionSnapshot) => void
+) => {
   const setRooms = useSetAtom(allRoomsAtom);
   const setSnapshot = useSetAtom(nativeRoomListSnapshotAtom);
 
@@ -85,11 +118,14 @@ export const useBindAllRoomsAtom = () => {
       if (inFlight) return;
       inFlight = true;
       try {
-        const session = await invokeDesktopWithAvailability<NativeSessionSnapshot>(
+        const sessionResult = await invokeDesktopWithAvailability<unknown>(
           'matrix_session_snapshot'
         );
-        if (disposed || !session.available) return;
-        if (session.value?.status !== 'logged_in') {
+        if (disposed || !sessionResult.available) return;
+        const session = parseNativeSessionSnapshot(sessionResult.value);
+        if (!session) return;
+        onSessionSnapshot?.(session);
+        if (session.status !== 'logged_in') {
           latestNativeRoomListSnapshot = emptyRoomListSnapshot;
           setSnapshot(emptyRoomListSnapshot);
           setRooms({ type: 'INITIALIZE', rooms: [] });
@@ -98,8 +134,11 @@ export const useBindAllRoomsAtom = () => {
         const result = await invokeDesktopWithAvailability<unknown>('matrix_room_list_snapshot');
         if (disposed || !result.available || !result.value) return;
         const snapshot = parseNativeRoomListSnapshot(result.value);
-        if (!snapshot) return;
+        if (!snapshot || snapshot.sessionGeneration !== session.sessionGeneration) return;
         latestNativeRoomListSnapshot = snapshot;
+        // Hydrate the synchronous facade before either atom setter can schedule
+        // selectors that combine a fresh room id with mx.getRoom().
+        onSnapshot?.(snapshot);
         setSnapshot(snapshot);
         setRooms({ type: 'INITIALIZE', rooms: snapshot.orderedRoomIds });
       } catch {
@@ -122,9 +161,5 @@ export const useBindAllRoomsAtom = () => {
       disposed = true;
       window.clearInterval(pollId);
     };
-  }, [setRooms, setSnapshot]);
-};
-
-type NativeSessionSnapshot = {
-  status: 'logged_out' | 'logged_in';
+  }, [onSessionSnapshot, onSnapshot, setRooms, setSnapshot]);
 };

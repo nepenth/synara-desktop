@@ -155,11 +155,15 @@ test('isSpace/isRoom/isUnsupportedRoom classify by room create type', () => {
   const weird = makeRoom({
     'm.room.create': makeEvent('m.room.create', { type: 'org.example.unknown' }),
   });
+  // Native room-list projections intentionally do not fabricate m.room.create.
+  const nativeSpace = makeRoom({}, { isSpaceRoom: true });
 
   assert.equal(isSpace(space), true);
   assert.equal(isRoom(space), false);
   assert.equal(isSpace(room), false);
   assert.equal(isRoom(room), true);
+  assert.equal(isSpace(nativeSpace), true);
+  assert.equal(isRoom(nativeSpace), false);
   assert.equal(isUnsupportedRoom(room), false);
   assert.equal(isUnsupportedRoom(noCreate), true);
   assert.equal(isUnsupportedRoom(weird), true);

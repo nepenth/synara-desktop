@@ -1,5 +1,9 @@
 import { useBindAllInvitesAtom } from '../room-list/inviteList';
-import { useBindAllRoomsAtom } from '../room-list/roomList';
+import {
+  useBindAllRoomsAtom,
+  type NativeRoomListSnapshot,
+  type NativeSessionSnapshot,
+} from '../room-list/roomList';
 import { useBindMDirectAtom } from '../mDirectList';
 import { useBindLaterContentAtom } from '../laterList';
 import { useBindRoomNotesContentAtom } from '../roomNotesList';
@@ -7,12 +11,15 @@ import { useBindRoomToUnreadAtom } from '../room/roomToUnread';
 import { useBindRoomToParentsAtom } from '../room/roomToParents';
 import { useBindRoomIdToTypingMembersAtom } from '../typingMembers';
 
-export const useBindAtoms = () => {
+export const useBindAtoms = (
+  onRoomListSnapshot?: (snapshot: NativeRoomListSnapshot) => void,
+  onNativeSessionSnapshot?: (snapshot: NativeSessionSnapshot) => void
+) => {
   useBindMDirectAtom();
   useBindLaterContentAtom();
   useBindRoomNotesContentAtom();
   useBindAllInvitesAtom();
-  useBindAllRoomsAtom();
+  useBindAllRoomsAtom(onRoomListSnapshot, onNativeSessionSnapshot);
   useBindRoomToParentsAtom();
   useBindRoomToUnreadAtom();
 
