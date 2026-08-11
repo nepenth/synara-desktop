@@ -60,8 +60,8 @@ pub use input::{
 };
 pub use login::{login_with_password, LoginMethodKind, LoginOptions, LoginResult};
 pub use login_flow::{
-    discover_login_flows, map_matrix_login_types, LoginFlow, LoginFlowDiscoveryResult,
-    LoginFlowKind, LoginFlowTransport, MockLoginFlowTransport,
+    discover_login_flows, login_flows_response, map_matrix_login_types, LoginFlow,
+    LoginFlowDiscoveryResult, LoginFlowKind, LoginFlowTransport, MockLoginFlowTransport,
 };
 pub use product::{
     MatrixAuthCommandError, MatrixAuthState, MatrixLoginIdentity, MatrixSessionSnapshot,

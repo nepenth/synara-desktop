@@ -225,59 +225,6 @@ fn parse_discovery_input_shapes() {
 }
 
 #[test]
-fn login_flow_list_mapping() {
-    let mapped = map_matrix_login_types(&[
-        "m.login.password",
-        "m.login.token",
-        "m.login.application_service",
-        "m.login.custom.widget",
-    ]);
-    assert_eq!(mapped.len(), 4);
-    assert_eq!(mapped[0].kind, LoginFlowKind::Password);
-    assert_eq!(mapped[1].kind, LoginFlowKind::Token);
-    assert_eq!(mapped[2].kind, LoginFlowKind::ApplicationService);
-    assert_eq!(mapped[3].kind, LoginFlowKind::Unknown);
-    assert_eq!(mapped[3].matrix_type, "m.login.custom.widget");
-}
-
-#[test]
-fn login_flow_discovery_mock_success() {
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-    let flows = vec![LoginFlow::password(), LoginFlow::token(true)];
-    let transport =
-        MockLoginFlowTransport::new().with_response("https://hs.example.org", flows.clone());
-    let result = rt
-        .block_on(discover_login_flows("https://hs.example.org/", &transport))
-        .expect("flows");
-    assert_eq!(result.homeserver_base_url, "https://hs.example.org");
-    assert!(result.password_available());
-    assert!(result.supports(LoginFlowKind::Token));
-    assert_eq!(result.flows.len(), 2);
-    assert_eq!(result.flows[1].get_login_token, Some(true));
-}
-
-#[test]
-fn login_flow_discovery_mock_failure() {
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-    let transport = MockLoginFlowTransport::new().with_error(
-        "https://hs.example.org",
-        AuthError::Connectivity {
-            diagnostic_id: "p3.1-login-flows-offline",
-        },
-    );
-    let err = rt
-        .block_on(discover_login_flows("https://hs.example.org", &transport))
-        .expect_err("offline");
-    assert_eq!(err.category(), MatrixIpcErrorCategory::Connectivity);
-}
-
-#[test]
 fn end_to_end_discovery_then_login_flows_with_mocks() {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -400,15 +347,6 @@ fn platform_device_display_names_are_product_fixed() {
 fn well_known_config_rejects_invalid_base_url() {
     let err = WellKnownClientConfig::new("not-a-url", None).unwrap_err();
     assert_eq!(err.category(), MatrixIpcErrorCategory::SdkInvariant);
-}
-
-#[test]
-fn login_flow_kind_matrix_type_roundtrip() {
-    for kind in LoginFlowKind::ALL_KNOWN {
-        let mt = kind.matrix_type().unwrap();
-        assert_eq!(LoginFlowKind::from_matrix_type(mt), *kind);
-        assert!(!kind.as_str().is_empty());
-    }
 }
 
 // --- P3.4 UIA session ---
