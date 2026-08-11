@@ -85,6 +85,7 @@ jobs:
             package.json \
             package-lock.json \
             scripts \
+            crates \
             src-tauri \
             synara; then
             echo "validate=false" >> "$GITHUB_OUTPUT"
@@ -99,6 +100,7 @@ jobs:
           if [[ "$VALIDATE" == "true" ]]; then
             if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
               .github/workflows/ci.yml \
+              crates \
               src-tauri \
               rust-toolchain.toml; then
               echo "validate_rust=false" >> "$GITHUB_OUTPUT"
