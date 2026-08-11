@@ -21,6 +21,10 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertTrue(environment.later is MockLaterService)
     }
 
+    func testLiveHomeserverDiscoveryConstructorUsesCoreService() {
+        XCTAssertTrue(AppEnvironment.makeLiveHomeserverDiscovery() is CoreHomeserverDiscoveryService)
+    }
+
     @MainActor
     func testLiveEnvironmentUsesMatrixRustSDKServices() {
         let environment = AppEnvironment.live()

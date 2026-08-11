@@ -85,7 +85,7 @@ struct AppEnvironment {
                 defaults: SynaraSharedConstants.appGroupDefaults() ?? .standard
             ),
             router: router,
-            homeserverDiscovery: PlaceholderHomeserverDiscoveryService(),
+            homeserverDiscovery: makeLiveHomeserverDiscovery(),
             auth: MatrixRustSDKAuthService(clientStore: matrixSDKClientStore),
             roomList: roomList,
             roomMembership: roomMembership,
@@ -113,6 +113,10 @@ struct AppEnvironment {
             roomManagement: roomManagement,
             sessionReadiness: sessionReadiness
         )
+    }
+
+    static func makeLiveHomeserverDiscovery() -> HomeserverDiscovering {
+        CoreHomeserverDiscoveryService()
     }
 
     static func mock(

@@ -16,6 +16,7 @@
 		1DB7278B67BE35BB7DC62210 /* AgentActionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80584058D243DE7197CF3096 /* AgentActionService.swift */; };
 		1DF4C901D18BA2FDFE0754D2 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34B7F1719CBFE6CC6BD8166C /* NotificationService.swift */; };
 		1F2AE40317C7704B4ADD16F8 /* StableTimelineViewportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 311E5731825808ADC48C05B4 /* StableTimelineViewportTests.swift */; };
+		234379800D455B5D292AB67E /* MatrixRustSDK in Frameworks */ = {isa = PBXBuildFile; productRef = 04B49FA4F6E9D7346F1EDC97 /* MatrixRustSDK */; };
 		27F8472586C8C97BFB42B087 /* NotificationPermissionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0394B6246C8637014BEDC20 /* NotificationPermissionCoordinator.swift */; };
 		2AEC9CA069983AED2A534D47 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C830BF9B8F7ED001CA8AC317 /* AuthService.swift */; };
 		2F7828F754C6D475F5E161B4 /* RoomListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 417DD4194803886BB803C6A6 /* RoomListView.swift */; };
@@ -24,7 +25,7 @@
 		3397141E30A00168F395FC72 /* NotificationPreviewSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB7C256708A8C6C4189DA5AB /* NotificationPreviewSupportTests.swift */; };
 		37E0DABCD7B044B59F2C5545 /* BoundedLRUCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43B4D9CA1CA01FA1D72EA05F /* BoundedLRUCache.swift */; };
 		3AB84959BA0C8A2EB98CF309 /* ComposerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A9908B77A7CB8F4A4CC55A /* ComposerService.swift */; };
-		3C76DA11CB749760025BAB3F /* MatrixRustSDK in Frameworks */ = {isa = PBXBuildFile; productRef = 04B49FA4F6E9D7346F1EDC97 /* MatrixRustSDK */; };
+		3C76DA11CB749760025BAB3F /* SynaraCore in Frameworks */ = {isa = PBXBuildFile; productRef = 49B5C4AB6642E35F27BCCB5C /* SynaraCore */; };
 		3CF0BDAD36854DC8962393D4 /* LogRedactorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15DF14E92067B54B5BF14404 /* LogRedactorTests.swift */; };
 		41FC7B292DE64AD0C485C6E3 /* SynaraMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDBE1E4A32C918309E6AA85A /* SynaraMotion.swift */; };
 		45DB0A08CF868FFA984A3B0D /* SecureSessionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0070A890F80B56DD756D02 /* SecureSessionStoreTests.swift */; };
@@ -169,6 +170,7 @@
 		72E9B9C1E874AD8B6B90D9C3 /* ComposerMarkdownTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerMarkdownTests.swift; sourceTree = "<group>"; };
 		75DD7BEECD59D41C5461C892 /* SessionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionCoordinator.swift; sourceTree = "<group>"; };
 		80584058D243DE7197CF3096 /* AgentActionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActionService.swift; sourceTree = "<group>"; };
+		86A2688BEAABC5E3684A7C77 /* SynaraCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SynaraCore; path = SynaraCore; sourceTree = SOURCE_ROOT; };
 		8809AE831952D397FC6221F3 /* SynaraNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraNavigation.swift; sourceTree = "<group>"; };
 		8A4D48D89C01C70901919CAB /* AppServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppServices.swift; sourceTree = "<group>"; };
 		8A5CC96CDA94EE562BDBA416 /* Synara.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Synara.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -220,16 +222,26 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3C76DA11CB749760025BAB3F /* MatrixRustSDK in Frameworks */,
+				3C76DA11CB749760025BAB3F /* SynaraCore in Frameworks */,
+				234379800D455B5D292AB67E /* MatrixRustSDK in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0C94B71649426E929669B21F /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				86A2688BEAABC5E3684A7C77 /* SynaraCore */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
 		1E3176E5C6C0F7405EC9FDD3 = {
 			isa = PBXGroup;
 			children = (
+				0C94B71649426E929669B21F /* Packages */,
 				CE2F9B69EA02147F6C8247BF /* Synara */,
 				324C41B9A8FB860E38E68C9C /* SynaraNotificationService */,
 				61D7A21D338190A767395C23 /* SynaraShared */,
@@ -467,6 +479,7 @@
 			);
 			name = Synara;
 			packageProductDependencies = (
+				49B5C4AB6642E35F27BCCB5C /* SynaraCore */,
 				04B49FA4F6E9D7346F1EDC97 /* MatrixRustSDK */,
 			);
 			productName = Synara;
@@ -537,6 +550,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				17EDB652A583F50EF7606E92 /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */,
+				0AF4C1D505336CCBD42D5D4D /* XCLocalSwiftPackageReference "SynaraCore" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 539906F05A3BEACFAD1E5565 /* Products */;
@@ -1016,6 +1030,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		0AF4C1D505336CCBD42D5D4D /* XCLocalSwiftPackageReference "SynaraCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = SynaraCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		17EDB652A583F50EF7606E92 /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -1032,6 +1053,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 17EDB652A583F50EF7606E92 /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */;
 			productName = MatrixRustSDK;
+		};
+		49B5C4AB6642E35F27BCCB5C /* SynaraCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SynaraCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
