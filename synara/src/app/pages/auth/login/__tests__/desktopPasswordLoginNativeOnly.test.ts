@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { clearDesktopDiagnostics } from '../../../../utils/desktopDiagnostics';
 import {
   LoginError,
   PasswordLoginError,
@@ -143,4 +144,117 @@ test('loginPassword maps native Forbidden code', async () => {
       return true;
     }
   );
+});
+
+test('loginPassword default bridge logs only a mapped static diagnostic', async () => {
+  const originalWindow = globalThis.window;
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  clearDesktopDiagnostics();
+
+  try {
+    (globalThis as any).window = {
+      __SYNARA_DESKTOP__: {
+        platform: 'tauri',
+        invoke: async (command: string, args?: Record<string, unknown>) => {
+          calls.push({ command, args });
+          if (command === 'desktop_append_log') return undefined;
+          throw {
+            code: 'Unknown',
+            diagnosticId: 'p3.2-login-http-api-response',
+            message:
+              'server body for @alice:example.org password=hunter2 https://private.example/token=secret',
+          };
+        },
+      },
+    };
+
+    await assert.rejects(
+      () =>
+        loginPassword(
+          'https://matrix.example.org',
+          {
+            type: 'm.login.password',
+            identifier: { type: 'm.id.user', user: '@alice:example.org' },
+            password: 's3cret',
+          },
+          { isDesktop: () => true }
+        ),
+      (err: unknown) => {
+        assert.ok(err instanceof PasswordLoginError);
+        assert.equal(err.errcode, LoginError.Unknown);
+        assert.equal(err.diagnosticId, 'p3.2-login-http-api-response');
+        return true;
+      }
+    );
+
+    const logMessages = calls
+      .filter((call) => call.command === 'desktop_append_log')
+      .map((call) => call.args?.message)
+      .filter((message): message is string => typeof message === 'string');
+    assert.deepEqual(logMessages, ['matrix_login_password failed: p3.2-login-http-api-response']);
+    assert.doesNotMatch(
+      logMessages.join('\n'),
+      /alice:example\.org|hunter2|private\.example|token=secret/
+    );
+  } finally {
+    (globalThis as any).window = originalWindow;
+    clearDesktopDiagnostics();
+  }
+});
+
+test('loginPassword preserves only a static native diagnostic id', async () => {
+  const invoke: PasswordLoginInvoke = async () => {
+    throw {
+      code: 'Unknown',
+      diagnosticId: 'p3.2-login-http-api-response',
+    };
+  };
+
+  await assert.rejects(
+    () =>
+      loginPassword(
+        'https://matrix.example.org',
+        {
+          type: 'm.login.password',
+          identifier: { type: 'm.id.user', user: '@alice:example.org' },
+          password: 's3cret',
+        },
+        { isDesktop: () => true, invoke }
+      ),
+    (err: unknown) => {
+      assert.ok(err instanceof PasswordLoginError);
+      assert.equal(err.errcode, LoginError.Unknown);
+      assert.equal(err.diagnosticId, 'p3.2-login-http-api-response');
+      return true;
+    }
+  );
+});
+
+test('loginPassword drops unlisted and unsafe native diagnostic values', async () => {
+  for (const diagnosticId of [
+    'p3.2-login-unlisted-native-value',
+    'https://private.example/token=secret',
+  ]) {
+    const invoke: PasswordLoginInvoke = async () => {
+      throw { code: 'Unknown', diagnosticId };
+    };
+
+    await assert.rejects(
+      () =>
+        loginPassword(
+          'https://matrix.example.org',
+          {
+            type: 'm.login.password',
+            identifier: { type: 'm.id.user', user: '@alice:example.org' },
+            password: 's3cret',
+          },
+          { isDesktop: () => true, invoke }
+        ),
+      (err: unknown) => {
+        assert.ok(err instanceof PasswordLoginError);
+        assert.equal(err.diagnosticId, undefined);
+        return true;
+      }
+    );
+  }
 });
