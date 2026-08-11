@@ -175,7 +175,7 @@ mod tests {
         let mut registry = CommandRegistry::new();
         registry
             .register(
-                "matrix_test_echo",
+                "matrix_login_flows",
                 |_state: Arc<CoreState>, request: CommandEnvelope| -> CommandFuture {
                     Box::pin(async move { Ok(request.payload) })
                 },
@@ -184,7 +184,7 @@ mod tests {
         let core = Core::with_registry(Arc::new(TestPlatform), registry);
         let response = core
             .command(CommandEnvelope {
-                command: "matrix_test_echo".into(),
+                command: "matrix_login_flows".into(),
                 session_generation: 1,
                 request_id: Some("r1".into()),
                 payload: serde_json::json!({"safe":true}),
@@ -192,15 +192,15 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.payload, serde_json::json!({"safe":true}));
-        assert_eq!(core.registered_commands(), vec!["matrix_test_echo"]);
+        assert_eq!(core.registered_commands(), vec!["matrix_login_flows"]);
     }
 
     #[tokio::test]
-    async fn unregistered_command_fails_closed_with_static_diagnostic() {
+    async fn known_but_unregistered_command_fails_closed_with_static_diagnostic() {
         let core = Core::new(Arc::new(TestPlatform));
         let error = core
             .command(CommandEnvelope {
-                command: "matrix_unregistered".into(),
+                command: "matrix_login_password".into(),
                 session_generation: 1,
                 request_id: None,
                 payload: serde_json::Value::Null,

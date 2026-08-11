@@ -9,7 +9,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use super::{is_valid_command_name, CommandEnvelope, MatrixIpcError};
+use super::{is_known_matrix_command, is_valid_command_name, CommandEnvelope, MatrixIpcError};
 use crate::core::CoreState;
 
 /// Owned future returned by a command handler.
@@ -35,6 +35,7 @@ where
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandRegistryError {
     InvalidCommandName,
+    UnknownCommand,
     DuplicateCommand,
 }
 
@@ -49,7 +50,7 @@ impl CommandRegistry {
         Self::default()
     }
 
-    /// Register exactly one handler for a stable `matrix_*` command name.
+    /// Register exactly one handler for a census-listed `matrix_*` command name.
     pub fn register<H>(
         &mut self,
         command: impl Into<String>,
@@ -61,6 +62,9 @@ impl CommandRegistry {
         let command = command.into();
         if !is_valid_command_name(&command) {
             return Err(CommandRegistryError::InvalidCommandName);
+        }
+        if !is_known_matrix_command(&command) {
+            return Err(CommandRegistryError::UnknownCommand);
         }
         if self.handlers.contains_key(&command) {
             return Err(CommandRegistryError::DuplicateCommand);
@@ -90,5 +94,35 @@ impl CommandRegistry {
 
     pub fn is_empty(&self) -> bool {
         self.handlers.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_handler(
+        _state: std::sync::Arc<crate::core::CoreState>,
+        _request: CommandEnvelope,
+    ) -> CommandFuture {
+        Box::pin(async { Ok(serde_json::Value::Null) })
+    }
+
+    #[test]
+    fn registration_accepts_census_names_and_rejects_unknown_names() {
+        let mut registry = CommandRegistry::new();
+        assert_eq!(
+            registry.register("matrix_login_flows", test_handler),
+            Ok(())
+        );
+        assert_eq!(
+            registry.register("matrix_p2_not_in_desktop_invoke_list", test_handler),
+            Err(CommandRegistryError::UnknownCommand)
+        );
+        assert_eq!(
+            registry.register("desktop_show", test_handler),
+            Err(CommandRegistryError::InvalidCommandName)
+        );
+        assert_eq!(registry.command_names(), vec!["matrix_login_flows"]);
     }
 }
