@@ -23,6 +23,15 @@ tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time"] 
 # e2e-encryption feature edge (which matrix-sdk-ui pulls in itself).
 matrix-sdk = { version = "=0.18.0", default-features = false }
 matrix-sdk-ui = { version = "=0.18.0", default-features = false }
+# SNC-P1-5b: room_list (moved from src-tauri/matrix/room_list) — live.rs streams
+# room-list vector diffs (eyeball-im) asynchronously (futures-util). Pins are
+# EXACTLY what src-tauri uses (eyeball-im 0.8, futures-util 0.3).
+eyeball-im = "0.8"
+futures-util = "0.3"
+# SNC-P1-5b: invite_avatars.rs mints opaque random bearer handles for
+# invite-card avatar media sources (getrandom::fill). Pin matches src-tauri
+# (getrandom 0.3, default features).
+getrandom = "0.3"
 
 [dev-dependencies]
 # dto/tests.rs fixture + serde round-trip tests.

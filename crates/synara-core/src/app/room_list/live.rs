@@ -12,8 +12,8 @@ use matrix_sdk::{Room, RoomState};
 use matrix_sdk_ui::room_list_service::filters;
 use serde::Serialize;
 
-use crate::matrix::dto::{Membership, NotificationMode, RoomSummary};
-use crate::matrix::sync::SyncServiceOwner;
+use crate::app::sync::SyncServiceOwner;
+use crate::dto::{Membership, NotificationMode, RoomSummary};
 
 const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(5);
 

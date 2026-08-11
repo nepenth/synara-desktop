@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::matrix::dto::{Membership, RoomSummary};
+use crate::dto::{Membership, RoomSummary};
 
 use super::filters::{room_matches_scope, RoomListScope};
 

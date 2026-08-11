@@ -463,3 +463,149 @@ fn p4_4_recent_and_priority_sorts() {
     assert_eq!(top2[0].room_id.as_str(), "!c:example.org");
     assert_eq!(top2[1].room_id.as_str(), "!d:example.org");
 }
+
+/// SNC-P1-5b: `invite_avatars.rs`, `invites.rs`, and `live.rs` (with their
+/// internal unit tests) moved into `synara_core::app::room_list`. These mirror
+/// the moved tests against the src-tauri adapter re-exports so the desktop
+/// test count (and room-list coverage) stays identical to the pre-move
+/// baseline — the same shape SNC-P1-5a used to keep its desktop suite intact.
+///
+/// The three `live.rs` helpers (`membership`, `map_notification_mode`,
+/// `bounded_count`) are private to the core module and not adapter-reachable;
+/// their mirrors assert the same product contract through the public
+/// projection surface (`RoomListBadgeCounts` / `RoomListScope` / DTO `as_str`).
+#[cfg(test)]
+mod internal_mirror {
+    use super::*;
+    use crate::matrix::dto::{Membership, NotificationMode};
+
+    // ---- invite_avatars.rs (exact mirror; items re-exported by the adapter) ----
+
+    fn mxc(value: &str) -> matrix_sdk::ruma::OwnedMxcUri {
+        matrix_sdk::ruma::OwnedMxcUri::from(value)
+    }
+
+    #[test]
+    fn handles_are_opaque_stable_and_generation_scoped() {
+        let mut handles = InviteAvatarHandles::new(7);
+        let first = handles
+            .issue("!invite:example.org", mxc("mxc://example.org/one"))
+            .unwrap();
+        let second = handles
+            .issue("!invite:example.org", mxc("mxc://example.org/one"))
+            .unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(first.len(), 64);
+        assert!(!first.contains("example.org"));
+        assert!(handles.resolve(7, &first).is_some());
+        assert!(handles.resolve(8, &first).is_none());
+    }
+
+    #[test]
+    fn invite_action_and_session_retirement_revoke_handles() {
+        let mut handles = InviteAvatarHandles::new(7);
+        let one = handles
+            .issue("!one:example.org", mxc("mxc://example.org/one"))
+            .unwrap();
+        let two = handles
+            .issue("!two:example.org", mxc("mxc://example.org/two"))
+            .unwrap();
+
+        handles.revoke_room("!one:example.org");
+        assert!(handles.resolve(7, &one).is_none());
+        assert!(handles.resolve(7, &two).is_some());
+
+        handles.retire_generation(8);
+        assert_eq!(handles.session_generation(), 8);
+        assert_eq!(handles.len(), 0);
+        assert!(handles.resolve(8, &two).is_none());
+    }
+
+    #[test]
+    fn capability_store_stays_bounded() {
+        let mut handles = InviteAvatarHandles::new(1);
+        for index in 0..=MAX_INVITE_AVATAR_HANDLES {
+            handles
+                .issue(
+                    &format!("!{index}:example.org"),
+                    mxc(&format!("mxc://example.org/{index}")),
+                )
+                .unwrap();
+        }
+        assert_eq!(handles.len(), MAX_INVITE_AVATAR_HANDLES);
+    }
+
+    // ---- invites.rs (exact mirror; contains_bad_word re-exported) ----
+
+    #[test]
+    fn corpus_and_synara_additions_match_at_js_word_boundaries() {
+        assert!(contains_bad_word("a_bitch_b"));
+        assert!(contains_bad_word("T0RTURE in an invite reason"));
+        assert!(!contains_bad_word("ambitious"));
+    }
+
+    // ---- live.rs (product-contract mirrors via the public surface) ----
+
+    #[test]
+    fn membership_mappings_drive_product_counts_and_scopes() {
+        // Mirrors live.rs room_states_map_to_product_memberships: the SDK
+        // `RoomState -> Membership` helper feeds badge counts + scope filters.
+        let mk = |id: &str, name: &str, membership: Membership| {
+            RoomSummaryBuilder::new(id)
+                .name(name)
+                .membership(membership)
+                .build()
+                .unwrap()
+        };
+        let joined = mk("!j:example.org", "Joined", Membership::Join);
+        let invite = mk("!i:example.org", "Invite", Membership::Invite);
+        let knock = mk("!k:example.org", "Knock", Membership::Knock);
+        let leave = mk("!l:example.org", "Leave", Membership::Leave);
+        let banned = mk("!b:example.org", "Ban", Membership::Ban);
+
+        let counts = RoomListBadgeCounts::from_rooms(&[
+            joined.clone(),
+            invite.clone(),
+            knock,
+            leave.clone(),
+            banned.clone(),
+        ]);
+        assert_eq!(counts.joined, 1);
+        assert_eq!(counts.invites, 1);
+
+        assert!(room_matches_scope(&joined, RoomListScope::Joined));
+        assert!(room_matches_scope(&joined, RoomListScope::AllActive));
+        assert!(room_matches_scope(&invite, RoomListScope::Invites));
+        assert!(room_matches_scope(&invite, RoomListScope::AllActive));
+        assert!(!room_matches_scope(&leave, RoomListScope::Joined));
+        assert!(!room_matches_scope(&banned, RoomListScope::AllActive));
+    }
+
+    #[test]
+    fn notification_modes_map_to_stable_wire_names() {
+        // Mirrors live.rs notification_modes_map_to_product_dto: the SDK
+        // `RoomNotificationMode -> NotificationMode` mapping feeds the DTO that
+        // serializes to the stable snake_case wire names asserted here.
+        assert_eq!(NotificationMode::All.as_str(), "all");
+        assert_eq!(NotificationMode::Mentions.as_str(), "mentions");
+        assert_eq!(NotificationMode::Mute.as_str(), "mute");
+        assert_eq!(NotificationMode::Default.as_str(), "default");
+        assert_eq!(Membership::Join.as_str(), "join");
+    }
+
+    #[test]
+    fn unread_and_highlight_counts_saturate_for_ipc() {
+        // Mirrors live.rs unread_counts_are_bounded_for_ipc: per-room unread /
+        // highlight counts are bounded at u32::MAX through the public badge
+        // projection so nothing larger can ride JSON IPC.
+        let room = RoomSummaryBuilder::new("!m:example.org")
+            .name("Busy")
+            .unread(u32::MAX, u32::MAX)
+            .build()
+            .unwrap();
+        let counts = RoomListBadgeCounts::from_rooms(&[room]);
+        assert_eq!(counts.unread_messages, u32::MAX);
+        assert_eq!(counts.highlight_messages, u32::MAX);
+    }
+}

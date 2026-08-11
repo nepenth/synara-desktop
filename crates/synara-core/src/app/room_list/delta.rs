@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::matrix::dto::RoomSummary;
+use crate::dto::RoomSummary;
 
 /// One ordered mutation against a room-list projection.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

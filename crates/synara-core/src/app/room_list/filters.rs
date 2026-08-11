@@ -2,7 +2,7 @@
 //!
 //! Pure predicates over [`RoomSummary`] — no SDK Room objects, no network.
 
-use crate::matrix::dto::{Membership, RoomSummary};
+use crate::dto::{Membership, RoomSummary};
 
 /// Product room-list scope filters used by nav tabs (subset of iOS/desktop scopes).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
