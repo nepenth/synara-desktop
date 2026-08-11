@@ -14,17 +14,21 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+mod command;
 mod envelope;
 mod error;
 mod protocol;
+mod registry;
 mod stream;
 mod stream_body;
 mod version;
 mod wire_counter;
 
+pub use command::*;
 pub use envelope::*;
 pub use error::*;
 pub use protocol::*;
+pub use registry::*;
 pub use stream::*;
 pub use stream_body::{validate_stream_topic_body, RoomListStreamBody, TimelineStreamBody};
 pub use version::*;
