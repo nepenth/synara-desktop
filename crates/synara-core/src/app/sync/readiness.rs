@@ -9,6 +9,12 @@ use serde::{Deserialize, Serialize};
 
 use super::sync_phase::SyncPhase;
 
+/// Only diagnostic id permitted on a failed [`SyncReadinessSnapshot`].
+///
+/// It is intentionally static: neither a raw SDK error nor a shell-provided
+/// diagnostic can cross the shared Core status transport.
+pub const SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID: &str = "p4.1-sync-service-error";
+
 /// High-level product readiness of the Matrix sync owner.
 ///
 /// Distinct from supervisor lifecycle (`Syncing` / `Ready`): this tracks the
@@ -106,6 +112,26 @@ impl SyncReadinessSnapshot {
         self.readiness.is_product_ready()
     }
 
+    /// Validate the fixed diagnostic contract of the public
+    /// `matrix_sync_status` DTO.
+    ///
+    /// This deliberately permits no diagnostic for healthy states and exactly
+    /// [`SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID`] for `failed`; callers must not
+    /// serialize a snapshot that has not passed this closed check.
+    pub(crate) fn is_valid_public_sync_status(&self) -> bool {
+        matches!(
+            (self.readiness, self.failure_diagnostic_id),
+            (
+                SyncReadiness::Failed,
+                Some(SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID)
+            ) | (SyncReadiness::Unconfigured, None)
+                | (SyncReadiness::Idle, None)
+                | (SyncReadiness::Running, None)
+                | (SyncReadiness::Offline, None)
+                | (SyncReadiness::Terminated, None)
+        )
+    }
+
     /// Attach a best-effort sliding-sync capability verdict (informational).
     pub fn with_sliding_sync_capability(mut self, capable: Option<bool>) -> Self {
         self.sliding_sync_capable = capable;
@@ -130,7 +156,7 @@ pub fn readiness_from_sdk_state(state: &SdkSyncState) -> SyncReadiness {
 /// Diagnostic id for a failed SDK state (no raw message).
 pub fn failure_diagnostic_from_sdk_state(state: &SdkSyncState) -> Option<&'static str> {
     match state {
-        SdkSyncState::Error(_) => Some("p4.1-sync-service-error"),
+        SdkSyncState::Error(_) => Some(SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID),
         _ => None,
     }
 }

@@ -13,8 +13,9 @@ use crate::app::auth::{
     HttpLoginFlowTransport, HttpRegisterFlowTransport, MatrixLoginFlowsResponse,
     RegisterFlowsProbe,
 };
+use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::dto::SessionSnapshot;
-use crate::platform::Platform;
+use crate::platform::{Platform, PlatformSyncFailure, PlatformSyncStatus};
 use crate::transport::{
     CommandEnvelope, CommandFuture, CommandRegistry, CommandResponseEnvelope, MatrixIpcError,
     MatrixIpcErrorCategory,
@@ -176,6 +177,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_session_snapshot", matrix_session_snapshot)
         .expect("built-in matrix_session_snapshot must remain in the command census");
     registry
+        .register("matrix_sync_status", matrix_sync_status)
+        .expect("built-in matrix_sync_status must remain in the command census");
+    registry
         .register("matrix_login_flows", matrix_login_flows)
         .expect("built-in matrix_login_flows must remain in the command census");
     registry
@@ -189,6 +193,50 @@ fn matrix_session_snapshot(state: Arc<CoreState>, _request: CommandEnvelope) -> 
         let response = MatrixSessionSnapshotResponse::from(state.session_snapshot()?);
         serde_json::to_value(response)
             .map_err(|_| core_state_error("p2-session-snapshot-serialization-failed"))
+    })
+}
+
+/// Reconstruct the public status DTO from the string-free Platform projection.
+///
+/// This is the only Platform-to-public mapping: Core constructs the fixed
+/// `p4.1-sync-service-error` value from the closed failure enum, then validates
+/// the full DTO contract before it can be serialized.
+fn public_sync_status(status: PlatformSyncStatus) -> Result<SyncReadinessSnapshot, MatrixIpcError> {
+    let failure_diagnostic_id = match status.failure() {
+        None => None,
+        Some(PlatformSyncFailure::SyncService) => Some(SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID),
+    };
+    let snapshot = SyncReadinessSnapshot {
+        readiness: status.readiness(),
+        session_generation: status.session_generation(),
+        offline_mode_enabled: status.offline_mode_enabled(),
+        failure_diagnostic_id,
+        sliding_sync_capable: status.sliding_sync_capable(),
+    };
+    snapshot
+        .is_valid_public_sync_status()
+        .then_some(snapshot)
+        .ok_or_else(|| core_state_error("p2-sync-status-invalid-platform-projection"))
+}
+
+/// `matrix_sync_status` is deliberately a payload-free observation. Core owns
+/// its registry entry and exact wire serialization; the Platform remains the
+/// sole owner of the live SDK client from which it reads the safe projection.
+fn matrix_sync_status(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-sync-status-invalid-payload"));
+        }
+        let platform = state.platform();
+        let status = platform
+            .sync_status()
+            .await
+            // Platform status errors are closed enums, and Core still exposes
+            // only its static command error through this public observation.
+            .map_err(|_| core_state_error("p2-sync-status-platform-unavailable"))?;
+        let snapshot = public_sync_status(status)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-sync-status-serialization-failed"))
     })
 }
 
@@ -247,11 +295,17 @@ fn core_state_error(diagnostic_id: &'static str) -> MatrixIpcError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::sync::SyncReadiness;
     use crate::dto::{SessionLifecycle, SessionSnapshot};
     use crate::platform::{PlatformStatus, SecretVault, UnavailableSecretVault};
     use crate::transport::{CommandFuture, CommandRegistry};
 
     const TEST_HTTP_USER_AGENT: &str = "Synara-Core-Test/1.0";
+
+    fn unconfigured_platform_status() -> PlatformSyncStatus {
+        PlatformSyncStatus::new(SyncReadiness::Unconfigured, 0, false, None, None)
+            .expect("unconfigured status is a valid string-free projection")
+    }
 
     #[derive(Default)]
     struct TestPlatform;
@@ -267,6 +321,45 @@ mod tests {
         }
         fn http_user_agent(&self) -> String {
             TEST_HTTP_USER_AGENT.into()
+        }
+        fn sync_status(&self) -> crate::platform::SyncStatusFuture<'_> {
+            Box::pin(async { Ok(unconfigured_platform_status()) })
+        }
+        fn notify(
+            &self,
+            _candidate: crate::dto::NotificationCandidate,
+        ) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+        fn set_badge(&self, _count: u64) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+        fn status(&self, _status: PlatformStatus) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+    }
+
+    /// A test shell may supply only the closed platform status/error types.
+    /// It has no field in which a diagnostic string can enter Core.
+    struct StatusPlatform {
+        status: Result<PlatformSyncStatus, crate::platform::PlatformSyncStatusError>,
+    }
+
+    impl Platform for StatusPlatform {
+        fn emit(
+            &self,
+            _envelope: crate::transport::MatrixIpcEnvelope,
+        ) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+        fn secret_store(&self) -> Arc<dyn SecretVault + Send + Sync> {
+            Arc::new(UnavailableSecretVault)
+        }
+        fn http_user_agent(&self) -> String {
+            TEST_HTTP_USER_AGENT.into()
+        }
+        fn sync_status(&self) -> crate::platform::SyncStatusFuture<'_> {
+            Box::pin(async move { self.status })
         }
         fn notify(
             &self,
@@ -333,6 +426,7 @@ mod tests {
                 "matrix_login_flows",
                 "matrix_register_flows",
                 "matrix_session_snapshot",
+                "matrix_sync_status",
             ]
         );
 
@@ -357,6 +451,149 @@ mod tests {
                 "homeserver_url":"https://example.org",
                 "sessionGeneration":1,
             })
+        );
+    }
+
+    #[tokio::test]
+    async fn core_sync_status_uses_exact_desktop_wire_shape() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let request = CommandEnvelope {
+            command: "matrix_sync_status".into(),
+            session_generation: 0,
+            request_id: Some("sync-status-fixture".into()),
+            payload: serde_json::Value::Null,
+        };
+
+        let response = core
+            .command(request)
+            .await
+            .expect("status observation succeeds");
+        assert_eq!(response.command, "matrix_sync_status");
+        assert_eq!(response.session_generation, 0);
+        assert_eq!(response.request_id.as_deref(), Some("sync-status-fixture"));
+        assert_eq!(
+            response.payload,
+            serde_json::json!({
+                "readiness": "unconfigured",
+                "sessionGeneration": 0,
+                "offlineModeEnabled": false,
+                "failureDiagnosticId": null,
+                "slidingSyncCapable": null,
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn core_sync_status_constructs_the_only_public_failure_diagnostic() {
+        let status = PlatformSyncStatus::new(
+            SyncReadiness::Failed,
+            9,
+            true,
+            Some(PlatformSyncFailure::SyncService),
+            Some(true),
+        )
+        .expect("closed sync failure is a valid Platform projection");
+        let response = Core::new(Arc::new(StatusPlatform { status: Ok(status) }))
+            .command(CommandEnvelope {
+                command: "matrix_sync_status".into(),
+                session_generation: 9,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect("closed Platform failure serializes through Core");
+
+        assert_eq!(
+            response.payload,
+            serde_json::json!({
+                "readiness": "failed",
+                "sessionGeneration": 9,
+                "offlineModeEnabled": true,
+                "failureDiagnosticId": "p4.1-sync-service-error",
+                "slidingSyncCapable": true,
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn hostile_desktop_diagnostic_is_rejected_before_platform_core_or_public_transport() {
+        let private_text: &'static str = Box::leak(
+            "https://private.example token=secret password=secret"
+                .to_owned()
+                .into_boxed_str(),
+        );
+        let hostile_desktop_snapshot = SyncReadinessSnapshot {
+            readiness: SyncReadiness::Failed,
+            session_generation: 9,
+            offline_mode_enabled: true,
+            failure_diagnostic_id: Some(private_text),
+            sliding_sync_capable: Some(false),
+        };
+
+        // This is the desktop-side normalization step. Its typed result has no
+        // diagnostic-string field, so the hostile value cannot enter Platform.
+        let normalized = PlatformSyncStatus::from_desktop_snapshot(hostile_desktop_snapshot);
+        assert_eq!(
+            normalized,
+            Err(crate::platform::PlatformSyncStatusError::InvalidSnapshot)
+        );
+        assert!(!format!("{normalized:?}").contains(private_text));
+
+        let error = Core::new(Arc::new(StatusPlatform { status: normalized }))
+            .command(CommandEnvelope {
+                command: "matrix_sync_status".into(),
+                session_generation: 9,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("rejected desktop diagnostic has no public status payload");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-sync-status-platform-unavailable")
+        );
+        let public_error = serde_json::to_string(&error).expect("static Core error serializes");
+        for forbidden in ["private.example", "token", "secret", "password"] {
+            assert!(
+                !public_error.contains(forbidden),
+                "hostile desktop diagnostic must not cross Platform/Core or public transport: {forbidden}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn core_sync_status_fails_closed_with_static_errors() {
+        let malformed = Core::new(Arc::new(TestPlatform))
+            .command(CommandEnvelope {
+                command: "matrix_sync_status".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"private": "token=secret"}),
+            })
+            .await
+            .expect_err("status command must accept no payload");
+        assert_eq!(malformed.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            malformed.diagnostic_id.as_deref(),
+            Some("p2-sync-status-invalid-payload")
+        );
+
+        let error = Core::new(Arc::new(StatusPlatform {
+            status: Err(crate::platform::PlatformSyncStatusError::Unavailable),
+        }))
+        .command(CommandEnvelope {
+            command: "matrix_sync_status".into(),
+            session_generation: 0,
+            request_id: None,
+            payload: serde_json::Value::Null,
+        })
+        .await
+        .expect_err("opaque platform errors must not cross the Core transport");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-sync-status-platform-unavailable")
         );
     }
 

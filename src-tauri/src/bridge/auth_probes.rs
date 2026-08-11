@@ -185,6 +185,19 @@ mod tests {
             "Synara-Desktop-Bridge-Test/1.0".to_owned()
         }
 
+        fn sync_status(&self) -> synara_core::platform::SyncStatusFuture<'_> {
+            Box::pin(async {
+                Ok(synara_core::platform::PlatformSyncStatus::new(
+                    synara_core::app::sync::SyncReadiness::Unconfigured,
+                    0,
+                    false,
+                    None,
+                    None,
+                )
+                .expect("unconfigured status is a valid string-free projection"))
+            })
+        }
+
         fn notify(&self, _candidate: NotificationCandidate) -> Result<(), MatrixIpcError> {
             Ok(())
         }
