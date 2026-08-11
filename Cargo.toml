@@ -7,7 +7,7 @@
 # into the workspace as it starts depending on synara-core.
 [workspace]
 resolver = "2"
-members = ["crates/synara-core"]
+members = ["crates/synara-core", "crates/synara-core-bindgen"]
 # Keep the desktop shell a standalone package for now (see comment above);
 # adding it to `members` would move the lockfile to the workspace root and is
 # deferred to a later slice.
