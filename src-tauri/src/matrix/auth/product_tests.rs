@@ -306,12 +306,16 @@ fn v_auth_3_product_registers_login_flows_command() {
         "matrix_login_flows must be registered in the invoke handler"
     );
     assert!(
-        product_prod.contains("HttpLoginFlowTransport"),
-        "product path must use live HTTP login-flow transport"
+        product_prod.contains("crate::bridge::auth_probes::login_flows"),
+        "product path must delegate login-flow discovery to the Core bridge"
     );
     assert!(
-        product_prod.contains("discover_login_flows"),
-        "product path must call discover_login_flows"
+        !product_prod.contains("HttpLoginFlowTransport"),
+        "product path must not instantiate a login-flow transport"
+    );
+    assert!(
+        !product_prod.contains("discover_login_flows"),
+        "product path must not call login-flow discovery directly"
     );
 }
 
