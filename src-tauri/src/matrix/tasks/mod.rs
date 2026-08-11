@@ -17,8 +17,8 @@
 
 pub use synara_core::task as task_inner;
 pub use synara_core::task::{
-    matrix_tasks_markers, TaskError, TaskId, TaskInfo, TaskKind, TaskOutcome,
-    TaskRunState, TaskSupervisor, MATRIX_TASKS_MARKER,
+    matrix_tasks_markers, TaskError, TaskId, TaskInfo, TaskKind, TaskOutcome, TaskRunState,
+    TaskSupervisor, MATRIX_TASKS_MARKER,
 };
 
 mod bridge;
