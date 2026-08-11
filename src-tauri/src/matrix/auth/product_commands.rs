@@ -701,7 +701,9 @@ fn map_store_migration_error(error: StoreMigrationError) -> MatrixAuthCommandErr
 fn map_store_key_vault_error(error: StoreKeyVaultError) -> MatrixAuthCommandError {
     let diagnostic_id = match error {
         StoreKeyVaultError::BackendUnavailable { .. } => "p3.2-login-store-locked",
-        StoreKeyVaultError::CorruptPayload => "p3.2-login-store-reset-required",
+        StoreKeyVaultError::MissingKeyForExistingStore | StoreKeyVaultError::CorruptPayload => {
+            "p3.2-login-store-reset-required"
+        }
         StoreKeyVaultError::NotFound | StoreKeyVaultError::Encoding => {
             "p3.2-login-store-open-failed"
         }
@@ -725,18 +727,27 @@ pub(super) async fn build_client(
     app_data_root: &Path,
     identity: AccountIdentity,
 ) -> Result<Client, MatrixAuthCommandError> {
+    // Probe before migration creates the account layout or revision manifest.
+    // Once an account root already exists, a Keychain miss must fail closed:
+    // generating a replacement key could make encrypted SQLite data
+    // unrecoverable. The probe is read-only and surfaces only a static error.
+    let store_paths = StorePaths::derive(app_data_root, &identity)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed"))?;
+    let key_creation_policy = store_paths
+        .key_creation_policy()
+        .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed"))?;
+
+    // Revision-aware Keychain/Secret-Service lookup copies a valid legacy key
+    // forward before creation. Only a genuinely fresh account root may receive
+    // a newly generated key; unavailable or corrupt Keychain data never does.
+    let store_key =
+        get_or_migrate_store_key(&KeyringStoreKeyVault::new(), &identity, key_creation_policy)
+            .map_err(map_store_key_vault_error)?;
+
     // Run deterministic revision migrations before the SDK opens encrypted
     // SQLite. A corrupt/ahead/missing migration chain is a reset *decision*,
     // never an automatic wipe; only the static safe diagnostic crosses IPC.
-    let store_paths = StorePaths::derive(app_data_root, &identity)
-        .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed"))?;
     migrate_store_to_current(&store_paths).map_err(map_store_migration_error)?;
-
-    // Revision-aware Keychain/Secret-Service lookup copies an existing future
-    // legacy key forward before generating anything. It never rotates/deletes a
-    // key implicitly. A locked credential store stays fail-closed.
-    let store_key = get_or_migrate_store_key(&KeyringStoreKeyVault::new(), &identity)
-        .map_err(map_store_key_vault_error)?;
     let config = ClientBuildConfig::product_default(app_data_root, identity, Some(store_key))
         .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed"))?;
     build_unauthenticated_client(&config)
@@ -1080,6 +1091,12 @@ mod tests {
         assert_eq!(locked.diagnostic_id, "p3.2-login-store-locked");
         let corrupt = map_store_key_vault_error(StoreKeyVaultError::CorruptPayload);
         assert_eq!(corrupt.diagnostic_id, "p3.2-login-store-reset-required");
+        let missing_existing =
+            map_store_key_vault_error(StoreKeyVaultError::MissingKeyForExistingStore);
+        assert_eq!(
+            missing_existing.diagnostic_id,
+            "p3.2-login-store-reset-required"
+        );
     }
 
     #[test]
