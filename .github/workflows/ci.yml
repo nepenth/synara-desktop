@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, "release/**"]
   pull_request:
-    branches: [main, "feature/matrix-rust-sdk-full-replacement", "release/**"]
+    branches: [main, "feature/matrix-rust-sdk-full-replacement", "feature/shared-native-core", "release/**"]
   workflow_dispatch:
 
 concurrency:
