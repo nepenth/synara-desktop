@@ -363,3 +363,32 @@ fn ensure_dirs_refuses_symlink_at_account_root() {
 
     let _ = fs::remove_dir_all(&root);
 }
+
+#[test]
+fn key_revision_current_id_is_stable_and_known() {
+    let identity = alice();
+    let current = StoreKeyId::from_identity(&identity);
+    assert_eq!(STORE_KEY_REVISION, 1);
+    assert_eq!(current.service(), STORE_KEY_SERVICE_V1);
+    assert_eq!(
+        StoreKeyId::for_revision(&identity, STORE_KEY_REVISION),
+        Some(current.clone())
+    );
+    assert_eq!(
+        StoreKeyId::for_revision(&identity, STORE_KEY_REVISION + 1),
+        None
+    );
+}
+
+#[test]
+fn revisioned_key_resolver_keeps_existing_key_bytes() {
+    let vault = InMemoryStoreKeyVault::new();
+    let identity = alice();
+    let id = StoreKeyId::from_identity(&identity);
+    let existing = StoreKeyMaterial::generate().unwrap();
+    vault.set(&id, &existing).unwrap();
+
+    let resolved = get_or_migrate_store_key(&vault, &identity).unwrap();
+    assert!(resolved.equals(&existing));
+    assert_eq!(vault.len(), 1, "current key must not be rotated");
+}

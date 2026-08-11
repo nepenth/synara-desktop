@@ -77,7 +77,9 @@ use crate::matrix::account_data::{
 use crate::matrix::backup::live::{
     self as live_backup, NativeBackupOperationResult, NativeBackupStatus,
 };
-use crate::matrix::client_builder::{build_unauthenticated_client, ClientBuildConfig};
+use crate::matrix::client_builder::{
+    build_unauthenticated_client, ClientBuildConfig, ClientBuilderError,
+};
 use crate::matrix::cross_signing::live::{
     project_status, supported_authentication, NativeCrossSigningSetupOutcome,
     NativeCrossSigningSetupResult, NativeCrossSigningStatus, SupportedBootstrapAuthentication,
@@ -120,7 +122,8 @@ use crate::matrix::spaces::{
     NativeSpaceParentsSnapshot,
 };
 use crate::matrix::store::{
-    get_or_create_store_key, AccountIdentity, KeyringStoreKeyVault, StoreKeyId, StoreKeyMaterial,
+    get_or_migrate_store_key, migrate_store_to_current, AccountIdentity, KeyringStoreKeyVault,
+    StoreKeyMaterial, StoreKeyVaultError, StoreMigrationError, StorePaths,
 };
 use crate::matrix::sync::{
     build_sync_service, unconfigured_snapshot, SyncReadinessSnapshot, SyncServiceConfig,

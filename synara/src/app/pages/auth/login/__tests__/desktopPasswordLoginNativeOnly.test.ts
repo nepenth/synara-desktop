@@ -262,7 +262,10 @@ test('loginPassword drops unlisted and unsafe native diagnostic values', async (
 test('loginPassword preserves refined store/olm static diagnostic ids', async () => {
   for (const diagnosticId of [
     'p3.2-login-store-locked',
+    'p3.2-login-store-migration-failed',
+    'p3.2-login-store-migration-required',
     'p3.2-login-store-open-failed',
+    'p3.2-login-store-reset-required',
     'p3.2-login-olm-unavailable',
     'p3.2-login-crypto-store', // legacy umbrella id remains accepted
   ]) {
