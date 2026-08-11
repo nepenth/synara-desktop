@@ -14,6 +14,7 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+mod census;
 mod command;
 mod envelope;
 mod error;
@@ -24,6 +25,7 @@ mod stream_body;
 mod version;
 mod wire_counter;
 
+pub use census::*;
 pub use command::*;
 pub use envelope::*;
 pub use error::*;
