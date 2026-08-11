@@ -158,13 +158,47 @@ type NativeCommandError = {
   diagnostic_id?: string;
 };
 
-const SAFE_NATIVE_DIAGNOSTIC_ID = /^[a-z0-9][a-z0-9.-]{0,127}$/;
+// Closed allowlist: native login diagnostics are static identifiers defined in
+// `src-tauri/src/matrix/auth/login.rs`. Do not accept arbitrary native text here:
+// this is the renderer's final privacy boundary before an identifier is displayed.
+const SAFE_NATIVE_LOGIN_DIAGNOSTIC_IDS = new Set([
+  'p3.2-device-display-name-too-long',
+  'p3.2-empty-device-display-name',
+  'p3.2-empty-password',
+  'p3.2-empty-user-id',
+  'p3.2-login-connectivity',
+  'p3.2-login-crypto-store',
+  'p3.2-login-endpoint-not-found',
+  'p3.2-login-homeserver-unavailable',
+  'p3.2-login-http-api-response',
+  'p3.2-login-http-cached',
+  'p3.2-login-http-connect',
+  'p3.2-login-http-request',
+  'p3.2-login-http-request-build',
+  'p3.2-login-http-timeout',
+  'p3.2-login-http-verifier',
+  'p3.2-login-local-io',
+  'p3.2-login-rate-limited',
+  'p3.2-login-refresh-token',
+  'p3.2-login-rejected',
+  'p3.2-login-response-decode',
+  'p3.2-login-sdk-timeout',
+  'p3.2-login-uiaa-required',
+  'p3.2-login-unknown',
+  'p3.2-login-unknown-rejected',
+  'p3.2-login-unknown-token',
+  'p3.2-login-unrecognized',
+  'p3.2-login-url-parse',
+  'p3.2-login-user-deactivated',
+  'p3.2-user-id-invalid-chars',
+  'p3.2-user-id-too-long',
+]);
 
 const nativeDiagnosticId = (error: unknown): string | undefined => {
   if (!error || typeof error !== 'object') return undefined;
   const candidate = error as NativeCommandError;
   const diagnosticId = candidate.diagnosticId ?? candidate.diagnostic_id;
-  return typeof diagnosticId === 'string' && SAFE_NATIVE_DIAGNOSTIC_ID.test(diagnosticId)
+  return typeof diagnosticId === 'string' && SAFE_NATIVE_LOGIN_DIAGNOSTIC_IDS.has(diagnosticId)
     ? diagnosticId
     : undefined;
 };
