@@ -1,21 +1,14 @@
-//! Deterministic unit tests for P2.4 task supervision and cancellation (src-tauri side).
-//!
-//! SNC-P1-4: `super::*` resolves against the core `synara_core::task` types
-//! re-exported by this module plus the desktop `bridge` adapter; the 3
-//! supervisor-coupled follow/mirror tests run here (they need the desktop
-//! `MatrixSupervisor`).
+//! Deterministic unit tests for P2.4 task supervision and cancellation (core side).
 //!
 //! No live homeserver network. Pure registry + Tokio mock futures only.
+//! SNC-P1-4: the supervisor-coupled bridge tests (follow/mirror against the
+//! desktop MatrixSupervisor) stay in src-tauri's tasks/tests.rs.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 use super::*;
-use crate::matrix::supervisor::{
-    harness_login_ready, MatrixSupervisor, SupervisorCommand, TestClientFactory,
-};
-
 #[test]
 fn marker_and_kinds_non_empty() {
     assert_eq!(matrix_tasks_markers(), MATRIX_TASKS_MARKER);
@@ -270,95 +263,6 @@ async fn shutdown_all_clears_registry() {
     assert_eq!(n, 3);
     assert_eq!(s.registered_count(), 0);
     assert_eq!(s.running_count(), 0);
-}
-
-#[tokio::test]
-async fn follow_supervisor_generation_on_logout() {
-    let mut actor = MatrixSupervisor::new();
-    let factory = TestClientFactory::new();
-    let mut tasks = TaskSupervisor::new();
-
-    harness_login_ready(&mut actor, &factory).unwrap();
-    let gen = actor.session_generation();
-    assert_eq!(gen, 1);
-    mirror_generation(&mut tasks, &actor);
-
-    let id = tasks
-        .spawn(TaskKind::Sync, gen, async {
-            tokio::time::sleep(Duration::from_secs(60)).await;
-        })
-        .unwrap();
-    assert_eq!(tasks.running_count(), 1);
-
-    actor.apply(SupervisorCommand::BeginStop).unwrap();
-    actor.apply(SupervisorCommand::CompleteLogout).unwrap();
-    assert_eq!(actor.session_generation(), 2);
-
-    let retired = follow_supervisor_generation(&mut tasks, &actor).await;
-    assert_eq!(retired, 1);
-    assert!(tasks.get(id).is_none());
-    assert_eq!(tasks.live_generation(), 2);
-    assert!(tasks.accept_result(1).unwrap_err().is_stale_generation());
-    assert!(tasks.accept_result(2).is_ok());
-}
-
-#[tokio::test]
-async fn follow_supervisor_generation_on_wipe() {
-    let mut actor = MatrixSupervisor::new();
-    let factory = TestClientFactory::new();
-    let mut tasks = TaskSupervisor::new();
-
-    harness_login_ready(&mut actor, &factory).unwrap();
-    mirror_generation(&mut tasks, &actor);
-    let gen = tasks.live_generation();
-
-    tasks
-        .spawn(TaskKind::Upload, gen, async {
-            tokio::time::sleep(Duration::from_secs(60)).await;
-        })
-        .unwrap();
-    tasks
-        .spawn(TaskKind::Search, gen, async {
-            tokio::time::sleep(Duration::from_secs(60)).await;
-        })
-        .unwrap();
-
-    actor.apply(SupervisorCommand::BeginWipe).unwrap();
-    actor.apply(SupervisorCommand::CompleteWipe).unwrap();
-    assert_eq!(actor.session_generation(), 2);
-
-    let retired = follow_supervisor_generation(&mut tasks, &actor).await;
-    assert_eq!(retired, 2);
-    assert_eq!(tasks.registered_count(), 0);
-    assert_eq!(tasks.live_generation(), 2);
-}
-
-#[tokio::test]
-async fn fail_reopen_bumps_and_retires_via_follow() {
-    let mut actor = MatrixSupervisor::new();
-    let factory = TestClientFactory::new();
-    let mut tasks = TaskSupervisor::new();
-
-    harness_login_ready(&mut actor, &factory).unwrap();
-    mirror_generation(&mut tasks, &actor);
-    tasks
-        .spawn(TaskKind::Listener, 1, async {
-            tokio::time::sleep(Duration::from_secs(60)).await;
-        })
-        .unwrap();
-
-    // Fail does not bump generation (P2.1); reopen via BeginOpen does.
-    actor.apply(SupervisorCommand::Fail).unwrap();
-    let retired_same = follow_supervisor_generation(&mut tasks, &actor).await;
-    assert_eq!(retired_same, 0);
-    assert_eq!(tasks.running_count(), 1);
-
-    actor.apply(SupervisorCommand::BeginOpen).unwrap();
-    assert_eq!(actor.session_generation(), 2);
-    let retired = follow_supervisor_generation(&mut tasks, &actor).await;
-    assert_eq!(retired, 1);
-    assert_eq!(tasks.registered_count(), 0);
-    assert_eq!(tasks.live_generation(), 2);
 }
 
 #[test]
