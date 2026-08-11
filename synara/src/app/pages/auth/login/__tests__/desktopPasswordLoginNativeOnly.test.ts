@@ -258,3 +258,34 @@ test('loginPassword drops unlisted and unsafe native diagnostic values', async (
     );
   }
 });
+
+test('loginPassword preserves refined store/olm static diagnostic ids', async () => {
+  for (const diagnosticId of [
+    'p3.2-login-store-locked',
+    'p3.2-login-store-open-failed',
+    'p3.2-login-olm-unavailable',
+    'p3.2-login-crypto-store', // legacy umbrella id remains accepted
+  ]) {
+    const invoke: PasswordLoginInvoke = async () => {
+      throw { code: 'Unknown', diagnosticId };
+    };
+
+    await assert.rejects(
+      () =>
+        loginPassword(
+          'https://matrix.example.org',
+          {
+            type: 'm.login.password',
+            identifier: { type: 'm.id.user', user: '@alice:example.org' },
+            password: 's3cret',
+          },
+          { isDesktop: () => true, invoke }
+        ),
+      (err: unknown) => {
+        assert.ok(err instanceof PasswordLoginError);
+        assert.equal(err.diagnosticId, diagnosticId);
+        return true;
+      }
+    );
+  }
+});
