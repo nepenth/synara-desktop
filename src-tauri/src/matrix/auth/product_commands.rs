@@ -27,6 +27,7 @@ pub async fn matrix_login_flows(
 pub async fn matrix_login_password(
     app: AppHandle,
     state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     homeserver_url: String,
     user: String,
     password: String,
@@ -126,6 +127,13 @@ pub async fn matrix_login_password(
         selected_room_key_import: None,
         next_room_key_import_selection_id: 0,
     });
+    drop(session);
+    crate::bridge::session_lifecycle::open_after_desktop_session_install(
+        core.inner().as_ref(),
+        &identity,
+        session_generation,
+    )
+    .await?;
     Ok(identity)
 }
 
@@ -223,10 +231,12 @@ pub enum MatrixRegisterOutcome {
 /// V-AUTH.4b — submit registration (+ UIAA stage). On complete, installs native session.
 ///
 /// Access/refresh tokens never leave the host. Unsupported UIAA stages fail closed.
+#[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
 #[tauri::command]
 pub async fn matrix_register(
     app: AppHandle,
     state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     homeserver_url: String,
     username: String,
     password: String,
@@ -268,8 +278,15 @@ pub async fn matrix_register(
             error_message: challenge.error_message,
         }),
         RegisterSubmitOutcome::Complete(secrets) => {
-            let identity =
+            let (identity, session_generation) =
                 install_session_from_register_secrets(&app, &state, &mut session, secrets).await?;
+            drop(session);
+            crate::bridge::session_lifecycle::open_after_desktop_session_install(
+                core.inner().as_ref(),
+                &identity,
+                session_generation,
+            )
+            .await?;
             Ok(MatrixRegisterOutcome::Complete { identity })
         }
     }
@@ -280,7 +297,7 @@ pub(super) async fn install_session_from_register_secrets(
     state: &State<'_, MatrixAuthState>,
     session: &mut Option<ManagedMatrixSession>,
     secrets: super::super::register::RegisterCompleteSecrets,
-) -> Result<MatrixLoginIdentity, MatrixAuthCommandError> {
+) -> Result<(MatrixLoginIdentity, u64), MatrixAuthCommandError> {
     let homeserver_url = normalize_homeserver_url(&secrets.homeserver_url)
         .map_err(map_register_auth_error)?
         .into_string();
@@ -366,15 +383,17 @@ pub(super) async fn install_session_from_register_secrets(
         selected_room_key_import: None,
         next_room_key_import_selection_id: 0,
     });
-    Ok(identity)
+    Ok((identity, session_generation))
 }
 
+/// SNC-P3.2 — forward the existing read-only React session snapshot through
+/// the managed Core. The desktop session owner remains private to every other
+/// command; only this command consumes Core's stable envelope response.
 #[tauri::command]
 pub async fn matrix_session_snapshot(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<MatrixSessionSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    Ok(snapshot(session.as_ref()))
+    crate::bridge::session_lifecycle::session_snapshot(core.inner().as_ref()).await
 }
 
 #[tauri::command]
@@ -407,9 +426,17 @@ pub async fn matrix_crypto_status(
 pub async fn matrix_logout(
     app: AppHandle,
     state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<MatrixSessionSnapshot, MatrixAuthCommandError> {
     let mut session = state.session.lock().await;
     let Some(active) = session.as_ref() else {
+        // A repeated logout must also clear any stale Core projection left by
+        // a prior partial lifecycle failure. Release the desktop mutex first.
+        drop(session);
+        crate::bridge::session_lifecycle::close_after_desktop_session_removal(
+            core.inner().as_ref(),
+        )
+        .await?;
         return Ok(MatrixSessionSnapshot::LoggedOut);
     };
 
@@ -433,6 +460,11 @@ pub async fn matrix_logout(
     let remove_result = remove_active_identity(&app_data_root(&app)?);
     let _ = clear_frontend_session_envelope();
     *session = None;
+    // The desktop session is now gone. Release its async mutex before Core's
+    // await and close Core before reporting deferred non-session cleanup errors.
+    drop(session);
+    crate::bridge::session_lifecycle::close_after_desktop_session_removal(core.inner().as_ref())
+        .await?;
     clear_result?;
     remove_result?;
     Ok(MatrixSessionSnapshot::LoggedOut)
@@ -442,6 +474,7 @@ pub async fn matrix_logout(
 pub async fn matrix_restore_session(
     app: AppHandle,
     state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<MatrixLoginIdentity, MatrixAuthCommandError> {
     let mut session = state.session.lock().await;
     if let Some(active) = session.as_ref() {
@@ -507,6 +540,13 @@ pub async fn matrix_restore_session(
         selected_room_key_import: None,
         next_room_key_import_selection_id: 0,
     });
+    drop(session);
+    crate::bridge::session_lifecycle::open_after_desktop_session_install(
+        core.inner().as_ref(),
+        &identity,
+        session_generation,
+    )
+    .await?;
     Ok(identity)
 }
 
@@ -645,18 +685,6 @@ pub(super) fn map_room_join_rule_owner_error(
         "Native Matrix room join-rule updates are unavailable.",
         diagnostic_id,
     )
-}
-
-pub(super) fn snapshot(session: Option<&ManagedMatrixSession>) -> MatrixSessionSnapshot {
-    match session {
-        None => MatrixSessionSnapshot::LoggedOut,
-        Some(active) => MatrixSessionSnapshot::LoggedIn {
-            user_id: active.identity.user_id.clone(),
-            device_id: active.identity.device_id.clone(),
-            homeserver_url: active.identity.homeserver_url.clone(),
-            session_generation: active.sync.session_generation(),
-        },
-    }
 }
 
 pub(super) async fn build_client(
