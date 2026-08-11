@@ -23,6 +23,12 @@ pub struct TimelineMediaSource {
 }
 
 /// Session-generation-scoped mapping from timeline item to opaque handles.
+///
+/// SNC-P1-5c: this type is now public API at the synara-core crate root via
+/// the timeline re-exports, which makes clippy's `len_without_is_empty` fire;
+/// no `is_empty` consumer ever existed (same allowance as room_list
+/// `InviteAvatarHandles`).
+#[allow(clippy::len_without_is_empty)]
 pub struct TimelineMediaRegistry {
     session_generation: u64,
     stream_id: String,

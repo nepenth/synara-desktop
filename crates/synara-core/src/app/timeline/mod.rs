@@ -29,9 +29,6 @@ mod registry;
 mod utd;
 mod view;
 
-#[cfg(test)]
-mod live_synapse_proof;
-
 pub use actions::{
     format_forwarded_media_body, format_forwarded_plain_body, should_attach_formatted_body,
     NativeTimelineActionKind, NativeTimelineActionReadback, NativeTimelineCallDeclineRequest,
@@ -63,14 +60,15 @@ pub use projection::{reconstruct, TimelineProjection};
 pub use registry::{TimelineEntry, TimelineKey, TimelineLifecycle, TimelineRegistry};
 pub use utd::{UtdEntry, UtdIndex, UtdPhase, UtdReasonCode, UtdUpdate, MAX_UTD_ENTRIES};
 pub use view::{
-    project_event_row, project_event_row_base, project_timeline_diffs,
+    project_event_row, project_event_row_base, project_formatted_body,
+    project_message_type_and_media, project_poll_answers, project_timeline_diffs,
     project_timeline_diffs_with_media, project_timeline_item, project_timeline_item_with_media,
     TimelineCallRow, TimelineEncryptedUnavailableRow, TimelineEventRowBase, TimelineMediaHandle,
     TimelineMembershipRow, TimelineMessageRow, TimelineOtherRow, TimelinePageState,
-    TimelinePaginationState, TimelinePollRow, TimelineReaction, TimelineReadState,
-    TimelineRedactedRow, TimelineReplyPreview, TimelineRowCapabilities, TimelineStateRow,
-    TimelineThreadSummary, TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewDeltaOp,
-    TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot,
+    TimelinePaginationState, TimelinePollAnswer, TimelinePollRow, TimelineReaction,
+    TimelineReadState, TimelineRedactedRow, TimelineReplyPreview, TimelineRowCapabilities,
+    TimelineStateRow, TimelineThreadSummary, TimelineViewCapabilities, TimelineViewDeltaBatch,
+    TimelineViewDeltaOp, TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot,
     NATIVE_TIMELINE_VIEW_UPDATED_EVENT, TIMELINE_VIEW_SCHEMA_VERSION,
 };
 
@@ -100,6 +98,3 @@ pub fn matrix_timeline_markers() -> &'static str {
     );
     MATRIX_TIMELINE_MARKER
 }
-
-#[cfg(test)]
-mod tests;

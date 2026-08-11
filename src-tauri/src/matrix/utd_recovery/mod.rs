@@ -17,8 +17,8 @@
 
 pub use synara_core::app::utd_recovery::{
     matrix_utd_recovery_markers, UtdRecoveryCoordinator, UtdRecoveryError, UtdRecoveryKind,
-    UtdRecoveryPhase, UtdRecoverySession, MAX_EVENT_IDS_PER_BATCH, MAX_ROOM_SESSIONS,
-    MATRIX_UTD_RECOVERY_MARKER,
+    UtdRecoveryPhase, UtdRecoverySession, MATRIX_UTD_RECOVERY_MARKER, MAX_EVENT_IDS_PER_BATCH,
+    MAX_ROOM_SESSIONS,
 };
 
 #[cfg(test)]

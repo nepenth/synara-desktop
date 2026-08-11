@@ -327,7 +327,7 @@ fn project_event_row_for_user(
 
 /// Project SDK-sanitized Matrix HTML when present and distinct from plain text.
 /// Project poll answer options with counts only (no voter user IDs over IPC).
-fn project_poll_answers(
+pub fn project_poll_answers(
     answers: impl IntoIterator<Item = (String, String)>,
     votes: &HashMap<String, Vec<String>>,
     own_user_id: Option<&str>,
@@ -349,7 +349,7 @@ fn project_poll_answers(
         .collect()
 }
 
-fn project_formatted_body(msgtype: &MessageType) -> Option<String> {
+pub fn project_formatted_body(msgtype: &MessageType) -> Option<String> {
     let formatted = match msgtype {
         MessageType::Text(content) => content.formatted.as_ref(),
         MessageType::Notice(content) => content.formatted.as_ref(),
@@ -370,7 +370,7 @@ fn project_formatted_body(msgtype: &MessageType) -> Option<String> {
     Some(html.to_owned())
 }
 
-fn project_message_type_and_media(
+pub fn project_message_type_and_media(
     item_id: &str,
     msgtype: &MessageType,
     media_registry: Option<&mut TimelineMediaRegistry>,
