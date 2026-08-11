@@ -6,8 +6,12 @@
 
 use std::sync::{Arc, Mutex};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
+use crate::app::auth::{
+    discover_login_flows, login_flows_response, AuthError, HttpLoginFlowTransport,
+    MatrixLoginFlowsResponse,
+};
 use crate::dto::SessionSnapshot;
 use crate::platform::Platform;
 use crate::transport::{
@@ -44,6 +48,16 @@ impl From<Option<SessionSnapshot>> for MatrixSessionSnapshotResponse {
             },
         }
     }
+}
+
+/// Exact React/Tauri envelope payload for `matrix_login_flows`.
+///
+/// The renderer sends the camel-case `homeserverUrl` key; unknown keys are
+/// rejected so accidental credential fields do not cross this boundary.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixLoginFlowsRequest {
+    homeserver_url: String,
 }
 
 /// Internal state passed to command handlers. It never carries shell types.
@@ -150,6 +164,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_session_snapshot", matrix_session_snapshot)
         .expect("built-in matrix_session_snapshot must remain in the command census");
     registry
+        .register("matrix_login_flows", matrix_login_flows)
+        .expect("built-in matrix_login_flows must remain in the command census");
+    registry
 }
 
 fn matrix_session_snapshot(state: Arc<CoreState>, _request: CommandEnvelope) -> CommandFuture {
@@ -158,6 +175,36 @@ fn matrix_session_snapshot(state: Arc<CoreState>, _request: CommandEnvelope) -> 
         serde_json::to_value(response)
             .map_err(|_| core_state_error("p2-session-snapshot-serialization-failed"))
     })
+}
+
+fn matrix_login_flows(_state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixLoginFlowsRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-login-flows-invalid-payload"))?;
+        let transport = HttpLoginFlowTransport::new().map_err(auth_transport_error)?;
+        let result = discover_login_flows(&payload.homeserver_url, &transport)
+            .await
+            .map_err(auth_transport_error)?;
+        let response: MatrixLoginFlowsResponse = login_flows_response(result.flows);
+        serde_json::to_value(response)
+            .map_err(|_| core_state_error("p2-login-flows-serialization-failed"))
+    })
+}
+
+/// Convert the credential-free auth domain's static diagnostics into the
+/// versioned core transport error shape. Never attach input URLs, HTTP bodies,
+/// credentials, tokens, or a raw library error.
+fn auth_transport_error(error: AuthError) -> MatrixIpcError {
+    let mut transport =
+        MatrixIpcError::new(error.category()).with_diagnostic(error.diagnostic_id());
+    if let AuthError::RateLimited {
+        retry_after_ms: Some(retry_after_ms),
+        ..
+    } = error
+    {
+        transport = transport.with_retry_after_ms(retry_after_ms);
+    }
+    transport
 }
 
 fn core_state_error(diagnostic_id: &'static str) -> MatrixIpcError {
@@ -242,7 +289,10 @@ mod tests {
     #[tokio::test]
     async fn default_registry_dispatches_matrix_session_snapshot() {
         let core = Core::new(Arc::new(TestPlatform));
-        assert_eq!(core.registered_commands(), vec!["matrix_session_snapshot"]);
+        assert_eq!(
+            core.registered_commands(),
+            vec!["matrix_login_flows", "matrix_session_snapshot"]
+        );
 
         let request = CommandEnvelope {
             command: "matrix_session_snapshot".into(),
@@ -266,6 +316,108 @@ mod tests {
                 "sessionGeneration":1,
             })
         );
+    }
+
+    async fn serve_login_flows_once(listener: &tokio::net::TcpListener) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let (mut socket, _) = listener.accept().await.expect("accept login-flow request");
+        let mut request = [0_u8; 2048];
+        let read = socket
+            .read(&mut request)
+            .await
+            .expect("read login-flow request");
+        assert!(
+            std::str::from_utf8(&request[..read])
+                .expect("HTTP request is text")
+                .starts_with("GET /_matrix/client/v3/login "),
+            "handler must request only the login-types endpoint"
+        );
+        let body = r#"{"flows":[{"type":"m.login.password"},{"type":"m.login.token","get_login_token":true},{"type":"m.login.application_service"},{"type":"m.login.custom"}]}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        socket
+            .write_all(response.as_bytes())
+            .await
+            .expect("write login-flow response");
+    }
+
+    #[tokio::test]
+    async fn core_login_flows_uses_exact_react_payload_and_response_json() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind login-flow server");
+        let address = listener.local_addr().expect("login-flow address");
+        let server = tokio::spawn(async move { serve_login_flows_once(&listener).await });
+        let core = Core::new(Arc::new(TestPlatform));
+
+        let response = core
+            .command(CommandEnvelope {
+                command: "matrix_login_flows".into(),
+                session_generation: 1,
+                request_id: Some("login-flows-fixture".into()),
+                payload: serde_json::json!({
+                    "homeserverUrl": format!("http://{address}"),
+                }),
+            })
+            .await
+            .expect("login-flow handler succeeds");
+
+        assert_eq!(
+            response.payload,
+            serde_json::json!({
+                "flows": [
+                    {"kind":"password","matrixType":"m.login.password"},
+                    {"kind":"token","matrixType":"m.login.token","getLoginToken":true},
+                    {"kind":"application_service","matrixType":"m.login.application_service"},
+                    {"kind":"unknown","matrixType":"m.login.custom"},
+                ]
+            })
+        );
+        server.await.expect("login-flow server task");
+    }
+
+    #[tokio::test]
+    async fn core_login_flows_rejects_malformed_missing_and_unsafe_input_privately() {
+        let core = Core::new(Arc::new(TestPlatform));
+        for payload in [
+            serde_json::Value::Null,
+            serde_json::json!({"homeserver_url":"https://not-the-react-key.invalid"}),
+        ] {
+            let error = core
+                .command(CommandEnvelope {
+                    command: "matrix_login_flows".into(),
+                    session_generation: 1,
+                    request_id: None,
+                    payload,
+                })
+                .await
+                .expect_err("malformed or missing payload must fail closed");
+            assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+            assert_eq!(
+                error.diagnostic_id.as_deref(),
+                Some("p2-login-flows-invalid-payload")
+            );
+        }
+
+        let unsafe_url = "https://private.example.invalid/../must-not-appear";
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_login_flows".into(),
+                session_generation: 1,
+                request_id: None,
+                payload: serde_json::json!({"homeserverUrl": unsafe_url}),
+            })
+            .await
+            .expect_err("unsafe homeserver must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p3.1-invalid-homeserver-url")
+        );
+        assert!(!format!("{error:?}").contains(unsafe_url));
     }
 
     #[tokio::test]

@@ -6039,10 +6039,12 @@ dependencies = [
  "getrandom 0.3.4",
  "matrix-sdk",
  "matrix-sdk-ui",
+ "reqwest",
  "serde",
  "serde_json",
  "tokio",
  "uniffi",
+ "url",
 ]
 
 [[package]]

@@ -5,6 +5,7 @@
 //! via `git mv` + path corrections; behavior is identical to the pre-move
 //! src-tauri/`crate::matrix::*` surfaces, which re-export this module.
 
+pub mod auth;
 pub mod room_list;
 pub mod sync;
 pub mod timeline;

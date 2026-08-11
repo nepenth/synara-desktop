@@ -7,35 +7,8 @@ use crate::desktop_session_store::{
 };
 use matrix_sdk::authentication::AuthSession;
 
-/// V-AUTH.3 — privacy-safe login-flow DTO (no secrets; discovery only).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixLoginFlowDto {
-    /// Synara kind discriminator (`password`, `token`, `application_service`, `unknown`).
-    pub kind: String,
-    /// Original Matrix type string (`m.login.password`, custom types, …).
-    pub matrix_type: String,
-    /// Token flow: homeserver supports `get_login_token` (when known).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub get_login_token: Option<bool>,
-}
-
-impl MatrixLoginFlowDto {
-    pub(super) fn from_domain(flow: LoginFlow) -> Self {
-        Self {
-            kind: flow.kind.as_str().to_owned(),
-            matrix_type: flow.matrix_type,
-            get_login_token: flow.get_login_token,
-        }
-    }
-}
-
-/// V-AUTH.3 — login-flow discovery response for the product UI.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixLoginFlowsResponse {
-    pub flows: Vec<MatrixLoginFlowDto>,
-}
+/// V-AUTH.3 desktop compatibility re-exports for the shared command response.
+pub use synara_core::app::auth::{MatrixLoginFlowDto, MatrixLoginFlowsResponse};
 
 /// V-AUTH.3 — discover homeserver login flows (unauthenticated CS `GET /login`).
 ///
@@ -45,17 +18,14 @@ pub struct MatrixLoginFlowsResponse {
 pub async fn matrix_login_flows(
     homeserver_url: String,
 ) -> Result<MatrixLoginFlowsResponse, MatrixAuthCommandError> {
-    let transport = HttpLoginFlowTransport::new().map_err(map_login_flows_auth_error)?;
+    let transport = HttpLoginFlowTransport::new_with_user_agent(
+        crate::matrix::client_builder::default_user_agent(),
+    )
+    .map_err(map_login_flows_auth_error)?;
     let result = discover_login_flows(&homeserver_url, &transport)
         .await
         .map_err(map_login_flows_auth_error)?;
-    Ok(MatrixLoginFlowsResponse {
-        flows: result
-            .flows
-            .into_iter()
-            .map(MatrixLoginFlowDto::from_domain)
-            .collect(),
-    })
+    Ok(synara_core::app::auth::login_flows_response(result.flows))
 }
 
 #[tauri::command]

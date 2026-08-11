@@ -234,10 +234,7 @@ fn matrix_login_flows_dto_is_privacy_safe_and_maps_domain_flows() {
         LoginFlow::from_matrix_parts("m.login.sso", None),
     ];
     let response = MatrixLoginFlowsResponse {
-        flows: flows
-            .into_iter()
-            .map(MatrixLoginFlowDto::from_domain)
-            .collect(),
+        flows: flows.into_iter().map(MatrixLoginFlowDto::from).collect(),
     };
     assert_eq!(response.flows[0].kind, "password");
     assert_eq!(response.flows[0].matrix_type, "m.login.password");
