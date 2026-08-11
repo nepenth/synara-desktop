@@ -8,6 +8,7 @@
 pub mod app;
 
 pub mod dto;
+pub mod platform;
 
 pub mod task;
 
