@@ -64,7 +64,9 @@ pub mod cross_signing;
 pub mod crypto_store;
 pub mod devices;
 pub mod diagnostics;
-pub mod dto;
+// SNC-P1-2: matrix/dto moved into crates/synara-core; re-export so all
+// `crate::matrix::dto::…` paths keep resolving (path-only, no behavior change).
+pub use synara_core::dto;
 pub mod ipc;
 pub mod legacy;
 pub mod lifecycle;

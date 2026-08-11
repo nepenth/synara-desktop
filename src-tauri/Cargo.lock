@@ -5850,6 +5850,7 @@ dependencies = [
  "serde_json",
  "sha1",
  "sha2",
+ "synara-core",
  "tauri",
  "tauri-build",
  "tauri-plugin-clipboard-manager",
@@ -5864,6 +5865,13 @@ dependencies = [
  "url",
  "webkit2gtk",
  "zeroize",
+]
+
+[[package]]
+name = "synara-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
