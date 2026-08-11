@@ -694,20 +694,54 @@ pub(super) fn snapshot(session: Option<&ManagedMatrixSession>) -> MatrixSessionS
     }
 }
 
+fn map_store_migration_error(error: StoreMigrationError) -> MatrixAuthCommandError {
+    MatrixAuthCommandError::unavailable(error.diagnostic_id())
+}
+
+fn map_store_key_vault_error(error: StoreKeyVaultError) -> MatrixAuthCommandError {
+    let diagnostic_id = match error {
+        StoreKeyVaultError::BackendUnavailable { .. } => "p3.2-login-store-locked",
+        StoreKeyVaultError::CorruptPayload => "p3.2-login-store-reset-required",
+        StoreKeyVaultError::NotFound | StoreKeyVaultError::Encoding => {
+            "p3.2-login-store-open-failed"
+        }
+    };
+    MatrixAuthCommandError::unavailable(diagnostic_id)
+}
+
+fn map_store_client_build_error(error: ClientBuilderError) -> MatrixAuthCommandError {
+    let diagnostic_id = match error.to_factory_error().category {
+        crate::matrix::ipc::MatrixIpcErrorCategory::StoreLocked => "p3.2-login-store-locked",
+        crate::matrix::ipc::MatrixIpcErrorCategory::StoreUnavailable
+        | crate::matrix::ipc::MatrixIpcErrorCategory::StoreCorrupt => {
+            "p3.2-login-store-open-failed"
+        }
+        _ => "p3.2-login-store-open-failed",
+    };
+    MatrixAuthCommandError::unavailable(diagnostic_id)
+}
+
 pub(super) async fn build_client(
     app_data_root: &Path,
     identity: AccountIdentity,
 ) -> Result<Client, MatrixAuthCommandError> {
-    let store_key = get_or_create_store_key(
-        &KeyringStoreKeyVault::new(),
-        &StoreKeyId::from_identity(&identity),
-    )
-    .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-store-key-unavailable"))?;
+    // Run deterministic revision migrations before the SDK opens encrypted
+    // SQLite. A corrupt/ahead/missing migration chain is a reset *decision*,
+    // never an automatic wipe; only the static safe diagnostic crosses IPC.
+    let store_paths = StorePaths::derive(app_data_root, &identity)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed"))?;
+    migrate_store_to_current(&store_paths).map_err(map_store_migration_error)?;
+
+    // Revision-aware Keychain/Secret-Service lookup copies an existing future
+    // legacy key forward before generating anything. It never rotates/deletes a
+    // key implicitly. A locked credential store stays fail-closed.
+    let store_key = get_or_migrate_store_key(&KeyringStoreKeyVault::new(), &identity)
+        .map_err(map_store_key_vault_error)?;
     let config = ClientBuildConfig::product_default(app_data_root, identity, Some(store_key))
-        .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-client-config-failed"))?;
+        .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed"))?;
     build_unauthenticated_client(&config)
         .await
-        .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-client-build-failed"))
+        .map_err(map_store_client_build_error)
 }
 
 /// Ephemeral unauthenticated client for password-reset (no product session, no keyring key).
@@ -1022,5 +1056,45 @@ mod tests {
         // Fail-closed messages never echo token material.
         assert!(!error.message.contains("syt-oauth"));
         assert!(!error.message.contains("refresh"));
+    }
+
+    #[test]
+    fn store_recovery_maps_only_static_login_diagnostics() {
+        let reset = map_store_migration_error(StoreMigrationError::CorruptManifest);
+        assert_eq!(reset.diagnostic_id, "p3.2-login-store-reset-required");
+        let migration = map_store_migration_error(StoreMigrationError::RevisionAhead {
+            observed: 2,
+            known: 1,
+        });
+        assert_eq!(
+            migration.diagnostic_id,
+            "p3.2-login-store-migration-required"
+        );
+        let failed =
+            map_store_migration_error(StoreMigrationError::StepFailed { step_id: "r2-test" });
+        assert_eq!(failed.diagnostic_id, "p3.2-login-store-migration-failed");
+
+        let locked = map_store_key_vault_error(StoreKeyVaultError::BackendUnavailable {
+            diagnostic_id: "r0.4-keyring-platform-failure",
+        });
+        assert_eq!(locked.diagnostic_id, "p3.2-login-store-locked");
+        let corrupt = map_store_key_vault_error(StoreKeyVaultError::CorruptPayload);
+        assert_eq!(corrupt.diagnostic_id, "p3.2-login-store-reset-required");
+    }
+
+    #[test]
+    fn sdk_store_build_errors_preserve_locked_vs_open_failed_boundary() {
+        let locked = map_store_client_build_error(ClientBuilderError::SdkBuild {
+            category: crate::matrix::ipc::MatrixIpcErrorCategory::StoreLocked,
+            diagnostic_id: "p2.3-sdk-build-store-locked",
+            message: "store is locked".into(),
+        });
+        assert_eq!(locked.diagnostic_id, "p3.2-login-store-locked");
+        let unavailable = map_store_client_build_error(ClientBuilderError::SdkBuild {
+            category: crate::matrix::ipc::MatrixIpcErrorCategory::StoreUnavailable,
+            diagnostic_id: "p2.3-sdk-build-store",
+            message: "store initialization failed".into(),
+        });
+        assert_eq!(unavailable.diagnostic_id, "p3.2-login-store-open-failed");
     }
 }

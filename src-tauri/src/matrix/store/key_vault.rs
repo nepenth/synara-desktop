@@ -9,7 +9,8 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use super::key_material::{StoreKeyId, StoreKeyMaterial, STORE_KEY_LEN};
+use super::identity::AccountIdentity;
+use super::key_material::{StoreKeyId, StoreKeyMaterial, STORE_KEY_LEN, STORE_KEY_REVISION};
 
 /// Privacy-safe vault errors (never include key bytes).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -231,6 +232,38 @@ fn map_keyring_error(error: keyring::Error) -> StoreKeyVaultError {
             diagnostic_id: "r0.4-keyring-unavailable",
         },
     }
+}
+
+/// Read the current revision key or migrate one known older Keychain/Secret
+/// Service entry forward without changing its bytes.
+///
+/// This is the key-vault half of a schema/key-revision upgrade: a future bump
+/// adds `StoreKeyId::for_revision(..., old)` mappings, and this helper copies
+/// the old key into the new ID before creating anything. It never deletes the
+/// old entry automatically; reset/key rotation remains an explicit action.
+pub fn get_or_migrate_store_key<V: StoreKeyVault + ?Sized>(
+    vault: &V,
+    identity: &AccountIdentity,
+) -> Result<StoreKeyMaterial, StoreKeyVaultError> {
+    let current = StoreKeyId::from_identity(identity);
+    if let Some(key) = vault.get(&current)? {
+        return Ok(key);
+    }
+
+    for revision in (1..STORE_KEY_REVISION).rev() {
+        let Some(legacy) = StoreKeyId::for_revision(identity, revision) else {
+            continue;
+        };
+        if legacy == current {
+            continue;
+        }
+        if let Some(key) = vault.get(&legacy)? {
+            vault.set(&current, &key)?;
+            return Ok(key);
+        }
+    }
+
+    get_or_create_store_key(vault, &current)
 }
 
 /// Get-or-create helper: never deletes store dirs on vault miss.

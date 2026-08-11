@@ -81,17 +81,36 @@ pub struct StoreKeyId {
     account: String,
 }
 
-/// Credential service name for Matrix store encryption keys (native only).
-pub const STORE_KEY_SERVICE: &str = "com.whylandcreative.synara.desktop.matrix-store-key";
+/// Current Keychain/Secret-Service key identifier revision.
+///
+/// Bump only when a key-service/account derivation contract changes. The vault
+/// migrator copies an existing key forward before ever generating a new one.
+pub const STORE_KEY_REVISION: u32 = 1;
+/// Revision-one credential service name for Matrix store encryption keys.
+pub const STORE_KEY_SERVICE_V1: &str = "com.whylandcreative.synara.desktop.matrix-store-key";
+/// Current credential service name (kept as a compatibility alias).
+pub const STORE_KEY_SERVICE: &str = STORE_KEY_SERVICE_V1;
 
 impl StoreKeyId {
-    /// Derive a deterministic keyring id from account identity.
+    /// Derive the current deterministic keyring id from account identity.
     pub fn from_identity(identity: &AccountIdentity) -> Self {
-        let account = format!("store-key:{}", identity.account_dir_segment());
-        Self {
-            service: STORE_KEY_SERVICE.to_owned(),
-            account,
-        }
+        Self::for_revision(identity, STORE_KEY_REVISION)
+            .expect("current StoreKey revision must have a service mapping")
+    }
+
+    /// Derive a known historical/current credential id for an explicit revision.
+    ///
+    /// This intentionally returns `None` for unknown revisions: callers fail
+    /// closed rather than guessing a Keychain service/account name.
+    pub fn for_revision(identity: &AccountIdentity, revision: u32) -> Option<Self> {
+        let service = match revision {
+            1 => STORE_KEY_SERVICE_V1,
+            _ => return None,
+        };
+        Some(Self {
+            service: service.to_owned(),
+            account: format!("store-key:{}", identity.account_dir_segment()),
+        })
     }
 
     pub fn service(&self) -> &str {

@@ -87,7 +87,14 @@ fn map_build_error(err: matrix_sdk::ClientBuildError) -> ClientBuilderError {
 
 fn classify_build_error(message: &str) -> (MatrixIpcErrorCategory, &'static str) {
     let lower = message.to_ascii_lowercase();
-    if lower.contains("store") || lower.contains("sqlite") || lower.contains("io") {
+    // Check lock before generic store words: CrossProcessLock/keychain lock
+    // failures often include both and should be retry/unlock actionable.
+    if lower.contains("lock") && (lower.contains("store") || lower.contains("sqlite")) {
+        (
+            MatrixIpcErrorCategory::StoreLocked,
+            "p2.3-sdk-build-store-locked",
+        )
+    } else if lower.contains("store") || lower.contains("sqlite") || lower.contains("io") {
         (
             MatrixIpcErrorCategory::StoreUnavailable,
             "p2.3-sdk-build-store",
@@ -113,6 +120,7 @@ fn classify_build_error(message: &str) -> (MatrixIpcErrorCategory, &'static str)
 /// Bounded, non-sensitive public message for SDK build failures.
 fn safe_build_message(diagnostic_id: &str) -> &'static str {
     match diagnostic_id {
+        "p2.3-sdk-build-store-locked" => "store is locked",
         "p2.3-sdk-build-store" => "store initialization failed",
         "p2.3-sdk-build-network" => "network configuration failed",
         "p2.3-sdk-build-homeserver" => "homeserver configuration failed",
@@ -142,5 +150,15 @@ mod privacy_tests {
         assert_eq!(id2, "p2.3-sdk-build-network");
         assert_eq!(cat2, MatrixIpcErrorCategory::Connectivity);
         assert_eq!(safe_build_message(id2), "network configuration failed");
+    }
+
+    #[test]
+    fn local_store_lock_is_distinct_before_generic_store_classification() {
+        let (category, id) = classify_build_error(
+            "sqlite store lock held at /Users/alice/Library/Application Support/Synara/matrix",
+        );
+        assert_eq!(category, MatrixIpcErrorCategory::StoreLocked);
+        assert_eq!(id, "p2.3-sdk-build-store-locked");
+        assert_eq!(safe_build_message(id), "store is locked");
     }
 }
