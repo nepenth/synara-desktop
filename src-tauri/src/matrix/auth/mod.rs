@@ -67,13 +67,16 @@ pub use product::{
     MatrixAuthCommandError, MatrixAuthState, MatrixLoginIdentity, MatrixSessionSnapshot,
 };
 pub use register::{
-    probe_register_flows, register_ephemeral_user_id, register_submit,
-    request_register_email_token, RegisterAuthStage, RegisterFlowsProbe, RegisterSubmitOutcome,
-    RegisterUiaChallenge, RegisterUiaFlow, SUPPORTED_REGISTER_STAGES,
+    register_ephemeral_user_id, register_submit, request_register_email_token, RegisterAuthStage,
+    RegisterSubmitOutcome, RegisterUiaChallenge,
 };
 pub use reset_password::{
     complete_password_reset, password_reset_ephemeral_user_id, request_password_email_token,
     PasswordEmailTokenResult, PasswordResetOutcome,
+};
+/// Desktop compatibility re-exports for the shared read-only registration probe.
+pub use synara_core::app::auth::{
+    probe_register_flows, RegisterFlowsProbe, RegisterUiaFlow, SUPPORTED_REGISTER_STAGES,
 };
 pub use uia::{
     UiaFlowKind, UiaOutcome, UiaPhase, UiaSession, UiaStage, UiaStageKind, MAX_UIA_ID_CHARS,

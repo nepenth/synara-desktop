@@ -9,8 +9,9 @@ use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 
 use crate::app::auth::{
-    discover_login_flows, login_flows_response, AuthError, HttpLoginFlowTransport,
-    MatrixLoginFlowsResponse,
+    discover_login_flows, login_flows_response, probe_register_flows, AuthError,
+    HttpLoginFlowTransport, HttpRegisterFlowTransport, MatrixLoginFlowsResponse,
+    RegisterFlowsProbe,
 };
 use crate::dto::SessionSnapshot;
 use crate::platform::Platform;
@@ -57,6 +58,17 @@ impl From<Option<SessionSnapshot>> for MatrixSessionSnapshotResponse {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct MatrixLoginFlowsRequest {
+    homeserver_url: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_register_flows`.
+///
+/// This read-only probe accepts exactly the existing camel-case homeserver
+/// field and rejects all credential or UIAA-continuation fields at the core
+/// boundary.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRegisterFlowsRequest {
     homeserver_url: String,
 }
 
@@ -167,6 +179,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_login_flows", matrix_login_flows)
         .expect("built-in matrix_login_flows must remain in the command census");
     registry
+        .register("matrix_register_flows", matrix_register_flows)
+        .expect("built-in matrix_register_flows must remain in the command census");
+    registry
 }
 
 fn matrix_session_snapshot(state: Arc<CoreState>, _request: CommandEnvelope) -> CommandFuture {
@@ -188,6 +203,20 @@ fn matrix_login_flows(_state: Arc<CoreState>, request: CommandEnvelope) -> Comma
         let response: MatrixLoginFlowsResponse = login_flows_response(result.flows);
         serde_json::to_value(response)
             .map_err(|_| core_state_error("p2-login-flows-serialization-failed"))
+    })
+}
+
+fn matrix_register_flows(_state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRegisterFlowsRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-register-flows-invalid-payload"))?;
+        let transport = HttpRegisterFlowTransport::new().map_err(auth_transport_error)?;
+        let response: RegisterFlowsProbe =
+            probe_register_flows(&payload.homeserver_url, &transport)
+                .await
+                .map_err(auth_transport_error)?;
+        serde_json::to_value(response)
+            .map_err(|_| core_state_error("p2-register-flows-serialization-failed"))
     })
 }
 
@@ -291,7 +320,11 @@ mod tests {
         let core = Core::new(Arc::new(TestPlatform));
         assert_eq!(
             core.registered_commands(),
-            vec!["matrix_login_flows", "matrix_session_snapshot"]
+            vec![
+                "matrix_login_flows",
+                "matrix_register_flows",
+                "matrix_session_snapshot",
+            ]
         );
 
         let request = CommandEnvelope {
@@ -420,6 +453,226 @@ mod tests {
         assert!(!format!("{error:?}").contains(unsafe_url));
     }
 
+    async fn serve_register_flows_once(
+        listener: &tokio::net::TcpListener,
+        status: u16,
+        body: &'static str,
+    ) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let (mut socket, _) = listener
+            .accept()
+            .await
+            .expect("accept registration-flow request");
+        let mut request = [0_u8; 4096];
+        let read = socket
+            .read(&mut request)
+            .await
+            .expect("read registration-flow request");
+        let request = std::str::from_utf8(&request[..read]).expect("HTTP request is text");
+        let (headers, request_body) = request
+            .split_once("\r\n\r\n")
+            .expect("registration request has headers and body");
+        assert!(
+            headers.starts_with("POST /_matrix/client/v3/register "),
+            "handler must request only the empty registration-probe endpoint"
+        );
+        let headers_lower = headers.to_ascii_lowercase();
+        assert!(headers_lower.contains("content-type: application/json"));
+        assert_eq!(request_body, "{}", "probe must use only an empty JSON body");
+        for forbidden in [
+            "authorization:",
+            "access_token",
+            "refresh_token",
+            "password",
+            "registration_token",
+            "client_secret",
+            "captcha",
+            "threepid",
+            "session",
+        ] {
+            assert!(
+                !request.to_ascii_lowercase().contains(forbidden),
+                "registration probe request must not contain {forbidden}"
+            );
+        }
+
+        let reason = match status {
+            200 => "OK",
+            400 => "Bad Request",
+            401 => "Unauthorized",
+            403 => "Forbidden",
+            429 => "Too Many Requests",
+            _ => "Error",
+        };
+        let response = format!(
+            "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        socket
+            .write_all(response.as_bytes())
+            .await
+            .expect("write registration-flow response");
+    }
+
+    async fn core_register_flows_request(
+        address: std::net::SocketAddr,
+    ) -> Result<CommandResponseEnvelope, MatrixIpcError> {
+        Core::new(Arc::new(TestPlatform))
+            .command(CommandEnvelope {
+                command: "matrix_register_flows".into(),
+                session_generation: 1,
+                request_id: Some("register-flows-fixture".into()),
+                payload: serde_json::json!({
+                    "homeserverUrl": format!("http://{address}"),
+                }),
+            })
+            .await
+    }
+
+    #[tokio::test]
+    async fn core_register_flows_uses_exact_react_wire_fixtures_and_empty_post() {
+        const FLOW_REQUIRED_UIAA: &str = r#"{
+            "flows":[
+                {"stages":["m.login.terms","m.login.dummy"]},
+                {"stages":["m.login.registration_token"]}
+            ],
+            "completed":["m.login.terms"],
+            "params":{"m.login.terms":{"policies":[]}},
+            "session":"opaque-uia-session"
+        }"#;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind registration-flow server");
+        let address = listener.local_addr().expect("registration-flow address");
+        let server = tokio::spawn(async move {
+            serve_register_flows_once(&listener, 401, FLOW_REQUIRED_UIAA).await;
+        });
+
+        let response = core_register_flows_request(address)
+            .await
+            .expect("registration UIAA probe succeeds");
+        assert_eq!(
+            response.payload,
+            serde_json::json!({
+                "status":"flow_required",
+                "session":"opaque-uia-session",
+                "flows":[
+                    {"stages":["m.login.terms","m.login.dummy"]},
+                    {"stages":["m.login.registration_token"]}
+                ],
+                "completed":["m.login.terms"],
+                "params":{"m.login.terms":{"policies":[]}},
+            })
+        );
+        assert_eq!(response.command, "matrix_register_flows");
+        assert_eq!(
+            response.request_id.as_deref(),
+            Some("register-flows-fixture")
+        );
+        server.await.expect("registration-flow server task");
+    }
+
+    #[tokio::test]
+    async fn core_register_flows_preserves_all_non_uia_probe_wire_variants() {
+        for (status, expected) in [
+            (200, serde_json::json!({"status":"invalid_request"})),
+            (400, serde_json::json!({"status":"invalid_request"})),
+            (403, serde_json::json!({"status":"registration_disabled"})),
+            (429, serde_json::json!({"status":"rate_limited"})),
+        ] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind registration-flow server");
+            let address = listener.local_addr().expect("registration-flow address");
+            let server = tokio::spawn(async move {
+                serve_register_flows_once(&listener, status, "{").await;
+            });
+
+            let response = core_register_flows_request(address)
+                .await
+                .expect("known registration-probe status has a safe wire outcome");
+            assert_eq!(response.payload, expected, "status {status}");
+            server.await.expect("registration-flow server task");
+        }
+    }
+
+    #[tokio::test]
+    async fn core_register_flows_rejects_non_react_or_sensitive_payloads_privately() {
+        let core = Core::new(Arc::new(TestPlatform));
+        for payload in [
+            serde_json::Value::Null,
+            serde_json::json!({"homeserver_url":"https://not-the-react-key.invalid"}),
+            serde_json::json!({
+                "homeserverUrl":"https://not-the-react-key.invalid",
+                "password":"must-not-cross-core",
+            }),
+            serde_json::json!({
+                "homeserverUrl":"https://not-the-react-key.invalid",
+                "session":"must-not-continue-uia",
+            }),
+        ] {
+            let error = core
+                .command(CommandEnvelope {
+                    command: "matrix_register_flows".into(),
+                    session_generation: 1,
+                    request_id: None,
+                    payload,
+                })
+                .await
+                .expect_err("malformed or sensitive probe payload must fail closed");
+            assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+            assert_eq!(
+                error.diagnostic_id.as_deref(),
+                Some("p2-register-flows-invalid-payload")
+            );
+            assert!(!format!("{error:?}").contains("must-not"));
+        }
+
+        let unsafe_url = "https://private.example.invalid/../must-not-appear";
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_register_flows".into(),
+                session_generation: 1,
+                request_id: None,
+                payload: serde_json::json!({"homeserverUrl": unsafe_url}),
+            })
+            .await
+            .expect_err("unsafe homeserver must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p3.1-invalid-homeserver-url")
+        );
+        assert!(!format!("{error:?}").contains(unsafe_url));
+    }
+
+    #[tokio::test]
+    async fn core_register_flows_malformed_uiaa_fails_closed_without_raw_body() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind registration-flow server");
+        let address = listener.local_addr().expect("registration-flow address");
+        let raw_body = r#"{"flows":"not-an-array","error":"private remote body"}"#;
+        let server = tokio::spawn(async move {
+            serve_register_flows_once(&listener, 401, raw_body).await;
+        });
+
+        let error = core_register_flows_request(address)
+            .await
+            .expect_err("malformed UIAA response must fail closed");
+        assert_eq!(
+            error.category,
+            MatrixIpcErrorCategory::UnsupportedCapability
+        );
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-register-flows-uiaa-response-invalid")
+        );
+        assert!(!format!("{error:?}").contains("private remote body"));
+        server.await.expect("registration-flow server task");
+    }
+
     #[tokio::test]
     async fn core_open_and_close_only_manage_safe_session_projection() {
         let core = Core::new(Arc::new(TestPlatform));
@@ -456,21 +709,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn known_but_unregistered_command_fails_closed_with_static_diagnostic() {
+    async fn known_but_unregistered_commands_fail_closed_with_static_diagnostic() {
         let core = Core::new(Arc::new(TestPlatform));
-        let error = core
-            .command(CommandEnvelope {
-                command: "matrix_login_password".into(),
-                session_generation: 1,
-                request_id: None,
-                payload: serde_json::Value::Null,
-            })
-            .await
-            .unwrap_err();
-        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
-        assert_eq!(
-            error.diagnostic_id.as_deref(),
-            Some("p2-command-unregistered")
-        );
+        for command in [
+            "matrix_login_password",
+            "matrix_register",
+            "matrix_register_request_email_token",
+        ] {
+            let error = core
+                .command(CommandEnvelope {
+                    command: command.into(),
+                    session_generation: 1,
+                    request_id: None,
+                    payload: serde_json::Value::Null,
+                })
+                .await
+                .expect_err("known but unregistered command must fail closed");
+            assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+            assert_eq!(
+                error.diagnostic_id.as_deref(),
+                Some("p2-command-unregistered")
+            );
+        }
     }
 }

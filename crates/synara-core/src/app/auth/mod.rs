@@ -7,11 +7,12 @@ mod error;
 mod http_transport;
 mod input;
 mod login_flow;
+mod register_flow;
 
 pub use error::AuthError;
 pub use http_transport::{
-    parse_login_types_json, HttpLoginFlowTransport, AUTH_HTTP_MAX_RESPONSE_BYTES,
-    AUTH_HTTP_TIMEOUT_SECS,
+    parse_login_types_json, HttpLoginFlowTransport, HttpRegisterFlowTransport,
+    AUTH_HTTP_MAX_RESPONSE_BYTES, AUTH_HTTP_TIMEOUT_SECS,
 };
 pub use input::{
     normalize_homeserver_url, normalize_server_name, parse_discovery_input, DiscoveryInput,
@@ -21,4 +22,8 @@ pub use login_flow::{
     discover_login_flows, login_flows_response, map_matrix_login_types, LoginFlow,
     LoginFlowDiscoveryResult, LoginFlowKind, LoginFlowTransport, MatrixLoginFlowDto,
     MatrixLoginFlowsResponse, MockLoginFlowTransport,
+};
+pub use register_flow::{
+    has_unsupported_only_register_flows, parse_register_uiaa_json, probe_register_flows,
+    RegisterFlowsProbe, RegisterFlowsTransport, RegisterUiaFlow, SUPPORTED_REGISTER_STAGES,
 };
