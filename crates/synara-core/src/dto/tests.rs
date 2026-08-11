@@ -5,10 +5,11 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Value;
 
-/// Fixture root relative to `src-tauri` package (`CARGO_MANIFEST_DIR`).
+/// Fixture root relative to this package (`CARGO_MANIFEST_DIR`). The fixtures
+/// live at the repository root under `docs/matrix-rust-sdk/dto/fixtures/`.
 fn fixture(name: &str) -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../docs/matrix-rust-sdk/dto/fixtures")
+        .join("../../docs/matrix-rust-sdk/dto/fixtures")
         .join(name);
     std::fs::read_to_string(&path).unwrap_or_else(|e| {
         panic!("failed to read fixture {}: {e}", path.display());
