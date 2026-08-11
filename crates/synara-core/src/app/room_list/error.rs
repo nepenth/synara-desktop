@@ -1,6 +1,6 @@
 //! Privacy-safe errors for room-list projection (P4.2).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Room-list snapshot/delta foundation failure.
 #[derive(Debug)]

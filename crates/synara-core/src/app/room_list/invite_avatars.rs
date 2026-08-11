@@ -33,6 +33,10 @@ pub struct InviteAvatarHandles {
     order: VecDeque<String>,
 }
 
+// Preserved as-is from src-tauri (behavior-identical, SNC-P1-5b). `len()` only
+// feeds bounded-capability tests; no `is_empty` consumer ever existed. The lint
+// only fires because room_list is now public API at the synara-core crate root.
+#[allow(clippy::len_without_is_empty)]
 impl InviteAvatarHandles {
     pub fn new(session_generation: u64) -> Self {
         Self {

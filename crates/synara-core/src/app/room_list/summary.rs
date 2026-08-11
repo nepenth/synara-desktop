@@ -4,7 +4,7 @@
 //! a sliding-sync partial-path harness lands; this module only constructs DTOs from
 //! pure product fields (no matrix-sdk types).
 
-use crate::matrix::dto::{Membership, RoomId, RoomSummary};
+use crate::dto::{Membership, RoomId, RoomSummary};
 
 /// Minimal builder for harness room rows (no tokens, no media bytes).
 #[derive(Debug, Clone)]

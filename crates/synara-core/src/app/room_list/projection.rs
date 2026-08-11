@@ -3,8 +3,8 @@
 //! Pure state machine for host/UI reconstruction tests. No network, no SDK
 //! objects. Sequence gaps and generation mismatches force resync.
 
-use crate::matrix::dto::RoomSummary;
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::dto::RoomSummary;
+use crate::transport::MatrixIpcErrorCategory;
 
 use super::delta::{RoomListDeltaBatch, RoomListDeltaOp, RoomListSnapshot};
 use super::error::RoomListError;

@@ -1,5 +1,10 @@
 //! P4.2–P4.4 — Room-list snapshot/delta, membership/unread, tag/recent semantics.
 //!
+//! SNC-P1-5b: moved from src-tauri `matrix/room_list` into the shared native
+//! core (`crates/synara-core/src/app/room_list`). src-tauri's
+//! `matrix/room_list/mod.rs` is now an adapter that re-exports this module;
+//! `room_list/tests.rs` and `product_commands.rs` stay in the desktop shell.
+//!
 //! Deterministic projection of ordered room summaries for the partial path:
 //! - product DTOs only ([`RoomSummary`]) — no SDK Room/VectorDiff on the wire
 //! - ordered delta ops with monotonic sequence + session generation
@@ -70,6 +75,3 @@ pub fn matrix_room_list_markers() -> &'static str {
     );
     MATRIX_ROOM_LIST_MARKER
 }
-
-#[cfg(test)]
-mod tests;

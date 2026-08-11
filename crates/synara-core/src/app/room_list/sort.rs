@@ -2,7 +2,7 @@
 //!
 //! Pure sorts over [`RoomSummary`] — no SDK types.
 
-use crate::matrix::dto::RoomSummary;
+use crate::dto::RoomSummary;
 
 /// Sort keys for product room lists.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -63,7 +63,7 @@ pub fn sort_rooms_in_place(rooms: &mut [RoomSummary], sort: RoomListSort) {
 pub fn recent_joined_rooms(rooms: &[RoomSummary], limit: usize) -> Vec<RoomSummary> {
     let mut joined: Vec<RoomSummary> = rooms
         .iter()
-        .filter(|r| r.membership == crate::matrix::dto::Membership::Join)
+        .filter(|r| r.membership == crate::dto::Membership::Join)
         .cloned()
         .collect();
     sort_rooms_in_place(&mut joined, RoomListSort::RecentActivity);
