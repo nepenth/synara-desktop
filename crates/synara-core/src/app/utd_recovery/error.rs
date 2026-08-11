@@ -1,6 +1,6 @@
 //! Privacy-safe errors for UTD retry / encrypted-history recovery (P8.7).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// UTD recovery flow failure.
 #[derive(Debug)]

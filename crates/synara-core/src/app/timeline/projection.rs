@@ -4,8 +4,8 @@
 //! timeline objects. Sequence gaps and generation mismatches force resync.
 //! SDK `Timeline` attach/diff mapping remains a later slice.
 
-use crate::matrix::dto::TimelineItem;
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::dto::TimelineItem;
+use crate::transport::MatrixIpcErrorCategory;
 
 use super::delta::{TimelineDeltaBatch, TimelineDeltaOp, TimelineSnapshot};
 use super::error::TimelineError;

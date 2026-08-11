@@ -1,11 +1,15 @@
-//! P5.1–P5.4 + P5.10 — Timeline registry, diffs, pagination, focus, UTD (harness).
+//! P5.1–P5.4 + P5.10 — Timeline registry, diffs, pagination, focus, UTD (src-tauri adapter).
 //!
-//! Per-room (and optional thread) timeline owners stamped with session
-//! generation, pure ordered-diff projection over Synara [`TimelineItem`] DTOs,
-//! a pagination state machine, live/unread/focused open navigation, and
-//! UTD/decryption update propagation.
-//! D0.3 adds a live SDK adapter for the product desktop session while retaining
-//! these pure foundations. No dual backend and no session keys in errors.
+//! SNC-P1-5c: the pure timeline logic now lives in the shared native core at
+//! `crates/synara-core/src/app/timeline`. This module keeps every
+//! `crate::matrix::timeline::*` path resolving with **identical behavior** by
+//! re-exporting the core items plus the desktop `live.rs` module (which stays
+//! here because it uses `tauri::AppHandle` for the React view-update stream —
+//! the P1.6 `Platform` seam will pull it into the core later).
+//!
+//! `product_commands.rs`, `tests.rs`, and `live_synapse_proof/` also stay here
+//! (Platform commands = serial product lane; tests.rs = desktop suite via
+//! `super::*`; live_synapse_proof = test-only network-proof harness).
 //!
 //! Authoritative design notes:
 //! - `docs/matrix-rust-sdk/p5.1-timeline-registry.md`
@@ -17,41 +21,35 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
-mod actions;
-mod composer;
-mod delta;
-mod error;
-mod focus;
 mod live;
-mod media;
-mod pagination;
-mod projection;
-mod registry;
-mod utd;
-mod view;
 
-#[cfg(test)]
-mod live_synapse_proof;
-
-pub use actions::{
-    format_forwarded_media_body, format_forwarded_plain_body, should_attach_formatted_body,
-    NativeTimelineActionKind, NativeTimelineActionReadback, NativeTimelineCallDeclineRequest,
-    NativeTimelineEditTextRequest, NativeTimelineForwardMediaRequest,
-    NativeTimelineForwardTextRequest, NativeTimelinePinRequest, NativeTimelinePollVoteRequest,
-    NativeTimelineRedactRequest, NativeTimelineReportRequest,
-    NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
-};
-pub use composer::{
-    reply_draft_readback, ComposerDraftRegistry, NativeComposerReplyDraft,
+pub use synara_core::app::timeline::{
+    format_forwarded_media_body, format_forwarded_plain_body, is_timeline_media_handle,
+    project_event_row, project_event_row_base, project_formatted_body,
+    project_message_type_and_media, project_poll_answers, project_timeline_diffs,
+    project_timeline_diffs_with_media, project_timeline_item, project_timeline_item_with_media,
+    reconstruct, reply_draft_readback, should_attach_formatted_body, ComposerDraftRegistry,
+    ContextWindow, DirectionStatus, FocusOpenOutcome, FocusOpenRequest, NativeComposerReplyDraft,
     NativeComposerReplyDraftReadback, NativeComposerReplyDraftRoomRequest,
-    NativeComposerSetReplyDraftRequest, NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION,
+    NativeComposerSetReplyDraftRequest, NativeTimelineActionKind, NativeTimelineActionReadback,
+    NativeTimelineCallDeclineRequest, NativeTimelineEditTextRequest,
+    NativeTimelineForwardMediaRequest, NativeTimelineForwardTextRequest, NativeTimelinePinRequest,
+    NativeTimelinePollVoteRequest, NativeTimelineRedactRequest, NativeTimelineReportRequest,
+    NavigationPhase, PaginationDirection, PaginationOutcome, PaginationPhase, PaginationRequest,
+    TimelineCallRow, TimelineDeltaBatch, TimelineDeltaOp, TimelineEncryptedUnavailableRow,
+    TimelineEntry, TimelineError, TimelineEventRowBase, TimelineFocus, TimelineKey,
+    TimelineLifecycle, TimelineMediaHandle, TimelineMediaRegistry, TimelineMediaSource,
+    TimelineMembershipRow, TimelineMessageRow, TimelineMode, TimelineOtherRow, TimelinePageState,
+    TimelinePagination, TimelinePaginationState, TimelinePollAnswer, TimelinePollRow,
+    TimelineProjection, TimelineReaction, TimelineReadState, TimelineRedactedRow, TimelineRegistry,
+    TimelineReplyPreview, TimelineRowCapabilities, TimelineSnapshot, TimelineStateRow,
+    TimelineThreadSummary, TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewDeltaOp,
+    TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot, UtdEntry, UtdIndex, UtdPhase,
+    UtdReasonCode, UtdUpdate, MAX_UTD_ENTRIES, NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION,
+    NATIVE_TIMELINE_ACTION_SCHEMA_VERSION, NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
+    TIMELINE_MEDIA_HANDLE_PREFIX, TIMELINE_VIEW_SCHEMA_VERSION,
 };
 
-pub use delta::{TimelineDeltaBatch, TimelineDeltaOp, TimelineSnapshot};
-pub use error::TimelineError;
-pub use focus::{
-    ContextWindow, FocusOpenOutcome, FocusOpenRequest, NavigationPhase, TimelineFocus, TimelineMode,
-};
 pub use live::{
     NativeDecryptionState, NativeReactionMutation, NativeReactionMutationResult,
     NativeTimelineCloseRequest, NativeTimelineDirection, NativeTimelineEventReadback,
@@ -62,28 +60,12 @@ pub use live::{
     NativeTimelineViewPaginationRequest, NativeTimelineViewportHint, NativeUtdPhase,
     NativeUtdStatus, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
 };
-pub use media::{
-    is_timeline_media_handle, TimelineMediaRegistry, TimelineMediaSource,
-    TIMELINE_MEDIA_HANDLE_PREFIX,
-};
-pub use pagination::{
-    DirectionStatus, PaginationDirection, PaginationOutcome, PaginationPhase, PaginationRequest,
-    TimelinePagination,
-};
-pub use projection::{reconstruct, TimelineProjection};
-pub use registry::{TimelineEntry, TimelineKey, TimelineLifecycle, TimelineRegistry};
-pub use utd::{UtdEntry, UtdIndex, UtdPhase, UtdReasonCode, UtdUpdate, MAX_UTD_ENTRIES};
-pub use view::{
-    project_event_row, project_event_row_base, project_timeline_diffs,
-    project_timeline_diffs_with_media, project_timeline_item, project_timeline_item_with_media,
-    TimelineCallRow, TimelineEncryptedUnavailableRow, TimelineEventRowBase, TimelineMediaHandle,
-    TimelineMembershipRow, TimelineMessageRow, TimelineOtherRow, TimelinePageState,
-    TimelinePaginationState, TimelinePollRow, TimelineReaction, TimelineReadState,
-    TimelineRedactedRow, TimelineReplyPreview, TimelineRowCapabilities, TimelineStateRow,
-    TimelineThreadSummary, TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewDeltaOp,
-    TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot,
-    NATIVE_TIMELINE_VIEW_UPDATED_EVENT, TIMELINE_VIEW_SCHEMA_VERSION,
-};
+
+#[cfg(test)]
+mod live_synapse_proof;
+
+#[cfg(test)]
+mod tests;
 
 /// Static marker for link / schema smoke.
 pub const MATRIX_TIMELINE_MARKER: &str =
@@ -111,6 +93,3 @@ pub fn matrix_timeline_markers() -> &'static str {
     );
     MATRIX_TIMELINE_MARKER
 }
-
-#[cfg(test)]
-mod tests;

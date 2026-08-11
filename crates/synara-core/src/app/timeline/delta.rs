@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::matrix::dto::TimelineItem;
+use crate::dto::TimelineItem;
 
 /// One ordered mutation against a timeline projection.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

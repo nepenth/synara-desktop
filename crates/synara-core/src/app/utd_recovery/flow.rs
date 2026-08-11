@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use crate::matrix::dto::{EventId, RoomId};
+use crate::dto::{EventId, RoomId};
 
 use super::error::UtdRecoveryError;
 
