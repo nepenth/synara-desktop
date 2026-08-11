@@ -168,6 +168,7 @@ const SAFE_NATIVE_LOGIN_DIAGNOSTIC_IDS = new Set([
   'p3.2-empty-password',
   'p3.2-empty-user-id',
   'p3.2-login-connectivity',
+  // Legacy umbrella id for pre-fix builds; refined ids add store-locked / store-open-failed / olm-unavailable
   'p3.2-login-crypto-store',
   'p3.2-login-endpoint-not-found',
   'p3.2-login-homeserver-unavailable',
@@ -184,6 +185,9 @@ const SAFE_NATIVE_LOGIN_DIAGNOSTIC_IDS = new Set([
   'p3.2-login-rejected',
   'p3.2-login-response-decode',
   'p3.2-login-sdk-timeout',
+  'p3.2-login-store-locked',
+  'p3.2-login-store-open-failed',
+  'p3.2-login-olm-unavailable',
   'p3.2-login-uiaa-required',
   'p3.2-login-unknown',
   'p3.2-login-unknown-rejected',
