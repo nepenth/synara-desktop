@@ -4,9 +4,10 @@
 //! with **session-generation isolation**: tasks are stamped at spawn, cancelled
 //! and joined on generation bump, and stale-generation results are refused.
 //!
-//! Standalone registry owned by the `matrix` module. Compose with
-//! [`crate::matrix::supervisor::MatrixSupervisor`] via
-//! [`bridge::follow_supervisor_generation`] after lifecycle generation bumps.
+//! Standalone registry owned by desktop's `matrix` module. Compose with the
+//! desktop `MatrixSupervisor` via the src-tauri `bridge::follow_supervisor_generation`
+//! adapter after lifecycle generation bumps (SNC-P1-4: bridge.rs stays in src-tauri
+//! until the supervisor module moves).
 //!
 //! **Harness / unit tests only until cutover.** No production login/sync loop,
 //! no Tauri Matrix commands, no dual-backend.
@@ -16,12 +17,10 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
-mod bridge;
 mod error;
 mod kind;
 mod registry;
 
-pub use bridge::{follow_supervisor_generation, mirror_generation};
 pub use error::TaskError;
 pub use kind::TaskKind;
 pub use registry::{TaskId, TaskInfo, TaskOutcome, TaskRunState, TaskSupervisor};

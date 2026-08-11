@@ -11,6 +11,9 @@ serde = { version = "1.0.193", features = ["derive"] }
 # P1.3 transport protocol (moved from src-tauri/matrix/ipc, SNC-P1-3): stream_body
 # validates JSON bodies at the envelope boundary; tests share the fixtures too.
 serde_json = "1.0.109"
+# SNC-P1-4: task registry (moved from src-tauri/matrix/tasks) supervises async
+# work — tokio spawn/JoinHandle at runtime and the test macro for its unit tests.
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time"] }
 
 [dev-dependencies]
 # dto/tests.rs fixture + serde round-trip tests.

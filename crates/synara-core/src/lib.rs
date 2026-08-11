@@ -1,10 +1,12 @@
 //! # synara-core
 //!
 //! Transport-agnostic shared native core for Synara (desktop via Tauri, iOS via
-//! uniffi). This crate is intentionally EMPTY for the P1-1 workspace-scaffolding
-//! slice; later P1 slices move `matrix/dto`, `matrix/ipc`, `matrix/tasks`, and
-//! the domain modules here by `git mv` + path updates only (no behavior change).
+//! uniffi). Domain modules move here by `git mv` + path updates only, keeping
+//! behavior identical (P1 slices: dto, transport/ipc, task, then the app/
+//! domain chunks).
 
 pub mod dto;
+
+pub mod task;
 
 pub mod transport;

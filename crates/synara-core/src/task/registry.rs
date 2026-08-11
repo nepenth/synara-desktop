@@ -1,8 +1,8 @@
 //! Task registry + supervisor: spawn, cancel, join, generation isolation.
 //!
 //! **Harness / unit tests until cutover.** Does not start production login or
-//! sync loops. Callers must stamp every task with the live
-//! [`crate::matrix::supervisor::MatrixSupervisor::session_generation`].
+//! sync loops. Callers must stamp every task with the live session generation
+//! (desktop: `crate::matrix::supervisor::MatrixSupervisor::session_generation`).
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -118,8 +118,8 @@ impl TaskSupervisor {
 
     /// Set the live generation without cancelling tasks.
     ///
-    /// Prefer [`Self::bump_generation`] or
-    /// [`super::bridge::follow_supervisor_generation`] so stale work is retired.
+    /// Prefer [`Self::bump_generation`] or the src-tauri bridge
+    /// `follow_supervisor_generation` so stale work is retired.
     pub fn set_live_generation(&mut self, generation: u64) {
         self.live_generation = generation;
     }
