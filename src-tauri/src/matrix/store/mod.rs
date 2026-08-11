@@ -29,7 +29,9 @@ pub use key_vault::{
     get_or_create_store_key, get_or_migrate_store_key, InMemoryStoreKeyVault, KeyringStoreKeyRefs,
     KeyringStoreKeyVault, StoreKeyVault, StoreKeyVaultError,
 };
-pub use paths::{StoreLayout, StorePathError, StorePaths, MATRIX_STORE_ROOT_SEGMENT};
+pub use paths::{
+    StoreKeyCreationPolicy, StoreLayout, StorePathError, StorePaths, MATRIX_STORE_ROOT_SEGMENT,
+};
 pub use revision::{
     matrix_store_revision_marker, migrate_store_to_current, reset_store_for_recovery,
     StoreMigrationError, StoreResetOutcome, StoreRevisionDecision, StoreRevisionManifest,
