@@ -71,11 +71,14 @@ export enum LoginError {
 /** SDK-neutral login error with product errcode (replaces matrix-js-sdk MatrixError). */
 export class PasswordLoginError extends Error {
   readonly errcode: LoginError;
+  /** Static native diagnostic only; never a server body, URL, password, or token. */
+  readonly diagnosticId?: string;
 
-  constructor(errcode: LoginError, message?: string) {
+  constructor(errcode: LoginError, message?: string, diagnosticId?: string) {
     super(message ?? errcode);
     this.name = 'PasswordLoginError';
     this.errcode = errcode;
+    this.diagnosticId = diagnosticId;
   }
 }
 
@@ -151,6 +154,19 @@ const resolveLoginBaseUrl = async (
 
 type NativeCommandError = {
   code?: string;
+  diagnosticId?: string;
+  diagnostic_id?: string;
+};
+
+const SAFE_NATIVE_DIAGNOSTIC_ID = /^[a-z0-9][a-z0-9.-]{0,127}$/;
+
+const nativeDiagnosticId = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object') return undefined;
+  const candidate = error as NativeCommandError;
+  const diagnosticId = candidate.diagnosticId ?? candidate.diagnostic_id;
+  return typeof diagnosticId === 'string' && SAFE_NATIVE_DIAGNOSTIC_ID.test(diagnosticId)
+    ? diagnosticId
+    : undefined;
 };
 
 const mapNativeLoginError = (error: unknown): PasswordLoginError => {
@@ -159,7 +175,7 @@ const mapNativeLoginError = (error: unknown): PasswordLoginError => {
   const errcode = Object.values(LoginError).includes(code as LoginError)
     ? (code as LoginError)
     : LoginError.Unknown;
-  return new PasswordLoginError(errcode);
+  return new PasswordLoginError(errcode, undefined, nativeDiagnosticId(error));
 };
 
 const passwordLoginUser = (data: PasswordLoginRequest): string | undefined =>

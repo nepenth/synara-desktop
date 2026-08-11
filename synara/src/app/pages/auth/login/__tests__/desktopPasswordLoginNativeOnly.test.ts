@@ -144,3 +144,55 @@ test('loginPassword maps native Forbidden code', async () => {
     }
   );
 });
+
+test('loginPassword preserves only a static native diagnostic id', async () => {
+  const invoke: PasswordLoginInvoke = async () => {
+    throw {
+      code: 'Unknown',
+      diagnosticId: 'p3.2-login-http-api-response',
+    };
+  };
+
+  await assert.rejects(
+    () =>
+      loginPassword(
+        'https://matrix.example.org',
+        {
+          type: 'm.login.password',
+          identifier: { type: 'm.id.user', user: '@alice:example.org' },
+          password: 's3cret',
+        },
+        { isDesktop: () => true, invoke }
+      ),
+    (err: unknown) => {
+      assert.ok(err instanceof PasswordLoginError);
+      assert.equal(err.errcode, LoginError.Unknown);
+      assert.equal(err.diagnosticId, 'p3.2-login-http-api-response');
+      return true;
+    }
+  );
+});
+
+test('loginPassword drops an unsafe native diagnostic value', async () => {
+  const invoke: PasswordLoginInvoke = async () => {
+    throw { code: 'Unknown', diagnosticId: 'https://private.example/token=secret' };
+  };
+
+  await assert.rejects(
+    () =>
+      loginPassword(
+        'https://matrix.example.org',
+        {
+          type: 'm.login.password',
+          identifier: { type: 'm.id.user', user: '@alice:example.org' },
+          password: 's3cret',
+        },
+        { isDesktop: () => true, invoke }
+      ),
+    (err: unknown) => {
+      assert.ok(err instanceof PasswordLoginError);
+      assert.equal(err.diagnosticId, undefined);
+      return true;
+    }
+  );
+});
