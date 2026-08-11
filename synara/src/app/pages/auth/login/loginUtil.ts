@@ -26,6 +26,7 @@ import { persistAuthenticatedSession } from '../../../state/sessionPersistence';
 import { pushSessionToSW } from '../../../../sw-session';
 import { recordClientDiagnostic } from '../../../utils/clientDiagnostics';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../../utils/desktop';
+import { recordDesktopDiagnostic } from '../../../utils/desktopDiagnostics';
 
 export enum GetBaseUrlError {
   NotAllow = 'NotAllow',
@@ -227,7 +228,9 @@ export const loginPassword = async (
 ): Promise<PasswordLoginResponse> => {
   const isDesktop = options.isDesktop ?? isSynaraDesktop;
   const invoke: PasswordLoginInvoke =
-    options.invoke ?? ((command, args) => invokeDesktopWithAvailability(command, args));
+    options.invoke ??
+    ((command, args) =>
+      invokeDesktopWithAvailability(command, args, { suppressErrorDiagnostic: true }));
 
   if (!isDesktop()) {
     throw new PasswordLoginError(
@@ -258,7 +261,13 @@ export const loginPassword = async (
     };
   } catch (error) {
     if (error instanceof PasswordLoginError) throw error;
-    throw mapNativeLoginError(error);
+    const mappedError = mapNativeLoginError(error);
+    // This is deliberately a static, allowlisted code rather than the native
+    // rejection: login errors can carry server-controlled text or credentials.
+    recordDesktopDiagnostic(
+      `matrix_login_password failed: ${mappedError.diagnosticId ?? 'p3.2-login-unknown'}`
+    );
+    throw mappedError;
   }
 };
 
