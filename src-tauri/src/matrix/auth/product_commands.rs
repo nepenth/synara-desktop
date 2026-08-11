@@ -10,22 +10,17 @@ use matrix_sdk::authentication::AuthSession;
 /// V-AUTH.3 desktop compatibility re-exports for the shared command response.
 pub use synara_core::app::auth::{MatrixLoginFlowDto, MatrixLoginFlowsResponse};
 
-/// V-AUTH.3 — discover homeserver login flows (unauthenticated CS `GET /login`).
+/// V-AUTH.3 / SNC-P3.1 — discover login flows through the managed shared Core.
 ///
-/// Fail-closed: transport/parse errors surface as privacy-safe command errors.
-/// No credentials are submitted; DTO never contains tokens or passwords.
+/// The renderer input and DTO remain byte-compatible. This command owns no
+/// transport: the Core uses the managed desktop Platform's established user
+/// agent for its credential-free probe.
 #[tauri::command]
 pub async fn matrix_login_flows(
+    core: State<'_, Arc<synara_core::Core>>,
     homeserver_url: String,
 ) -> Result<MatrixLoginFlowsResponse, MatrixAuthCommandError> {
-    let transport = HttpLoginFlowTransport::new_with_user_agent(
-        crate::matrix::client_builder::default_user_agent(),
-    )
-    .map_err(map_login_flows_auth_error)?;
-    let result = discover_login_flows(&homeserver_url, &transport)
-        .await
-        .map_err(map_login_flows_auth_error)?;
-    Ok(synara_core::app::auth::login_flows_response(result.flows))
+    crate::bridge::auth_probes::login_flows(core.inner().as_ref(), homeserver_url).await
 }
 
 #[tauri::command]
@@ -179,22 +174,16 @@ pub async fn matrix_password_reset_complete(
     .map_err(map_password_reset_auth_error)
 }
 
-/// V-AUTH.4b / SNC-P2.5 — probe registration UIAA flows (unauthenticated).
+/// V-AUTH.4b / SNC-P3.1 — probe registration UIAA flows through the managed Core.
 ///
-/// Thin desktop delegation to the shared bounded Core probe. This sends only
-/// the empty registration-flow request; account creation, email-token, and
-/// UIAA-continuation owners remain in the desktop registration module.
+/// This is only the credential-free flow probe. Account creation, email-token,
+/// and UIAA-continuation commands remain desktop-owned.
 #[tauri::command]
 pub async fn matrix_register_flows(
+    core: State<'_, Arc<synara_core::Core>>,
     homeserver_url: String,
 ) -> Result<RegisterFlowsProbe, MatrixAuthCommandError> {
-    let transport = synara_core::app::auth::HttpRegisterFlowTransport::new_with_user_agent(
-        crate::matrix::client_builder::default_user_agent(),
-    )
-    .map_err(map_register_auth_error)?;
-    probe_register_flows(&homeserver_url, &transport)
-        .await
-        .map_err(map_register_auth_error)
+    crate::bridge::auth_probes::register_flows(core.inner().as_ref(), homeserver_url).await
 }
 
 /// V-AUTH.4b — request a registration email token (unauthenticated).

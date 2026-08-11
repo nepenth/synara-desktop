@@ -3,6 +3,7 @@
     windows_subsystem = "windows"
 )]
 
+mod bridge;
 mod build_info;
 mod desktop;
 mod desktop_agent_actions;
@@ -629,10 +630,14 @@ pub fn run() {
             window.unminimize()?;
             window.set_focus()?;
 
-            // P1.6 seam: expose the desktop platform sink as managed state.
-            // No callers route through it yet (P2+); AppHandle call sites keep
-            // their current direct wiring until then.
-            app.manage::<Arc<dyn Platform>>(Arc::new(desktop_platform::TauriPlatform::new(app.handle().clone())));
+            // One desktop platform allocation is shared by the shell state and
+            // the managed Core. P3.1 auth probes therefore retain this
+            // platform's established HTTP user-agent injection without giving
+            // Core a Tauri type or creating a fallback platform.
+            let platform: Arc<dyn Platform> =
+                Arc::new(desktop_platform::TauriPlatform::new(app.handle().clone()));
+            app.manage(Arc::clone(&platform));
+            app.manage(Arc::new(synara_core::Core::new(platform)));
             Ok(())
         })
         .build(context)

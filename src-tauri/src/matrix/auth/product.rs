@@ -55,12 +55,11 @@ use tokio::sync::Mutex;
 use zeroize::Zeroize;
 
 use super::{
-    complete_password_reset, discover_login_flows, login_with_password, normalize_homeserver_url,
-    password_reset_ephemeral_user_id, probe_register_flows, register_ephemeral_user_id,
-    register_submit, request_password_email_token, request_register_email_token, AuthError,
-    HttpLoginFlowTransport, LoginFlow, LoginOptions, PasswordEmailTokenResult,
-    PasswordResetOutcome, RegisterAuthStage, RegisterFlowsProbe, RegisterSubmitOutcome,
-    RegisterUiaFlow,
+    complete_password_reset, login_with_password, normalize_homeserver_url,
+    password_reset_ephemeral_user_id, register_ephemeral_user_id, register_submit,
+    request_password_email_token, request_register_email_token, AuthError, LoginFlow, LoginOptions,
+    PasswordEmailTokenResult, PasswordResetOutcome, RegisterAuthStage, RegisterFlowsProbe,
+    RegisterSubmitOutcome, RegisterUiaFlow,
 };
 use crate::matrix::account_data::{
     add_room_to_mdirect, clear_completed_later_live, complete_later_item_live,
