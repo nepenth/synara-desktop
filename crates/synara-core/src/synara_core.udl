@@ -4,4 +4,26 @@
 // without exposing credentials, Matrix SDK types, or shell-owned services.
 namespace synara_core {
   string binding_scaffold_version();
+
+  // P4-2: credential-free, read-only Matrix login-flow discovery. The
+  // homeserver URL is normalized by the shared core before its bounded,
+  // redirect-free request is assembled.
+  [Async, Throws=LoginFlowsError]
+  sequence<LoginFlowDto> login_flows(string homeserver_url);
+};
+
+// Public Swift DTO for one homeserver-advertised Matrix login type. It never
+// carries a credential, session, or client handle.
+dictionary LoginFlowDto {
+  string kind;
+  string matrix_type;
+  boolean? get_login_token;
+};
+
+// All fields below are fixed, privacy-safe values. In particular, no input
+// URL, HTTP diagnostic, response body, header, credential, or token crosses
+// the UniFFI error boundary.
+[Error]
+interface LoginFlowsError {
+  ProbeFailed(string category, string code, string description);
 };
