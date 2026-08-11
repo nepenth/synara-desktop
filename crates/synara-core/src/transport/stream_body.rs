@@ -8,7 +8,7 @@
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::matrix::dto::{
+use crate::dto::{
     NotificationCandidate, Receipt, RoomMember, RoomSummary, SecurityStatus, TimelineItem,
     TypingSnapshot, FORBIDDEN_WIRE_FIELD_NAMES,
 };
