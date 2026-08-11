@@ -23,6 +23,10 @@ use matrix_sdk::ruma::{
 use matrix_sdk::{Client, Error as SdkError, HttpError};
 use serde::Serialize;
 use serde_json::{json, Map, Value as JsonValue};
+use synara_core::app::auth::{
+    has_unsupported_only_register_flows, RegisterFlowsProbe, RegisterUiaFlow,
+    SUPPORTED_REGISTER_STAGES,
+};
 use zeroize::Zeroizing;
 
 use super::error::AuthError;
@@ -30,15 +34,6 @@ use super::login::map_login_sdk_error;
 use super::reset_password::{
     map_password_reset_http_error, password_reset_ephemeral_user_id, PasswordEmailTokenResult,
 };
-
-/// Supported registration UIAA stages for the desktop product surface.
-pub const SUPPORTED_REGISTER_STAGES: &[&str] = &[
-    "m.login.registration_token",
-    "m.login.terms",
-    "m.login.recaptcha",
-    "m.login.email.identity",
-    "m.login.dummy",
-];
 
 /// Host-only secrets from a completed registration (never serialized to IPC).
 #[derive(Debug)]
@@ -70,29 +65,6 @@ pub struct RegisterUiaChallenge {
     pub params: Option<JsonValue>,
     pub error_code: Option<String>,
     pub error_message: Option<&'static str>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RegisterUiaFlow {
-    pub stages: Vec<String>,
-}
-
-/// Probe outcome for empty `/register` (flow discovery).
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(tag = "status", rename_all = "snake_case")]
-pub enum RegisterFlowsProbe {
-    /// Homeserver requires UIAA; product shows the register form.
-    #[serde(rename_all = "camelCase")]
-    FlowRequired {
-        session: Option<String>,
-        flows: Vec<RegisterUiaFlow>,
-        completed: Vec<String>,
-        params: Option<JsonValue>,
-    },
-    RegistrationDisabled,
-    RateLimited,
-    InvalidRequest,
 }
 
 /// Host outcome of a register submit. Complete secrets never cross IPC.
@@ -129,15 +101,6 @@ pub enum RegisterAuthStage {
         client_secret: String,
         session: Option<String>,
     },
-}
-
-/// Probe registration UIAA flows with an empty register request.
-pub async fn probe_register_flows(client: &Client) -> Result<RegisterFlowsProbe, AuthError> {
-    let request = register::v3::Request::new();
-    match client.send(request).await {
-        Ok(_) => Ok(RegisterFlowsProbe::InvalidRequest),
-        Err(err) => map_probe_error(err),
-    }
 }
 
 /// Request a registration email token via Ruma `request_registration_token_via_email`.
@@ -332,26 +295,10 @@ fn map_flow(flow: &AuthFlow) -> RegisterUiaFlow {
     }
 }
 
-fn is_supported_stage(stage: &AuthType) -> bool {
-    matches!(
-        stage,
-        AuthType::RegistrationToken
-            | AuthType::Terms
-            | AuthType::ReCaptcha
-            | AuthType::EmailIdentity
-            | AuthType::Dummy
-    )
-}
-
 fn has_unsupported_only_flows(info: &UiaaInfo) -> bool {
-    if info.flows.is_empty() {
-        return false;
-    }
-    !info.flows.iter().any(|flow| {
-        flow.stages
-            .iter()
-            .all(|stage| info.completed.contains(stage) || is_supported_stage(stage))
-    })
+    let flows: Vec<_> = info.flows.iter().map(map_flow).collect();
+    let completed: Vec<_> = info.completed.iter().map(ToString::to_string).collect();
+    has_unsupported_only_register_flows(&flows, &completed)
 }
 
 fn static_uia_error_message(info: &UiaaInfo) -> Option<&'static str> {
@@ -368,48 +315,6 @@ fn static_uia_error_message(info: &UiaaInfo) -> Option<&'static str> {
         }
         _ => "Registration authentication was rejected.",
     })
-}
-
-fn map_probe_error(err: HttpError) -> Result<RegisterFlowsProbe, AuthError> {
-    let sdk_err = SdkError::from(err);
-    if let Some(info) = sdk_err.as_uiaa_response() {
-        if has_unsupported_only_flows(info) {
-            return Err(AuthError::UnsupportedCapability {
-                diagnostic_id: "v-auth.4b-register-unsupported-uia-stage",
-            });
-        }
-        return Ok(RegisterFlowsProbe::FlowRequired {
-            session: info.session.clone(),
-            flows: info.flows.iter().map(map_flow).collect(),
-            completed: info
-                .completed
-                .iter()
-                .map(|stage| stage.to_string())
-                .collect(),
-            params: info
-                .params
-                .as_ref()
-                .and_then(|raw| serde_json::from_str(raw.get()).ok()),
-        });
-    }
-    if let Some(kind) = sdk_err.client_api_error_kind() {
-        let k = format!("{kind:?}").to_ascii_lowercase();
-        if k.starts_with("forbidden") {
-            return Ok(RegisterFlowsProbe::RegistrationDisabled);
-        }
-        if k.starts_with("limitexceeded") {
-            return Ok(RegisterFlowsProbe::RateLimited);
-        }
-    }
-    let mapped = map_login_sdk_error(sdk_err);
-    match mapped {
-        AuthError::AuthenticationRejected { .. } => Ok(RegisterFlowsProbe::RegistrationDisabled),
-        AuthError::RateLimited { .. } => Ok(RegisterFlowsProbe::RateLimited),
-        AuthError::InvalidInput { .. } | AuthError::UnsupportedCapability { .. } => {
-            Ok(RegisterFlowsProbe::InvalidRequest)
-        }
-        other => Err(other),
-    }
 }
 
 fn map_register_http_error(err: HttpError) -> AuthError {

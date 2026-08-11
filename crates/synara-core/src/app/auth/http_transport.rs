@@ -1,7 +1,8 @@
-//! Bounded, redirect-free HTTP transport for Matrix login-flow discovery.
+//! Bounded, redirect-free HTTP transport for unauthenticated Matrix auth probes.
 //!
-//! It only sends `GET /_matrix/client/v3/login`; credentials and response
-//! bodies never cross its public error surface.
+//! The login-flow route sends only `GET /_matrix/client/v3/login`; the
+//! registration-flow route sends only an empty `POST /_matrix/client/v3/register`.
+//! Credentials and raw response bodies never cross the public error surface.
 
 use std::time::Duration;
 
@@ -10,6 +11,7 @@ use serde_json::Value;
 use super::error::AuthError;
 use super::input::normalize_homeserver_url;
 use super::login_flow::{LoginFlow, LoginFlowTransport};
+use super::register_flow::{parse_register_uiaa_json, RegisterFlowsProbe, RegisterFlowsTransport};
 
 /// Default end-to-end timeout for the unauthenticated login-types request.
 pub const AUTH_HTTP_TIMEOUT_SECS: u64 = 15;
@@ -36,15 +38,9 @@ impl HttpLoginFlowTransport {
     /// preserves desktop's established user agent without importing a shell
     /// type or product configuration into the core.
     pub fn new_with_user_agent(user_agent: impl Into<String>) -> Result<Self, AuthError> {
-        let http = reqwest::ClientBuilder::new()
-            .timeout(Duration::from_secs(AUTH_HTTP_TIMEOUT_SECS))
-            .redirect(reqwest::redirect::Policy::none())
-            .user_agent(user_agent.into())
-            .build()
-            .map_err(|_| AuthError::Connectivity {
-                diagnostic_id: "r0.7-http-client-init",
-            })?;
-        Ok(Self { http })
+        Ok(Self {
+            http: bounded_http_client(user_agent)?,
+        })
     }
 }
 
@@ -55,6 +51,81 @@ impl Default for HttpLoginFlowTransport {
         // fail closed if the HTTP backend cannot initialize.
         Self::new().expect("bounded login-flow HTTP client must initialize")
     }
+}
+
+/// Live read-only transport for the empty registration UIAA probe.
+#[derive(Debug, Clone)]
+pub struct HttpRegisterFlowTransport {
+    http: reqwest::Client,
+}
+
+impl HttpRegisterFlowTransport {
+    /// Build the shared core default bounded client.
+    pub fn new() -> Result<Self, AuthError> {
+        Self::new_with_user_agent(concat!(
+            "Synara-Core/",
+            env!("CARGO_PKG_VERSION"),
+            " (matrix-sdk/0.18.0)"
+        ))
+    }
+
+    /// Build a bounded probe client with a shell-owned product identifier.
+    pub fn new_with_user_agent(user_agent: impl Into<String>) -> Result<Self, AuthError> {
+        Ok(Self {
+            http: bounded_http_client(user_agent)?,
+        })
+    }
+}
+
+impl Default for HttpRegisterFlowTransport {
+    fn default() -> Self {
+        Self::new().expect("bounded registration-flow HTTP client must initialize")
+    }
+}
+
+impl RegisterFlowsTransport for HttpRegisterFlowTransport {
+    async fn probe_register_flows(
+        &self,
+        homeserver_base_url: &str,
+    ) -> Result<RegisterFlowsProbe, AuthError> {
+        let base = normalize_homeserver_url(homeserver_base_url)?.into_string();
+        let url = format!("{base}/_matrix/client/v3/register");
+        let mut response = self
+            .http
+            .post(url)
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body("{}")
+            .send()
+            .await
+            .map_err(map_reqwest_error)?;
+        match response.status().as_u16() {
+            401 => {
+                let body = read_bounded_response(
+                    &mut response,
+                    ResponseReadDiagnostics {
+                        too_large: "p2-register-flows-response-too-large",
+                        body: "p2-register-flows-response-body",
+                        invalid_utf8: "p2-register-flows-uiaa-response-invalid",
+                    },
+                )
+                .await?;
+                parse_register_uiaa_json(&body)
+            }
+            200..=299 => Ok(RegisterFlowsProbe::InvalidRequest),
+            status => map_register_flows_status(status),
+        }
+    }
+}
+
+fn bounded_http_client(user_agent: impl Into<String>) -> Result<reqwest::Client, AuthError> {
+    reqwest::ClientBuilder::new()
+        .timeout(Duration::from_secs(AUTH_HTTP_TIMEOUT_SECS))
+        .redirect(reqwest::redirect::Policy::none())
+        .user_agent(user_agent.into())
+        .build()
+        .map_err(|_| AuthError::Connectivity {
+            diagnostic_id: "r0.7-http-client-init",
+        })
 }
 
 impl LoginFlowTransport for HttpLoginFlowTransport {
@@ -69,18 +140,36 @@ impl LoginFlowTransport for HttpLoginFlowTransport {
         if !status.is_success() {
             return Err(map_http_status(status.as_u16()));
         }
-        let body = read_bounded_response(&mut response).await?;
+        let body = read_bounded_response(
+            &mut response,
+            ResponseReadDiagnostics {
+                too_large: "r0.7-login-types-response-too-large",
+                body: "r0.7-login-types-body",
+                invalid_utf8: "r0.7-login-types-json",
+            },
+        )
+        .await?;
         parse_login_types_json(&body)
     }
 }
 
-async fn read_bounded_response(response: &mut reqwest::Response) -> Result<String, AuthError> {
+#[derive(Clone, Copy)]
+struct ResponseReadDiagnostics {
+    too_large: &'static str,
+    body: &'static str,
+    invalid_utf8: &'static str,
+}
+
+async fn read_bounded_response(
+    response: &mut reqwest::Response,
+    diagnostics: ResponseReadDiagnostics,
+) -> Result<String, AuthError> {
     if response
         .content_length()
         .is_some_and(|length| length > AUTH_HTTP_MAX_RESPONSE_BYTES as u64)
     {
         return Err(AuthError::UnsupportedCapability {
-            diagnostic_id: "r0.7-login-types-response-too-large",
+            diagnostic_id: diagnostics.too_large,
         });
     }
 
@@ -89,18 +178,18 @@ async fn read_bounded_response(response: &mut reqwest::Response) -> Result<Strin
         .chunk()
         .await
         .map_err(|_| AuthError::Connectivity {
-            diagnostic_id: "r0.7-login-types-body",
+            diagnostic_id: diagnostics.body,
         })?
     {
         if body.len().saturating_add(chunk.len()) > AUTH_HTTP_MAX_RESPONSE_BYTES {
             return Err(AuthError::UnsupportedCapability {
-                diagnostic_id: "r0.7-login-types-response-too-large",
+                diagnostic_id: diagnostics.too_large,
             });
         }
         body.extend_from_slice(&chunk);
     }
     String::from_utf8(body).map_err(|_| AuthError::UnsupportedCapability {
-        diagnostic_id: "r0.7-login-types-json",
+        diagnostic_id: diagnostics.invalid_utf8,
     })
 }
 
@@ -165,6 +254,29 @@ fn map_http_status(status: u16) -> AuthError {
         _ => AuthError::Unknown {
             diagnostic_id: "r0.7-http-status",
         },
+    }
+}
+
+/// Map only the empty registration-probe statuses that are safe to expose as
+/// existing probe outcomes. Other statuses remain privacy-safe transport
+/// errors; no response body is parsed outside a `401` UIAA challenge.
+fn map_register_flows_status(status: u16) -> Result<RegisterFlowsProbe, AuthError> {
+    match status {
+        403 => Ok(RegisterFlowsProbe::RegistrationDisabled),
+        408 => Err(AuthError::Connectivity {
+            diagnostic_id: "p2-register-flows-http-retryable",
+        }),
+        429 => Ok(RegisterFlowsProbe::RateLimited),
+        400..=499 => Ok(RegisterFlowsProbe::InvalidRequest),
+        502..=504 => Err(AuthError::Connectivity {
+            diagnostic_id: "p2-register-flows-http-retryable",
+        }),
+        500..=599 => Err(AuthError::HomeserverUnavailable {
+            diagnostic_id: "p2-register-flows-http-5xx",
+        }),
+        _ => Err(AuthError::Unknown {
+            diagnostic_id: "p2-register-flows-http-status",
+        }),
     }
 }
 
@@ -315,6 +427,104 @@ mod tests {
             }
         ));
         server.await.expect("stub task");
+    }
+
+    #[test]
+    fn registration_probe_statuses_expose_only_existing_safe_outcomes() {
+        assert_eq!(
+            map_register_flows_status(403).unwrap(),
+            RegisterFlowsProbe::RegistrationDisabled
+        );
+        assert_eq!(
+            map_register_flows_status(429).unwrap(),
+            RegisterFlowsProbe::RateLimited
+        );
+        assert_eq!(
+            map_register_flows_status(400).unwrap(),
+            RegisterFlowsProbe::InvalidRequest
+        );
+        assert!(matches!(
+            map_register_flows_status(503),
+            Err(AuthError::Connectivity {
+                diagnostic_id: "p2-register-flows-http-retryable"
+            })
+        ));
+    }
+
+    #[tokio::test]
+    async fn registration_probe_redirect_is_not_followed() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind registration redirect server");
+        let address = listener
+            .local_addr()
+            .expect("registration redirect address");
+        let base = format!("http://{address}");
+        let server = tokio::spawn(async move {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+            let (mut socket, _) = listener.accept().await.expect("accept probe request");
+            let mut request = [0_u8; 1024];
+            let _ = socket.read(&mut request).await.expect("read probe request");
+            socket
+                .write_all(
+                    b"HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1/redirect-target\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                )
+                .await
+                .expect("write redirect response");
+        });
+
+        let transport = HttpRegisterFlowTransport::new().expect("HTTP transport");
+        let error = transport
+            .probe_register_flows(&base)
+            .await
+            .expect_err("registration redirect must fail closed rather than be followed");
+        assert!(matches!(
+            error,
+            AuthError::Unknown {
+                diagnostic_id: "p2-register-flows-http-status"
+            }
+        ));
+        server.await.expect("redirect server task");
+    }
+
+    #[tokio::test]
+    async fn registration_probe_uiaa_body_is_bounded_before_reading() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind oversized registration server");
+        let address = listener
+            .local_addr()
+            .expect("oversized registration address");
+        let base = format!("http://{address}");
+        let server = tokio::spawn(async move {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+            let (mut socket, _) = listener.accept().await.expect("accept probe request");
+            let mut request = [0_u8; 1024];
+            let _ = socket.read(&mut request).await.expect("read probe request");
+            let response = format!(
+                "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{{}}",
+                AUTH_HTTP_MAX_RESPONSE_BYTES + 1
+            );
+            socket
+                .write_all(response.as_bytes())
+                .await
+                .expect("write oversized response");
+        });
+
+        let transport = HttpRegisterFlowTransport::new().expect("HTTP transport");
+        let error = transport
+            .probe_register_flows(&base)
+            .await
+            .expect_err("oversized registration UIAA response must fail closed");
+        assert!(matches!(
+            error,
+            AuthError::UnsupportedCapability {
+                diagnostic_id: "p2-register-flows-response-too-large"
+            }
+        ));
+        server.await.expect("oversized server task");
     }
 
     #[tokio::test]

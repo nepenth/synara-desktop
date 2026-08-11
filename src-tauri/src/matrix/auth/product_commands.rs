@@ -179,14 +179,20 @@ pub async fn matrix_password_reset_complete(
     .map_err(map_password_reset_auth_error)
 }
 
-/// V-AUTH.4b — probe registration UIAA flows (unauthenticated).
+/// V-AUTH.4b / SNC-P2.5 — probe registration UIAA flows (unauthenticated).
+///
+/// Thin desktop delegation to the shared bounded Core probe. This sends only
+/// the empty registration-flow request; account creation, email-token, and
+/// UIAA-continuation owners remain in the desktop registration module.
 #[tauri::command]
 pub async fn matrix_register_flows(
-    app: AppHandle,
     homeserver_url: String,
 ) -> Result<RegisterFlowsProbe, MatrixAuthCommandError> {
-    let client = build_register_ephemeral_client(&app, &homeserver_url).await?;
-    probe_register_flows(&client)
+    let transport = synara_core::app::auth::HttpRegisterFlowTransport::new_with_user_agent(
+        crate::matrix::client_builder::default_user_agent(),
+    )
+    .map_err(map_register_auth_error)?;
+    probe_register_flows(&homeserver_url, &transport)
         .await
         .map_err(map_register_auth_error)
 }
