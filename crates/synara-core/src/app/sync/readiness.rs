@@ -1,13 +1,13 @@
 //! Product-facing sync readiness model (P4.1).
 //!
 //! Maps `matrix_sdk_ui::sync_service::State` into privacy-safe phases that align
-//! with [`crate::matrix::diagnostics::SyncPhase`] vocabulary. No tokens, no
+//! with [`crate::app::sync::SyncPhase`] vocabulary. No tokens, no
 //! homeserver raw errors, no dual-backend.
 
 use matrix_sdk_ui::sync_service::State as SdkSyncState;
 use serde::{Deserialize, Serialize};
 
-use crate::matrix::diagnostics::SyncPhase;
+use super::sync_phase::SyncPhase;
 
 /// High-level product readiness of the Matrix sync owner.
 ///

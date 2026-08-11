@@ -2,7 +2,7 @@
 //!
 //! Errors never carry tokens, homeserver raw bodies, or store paths.
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Sync readiness / reconnect foundation failure.
 #[derive(Debug)]

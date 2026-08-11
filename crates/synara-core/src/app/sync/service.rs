@@ -173,4 +173,4 @@ fn map_build_error(err: matrix_sdk_ui::sync_service::Error) -> SyncError {
     }
 }
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
