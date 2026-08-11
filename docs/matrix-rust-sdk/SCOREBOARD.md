@@ -11,12 +11,15 @@
 
 | Field                                                  | Value                                                                                                                                                                                                                                                                                               |
 | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Updated                                                | **2026-08-10** (tip `7c642ae3` · **0 importers, js-sdk removed**)
-| Tip                                                    | `7c642ae3` on `feature/matrix-rust-sdk-full-replacement`                                                                                                                                                                                                                                            |
+| Updated                                                | **2026-08-11** (tip `c2797c13` · **0 importers, js-sdk removed**)
+| Tip                                                    | `c2797c13` on `feature/matrix-rust-sdk-full-replacement`                                                                                                                                                                                                                                            |
 | Production `matrix-js-sdk` import files (`synara/src`) | **0** — plan baseline **220**; **220 removed, 100%**                                                                                                                                                                                                                                                |
 | Allowlist `pathCount`                                  | **0** (empty = full ban; any new importer fails)                                                                                                                                                                                                                                                    |
 | Test `matrix-js-sdk` import files (`synara/src`)       | **0** (burned in #595; fixtures migrated to probed literals)                                                                                                                                                                                                                                        |
 | Dual backend                                           | **false** (forbidden forever)                                                                                                                                                                                                                                                                       |
+
+## Recent (2026-08-11)
+- #664 native password-login diagnostics + privacy-safe frontend invoke logging — merged (`c2797c13`); importer inventory unchanged at 0 production / 0 test / allowlist 0
 
 ## Recent (2026-08-10 overnight)
 - #635 room-list favorites (m.tag notable_tags) — merged
