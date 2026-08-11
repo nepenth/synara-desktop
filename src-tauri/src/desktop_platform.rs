@@ -49,6 +49,11 @@ impl<R: Runtime> Platform for TauriPlatform<R> {
         Arc::new(UnavailableSecretVault)
     }
 
+    /// Use the established desktop product identity for core HTTP probes.
+    fn http_user_agent(&self) -> String {
+        crate::matrix::client_builder::default_user_agent()
+    }
+
     /// Deliver a native notification through the existing desktop path.
     fn notify(&self, candidate: NotificationCandidate) -> Result<(), MatrixIpcError> {
         let payload = DesktopNotificationPayload {

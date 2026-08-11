@@ -192,11 +192,13 @@ fn matrix_session_snapshot(state: Arc<CoreState>, _request: CommandEnvelope) -> 
     })
 }
 
-fn matrix_login_flows(_state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+fn matrix_login_flows(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixLoginFlowsRequest = serde_json::from_value(request.payload)
             .map_err(|_| core_state_error("p2-login-flows-invalid-payload"))?;
-        let transport = HttpLoginFlowTransport::new().map_err(auth_transport_error)?;
+        let transport =
+            HttpLoginFlowTransport::new_with_user_agent(state.platform().http_user_agent())
+                .map_err(auth_transport_error)?;
         let result = discover_login_flows(&payload.homeserver_url, &transport)
             .await
             .map_err(auth_transport_error)?;
@@ -206,11 +208,13 @@ fn matrix_login_flows(_state: Arc<CoreState>, request: CommandEnvelope) -> Comma
     })
 }
 
-fn matrix_register_flows(_state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+fn matrix_register_flows(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixRegisterFlowsRequest = serde_json::from_value(request.payload)
             .map_err(|_| core_state_error("p2-register-flows-invalid-payload"))?;
-        let transport = HttpRegisterFlowTransport::new().map_err(auth_transport_error)?;
+        let transport =
+            HttpRegisterFlowTransport::new_with_user_agent(state.platform().http_user_agent())
+                .map_err(auth_transport_error)?;
         let response: RegisterFlowsProbe =
             probe_register_flows(&payload.homeserver_url, &transport)
                 .await
@@ -247,6 +251,8 @@ mod tests {
     use crate::platform::{PlatformStatus, SecretVault, UnavailableSecretVault};
     use crate::transport::{CommandFuture, CommandRegistry};
 
+    const TEST_HTTP_USER_AGENT: &str = "Synara-Core-Test/1.0";
+
     #[derive(Default)]
     struct TestPlatform;
     impl Platform for TestPlatform {
@@ -258,6 +264,9 @@ mod tests {
         }
         fn secret_store(&self) -> Arc<dyn SecretVault + Send + Sync> {
             Arc::new(UnavailableSecretVault)
+        }
+        fn http_user_agent(&self) -> String {
+            TEST_HTTP_USER_AGENT.into()
         }
         fn notify(
             &self,
@@ -351,6 +360,18 @@ mod tests {
         );
     }
 
+    fn assert_test_user_agent(request: &str) {
+        let user_agent = request
+            .split("\r\n")
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("user-agent")
+                    .then_some(value.trim())
+            })
+            .expect("core auth probe must send a user-agent");
+        assert_eq!(user_agent, TEST_HTTP_USER_AGENT);
+    }
+
     async fn serve_login_flows_once(listener: &tokio::net::TcpListener) {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -360,12 +381,12 @@ mod tests {
             .read(&mut request)
             .await
             .expect("read login-flow request");
+        let request = std::str::from_utf8(&request[..read]).expect("HTTP request is text");
         assert!(
-            std::str::from_utf8(&request[..read])
-                .expect("HTTP request is text")
-                .starts_with("GET /_matrix/client/v3/login "),
+            request.starts_with("GET /_matrix/client/v3/login "),
             "handler must request only the login-types endpoint"
         );
+        assert_test_user_agent(request);
         let body = r#"{"flows":[{"type":"m.login.password"},{"type":"m.login.token","get_login_token":true},{"type":"m.login.application_service"},{"type":"m.login.custom"}]}"#;
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
@@ -470,6 +491,7 @@ mod tests {
             .await
             .expect("read registration-flow request");
         let request = std::str::from_utf8(&request[..read]).expect("HTTP request is text");
+        assert_test_user_agent(request);
         let (headers, request_body) = request
             .split_once("\r\n\r\n")
             .expect("registration request has headers and body");
