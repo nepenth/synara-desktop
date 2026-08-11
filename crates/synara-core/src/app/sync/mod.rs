@@ -1,9 +1,14 @@
-//! P4.1 — Sync service readiness / reconnect model (harness foundation).
+//! P4.1 — Sync service readiness / reconnect model (shared native core).
 //!
 //! Owns the product mapping around `matrix_sdk_ui::sync_service::SyncService`:
-//! - privacy-safe readiness phases aligned with diagnostics `SyncPhase`
+//! - privacy-safe readiness phases aligned with diagnostics [`SyncPhase`]
 //! - pure reconnect decision table (start / stop / restart)
 //! - session-generation-stamped owner for one authenticated client
+//!
+//! SNC-P1-5a: moved from src-tauri `matrix/sync` into the shared core
+//! (`crates/synara-core/src/app/sync`). src-tauri's `matrix/sync/mod.rs` is
+//! now an adapter that re-exports this module; the [`SyncPhase`] seam lives in
+//! [`sync_phase`] and is re-exported by src-tauri diagnostics/health.rs.
 //!
 //! **Harness / foundation only until cutover.** No production Tauri Matrix
 //! commands, no room-list deltas (P4.2), no dual-backend, no JS sync.
@@ -18,6 +23,7 @@ mod error;
 mod readiness;
 mod reconnect;
 mod service;
+mod sync_phase;
 
 pub use capability::{probe_sliding_sync, server_supports_sliding_sync};
 pub use error::SyncError;
@@ -30,6 +36,7 @@ pub use service::{
     assert_generation, build_sync_service, readiness_of, unconfigured_snapshot, SyncServiceConfig,
     SyncServiceOwner,
 };
+pub use sync_phase::SyncPhase;
 
 /// Static marker for link / schema smoke (no network, no Client).
 pub const MATRIX_SYNC_MARKER: &str = "matrix-sync-readiness-p4.1";
@@ -49,6 +56,3 @@ pub fn matrix_sync_markers() -> &'static str {
     debug_assert_eq!(MATRIX_SYNC_MARKER, "matrix-sync-readiness-p4.1");
     MATRIX_SYNC_MARKER
 }
-
-#[cfg(test)]
-mod tests;

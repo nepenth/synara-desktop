@@ -5,6 +5,8 @@
 //! behavior identical (P1 slices: dto, transport/ipc, task, then the app/
 //! domain chunks).
 
+pub mod app;
+
 pub mod dto;
 
 pub mod task;

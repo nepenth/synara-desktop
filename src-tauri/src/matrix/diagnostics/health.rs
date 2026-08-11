@@ -11,38 +11,11 @@ use crate::matrix::tasks::{TaskKind, TaskSupervisor};
 pub const MATRIX_HEALTH_SCHEMA_VERSION: u32 = 1;
 
 /// High-level sync activity phase (product-neutral; no homeserver details).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SyncPhase {
-    Idle,
-    CatchingUp,
-    Live,
-    Reconnecting,
-    Paused,
-    Failed,
-}
-
-impl SyncPhase {
-    pub const ALL: &'static [SyncPhase] = &[
-        Self::Idle,
-        Self::CatchingUp,
-        Self::Live,
-        Self::Reconnecting,
-        Self::Paused,
-        Self::Failed,
-    ];
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Idle => "idle",
-            Self::CatchingUp => "catching_up",
-            Self::Live => "live",
-            Self::Reconnecting => "reconnecting",
-            Self::Paused => "paused",
-            Self::Failed => "failed",
-        }
-    }
-}
+///
+/// SNC-P1-5a seam: the pure enum now lives in the shared core
+/// (`crates/synara-core/src/app/sync`); re-export here so every
+/// `crate::matrix::diagnostics::SyncPhase` path keeps resolving identically.
+pub use synara_core::app::sync::SyncPhase;
 
 /// Store subsystem readiness (no paths, keys, or account identifiers).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]

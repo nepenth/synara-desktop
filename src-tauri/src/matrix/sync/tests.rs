@@ -242,3 +242,59 @@ fn assert_generation_detects_stale_owner_without_service() {
     assert!(msg.contains("expected 5"));
     assert!(msg.contains("observed 4"));
 }
+
+/// SNC-P1-5a: `capability.rs` moved to `synara_core::app::sync`; these mirror
+/// its unit tests against the src-tauri re-export so the desktop test count
+/// (and sliding-sync capability coverage) stays identical to the pre-move
+/// baseline — the same shape SNC-P1-4 used to keep its desktop suite intact.
+#[cfg(test)]
+mod capability_mirror {
+    use super::server_supports_sliding_sync;
+    use std::collections::BTreeMap;
+
+    fn versions(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+    fn unstable(pairs: &[(&str, bool)]) -> BTreeMap<String, bool> {
+        pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect()
+    }
+
+    #[test]
+    fn empty_server_response_is_not_supported() {
+        assert!(!server_supports_sliding_sync(&[], &BTreeMap::new()));
+    }
+
+    #[test]
+    fn unstable_feature_marker_enables_support() {
+        assert!(server_supports_sliding_sync(
+            &versions(&["v1.11"]),
+            &unstable(&[("org.matrix.msc3575", true)])
+        ));
+        assert!(server_supports_sliding_sync(
+            &versions(&["v1.11"]),
+            &unstable(&[("org.matrix.msc4186", true)])
+        ));
+        // matrix-sdk 0.18's native SyncService uses
+        // /unstable/org.matrix.simplified_msc3575/sync (MSC4186).
+        assert!(server_supports_sliding_sync(
+            &versions(&["v1.11"]),
+            &unstable(&[("org.matrix.simplified_msc3575", true)])
+        ));
+    }
+
+    #[test]
+    fn versions_list_marker_enables_support() {
+        assert!(server_supports_sliding_sync(
+            &versions(&["v1.11", "org.matrix.msc3575"]),
+            &BTreeMap::new()
+        ));
+    }
+
+    #[test]
+    fn absent_or_false_markers_are_not_supported() {
+        assert!(!server_supports_sliding_sync(
+            &versions(&["v1.11", "v1.12"]),
+            &unstable(&[("org.matrix.msc3575", false), ("org.matrix.thing", true)])
+        ));
+    }
+}
