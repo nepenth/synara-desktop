@@ -10,6 +10,7 @@ mod desktop_file_transfer;
 mod desktop_integration;
 mod desktop_logging;
 mod desktop_notifications;
+mod desktop_platform;
 mod desktop_sanitize;
 mod desktop_secret_store;
 mod desktop_session;
@@ -27,6 +28,8 @@ mod menu;
 
 use serde::Serialize;
 use std::path::PathBuf;
+use std::sync::Arc;
+use synara_core::platform::Platform;
 use tauri::{
     webview::{NewWindowResponse, WebviewWindowBuilder},
     DragDropEvent, Emitter, LogicalSize, Manager, Size, WebviewUrl, WindowEvent,
@@ -625,6 +628,11 @@ pub fn run() {
             window.show()?;
             window.unminimize()?;
             window.set_focus()?;
+
+            // P1.6 seam: expose the desktop platform sink as managed state.
+            // No callers route through it yet (P2+); AppHandle call sites keep
+            // their current direct wiring until then.
+            app.manage::<Arc<dyn Platform>>(Arc::new(desktop_platform::TauriPlatform::new(app.handle().clone())));
             Ok(())
         })
         .build(context)
