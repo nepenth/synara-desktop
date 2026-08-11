@@ -53,6 +53,12 @@ pub trait Platform: Send + Sync + 'static {
     fn emit(&self, envelope: MatrixIpcEnvelope) -> Result<(), MatrixIpcError>;
     /// Key-value secret vault (session material, keys).
     fn secret_store(&self) -> Arc<dyn SecretVault + Send + Sync>;
+    /// Product identity for unauthenticated HTTP requests.
+    ///
+    /// This is a non-secret User-Agent value, not an authentication header,
+    /// token, or other credential. Returning an owned string keeps the core
+    /// independent of a shell's configuration and lifetime.
+    fn http_user_agent(&self) -> String;
     /// Deliver a native notification (tray/toast on desktop, APNs/badge on iOS).
     fn notify(&self, candidate: NotificationCandidate) -> Result<(), MatrixIpcError>;
     /// App icon badge count (dock/taskbar/today on iOS).
