@@ -5,6 +5,9 @@
 //! behavior identical (P1 slices: dto, transport/ipc, task, then the app/
 //! domain chunks).
 
+mod core;
+pub use core::Core;
+
 pub mod app;
 
 pub mod dto;
