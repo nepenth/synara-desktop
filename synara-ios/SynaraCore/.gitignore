@@ -3,3 +3,4 @@
 /Sources/synara_coreFFI/include/*
 !/Sources/synara_coreFFI/include/.gitkeep
 /Artifacts/
+/.build/

@@ -16,13 +16,13 @@ let package = Package(
         .library(name: "SynaraCore", targets: ["SynaraCore"]),
     ],
     targets: [
-        // The generator supplies this module's C header and module map. The
-        // generated Swift imports it as `synara_coreFFI`; no hand-written FFI
-        // declarations or Matrix wrapper are maintained here.
-        .target(
+        // The generator places the generated `synara_coreFFI` C module and the
+        // matching Rust static libraries in this XCFramework. The generated
+        // Swift imports that module; modeling it as a binary target ensures an
+        // app linking SynaraCore also links the real project-owned FFI.
+        .binaryTarget(
             name: "synara_coreFFI",
-            path: "Sources/synara_coreFFI",
-            publicHeadersPath: "include"
+            path: "Artifacts/SynaraCore.xcframework"
         ),
         .target(
             name: "SynaraCore",
