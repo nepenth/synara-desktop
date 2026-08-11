@@ -475,34 +475,28 @@ export type DesktopInvokeResult<T> =
   | { available: false }
   | { available: true; value: T | undefined };
 
-/** Format Tauri/native invoke rejections for diagnostics (not always `Error`). */
+export type DesktopInvokeOptions = {
+  /**
+   * Secret-bearing callers map their rejection to a static product diagnostic
+   * themselves. This prevents a duplicate generic entry before that mapping.
+   */
+  suppressErrorDiagnostic?: boolean;
+};
+
+/**
+ * Tauri/native rejection values are untrusted: a server body, URL, credential,
+ * or token can be embedded in any of their fields. Never log their contents.
+ */
 export const formatDesktopInvokeError = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.message || error.name || 'unknown error';
-  }
-  if (typeof error === 'string' && error.trim().length > 0) {
-    return error.trim();
-  }
-  if (error && typeof error === 'object') {
-    const record = error as Record<string, unknown>;
-    const parts = [record.message, record.code, record.diagnosticId, record.diagnostic_id]
-      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-      .map((value) => value.trim());
-    if (parts.length > 0) {
-      return parts.join(' | ');
-    }
-    try {
-      return JSON.stringify(error);
-    } catch {
-      // fall through
-    }
-  }
-  return 'unknown error';
+  // Explicitly consume the value without inspecting it: any field may be secret.
+  void error;
+  return 'native command rejected';
 };
 
 export const invokeDesktopWithAvailability = async <T = unknown>(
   command: string,
-  args?: Record<string, unknown>
+  args?: Record<string, unknown>,
+  options: DesktopInvokeOptions = {}
 ): Promise<DesktopInvokeResult<T>> => {
   const invoke = getDesktopInvoke();
   if (!invoke) {
@@ -512,7 +506,9 @@ export const invokeDesktopWithAvailability = async <T = unknown>(
   try {
     return { available: true, value: await invoke<T>(command, args) };
   } catch (error) {
-    recordDesktopDiagnostic(`${command} failed: ${formatDesktopInvokeError(error)}`);
+    if (!options.suppressErrorDiagnostic) {
+      recordDesktopDiagnostic(`${command} failed: ${formatDesktopInvokeError(error)}`);
+    }
     throw error;
   }
 };
@@ -840,9 +836,7 @@ export const readDesktopClipboardImage = async (): Promise<File | undefined> => 
     return new File([blob], 'clipboard-image.png', { type: 'image/png' });
   } catch (error) {
     recordDesktopDiagnostic(
-      `desktop clipboard image import failed: ${
-        error instanceof Error ? error.message : 'unknown error'
-      }`
+      `desktop clipboard image import failed: ${formatDesktopInvokeError(error)}`
     );
     return undefined;
   } finally {
@@ -867,9 +861,7 @@ export const readDesktopClipboardText = async (): Promise<string | undefined> =>
     return text;
   } catch (error) {
     recordDesktopDiagnostic(
-      `desktop clipboard text import failed: ${
-        error instanceof Error ? error.message : 'unknown error'
-      }`
+      `desktop clipboard text import failed: ${formatDesktopInvokeError(error)}`
     );
     return undefined;
   }

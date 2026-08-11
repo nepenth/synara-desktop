@@ -384,6 +384,39 @@ test('desktop invoke distinguishes missing bridge from explicit false failures',
   }
 });
 
+test('desktop invoke never persists raw native rejection fields', async () => {
+  const originalWindow = globalThis.window;
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  clearDesktopDiagnostics();
+
+  try {
+    (globalThis as any).window = {
+      __SYNARA_DESKTOP__: {
+        platform: 'tauri',
+        invoke: async (command: string, args?: Record<string, unknown>) => {
+          calls.push({ command, args });
+          if (command === 'desktop_append_log') return undefined;
+          throw {
+            message: 'server body password=hunter2 https://private.example/token=secret',
+            diagnosticId: 'p3.2-login-unlisted-native-value',
+          };
+        },
+      },
+    };
+
+    await assert.rejects(() => invokeDesktopWithAvailability('matrix_login_password'));
+
+    const logMessages = calls
+      .filter((call) => call.command === 'desktop_append_log')
+      .map((call) => call.args?.message);
+    assert.deepEqual(logMessages, ['matrix_login_password failed: native command rejected']);
+    assert.doesNotMatch(logMessages.join('\n'), /hunter2|private\.example|token=secret/);
+  } finally {
+    (globalThis as any).window = originalWindow;
+    clearDesktopDiagnostics();
+  }
+});
+
 test('desktop shortcut failures are recorded in diagnostics', async () => {
   const originalWindow = globalThis.window;
   clearDesktopDiagnostics();
@@ -1082,7 +1115,7 @@ test('desktop clipboard image read ignores clipboards without an image', async (
       command: 'desktop_append_log',
       args: {
         source: 'frontend',
-        message: 'desktop clipboard image import failed: clipboard does not contain an image',
+        message: 'desktop clipboard image import failed: native command rejected',
       },
     },
   ]);
@@ -1200,7 +1233,7 @@ test('desktop performance capabilities fall back when desktop ACL denies the com
     });
     assert.match(
       getDesktopDiagnosticEntries().join('\n'),
-      /desktop_get_performance_capabilities failed: Command desktop_get_performance_capabilities not allowed by ACL/
+      /desktop_get_performance_capabilities failed: native command rejected/
     );
   } finally {
     (globalThis as any).window = originalWindow;

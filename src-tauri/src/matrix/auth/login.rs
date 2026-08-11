@@ -14,7 +14,7 @@
 //! fields for harness/status. Optional host-side persistence after login is
 //! [`crate::matrix::lifecycle::persist_session_after_login`] (P3.5).
 
-use matrix_sdk::Client;
+use matrix_sdk::{Client, Error as MatrixSdkError, HttpError};
 
 use super::device_name::{platform_device_display_name, DevicePlatform};
 use super::error::AuthError;
@@ -169,22 +169,79 @@ fn validate_device_display_name(name: &str) -> Result<(), AuthError> {
 /// Uses structured UIA detection when available, then classifies from a
 /// redacted structural scan of the error Display text. Never embeds password,
 /// token, or raw homeserver error bodies into Display/diagnostic fields.
-pub(crate) fn map_login_sdk_error(err: matrix_sdk::Error) -> AuthError {
+pub(crate) fn map_login_sdk_error(err: MatrixSdkError) -> AuthError {
     if err.as_uiaa_response().is_some() {
         return AuthError::InteractiveAuthRequired {
             diagnostic_id: "p3.2-login-uiaa-required",
         };
     }
 
-    // Prefer structured kind presence for soft hints, without depending on a
-    // direct `ruma` crate import (ErrorKind is not re-exported as a matrix-sdk type).
+    // Prefer structured Matrix error kinds. These are the only server-response
+    // details we map; raw response text is never returned or logged.
     if let Some(kind) = err.client_api_error_kind() {
         let kind_debug = format!("{kind:?}");
         return classify_error_kind_debug(&kind_debug);
     }
 
+    // A standard Matrix error kind was not available. Preserve only a static,
+    // privacy-safe shape identifier so a support report can distinguish a
+    // transport failure, non-Matrix response, store failure, or decoder issue
+    // without exposing a URL, response body, password, or token.
+    if let Some(error) = classify_login_sdk_error_shape(&err) {
+        return error;
+    }
+
+    // Retain the existing redacted structural fallback for SDK variants that
+    // are not representable by the public error enum on every feature set.
     let raw = format!("{err}");
     classify_login_message_fallback(&raw)
+}
+
+fn classify_login_sdk_error_shape(err: &MatrixSdkError) -> Option<AuthError> {
+    let diagnostic_id = match err {
+        MatrixSdkError::Http(error) => match error.as_ref() {
+            HttpError::Reqwest(error) if error.is_timeout() => "p3.2-login-http-timeout",
+            HttpError::Reqwest(error) if error.is_connect() => "p3.2-login-http-connect",
+            HttpError::Reqwest(_) => "p3.2-login-http-request",
+            // Matrix API errors with a recognized errcode return above. This
+            // branch therefore means an unexpected/non-Matrix API response or
+            // response decoder failure, not a server message we may disclose.
+            HttpError::Api(_) => "p3.2-login-http-api-response",
+            HttpError::IntoHttp(_) => "p3.2-login-http-request-build",
+            HttpError::RefreshToken(_) => "p3.2-login-refresh-token",
+            HttpError::Cached(_) => "p3.2-login-http-cached",
+            #[cfg(target_os = "android")]
+            HttpError::VerifierBuilder(_) => "p3.2-login-http-verifier",
+        },
+        MatrixSdkError::SerdeJson(_) => "p3.2-login-response-decode",
+        MatrixSdkError::Io(_) => "p3.2-login-local-io",
+        MatrixSdkError::Url(_) => "p3.2-login-url-parse",
+        MatrixSdkError::Timeout => "p3.2-login-sdk-timeout",
+        MatrixSdkError::CryptoStoreError(_)
+        | MatrixSdkError::StateStore(_)
+        | MatrixSdkError::CrossProcessLockError(_)
+        | MatrixSdkError::BadCryptoStoreState
+        | MatrixSdkError::NoOlmMachine
+        | MatrixSdkError::OlmError(_)
+        | MatrixSdkError::MegolmError(_) => "p3.2-login-crypto-store",
+        _ => return None,
+    };
+
+    let error = match diagnostic_id {
+        "p3.2-login-http-timeout"
+        | "p3.2-login-http-connect"
+        | "p3.2-login-http-request"
+        | "p3.2-login-sdk-timeout" => AuthError::Connectivity { diagnostic_id },
+        "p3.2-login-http-request-build" | "p3.2-login-url-parse" => AuthError::InvalidInput {
+            diagnostic_id,
+            reason: "SDK could not construct the login request",
+        },
+        "p3.2-login-crypto-store" | "p3.2-login-local-io" => {
+            AuthError::SdkInvariant { diagnostic_id }
+        }
+        _ => AuthError::Unknown { diagnostic_id },
+    };
+    Some(error)
 }
 
 fn classify_error_kind_debug(kind_debug: &str) -> AuthError {
@@ -385,5 +442,16 @@ mod tests {
         assert!(name.starts_with("Synara "));
         let macos = LoginOptions::with_platform_device_name(DevicePlatform::MacOs);
         assert_eq!(macos.resolved_device_display_name(), "Synara macOS");
+    }
+
+    #[test]
+    fn sdk_timeout_gets_a_static_privacy_safe_diagnostic() {
+        let error = map_login_sdk_error(MatrixSdkError::Timeout);
+        assert_eq!(error.diagnostic_id(), "p3.2-login-sdk-timeout");
+        assert!(error.display_is_privacy_safe(&[
+            "https://private.example",
+            "password=hunter2",
+            "access_token=secret",
+        ]));
     }
 }

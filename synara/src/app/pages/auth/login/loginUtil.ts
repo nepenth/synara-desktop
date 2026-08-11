@@ -26,6 +26,7 @@ import { persistAuthenticatedSession } from '../../../state/sessionPersistence';
 import { pushSessionToSW } from '../../../../sw-session';
 import { recordClientDiagnostic } from '../../../utils/clientDiagnostics';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../../utils/desktop';
+import { recordDesktopDiagnostic } from '../../../utils/desktopDiagnostics';
 
 export enum GetBaseUrlError {
   NotAllow = 'NotAllow',
@@ -71,11 +72,14 @@ export enum LoginError {
 /** SDK-neutral login error with product errcode (replaces matrix-js-sdk MatrixError). */
 export class PasswordLoginError extends Error {
   readonly errcode: LoginError;
+  /** Static native diagnostic only; never a server body, URL, password, or token. */
+  readonly diagnosticId?: string;
 
-  constructor(errcode: LoginError, message?: string) {
+  constructor(errcode: LoginError, message?: string, diagnosticId?: string) {
     super(message ?? errcode);
     this.name = 'PasswordLoginError';
     this.errcode = errcode;
+    this.diagnosticId = diagnosticId;
   }
 }
 
@@ -151,6 +155,53 @@ const resolveLoginBaseUrl = async (
 
 type NativeCommandError = {
   code?: string;
+  diagnosticId?: string;
+  diagnostic_id?: string;
+};
+
+// Closed allowlist: native login diagnostics are static identifiers defined in
+// `src-tauri/src/matrix/auth/login.rs`. Do not accept arbitrary native text here:
+// this is the renderer's final privacy boundary before an identifier is displayed.
+const SAFE_NATIVE_LOGIN_DIAGNOSTIC_IDS = new Set([
+  'p3.2-device-display-name-too-long',
+  'p3.2-empty-device-display-name',
+  'p3.2-empty-password',
+  'p3.2-empty-user-id',
+  'p3.2-login-connectivity',
+  'p3.2-login-crypto-store',
+  'p3.2-login-endpoint-not-found',
+  'p3.2-login-homeserver-unavailable',
+  'p3.2-login-http-api-response',
+  'p3.2-login-http-cached',
+  'p3.2-login-http-connect',
+  'p3.2-login-http-request',
+  'p3.2-login-http-request-build',
+  'p3.2-login-http-timeout',
+  'p3.2-login-http-verifier',
+  'p3.2-login-local-io',
+  'p3.2-login-rate-limited',
+  'p3.2-login-refresh-token',
+  'p3.2-login-rejected',
+  'p3.2-login-response-decode',
+  'p3.2-login-sdk-timeout',
+  'p3.2-login-uiaa-required',
+  'p3.2-login-unknown',
+  'p3.2-login-unknown-rejected',
+  'p3.2-login-unknown-token',
+  'p3.2-login-unrecognized',
+  'p3.2-login-url-parse',
+  'p3.2-login-user-deactivated',
+  'p3.2-user-id-invalid-chars',
+  'p3.2-user-id-too-long',
+]);
+
+const nativeDiagnosticId = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object') return undefined;
+  const candidate = error as NativeCommandError;
+  const diagnosticId = candidate.diagnosticId ?? candidate.diagnostic_id;
+  return typeof diagnosticId === 'string' && SAFE_NATIVE_LOGIN_DIAGNOSTIC_IDS.has(diagnosticId)
+    ? diagnosticId
+    : undefined;
 };
 
 const mapNativeLoginError = (error: unknown): PasswordLoginError => {
@@ -159,7 +210,7 @@ const mapNativeLoginError = (error: unknown): PasswordLoginError => {
   const errcode = Object.values(LoginError).includes(code as LoginError)
     ? (code as LoginError)
     : LoginError.Unknown;
-  return new PasswordLoginError(errcode);
+  return new PasswordLoginError(errcode, undefined, nativeDiagnosticId(error));
 };
 
 const passwordLoginUser = (data: PasswordLoginRequest): string | undefined =>
@@ -177,7 +228,9 @@ export const loginPassword = async (
 ): Promise<PasswordLoginResponse> => {
   const isDesktop = options.isDesktop ?? isSynaraDesktop;
   const invoke: PasswordLoginInvoke =
-    options.invoke ?? ((command, args) => invokeDesktopWithAvailability(command, args));
+    options.invoke ??
+    ((command, args) =>
+      invokeDesktopWithAvailability(command, args, { suppressErrorDiagnostic: true }));
 
   if (!isDesktop()) {
     throw new PasswordLoginError(
@@ -208,7 +261,13 @@ export const loginPassword = async (
     };
   } catch (error) {
     if (error instanceof PasswordLoginError) throw error;
-    throw mapNativeLoginError(error);
+    const mappedError = mapNativeLoginError(error);
+    // This is deliberately a static, allowlisted code rather than the native
+    // rejection: login errors can carry server-controlled text or credentials.
+    recordDesktopDiagnostic(
+      `matrix_login_password failed: ${mappedError.diagnosticId ?? 'p3.2-login-unknown'}`
+    );
+    throw mappedError;
   }
 };
 
