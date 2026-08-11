@@ -10,8 +10,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 core_udl="$repo_root/crates/synara-core/src/synara_core.udl"
 package_root="$repo_root/synara-ios/SynaraCore"
 generated_dir="$package_root/Sources/SynaraCore/Generated"
+ffi_include_dir="$package_root/Sources/synara_coreFFI/include"
 artifacts_dir="$package_root/Artifacts"
-uniffi_version="0.28.3"
 targets=(aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-darwin)
 
 fail() {
@@ -41,14 +41,6 @@ done
 work_dir="$(mktemp -d "${TMPDIR:-/tmp}/synara-core-uniffi.XXXXXX")"
 trap 'rm -rf "$work_dir"' EXIT
 cargo_target_dir="$work_dir/target"
-tool_root="$repo_root/target/uniffi-tools-$uniffi_version"
-bindgen="$tool_root/bin/uniffi-bindgen"
-
-# Install an exact, project-selected generator outside the source tree. It is
-# cached under ignored target/ only after this explicit Apple build is invoked.
-if [[ ! -x "$bindgen" ]]; then
-  cargo install --locked --root "$tool_root" --version "$uniffi_version" uniffi_bindgen
-fi
 
 for target in "${targets[@]}"; do
   CARGO_TARGET_DIR="$cargo_target_dir" cargo build --locked --release --package synara-core --target "$target"
@@ -56,15 +48,19 @@ done
 
 swift_tmp="$work_dir/Swift"
 mkdir -p "$swift_tmp"
-"$bindgen" generate "$core_udl" --language swift --out-dir "$swift_tmp"
+# Run the repository's own lockfile-pinned generator, never a user/global tool.
+CARGO_TARGET_DIR="$cargo_target_dir" cargo run --locked --package synara-core-bindgen \
+  -- generate "$core_udl" --language swift --out-dir "$swift_tmp" --no-format
 
 framework_tmp="$work_dir/SynaraCore.xcframework"
 xcodebuild -create-xcframework   -library "$cargo_target_dir/aarch64-apple-ios/release/libsynara_core.a"   -library "$cargo_target_dir/aarch64-apple-ios-sim/release/libsynara_core.a"   -library "$cargo_target_dir/aarch64-apple-darwin/release/libsynara_core.a"   -output "$framework_tmp"
 
 # Publish only an all-target result. The generated package paths are ignored so
 # source control never mistakes generated output for hand-maintained Swift.
-rm -rf "$generated_dir" "$artifacts_dir"
-mkdir -p "$generated_dir" "$artifacts_dir"
-mv "$swift_tmp"/*.swift "$generated_dir/"
+rm -rf "$generated_dir" "$ffi_include_dir" "$artifacts_dir"
+mkdir -p "$generated_dir" "$ffi_include_dir" "$artifacts_dir"
+mv "$swift_tmp"/synara_core.swift "$generated_dir/"
+mv "$swift_tmp"/synara_coreFFI.h "$ffi_include_dir/synara_coreFFI.h"
+mv "$swift_tmp"/synara_coreFFI.modulemap "$ffi_include_dir/module.modulemap"
 mv "$framework_tmp" "$artifacts_dir/SynaraCore.xcframework"
 printf 'Generated SynaraCore Swift bindings and XCFramework at %s\n' "$package_root"

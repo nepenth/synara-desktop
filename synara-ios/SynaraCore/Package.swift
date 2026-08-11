@@ -16,9 +16,21 @@ let package = Package(
         .library(name: "SynaraCore", targets: ["SynaraCore"]),
     ],
     targets: [
+        // The generator supplies this module's C header and module map. The
+        // generated Swift imports it as `synara_coreFFI`; no hand-written FFI
+        // declarations or Matrix wrapper are maintained here.
+        .target(
+            name: "synara_coreFFI",
+            path: "Sources/synara_coreFFI",
+            publicHeadersPath: "include"
+        ),
         .target(
             name: "SynaraCore",
-            path: "Sources/SynaraCore"
+            dependencies: ["synara_coreFFI"],
+            path: "Sources/SynaraCore",
+            // Keep the tracked generation instructions out of the module while
+            // accepting generated .swift files in this directory at build time.
+            exclude: ["Generated/README.md"]
         ),
     ]
 )
