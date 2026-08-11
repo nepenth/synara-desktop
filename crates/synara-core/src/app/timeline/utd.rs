@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use crate::matrix::dto::{EventId, RoomId, TimelineEncryptedUnavailableItem, TimelineItemId};
+use crate::dto::{EventId, RoomId, TimelineEncryptedUnavailableItem, TimelineItemId};
 
 use super::error::TimelineError;
 

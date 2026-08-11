@@ -1,6 +1,6 @@
 //! Privacy-safe errors for timeline registry + projection (P5.1 / P5.2).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Timeline registry / lifecycle / projection failure.
 #[derive(Debug)]

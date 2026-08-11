@@ -24,7 +24,7 @@ use matrix_sdk_ui::timeline::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::matrix::dto::{EventId, RoomId, TimelineItemId, UserId};
+use crate::dto::{EventId, RoomId, TimelineItemId, UserId};
 
 use super::TimelineMediaRegistry;
 

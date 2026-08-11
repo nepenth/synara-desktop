@@ -22,7 +22,6 @@ mod composer;
 mod delta;
 mod error;
 mod focus;
-mod live;
 mod media;
 mod pagination;
 mod projection;
@@ -51,16 +50,6 @@ pub use delta::{TimelineDeltaBatch, TimelineDeltaOp, TimelineSnapshot};
 pub use error::TimelineError;
 pub use focus::{
     ContextWindow, FocusOpenOutcome, FocusOpenRequest, NavigationPhase, TimelineFocus, TimelineMode,
-};
-pub use live::{
-    NativeDecryptionState, NativeReactionMutation, NativeReactionMutationResult,
-    NativeTimelineCloseRequest, NativeTimelineDirection, NativeTimelineEventReadback,
-    NativeTimelineItem, NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition,
-    NativeTimelineOpenReadback, NativeTimelineOpenRequest, NativeTimelineReaction,
-    NativeTimelineReactionSender, NativeTimelineReadAction, NativeTimelineReadStateReadback,
-    NativeTimelineReadStateRequest, NativeTimelineRegistry, NativeTimelineSnapshot,
-    NativeTimelineViewPaginationRequest, NativeTimelineViewportHint, NativeUtdPhase,
-    NativeUtdStatus, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
 };
 pub use media::{
     is_timeline_media_handle, TimelineMediaRegistry, TimelineMediaSource,
