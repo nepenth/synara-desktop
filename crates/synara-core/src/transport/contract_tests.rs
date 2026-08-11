@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 /// Fixture root relative to `src-tauri` package (`CARGO_MANIFEST_DIR`).
 fn fixture(name: &str) -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../docs/matrix-rust-sdk/ipc/fixtures")
+        .join("../../docs/matrix-rust-sdk/ipc/fixtures")
         .join(name);
     std::fs::read_to_string(&path).unwrap_or_else(|e| {
         panic!("failed to read fixture {}: {e}", path.display());
@@ -344,10 +344,10 @@ fn fixture_snapshot_with_dto_shaped_body() {
                 Some("!room:example.org")
             );
             // DTO composition: body room summary parses as domain DTO
-            let summary: crate::matrix::dto::RoomSummary =
+            let summary: crate::dto::RoomSummary =
                 serde_json::from_value(rooms[0].clone()).expect("RoomSummary DTO");
             assert_eq!(summary.room_id, "!room:example.org");
-            assert_eq!(summary.membership, crate::matrix::dto::Membership::Join);
+            assert_eq!(summary.membership, crate::dto::Membership::Join);
         }
         other => panic!("expected snapshot, got {}", other.kind()),
     }
@@ -702,8 +702,15 @@ fn fixture_inventory_matches_contract_lists() {
 
 #[test]
 fn ipc_module_marker_has_no_sdk_surface() {
-    // matrix_ipc_schema_markers must not require Client construction.
-    let marker = crate::matrix::matrix_ipc_schema_markers();
-    assert!(marker.contains("matrix-ipc-protocol-v1"));
-    assert!(marker.contains("domain-dtos-p1.4"));
+    // SNC-P1-3: `matrix_ipc_schema_markers` is composed in the src-tauri shell
+    // from these transport constants via the `crate::matrix::ipc` re-export;
+    // from synara-core we assert the transport module's own protocol marker
+    // identity instead — the wire modules stay free of matrix_sdk types either
+    // way (compile-time + marker).
+    assert_eq!(MATRIX_IPC_PROTOCOL_VERSION, 1);
+    assert!(!MATRIX_IPC_KINDS.is_empty());
+    assert!(!MatrixIpcErrorCategory::ALL.is_empty());
+    assert!(!StreamTopic::ALL.is_empty());
+    const { assert!(FORBID_MEDIA_BYTES_OVER_JSON_IPC) };
+    const { assert!(MAX_STREAM_QUEUE_DEPTH > 0) };
 }

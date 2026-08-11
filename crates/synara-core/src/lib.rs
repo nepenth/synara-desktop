@@ -6,3 +6,5 @@
 //! the domain modules here by `git mv` + path updates only (no behavior change).
 
 pub mod dto;
+
+pub mod transport;

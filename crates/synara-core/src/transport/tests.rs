@@ -3,10 +3,11 @@
 use super::*;
 use serde_json::json;
 
-/// Fixture root relative to `src-tauri` package (`CARGO_MANIFEST_DIR`).
+/// Fixture root relative to this package (`CARGO_MANIFEST_DIR`). The fixtures
+/// live at the repository root under `docs/matrix-rust-sdk/ipc/fixtures`.
 fn fixture(name: &str) -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../docs/matrix-rust-sdk/ipc/fixtures")
+        .join("../../docs/matrix-rust-sdk/ipc/fixtures")
         .join(name);
     std::fs::read_to_string(&path).unwrap_or_else(|e| {
         panic!("failed to read fixture {}: {e}", path.display());
@@ -16,7 +17,7 @@ fn fixture(name: &str) -> String {
 /// Schema catalog root (shared Rust/TS compatibility oracle).
 fn schema_catalog() -> serde_json::Value {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../docs/matrix-rust-sdk/ipc/schema_catalog_v1.json");
+        .join("../../docs/matrix-rust-sdk/ipc/schema_catalog_v1.json");
     let raw = std::fs::read_to_string(&path).unwrap_or_else(|e| {
         panic!("failed to read schema catalog {}: {e}", path.display());
     });
