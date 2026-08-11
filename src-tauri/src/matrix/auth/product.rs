@@ -155,7 +155,7 @@ pub struct MatrixLoginIdentity {
     pub homeserver_url: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum MatrixSessionSnapshot {
     LoggedOut,
