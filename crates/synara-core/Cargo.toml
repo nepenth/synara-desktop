@@ -5,6 +5,11 @@ description = "Transport-agnostic shared native core for Synara (desktop + iOS)"
 license = "AGPL-3.0-only"
 edition = "2021"
 
+# P4-1: Apple shells link the same project-owned library; no prebuilt Matrix
+# wrapper is used for this binding surface.
+[lib]
+crate-type = ["lib", "staticlib", "cdylib"]
+
 [dependencies]
 # P1.4 domain DTOs (moved from src-tauri/matrix/dto, SNC-P1-2) derive serde.
 serde = { version = "1.0.193", features = ["derive"] }
@@ -32,6 +37,12 @@ futures-util = "0.3"
 # invite-card avatar media sources (getrandom::fill). Pin matches src-tauri
 # (getrandom 0.3, default features).
 getrandom = "0.3"
+# P4-1 binding metadata/runtime. The version is pinned so the UDL scaffolding,
+# generated Swift, and Apple libraries are produced by one reproducible toolchain.
+uniffi = { version = "=0.28.3" }
+
+[build-dependencies]
+uniffi = { version = "=0.28.3", features = ["build"] }
 
 [dev-dependencies]
 # dto/tests.rs fixture + serde round-trip tests.

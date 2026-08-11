@@ -1,0 +1,7 @@
+// P4-1: deliberately narrow FFI bootstrap. Product commands and platform
+// callbacks are added only as their P4 migration slices land. Keeping this
+// namespace generated from a project-owned UDL proves the binding pipeline
+// without exposing credentials, Matrix SDK types, or shell-owned services.
+namespace synara_core {
+  string binding_scaffold_version();
+};
