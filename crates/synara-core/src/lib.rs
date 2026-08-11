@@ -6,7 +6,7 @@
 //! domain chunks).
 
 // Generated from `src/synara_core.udl` by build.rs. Keep this at crate root:
-// its exported surface is intentionally limited to the P4-1 binding bootstrap.
+// P4-2 adds only credential-free login-flow discovery to the P4-1 bootstrap.
 uniffi::include_scaffolding!("synara_core");
 
 /// Identifies the project-owned UniFFI surface without exposing a product
@@ -15,6 +15,9 @@ uniffi::include_scaffolding!("synara_core");
 pub fn binding_scaffold_version() -> String {
     env!("CARGO_PKG_VERSION").to_owned()
 }
+
+mod ffi;
+pub use ffi::{login_flows, LoginFlowDto, LoginFlowsError};
 
 mod core;
 pub use core::Core;

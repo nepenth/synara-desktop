@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const required = [
   "crates/synara-core/src/synara_core.udl",
+  "crates/synara-core/src/ffi.rs",
   "crates/synara-core/build.rs",
   "crates/synara-core-bindgen/Cargo.toml",
   "crates/synara-core-bindgen/src/main.rs",
@@ -32,6 +33,7 @@ for (const path of required) {
 const cargo = readFileSync(resolve(root, "crates/synara-core/Cargo.toml"), "utf8");
 const udl = readFileSync(resolve(root, "crates/synara-core/src/synara_core.udl"), "utf8");
 const lib = readFileSync(resolve(root, "crates/synara-core/src/lib.rs"), "utf8");
+const ffi = readFileSync(resolve(root, "crates/synara-core/src/ffi.rs"), "utf8");
 const packageManifest = readFileSync(resolve(root, "synara-ios/SynaraCore/Package.swift"), "utf8");
 const ignored = readFileSync(resolve(root, "synara-ios/SynaraCore/.gitignore"), "utf8");
 const generator = readFileSync(resolve(root, "scripts/generate-synara-core-swift.sh"), "utf8");
@@ -42,8 +44,15 @@ const assertions = [
   [readFileSync(resolve(root, "crates/synara-core-bindgen/Cargo.toml"), "utf8"), 'uniffi = { version = "=0.28.3", features = ["cli"] }', "pinned project-owned UniFFI generator"],
   [cargo, 'features = ["build"]', "UniFFI build scaffolding"],
   [udl, "namespace synara_core", "project-owned UniFFI namespace"],
-  [udl, "binding_scaffold_version", "minimal exported binding"],
+  [udl, "binding_scaffold_version", "P4-1 binding bootstrap"],
+  [udl, "[Async, Throws=LoginFlowsError]", "async typed login-flow operation"],
+  [udl, "sequence<LoginFlowDto> login_flows(string homeserver_url)", "typed login-flow return"],
+  [udl, "dictionary LoginFlowDto", "typed login-flow DTO"],
+  [udl, "boolean? get_login_token", "optional token-capability metadata"],
+  [udl, "interface LoginFlowsError", "typed privacy-safe login-flow error"],
   [lib, 'uniffi::include_scaffolding!("synara_core")', "Rust FFI scaffolding inclusion"],
+  [ffi, "discover_login_flows", "shared-core login-flow discovery call"],
+  [ffi, "HttpLoginFlowTransport::new()", "bounded Core login-flow transport"],
   [readFileSync(resolve(root, "crates/synara-core/build.rs"), "utf8"), "unexpected UniFFI 0.28.3 metadata-doc shape", "fail-closed generated-scaffolding lint patch"],
   [packageManifest, 'name: "SynaraCore"', "Swift package target"],
   [packageManifest, 'name: "synara_coreFFI"', "generated C FFI package target"],
