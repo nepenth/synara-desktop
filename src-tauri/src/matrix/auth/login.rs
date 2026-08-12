@@ -217,13 +217,24 @@ fn classify_login_sdk_error_shape(err: &MatrixSdkError) -> Option<AuthError> {
         MatrixSdkError::Io(_) => "p3.2-login-local-io",
         MatrixSdkError::Url(_) => "p3.2-login-url-parse",
         MatrixSdkError::Timeout => "p3.2-login-sdk-timeout",
+        // Sub-classified store failures so a privacy-safe support report can
+        // distinguish the three distinct local failure classes (and their
+        // remediation) without exposing any raw SDK text:
+        // - CrossProcessLockError: another running instance holds the store
+        //   lock (macOS users often see this after launching while a prior
+        //   instance is still open, or after an unclean exit left a stale lock).
+        // - CryptoStoreError/StateStore/BadCryptoStoreState: local store open,
+        //   migration, or schema/cipher failure (e.g. leftover store created by
+        //   a different app build or a changed store key).
+        // - NoOlmMachine/OlmError/MegolmError: encryption engine could not be
+        //   initialized; fails closed.
+        MatrixSdkError::CrossProcessLockError(_) => "p3.2-login-store-locked",
         MatrixSdkError::CryptoStoreError(_)
         | MatrixSdkError::StateStore(_)
-        | MatrixSdkError::CrossProcessLockError(_)
-        | MatrixSdkError::BadCryptoStoreState
-        | MatrixSdkError::NoOlmMachine
+        | MatrixSdkError::BadCryptoStoreState => "p3.2-login-store-open-failed",
+        MatrixSdkError::NoOlmMachine
         | MatrixSdkError::OlmError(_)
-        | MatrixSdkError::MegolmError(_) => "p3.2-login-crypto-store",
+        | MatrixSdkError::MegolmError(_) => "p3.2-login-olm-unavailable",
         _ => return None,
     };
 
@@ -236,9 +247,10 @@ fn classify_login_sdk_error_shape(err: &MatrixSdkError) -> Option<AuthError> {
             diagnostic_id,
             reason: "SDK could not construct the login request",
         },
-        "p3.2-login-crypto-store" | "p3.2-login-local-io" => {
-            AuthError::SdkInvariant { diagnostic_id }
-        }
+        "p3.2-login-store-locked"
+        | "p3.2-login-store-open-failed"
+        | "p3.2-login-olm-unavailable"
+        | "p3.2-login-local-io" => AuthError::SdkInvariant { diagnostic_id },
         _ => AuthError::Unknown { diagnostic_id },
     };
     Some(error)
@@ -453,5 +465,40 @@ mod tests {
             "password=hunter2",
             "access_token=secret",
         ]));
+    }
+
+    #[test]
+    fn store_lock_error_maps_to_precise_static_diagnostic() {
+        // Cross-process lock held by another instance -> distinct static id
+        // (distinguishes "another Synara instance is running" from an invalid
+        // password or a local store corruption; never leaks lock internals).
+        let unlock_busy = matrix_sdk::cross_process_lock::CrossProcessLockError::Unobtained(
+            matrix_sdk::cross_process_lock::CrossProcessLockUnobtained::Busy,
+        );
+        let err = map_login_sdk_error(MatrixSdkError::CrossProcessLockError(Box::new(unlock_busy)));
+        assert_eq!(err.diagnostic_id(), "p3.2-login-store-locked");
+        assert!(err.display_is_privacy_safe(&[
+            "syt_token",
+            "/Users/alice/Library/Application Support/Synara",
+            "password=hunter2"
+        ]));
+    }
+
+    #[test]
+    fn store_open_failure_maps_to_precise_static_diagnostic() {
+        let err = map_login_sdk_error(MatrixSdkError::CryptoStoreError(Box::new(
+            matrix_sdk::encryption::CryptoStoreError::AccountUnset,
+        )));
+        assert_eq!(err.diagnostic_id(), "p3.2-login-store-open-failed");
+
+        let state = map_login_sdk_error(MatrixSdkError::BadCryptoStoreState);
+        assert_eq!(state.diagnostic_id(), "p3.2-login-store-open-failed");
+    }
+
+    #[test]
+    fn olm_unavailable_maps_to_precise_static_diagnostic() {
+        let err = map_login_sdk_error(MatrixSdkError::NoOlmMachine);
+        assert_eq!(err.diagnostic_id(), "p3.2-login-olm-unavailable");
+        assert!(err.display_is_privacy_safe(&["syt_token", "olm_session", "refresh_token=rrr"]));
     }
 }

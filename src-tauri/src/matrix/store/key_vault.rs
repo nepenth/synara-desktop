@@ -9,13 +9,20 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use super::key_material::{StoreKeyId, StoreKeyMaterial, STORE_KEY_LEN};
+use super::identity::AccountIdentity;
+use super::key_material::{StoreKeyId, StoreKeyMaterial, STORE_KEY_LEN, STORE_KEY_REVISION};
+use super::paths::StoreKeyCreationPolicy;
 
 /// Privacy-safe vault errors (never include key bytes).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StoreKeyVaultError {
-    /// No key stored for this id (caller may generate — must not wipe stores).
+    /// No key stored for this id.
     NotFound,
+    /// An existing account layout has no current or known legacy key.
+    ///
+    /// Key creation is forbidden here so an encrypted store can never be
+    /// silently opened with replacement key material.
+    MissingKeyForExistingStore,
     /// Backend unavailable / locked / denied.
     BackendUnavailable { diagnostic_id: &'static str },
     /// Stored payload corrupt or wrong length.
@@ -28,6 +35,9 @@ impl std::fmt::Display for StoreKeyVaultError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NotFound => write!(f, "store key not found"),
+            Self::MissingKeyForExistingStore => {
+                write!(f, "store key missing for existing store")
+            }
             Self::BackendUnavailable { diagnostic_id } => {
                 write!(f, "store key vault unavailable ({diagnostic_id})")
             }
@@ -230,6 +240,50 @@ fn map_keyring_error(error: keyring::Error) -> StoreKeyVaultError {
         _ => StoreKeyVaultError::BackendUnavailable {
             diagnostic_id: "r0.4-keyring-unavailable",
         },
+    }
+}
+
+/// Read the current revision key or migrate one known older Keychain/Secret
+/// Service entry forward without changing its bytes.
+///
+/// This is the key-vault half of a schema/key-revision upgrade: a future bump
+/// adds `StoreKeyId::for_revision(..., old)` mappings, and this helper copies
+/// the old key into the new ID before creating anything. It never deletes the
+/// old entry automatically; reset/key rotation remains an explicit action.
+///
+/// `creation_policy` must be probed from [`StorePaths`] before migration or
+/// client open creates the account layout. A new key is generated only for a
+/// genuinely fresh account root. Existing account data with neither a current
+/// nor known legacy key fails closed instead of receiving replacement key
+/// material.
+pub fn get_or_migrate_store_key<V: StoreKeyVault + ?Sized>(
+    vault: &V,
+    identity: &AccountIdentity,
+    creation_policy: StoreKeyCreationPolicy,
+) -> Result<StoreKeyMaterial, StoreKeyVaultError> {
+    let current = StoreKeyId::from_identity(identity);
+    if let Some(key) = vault.get(&current)? {
+        return Ok(key);
+    }
+
+    for revision in (1..STORE_KEY_REVISION).rev() {
+        let Some(legacy) = StoreKeyId::for_revision(identity, revision) else {
+            continue;
+        };
+        if legacy == current {
+            continue;
+        }
+        if let Some(key) = vault.get(&legacy)? {
+            vault.set(&current, &key)?;
+            return Ok(key);
+        }
+    }
+
+    match creation_policy {
+        StoreKeyCreationPolicy::AllowForFreshStore => get_or_create_store_key(vault, &current),
+        StoreKeyCreationPolicy::ForbidForExistingStore => {
+            Err(StoreKeyVaultError::MissingKeyForExistingStore)
+        }
     }
 }
 

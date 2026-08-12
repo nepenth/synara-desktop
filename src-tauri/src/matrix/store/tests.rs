@@ -363,3 +363,191 @@ fn ensure_dirs_refuses_symlink_at_account_root() {
 
     let _ = fs::remove_dir_all(&root);
 }
+
+#[test]
+fn key_revision_current_id_is_stable_and_known() {
+    let identity = alice();
+    let current = StoreKeyId::from_identity(&identity);
+    assert_eq!(STORE_KEY_REVISION, 1);
+    assert_eq!(current.service(), STORE_KEY_SERVICE_V1);
+    assert_eq!(
+        StoreKeyId::for_revision(&identity, STORE_KEY_REVISION),
+        Some(current.clone())
+    );
+    assert_eq!(
+        StoreKeyId::for_revision(&identity, STORE_KEY_REVISION + 1),
+        None
+    );
+}
+
+#[test]
+fn current_revision_key_remains_usable_when_existing_store_disallows_generation() {
+    // STORE_KEY_REVISION is currently the first key-id revision, so there is
+    // no distinct legacy id to migrate in this build. A future revision adds
+    // its historical mapping to `StoreKeyId::for_revision`; the current-key
+    // path must remain usable while new-key creation is forbidden.
+    let vault = InMemoryStoreKeyVault::new();
+    let identity = alice();
+    let id = StoreKeyId::from_identity(&identity);
+    let existing = StoreKeyMaterial::generate().unwrap();
+    vault.set(&id, &existing).unwrap();
+
+    let resolved = get_or_migrate_store_key(
+        &vault,
+        &identity,
+        StoreKeyCreationPolicy::ForbidForExistingStore,
+    )
+    .unwrap();
+    assert!(resolved.equals(&existing));
+    assert_eq!(vault.len(), 1, "current key must not be rotated");
+}
+
+#[derive(Debug)]
+struct GetFailingVault {
+    get_error: StoreKeyVaultError,
+    set_attempts: std::sync::atomic::AtomicUsize,
+}
+
+impl GetFailingVault {
+    fn new(get_error: StoreKeyVaultError) -> Self {
+        Self {
+            get_error,
+            set_attempts: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+
+    fn set_attempts(&self) -> usize {
+        self.set_attempts.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+impl StoreKeyVault for GetFailingVault {
+    fn get(&self, _id: &StoreKeyId) -> Result<Option<StoreKeyMaterial>, StoreKeyVaultError> {
+        Err(self.get_error.clone())
+    }
+
+    fn set(&self, _id: &StoreKeyId, _key: &StoreKeyMaterial) -> Result<(), StoreKeyVaultError> {
+        self.set_attempts
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(())
+    }
+
+    fn delete(&self, _id: &StoreKeyId) -> Result<bool, StoreKeyVaultError> {
+        Ok(false)
+    }
+}
+
+#[test]
+fn existing_encrypted_store_with_missing_key_fails_closed_without_replacement() {
+    let root = temp_root("existing-key-missing");
+    let identity = alice();
+    let paths = StorePaths::derive(&root, &identity).unwrap();
+    paths.ensure_dirs().unwrap();
+    let encrypted_marker = paths.state_dir().join("matrix-sdk-state.sqlite3");
+    fs::write(&encrypted_marker, b"encrypted sqlite bytes").unwrap();
+
+    let policy = paths.key_creation_policy().unwrap();
+    assert_eq!(policy, StoreKeyCreationPolicy::ForbidForExistingStore);
+    let vault = InMemoryStoreKeyVault::new();
+    let error = get_or_migrate_store_key(&vault, &identity, policy).unwrap_err();
+
+    assert_eq!(error, StoreKeyVaultError::MissingKeyForExistingStore);
+    assert!(vault.is_empty(), "a missing key must not be replaced");
+    assert_eq!(
+        fs::read(&encrypted_marker).unwrap(),
+        b"encrypted sqlite bytes"
+    );
+    assert!(!error.to_string().contains(root.to_string_lossy().as_ref()));
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn unavailable_keychain_for_existing_store_never_attempts_new_key_creation() {
+    let root = temp_root("existing-keychain-locked");
+    let identity = alice();
+    let paths = StorePaths::derive(&root, &identity).unwrap();
+    paths.ensure_dirs().unwrap();
+    let encrypted_marker = paths.state_dir().join("matrix-sdk-crypto.sqlite3");
+    fs::write(&encrypted_marker, b"encrypted crypto bytes").unwrap();
+
+    let vault = GetFailingVault::new(StoreKeyVaultError::BackendUnavailable {
+        diagnostic_id: "r0.4-keyring-no-storage-access",
+    });
+    let error = get_or_migrate_store_key(&vault, &identity, paths.key_creation_policy().unwrap())
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        StoreKeyVaultError::BackendUnavailable { .. }
+    ));
+    assert_eq!(
+        vault.set_attempts(),
+        0,
+        "locked Keychain must not be written"
+    );
+    assert_eq!(
+        fs::read(&encrypted_marker).unwrap(),
+        b"encrypted crypto bytes"
+    );
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn corrupt_keychain_payload_for_existing_store_never_attempts_replacement() {
+    let root = temp_root("existing-keychain-corrupt");
+    let identity = alice();
+    let paths = StorePaths::derive(&root, &identity).unwrap();
+    paths.ensure_dirs().unwrap();
+    let encrypted_marker = paths.state_dir().join("matrix-sdk-state.sqlite3");
+    fs::write(&encrypted_marker, b"encrypted sqlite bytes").unwrap();
+
+    let vault = GetFailingVault::new(StoreKeyVaultError::CorruptPayload);
+    let error = get_or_migrate_store_key(&vault, &identity, paths.key_creation_policy().unwrap())
+        .unwrap_err();
+
+    assert_eq!(error, StoreKeyVaultError::CorruptPayload);
+    assert_eq!(
+        vault.set_attempts(),
+        0,
+        "corrupt Keychain data must not be replaced"
+    );
+    assert_eq!(
+        fs::read(&encrypted_marker).unwrap(),
+        b"encrypted sqlite bytes"
+    );
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn fresh_store_first_run_creates_key_then_initializes_layout() {
+    let root = temp_root("fresh-key-create");
+    let identity = alice();
+    let paths = StorePaths::derive(&root, &identity).unwrap();
+    assert!(!paths.account_root().exists());
+    assert_eq!(
+        paths.key_creation_policy().unwrap(),
+        StoreKeyCreationPolicy::AllowForFreshStore
+    );
+    assert!(
+        !paths.account_root().exists(),
+        "the preflight must not initialize a store layout"
+    );
+
+    let vault = InMemoryStoreKeyVault::new();
+    let key = get_or_migrate_store_key(
+        &vault,
+        &identity,
+        StoreKeyCreationPolicy::AllowForFreshStore,
+    )
+    .unwrap();
+    assert_eq!(vault.len(), 1);
+    migrate_store_to_current(&paths).unwrap();
+    assert!(paths.account_root().is_dir());
+
+    let reloaded = vault
+        .get(&StoreKeyId::from_identity(&identity))
+        .unwrap()
+        .expect("fresh key stored");
+    assert!(key.equals(&reloaded));
+    let _ = fs::remove_dir_all(&root);
+}

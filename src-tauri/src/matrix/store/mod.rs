@@ -18,14 +18,25 @@ mod identity;
 mod key_material;
 mod key_vault;
 mod paths;
+mod revision;
 
 pub use identity::{AccountIdentity, AccountIdentityError};
-pub use key_material::{StoreKeyId, StoreKeyMaterial, STORE_KEY_LEN, STORE_KEY_SERVICE};
-pub use key_vault::{
-    get_or_create_store_key, InMemoryStoreKeyVault, KeyringStoreKeyRefs, KeyringStoreKeyVault,
-    StoreKeyVault, StoreKeyVaultError,
+pub use key_material::{
+    StoreKeyId, StoreKeyMaterial, STORE_KEY_LEN, STORE_KEY_REVISION, STORE_KEY_SERVICE,
+    STORE_KEY_SERVICE_V1,
 };
-pub use paths::{StoreLayout, StorePathError, StorePaths, MATRIX_STORE_ROOT_SEGMENT};
+pub use key_vault::{
+    get_or_create_store_key, get_or_migrate_store_key, InMemoryStoreKeyVault, KeyringStoreKeyRefs,
+    KeyringStoreKeyVault, StoreKeyVault, StoreKeyVaultError,
+};
+pub use paths::{
+    StoreKeyCreationPolicy, StoreLayout, StorePathError, StorePaths, MATRIX_STORE_ROOT_SEGMENT,
+};
+pub use revision::{
+    matrix_store_revision_marker, migrate_store_to_current, reset_store_for_recovery,
+    StoreMigrationError, StoreResetOutcome, StoreRevisionDecision, StoreRevisionManifest,
+    STORE_LAYOUT_VERSION, STORE_RECOVERY_ARCHIVE_SEGMENT, STORE_REVISION_MANIFEST_FILE,
+};
 
 /// Static marker for link / schema smoke (no network, no Client, no secrets).
 pub const MATRIX_STORE_MARKER: &str = "matrix-store-paths-keys-p2.2";

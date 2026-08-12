@@ -168,6 +168,7 @@ const SAFE_NATIVE_LOGIN_DIAGNOSTIC_IDS = new Set([
   'p3.2-empty-password',
   'p3.2-empty-user-id',
   'p3.2-login-connectivity',
+  // Legacy umbrella id for pre-fix builds; refined ids add store-locked / store-open-failed / olm-unavailable
   'p3.2-login-crypto-store',
   'p3.2-login-endpoint-not-found',
   'p3.2-login-homeserver-unavailable',
@@ -184,6 +185,12 @@ const SAFE_NATIVE_LOGIN_DIAGNOSTIC_IDS = new Set([
   'p3.2-login-rejected',
   'p3.2-login-response-decode',
   'p3.2-login-sdk-timeout',
+  'p3.2-login-store-locked',
+  'p3.2-login-store-migration-failed',
+  'p3.2-login-store-migration-required',
+  'p3.2-login-store-open-failed',
+  'p3.2-login-store-reset-required',
+  'p3.2-login-olm-unavailable',
   'p3.2-login-uiaa-required',
   'p3.2-login-unknown',
   'p3.2-login-unknown-rejected',
@@ -211,6 +218,120 @@ const mapNativeLoginError = (error: unknown): PasswordLoginError => {
     ? (code as LoginError)
     : LoginError.Unknown;
   return new PasswordLoginError(errcode, undefined, nativeDiagnosticId(error));
+};
+
+// Only a native login failure can reveal the archive-and-rebuild affordance.
+// This stays separate from generic store errors: locked/unavailable storage is
+// not automatically treated as data corruption or a reset candidate.
+const RECOVERABLE_NATIVE_STORE_DIAGNOSTIC_IDS = new Set([
+  'p3.2-login-store-migration-required',
+  'p3.2-login-store-reset-required',
+]);
+
+export const canOfferNativeStoreRecovery = (diagnosticId: string | undefined): boolean =>
+  diagnosticId !== undefined && RECOVERABLE_NATIVE_STORE_DIAGNOSTIC_IDS.has(diagnosticId);
+
+/** The visible acknowledgement required before the one-use native confirmation is requested. */
+export const STORE_RECOVERY_CONFIRMATION_TEXT = 'ARCHIVE';
+
+/** Static-only error for the archive-and-rebuild IPC flow. */
+export class StoreRecoveryError extends Error {
+  readonly diagnosticId: string;
+
+  constructor(diagnosticId: string) {
+    super('Local Matrix store recovery could not be completed.');
+    this.name = 'StoreRecoveryError';
+    this.diagnosticId = diagnosticId;
+  }
+}
+
+const SAFE_NATIVE_STORE_RECOVERY_DIAGNOSTIC_IDS = new Set([
+  'd0.1-session-already-active',
+  'p3.2-login-store-recovery-confirmation-required',
+  'p3.2-login-store-recovery-confirmation-unavailable',
+  'p3.2-login-store-recovery-failed',
+  'p3.2-login-store-recovery-not-pending',
+  'p3.2-login-store-recovery-unavailable',
+]);
+
+const nativeStoreRecoveryDiagnosticId = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object') return undefined;
+  const candidate = error as NativeCommandError;
+  const diagnosticId = candidate.diagnosticId ?? candidate.diagnostic_id;
+  return typeof diagnosticId === 'string' &&
+    SAFE_NATIVE_STORE_RECOVERY_DIAGNOSTIC_IDS.has(diagnosticId)
+    ? diagnosticId
+    : undefined;
+};
+
+const asStoreRecoveryConfirmationId = (value: unknown): string | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const confirmationId = (value as { confirmationId?: unknown }).confirmationId;
+  return typeof confirmationId === 'string' && /^[a-f0-9]{64}$/.test(confirmationId)
+    ? confirmationId
+    : undefined;
+};
+
+const isStoreRecoverySuccess = (value: unknown): boolean =>
+  !!value &&
+  typeof value === 'object' &&
+  (value as { status?: unknown }).status === 'archived_and_rebuilt';
+
+export type StoreRecoveryOptions = {
+  invoke?: PasswordLoginInvoke;
+};
+
+/**
+ * Complete only the already-user-confirmed archive-and-rebuild action.
+ *
+ * `confirmationText` is the exact text typed in the recovery dialog. The
+ * helper refuses it before even preparing a native capability unless it is the
+ * visible acknowledgement; the native host validates the same value again.
+ * The host accepts no account identity or credential here. It first issues an
+ * opaque CSPRNG one-use confirmation identifier bound to the failed login
+ * target, then consumes it immediately. Neither it nor raw IPC errors are
+ * rendered or logged.
+ */
+export const archiveAndRebuildNativeStore = async (
+  confirmationText: string,
+  options: StoreRecoveryOptions = {}
+): Promise<void> => {
+  const invoke: PasswordLoginInvoke =
+    options.invoke ??
+    ((command, args) =>
+      invokeDesktopWithAvailability(command, args, { suppressErrorDiagnostic: true }));
+
+  try {
+    if (confirmationText !== STORE_RECOVERY_CONFIRMATION_TEXT) {
+      throw new StoreRecoveryError('p3.2-login-store-recovery-confirmation-required');
+    }
+    const prepared = await invoke('matrix_store_recovery_prepare');
+    const confirmationId = prepared.available
+      ? asStoreRecoveryConfirmationId(prepared.value)
+      : undefined;
+    if (!confirmationId) {
+      throw new StoreRecoveryError('p3.2-login-store-recovery-unavailable');
+    }
+    const confirmed = await invoke('matrix_store_recovery_confirm', {
+      confirmationId,
+      confirmationText,
+    });
+    if (!confirmed.available || !isStoreRecoverySuccess(confirmed.value)) {
+      throw new StoreRecoveryError('p3.2-login-store-recovery-unavailable');
+    }
+  } catch (error) {
+    const mapped =
+      error instanceof StoreRecoveryError
+        ? error
+        : new StoreRecoveryError(
+            nativeStoreRecoveryDiagnosticId(error) ?? 'p3.2-login-store-recovery-failed'
+          );
+    // A fixed allowlisted identifier is the only recovery detail written to
+    // desktop diagnostics; confirmation IDs, identities, paths, and native
+    // errors never reach logs.
+    recordDesktopDiagnostic(`matrix_store_recovery failed: ${mapped.diagnosticId}`);
+    throw mapped;
+  }
 };
 
 const passwordLoginUser = (data: PasswordLoginRequest): string | undefined =>
