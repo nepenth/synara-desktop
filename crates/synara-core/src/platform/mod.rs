@@ -331,6 +331,196 @@ pub type CrossSigningStatusFuture<'a> = Pin<
     >,
 >;
 
+/// Closed status vocabulary for the existing secret-storage observation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PlatformSecretStorageState {
+    Unavailable,
+    NotSetUp,
+    Locked,
+    Ready,
+}
+
+/// Closed action vocabulary for the existing secret-storage observation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PlatformSecretStorageAction {
+    BootstrapRequired,
+    UnlockRequired,
+    None,
+}
+
+/// Fixed, scalar-only record of the four known missing-secret conditions.
+///
+/// This intentionally represents each known condition as a bit rather than a
+/// list or identifier. Core reconstructs the legacy ordered public labels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PlatformSecretStorageMissingSecrets {
+    cross_signing_master: bool,
+    cross_signing_self_signing: bool,
+    cross_signing_user_signing: bool,
+    encryption_backup: bool,
+}
+
+impl PlatformSecretStorageMissingSecrets {
+    pub fn new(
+        cross_signing_master: bool,
+        cross_signing_self_signing: bool,
+        cross_signing_user_signing: bool,
+        encryption_backup: bool,
+    ) -> Self {
+        Self {
+            cross_signing_master,
+            cross_signing_self_signing,
+            cross_signing_user_signing,
+            encryption_backup,
+        }
+    }
+
+    pub fn cross_signing_master(self) -> bool {
+        self.cross_signing_master
+    }
+
+    pub fn cross_signing_self_signing(self) -> bool {
+        self.cross_signing_self_signing
+    }
+
+    pub fn cross_signing_user_signing(self) -> bool {
+        self.cross_signing_user_signing
+    }
+
+    pub fn encryption_backup(self) -> bool {
+        self.encryption_backup
+    }
+}
+
+/// Static failures from the desktop-owned secret-storage observation.
+///
+/// This vocabulary is deliberately closed and string-free. In particular, no
+/// secret, key, identifier, SDK error, or account-data value crosses this seam.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PlatformSecretStorageStatusError {
+    NoSession,
+    DefaultKeyLoadFailed,
+    KeyInfoLoadFailed,
+    SecretCheckFailed,
+    UnsafeSessionGeneration,
+    InvalidSnapshot,
+}
+
+/// String-free, bounded secret-storage status supplied by a platform.
+///
+/// The shell samples its existing local observation and reduces it to fixed
+/// booleans and closed enums. Core owns only validation and the legacy wire
+/// DTO; it never receives any underlying secret-storage value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlatformSecretStorageStatus {
+    session_generation: u64,
+    state: PlatformSecretStorageState,
+    exists: bool,
+    unlocked: bool,
+    default_key_set: bool,
+    passphrase_configured: bool,
+    bootstrap_ready: bool,
+    missing_secrets: PlatformSecretStorageMissingSecrets,
+    action: PlatformSecretStorageAction,
+}
+
+impl PlatformSecretStorageStatus {
+    #[allow(clippy::too_many_arguments)] // Fixed legacy DTO fields are intentional.
+    pub fn new(
+        session_generation: u64,
+        state: PlatformSecretStorageState,
+        exists: bool,
+        unlocked: bool,
+        default_key_set: bool,
+        passphrase_configured: bool,
+        bootstrap_ready: bool,
+        missing_secrets: PlatformSecretStorageMissingSecrets,
+        action: PlatformSecretStorageAction,
+    ) -> Result<Self, PlatformSecretStorageStatusError> {
+        if session_generation > MAX_WIRE_COUNTER {
+            return Err(PlatformSecretStorageStatusError::UnsafeSessionGeneration);
+        }
+        let state_pairing_is_valid = matches!(
+            (state, unlocked, action),
+            (
+                PlatformSecretStorageState::Unavailable,
+                false,
+                PlatformSecretStorageAction::UnlockRequired,
+            ) | (
+                PlatformSecretStorageState::NotSetUp,
+                false,
+                PlatformSecretStorageAction::BootstrapRequired,
+            ) | (
+                PlatformSecretStorageState::Locked,
+                false,
+                PlatformSecretStorageAction::UnlockRequired,
+            ) | (
+                PlatformSecretStorageState::Ready,
+                true,
+                PlatformSecretStorageAction::None,
+            )
+        );
+        state_pairing_is_valid
+            .then_some(Self {
+                session_generation,
+                state,
+                exists,
+                unlocked,
+                default_key_set,
+                passphrase_configured,
+                bootstrap_ready,
+                missing_secrets,
+                action,
+            })
+            .ok_or(PlatformSecretStorageStatusError::InvalidSnapshot)
+    }
+
+    pub fn session_generation(self) -> u64 {
+        self.session_generation
+    }
+
+    pub fn state(self) -> PlatformSecretStorageState {
+        self.state
+    }
+
+    pub fn exists(self) -> bool {
+        self.exists
+    }
+
+    pub fn unlocked(self) -> bool {
+        self.unlocked
+    }
+
+    pub fn default_key_set(self) -> bool {
+        self.default_key_set
+    }
+
+    pub fn passphrase_configured(self) -> bool {
+        self.passphrase_configured
+    }
+
+    pub fn bootstrap_ready(self) -> bool {
+        self.bootstrap_ready
+    }
+
+    pub fn missing_secrets(self) -> PlatformSecretStorageMissingSecrets {
+        self.missing_secrets
+    }
+
+    pub fn action(self) -> PlatformSecretStorageAction {
+        self.action
+    }
+}
+
+/// Read-only secret-storage observation from a shell-owned SDK session.
+pub type SecretStorageStatusFuture<'a> = Pin<
+    Box<
+        dyn Future<Output = Result<PlatformSecretStorageStatus, PlatformSecretStorageStatusError>>
+            + Send
+            + 'a,
+    >,
+>;
+
 /// Closed, scalar-only media-config projection supplied by a platform.
 ///
 /// The maximum upload size is a JSON number on the existing React/Tauri wire,
@@ -415,9 +605,10 @@ pub trait SecretVault: Send + Sync {
 
 /// OS-surface sink the shared engine uses.
 ///
-/// Every shell provides all methods (no default impls in the crate);
-/// fail-closed defaults where acceptable (e.g. `set_badge` no-op on unsupported
-/// OS). P2 makes this (plus `synara_core::Core`) the only entry points shells use.
+/// Every installed operation has a shell implementation. A newly added,
+/// read-only observation may fail closed by default until a shell explicitly
+/// opts in; P2 makes this (plus `synara_core::Core`) the only entry points
+/// shells use.
 pub trait Platform: Send + Sync + 'static {
     /// Push a protocol envelope onto the UI stream (sic the ipc protocol).
     fn emit(&self, envelope: MatrixIpcEnvelope) -> Result<(), MatrixIpcError>;
@@ -450,6 +641,14 @@ pub trait Platform: Send + Sync + 'static {
     /// performs the existing own-identity query locally. Core receives only
     /// [`PlatformCrossSigningStatus`] or a static closed error.
     fn cross_signing_status(&self) -> CrossSigningStatusFuture<'_>;
+    /// Read the existing secret-storage status as fixed booleans and enums.
+    ///
+    /// The desktop overrides this with its local observation. Other existing
+    /// Platform implementors fail closed until they explicitly support this
+    /// read-only command, so adding the P2 method never widens their surface.
+    fn secret_storage_status(&self) -> SecretStorageStatusFuture<'_> {
+        Box::pin(async { Err(PlatformSecretStorageStatusError::NoSession) })
+    }
     /// Read the live media upload-size configuration as a closed projection.
     ///
     /// The shell retains the Matrix SDK client, authenticated session, cache,
@@ -629,6 +828,144 @@ mod tests {
             assert!(
                 !seam.contains(forbidden),
                 "cross-signing Platform/Core seam must remain closed and string-free: {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn secret_storage_projection_is_closed_bounded_and_covers_every_missing_secret_case() {
+        let states = [
+            (
+                PlatformSecretStorageState::Unavailable,
+                false,
+                PlatformSecretStorageAction::UnlockRequired,
+            ),
+            (
+                PlatformSecretStorageState::NotSetUp,
+                false,
+                PlatformSecretStorageAction::BootstrapRequired,
+            ),
+            (
+                PlatformSecretStorageState::Locked,
+                false,
+                PlatformSecretStorageAction::UnlockRequired,
+            ),
+            (
+                PlatformSecretStorageState::Ready,
+                true,
+                PlatformSecretStorageAction::None,
+            ),
+        ];
+        for (state, unlocked, action) in states {
+            for bits in 0_u8..16 {
+                let missing = PlatformSecretStorageMissingSecrets::new(
+                    bits & 1 != 0,
+                    bits & 2 != 0,
+                    bits & 4 != 0,
+                    bits & 8 != 0,
+                );
+                let projection = PlatformSecretStorageStatus::new(
+                    MAX_WIRE_COUNTER,
+                    state,
+                    true,
+                    unlocked,
+                    true,
+                    true,
+                    true,
+                    missing,
+                    action,
+                )
+                .expect("every fixed legacy missing-secret combination is valid");
+                assert_eq!(projection.session_generation(), MAX_WIRE_COUNTER);
+                assert_eq!(projection.state(), state);
+                assert_eq!(projection.unlocked(), unlocked);
+                assert_eq!(projection.action(), action);
+                assert_eq!(projection.missing_secrets(), missing);
+            }
+        }
+        assert_eq!(
+            PlatformSecretStorageStatus::new(
+                MAX_WIRE_COUNTER + 1,
+                PlatformSecretStorageState::Ready,
+                true,
+                true,
+                true,
+                true,
+                true,
+                PlatformSecretStorageMissingSecrets::new(false, false, false, false),
+                PlatformSecretStorageAction::None,
+            ),
+            Err(PlatformSecretStorageStatusError::UnsafeSessionGeneration)
+        );
+        assert_eq!(
+            PlatformSecretStorageStatus::new(
+                1,
+                PlatformSecretStorageState::Ready,
+                true,
+                false,
+                true,
+                true,
+                true,
+                PlatformSecretStorageMissingSecrets::new(false, false, false, false),
+                PlatformSecretStorageAction::None,
+            ),
+            Err(PlatformSecretStorageStatusError::InvalidSnapshot)
+        );
+    }
+
+    #[test]
+    fn secret_storage_platform_seam_has_no_dynamic_or_sdk_bearing_type() {
+        let projection = PlatformSecretStorageStatus::new(
+            4,
+            PlatformSecretStorageState::Locked,
+            true,
+            false,
+            true,
+            true,
+            false,
+            PlatformSecretStorageMissingSecrets::new(true, false, true, false),
+            PlatformSecretStorageAction::UnlockRequired,
+        )
+        .expect("closed secret-storage projection is valid");
+        let private_text = "https://private.example token=secret recovery=key";
+        assert!(!format!("{projection:?}").contains(private_text));
+        for error in [
+            PlatformSecretStorageStatusError::NoSession,
+            PlatformSecretStorageStatusError::DefaultKeyLoadFailed,
+            PlatformSecretStorageStatusError::KeyInfoLoadFailed,
+            PlatformSecretStorageStatusError::SecretCheckFailed,
+            PlatformSecretStorageStatusError::UnsafeSessionGeneration,
+            PlatformSecretStorageStatusError::InvalidSnapshot,
+        ] {
+            assert!(!format!("{error:?}").contains(private_text));
+        }
+
+        let source = include_str!("mod.rs");
+        let seam = source
+            .split("/// Closed status vocabulary for the existing secret-storage observation.")
+            .nth(1)
+            .and_then(|section| {
+                section
+                    .split(
+                        "/// Closed, scalar-only media-config projection supplied by a platform.",
+                    )
+                    .next()
+            })
+            .expect("secret-storage projection seam must remain isolated");
+        for forbidden in [
+            ": String",
+            "String)",
+            "String,",
+            "String>",
+            "&str",
+            "Vec<",
+            "HashMap",
+            "MatrixIpcError",
+            "matrix_sdk::",
+        ] {
+            assert!(
+                !seam.contains(forbidden),
+                "secret-storage Platform/Core seam must remain closed and string-free: {forbidden}"
             );
         }
     }

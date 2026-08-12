@@ -18,8 +18,9 @@ use crate::dto::SessionSnapshot;
 use crate::platform::{
     Platform, PlatformCrossSigningOwnIdentity, PlatformCrossSigningPrivateState,
     PlatformCrossSigningStatus, PlatformCrossSigningStatusError, PlatformCryptoCrossSigningState,
-    PlatformCryptoStatus, PlatformMediaConfig, PlatformMediaConfigError, PlatformSyncFailure,
-    PlatformSyncStatus,
+    PlatformCryptoStatus, PlatformMediaConfig, PlatformMediaConfigError,
+    PlatformSecretStorageAction, PlatformSecretStorageState, PlatformSecretStorageStatus,
+    PlatformSecretStorageStatusError, PlatformSyncFailure, PlatformSyncStatus,
 };
 use crate::transport::{
     CommandEnvelope, CommandFuture, CommandRegistry, CommandResponseEnvelope, MatrixIpcError,
@@ -322,6 +323,131 @@ impl MatrixCrossSigningStatusResponse {
     }
 }
 
+/// Fixed public state vocabulary for `matrix_secret_storage_status`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum MatrixSecretStorageStateResponse {
+    Unavailable,
+    NotSetUp,
+    Locked,
+    Ready,
+}
+
+/// Fixed public action vocabulary for `matrix_secret_storage_status`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum MatrixSecretStorageActionResponse {
+    BootstrapRequired,
+    UnlockRequired,
+    None,
+}
+
+/// Fixed public missing-secret label vocabulary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum MatrixMissingSecretResponse {
+    CrossSigningMaster,
+    CrossSigningSelfSigning,
+    CrossSigningUserSigning,
+    EncryptionBackup,
+}
+
+/// Exact React/Tauri DTO for `matrix_secret_storage_status`.
+///
+/// Core reconstructs this legacy object only from the platform's closed,
+/// scalar projection. The `missingSecrets` list is public wire shape; its
+/// canonical labels and ordering are owned here, not supplied by the shell.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MatrixSecretStorageStatusResponse {
+    session_generation: u64,
+    state: MatrixSecretStorageStateResponse,
+    exists: bool,
+    unlocked: bool,
+    default_key_set: bool,
+    passphrase_configured: bool,
+    bootstrap_ready: bool,
+    missing_secrets: Vec<MatrixMissingSecretResponse>,
+    action: MatrixSecretStorageActionResponse,
+}
+
+impl MatrixSecretStorageStatusResponse {
+    fn from_platform(status: PlatformSecretStorageStatus) -> Result<Self, MatrixIpcError> {
+        let state = match status.state() {
+            PlatformSecretStorageState::Unavailable => {
+                MatrixSecretStorageStateResponse::Unavailable
+            }
+            PlatformSecretStorageState::NotSetUp => MatrixSecretStorageStateResponse::NotSetUp,
+            PlatformSecretStorageState::Locked => MatrixSecretStorageStateResponse::Locked,
+            PlatformSecretStorageState::Ready => MatrixSecretStorageStateResponse::Ready,
+        };
+        let action = match status.action() {
+            PlatformSecretStorageAction::BootstrapRequired => {
+                MatrixSecretStorageActionResponse::BootstrapRequired
+            }
+            PlatformSecretStorageAction::UnlockRequired => {
+                MatrixSecretStorageActionResponse::UnlockRequired
+            }
+            PlatformSecretStorageAction::None => MatrixSecretStorageActionResponse::None,
+        };
+        let missing = status.missing_secrets();
+        let mut missing_secrets = Vec::with_capacity(4);
+        if missing.cross_signing_master() {
+            missing_secrets.push(MatrixMissingSecretResponse::CrossSigningMaster);
+        }
+        if missing.cross_signing_self_signing() {
+            missing_secrets.push(MatrixMissingSecretResponse::CrossSigningSelfSigning);
+        }
+        if missing.cross_signing_user_signing() {
+            missing_secrets.push(MatrixMissingSecretResponse::CrossSigningUserSigning);
+        }
+        if missing.encryption_backup() {
+            missing_secrets.push(MatrixMissingSecretResponse::EncryptionBackup);
+        }
+        let response = Self {
+            session_generation: status.session_generation(),
+            state,
+            exists: status.exists(),
+            unlocked: status.unlocked(),
+            default_key_set: status.default_key_set(),
+            passphrase_configured: status.passphrase_configured(),
+            bootstrap_ready: status.bootstrap_ready(),
+            missing_secrets,
+            action,
+        };
+        response
+            .is_valid()
+            .then_some(response)
+            .ok_or_else(|| core_state_error("p2-secret-storage-status-invalid-platform-projection"))
+    }
+
+    fn is_valid(&self) -> bool {
+        if self.session_generation > MAX_WIRE_COUNTER {
+            return false;
+        }
+        matches!(
+            (self.state, self.unlocked, self.action),
+            (
+                MatrixSecretStorageStateResponse::Unavailable,
+                false,
+                MatrixSecretStorageActionResponse::UnlockRequired,
+            ) | (
+                MatrixSecretStorageStateResponse::NotSetUp,
+                false,
+                MatrixSecretStorageActionResponse::BootstrapRequired,
+            ) | (
+                MatrixSecretStorageStateResponse::Locked,
+                false,
+                MatrixSecretStorageActionResponse::UnlockRequired,
+            ) | (
+                MatrixSecretStorageStateResponse::Ready,
+                true,
+                MatrixSecretStorageActionResponse::None,
+            )
+        )
+    }
+}
+
 /// Exact React/Tauri payload for `matrix_media_config`.
 ///
 /// The legacy command deliberately has no renderer-supplied input and returns
@@ -479,6 +605,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_cross_signing_status", matrix_cross_signing_status)
         .expect("built-in matrix_cross_signing_status must remain in the command census");
     registry
+        .register("matrix_secret_storage_status", matrix_secret_storage_status)
+        .expect("built-in matrix_secret_storage_status must remain in the command census");
+    registry
         .register("matrix_media_config", matrix_media_config)
         .expect("built-in matrix_media_config must remain in the command census");
     registry
@@ -603,6 +732,57 @@ fn cross_signing_status_transport_error(error: PlatformCrossSigningStatusError) 
         PlatformCrossSigningStatusError::UnsafeSessionGeneration => {
             MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
                 .with_diagnostic("p2-cross-signing-status-unsafe-session-generation")
+        }
+    }
+}
+
+/// `matrix_secret_storage_status` is a payload-free read observation.
+///
+/// The Platform retains the sole live SDK/session/key/store ownership and
+/// supplies only fixed booleans and closed enums. Core reconstructs the exact
+/// legacy response and never receives a secret, identifier, raw diagnostic,
+/// or SDK/account-data value.
+fn matrix_secret_storage_status(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-secret-storage-status-invalid-payload"));
+        }
+        let status = state
+            .platform()
+            .secret_storage_status()
+            .await
+            .map_err(secret_storage_status_transport_error)?;
+        let response = MatrixSecretStorageStatusResponse::from_platform(status)?;
+        serde_json::to_value(response)
+            .map_err(|_| core_state_error("p2-secret-storage-status-serialization-failed"))
+    })
+}
+
+/// Convert only the closed shell failures into the established public static
+/// error categories and diagnostics. No shell-provided text crosses this map.
+fn secret_storage_status_transport_error(
+    error: PlatformSecretStorageStatusError,
+) -> MatrixIpcError {
+    match error {
+        PlatformSecretStorageStatusError::NoSession => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("v-crypto.4-secret-storage-requires-session")
+        }
+        PlatformSecretStorageStatusError::DefaultKeyLoadFailed => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::RecoveryFailure)
+                .with_diagnostic("v-crypto.4-status-default-key-failed")
+        }
+        PlatformSecretStorageStatusError::KeyInfoLoadFailed => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::RecoveryFailure)
+                .with_diagnostic("v-crypto.4-status-key-info-failed")
+        }
+        PlatformSecretStorageStatusError::SecretCheckFailed => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::RecoveryFailure)
+                .with_diagnostic("v-crypto.4-status-secret-check-failed")
+        }
+        PlatformSecretStorageStatusError::UnsafeSessionGeneration
+        | PlatformSecretStorageStatusError::InvalidSnapshot => {
+            core_state_error("p2-secret-storage-status-invalid-platform-projection")
         }
     }
 }
@@ -907,6 +1087,55 @@ mod tests {
         }
     }
 
+    /// Secret-storage tests can supply only the fixed closed projection/error.
+    /// There is no field in which a secret, key, identifier, SDK value, or raw
+    /// diagnostic could reach Core.
+    struct SecretStorageStatusPlatform {
+        status: Result<PlatformSecretStorageStatus, PlatformSecretStorageStatusError>,
+    }
+
+    impl Platform for SecretStorageStatusPlatform {
+        fn emit(
+            &self,
+            _envelope: crate::transport::MatrixIpcEnvelope,
+        ) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+        fn secret_store(&self) -> Arc<dyn SecretVault + Send + Sync> {
+            Arc::new(UnavailableSecretVault)
+        }
+        fn http_user_agent(&self) -> String {
+            TEST_HTTP_USER_AGENT.into()
+        }
+        fn sync_status(&self) -> crate::platform::SyncStatusFuture<'_> {
+            Box::pin(async { Ok(unconfigured_platform_status()) })
+        }
+        fn crypto_status(&self) -> crate::platform::CryptoStatusFuture<'_> {
+            Box::pin(async { Ok(unavailable_platform_crypto_status()) })
+        }
+        fn cross_signing_status(&self) -> crate::platform::CrossSigningStatusFuture<'_> {
+            Box::pin(async { Err(crate::platform::PlatformCrossSigningStatusError::NoSession) })
+        }
+        fn secret_storage_status(&self) -> crate::platform::SecretStorageStatusFuture<'_> {
+            Box::pin(async move { self.status })
+        }
+        fn media_config(&self) -> crate::platform::MediaConfigFuture<'_> {
+            Box::pin(async { Ok(available_platform_media_config()) })
+        }
+        fn notify(
+            &self,
+            _candidate: crate::dto::NotificationCandidate,
+        ) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+        fn set_badge(&self, _count: u64) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+        fn status(&self, _status: PlatformStatus) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+    }
+
     /// Media tests can supply only the bounded projection or one static error.
     /// There is no field in which an SDK/client/cache/store value or raw text
     /// could reach Core.
@@ -1007,6 +1236,7 @@ mod tests {
                 "matrix_login_flows",
                 "matrix_media_config",
                 "matrix_register_flows",
+                "matrix_secret_storage_status",
                 "matrix_session_snapshot",
                 "matrix_sync_status",
             ]
@@ -1311,6 +1541,171 @@ mod tests {
                 assert!(
                     !serialized.contains(forbidden),
                     "cross-signing Platform/Core error must not reflect hostile text: {forbidden}"
+                );
+            }
+        }
+        assert!(!serde_json::to_string(&malformed)
+            .unwrap()
+            .contains(private_text));
+    }
+
+    #[tokio::test]
+    async fn core_secret_storage_status_recreates_every_closed_state_and_missing_secret_case() {
+        let states = [
+            (
+                PlatformSecretStorageState::Unavailable,
+                false,
+                PlatformSecretStorageAction::UnlockRequired,
+                "unavailable",
+                "unlock_required",
+            ),
+            (
+                PlatformSecretStorageState::NotSetUp,
+                false,
+                PlatformSecretStorageAction::BootstrapRequired,
+                "not_set_up",
+                "bootstrap_required",
+            ),
+            (
+                PlatformSecretStorageState::Locked,
+                false,
+                PlatformSecretStorageAction::UnlockRequired,
+                "locked",
+                "unlock_required",
+            ),
+            (
+                PlatformSecretStorageState::Ready,
+                true,
+                PlatformSecretStorageAction::None,
+                "ready",
+                "none",
+            ),
+        ];
+        for (state, unlocked, action, state_label, action_label) in states {
+            for bits in 0_u8..16 {
+                let missing = crate::platform::PlatformSecretStorageMissingSecrets::new(
+                    bits & 1 != 0,
+                    bits & 2 != 0,
+                    bits & 4 != 0,
+                    bits & 8 != 0,
+                );
+                let status = PlatformSecretStorageStatus::new(
+                    9, state, true, unlocked, true, true, true, missing, action,
+                )
+                .expect("all closed legacy state/missing-secret rows are representable");
+                let response =
+                    Core::new(Arc::new(SecretStorageStatusPlatform { status: Ok(status) }))
+                        .command(CommandEnvelope {
+                            command: "matrix_secret_storage_status".into(),
+                            session_generation: 0,
+                            request_id: Some("secret-storage-status-fixture".into()),
+                            payload: serde_json::Value::Null,
+                        })
+                        .await
+                        .expect("closed status row serializes through Core");
+                let mut missing_secrets = Vec::new();
+                if bits & 1 != 0 {
+                    missing_secrets.push("cross_signing_master");
+                }
+                if bits & 2 != 0 {
+                    missing_secrets.push("cross_signing_self_signing");
+                }
+                if bits & 4 != 0 {
+                    missing_secrets.push("cross_signing_user_signing");
+                }
+                if bits & 8 != 0 {
+                    missing_secrets.push("encryption_backup");
+                }
+                assert_eq!(response.command, "matrix_secret_storage_status");
+                assert_eq!(response.session_generation, 0);
+                assert_eq!(
+                    response.request_id.as_deref(),
+                    Some("secret-storage-status-fixture")
+                );
+                assert_eq!(
+                    response.payload,
+                    serde_json::json!({
+                        "sessionGeneration": 9,
+                        "state": state_label,
+                        "exists": true,
+                        "unlocked": unlocked,
+                        "defaultKeySet": true,
+                        "passphraseConfigured": true,
+                        "bootstrapReady": true,
+                        "missingSecrets": missing_secrets,
+                        "action": action_label,
+                    })
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn core_secret_storage_status_rejects_payload_and_maps_every_static_platform_error() {
+        let private_text = "https://private.example token=secret recovery_key=secret";
+        let malformed = Core::new(Arc::new(TestPlatform))
+            .command(CommandEnvelope {
+                command: "matrix_secret_storage_status".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({ "private": private_text }),
+            })
+            .await
+            .expect_err("secret-storage status is a zero-argument observation");
+        assert_eq!(malformed.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            malformed.diagnostic_id.as_deref(),
+            Some("p2-secret-storage-status-invalid-payload")
+        );
+
+        for (status, category, diagnostic_id) in [
+            (
+                Err(PlatformSecretStorageStatusError::NoSession),
+                MatrixIpcErrorCategory::Forbidden,
+                "v-crypto.4-secret-storage-requires-session",
+            ),
+            (
+                Err(PlatformSecretStorageStatusError::DefaultKeyLoadFailed),
+                MatrixIpcErrorCategory::RecoveryFailure,
+                "v-crypto.4-status-default-key-failed",
+            ),
+            (
+                Err(PlatformSecretStorageStatusError::KeyInfoLoadFailed),
+                MatrixIpcErrorCategory::RecoveryFailure,
+                "v-crypto.4-status-key-info-failed",
+            ),
+            (
+                Err(PlatformSecretStorageStatusError::SecretCheckFailed),
+                MatrixIpcErrorCategory::RecoveryFailure,
+                "v-crypto.4-status-secret-check-failed",
+            ),
+            (
+                Err(PlatformSecretStorageStatusError::UnsafeSessionGeneration),
+                MatrixIpcErrorCategory::SdkInvariant,
+                "p2-secret-storage-status-invalid-platform-projection",
+            ),
+            (
+                Err(PlatformSecretStorageStatusError::InvalidSnapshot),
+                MatrixIpcErrorCategory::SdkInvariant,
+                "p2-secret-storage-status-invalid-platform-projection",
+            ),
+        ] {
+            let error = Core::new(Arc::new(SecretStorageStatusPlatform { status }))
+                .command(CommandEnvelope {
+                    command: "matrix_secret_storage_status".into(),
+                    session_generation: 0,
+                    request_id: None,
+                    payload: serde_json::Value::Null,
+                })
+                .await
+                .expect_err("closed Platform failure must become a static Core error");
+            assert_eq!(error.category, category);
+            assert_eq!(error.diagnostic_id.as_deref(), Some(diagnostic_id));
+            let serialized = serde_json::to_string(&error).expect("static error serializes");
+            for forbidden in ["private.example", "token=", "recovery_key="] {
+                assert!(
+                    !serialized.contains(forbidden),
+                    "secret-storage Platform/Core error must not reflect hostile text: {forbidden}"
                 );
             }
         }

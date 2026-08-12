@@ -12,8 +12,8 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 use synara_core::dto::NotificationCandidate;
 use synara_core::platform::{
     CrossSigningStatusFuture, CryptoStatusFuture, MediaConfigFuture, Platform,
-    PlatformCryptoStatus, PlatformStatus, PlatformSyncStatus, SecretVault, SyncStatusFuture,
-    UnavailableSecretVault,
+    PlatformCryptoStatus, PlatformStatus, PlatformSyncStatus, SecretStorageStatusFuture,
+    SecretVault, SyncStatusFuture, UnavailableSecretVault,
 };
 use synara_core::transport::{MatrixIpcEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
 
@@ -97,6 +97,20 @@ impl<R: Runtime> Platform for TauriPlatform<R> {
             self.app
                 .state::<crate::matrix::auth::MatrixAuthState>()
                 .cross_signing_status_projection()
+                .await
+        })
+    }
+
+    /// Observe secret-storage status through the desktop-owned Matrix session.
+    ///
+    /// `MatrixAuthState` retains the existing auth mutex across the full
+    /// observation and reduces the result locally to fixed booleans and closed
+    /// enums. No SDK/session/key/store value or diagnostic crosses into Core.
+    fn secret_storage_status(&self) -> SecretStorageStatusFuture<'_> {
+        Box::pin(async move {
+            self.app
+                .state::<crate::matrix::auth::MatrixAuthState>()
+                .secret_storage_status_projection()
                 .await
         })
     }
