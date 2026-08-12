@@ -52,7 +52,8 @@ use serde::{Deserialize, Serialize};
 use synara_core::platform::{
     PlatformCrossSigningOwnIdentity, PlatformCrossSigningPrivateState, PlatformCrossSigningStatus,
     PlatformCryptoCrossSigningState, PlatformCryptoStatus, PlatformMediaConfig,
-    PlatformMediaConfigError,
+    PlatformMediaConfigError, PlatformSecretStorageAction, PlatformSecretStorageMissingSecrets,
+    PlatformSecretStorageState, PlatformSecretStorageStatus, PlatformSecretStorageStatusError,
 };
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
@@ -110,7 +111,8 @@ use crate::matrix::room_list::{
 };
 use crate::matrix::room_profile::NativeRoomJoinRuleOwner;
 use crate::matrix::secret_storage::live::{
-    self as live_secret_storage, NativeSecretStorageOperationResult, NativeSecretStorageStatus,
+    self as live_secret_storage, NativeMissingSecret, NativeSecretStorageAction,
+    NativeSecretStorageOperationResult, NativeSecretStorageState, NativeSecretStorageStatus,
 };
 use crate::matrix::send::{
     normalize_poll, poll_response_content, poll_start_content, AttachmentEnqueue, AttachmentKind,
@@ -544,6 +546,25 @@ impl MatrixAuthState {
         )
     }
 
+    /// Read secret-storage status through the desktop-owned Matrix session.
+    ///
+    /// This retains the pre-Core status command's auth mutex across every
+    /// existing SDK observation and reduces its legacy DTO locally to fixed
+    /// booleans/enums. No recovery material, key id, account-data value, SDK
+    /// object, or raw diagnostic reaches the Platform/Core seam.
+    pub(crate) async fn secret_storage_status_projection(
+        &self,
+    ) -> Result<PlatformSecretStorageStatus, PlatformSecretStorageStatusError> {
+        let session = self.session.lock().await;
+        let active = session
+            .as_ref()
+            .ok_or(PlatformSecretStorageStatusError::NoSession)?;
+        let status = live_secret_storage::status(&active.client, active.sync.session_generation())
+            .await
+            .map_err(map_secret_storage_status_error)?;
+        platform_secret_storage_status(status)
+    }
+
     /// Read the upload-size config through the desktop-owned SDK client.
     ///
     /// This preserves the pre-Core `matrix_media_config` concurrency contract
@@ -596,6 +617,70 @@ impl MatrixAuthState {
         let active = session.as_ref()?;
         let source = active.timelines.resolve_media(handle).await?;
         Some((active.client.clone(), source))
+    }
+}
+
+/// Reduce the existing desktop-only secret-storage DTO before it reaches Core.
+///
+/// `NativeSecretStorageStatus` can contain a dynamic public list locally; this
+/// conversion collapses its four known labels into fixed bits before returning.
+fn platform_secret_storage_status(
+    status: NativeSecretStorageStatus,
+) -> Result<PlatformSecretStorageStatus, PlatformSecretStorageStatusError> {
+    let state = match status.state {
+        NativeSecretStorageState::Unavailable => PlatformSecretStorageState::Unavailable,
+        NativeSecretStorageState::NotSetUp => PlatformSecretStorageState::NotSetUp,
+        NativeSecretStorageState::Locked => PlatformSecretStorageState::Locked,
+        NativeSecretStorageState::Ready => PlatformSecretStorageState::Ready,
+    };
+    let action = match status.action {
+        NativeSecretStorageAction::BootstrapRequired => {
+            PlatformSecretStorageAction::BootstrapRequired
+        }
+        NativeSecretStorageAction::UnlockRequired => PlatformSecretStorageAction::UnlockRequired,
+        NativeSecretStorageAction::None => PlatformSecretStorageAction::None,
+    };
+    let missing_secrets = PlatformSecretStorageMissingSecrets::new(
+        status
+            .missing_secrets
+            .contains(&NativeMissingSecret::CrossSigningMaster),
+        status
+            .missing_secrets
+            .contains(&NativeMissingSecret::CrossSigningSelfSigning),
+        status
+            .missing_secrets
+            .contains(&NativeMissingSecret::CrossSigningUserSigning),
+        status
+            .missing_secrets
+            .contains(&NativeMissingSecret::EncryptionBackup),
+    );
+    PlatformSecretStorageStatus::new(
+        status.session_generation,
+        state,
+        status.exists,
+        status.unlocked,
+        status.default_key_set,
+        status.passphrase_configured,
+        status.bootstrap_ready,
+        missing_secrets,
+        action,
+    )
+}
+
+/// Map only the three exact legacy status failures to closed Platform errors.
+/// Any unexpected local result fails closed without moving a diagnostic string.
+fn map_secret_storage_status_error(
+    error: MatrixAuthCommandError,
+) -> PlatformSecretStorageStatusError {
+    match error.diagnostic_id {
+        "v-crypto.4-status-default-key-failed" => {
+            PlatformSecretStorageStatusError::DefaultKeyLoadFailed
+        }
+        "v-crypto.4-status-key-info-failed" => PlatformSecretStorageStatusError::KeyInfoLoadFailed,
+        "v-crypto.4-status-secret-check-failed" => {
+            PlatformSecretStorageStatusError::SecretCheckFailed
+        }
+        _ => PlatformSecretStorageStatusError::InvalidSnapshot,
     }
 }
 

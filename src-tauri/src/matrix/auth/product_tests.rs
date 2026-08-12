@@ -606,7 +606,7 @@ fn cross_signing_status_routes_only_through_core_and_holds_the_auth_mutex_across
     let projection = product_source
         .split("pub(crate) async fn cross_signing_status_projection")
         .nth(1)
-        .and_then(|source| source.split("/// Read the upload-size config").next())
+        .and_then(|source| source.split("/// Read secret-storage status").next())
         .expect("desktop cross-signing projection must remain isolated");
     let lock = projection
         .find("self.session.lock().await")
@@ -644,6 +644,176 @@ fn cross_signing_status_routes_only_through_core_and_holds_the_auth_mutex_across
             "desktop projection must be a string-free read observation only: {forbidden}"
         );
     }
+}
+
+#[test]
+fn secret_storage_status_routes_only_through_core_and_preserves_desktop_observation_ownership() {
+    let command_source = include_str!("../secret_storage/product_commands.rs");
+    let command = command_source
+        .split("pub async fn matrix_secret_storage_status")
+        .nth(1)
+        .and_then(|source| {
+            source
+                .split("pub async fn matrix_secret_storage_bootstrap")
+                .next()
+        })
+        .expect("secret-storage status command body");
+    assert!(
+        command.contains("crate::bridge::secret_storage_status::secret_storage_status"),
+        "status handler must delegate Core envelope/serialization to its strict bridge"
+    );
+    assert!(
+        command.contains("core: State<'_, Arc<synara_core::Core>>"),
+        "status handler takes only managed Core state"
+    );
+    for forbidden in [
+        "MatrixAuthState",
+        "state.session",
+        "active.client",
+        "live_secret_storage::status",
+        "matrix_secret_storage_bootstrap",
+        "matrix_secret_storage_unlock",
+        "matrix_secret_storage_reset",
+        "MatrixIpcError",
+    ] {
+        assert!(
+            !command.contains(forbidden),
+            "Tauri status handler must not reclaim desktop SDK ownership or writers: {forbidden}"
+        );
+    }
+
+    let product_source = include_str!("product.rs");
+    let projection = product_source
+        .split("pub(crate) async fn secret_storage_status_projection")
+        .nth(1)
+        .and_then(|source| source.split("/// Read the upload-size config").next())
+        .expect("desktop secret-storage projection must remain isolated");
+    let lock = projection
+        .find("self.session.lock().await")
+        .expect("secret-storage projection must take the existing auth mutex");
+    let observation = projection
+        .find("live_secret_storage::status(&active.client, active.sync.session_generation())")
+        .expect("projection must retain the existing desktop secret-storage status observation");
+    assert!(
+        lock < observation,
+        "the existing auth mutex must be acquired before and held through status observation"
+    );
+    for forbidden in [
+        "drop(session)",
+        "client.clone",
+        "matrix_secret_storage_bootstrap",
+        "matrix_secret_storage_unlock",
+        "matrix_secret_storage_reset",
+        "MatrixIpcError",
+        "with_diagnostic",
+    ] {
+        assert!(
+            !projection.contains(forbidden),
+            "secret-storage observation must remain a closed read projection: {forbidden}"
+        );
+    }
+
+    for (diagnostic_id, expected) in [
+        (
+            "v-crypto.4-status-default-key-failed",
+            PlatformSecretStorageStatusError::DefaultKeyLoadFailed,
+        ),
+        (
+            "v-crypto.4-status-key-info-failed",
+            PlatformSecretStorageStatusError::KeyInfoLoadFailed,
+        ),
+        (
+            "v-crypto.4-status-secret-check-failed",
+            PlatformSecretStorageStatusError::SecretCheckFailed,
+        ),
+        (
+            "unexpected-private-diagnostic",
+            PlatformSecretStorageStatusError::InvalidSnapshot,
+        ),
+    ] {
+        assert_eq!(
+            map_secret_storage_status_error(MatrixAuthCommandError::new(
+                "Recovery",
+                "Native secret storage status is unavailable.",
+                diagnostic_id,
+            )),
+            expected,
+            "desktop error text must reduce only to the closed Platform failure"
+        );
+    }
+}
+
+#[test]
+fn secret_storage_desktop_reducer_covers_every_state_and_fixed_missing_secret_bit() {
+    let states = [
+        (
+            NativeSecretStorageState::Unavailable,
+            false,
+            NativeSecretStorageAction::UnlockRequired,
+        ),
+        (
+            NativeSecretStorageState::NotSetUp,
+            false,
+            NativeSecretStorageAction::BootstrapRequired,
+        ),
+        (
+            NativeSecretStorageState::Locked,
+            false,
+            NativeSecretStorageAction::UnlockRequired,
+        ),
+        (
+            NativeSecretStorageState::Ready,
+            true,
+            NativeSecretStorageAction::None,
+        ),
+    ];
+    for (state, unlocked, action) in states {
+        for bits in 0_u8..16 {
+            let known = [
+                NativeMissingSecret::CrossSigningMaster,
+                NativeMissingSecret::CrossSigningSelfSigning,
+                NativeMissingSecret::CrossSigningUserSigning,
+                NativeMissingSecret::EncryptionBackup,
+            ];
+            let missing_secrets = known
+                .iter()
+                .enumerate()
+                .filter_map(|(index, missing)| (bits & (1 << index) != 0).then_some(*missing))
+                .collect();
+            let projection = platform_secret_storage_status(NativeSecretStorageStatus {
+                session_generation: 9,
+                state,
+                exists: true,
+                unlocked,
+                default_key_set: true,
+                passphrase_configured: true,
+                bootstrap_ready: true,
+                missing_secrets,
+                action,
+            })
+            .expect("every existing state/missing-secret projection is closed and valid");
+            let missing = projection.missing_secrets();
+            assert_eq!(missing.cross_signing_master(), bits & 1 != 0);
+            assert_eq!(missing.cross_signing_self_signing(), bits & 2 != 0);
+            assert_eq!(missing.cross_signing_user_signing(), bits & 4 != 0);
+            assert_eq!(missing.encryption_backup(), bits & 8 != 0);
+        }
+    }
+
+    assert_eq!(
+        platform_secret_storage_status(NativeSecretStorageStatus {
+            session_generation: 9,
+            state: NativeSecretStorageState::Ready,
+            exists: true,
+            unlocked: false,
+            default_key_set: true,
+            passphrase_configured: true,
+            bootstrap_ready: true,
+            missing_secrets: Vec::new(),
+            action: NativeSecretStorageAction::None,
+        }),
+        Err(PlatformSecretStorageStatusError::InvalidSnapshot)
+    );
 }
 
 #[test]
