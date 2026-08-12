@@ -3,7 +3,7 @@
 //! Pure host-side view of Synara [`SecurityStatus`] DTOs. **No keys, recovery
 //! material, or secrets** — status enums and counts only. No dual-backend.
 
-use crate::matrix::dto::{BackupStatus, RecoveryStatus, SecurityStatus, VerificationState};
+use crate::dto::{BackupStatus, RecoveryStatus, SecurityStatus, VerificationState};
 
 use super::error::SecurityError;
 

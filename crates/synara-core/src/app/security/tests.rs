@@ -1,8 +1,8 @@
 //! Unit tests for P8.1 security status store.
 
 use super::*;
-use crate::matrix::dto::{BackupStatus, RecoveryStatus, SecurityStatus, VerificationState};
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::dto::{BackupStatus, RecoveryStatus, SecurityStatus, VerificationState};
+use crate::transport::MatrixIpcErrorCategory;
 
 #[test]
 fn marker_stable() {
