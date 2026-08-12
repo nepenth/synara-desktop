@@ -15,7 +15,10 @@ use crate::app::auth::{
 };
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::dto::SessionSnapshot;
-use crate::platform::{Platform, PlatformSyncFailure, PlatformSyncStatus};
+use crate::platform::{
+    Platform, PlatformCryptoCrossSigningState, PlatformCryptoStatus, PlatformSyncFailure,
+    PlatformSyncStatus,
+};
 use crate::transport::{
     CommandEnvelope, CommandFuture, CommandRegistry, CommandResponseEnvelope, MatrixIpcError,
     MatrixIpcErrorCategory,
@@ -49,6 +52,67 @@ impl From<Option<SessionSnapshot>> for MatrixSessionSnapshotResponse {
                 session_generation: snapshot.session_generation,
             },
         }
+    }
+}
+
+/// Fixed public cross-signing state for `matrix_crypto_status`.
+///
+/// Core alone serializes this public vocabulary after a Platform has reduced
+/// its shell-owned SDK observation to a closed enum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum MatrixCryptoCrossSigningStateResponse {
+    Unavailable,
+    NotSetUp,
+    Partial,
+    Ready,
+}
+
+/// Exact React/Tauri payload for `matrix_crypto_status`.
+///
+/// Keep this separate from the Platform projection: this type owns the wire
+/// field names and is constructed only after Core validates the closed input.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MatrixCryptoStatusResponse {
+    session_generation: u64,
+    encryption_enabled: bool,
+    cross_signing_state: MatrixCryptoCrossSigningStateResponse,
+}
+
+impl MatrixCryptoStatusResponse {
+    fn from_platform(status: PlatformCryptoStatus) -> Result<Self, MatrixIpcError> {
+        let cross_signing_state = match status.cross_signing_state() {
+            PlatformCryptoCrossSigningState::Unavailable => {
+                MatrixCryptoCrossSigningStateResponse::Unavailable
+            }
+            PlatformCryptoCrossSigningState::NotSetUp => {
+                MatrixCryptoCrossSigningStateResponse::NotSetUp
+            }
+            PlatformCryptoCrossSigningState::Partial => {
+                MatrixCryptoCrossSigningStateResponse::Partial
+            }
+            PlatformCryptoCrossSigningState::Ready => MatrixCryptoCrossSigningStateResponse::Ready,
+        };
+        let response = Self {
+            session_generation: status.session_generation(),
+            encryption_enabled: status.encryption_enabled(),
+            cross_signing_state,
+        };
+        response
+            .is_valid()
+            .then_some(response)
+            .ok_or_else(|| core_state_error("p2-crypto-status-invalid-platform-projection"))
+    }
+
+    fn is_valid(&self) -> bool {
+        matches!(
+            (self.encryption_enabled, self.cross_signing_state),
+            (false, MatrixCryptoCrossSigningStateResponse::Unavailable)
+                | (true, MatrixCryptoCrossSigningStateResponse::NotSetUp)
+                | (true, MatrixCryptoCrossSigningStateResponse::Partial)
+                | (true, MatrixCryptoCrossSigningStateResponse::Ready)
+        )
     }
 }
 
@@ -180,6 +244,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_sync_status", matrix_sync_status)
         .expect("built-in matrix_sync_status must remain in the command census");
     registry
+        .register("matrix_crypto_status", matrix_crypto_status)
+        .expect("built-in matrix_crypto_status must remain in the command census");
+    registry
         .register("matrix_login_flows", matrix_login_flows)
         .expect("built-in matrix_login_flows must remain in the command census");
     registry
@@ -237,6 +304,27 @@ fn matrix_sync_status(state: Arc<CoreState>, request: CommandEnvelope) -> Comman
         let snapshot = public_sync_status(status)?;
         serde_json::to_value(snapshot)
             .map_err(|_| core_state_error("p2-sync-status-serialization-failed"))
+    })
+}
+
+/// `matrix_crypto_status` is deliberately a payload-free observation. Core
+/// owns its registry entry, validation, and exact wire serialization; the
+/// Platform remains the sole owner of the live SDK crypto observation.
+fn matrix_crypto_status(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-crypto-status-invalid-payload"));
+        }
+        let platform = state.platform();
+        let status = platform
+            .crypto_status()
+            .await
+            // A Platform crypto error is a closed enum. Never attach a shell
+            // error, SDK diagnostic, identity, or key to the public command.
+            .map_err(|_| core_state_error("p2-crypto-status-platform-unavailable"))?;
+        let response = MatrixCryptoStatusResponse::from_platform(status)?;
+        serde_json::to_value(response)
+            .map_err(|_| core_state_error("p2-crypto-status-serialization-failed"))
     })
 }
 
@@ -307,6 +395,11 @@ mod tests {
             .expect("unconfigured status is a valid string-free projection")
     }
 
+    fn unavailable_platform_crypto_status() -> PlatformCryptoStatus {
+        PlatformCryptoStatus::new(0, false, PlatformCryptoCrossSigningState::Unavailable)
+            .expect("unavailable is a valid string-free crypto projection")
+    }
+
     #[derive(Default)]
     struct TestPlatform;
     impl Platform for TestPlatform {
@@ -324,6 +417,9 @@ mod tests {
         }
         fn sync_status(&self) -> crate::platform::SyncStatusFuture<'_> {
             Box::pin(async { Ok(unconfigured_platform_status()) })
+        }
+        fn crypto_status(&self) -> crate::platform::CryptoStatusFuture<'_> {
+            Box::pin(async { Ok(unavailable_platform_crypto_status()) })
         }
         fn notify(
             &self,
@@ -359,6 +455,48 @@ mod tests {
             TEST_HTTP_USER_AGENT.into()
         }
         fn sync_status(&self) -> crate::platform::SyncStatusFuture<'_> {
+            Box::pin(async move { self.status })
+        }
+        fn crypto_status(&self) -> crate::platform::CryptoStatusFuture<'_> {
+            Box::pin(async { Ok(unavailable_platform_crypto_status()) })
+        }
+        fn notify(
+            &self,
+            _candidate: crate::dto::NotificationCandidate,
+        ) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+        fn set_badge(&self, _count: u64) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+        fn status(&self, _status: PlatformStatus) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+    }
+
+    /// A crypto test shell can supply only the closed platform projection or
+    /// closed static error; neither variant can carry hostile shell text.
+    struct CryptoStatusPlatform {
+        status: Result<PlatformCryptoStatus, crate::platform::PlatformCryptoStatusError>,
+    }
+
+    impl Platform for CryptoStatusPlatform {
+        fn emit(
+            &self,
+            _envelope: crate::transport::MatrixIpcEnvelope,
+        ) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+        fn secret_store(&self) -> Arc<dyn SecretVault + Send + Sync> {
+            Arc::new(UnavailableSecretVault)
+        }
+        fn http_user_agent(&self) -> String {
+            TEST_HTTP_USER_AGENT.into()
+        }
+        fn sync_status(&self) -> crate::platform::SyncStatusFuture<'_> {
+            Box::pin(async { Ok(unconfigured_platform_status()) })
+        }
+        fn crypto_status(&self) -> crate::platform::CryptoStatusFuture<'_> {
             Box::pin(async move { self.status })
         }
         fn notify(
@@ -423,6 +561,7 @@ mod tests {
         assert_eq!(
             core.registered_commands(),
             vec![
+                "matrix_crypto_status",
                 "matrix_login_flows",
                 "matrix_register_flows",
                 "matrix_session_snapshot",
@@ -481,6 +620,98 @@ mod tests {
                 "slidingSyncCapable": null,
             })
         );
+    }
+
+    #[tokio::test]
+    async fn core_crypto_status_uses_exact_desktop_wire_shape() {
+        let ready = PlatformCryptoStatus::new(9, true, PlatformCryptoCrossSigningState::Ready)
+            .expect("ready is a valid closed crypto projection");
+        let response = Core::new(Arc::new(CryptoStatusPlatform { status: Ok(ready) }))
+            .command(CommandEnvelope {
+                command: "matrix_crypto_status".into(),
+                session_generation: 0,
+                request_id: Some("crypto-status-fixture".into()),
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect("crypto status observation succeeds");
+
+        assert_eq!(response.command, "matrix_crypto_status");
+        assert_eq!(response.session_generation, 0);
+        assert_eq!(
+            response.request_id.as_deref(),
+            Some("crypto-status-fixture")
+        );
+        assert_eq!(
+            response.payload,
+            serde_json::json!({
+                "sessionGeneration": 9,
+                "encryptionEnabled": true,
+                "crossSigningState": "ready",
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn crypto_status_projection_is_closed_and_core_errors_are_static() {
+        let private_text = "https://private.example token=secret key=secret";
+        let valid = PlatformCryptoStatus::new(7, true, PlatformCryptoCrossSigningState::Partial)
+            .expect("partial is a valid closed projection");
+        assert!(!format!("{valid:?}").contains(private_text));
+
+        // The Platform error contains no dynamic data, and Core replaces it
+        // with a fixed command error before the public transport boundary.
+        let error = Core::new(Arc::new(CryptoStatusPlatform {
+            status: Err(crate::platform::PlatformCryptoStatusError::InvalidSnapshot),
+        }))
+        .command(CommandEnvelope {
+            command: "matrix_crypto_status".into(),
+            session_generation: 0,
+            request_id: None,
+            payload: serde_json::Value::Null,
+        })
+        .await
+        .expect_err("closed Platform errors have no public crypto payload");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-crypto-status-platform-unavailable")
+        );
+
+        let malformed = Core::new(Arc::new(TestPlatform))
+            .command(CommandEnvelope {
+                command: "matrix_crypto_status".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({ "private": private_text }),
+            })
+            .await
+            .expect_err("crypto status accepts no payload");
+        assert_eq!(malformed.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            malformed.diagnostic_id.as_deref(),
+            Some("p2-crypto-status-invalid-payload")
+        );
+
+        for public_error in [error, malformed] {
+            let serialized = serde_json::to_string(&public_error).expect("static error serializes");
+            for forbidden in ["private.example", "token", "secret", "key"] {
+                assert!(
+                    !serialized.contains(forbidden),
+                    "hostile crypto text must not cross the Platform/Core seam: {forbidden}"
+                );
+            }
+        }
+
+        // Validate the Core-owned response contract independently of the
+        // Platform constructor so an accidental future mapping cannot emit an
+        // impossible encryption/state pairing.
+        let invalid_response = MatrixCryptoStatusResponse {
+            session_generation: 7,
+            encryption_enabled: false,
+            cross_signing_state: MatrixCryptoCrossSigningStateResponse::Ready,
+        };
+        assert!(!invalid_response.is_valid());
     }
 
     #[tokio::test]

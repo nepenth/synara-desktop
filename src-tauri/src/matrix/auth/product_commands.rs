@@ -406,19 +406,15 @@ pub async fn matrix_sync_status(
     crate::bridge::session_lifecycle::sync_status(core.inner().as_ref()).await
 }
 
+/// SNC-P3.4 — retain the existing zero-argument crypto-status command while
+/// routing envelope validation and exact response serialization through Core.
+/// The desktop Platform still samples the live crypto owner under its auth
+/// mutex; this command receives only the already validated public DTO.
 #[tauri::command]
 pub async fn matrix_crypto_status(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<MatrixCryptoStatus, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let Some(active) = session.as_ref() else {
-        return Ok(crypto_status(state.current_generation(), None));
-    };
-    let cross_signing = active.client.encryption().cross_signing_status().await;
-    Ok(crypto_status(
-        active.sync.session_generation(),
-        cross_signing,
-    ))
+    crate::bridge::session_lifecycle::crypto_status(core.inner().as_ref()).await
 }
 
 #[tauri::command]
@@ -644,28 +640,6 @@ pub(super) async fn ensure_crypto_ready(client: &Client) -> Result<(), MatrixAut
         ));
     }
     Ok(())
-}
-
-pub(super) fn crypto_status(
-    session_generation: u64,
-    cross_signing: Option<CrossSigningStatus>,
-) -> MatrixCryptoStatus {
-    MatrixCryptoStatus {
-        session_generation,
-        encryption_enabled: cross_signing.is_some(),
-        cross_signing_state: cross_signing_state(cross_signing.as_ref()),
-    }
-}
-
-pub(super) fn cross_signing_state(status: Option<&CrossSigningStatus>) -> MatrixCrossSigningState {
-    match status {
-        None => MatrixCrossSigningState::Unavailable,
-        Some(status) if status.is_complete() => MatrixCrossSigningState::Ready,
-        Some(status) if status.has_master || status.has_self_signing || status.has_user_signing => {
-            MatrixCrossSigningState::Partial
-        }
-        Some(_) => MatrixCrossSigningState::NotSetUp,
-    }
 }
 
 pub(super) fn map_sync_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {

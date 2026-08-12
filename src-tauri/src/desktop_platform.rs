@@ -11,8 +11,8 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use synara_core::dto::NotificationCandidate;
 use synara_core::platform::{
-    Platform, PlatformStatus, PlatformSyncStatus, SecretVault, SyncStatusFuture,
-    UnavailableSecretVault,
+    CryptoStatusFuture, Platform, PlatformCryptoStatus, PlatformStatus, PlatformSyncStatus,
+    SecretVault, SyncStatusFuture, UnavailableSecretVault,
 };
 use synara_core::transport::{MatrixIpcEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
 
@@ -69,6 +69,22 @@ impl<R: Runtime> Platform for TauriPlatform<R> {
                 .sync_status_snapshot()
                 .await;
             PlatformSyncStatus::from_desktop_snapshot(snapshot)
+        })
+    }
+
+    /// Observe crypto through the shell-owned Matrix session. The desktop
+    /// state samples `cross_signing_status` under its existing auth mutex and
+    /// reduces it locally to a generation, boolean, and closed coarse state.
+    /// No SDK object, raw error, identity, credential, key, or store crosses
+    /// this Platform/Core boundary.
+    fn crypto_status(&self) -> CryptoStatusFuture<'_> {
+        Box::pin(async move {
+            let projection: PlatformCryptoStatus = self
+                .app
+                .state::<crate::matrix::auth::MatrixAuthState>()
+                .crypto_status_projection()
+                .await;
+            Ok(projection)
         })
     }
 

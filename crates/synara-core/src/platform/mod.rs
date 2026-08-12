@@ -138,6 +138,92 @@ impl PlatformSyncStatus {
 pub type SyncStatusFuture<'a> =
     Pin<Box<dyn Future<Output = Result<PlatformSyncStatus, PlatformSyncStatusError>> + Send + 'a>>;
 
+/// Closed cross-signing state that may cross from a shell into Core.
+///
+/// This is deliberately not an SDK status object, identity, key, or string.
+/// Core alone maps this enum to the exact public `crossSigningState` value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PlatformCryptoCrossSigningState {
+    /// The shell has no encryption status to observe.
+    Unavailable,
+    /// Encryption is available but no cross-signing keys are configured.
+    NotSetUp,
+    /// At least one, but not all, cross-signing keys are configured.
+    Partial,
+    /// All cross-signing keys are configured.
+    Ready,
+}
+
+/// Static, opaque error from the shell-owned crypto-status observation.
+///
+/// Do not add a string payload here. Raw SDK errors, identities, credentials,
+/// and keys must remain in the shell and never cross the Platform/Core seam.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PlatformCryptoStatusError {
+    /// A shell projection had an inconsistent encryption/state pairing.
+    InvalidSnapshot,
+}
+
+/// String-free crypto-status projection supplied by a platform implementation.
+///
+/// The fields remain private so a shell can pass only booleans and a closed
+/// state enum to Core. Core owns construction and validation of the exact
+/// React-facing response DTO.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlatformCryptoStatus {
+    session_generation: u64,
+    encryption_enabled: bool,
+    cross_signing_state: PlatformCryptoCrossSigningState,
+}
+
+impl PlatformCryptoStatus {
+    /// Construct a closed crypto projection, rejecting state combinations that
+    /// could not have been produced by the existing desktop observation.
+    pub fn new(
+        session_generation: u64,
+        encryption_enabled: bool,
+        cross_signing_state: PlatformCryptoCrossSigningState,
+    ) -> Result<Self, PlatformCryptoStatusError> {
+        let encryption_pairing_is_valid = matches!(
+            (encryption_enabled, cross_signing_state),
+            (false, PlatformCryptoCrossSigningState::Unavailable)
+                | (true, PlatformCryptoCrossSigningState::NotSetUp)
+                | (true, PlatformCryptoCrossSigningState::Partial)
+                | (true, PlatformCryptoCrossSigningState::Ready)
+        );
+        if !encryption_pairing_is_valid {
+            return Err(PlatformCryptoStatusError::InvalidSnapshot);
+        }
+
+        Ok(Self {
+            session_generation,
+            encryption_enabled,
+            cross_signing_state,
+        })
+    }
+
+    pub fn session_generation(self) -> u64 {
+        self.session_generation
+    }
+
+    pub fn encryption_enabled(self) -> bool {
+        self.encryption_enabled
+    }
+
+    pub fn cross_signing_state(self) -> PlatformCryptoCrossSigningState {
+        self.cross_signing_state
+    }
+}
+
+/// Read-only, platform-provided crypto-status observation.
+///
+/// The future may borrow its platform implementation while it reads the live,
+/// shell-owned SDK session. Its result is a closed, string-free projection, so
+/// no raw SDK object, error, identity, credential, or key reaches Core.
+pub type CryptoStatusFuture<'a> = Pin<
+    Box<dyn Future<Output = Result<PlatformCryptoStatus, PlatformCryptoStatusError>> + Send + 'a>,
+>;
+
 /// Broad engine status broadcast to the OS layer (health/readiness).
 ///
 /// The real consumption (dock/tray/today-widget on iOS) lands with the P2 sink
@@ -194,6 +280,13 @@ pub trait Platform: Send + Sync + 'static {
     /// projection directly) before returning; Core only owns the read-only
     /// transport command and its wire response.
     fn sync_status(&self) -> SyncStatusFuture<'_>;
+    /// Read the current crypto state as a closed, string-free projection.
+    ///
+    /// The shell remains the sole owner of its SDK client, crypto state,
+    /// credentials, stores, and raw errors. Implementations must reduce their
+    /// local observation to [`PlatformCryptoStatus`] before returning; Core
+    /// owns only the read-only transport command and its exact wire response.
+    fn crypto_status(&self) -> CryptoStatusFuture<'_>;
     /// Deliver a native notification (tray/toast on desktop, APNs/badge on iOS).
     fn notify(&self, candidate: NotificationCandidate) -> Result<(), MatrixIpcError>;
     /// App icon badge count (dock/taskbar/today on iOS).
@@ -264,5 +357,64 @@ mod tests {
             ),
             Err(PlatformSyncStatusError::InvalidSnapshot)
         );
+    }
+
+    #[test]
+    fn crypto_projection_is_closed_and_rejects_inconsistent_pairings() {
+        let unavailable =
+            PlatformCryptoStatus::new(4, false, PlatformCryptoCrossSigningState::Unavailable)
+                .expect("unavailable is an existing crypto-status outcome");
+        assert_eq!(unavailable.session_generation(), 4);
+        assert!(!unavailable.encryption_enabled());
+        assert_eq!(
+            unavailable.cross_signing_state(),
+            PlatformCryptoCrossSigningState::Unavailable
+        );
+
+        for state in [
+            PlatformCryptoCrossSigningState::NotSetUp,
+            PlatformCryptoCrossSigningState::Partial,
+            PlatformCryptoCrossSigningState::Ready,
+        ] {
+            assert!(PlatformCryptoStatus::new(4, true, state).is_ok());
+        }
+        assert_eq!(
+            PlatformCryptoStatus::new(4, false, PlatformCryptoCrossSigningState::Ready),
+            Err(PlatformCryptoStatusError::InvalidSnapshot)
+        );
+        assert_eq!(
+            PlatformCryptoStatus::new(4, true, PlatformCryptoCrossSigningState::Unavailable),
+            Err(PlatformCryptoStatusError::InvalidSnapshot)
+        );
+    }
+
+    #[test]
+    fn crypto_projection_seam_has_no_dynamic_or_sdk_bearing_type() {
+        let private_text = "https://private.example token=secret key=secret";
+        let projection =
+            PlatformCryptoStatus::new(4, true, PlatformCryptoCrossSigningState::Partial)
+                .expect("closed projection is valid");
+        assert!(!format!("{projection:?}").contains(private_text));
+
+        let source = include_str!("mod.rs");
+        let crypto_seam = source
+            .split("/// Closed cross-signing state that may cross from a shell into Core.")
+            .nth(1)
+            .and_then(|section| section.split("/// Broad engine status broadcast").next())
+            .expect("crypto projection seam must remain isolated");
+        for forbidden in [
+            ": String",
+            "String)",
+            "String,",
+            "String>",
+            "&str",
+            "MatrixIpcError",
+            "matrix_sdk::",
+        ] {
+            assert!(
+                !crypto_seam.contains(forbidden),
+                "crypto Platform/Core seam must remain closed and string-free: {forbidden}"
+            );
+        }
     }
 }
