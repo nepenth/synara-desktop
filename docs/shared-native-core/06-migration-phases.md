@@ -1,9 +1,11 @@
 # 06 — Migration Phases (P1–P5)
 
 Methodology mirrors the js→rust burn-down: small additive slices, each a
-squashed PR onto `feature/shared-native-core` with green desktop CI (Quality +
-Desktop package + full matrix at tip), worktree isolation, provenance anchor
-maintained. **Never a big-bang move.**
+squashed PR onto `feature/shared-native-core` with a provenance anchor and the
+path-scoped CI required by the workflow plus its aggregate Quality gate.
+Desktop package and full Synapse evidence run only when selected or explicitly
+required by the relevant protected, integration, or release path. **Never a
+big-bang move.**
 
 ## P0 — ADR + plan + census (done)
 
@@ -14,6 +16,12 @@ maintained. **Never a big-bang move.**
 
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
+
+**Current bounded status at `b811319f0fcc7ecd6eee82e4255d57e8e5699360`
+(#714, after #713):** #713 mechanically moved notifications, polls, relations,
+threads, and unread; #714 mechanically moved raw content, receipts, routes, and
+security. Both retain thin desktop re-exports. They are P1 extraction only: no
+P2 command registration, UDL, or iOS behavior changed.
 
 Slicing (each slice = one PR):
 1. Workspace scaffolding: root `Cargo.toml` workspace; `crates/synara-core`
@@ -94,14 +102,15 @@ core; `grep -rn 'MatrixRustSDK' synara-ios/Synara --include='*.swift'` returns
 zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
 
-> **Bounded evidence note — not P4 acceptance:** At
-> `origin/feature/shared-native-core` `fa6e6b63` (#710, after #708), #708 is
-> only the pure iOS room-row unread presentation from closed
+> **Bounded evidence note — not P4 acceptance:** At the current feature tip
+> `b811319f0fcc7ecd6eee82e4255d57e8e5699360` (#714, after P1-only #713), the
+> prior #708 work is only the pure iOS room-row unread presentation from closed
 > `Joined`/`Invited` membership, scalar counters, and a marked-unread flag to a
-> `u64` count plus highlight boolean. #710 is only the pure cold-start decision
-> from a latest-state boolean and `{Missing, Known}` to a boolean; Swift maps
-> `nil`/`.distantPast` to `Missing` and a real `Date` to `Known`. Neither adds a
-> Core command route or Core SDK/service owner. Actual SDK `Room` and timeline
+> `u64` count plus highlight boolean. The prior #710 work is only the pure
+> cold-start decision from a latest-state boolean and `{Missing, Known}` to a
+> boolean; Swift maps `nil`/`.distantPast` to `Missing` and a real `Date` to
+> `Known`. #713/#714 add no Core command route, UDL, or iOS behavior. Neither
+> P4 policy slice adds a Core SDK/service owner. Actual SDK `Room` and timeline
 > listener/pagination/recovery execution, plus session, Keychain, store, crypto,
 > sync, and lifecycle ownership, remain `MatrixRustSDKService`-owned.
 

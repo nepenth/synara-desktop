@@ -1,9 +1,10 @@
 # Shared Native Core (synara-core) — Program Plan
 
-**Status at `origin/feature/shared-native-core` `fa6e6b63` (#710, following
-#708):** P0 is complete; P1 extraction and bounded P2, P3, and P4 slices are
-merged. P2–P4 remain in progress. P5 has not started. Owner: Synara
-engineering.
+**Status at `feature/shared-native-core`
+`b811319f0fcc7ecd6eee82e4255d57e8e5699360` (#714, after #713):** P0 is
+complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
+remain in progress. P5 has not started. Owner: Synara engineering. The current
+provenance, gates, and successor steps are in `10-current-handoff.md`.
 
 ## Goal
 
@@ -16,8 +17,9 @@ and release gates have actually passed.
 
 - ADR 0003: `docs/adr/0003-shared-native-rust-core.md`
 
-Full docs: see this directory's README and 01–09 (architecture, census,
-platform sinks, transport/FFI, phases, risk, parity matrix, references).
+Full docs: see this directory's README and 01–10 (architecture, census,
+platform sinks, transport/FFI, phases, risk, parity matrix, references, and the
+current handoff ledger).
 
 ## Merged progress and remaining work
 
@@ -29,9 +31,12 @@ acceptance criteria have all passed.
   workspace/core scaffold; #673–#675 moved DTO, transport/IPC, and the pure
   task subset; #676–#677 and #680 moved sync, room-list, timeline, and
   UTD-recovery pieces. #681 added the `Platform` sink and desktop `AppHandle`
-  adapter without changing intended behavior. Compatibility re-exports remain,
-  and many matrix domains are still desktop-owned, so the full extraction/end
-  state is not yet complete.
+  adapter without changing intended behavior. #713 then mechanically moved the
+  pure notifications, polls, relations, threads, and unread projections; #714
+  mechanically moved raw content, receipts, routes, and security. Both clusters
+  retain thin desktop re-exports and add no P2 command, UDL, or iOS behavior.
+  Compatibility re-exports remain, and many matrix domains are still
+  desktop-owned, so the full extraction/end state is not yet complete.
 - **P2 — in progress; transport registry is intentionally partial.** #683–#684
   added `Core::command`, typed envelopes, the registry, and the desktop command
   census. The merged registry currently has exactly:
@@ -40,8 +45,8 @@ acceptance criteria have all passed.
   `matrix_cross_signing_status`, and `matrix_secret_storage_status`
   (#686–#689, #694, #698, #701–#702, #706). The latter six preserve bounded
   legacy status/media/cross-signing/secret-storage contracts through Core.
-  Neither #708 nor #710 adds a Core command route. It is not the complete
-  desktop command registry; unregistered census names fail closed.
+  Neither #708, #710, #713, nor #714 adds a Core command route. It is not the
+  complete desktop command registry; unregistered census names fail closed.
 - **P3 — in progress; a desktop seam is merged, not a whole adapter swap.**
   #690 routes the credential-free login and registration flow probes through
   Core. #691 mirrors only the installed safe session lifecycle, and #694/#698

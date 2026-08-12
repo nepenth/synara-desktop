@@ -4,19 +4,21 @@ Legend: ✅ shipping / 🔨 in progress / ⛔ not yet
 
 ## Current bounded evidence (not parity completion)
 
-At `origin/feature/shared-native-core` `fa6e6b63` (#710, following #708), P2
-still registers exactly the same eight names—`matrix_login_flows`,
-`matrix_register_flows`, `matrix_session_snapshot`, `matrix_sync_status`,
-`matrix_crypto_status`, `matrix_media_config`, `matrix_cross_signing_status`,
-and `matrix_secret_storage_status`—and all other census names fail closed;
-#708 and #710 add no Core command routes. #708 is only a pure iOS room-row
-unread presentation from closed `Joined`/`Invited` membership, scalar counters,
-and a marked-unread flag to a `u64` count plus highlight boolean. #710 is only
-a pure cold-start decision from a latest-state boolean and `{Missing, Known}`
-to a boolean; Swift maps `nil`/`.distantPast` to `Missing` and a real `Date` to
-`Known`. Neither is Core SDK/service ownership: actual SDK `Room` and timeline
-listener/pagination/recovery execution, plus session, Keychain, store, crypto,
-sync, and lifecycle ownership, remain `MatrixRustSDKService`-owned.
+At `feature/shared-native-core` `b811319f0fcc7ecd6eee82e4255d57e8e5699360`
+(#714, after #713), P2 still registers exactly the same eight names—
+`matrix_login_flows`, `matrix_register_flows`, `matrix_session_snapshot`,
+`matrix_sync_status`, `matrix_crypto_status`, `matrix_media_config`,
+`matrix_cross_signing_status`, and `matrix_secret_storage_status`—and all
+other census names fail closed. #713/#714 are P1-only mechanical extraction:
+they add no Core command route, UDL, or iOS behavior. The prior #708 work is
+only a pure iOS room-row unread presentation from closed `Joined`/`Invited`
+membership, scalar counters, and a marked-unread flag to a `u64` count plus
+highlight boolean. The prior #710 work is only a pure cold-start decision from
+a latest-state boolean and `{Missing, Known}` to a boolean; Swift maps
+`nil`/`.distantPast` to `Missing` and a real `Date` to `Known`. Neither is Core
+SDK/service ownership: actual SDK `Room` and timeline listener/pagination/
+recovery execution, plus session, Keychain, store, crypto, sync, and lifecycle
+ownership, remain `MatrixRustSDKService`-owned.
 
 | Capability | Desktop (src-tauri engine) | iOS today (Swift re-impl) | After P4+P5 (shared core) |
 |---|---|---|---|
