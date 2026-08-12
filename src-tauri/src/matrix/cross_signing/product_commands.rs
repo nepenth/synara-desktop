@@ -1,12 +1,15 @@
+use std::sync::Arc;
+
 use super::*;
 
+/// SNC-P3.6 — retain the existing payload-free cross-signing status wire DTO
+/// while Core owns command registration, validation, and truth-table output.
+/// The desktop Platform remains the only Matrix SDK/client/crypto/store owner.
 #[tauri::command]
 pub async fn matrix_cross_signing_status(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeCrossSigningStatus, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_cross_signing_session(session.as_ref())?;
-    live_cross_signing_status(active).await
+    crate::bridge::cross_signing_status::cross_signing_status(core.inner().as_ref()).await
 }
 
 #[tauri::command]

@@ -534,7 +534,11 @@ fn crypto_status_routes_through_core_while_desktop_keeps_the_mutex_bound_sdk_rea
     let projection = product_source
         .split("pub(crate) async fn crypto_status_projection")
         .nth(1)
-        .and_then(|source| source.split("/// Resolve an opaque V-ROOMS").next())
+        .and_then(|source| {
+            source
+                .split("/// Read the exact legacy cross-signing observation")
+                .next()
+        })
         .expect("desktop crypto projection must remain isolated");
     let lock = projection
         .find("self.session.lock().await")
@@ -560,6 +564,84 @@ fn crypto_status_routes_through_core_while_desktop_keeps_the_mutex_bound_sdk_rea
         assert!(
             !projection.contains(forbidden),
             "desktop crypto projection must stay read-only and string-free: {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn cross_signing_status_routes_only_through_core_and_holds_the_auth_mutex_across_both_sdk_reads() {
+    let command_source = include_str!("../cross_signing/product_commands.rs");
+    let command = command_source
+        .split("pub async fn matrix_cross_signing_status")
+        .nth(1)
+        .and_then(|source| {
+            source
+                .split("pub async fn matrix_cross_signing_setup")
+                .next()
+        })
+        .expect("cross-signing status command body");
+    assert!(
+        command.contains("crate::bridge::cross_signing_status::cross_signing_status"),
+        "status handler must delegate Core envelope/serialization to its strict bridge"
+    );
+    assert!(
+        command.contains("core: State<'_, Arc<synara_core::Core>>"),
+        "status handler takes only the managed Core state"
+    );
+    for forbidden in [
+        "MatrixAuthState",
+        "state.session",
+        "active.client",
+        "live_cross_signing_status",
+        "request_user_identity",
+        "MatrixIpcError",
+    ] {
+        assert!(
+            !command.contains(forbidden),
+            "Tauri status handler must not reclaim desktop SDK ownership: {forbidden}"
+        );
+    }
+
+    let product_source = include_str!("product.rs");
+    let projection = product_source
+        .split("pub(crate) async fn cross_signing_status_projection")
+        .nth(1)
+        .and_then(|source| source.split("/// Read the upload-size config").next())
+        .expect("desktop cross-signing projection must remain isolated");
+    let lock = projection
+        .find("self.session.lock().await")
+        .expect("cross-signing projection must take the existing auth mutex");
+    let private_status = projection
+        .find("cross_signing_status().await")
+        .expect("projection must retain the existing private status observation");
+    let identity_query = projection
+        .find("request_user_identity(user_id)")
+        .expect("projection must retain the existing desktop-owned identity query");
+    assert!(
+        lock < private_status && private_status < identity_query,
+        "the auth mutex must be acquired before and held across both legacy SDK awaits"
+    );
+    for forbidden in [
+        "drop(session)",
+        "client.clone",
+        "clone().request_user_identity",
+    ] {
+        assert!(
+            !projection.contains(forbidden),
+            "cross-signing observation must not clone/drop/reorder the legacy mutex owner: {forbidden}"
+        );
+    }
+    for forbidden in [
+        "MatrixIpcError",
+        "diagnostic_id",
+        "with_diagnostic",
+        "bootstrap_cross_signing",
+        "recovery",
+        "secret_storage",
+    ] {
+        assert!(
+            !projection.contains(forbidden),
+            "desktop projection must be a string-free read observation only: {forbidden}"
         );
     }
 }

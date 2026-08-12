@@ -318,6 +318,12 @@ mod tests {
             })
         }
 
+        fn cross_signing_status(&self) -> synara_core::platform::CrossSigningStatusFuture<'_> {
+            Box::pin(async {
+                Err(synara_core::platform::PlatformCrossSigningStatusError::NoSession)
+            })
+        }
+
         fn media_config(&self) -> synara_core::platform::MediaConfigFuture<'_> {
             Box::pin(async {
                 Ok(synara_core::platform::PlatformMediaConfig::new(0)

@@ -226,6 +226,111 @@ pub type CryptoStatusFuture<'a> = Pin<
     Box<dyn Future<Output = Result<PlatformCryptoStatus, PlatformCryptoStatusError>> + Send + 'a>,
 >;
 
+/// Closed private cross-signing state that may cross from a shell into Core.
+///
+/// It records only which local private-signing-material condition the
+/// desktop-owned SDK reported. It carries no key, identity, client, store,
+/// credential, raw error, or recovery material.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PlatformCrossSigningPrivateState {
+    /// The desktop SDK did not expose a cross-signing status.
+    Unavailable,
+    /// A status exists but no private cross-signing key is present.
+    Missing,
+    /// Some, but not all, private cross-signing keys are present.
+    Partial,
+    /// All private cross-signing keys are present.
+    Complete,
+}
+
+/// Closed own-identity condition that may cross from a shell into Core.
+///
+/// This reports no identifier or key: it is only the result of the existing
+/// desktop-owned identity query.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PlatformCrossSigningOwnIdentity {
+    /// The existing identity query returned no own identity.
+    Missing,
+    /// The existing identity query returned an unverified own identity.
+    Unverified,
+    /// The existing identity query returned a verified own identity.
+    Verified,
+}
+
+/// String-free `matrix_cross_signing_status` observation supplied by a shell.
+///
+/// Core reconstructs the exact legacy public fields and truth table from this
+/// bounded generation plus two closed enums. The SDK client/crypto/store,
+/// queried user id, identities, keys, credentials, and raw diagnostics remain
+/// owned by the shell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlatformCrossSigningStatus {
+    session_generation: u64,
+    private_state: PlatformCrossSigningPrivateState,
+    own_identity: PlatformCrossSigningOwnIdentity,
+}
+
+impl PlatformCrossSigningStatus {
+    /// Construct the only status observation permitted across this seam.
+    /// JavaScript receives the generation on the legacy wire, so reject an
+    /// unsafe counter before Core can serialize it.
+    pub fn new(
+        session_generation: u64,
+        private_state: PlatformCrossSigningPrivateState,
+        own_identity: PlatformCrossSigningOwnIdentity,
+    ) -> Result<Self, PlatformCrossSigningStatusError> {
+        (session_generation <= MAX_WIRE_COUNTER)
+            .then_some(Self {
+                session_generation,
+                private_state,
+                own_identity,
+            })
+            .ok_or(PlatformCrossSigningStatusError::UnsafeSessionGeneration)
+    }
+
+    pub fn session_generation(self) -> u64 {
+        self.session_generation
+    }
+
+    pub fn private_state(self) -> PlatformCrossSigningPrivateState {
+        self.private_state
+    }
+
+    pub fn own_identity(self) -> PlatformCrossSigningOwnIdentity {
+        self.own_identity
+    }
+}
+
+/// Static failures from the desktop-owned cross-signing observation.
+///
+/// Do not add a string payload. In particular, user ids, identities, keys,
+/// secrets, SDK/client/store values, and raw diagnostics must not cross this
+/// Platform/Core seam.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PlatformCrossSigningStatusError {
+    /// No desktop session owns a live Matrix SDK client.
+    NoSession,
+    /// The active SDK client anomalously did not expose its own user id.
+    UserMissing,
+    /// The existing desktop-owned own-identity query failed.
+    IdentityQueryFailed,
+    /// The active session generation is outside the JSON-safe wire range.
+    UnsafeSessionGeneration,
+}
+
+/// Read-only cross-signing observation from the shell-owned Matrix SDK.
+///
+/// Implementations retain their existing auth mutex semantics while sampling
+/// both the private status and the existing identity query. Only the closed
+/// projection/error above reaches Core.
+pub type CrossSigningStatusFuture<'a> = Pin<
+    Box<
+        dyn Future<Output = Result<PlatformCrossSigningStatus, PlatformCrossSigningStatusError>>
+            + Send
+            + 'a,
+    >,
+>;
+
 /// Closed, scalar-only media-config projection supplied by a platform.
 ///
 /// The maximum upload size is a JSON number on the existing React/Tauri wire,
@@ -339,6 +444,12 @@ pub trait Platform: Send + Sync + 'static {
     /// local observation to [`PlatformCryptoStatus`] before returning; Core
     /// owns only the read-only transport command and its exact wire response.
     fn crypto_status(&self) -> CryptoStatusFuture<'_>;
+    /// Read the existing desktop cross-signing status as a closed projection.
+    ///
+    /// The shell keeps the Matrix SDK client/crypto/store/network ownership and
+    /// performs the existing own-identity query locally. Core receives only
+    /// [`PlatformCrossSigningStatus`] or a static closed error.
+    fn cross_signing_status(&self) -> CrossSigningStatusFuture<'_>;
     /// Read the live media upload-size configuration as a closed projection.
     ///
     /// The shell retains the Matrix SDK client, authenticated session, cache,
@@ -444,6 +555,82 @@ mod tests {
             PlatformCryptoStatus::new(4, true, PlatformCryptoCrossSigningState::Unavailable),
             Err(PlatformCryptoStatusError::InvalidSnapshot)
         );
+    }
+
+    #[test]
+    fn cross_signing_projection_is_closed_bounded_and_covers_every_private_state() {
+        for private_state in [
+            PlatformCrossSigningPrivateState::Unavailable,
+            PlatformCrossSigningPrivateState::Missing,
+            PlatformCrossSigningPrivateState::Partial,
+            PlatformCrossSigningPrivateState::Complete,
+        ] {
+            for own_identity in [
+                PlatformCrossSigningOwnIdentity::Missing,
+                PlatformCrossSigningOwnIdentity::Unverified,
+                PlatformCrossSigningOwnIdentity::Verified,
+            ] {
+                let projection =
+                    PlatformCrossSigningStatus::new(MAX_WIRE_COUNTER, private_state, own_identity)
+                        .expect(
+                            "all closed cross-signing state combinations are legacy observations",
+                        );
+                assert_eq!(projection.session_generation(), MAX_WIRE_COUNTER);
+                assert_eq!(projection.private_state(), private_state);
+                assert_eq!(projection.own_identity(), own_identity);
+            }
+        }
+        assert_eq!(
+            PlatformCrossSigningStatus::new(
+                MAX_WIRE_COUNTER + 1,
+                PlatformCrossSigningPrivateState::Complete,
+                PlatformCrossSigningOwnIdentity::Verified,
+            ),
+            Err(PlatformCrossSigningStatusError::UnsafeSessionGeneration)
+        );
+    }
+
+    #[test]
+    fn cross_signing_platform_seam_has_no_dynamic_or_sdk_bearing_type() {
+        let projection = PlatformCrossSigningStatus::new(
+            4,
+            PlatformCrossSigningPrivateState::Partial,
+            PlatformCrossSigningOwnIdentity::Unverified,
+        )
+        .expect("closed cross-signing projection is valid");
+        let private_text = "@alice:private.example token=secret key=secret";
+        assert!(!format!("{projection:?}").contains(private_text));
+        assert!(
+            !format!("{:?}", PlatformCrossSigningStatusError::IdentityQueryFailed)
+                .contains(private_text)
+        );
+
+        let source = include_str!("mod.rs");
+        let seam = source
+            .split("/// Closed private cross-signing state that may cross from a shell into Core.")
+            .nth(1)
+            .and_then(|section| {
+                section
+                    .split(
+                        "/// Closed, scalar-only media-config projection supplied by a platform.",
+                    )
+                    .next()
+            })
+            .expect("cross-signing projection seam must remain isolated");
+        for forbidden in [
+            ": String",
+            "String)",
+            "String,",
+            "String>",
+            "&str",
+            "MatrixIpcError",
+            "matrix_sdk::",
+        ] {
+            assert!(
+                !seam.contains(forbidden),
+                "cross-signing Platform/Core seam must remain closed and string-free: {forbidden}"
+            );
+        }
     }
 
     #[test]
