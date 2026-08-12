@@ -8,7 +8,7 @@ Desktop onto **one transport-agnostic Rust application-logic core** —
 |---|---|
 | Owner | Synara engineering |
 | Status | P0 complete; P1 extraction and bounded P2, P3, and P4 slices are merged at the evidence base below. P2–P4 remain in progress; P5 has not started. |
-| Evidence base | `origin/feature/shared-native-core` at `4c4615dc` (`feat(core): migrate cross-signing status observation`, #702) |
+| Evidence base | `origin/feature/shared-native-core` at `3bd0da01` (`feat(core): route secret-storage status through shared transport`, #706) |
 | Decision | [ADR 0003](../adr/0003-shared-native-rust-core.md) |
 | Program ledger | `docs/shared-native-core/` (this directory) |
 | Related ADRs | [0001](../adr/0001-ios-repository-layout.md), [0002](../adr/0002-ios-architecture.md) |
@@ -25,47 +25,41 @@ Desktop onto **one transport-agnostic Rust application-logic core** —
   change. The remaining desktop-owned matrix domains still make the full P1
   end-state incomplete.
 - **P2 is a partial transport registry, not the complete command migration.**
-  `Core::command` has typed envelopes and currently registers exactly seven
+  `Core::command` has typed envelopes and currently registers exactly eight
   desktop-census commands: `matrix_login_flows`, `matrix_register_flows`,
   `matrix_session_snapshot`, `matrix_sync_status`, `matrix_crypto_status`,
-  `matrix_media_config`, and `matrix_cross_signing_status`. The status,
-  media, and cross-signing paths preserve their bounded legacy DTO contracts;
-  the rest of the census remains unregistered and fail-closed.
+  `matrix_media_config`, `matrix_cross_signing_status`, and
+  `matrix_secret_storage_status`. The status, media, cross-signing, and
+  secret-storage paths preserve their bounded legacy DTO contracts; the rest
+  of the census remains unregistered and fail-closed.
 - **P3 has a bounded desktop seam.** Existing Tauri commands route the two
   stateless auth probes and the session lifecycle/snapshot, sync-status, and
   crypto-status observations through the managed Core while retaining their
-  React-facing DTOs. The payload-free media-config and read-only
-  cross-signing-status bridges are also routed through Core. This is not the
-  planned whole-shell swap: the other desktop commands and live session
-  ownership remain in `src-tauri`.
+  React-facing DTOs. The payload-free media-config, read-only
+  cross-signing-status, and read-only secret-storage-status bridges are also
+  routed through Core. This is not the planned whole-shell swap: the other
+  desktop commands and live session ownership remain in `src-tauri`.
 - **P4 has a project-owned UniFFI scaffold, credential-free typed login-flow
   discovery, iOS homeserver-discovery use, an XCTest that calls the generated
-  Rust FFI scaffold, and the bounded `SessionProjectionCore` mirror.** The
-  mirror is not auth/session truth and has not migrated the iOS session,
-  room-list, timeline, crypto, push/NSE, or `MatrixRustSDK` service layer. P5
-  is not complete and iOS is not migrated to the shared engine.
+  Rust FFI scaffold, the bounded `SessionProjectionCore` mirror, and a
+  Settings display-only readback that exact-matches the Swift session state and
+  otherwise falls back safely.** Neither the mirror nor that readback is
+  auth/session truth, and neither has migrated the iOS session, room-list,
+  timeline, crypto, push/NSE, or `MatrixRustSDK` service layer. P5 is not
+  complete and iOS is not migrated to the shared engine.
 
 ## Current milestone ledger
 
-The following describes only merged source reachable from `4c4615dc`.
+The following describes only merged source reachable from `3bd0da01`.
 
 | Phase | Merged evidence | Current boundary |
 |---|---|---|
 | P0 | ADR, plan, and census | Complete planning baseline. |
 | P1 | #669, #673–#677, #680–#681 | Extraction slices and the `Platform`/desktop adapter are merged; remaining matrix domains have not all moved. |
-| P2 | #683–#689, #694, #698, #701–#702 | The seven-command registry above is live; it is not parity with the full desktop invoke census. |
-| P3 | #690–#691, #694, #698, #701–#702 | The listed auth and read-only/session bridges use Core; `src-tauri` is not yet a fully thin shell. |
-| P4 | #685, #692–#693, #696, #699 | UniFFI scaffold, bounded login discovery/link coverage, and a safe session projection mirror exist; service migration and Apple release proof do not. |
+| P2 | #683–#689, #694, #698, #701–#702, #706 | The eight-command registry above is live; it is not parity with the full desktop invoke census. |
+| P3 | #690–#691, #694, #698, #701–#702, #706 | The listed auth and read-only/session bridges use Core; `src-tauri` is not yet a fully thin shell. |
+| P4 | #685, #692–#693, #696, #699, #703 | UniFFI scaffold, bounded login discovery/link coverage, a safe session projection mirror, and display-only readback exist; service migration and Apple release proof do not. |
 | P5 | None | Not started. The release gates below remain required. |
-
-### Unmerged work is not current program state
-
-[PR #703](https://github.com/nepenth/synara-desktop/pull/703),
-`feat(ios): read back safe Core session identity`, remains **open and
-unmerged** at this evidence base. Its proposed Settings display-only consumer
-of the already-merged `SessionProjectionCore` mirror is not P4 service
-migration, iOS migration, or P5 progress. It remains future work unless and
-until it lands separately.
 
 ## Ownership, privacy, and release gates
 
