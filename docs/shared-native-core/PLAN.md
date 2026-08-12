@@ -1,43 +1,116 @@
 # Shared Native Core (synara-core) — Program Plan
 
-Status: P0 complete; P1-5 not started. Owner: Synara engineering.
+**Status at `origin/feature/shared-native-core` `78028d6`:** P0 is complete;
+P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4 remain in
+progress. P5 has not started. Owner: Synara engineering.
 
 ## Goal
 
 One Rust app-logic core (`crates/synara-core`) consumed by both desktop
-(Tauri) and iOS (SwiftUI via uniffi). Ends the dual implementation of sync,
-room list, timeline, and crypto logic.
+(Tauri) and iOS (SwiftUI via UniFFI). This ends the dual implementation of
+sync, room list, timeline, and crypto logic only when the remaining migrations
+and release gates have actually passed.
 
 ## Decision record
 
 - ADR 0003: `docs/adr/0003-shared-native-rust-core.md`
 
-Full docs: see this directory's README and 01-09
-(architecture, census, platform sinks, transport/FFI, phases, risk,
-parity matrix, references).
+Full docs: see this directory's README and 01–09 (architecture, census,
+platform sinks, transport/FFI, phases, risk, parity matrix, references).
 
-## Phases
+## Merged progress and remaining work
 
-- [x] P0 — ADR + plan + module-boundary census. Evidence:
-  - 285 .rs files under src-tauri/src/matrix/
-  - 144 #[tauri::command] fns; 38 AppHandle refs in the matrix layer
-  - existing ipc/ protocol (envelope, stream, wire counter, contract tests)
-  - iOS currently re-implements over matrix-rust-components-swift 26.06.06
-- [ ] P1 — Crate extraction (no behavior change). Move matrix/tasks/dto/ipc
-      into crates/synara-core; add `platform` sink trait; desktop CI green end-state.
-- [ ] P2 — Native transport API: commands + event-stream protocol from ipc/
-      become the core public surface; observer/sink abstraction for both adapters.
-- [ ] P3 — Desktop adapter swap: src-tauri thin shell over synara-core.
-- [ ] P4 — uniffi bindings for iOS targets + Swift SynaraCore adapter;
-      remove direct MatrixRustSDKService/RoomListService/TimelineService usage.
-- [ ] P5 — iOS parity + release gates (shared full matrix, iOS sim, device,
-      APNs, TestFlight, production E2EE completion).
+This is a source-and-log status ledger, not a claim that a phase's final
+acceptance criteria have all passed.
+
+- **P0 — complete.** ADR, plan, and module-boundary census are established.
+- **P1 — in progress; extraction slices are merged.** #669 created the
+  workspace/core scaffold; #673–#675 moved DTO, transport/IPC, and the pure
+  task subset; #676–#677 and #680 moved sync, room-list, timeline, and
+  UTD-recovery pieces. #681 added the `Platform` sink and desktop `AppHandle`
+  adapter without changing intended behavior. Compatibility re-exports remain,
+  and many matrix domains are still desktop-owned, so the full extraction/end
+  state is not yet complete.
+- **P2 — in progress; transport registry is intentionally partial.** #683–#684
+  added `Core::command`, typed envelopes, the registry, and the desktop command
+  census. The merged registry currently has exactly:
+  `matrix_login_flows`, `matrix_register_flows`, `matrix_session_snapshot`,
+  `matrix_sync_status`, and `matrix_crypto_status` (#686–#689, #694, #698).
+  The latter three preserve the session snapshot and payload-free sync/crypto
+  status contracts through Core. It is not the complete desktop command
+  registry; unregistered census names fail closed.
+- **P3 — in progress; a desktop seam is merged, not a whole adapter swap.**
+  #690 routes the credential-free login and registration flow probes through
+  Core. #691 mirrors only the installed safe session lifecycle, and #694/#698
+  route the existing sync- and crypto-status commands through Core. The desktop
+  still owns its live Matrix SDK client, credentials, persistence, and all
+  remaining direct command paths.
+- **P4 — in progress; bootstrap and discovery are merged.** #685 provides the
+  project-owned UniFFI/Swift package scaffold. #692 exposes only typed,
+  credential-free login-flow discovery; #693 has iOS homeserver discovery call
+  it; #696 adds an XCTest that invokes `bindingScaffoldVersion()` through the
+  generated Rust FFI. This does **not** migrate iOS session, room-list,
+  timeline, crypto, push/NSE, or `MatrixRustSDK` services, and it does not
+  remove the upstream Swift SDK dependency.
+- **P5 — not started.** Do not claim iOS shared-engine parity, iOS migration,
+  or Apple release readiness from the bounded work above.
+
+### Open work outside this evidence base
+
+[PR #699](https://github.com/nepenth/synara-desktop/pull/699) is open and has
+no merge commit at `78028d6`. Its proposed safe iOS `SessionProjectionCore`
+mirror is future/unmerged work, not a delivered P4 capability. Even if merged,
+it would not by itself complete P4, P5, the iOS migration, or any release gate.
+
+## Phase acceptance targets
+
+The original phase targets remain the definition of done; partial completion
+above does not relax them.
+
+1. **P1:** finish moving the intended app logic while preserving behavior,
+   compatibility re-exports, tests, formatting, clippy, and matrix boundaries.
+2. **P2:** register the complete desktop command census with parity/contract
+   coverage while preserving the React-facing `matrix_*` command contract.
+3. **P3:** reduce `src-tauri` to the planned thin Core adapter without changing
+   renderer-visible command behavior; retain desktop package and full-matrix
+   proofs.
+4. **P4:** build project-owned bindings for the Apple targets and migrate iOS
+   services in dependency-safe slices; only then retire direct
+   `MatrixRustSDKService`, room-list, and timeline service use when no consumer
+   remains.
+5. **P5:** establish shared-engine parity and close the release gates below.
+
+## Ownership, privacy, and operator/Apple release gates
+
+- Shells retain platform-native ownership: desktop owns its SDK client,
+  credentials, stores, and live observations; iOS owns SwiftUI, Keychain, APNs,
+  app lifecycle, and NSE behavior. The currently routed Core paths accept safe
+  projections and commands, never a live client or raw diagnostic.
+- Preserve privacy boundaries in every slice. `Core::open`/`close` keeps only an
+  in-memory safe session projection; sync and crypto use closed, string-free
+  platform projections; and current UniFFI login discovery is read-only and
+  credential-free. Never widen those surfaces with tokens, passwords, keys,
+  client handles, store locations, raw diagnostics, or raw HTTP payloads.
+- P5 requires shared-core desktop matrix/compatibility evidence, iOS simulator
+  evidence, signed physical-device and profiling evidence, production APNs,
+  TestFlight archive/upload, and production E2EE completion (recovery,
+  verification/cross-signing, key-backup restore, encrypted-media decryption).
+  Preserve the [device-readiness](../../synara-ios/docs/device-readiness.md)
+  and [iOS release](../../synara-ios/docs/release-checklist.md) Apple signing,
+  privacy, legal, and enrollment gates.
+- A merged implementation slice is not release authorization. Production
+  publication remains the exact-tag, protected `production-release` process
+  with required human review documented in
+  [build-and-release.md](../build-and-release.md). No PR may bypass it.
 
 ## Guardrails (from js→rust burn-down methodology)
 
 - Small additive slices, each a PR with green desktop CI (Quality + Desktop
   package + full matrix at tip).
 - Worktree isolation; branch base = feature; squashed PRs; provenance anchor.
-- Domain modules already carry their own tests; move them intact (no behavior
-  change during P1).
-- The ipc/ contract tests are the north star for the transport API.
+- Domain modules carry their tests; preserve behavior while extracting them.
+- The IPC/transport contract tests and command census are the north star for
+  transport migration; unregistered commands fail closed rather than silently
+  changing behavior.
+- No phase or release checkbox closes without its stated evidence, including
+  privacy review and the relevant operator/Apple gates.
