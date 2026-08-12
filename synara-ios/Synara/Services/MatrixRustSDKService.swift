@@ -1,4 +1,5 @@
 import Foundation
+import SynaraCore
 @preconcurrency import MatrixRustSDK
 
 private final class SynaraUnableToDecryptRecorder: UnableToDecryptDelegate, @unchecked Sendable {
@@ -2363,21 +2364,22 @@ enum RoomUnreadPresentation {
         numUnreadMentions: UInt64 = 0,
         isMarkedUnread: Bool = false
     ) -> (unreadCount: Int, hasHighlight: Bool) {
-        if membership == .invited {
-            return (1, true)
+        let coreMembership: SynaraCore.RoomUnreadMembership
+        switch membership {
+        case .joined:
+            coreMembership = .joined
+        case .invited:
+            coreMembership = .invited
         }
 
-        let messages = Int(numUnreadMessages)
-        let notifications = Int(numUnreadNotifications)
-        let mentions = Int(numUnreadMentions)
-
-        var unreadCount = max(messages, notifications)
-        if isMarkedUnread, unreadCount == 0 {
-            unreadCount = 1
-        }
-
-        let hasHighlight = mentions > 0
-        return (unreadCount, hasHighlight)
+        let projection = SynaraCore.roomUnreadPresentation(
+            membership: coreMembership,
+            numUnreadMessages: numUnreadMessages,
+            numUnreadNotifications: numUnreadNotifications,
+            numUnreadMentions: numUnreadMentions,
+            isMarkedUnread: isMarkedUnread
+        )
+        return (Int(projection.unreadCount), projection.hasHighlight)
     }
 }
 

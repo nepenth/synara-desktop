@@ -35,7 +35,9 @@ mod projection;
 mod sort;
 mod summary;
 
-pub use counts::RoomListBadgeCounts;
+pub use counts::{
+    room_unread_presentation, RoomListBadgeCounts, RoomUnreadMembership, RoomUnreadPresentationDto,
+};
 pub use delta::{RoomListDeltaBatch, RoomListDeltaOp, RoomListSnapshot};
 pub use error::RoomListError;
 pub use filters::{

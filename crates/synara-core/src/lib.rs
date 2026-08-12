@@ -29,6 +29,9 @@ mod core;
 pub use core::Core;
 
 pub mod app;
+pub use app::room_list::{
+    room_unread_presentation, RoomUnreadMembership, RoomUnreadPresentationDto,
+};
 
 pub mod dto;
 pub mod platform;
