@@ -327,4 +327,29 @@ if (projectionOperations.join(",") !== "open,session_snapshot,close") {
   throw new Error(`P4-3 facade must expose only open/session_snapshot/close; found ${projectionOperations.join(", ")}`);
 }
 
+// P4-3's private Core dependency must continue satisfying every required
+// Platform method without turning media configuration into a projection or a
+// UniFFI surface. Check the exact inert, closed, string-free implementation.
+const projectionPlatformImplStart = sessionProjectionFfi.indexOf(
+  "impl Platform for ProjectionOnlyPlatform {"
+);
+const projectionPlatformImplEnd = sessionProjectionFfi.indexOf(
+  "\n}\n\nfn inert_platform_error",
+  projectionPlatformImplStart
+);
+const inertProjectionMediaConfig = `fn media_config(&self) -> MediaConfigFuture<'_> {
+        Box::pin(async { Err(PlatformMediaConfigError::NoSession) })
+    }`;
+const inertProjectionMediaConfigStart = sessionProjectionFfi.indexOf(inertProjectionMediaConfig);
+if (
+  projectionPlatformImplStart < 0 ||
+  projectionPlatformImplEnd < 0 ||
+  inertProjectionMediaConfigStart < projectionPlatformImplStart ||
+  inertProjectionMediaConfigStart > projectionPlatformImplEnd
+) {
+  throw new Error(
+    "P4-3 ProjectionOnlyPlatform must implement Platform::media_config with the exact closed, string-free NoSession future"
+  );
+}
+
 console.log("SynaraCore UniFFI Swift scaffold contract passed.");

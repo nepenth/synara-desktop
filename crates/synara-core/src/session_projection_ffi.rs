@@ -13,8 +13,9 @@ use crate::app::auth::{normalize_homeserver_url, normalize_server_name};
 use crate::core::Core;
 use crate::dto::{NotificationCandidate, SessionLifecycle, SessionSnapshot};
 use crate::platform::{
-    CryptoStatusFuture, Platform, PlatformCryptoStatusError, PlatformStatus,
-    PlatformSyncStatusError, SecretVault, SyncStatusFuture, UnavailableSecretVault,
+    CryptoStatusFuture, MediaConfigFuture, Platform, PlatformCryptoStatusError,
+    PlatformMediaConfigError, PlatformStatus, PlatformSyncStatusError, SecretVault,
+    SyncStatusFuture, UnavailableSecretVault,
 };
 use crate::transport::{
     CommandRegistry, MatrixIpcEnvelope, MatrixIpcError, MatrixIpcErrorCategory,
@@ -254,6 +255,10 @@ impl Platform for ProjectionOnlyPlatform {
 
     fn crypto_status(&self) -> CryptoStatusFuture<'_> {
         Box::pin(async { Err(PlatformCryptoStatusError::InvalidSnapshot) })
+    }
+
+    fn media_config(&self) -> MediaConfigFuture<'_> {
+        Box::pin(async { Err(PlatformMediaConfigError::NoSession) })
     }
 
     fn notify(&self, _: NotificationCandidate) -> Result<(), MatrixIpcError> {

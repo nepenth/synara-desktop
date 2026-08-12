@@ -20,10 +20,12 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
 
         try await core.open(projection: expected)
-        XCTAssertEqual(try await core.sessionSnapshot(), Optional(expected))
+        let openedSnapshot = try await core.sessionSnapshot()
+        XCTAssertEqual(openedSnapshot, Optional(expected))
 
         try await core.close()
-        XCTAssertNil(try await core.sessionSnapshot())
+        let closedSnapshot = try await core.sessionSnapshot()
+        XCTAssertNil(closedSnapshot)
     }
 
     func testSessionProjectionFacadeRejectsHostileValuesWithStaticError() async {
