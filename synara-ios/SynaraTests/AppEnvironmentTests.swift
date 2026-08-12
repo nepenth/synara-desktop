@@ -21,6 +21,48 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertTrue(environment.later is MockLaterService)
     }
 
+    func testMatrixClientCoreSessionIdentityDefaultsToNilForMock() async {
+        let matrix: any MatrixClientServicing = MockMatrixClientService()
+
+        let identity = await matrix.coreSessionIdentity()
+
+        XCTAssertNil(identity)
+    }
+
+    func testSettingsCoreIdentitySelectionRequiresExactSwiftSessionMatch() throws {
+        let session = AuthenticatedSession(
+            userID: "@alice:matrix.org",
+            deviceID: "SYNARA-IOS-DEVICE",
+            homeserverURL: try XCTUnwrap(URL(string: "https://matrix.org")),
+            accessToken: "token"
+        )
+        let matching = CoreSessionIdentity(
+            userID: session.userID,
+            deviceID: session.deviceID,
+            homeserverURL: session.homeserverURL.absoluteString
+        )
+        let differentDevice = CoreSessionIdentity(
+            userID: session.userID,
+            deviceID: "OTHER-DEVICE",
+            homeserverURL: session.homeserverURL.absoluteString
+        )
+
+        XCTAssertEqual(
+            SettingsAccountIdentitySelection.matchingCoreIdentity(matching, for: session),
+            matching
+        )
+        XCTAssertNil(SettingsAccountIdentitySelection.matchingCoreIdentity(differentDevice, for: session))
+        XCTAssertNil(SettingsAccountIdentitySelection.matchingCoreIdentity(nil, for: session))
+        XCTAssertEqual(
+            SettingsAccountIdentitySelection.homeserverDisplayValue(for: matching, fallback: session.homeserverURL),
+            "matrix.org"
+        )
+        XCTAssertEqual(
+            SettingsAccountIdentitySelection.homeserverDisplayValue(for: nil, fallback: session.homeserverURL),
+            "matrix.org"
+        )
+    }
+
     func testLiveHomeserverDiscoveryConstructorUsesCoreService() {
         XCTAssertTrue(AppEnvironment.makeLiveHomeserverDiscovery() is CoreHomeserverDiscoveryService)
     }

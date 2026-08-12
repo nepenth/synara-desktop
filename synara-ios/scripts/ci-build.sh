@@ -34,6 +34,13 @@ fi
 cd "$(dirname "$0")/.."
 
 repo_root="$(cd .. && pwd)"
+checker="$repo_root/scripts/check-synara-core-swift-scaffold.mjs"
+if [[ ! -f "$checker" ]]; then
+  echo "SynaraCore Swift scaffold checker is required at $checker" >&2
+  exit 127
+fi
+node "$checker"
+
 generator="$repo_root/scripts/generate-synara-core-swift.sh"
 if [[ ! -x "$generator" ]]; then
   echo "SynaraCore generator is required at $generator" >&2
