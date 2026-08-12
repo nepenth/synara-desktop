@@ -1,8 +1,8 @@
 //! Unit tests for P7.1 notification candidate index.
 
 use super::*;
-use crate::matrix::dto::{NotificationCandidate, NotificationKind};
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::dto::{NotificationCandidate, NotificationKind};
+use crate::transport::MatrixIpcErrorCategory;
 
 fn candidate(
     id: &str,

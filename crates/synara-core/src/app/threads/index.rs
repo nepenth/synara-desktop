@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use crate::matrix::dto::{EventId, RoomId, ThreadSummary};
+use crate::dto::{EventId, RoomId, ThreadSummary};
 
 use super::error::ThreadError;
 

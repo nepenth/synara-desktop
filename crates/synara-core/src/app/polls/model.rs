@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::matrix::dto::{EventId, RoomId};
+use crate::dto::{EventId, RoomId};
 
 /// Current projection of one poll start plus its response/end state.
 #[derive(Clone, PartialEq, Eq)]

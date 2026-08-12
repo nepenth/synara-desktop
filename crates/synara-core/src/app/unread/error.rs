@@ -1,6 +1,6 @@
 //! Privacy-safe errors for unread / read-marker positioning (P5.5).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Unread positioning failure.
 #[derive(Debug)]

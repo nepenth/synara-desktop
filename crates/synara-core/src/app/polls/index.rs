@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::matrix::dto::{EventId, RoomId};
+use crate::dto::{EventId, RoomId};
 
 use super::error::ProjectionError;
 use super::model::{PollProjection, StateProjectionRow};

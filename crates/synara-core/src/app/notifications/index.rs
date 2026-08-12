@@ -5,7 +5,7 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use crate::matrix::dto::{NotificationCandidate, NotificationCandidateId, RoomId};
+use crate::dto::{NotificationCandidate, NotificationCandidateId, RoomId};
 
 use super::error::NotificationError;
 

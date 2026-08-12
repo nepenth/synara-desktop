@@ -4,7 +4,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use crate::matrix::dto::{
+use crate::dto::{
     EventId, RelationRef, RoomId, TimelineReactionSummaryItem, UserId, REL_TYPE_ANNOTATION,
     REL_TYPE_REFERENCE, REL_TYPE_REPLACE, REL_TYPE_THREAD,
 };

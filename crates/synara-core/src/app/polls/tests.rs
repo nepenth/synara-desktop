@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use super::*;
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 fn poll(room_id: &str, event_id: &str, question: &str) -> PollProjection {
     PollProjection {

@@ -1,6 +1,6 @@
 //! Privacy-safe errors for thread projection (P5.8).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Thread index / apply failure.
 #[derive(Debug)]

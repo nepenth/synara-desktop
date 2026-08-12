@@ -1,6 +1,6 @@
 //! Privacy-safe errors for notification candidates (P7.1).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Notification candidate index failure.
 #[derive(Debug)]
