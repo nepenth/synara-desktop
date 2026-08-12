@@ -16,8 +16,10 @@ use crate::app::auth::{
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::dto::SessionSnapshot;
 use crate::platform::{
-    Platform, PlatformCryptoCrossSigningState, PlatformCryptoStatus, PlatformMediaConfig,
-    PlatformMediaConfigError, PlatformSyncFailure, PlatformSyncStatus,
+    Platform, PlatformCrossSigningOwnIdentity, PlatformCrossSigningPrivateState,
+    PlatformCrossSigningStatus, PlatformCrossSigningStatusError, PlatformCryptoCrossSigningState,
+    PlatformCryptoStatus, PlatformMediaConfig, PlatformMediaConfigError, PlatformSyncFailure,
+    PlatformSyncStatus,
 };
 use crate::transport::{
     CommandEnvelope, CommandFuture, CommandRegistry, CommandResponseEnvelope, MatrixIpcError,
@@ -112,6 +114,210 @@ impl MatrixCryptoStatusResponse {
                 | (true, MatrixCryptoCrossSigningStateResponse::NotSetUp)
                 | (true, MatrixCryptoCrossSigningStateResponse::Partial)
                 | (true, MatrixCryptoCrossSigningStateResponse::Ready)
+        )
+    }
+}
+
+/// Fixed public readiness vocabulary for `matrix_cross_signing_status`.
+///
+/// `recovery_required` remains a read-only legacy status label. This transport
+/// command performs no setup, recovery, or verification action.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum MatrixCrossSigningReadinessResponse {
+    Unavailable,
+    SetupRequired,
+    RecoveryRequired,
+    VerificationRequired,
+    Ready,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum MatrixCrossSigningKeyPublicationResponse {
+    Missing,
+    Published,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum MatrixCrossSigningPrivateIdentityResponse {
+    Missing,
+    Partial,
+    Complete,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum MatrixOwnIdentityVerificationResponse {
+    Missing,
+    Unverified,
+    Verified,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum MatrixCrossSigningBootstrapResponse {
+    Needed,
+    NotNeeded,
+}
+
+/// Exact legacy camel-case React/Tauri DTO for `matrix_cross_signing_status`.
+///
+/// This is deliberately separate from the Platform projection. Core alone
+/// reconstructs all public labels after it has received only a bounded
+/// generation and two closed private enums.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MatrixCrossSigningStatusResponse {
+    session_generation: u64,
+    readiness: MatrixCrossSigningReadinessResponse,
+    master_signing: MatrixCrossSigningKeyPublicationResponse,
+    self_signing: MatrixCrossSigningKeyPublicationResponse,
+    user_signing: MatrixCrossSigningKeyPublicationResponse,
+    private_identity: MatrixCrossSigningPrivateIdentityResponse,
+    own_identity_verification: MatrixOwnIdentityVerificationResponse,
+    bootstrap: MatrixCrossSigningBootstrapResponse,
+}
+
+impl MatrixCrossSigningStatusResponse {
+    fn from_platform(status: PlatformCrossSigningStatus) -> Result<Self, MatrixIpcError> {
+        let private_identity = match status.private_state() {
+            PlatformCrossSigningPrivateState::Unavailable
+            | PlatformCrossSigningPrivateState::Missing => {
+                MatrixCrossSigningPrivateIdentityResponse::Missing
+            }
+            PlatformCrossSigningPrivateState::Partial => {
+                MatrixCrossSigningPrivateIdentityResponse::Partial
+            }
+            PlatformCrossSigningPrivateState::Complete => {
+                MatrixCrossSigningPrivateIdentityResponse::Complete
+            }
+        };
+        let (publication, own_identity_verification) = match status.own_identity() {
+            PlatformCrossSigningOwnIdentity::Missing => (
+                MatrixCrossSigningKeyPublicationResponse::Missing,
+                MatrixOwnIdentityVerificationResponse::Missing,
+            ),
+            PlatformCrossSigningOwnIdentity::Unverified => (
+                MatrixCrossSigningKeyPublicationResponse::Published,
+                MatrixOwnIdentityVerificationResponse::Unverified,
+            ),
+            PlatformCrossSigningOwnIdentity::Verified => (
+                MatrixCrossSigningKeyPublicationResponse::Published,
+                MatrixOwnIdentityVerificationResponse::Verified,
+            ),
+        };
+        let readiness = match (status.private_state(), status.own_identity()) {
+            (PlatformCrossSigningPrivateState::Unavailable, _) => {
+                MatrixCrossSigningReadinessResponse::Unavailable
+            }
+            (_, PlatformCrossSigningOwnIdentity::Missing) => {
+                MatrixCrossSigningReadinessResponse::SetupRequired
+            }
+            (
+                PlatformCrossSigningPrivateState::Missing
+                | PlatformCrossSigningPrivateState::Partial,
+                PlatformCrossSigningOwnIdentity::Unverified
+                | PlatformCrossSigningOwnIdentity::Verified,
+            ) => MatrixCrossSigningReadinessResponse::RecoveryRequired,
+            (
+                PlatformCrossSigningPrivateState::Complete,
+                PlatformCrossSigningOwnIdentity::Unverified,
+            ) => MatrixCrossSigningReadinessResponse::VerificationRequired,
+            (
+                PlatformCrossSigningPrivateState::Complete,
+                PlatformCrossSigningOwnIdentity::Verified,
+            ) => MatrixCrossSigningReadinessResponse::Ready,
+        };
+        let bootstrap = match (status.private_state(), status.own_identity()) {
+            (PlatformCrossSigningPrivateState::Unavailable, _)
+            | (
+                _,
+                PlatformCrossSigningOwnIdentity::Unverified
+                | PlatformCrossSigningOwnIdentity::Verified,
+            ) => MatrixCrossSigningBootstrapResponse::NotNeeded,
+            (_, PlatformCrossSigningOwnIdentity::Missing) => {
+                MatrixCrossSigningBootstrapResponse::Needed
+            }
+        };
+        let response = Self {
+            session_generation: status.session_generation(),
+            readiness,
+            master_signing: publication,
+            self_signing: publication,
+            user_signing: publication,
+            private_identity,
+            own_identity_verification,
+            bootstrap,
+        };
+        response
+            .is_valid()
+            .then_some(response)
+            .ok_or_else(|| core_state_error("p2-cross-signing-status-invalid-platform-projection"))
+    }
+
+    /// Revalidate the complete legacy truth table before serializing it.
+    fn is_valid(&self) -> bool {
+        if self.session_generation > MAX_WIRE_COUNTER
+            || self.master_signing != self.self_signing
+            || self.master_signing != self.user_signing
+        {
+            return false;
+        }
+
+        let identity_is_consistent = matches!(
+            (self.master_signing, self.own_identity_verification),
+            (
+                MatrixCrossSigningKeyPublicationResponse::Missing,
+                MatrixOwnIdentityVerificationResponse::Missing
+            ) | (
+                MatrixCrossSigningKeyPublicationResponse::Published,
+                MatrixOwnIdentityVerificationResponse::Unverified
+                    | MatrixOwnIdentityVerificationResponse::Verified
+            )
+        );
+        if !identity_is_consistent {
+            return false;
+        }
+
+        matches!(
+            (
+                self.readiness,
+                self.private_identity,
+                self.own_identity_verification,
+                self.bootstrap,
+            ),
+            (
+                MatrixCrossSigningReadinessResponse::Unavailable,
+                MatrixCrossSigningPrivateIdentityResponse::Missing,
+                _,
+                MatrixCrossSigningBootstrapResponse::NotNeeded,
+            ) | (
+                MatrixCrossSigningReadinessResponse::SetupRequired,
+                MatrixCrossSigningPrivateIdentityResponse::Missing
+                    | MatrixCrossSigningPrivateIdentityResponse::Partial
+                    | MatrixCrossSigningPrivateIdentityResponse::Complete,
+                MatrixOwnIdentityVerificationResponse::Missing,
+                MatrixCrossSigningBootstrapResponse::Needed,
+            ) | (
+                MatrixCrossSigningReadinessResponse::RecoveryRequired,
+                MatrixCrossSigningPrivateIdentityResponse::Missing
+                    | MatrixCrossSigningPrivateIdentityResponse::Partial,
+                MatrixOwnIdentityVerificationResponse::Unverified
+                    | MatrixOwnIdentityVerificationResponse::Verified,
+                MatrixCrossSigningBootstrapResponse::NotNeeded,
+            ) | (
+                MatrixCrossSigningReadinessResponse::VerificationRequired,
+                MatrixCrossSigningPrivateIdentityResponse::Complete,
+                MatrixOwnIdentityVerificationResponse::Unverified,
+                MatrixCrossSigningBootstrapResponse::NotNeeded,
+            ) | (
+                MatrixCrossSigningReadinessResponse::Ready,
+                MatrixCrossSigningPrivateIdentityResponse::Complete,
+                MatrixOwnIdentityVerificationResponse::Verified,
+                MatrixCrossSigningBootstrapResponse::NotNeeded,
+            )
         )
     }
 }
@@ -270,6 +476,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_crypto_status", matrix_crypto_status)
         .expect("built-in matrix_crypto_status must remain in the command census");
     registry
+        .register("matrix_cross_signing_status", matrix_cross_signing_status)
+        .expect("built-in matrix_cross_signing_status must remain in the command census");
+    registry
         .register("matrix_media_config", matrix_media_config)
         .expect("built-in matrix_media_config must remain in the command census");
     registry
@@ -352,6 +561,50 @@ fn matrix_crypto_status(state: Arc<CoreState>, request: CommandEnvelope) -> Comm
         serde_json::to_value(response)
             .map_err(|_| core_state_error("p2-crypto-status-serialization-failed"))
     })
+}
+
+/// `matrix_cross_signing_status` is a payload-free read observation. Core owns
+/// its registration, exact wire DTO, and legacy truth-table reconstruction;
+/// the Platform remains the sole owner of the Matrix SDK identity query and
+/// its client/crypto/store/network side effects.
+fn matrix_cross_signing_status(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-cross-signing-status-invalid-payload"));
+        }
+        let status = state
+            .platform()
+            .cross_signing_status()
+            .await
+            .map_err(cross_signing_status_transport_error)?;
+        let response = MatrixCrossSigningStatusResponse::from_platform(status)?;
+        serde_json::to_value(response)
+            .map_err(|_| core_state_error("p2-cross-signing-status-serialization-failed"))
+    })
+}
+
+/// Convert only the closed desktop status failures into static Core errors.
+/// The three legacy pairs are reconstructed here; the desktop bridge accepts
+/// exactly those category/diagnostic pairs and no dynamic Core text.
+fn cross_signing_status_transport_error(error: PlatformCrossSigningStatusError) -> MatrixIpcError {
+    match error {
+        PlatformCrossSigningStatusError::NoSession => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("v-crypto.2-cross-signing-requires-session")
+        }
+        PlatformCrossSigningStatusError::UserMissing => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("v-crypto.2-cross-signing-user-missing")
+        }
+        PlatformCrossSigningStatusError::IdentityQueryFailed => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Unknown)
+                .with_diagnostic("v-crypto.2-cross-signing-identity-query-failed")
+        }
+        PlatformCrossSigningStatusError::UnsafeSessionGeneration => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
+                .with_diagnostic("p2-cross-signing-status-unsafe-session-generation")
+        }
+    }
 }
 
 /// `matrix_media_config` has no renderer payload. Core owns the envelope and
@@ -495,6 +748,10 @@ mod tests {
         fn crypto_status(&self) -> crate::platform::CryptoStatusFuture<'_> {
             Box::pin(async { Ok(unavailable_platform_crypto_status()) })
         }
+        fn cross_signing_status(&self) -> crate::platform::CrossSigningStatusFuture<'_> {
+            Box::pin(async { Err(crate::platform::PlatformCrossSigningStatusError::NoSession) })
+        }
+
         fn media_config(&self) -> crate::platform::MediaConfigFuture<'_> {
             Box::pin(async { Ok(available_platform_media_config()) })
         }
@@ -537,6 +794,10 @@ mod tests {
         fn crypto_status(&self) -> crate::platform::CryptoStatusFuture<'_> {
             Box::pin(async { Ok(unavailable_platform_crypto_status()) })
         }
+        fn cross_signing_status(&self) -> crate::platform::CrossSigningStatusFuture<'_> {
+            Box::pin(async { Err(crate::platform::PlatformCrossSigningStatusError::NoSession) })
+        }
+
         fn media_config(&self) -> crate::platform::MediaConfigFuture<'_> {
             Box::pin(async { Ok(available_platform_media_config()) })
         }
@@ -577,6 +838,56 @@ mod tests {
             Box::pin(async { Ok(unconfigured_platform_status()) })
         }
         fn crypto_status(&self) -> crate::platform::CryptoStatusFuture<'_> {
+            Box::pin(async move { self.status })
+        }
+        fn cross_signing_status(&self) -> crate::platform::CrossSigningStatusFuture<'_> {
+            Box::pin(async { Err(crate::platform::PlatformCrossSigningStatusError::NoSession) })
+        }
+
+        fn media_config(&self) -> crate::platform::MediaConfigFuture<'_> {
+            Box::pin(async { Ok(available_platform_media_config()) })
+        }
+        fn notify(
+            &self,
+            _candidate: crate::dto::NotificationCandidate,
+        ) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+        fn set_badge(&self, _count: u64) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+        fn status(&self, _status: PlatformStatus) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+    }
+
+    /// Cross-signing tests can supply only the closed private projection or
+    /// four static errors. There is no identity, user id, SDK/client/store,
+    /// key, secret, or raw diagnostic field in this seam.
+    struct CrossSigningStatusPlatform {
+        status: Result<PlatformCrossSigningStatus, PlatformCrossSigningStatusError>,
+    }
+
+    impl Platform for CrossSigningStatusPlatform {
+        fn emit(
+            &self,
+            _envelope: crate::transport::MatrixIpcEnvelope,
+        ) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+        fn secret_store(&self) -> Arc<dyn SecretVault + Send + Sync> {
+            Arc::new(UnavailableSecretVault)
+        }
+        fn http_user_agent(&self) -> String {
+            TEST_HTTP_USER_AGENT.into()
+        }
+        fn sync_status(&self) -> crate::platform::SyncStatusFuture<'_> {
+            Box::pin(async { Ok(unconfigured_platform_status()) })
+        }
+        fn crypto_status(&self) -> crate::platform::CryptoStatusFuture<'_> {
+            Box::pin(async { Ok(unavailable_platform_crypto_status()) })
+        }
+        fn cross_signing_status(&self) -> crate::platform::CrossSigningStatusFuture<'_> {
             Box::pin(async move { self.status })
         }
         fn media_config(&self) -> crate::platform::MediaConfigFuture<'_> {
@@ -622,6 +933,10 @@ mod tests {
         fn crypto_status(&self) -> crate::platform::CryptoStatusFuture<'_> {
             Box::pin(async { Ok(unavailable_platform_crypto_status()) })
         }
+        fn cross_signing_status(&self) -> crate::platform::CrossSigningStatusFuture<'_> {
+            Box::pin(async { Err(crate::platform::PlatformCrossSigningStatusError::NoSession) })
+        }
+
         fn media_config(&self) -> crate::platform::MediaConfigFuture<'_> {
             Box::pin(async move { self.config })
         }
@@ -687,6 +1002,7 @@ mod tests {
         assert_eq!(
             core.registered_commands(),
             vec![
+                "matrix_cross_signing_status",
                 "matrix_crypto_status",
                 "matrix_login_flows",
                 "matrix_media_config",
@@ -777,6 +1093,230 @@ mod tests {
                 "crossSigningState": "ready",
             })
         );
+    }
+
+    #[tokio::test]
+    async fn core_cross_signing_status_recreates_every_closed_legacy_truth_table_row() {
+        for (
+            private_state,
+            own_identity,
+            readiness,
+            publication,
+            private_identity,
+            own_identity_verification,
+            bootstrap,
+        ) in [
+            (
+                PlatformCrossSigningPrivateState::Unavailable,
+                PlatformCrossSigningOwnIdentity::Missing,
+                "unavailable",
+                "missing",
+                "missing",
+                "missing",
+                "not_needed",
+            ),
+            (
+                PlatformCrossSigningPrivateState::Unavailable,
+                PlatformCrossSigningOwnIdentity::Unverified,
+                "unavailable",
+                "published",
+                "missing",
+                "unverified",
+                "not_needed",
+            ),
+            (
+                PlatformCrossSigningPrivateState::Unavailable,
+                PlatformCrossSigningOwnIdentity::Verified,
+                "unavailable",
+                "published",
+                "missing",
+                "verified",
+                "not_needed",
+            ),
+            (
+                PlatformCrossSigningPrivateState::Missing,
+                PlatformCrossSigningOwnIdentity::Missing,
+                "setup_required",
+                "missing",
+                "missing",
+                "missing",
+                "needed",
+            ),
+            (
+                PlatformCrossSigningPrivateState::Missing,
+                PlatformCrossSigningOwnIdentity::Unverified,
+                "recovery_required",
+                "published",
+                "missing",
+                "unverified",
+                "not_needed",
+            ),
+            (
+                PlatformCrossSigningPrivateState::Missing,
+                PlatformCrossSigningOwnIdentity::Verified,
+                "recovery_required",
+                "published",
+                "missing",
+                "verified",
+                "not_needed",
+            ),
+            (
+                PlatformCrossSigningPrivateState::Partial,
+                PlatformCrossSigningOwnIdentity::Missing,
+                "setup_required",
+                "missing",
+                "partial",
+                "missing",
+                "needed",
+            ),
+            (
+                PlatformCrossSigningPrivateState::Partial,
+                PlatformCrossSigningOwnIdentity::Unverified,
+                "recovery_required",
+                "published",
+                "partial",
+                "unverified",
+                "not_needed",
+            ),
+            (
+                PlatformCrossSigningPrivateState::Partial,
+                PlatformCrossSigningOwnIdentity::Verified,
+                "recovery_required",
+                "published",
+                "partial",
+                "verified",
+                "not_needed",
+            ),
+            (
+                PlatformCrossSigningPrivateState::Complete,
+                PlatformCrossSigningOwnIdentity::Missing,
+                "setup_required",
+                "missing",
+                "complete",
+                "missing",
+                "needed",
+            ),
+            (
+                PlatformCrossSigningPrivateState::Complete,
+                PlatformCrossSigningOwnIdentity::Unverified,
+                "verification_required",
+                "published",
+                "complete",
+                "unverified",
+                "not_needed",
+            ),
+            (
+                PlatformCrossSigningPrivateState::Complete,
+                PlatformCrossSigningOwnIdentity::Verified,
+                "ready",
+                "published",
+                "complete",
+                "verified",
+                "not_needed",
+            ),
+        ] {
+            let status = PlatformCrossSigningStatus::new(9, private_state, own_identity)
+                .expect("each closed row is representable through Platform");
+            let response = Core::new(Arc::new(CrossSigningStatusPlatform { status: Ok(status) }))
+                .command(CommandEnvelope {
+                    command: "matrix_cross_signing_status".into(),
+                    session_generation: 0,
+                    request_id: Some("cross-signing-status-fixture".into()),
+                    payload: serde_json::Value::Null,
+                })
+                .await
+                .expect("closed status row serializes through Core");
+            assert_eq!(response.command, "matrix_cross_signing_status");
+            assert_eq!(response.session_generation, 0);
+            assert_eq!(
+                response.request_id.as_deref(),
+                Some("cross-signing-status-fixture")
+            );
+            assert_eq!(
+                response.payload,
+                serde_json::json!({
+                    "sessionGeneration": 9,
+                    "readiness": readiness,
+                    "masterSigning": publication,
+                    "selfSigning": publication,
+                    "userSigning": publication,
+                    "privateIdentity": private_identity,
+                    "ownIdentityVerification": own_identity_verification,
+                    "bootstrap": bootstrap,
+                })
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn core_cross_signing_status_rejects_payload_and_maps_every_static_platform_error() {
+        let private_text = "@alice:private.example token=secret password=secret key=secret";
+        let malformed = Core::new(Arc::new(TestPlatform))
+            .command(CommandEnvelope {
+                command: "matrix_cross_signing_status".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({ "private": private_text }),
+            })
+            .await
+            .expect_err("cross-signing status is a zero-argument observation");
+        assert_eq!(malformed.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            malformed.diagnostic_id.as_deref(),
+            Some("p2-cross-signing-status-invalid-payload")
+        );
+
+        for (status, category, diagnostic_id) in [
+            (
+                Err(PlatformCrossSigningStatusError::NoSession),
+                MatrixIpcErrorCategory::Forbidden,
+                "v-crypto.2-cross-signing-requires-session",
+            ),
+            (
+                Err(PlatformCrossSigningStatusError::UserMissing),
+                MatrixIpcErrorCategory::Forbidden,
+                "v-crypto.2-cross-signing-user-missing",
+            ),
+            (
+                Err(PlatformCrossSigningStatusError::IdentityQueryFailed),
+                MatrixIpcErrorCategory::Unknown,
+                "v-crypto.2-cross-signing-identity-query-failed",
+            ),
+            (
+                Err(PlatformCrossSigningStatusError::UnsafeSessionGeneration),
+                MatrixIpcErrorCategory::SdkInvariant,
+                "p2-cross-signing-status-unsafe-session-generation",
+            ),
+        ] {
+            let error = Core::new(Arc::new(CrossSigningStatusPlatform { status }))
+                .command(CommandEnvelope {
+                    command: "matrix_cross_signing_status".into(),
+                    session_generation: 0,
+                    request_id: None,
+                    payload: serde_json::Value::Null,
+                })
+                .await
+                .expect_err("closed Platform failure must become a static Core error");
+            assert_eq!(error.category, category);
+            assert_eq!(error.diagnostic_id.as_deref(), Some(diagnostic_id));
+            let serialized = serde_json::to_string(&error).expect("static error serializes");
+            for forbidden in [
+                "alice",
+                "private.example",
+                "token",
+                "secret",
+                "password",
+                "key",
+            ] {
+                assert!(
+                    !serialized.contains(forbidden),
+                    "cross-signing Platform/Core error must not reflect hostile text: {forbidden}"
+                );
+            }
+        }
+        assert!(!serde_json::to_string(&malformed)
+            .unwrap()
+            .contains(private_text));
     }
 
     #[tokio::test]

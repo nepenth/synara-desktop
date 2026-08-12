@@ -11,8 +11,9 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use synara_core::dto::NotificationCandidate;
 use synara_core::platform::{
-    CryptoStatusFuture, MediaConfigFuture, Platform, PlatformCryptoStatus, PlatformStatus,
-    PlatformSyncStatus, SecretVault, SyncStatusFuture, UnavailableSecretVault,
+    CrossSigningStatusFuture, CryptoStatusFuture, MediaConfigFuture, Platform,
+    PlatformCryptoStatus, PlatformStatus, PlatformSyncStatus, SecretVault, SyncStatusFuture,
+    UnavailableSecretVault,
 };
 use synara_core::transport::{MatrixIpcEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
 
@@ -85,6 +86,18 @@ impl<R: Runtime> Platform for TauriPlatform<R> {
                 .crypto_status_projection()
                 .await;
             Ok(projection)
+        })
+    }
+
+    /// Observe the exact legacy cross-signing status through the desktop-owned
+    /// Matrix session. The auth state keeps its mutex across both existing SDK
+    /// awaits and returns only a bounded generation plus closed enums/errors.
+    fn cross_signing_status(&self) -> CrossSigningStatusFuture<'_> {
+        Box::pin(async move {
+            self.app
+                .state::<crate::matrix::auth::MatrixAuthState>()
+                .cross_signing_status_projection()
+                .await
         })
     }
 

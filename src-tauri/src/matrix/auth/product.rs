@@ -50,6 +50,7 @@ use matrix_sdk::{
 use mime::Mime;
 use serde::{Deserialize, Serialize};
 use synara_core::platform::{
+    PlatformCrossSigningOwnIdentity, PlatformCrossSigningPrivateState, PlatformCrossSigningStatus,
     PlatformCryptoCrossSigningState, PlatformCryptoStatus, PlatformMediaConfig,
     PlatformMediaConfigError,
 };
@@ -494,6 +495,55 @@ impl MatrixAuthState {
         .expect("desktop crypto observation must map to a valid closed projection")
     }
 
+    /// Read the exact legacy cross-signing observation as a closed Core projection.
+    ///
+    /// The auth mutex intentionally remains held from before
+    /// `cross_signing_status` through the existing `request_user_identity`
+    /// await. That preserves the legacy key-query/store side effects and its
+    /// serialization against session replacement. Only the bounded generation
+    /// and closed enums/errors leave this desktop-owned SDK method.
+    pub(crate) async fn cross_signing_status_projection(
+        &self,
+    ) -> Result<PlatformCrossSigningStatus, synara_core::platform::PlatformCrossSigningStatusError>
+    {
+        let session = self.session.lock().await;
+        let active = session
+            .as_ref()
+            .ok_or(synara_core::platform::PlatformCrossSigningStatusError::NoSession)?;
+
+        let encryption = active.client.encryption();
+        let private_status = encryption.cross_signing_status().await;
+        let Some(user_id) = active.client.user_id() else {
+            return Err(synara_core::platform::PlatformCrossSigningStatusError::UserMissing);
+        };
+        let own_identity = encryption
+            .request_user_identity(user_id)
+            .await
+            .map_err(|_| {
+                synara_core::platform::PlatformCrossSigningStatusError::IdentityQueryFailed
+            })?;
+
+        let private_state = match private_status.as_ref() {
+            None => PlatformCrossSigningPrivateState::Unavailable,
+            Some(status) => cross_signing_private_state(
+                status.is_complete(),
+                status.has_master,
+                status.has_self_signing,
+                status.has_user_signing,
+            ),
+        };
+        let own_identity = match own_identity.as_ref() {
+            None => PlatformCrossSigningOwnIdentity::Missing,
+            Some(identity) if identity.is_verified() => PlatformCrossSigningOwnIdentity::Verified,
+            Some(_) => PlatformCrossSigningOwnIdentity::Unverified,
+        };
+        PlatformCrossSigningStatus::new(
+            active.sync.session_generation(),
+            private_state,
+            own_identity,
+        )
+    }
+
     /// Read the upload-size config through the desktop-owned SDK client.
     ///
     /// This preserves the pre-Core `matrix_media_config` concurrency contract
@@ -564,6 +614,24 @@ fn crypto_cross_signing_state(
         PlatformCryptoCrossSigningState::Partial
     } else {
         PlatformCryptoCrossSigningState::NotSetUp
+    }
+}
+
+/// Reduce the desktop SDK's private cross-signing result locally, before the
+/// closed projection enters the Platform/Core seam. This keeps all SDK status
+/// types and key details in the desktop process.
+fn cross_signing_private_state(
+    is_complete: bool,
+    has_master: bool,
+    has_self_signing: bool,
+    has_user_signing: bool,
+) -> PlatformCrossSigningPrivateState {
+    if is_complete {
+        PlatformCrossSigningPrivateState::Complete
+    } else if has_master || has_self_signing || has_user_signing {
+        PlatformCrossSigningPrivateState::Partial
+    } else {
+        PlatformCrossSigningPrivateState::Missing
     }
 }
 

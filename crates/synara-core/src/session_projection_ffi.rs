@@ -257,6 +257,10 @@ impl Platform for ProjectionOnlyPlatform {
         Box::pin(async { Err(PlatformCryptoStatusError::InvalidSnapshot) })
     }
 
+    fn cross_signing_status(&self) -> crate::platform::CrossSigningStatusFuture<'_> {
+        Box::pin(async { Err(crate::platform::PlatformCrossSigningStatusError::NoSession) })
+    }
+
     fn media_config(&self) -> MediaConfigFuture<'_> {
         Box::pin(async { Err(PlatformMediaConfigError::NoSession) })
     }
