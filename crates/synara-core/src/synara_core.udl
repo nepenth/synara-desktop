@@ -20,6 +20,13 @@ namespace synara_core {
     u64 num_unread_mentions,
     boolean is_marked_unread
   );
+
+  // P4: total cold-start recovery gate. It accepts only a scalar latest-state
+  // bit and a closed previous-state enum, and has no error or callback path.
+  boolean room_activity_recovery_required(
+    boolean latest_requires_recovery,
+    RoomActivityPreviousState previous_state
+  );
 };
 
 // Closed scalar input for the per-row unread presentation. It intentionally
@@ -34,6 +41,13 @@ enum RoomUnreadMembership {
 dictionary RoomUnreadPresentationDto {
   u64 unread_count;
   boolean has_highlight;
+};
+
+// Closed prior-activity classification for the cold-start recovery gate.
+// It never carries an identifier, SDK value, or diagnostic.
+enum RoomActivityPreviousState {
+  "Missing",
+  "Known"
 };
 
 // Public Swift DTO for one homeserver-advertised Matrix login type. It never

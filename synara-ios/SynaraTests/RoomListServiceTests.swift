@@ -1,3 +1,4 @@
+import SynaraCore
 @testable import Synara
 import XCTest
 
@@ -716,7 +717,9 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertFalse(RoomActivityQualification.qualifies(.state))
     }
 
-    func testRecentColdStartRecoveryOnlyRunsForStateLatestWithoutKnownActivity() {
+    func testRecentColdStartRecoveryGatePreservesNilDistantPastAndKnownDateParity() {
+        let knownDate = RoomListFixtures.now
+
         XCTAssertTrue(
             RoomActivityRecoveryPolicy.shouldRecover(
                 latestRequiresRecovery: true,
@@ -731,14 +734,53 @@ final class RoomListServiceTests: XCTestCase {
         )
         XCTAssertFalse(
             RoomActivityRecoveryPolicy.shouldRecover(
+                latestRequiresRecovery: true,
+                previousActivityAt: knownDate
+            )
+        )
+        XCTAssertFalse(
+            RoomActivityRecoveryPolicy.shouldRecover(
                 latestRequiresRecovery: false,
                 previousActivityAt: nil
             )
         )
         XCTAssertFalse(
             RoomActivityRecoveryPolicy.shouldRecover(
+                latestRequiresRecovery: false,
+                previousActivityAt: .distantPast
+            )
+        )
+        XCTAssertFalse(
+            RoomActivityRecoveryPolicy.shouldRecover(
+                latestRequiresRecovery: false,
+                previousActivityAt: knownDate
+            )
+        )
+    }
+
+    func testGeneratedCoreRecoveryGateBindingExecutesExhaustiveTruthTable() {
+        XCTAssertFalse(
+            SynaraCore.roomActivityRecoveryRequired(
+                latestRequiresRecovery: false,
+                previousState: .missing
+            )
+        )
+        XCTAssertFalse(
+            SynaraCore.roomActivityRecoveryRequired(
+                latestRequiresRecovery: false,
+                previousState: .known
+            )
+        )
+        XCTAssertTrue(
+            SynaraCore.roomActivityRecoveryRequired(
                 latestRequiresRecovery: true,
-                previousActivityAt: RoomListFixtures.now
+                previousState: .missing
+            )
+        )
+        XCTAssertFalse(
+            SynaraCore.roomActivityRecoveryRequired(
+                latestRequiresRecovery: true,
+                previousState: .known
             )
         )
     }
