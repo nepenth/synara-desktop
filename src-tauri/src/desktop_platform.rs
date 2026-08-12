@@ -11,8 +11,8 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use synara_core::dto::NotificationCandidate;
 use synara_core::platform::{
-    CryptoStatusFuture, Platform, PlatformCryptoStatus, PlatformStatus, PlatformSyncStatus,
-    SecretVault, SyncStatusFuture, UnavailableSecretVault,
+    CryptoStatusFuture, MediaConfigFuture, Platform, PlatformCryptoStatus, PlatformStatus,
+    PlatformSyncStatus, SecretVault, SyncStatusFuture, UnavailableSecretVault,
 };
 use synara_core::transport::{MatrixIpcEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
 
@@ -85,6 +85,21 @@ impl<R: Runtime> Platform for TauriPlatform<R> {
                 .crypto_status_projection()
                 .await;
             Ok(projection)
+        })
+    }
+
+    /// Read media configuration through the desktop-owned Matrix session.
+    ///
+    /// `MatrixAuthState` clones the live SDK client under its existing auth
+    /// mutex, then preserves the old command's lock-release-before-load
+    /// behavior while the SDK serves cache/network data. Only the bounded,
+    /// string-free projection crosses into Core.
+    fn media_config(&self) -> MediaConfigFuture<'_> {
+        Box::pin(async move {
+            self.app
+                .state::<crate::matrix::auth::MatrixAuthState>()
+                .media_config_projection()
+                .await
         })
     }
 

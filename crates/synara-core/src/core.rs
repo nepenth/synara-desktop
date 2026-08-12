@@ -16,12 +16,12 @@ use crate::app::auth::{
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::dto::SessionSnapshot;
 use crate::platform::{
-    Platform, PlatformCryptoCrossSigningState, PlatformCryptoStatus, PlatformSyncFailure,
-    PlatformSyncStatus,
+    Platform, PlatformCryptoCrossSigningState, PlatformCryptoStatus, PlatformMediaConfig,
+    PlatformMediaConfigError, PlatformSyncFailure, PlatformSyncStatus,
 };
 use crate::transport::{
     CommandEnvelope, CommandFuture, CommandRegistry, CommandResponseEnvelope, MatrixIpcError,
-    MatrixIpcErrorCategory,
+    MatrixIpcErrorCategory, MAX_WIRE_COUNTER,
 };
 
 /// React-compatible payload for `matrix_session_snapshot`.
@@ -113,6 +113,29 @@ impl MatrixCryptoStatusResponse {
                 | (true, MatrixCryptoCrossSigningStateResponse::Partial)
                 | (true, MatrixCryptoCrossSigningStateResponse::Ready)
         )
+    }
+}
+
+/// Exact React/Tauri payload for `matrix_media_config`.
+///
+/// The legacy command deliberately has no renderer-supplied input and returns
+/// this one-key object verbatim. Keep it independent from the Platform
+/// projection: Core owns the public field spelling and serializes only after
+/// checking the shared JavaScript-safe counter bound.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+struct MatrixMediaConfigResponse {
+    #[serde(rename = "m.upload.size")]
+    upload_size: u64,
+}
+
+impl MatrixMediaConfigResponse {
+    fn from_platform(config: PlatformMediaConfig) -> Result<Self, MatrixIpcError> {
+        let response = Self {
+            upload_size: config.upload_size(),
+        };
+        (response.upload_size <= MAX_WIRE_COUNTER)
+            .then_some(response)
+            .ok_or_else(|| core_state_error("p2-media-config-invalid-platform-projection"))
     }
 }
 
@@ -247,6 +270,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_crypto_status", matrix_crypto_status)
         .expect("built-in matrix_crypto_status must remain in the command census");
     registry
+        .register("matrix_media_config", matrix_media_config)
+        .expect("built-in matrix_media_config must remain in the command census");
+    registry
         .register("matrix_login_flows", matrix_login_flows)
         .expect("built-in matrix_login_flows must remain in the command census");
     registry
@@ -328,6 +354,49 @@ fn matrix_crypto_status(state: Arc<CoreState>, request: CommandEnvelope) -> Comm
     })
 }
 
+/// `matrix_media_config` has no renderer payload. Core owns the envelope and
+/// exact legacy object serialization only; the Platform remains the sole owner
+/// of the Matrix SDK client/session/cache/store and its cache/network load.
+fn matrix_media_config(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-media-config-invalid-payload"));
+        }
+        let platform = state.platform();
+        let config = platform
+            .media_config()
+            .await
+            .map_err(media_config_transport_error)?;
+        let response = MatrixMediaConfigResponse::from_platform(config)?;
+        serde_json::to_value(response)
+            .map_err(|_| core_state_error("p2-media-config-serialization-failed"))
+    })
+}
+
+/// Map the closed Platform media observation to static Core transport errors.
+/// No Platform string, SDK error, URL, credential, key, or Core error object
+/// enters this mapping. The desktop bridge uses only the resulting category to
+/// restore its established static command diagnostics.
+fn media_config_transport_error(error: PlatformMediaConfigError) -> MatrixIpcError {
+    match error {
+        PlatformMediaConfigError::NoSession => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-media-config-no-session")
+        }
+        PlatformMediaConfigError::LoadFailed => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Unknown)
+                .with_diagnostic("p2-media-config-load-failed")
+        }
+        // The source value was outside the shared JSON-safe range. Keep this
+        // distinct in Core so the bridge can retain the legacy unsafe-size
+        // diagnostic instead of conflating it with an SDK load failure.
+        PlatformMediaConfigError::UnsafeSize => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::MediaTooLarge)
+                .with_diagnostic("p2-media-config-unsafe-size")
+        }
+    }
+}
+
 fn matrix_login_flows(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixLoginFlowsRequest = serde_json::from_value(request.payload)
@@ -400,6 +469,11 @@ mod tests {
             .expect("unavailable is a valid string-free crypto projection")
     }
 
+    fn available_platform_media_config() -> PlatformMediaConfig {
+        PlatformMediaConfig::new(16 * 1024 * 1024)
+            .expect("a normal upload limit is a valid closed media projection")
+    }
+
     #[derive(Default)]
     struct TestPlatform;
     impl Platform for TestPlatform {
@@ -420,6 +494,9 @@ mod tests {
         }
         fn crypto_status(&self) -> crate::platform::CryptoStatusFuture<'_> {
             Box::pin(async { Ok(unavailable_platform_crypto_status()) })
+        }
+        fn media_config(&self) -> crate::platform::MediaConfigFuture<'_> {
+            Box::pin(async { Ok(available_platform_media_config()) })
         }
         fn notify(
             &self,
@@ -460,6 +537,9 @@ mod tests {
         fn crypto_status(&self) -> crate::platform::CryptoStatusFuture<'_> {
             Box::pin(async { Ok(unavailable_platform_crypto_status()) })
         }
+        fn media_config(&self) -> crate::platform::MediaConfigFuture<'_> {
+            Box::pin(async { Ok(available_platform_media_config()) })
+        }
         fn notify(
             &self,
             _candidate: crate::dto::NotificationCandidate,
@@ -498,6 +578,52 @@ mod tests {
         }
         fn crypto_status(&self) -> crate::platform::CryptoStatusFuture<'_> {
             Box::pin(async move { self.status })
+        }
+        fn media_config(&self) -> crate::platform::MediaConfigFuture<'_> {
+            Box::pin(async { Ok(available_platform_media_config()) })
+        }
+        fn notify(
+            &self,
+            _candidate: crate::dto::NotificationCandidate,
+        ) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+        fn set_badge(&self, _count: u64) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+        fn status(&self, _status: PlatformStatus) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+    }
+
+    /// Media tests can supply only the bounded projection or one static error.
+    /// There is no field in which an SDK/client/cache/store value or raw text
+    /// could reach Core.
+    struct MediaConfigPlatform {
+        config: Result<PlatformMediaConfig, PlatformMediaConfigError>,
+    }
+
+    impl Platform for MediaConfigPlatform {
+        fn emit(
+            &self,
+            _envelope: crate::transport::MatrixIpcEnvelope,
+        ) -> Result<(), MatrixIpcError> {
+            Ok(())
+        }
+        fn secret_store(&self) -> Arc<dyn SecretVault + Send + Sync> {
+            Arc::new(UnavailableSecretVault)
+        }
+        fn http_user_agent(&self) -> String {
+            TEST_HTTP_USER_AGENT.into()
+        }
+        fn sync_status(&self) -> crate::platform::SyncStatusFuture<'_> {
+            Box::pin(async { Ok(unconfigured_platform_status()) })
+        }
+        fn crypto_status(&self) -> crate::platform::CryptoStatusFuture<'_> {
+            Box::pin(async { Ok(unavailable_platform_crypto_status()) })
+        }
+        fn media_config(&self) -> crate::platform::MediaConfigFuture<'_> {
+            Box::pin(async move { self.config })
         }
         fn notify(
             &self,
@@ -563,6 +689,7 @@ mod tests {
             vec![
                 "matrix_crypto_status",
                 "matrix_login_flows",
+                "matrix_media_config",
                 "matrix_register_flows",
                 "matrix_session_snapshot",
                 "matrix_sync_status",
@@ -650,6 +777,91 @@ mod tests {
                 "crossSigningState": "ready",
             })
         );
+    }
+
+    #[tokio::test]
+    async fn core_media_config_uses_the_exact_legacy_wire_object() {
+        let response = Core::new(Arc::new(MediaConfigPlatform {
+            config: Ok(PlatformMediaConfig::new(MAX_WIRE_COUNTER)
+                .expect("maximum safe upload size projects through Platform")),
+        }))
+        .command(CommandEnvelope {
+            command: "matrix_media_config".into(),
+            session_generation: 0,
+            request_id: Some("media-config-fixture".into()),
+            payload: serde_json::Value::Null,
+        })
+        .await
+        .expect("closed media config serializes through Core");
+
+        assert_eq!(response.command, "matrix_media_config");
+        assert_eq!(response.session_generation, 0);
+        assert_eq!(response.request_id.as_deref(), Some("media-config-fixture"));
+        assert_eq!(
+            response.payload,
+            serde_json::json!({ "m.upload.size": MAX_WIRE_COUNTER })
+        );
+    }
+
+    #[tokio::test]
+    async fn core_media_config_rejects_payload_and_maps_each_platform_error_statically() {
+        let private_text = "https://private.example token=secret password=secret key=secret";
+        let malformed = Core::new(Arc::new(TestPlatform))
+            .command(CommandEnvelope {
+                command: "matrix_media_config".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({ "private": private_text }),
+            })
+            .await
+            .expect_err("media config is a zero-argument command");
+        assert_eq!(malformed.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            malformed.diagnostic_id.as_deref(),
+            Some("p2-media-config-invalid-payload")
+        );
+
+        for (config, category, diagnostic_id) in [
+            (
+                Err(PlatformMediaConfigError::NoSession),
+                MatrixIpcErrorCategory::Forbidden,
+                "p2-media-config-no-session",
+            ),
+            (
+                Err(PlatformMediaConfigError::LoadFailed),
+                MatrixIpcErrorCategory::Unknown,
+                "p2-media-config-load-failed",
+            ),
+            (
+                Err(PlatformMediaConfigError::UnsafeSize),
+                MatrixIpcErrorCategory::MediaTooLarge,
+                "p2-media-config-unsafe-size",
+            ),
+        ] {
+            let error = Core::new(Arc::new(MediaConfigPlatform { config }))
+                .command(CommandEnvelope {
+                    command: "matrix_media_config".into(),
+                    session_generation: 0,
+                    request_id: None,
+                    payload: serde_json::Value::Null,
+                })
+                .await
+                .expect_err(
+                    "closed platform media failure must reach the bridge as a static error",
+                );
+            assert_eq!(error.category, category);
+            assert_eq!(error.diagnostic_id.as_deref(), Some(diagnostic_id));
+            let serialized = serde_json::to_string(&error).expect("static error serializes");
+            for forbidden in ["private.example", "token", "secret", "password", "key"] {
+                assert!(
+                    !serialized.contains(forbidden),
+                    "media Platform/Core error must not reflect hostile text: {forbidden}"
+                );
+            }
+        }
+        assert!(!serde_json::to_string(&malformed)
+            .unwrap()
+            .contains(private_text));
     }
 
     #[tokio::test]

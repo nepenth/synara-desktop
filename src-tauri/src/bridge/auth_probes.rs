@@ -209,6 +209,13 @@ mod tests {
             })
         }
 
+        fn media_config(&self) -> synara_core::platform::MediaConfigFuture<'_> {
+            Box::pin(async {
+                Ok(synara_core::platform::PlatformMediaConfig::new(0)
+                    .expect("zero is a valid closed media projection"))
+            })
+        }
+
         fn notify(&self, _candidate: NotificationCandidate) -> Result<(), MatrixIpcError> {
             Ok(())
         }
