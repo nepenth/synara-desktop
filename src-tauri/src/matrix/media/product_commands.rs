@@ -60,24 +60,15 @@ pub(super) const MAX_MEDIA_DOWNLOAD_URI_BYTES: usize = 2048;
 /// Upper bound for an original-file download returned to the renderer.
 pub(super) const MAX_MEDIA_DOWNLOAD_BYTES: usize = 300 * 1024 * 1024;
 
-/// V-SEND.R-MEDIA — the exact media-upload size limit (`m.upload.size`)
-/// reported by the homeserver for the live client (general media surface; the
-/// former CallWidget-only owner is now the shared native media owner).
+/// V-SEND.R-MEDIA / SNC-P3.5 — retain the exact zero-argument media-config
+/// invoke while routing only its envelope and fixed response serialization
+/// through Core. The desktop Platform remains the sole SDK client/session/cache
+/// and store owner; it supplies Core a bounded, string-free projection.
 #[tauri::command]
 pub async fn matrix_media_config(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<MatrixMediaConfigResult, MatrixAuthCommandError> {
-    let client = {
-        let session = state.session.lock().await;
-        require_session(session.as_ref())?.client.clone()
-    };
-    let upload_size = client
-        .load_or_fetch_max_upload_size()
-        .await
-        .map_err(|_| map_media_download_error("v-send.r-media-config-sdk-failed"))?;
-    let upload_size = project_media_upload_size(upload_size)?;
-
-    Ok(MatrixMediaConfigResult { upload_size })
+    crate::bridge::media_config::media_config(core.inner().as_ref()).await
 }
 
 /// V-SEND.R-MEDIA — original-file download owner. The managed SDK media cache
@@ -106,19 +97,6 @@ pub async fn matrix_media_download(
     validate_media_download_size(bytes.len())?;
 
     Ok(MatrixMediaDownloadResult { bytes })
-}
-
-pub(super) fn project_media_upload_size(upload_size: UInt) -> Result<u64, MatrixAuthCommandError> {
-    // `UInt` is already JS-safe, but keep the product boundary explicit so a
-    // future SDK type change cannot silently round a value on the wire.
-    let upload_size = u64::try_from(i64::from(upload_size))
-        .map_err(|_| map_media_download_error("v-send.r-media-config-unsafe-size"))?;
-    if upload_size > MAX_WIRE_COUNTER {
-        return Err(map_media_download_error(
-            "v-send.r-media-config-unsafe-size",
-        ));
-    }
-    Ok(upload_size)
 }
 
 pub(super) fn parse_media_download_uri(

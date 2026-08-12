@@ -12,7 +12,9 @@ use std::sync::Arc;
 
 use crate::app::sync::{SyncReadiness, SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::dto::NotificationCandidate;
-use crate::transport::{MatrixIpcEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use crate::transport::{
+    MatrixIpcEnvelope, MatrixIpcError, MatrixIpcErrorCategory, MAX_WIRE_COUNTER,
+};
 
 /// Closed failure classification that may cross from a shell into Core.
 ///
@@ -224,6 +226,56 @@ pub type CryptoStatusFuture<'a> = Pin<
     Box<dyn Future<Output = Result<PlatformCryptoStatus, PlatformCryptoStatusError>> + Send + 'a>,
 >;
 
+/// Closed, scalar-only media-config projection supplied by a platform.
+///
+/// The maximum upload size is a JSON number on the existing React/Tauri wire,
+/// so it is bounded by [`MAX_WIRE_COUNTER`] before Core receives it. The SDK
+/// client, cache/store, homeserver details, and any SDK error stay owned by the
+/// shell that created this projection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlatformMediaConfig {
+    upload_size: u64,
+}
+
+impl PlatformMediaConfig {
+    /// Construct the only media-config value permitted across the Platform/Core
+    /// seam. This rejects values that JavaScript could not represent exactly.
+    pub fn new(upload_size: u64) -> Result<Self, PlatformMediaConfigError> {
+        (upload_size <= MAX_WIRE_COUNTER)
+            .then_some(Self { upload_size })
+            .ok_or(PlatformMediaConfigError::UnsafeSize)
+    }
+
+    pub fn upload_size(self) -> u64 {
+        self.upload_size
+    }
+}
+
+/// Static failures from the desktop-owned media-config observation.
+///
+/// This vocabulary intentionally has no string, SDK, URL, credential, or key
+/// payload. Core maps it to its own static transport errors; the desktop bridge
+/// then restores the established public command diagnostics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PlatformMediaConfigError {
+    /// No desktop session owns a live Matrix client.
+    NoSession,
+    /// The SDK cache/network observation did not complete.
+    LoadFailed,
+    /// The SDK supplied a value outside the JSON-safe upload-size range.
+    UnsafeSize,
+}
+
+/// Read-only media-config observation from the shell-owned Matrix client.
+///
+/// Implementations may retain or release their session mutex according to the
+/// pre-Core command's concurrency contract, but must return only the closed
+/// projection/error above. In particular, Core never receives an SDK client,
+/// cache/store handle, raw SDK error, URL, credential, or key.
+pub type MediaConfigFuture<'a> = Pin<
+    Box<dyn Future<Output = Result<PlatformMediaConfig, PlatformMediaConfigError>> + Send + 'a>,
+>;
+
 /// Broad engine status broadcast to the OS layer (health/readiness).
 ///
 /// The real consumption (dock/tray/today-widget on iOS) lands with the P2 sink
@@ -287,6 +339,12 @@ pub trait Platform: Send + Sync + 'static {
     /// local observation to [`PlatformCryptoStatus`] before returning; Core
     /// owns only the read-only transport command and its exact wire response.
     fn crypto_status(&self) -> CryptoStatusFuture<'_>;
+    /// Read the live media upload-size configuration as a closed projection.
+    ///
+    /// The shell retains the Matrix SDK client, authenticated session, cache,
+    /// and store. It maps its local observation to [`PlatformMediaConfig`] or
+    /// [`PlatformMediaConfigError`] before Core sees it.
+    fn media_config(&self) -> MediaConfigFuture<'_>;
     /// Deliver a native notification (tray/toast on desktop, APNs/badge on iOS).
     fn notify(&self, candidate: NotificationCandidate) -> Result<(), MatrixIpcError>;
     /// App icon badge count (dock/taskbar/today on iOS).
@@ -386,6 +444,45 @@ mod tests {
             PlatformCryptoStatus::new(4, true, PlatformCryptoCrossSigningState::Unavailable),
             Err(PlatformCryptoStatusError::InvalidSnapshot)
         );
+    }
+
+    #[test]
+    fn media_config_projection_is_closed_and_bounded_to_the_wire_counter() {
+        let at_limit = PlatformMediaConfig::new(MAX_WIRE_COUNTER)
+            .expect("the maximum JavaScript-safe integer is a valid upload size");
+        assert_eq!(at_limit.upload_size(), MAX_WIRE_COUNTER);
+        assert_eq!(
+            PlatformMediaConfig::new(MAX_WIRE_COUNTER + 1),
+            Err(PlatformMediaConfigError::UnsafeSize)
+        );
+
+        let private_text = "https://private.example token=secret key=secret";
+        assert!(!format!("{at_limit:?}").contains(private_text));
+        assert!(!format!("{:?}", PlatformMediaConfigError::LoadFailed).contains(private_text));
+    }
+
+    #[test]
+    fn media_config_platform_seam_has_no_dynamic_or_sdk_bearing_type() {
+        let source = include_str!("mod.rs");
+        let media_seam = source
+            .split("/// Closed, scalar-only media-config projection supplied by a platform.")
+            .nth(1)
+            .and_then(|section| section.split("/// Broad engine status broadcast").next())
+            .expect("media projection seam must remain isolated");
+        for forbidden in [
+            ": String",
+            "String)",
+            "String,",
+            "String>",
+            "&str",
+            "MatrixIpcError",
+            "matrix_sdk::",
+        ] {
+            assert!(
+                !media_seam.contains(forbidden),
+                "media Platform/Core seam must remain closed and string-free: {forbidden}"
+            );
+        }
     }
 
     #[test]

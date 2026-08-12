@@ -49,7 +49,10 @@ use matrix_sdk::{
 };
 use mime::Mime;
 use serde::{Deserialize, Serialize};
-use synara_core::platform::{PlatformCryptoCrossSigningState, PlatformCryptoStatus};
+use synara_core::platform::{
+    PlatformCryptoCrossSigningState, PlatformCryptoStatus, PlatformMediaConfig,
+    PlatformMediaConfigError,
+};
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
 use zeroize::Zeroize;
@@ -489,6 +492,33 @@ impl MatrixAuthState {
             cross_signing_state,
         )
         .expect("desktop crypto observation must map to a valid closed projection")
+    }
+
+    /// Read the upload-size config through the desktop-owned SDK client.
+    ///
+    /// This preserves the pre-Core `matrix_media_config` concurrency contract
+    /// exactly: clone the SDK Client while holding the auth mutex, release that
+    /// mutex, then allow `load_or_fetch_max_upload_size` to use its cache or
+    /// network. `Client` is reference-counted and the old command already did
+    /// this, so logout/session replacement may proceed without invalidating the
+    /// in-flight client/cache load. Core receives only the closed scalar result.
+    pub(crate) async fn media_config_projection(
+        &self,
+    ) -> Result<PlatformMediaConfig, PlatformMediaConfigError> {
+        let client = {
+            let session = self.session.lock().await;
+            let active = session
+                .as_ref()
+                .ok_or(PlatformMediaConfigError::NoSession)?;
+            active.client.clone()
+        };
+        let upload_size = client
+            .load_or_fetch_max_upload_size()
+            .await
+            .map_err(|_| PlatformMediaConfigError::LoadFailed)?;
+        let upload_size = u64::try_from(i64::from(upload_size))
+            .map_err(|_| PlatformMediaConfigError::UnsafeSize)?;
+        PlatformMediaConfig::new(upload_size)
     }
 
     /// Resolve an opaque V-ROOMS invite-avatar capability for the native URI

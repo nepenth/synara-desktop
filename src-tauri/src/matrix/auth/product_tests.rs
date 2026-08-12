@@ -1905,8 +1905,17 @@ fn media_errors_are_stable_and_privacy_safe() {
     assert!(!raw.contains("sdk error"));
 }
 
-#[test]
-fn media_commands_use_the_live_client_and_original_file() {
+#[tokio::test]
+async fn media_config_desktop_owner_keeps_the_live_client_and_closed_no_session_error() {
+    let error = MatrixAuthState::new()
+        .media_config_projection()
+        .await
+        .expect_err("a desktop-owned SDK observation requires a live session");
+    assert_eq!(
+        error,
+        synara_core::platform::PlatformMediaConfigError::NoSession
+    );
+
     let product = PRODUCT_SOURCE;
     let config = product
         .split("pub async fn matrix_media_config")
@@ -1916,8 +1925,35 @@ fn media_commands_use_the_live_client_and_original_file() {
         .split("#[tauri::command]")
         .next()
         .expect("media config command body");
-    assert!(config.contains("load_or_fetch_max_upload_size"));
-    assert!(!config.contains("matrix-js-sdk"));
+    assert!(config.contains("crate::bridge::media_config::media_config"));
+    assert!(config.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!config.contains("load_or_fetch_max_upload_size"));
+
+    // The former command already cloned Client under the auth mutex and
+    // released it before its cache/network read. Keep that exact safe behavior
+    // in desktop ownership; Core receives only the post-load scalar projection.
+    let desktop_owner = include_str!("product.rs");
+    let projection = desktop_owner
+        .split("pub(crate) async fn media_config_projection")
+        .nth(1)
+        .expect("desktop media config projection");
+    let clone = projection
+        .find("active.client.clone()")
+        .expect("clone the live client while holding the auth mutex");
+    let release = projection[clone..]
+        .find("};")
+        .map(|offset| clone + offset)
+        .expect("close the client/mutex scope before the SDK load");
+    let load = projection
+        .find("load_or_fetch_max_upload_size")
+        .expect("desktop owns the SDK cache/network load");
+    assert!(
+        clone < release && release < load,
+        "media config must preserve the existing clone-then-release lock semantics"
+    );
+    assert!(projection.contains("PlatformMediaConfig::new(upload_size)"));
+    assert!(!projection.contains("synara_core::Core"));
+    assert!(!projection.contains("matrix-js-sdk"));
 
     let download = product
         .split("pub async fn matrix_media_download")
