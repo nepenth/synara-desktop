@@ -421,7 +421,7 @@ mod tests {
         // This is intentionally a compile-time-shaped list rather than a
         // serialization of SessionSnapshot, which has additional Core-only
         // fields. Keep the UniFFI record and this list in lockstep.
-        const FIELDS: &[&str] = [
+        const FIELDS: &[&str] = &[
             "generation",
             "user_id",
             "device_id",
