@@ -27,3 +27,52 @@ dictionary LoginFlowDto {
 interface LoginFlowsError {
   ProbeFailed(string category, string code, string description);
 };
+
+// P4-3: the iOS shell may mirror only the safe state of an already-installed
+// MatrixRustSDK client. This is not a client/session/credential API: it is a
+// Core open/close/session_snapshot facade with exactly six crossed fields.
+dictionary SessionProjection {
+  u64 generation;
+  string user_id;
+  string device_id;
+  string homeserver_url;
+  SessionProjectionLifecycle lifecycle;
+  boolean crypto_ready;
+};
+
+// Closed values only; no shell or SDK diagnostic string can be a lifecycle.
+enum SessionProjectionLifecycle {
+  "Empty",
+  "Opening",
+  "Authenticating",
+  "Restoring",
+  "Syncing",
+  "Ready",
+  "Stopping",
+  "LoggedOut",
+  "Failed",
+  "Wiping"
+};
+
+// All error fields below are fixed, privacy-safe source constants. Invalid
+// identifiers/URLs and Core internals are intentionally not echoed.
+[Error]
+interface SessionProjectionError {
+  Rejected(string code, string description);
+  Unavailable(string code, string description);
+};
+
+// The project-owned object does not expose Core, Platform, commands,
+// callbacks, Matrix SDK values, persistence, or networking.
+interface SessionProjectionCore {
+  constructor();
+
+  [Async, Throws=SessionProjectionError]
+  void open(SessionProjection projection);
+
+  [Async, Throws=SessionProjectionError]
+  SessionProjection? session_snapshot();
+
+  [Async, Throws=SessionProjectionError]
+  void close();
+};
