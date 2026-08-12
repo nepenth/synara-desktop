@@ -1,7 +1,7 @@
 //! Unit tests for P5.5 unread / open-position policy.
 
 use super::*;
-use crate::matrix::dto::{Receipt, ReceiptType};
+use crate::dto::{Receipt, ReceiptType};
 
 fn room_state(room: &str) -> RoomReadState {
     RoomReadState::new(room).unwrap()

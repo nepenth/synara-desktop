@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use crate::matrix::dto::{EventId, Receipt, ReceiptType, RoomId};
+use crate::dto::{EventId, Receipt, ReceiptType, RoomId};
 
 use super::error::UnreadError;
 

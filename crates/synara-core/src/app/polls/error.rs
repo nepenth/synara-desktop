@@ -1,6 +1,6 @@
 //! Privacy-safe errors for poll and state projection (P5.7).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Poll/state projection validation failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

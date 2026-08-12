@@ -1,8 +1,8 @@
 //! Unit tests for P5.8 thread index.
 
 use super::*;
-use crate::matrix::dto::ThreadSummary;
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::dto::ThreadSummary;
+use crate::transport::MatrixIpcErrorCategory;
 
 fn summary(
     room: &str,

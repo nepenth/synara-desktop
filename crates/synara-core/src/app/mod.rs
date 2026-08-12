@@ -6,7 +6,12 @@
 //! src-tauri/`crate::matrix::*` surfaces, which re-export this module.
 
 pub mod auth;
+pub mod notifications;
+pub mod polls;
+pub mod relations;
 pub mod room_list;
 pub mod sync;
+pub mod threads;
 pub mod timeline;
+pub mod unread;
 pub mod utd_recovery;

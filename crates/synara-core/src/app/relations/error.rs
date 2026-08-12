@@ -1,6 +1,6 @@
 //! Privacy-safe errors for relation projection (P5.6).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Relation index / apply failure.
 #[derive(Debug)]

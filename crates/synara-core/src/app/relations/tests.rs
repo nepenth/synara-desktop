@@ -1,10 +1,10 @@
 //! Unit tests for P5.6 relation index.
 
 use super::*;
-use crate::matrix::dto::{
+use crate::dto::{
     RelationRef, REL_TYPE_ANNOTATION, REL_TYPE_REFERENCE, REL_TYPE_REPLACE, REL_TYPE_THREAD,
 };
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 fn ann(room: &str, target: &str, key: &str, sender: &str) -> RelationRef {
     RelationRef {
