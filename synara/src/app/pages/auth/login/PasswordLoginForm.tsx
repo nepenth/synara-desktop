@@ -2,6 +2,7 @@ import React, { FormEventHandler, MouseEventHandler, useCallback, useState } fro
 import {
   Box,
   Button,
+  Dialog,
   Header,
   Icon,
   IconButton,
@@ -29,6 +30,10 @@ import {
   LoginError,
   PasswordLoginError,
   PasswordLoginResponse,
+  STORE_RECOVERY_CONFIRMATION_TEXT,
+  StoreRecoveryError,
+  archiveAndRebuildNativeStore,
+  canOfferNativeStoreRecovery,
   factoryGetBaseUrl,
   loginPassword,
   useLoginComplete,
@@ -125,6 +130,48 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
   >(useCallback(loginPassword, []));
 
   useLoginComplete(loginState.status === AsyncStatus.Success ? loginState.data : undefined);
+
+  const [storeRecoveryOpen, setStoreRecoveryOpen] = useState(false);
+  const [storeRecoveryConfirmation, setStoreRecoveryConfirmation] = useState('');
+  const [storeRecoveryBusy, setStoreRecoveryBusy] = useState(false);
+  const [storeRecoveryDiagnostic, setStoreRecoveryDiagnostic] = useState<string>();
+  const [storeRecoveryCompleted, setStoreRecoveryCompleted] = useState(false);
+
+  const openStoreRecovery = () => {
+    // Opening this UI has no native side effect. The only archive request is
+    // behind the typed acknowledgement and the second explicit button below.
+    setStoreRecoveryConfirmation('');
+    setStoreRecoveryDiagnostic(undefined);
+    setStoreRecoveryOpen(true);
+  };
+
+  const closeStoreRecovery = () => {
+    if (storeRecoveryBusy) return;
+    setStoreRecoveryOpen(false);
+    setStoreRecoveryConfirmation('');
+  };
+
+  const confirmStoreRecovery = async () => {
+    if (storeRecoveryConfirmation !== STORE_RECOVERY_CONFIRMATION_TEXT) return;
+    setStoreRecoveryBusy(true);
+    setStoreRecoveryDiagnostic(undefined);
+    try {
+      await archiveAndRebuildNativeStore(storeRecoveryConfirmation);
+      setStoreRecoveryCompleted(true);
+      setStoreRecoveryOpen(false);
+      setStoreRecoveryConfirmation('');
+    } catch (error) {
+      // The helper already discards raw Tauri/SDK errors and logs only a
+      // fixed allowlisted diagnostic. Do not turn unknown error text into UI.
+      setStoreRecoveryDiagnostic(
+        error instanceof StoreRecoveryError
+          ? error.diagnosticId
+          : 'p3.2-login-store-recovery-failed'
+      );
+    } finally {
+      setStoreRecoveryBusy(false);
+    }
+  };
 
   const handleUsernameLogin = (username: string, password: string) => {
     startLogin(baseUrl, {
@@ -254,6 +301,25 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
                   )}
                 </>
               )}
+              {canOfferNativeStoreRecovery(loginState.error.diagnosticId) && (
+                <Box direction="Column" gap="100">
+                  <Text size="T300" priority="400">
+                    Synara stopped before changing this local Matrix store. You can review an
+                    archive-and-rebuild recovery action instead of deleting local data.
+                  </Text>
+                  <Button type="button" variant="Secondary" fill="Soft" onClick={openStoreRecovery}>
+                    <Text as="span" size="B300">
+                      Review Local Store Recovery
+                    </Text>
+                  </Button>
+                </Box>
+              )}
+              {storeRecoveryCompleted && (
+                <Text size="T300" priority="400">
+                  Local state, crypto, cache, and media were archived and an empty local layout was
+                  rebuilt. Sign in again to try the normal native login path.
+                </Text>
+              )}
             </>
           )}
           <Box grow="Yes" shrink="No" justifyContent="End">
@@ -268,6 +334,76 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
           Login
         </Text>
       </Button>
+
+      <Overlay open={storeRecoveryOpen} backdrop={<OverlayBackdrop />}>
+        <OverlayCenter>
+          <Dialog variant="Surface">
+            <Box style={{ padding: config.space.S400, maxWidth: 520 }} direction="Column" gap="400">
+              <Text size="H4">Archive and Rebuild Local Store?</Text>
+              <Text size="T300" priority="400">
+                Synara will archive this account&apos;s local state, crypto, cache, and media before
+                rebuilding an empty local layout. It does not delete the archive, change any
+                Keychain store key, send your password, or start another login automatically.
+              </Text>
+              <Text size="T300" priority="400">
+                If the original Keychain store key is missing or corrupt, recovery remains blocked;
+                this action does not replace it.
+              </Text>
+              <Box direction="Column" gap="100">
+                <Text as="label" size="L400" priority="300">
+                  Type {STORE_RECOVERY_CONFIRMATION_TEXT} to enable this action
+                </Text>
+                <Input
+                  aria-label="Confirm archive and rebuild local Matrix store"
+                  value={storeRecoveryConfirmation}
+                  onChange={(evt) => setStoreRecoveryConfirmation(evt.currentTarget.value)}
+                  variant="Background"
+                  size="500"
+                  outlined
+                  disabled={storeRecoveryBusy}
+                />
+              </Box>
+              {storeRecoveryDiagnostic && (
+                <>
+                  <FieldError message="Local store recovery could not be completed." />
+                  <Text as="span" size="T200" priority="400">
+                    Diagnostic code: {storeRecoveryDiagnostic}
+                  </Text>
+                </>
+              )}
+              <Box direction="Column" gap="200">
+                <Button
+                  type="button"
+                  variant="Critical"
+                  onClick={() => void confirmStoreRecovery()}
+                  disabled={
+                    storeRecoveryBusy ||
+                    storeRecoveryConfirmation !== STORE_RECOVERY_CONFIRMATION_TEXT
+                  }
+                  before={
+                    storeRecoveryBusy && <Spinner variant="Critical" fill="Solid" size="200" />
+                  }
+                >
+                  <Text as="span" size="B400">
+                    Archive and Rebuild
+                  </Text>
+                </Button>
+                <Button
+                  type="button"
+                  variant="Secondary"
+                  fill="Soft"
+                  onClick={closeStoreRecovery}
+                  disabled={storeRecoveryBusy}
+                >
+                  <Text as="span" size="B400">
+                    Cancel
+                  </Text>
+                </Button>
+              </Box>
+            </Box>
+          </Dialog>
+        </OverlayCenter>
+      </Overlay>
 
       <Overlay
         open={

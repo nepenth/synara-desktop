@@ -13,7 +13,7 @@
 //!   homeserver URLs, tokens, or raw SDK/Keychain text.
 
 use std::fs;
-use std::io;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use super::paths::{StorePathError, StorePaths};
@@ -195,14 +195,25 @@ pub fn migrate_store_to_current(
 pub fn reset_store_for_recovery(
     paths: &StorePaths,
 ) -> Result<StoreResetOutcome, StoreMigrationError> {
+    // Refuse every managed layout symlink before creating an archive or moving
+    // data. In particular, `recovery/` must never redirect reset output
+    // outside the account root.
     paths.ensure_dirs()?;
+    let manifest = manifest_path(paths);
+    let archive_manifest = validate_recovery_reset_sources(paths, &manifest)?;
     let archive = create_archive_dir(paths)?;
-    let components = [
+    let mut components = vec![
         (paths.state_dir(), "state"),
         (paths.crypto_dir(), "crypto"),
         (paths.cache_dir(), "cache"),
         (paths.media_dir(), "media"),
     ];
+    // A malformed/ahead manifest is itself recovery evidence. Move it before
+    // writing the reset manifest so recovery never silently overwrites it.
+    if archive_manifest {
+        components.push((&manifest, STORE_REVISION_MANIFEST_FILE));
+    }
+
     let mut moved: Vec<(PathBuf, PathBuf)> = Vec::with_capacity(components.len());
     for (source, label) in components {
         let target = archive.join(label);
@@ -285,7 +296,16 @@ fn write_manifest(
     let bytes = serde_json::to_vec_pretty(manifest).map_err(|_| StoreMigrationError::Io {
         kind: "manifest-encode",
     })?;
-    fs::write(&temporary, bytes).map_err(io_error)?;
+    // Never follow a pre-existing predictable temporary symlink. `create_new`
+    // makes a collision fail closed rather than letting fs::write overwrite an
+    // external file through such a link.
+    let mut temporary_file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temporary)
+        .map_err(io_error)?;
+    temporary_file.write_all(&bytes).map_err(io_error)?;
+    drop(temporary_file);
     fs::rename(&temporary, target).map_err(io_error)?;
     #[cfg(unix)]
     {
@@ -296,9 +316,66 @@ fn write_manifest(
     Ok(())
 }
 
+/// Verify the reset inputs before creating an archive. The revision manifest
+/// must be a regular local file when present, and every pre-existing archive
+/// entry must be non-symlinked so recovery never follows or writes through an
+/// attacker-controlled link.
+fn validate_recovery_reset_sources(
+    paths: &StorePaths,
+    manifest: &Path,
+) -> Result<bool, StoreMigrationError> {
+    validate_recovery_archive_root(&paths.account_root().join(STORE_RECOVERY_ARCHIVE_SEGMENT))?;
+    match fs::symlink_metadata(manifest) {
+        Ok(metadata) if metadata.file_type().is_symlink() => Err(unsafe_recovery_component()),
+        Ok(metadata) if !metadata.file_type().is_file() => Err(unsafe_recovery_component()),
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(io_error(error)),
+    }
+}
+
+fn validate_recovery_archive_root(root: &Path) -> Result<(), StoreMigrationError> {
+    match fs::symlink_metadata(root) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            return Err(unsafe_recovery_component())
+        }
+        Ok(metadata) if !metadata.is_dir() => return Err(unsafe_recovery_component()),
+        Ok(_) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(io_error(error)),
+    }
+
+    for entry in fs::read_dir(root).map_err(io_error)? {
+        let entry = entry.map_err(io_error)?;
+        if fs::symlink_metadata(entry.path())
+            .map_err(io_error)?
+            .file_type()
+            .is_symlink()
+        {
+            return Err(unsafe_recovery_component());
+        }
+    }
+    Ok(())
+}
+
+fn unsafe_recovery_component() -> StoreMigrationError {
+    StoreMigrationError::Io {
+        kind: "recovery-unsafe-component",
+    }
+}
+
 fn create_archive_dir(paths: &StorePaths) -> Result<PathBuf, StoreMigrationError> {
     let root = paths.account_root().join(STORE_RECOVERY_ARCHIVE_SEGMENT);
-    fs::create_dir_all(&root).map_err(io_error)?;
+    validate_recovery_archive_root(&root)?;
+    match fs::create_dir(&root) {
+        Ok(()) => {}
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+        Err(error) => return Err(io_error(error)),
+    }
+    // Recheck after mkdir so a raced/pre-existing symlink can never be used as
+    // the archive root. `paths.ensure_dirs` has already created account_root,
+    // so this intentionally never uses create_dir_all (which follows links).
+    validate_recovery_archive_root(&root)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -437,14 +514,16 @@ mod revision_tests {
     }
 
     #[test]
-    fn explicit_reset_archives_data_preserves_key_sidecar_and_rebuilds_layout() {
+    fn explicit_reset_archives_data_and_manifest_then_rebuilds_layout() {
         let root = root("reset");
         let paths = paths(&root);
         migrate_store_to_current(&paths).unwrap();
+        let original_manifest = fs::read(manifest_path(&paths)).unwrap();
         fs::write(paths.state_dir().join("state.db"), b"opaque-state").unwrap();
         fs::write(paths.cache_dir().join("cache.db"), b"opaque-cache").unwrap();
+
         let outcome = reset_store_for_recovery(&paths).unwrap();
-        assert_eq!(outcome.archived_components, 4);
+        assert_eq!(outcome.archived_components, 5);
         assert_eq!(outcome.layout_version, STORE_LAYOUT_VERSION);
         assert!(!paths.state_dir().join("state.db").exists());
         assert!(!paths.cache_dir().join("cache.db").exists());
@@ -455,8 +534,91 @@ mod revision_tests {
             StoreRevisionDecision::UpToDate { layout_version: 1 }
         );
         let archive_root = paths.account_root().join(STORE_RECOVERY_ARCHIVE_SEGMENT);
-        assert!(archive_root.is_dir());
-        assert!(fs::read_dir(archive_root).unwrap().next().is_some());
+        let archive = fs::read_dir(&archive_root)
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        for component in ["state", "crypto", "cache", "media"] {
+            assert!(archive.join(component).is_dir(), "{component} is archived");
+        }
+        assert_eq!(
+            fs::read(archive.join(STORE_REVISION_MANIFEST_FILE)).unwrap(),
+            original_manifest,
+            "the pre-reset revision evidence is archived, never overwritten"
+        );
+        assert_ne!(
+            fs::read(manifest_path(&paths)).unwrap(),
+            original_manifest,
+            "the rebuilt layout has its own reset manifest"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn explicit_reset_refuses_recovery_symlinks_without_external_write() {
+        use std::os::unix::fs::symlink;
+
+        for (label, install_link) in [
+            ("recovery-root-symlink", true),
+            ("existing-archive-symlink", false),
+        ] {
+            let root = root(label);
+            let paths = paths(&root);
+            paths.ensure_dirs().unwrap();
+            let outside = std::env::temp_dir().join(format!(
+                "synara-store-revision-{label}-outside-{}",
+                std::process::id()
+            ));
+            let _ = fs::remove_dir_all(&outside);
+            fs::create_dir_all(&outside).unwrap();
+            let recovery = paths.account_root().join(STORE_RECOVERY_ARCHIVE_SEGMENT);
+            if install_link {
+                symlink(&outside, &recovery).unwrap();
+            } else {
+                fs::create_dir(&recovery).unwrap();
+                symlink(&outside, recovery.join("prior-archive")).unwrap();
+            }
+
+            let error = reset_store_for_recovery(&paths).unwrap_err();
+            assert_eq!(error.diagnostic_id(), "p3.2-login-store-migration-failed");
+            assert_eq!(
+                fs::read_dir(&outside).unwrap().count(),
+                0,
+                "recovery must not write through {label}"
+            );
+            let _ = fs::remove_dir_all(&outside);
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn explicit_reset_refuses_manifest_symlink_before_archiving_or_overwriting() {
+        use std::os::unix::fs::symlink;
+
+        let root = root("manifest-symlink");
+        let paths = paths(&root);
+        paths.ensure_dirs().unwrap();
+        let outside = std::env::temp_dir().join(format!(
+            "synara-store-revision-manifest-outside-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_file(&outside);
+        fs::write(&outside, b"outside-manifest").unwrap();
+        symlink(&outside, manifest_path(&paths)).unwrap();
+
+        let error = reset_store_for_recovery(&paths).unwrap_err();
+        assert_eq!(error.diagnostic_id(), "p3.2-login-store-migration-failed");
+        assert_eq!(fs::read(&outside).unwrap(), b"outside-manifest");
+        assert!(
+            !paths
+                .account_root()
+                .join(STORE_RECOVERY_ARCHIVE_SEGMENT)
+                .exists(),
+            "an unsafe manifest must fail before any archive is created"
+        );
+        let _ = fs::remove_file(&outside);
     }
 
     #[test]
