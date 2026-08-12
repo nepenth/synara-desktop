@@ -10,6 +10,30 @@ namespace synara_core {
   // redirect-free request is assembled.
   [Async, Throws=LoginFlowsError]
   sequence<LoginFlowDto> login_flows(string homeserver_url);
+
+  // P4: pure per-row unread/highlight projection used by the live iOS
+  // room-list adapter. This has no state, callback, error, or string input.
+  RoomUnreadPresentationDto room_unread_presentation(
+    RoomUnreadMembership membership,
+    u64 num_unread_messages,
+    u64 num_unread_notifications,
+    u64 num_unread_mentions,
+    boolean is_marked_unread
+  );
+};
+
+// Closed scalar input for the per-row unread presentation. It intentionally
+// does not carry a Matrix identifier, SDK value, or diagnostic string.
+enum RoomUnreadMembership {
+  "Joined",
+  "Invited"
+};
+
+// Scalar output of the total per-row unread presentation. The full-width
+// counter and boolean are the entire cross-platform surface.
+dictionary RoomUnreadPresentationDto {
+  u64 unread_count;
+  boolean has_highlight;
 };
 
 // Public Swift DTO for one homeserver-advertised Matrix login type. It never
