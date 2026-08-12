@@ -1,6 +1,6 @@
 # Shared Native Core (synara-core) — Program Plan
 
-**Status at `origin/feature/shared-native-core` `78028d6`:** P0 is complete;
+**Status at `origin/feature/shared-native-core` `4c4615dc`:** P0 is complete;
 P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4 remain in
 progress. P5 has not started. Owner: Synara engineering.
 
@@ -35,32 +35,36 @@ acceptance criteria have all passed.
   added `Core::command`, typed envelopes, the registry, and the desktop command
   census. The merged registry currently has exactly:
   `matrix_login_flows`, `matrix_register_flows`, `matrix_session_snapshot`,
-  `matrix_sync_status`, and `matrix_crypto_status` (#686–#689, #694, #698).
-  The latter three preserve the session snapshot and payload-free sync/crypto
-  status contracts through Core. It is not the complete desktop command
-  registry; unregistered census names fail closed.
+  `matrix_sync_status`, `matrix_crypto_status`, `matrix_media_config`, and
+  `matrix_cross_signing_status` (#686–#689, #694, #698, #701–#702). The latter
+  five preserve bounded legacy status/media/cross-signing contracts through
+  Core. It is not the complete desktop command registry; unregistered census
+  names fail closed.
 - **P3 — in progress; a desktop seam is merged, not a whole adapter swap.**
   #690 routes the credential-free login and registration flow probes through
   Core. #691 mirrors only the installed safe session lifecycle, and #694/#698
-  route the existing sync- and crypto-status commands through Core. The desktop
-  still owns its live Matrix SDK client, credentials, persistence, and all
-  remaining direct command paths.
+  route the existing sync- and crypto-status commands through Core; #701/#702
+  add bounded media-config and cross-signing-status bridges. The desktop still
+  owns its live Matrix SDK client, credentials, persistence, and all remaining
+  direct command paths.
 - **P4 — in progress; bootstrap and discovery are merged.** #685 provides the
   project-owned UniFFI/Swift package scaffold. #692 exposes only typed,
   credential-free login-flow discovery; #693 has iOS homeserver discovery call
   it; #696 adds an XCTest that invokes `bindingScaffoldVersion()` through the
-  generated Rust FFI. This does **not** migrate iOS session, room-list,
-  timeline, crypto, push/NSE, or `MatrixRustSDK` services, and it does not
-  remove the upstream Swift SDK dependency.
+  generated Rust FFI; #699 adds only a safe transient session-projection mirror.
+  This does **not** migrate iOS session, room-list, timeline, crypto, push/NSE,
+  or `MatrixRustSDK` services, and it does not remove the upstream Swift SDK
+  dependency.
 - **P5 — not started.** Do not claim iOS shared-engine parity, iOS migration,
   or Apple release readiness from the bounded work above.
 
 ### Open work outside this evidence base
 
-[PR #699](https://github.com/nepenth/synara-desktop/pull/699) is open and has
-no merge commit at `78028d6`. Its proposed safe iOS `SessionProjectionCore`
-mirror is future/unmerged work, not a delivered P4 capability. Even if merged,
-it would not by itself complete P4, P5, the iOS migration, or any release gate.
+[PR #703](https://github.com/nepenth/synara-desktop/pull/703) is open and has
+no merge commit at `4c4615dc`. Its proposed Settings display-only consumer of
+the already-merged safe iOS `SessionProjectionCore` mirror is future/unmerged
+work, not a delivered P4 service migration. Even if merged, it would not by
+itself complete P4, P5, the iOS migration, or any release gate.
 
 ## Phase acceptance targets
 
