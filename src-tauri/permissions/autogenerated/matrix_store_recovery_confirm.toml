@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-store-recovery-confirm"
+description = "Enables the matrix_store_recovery_confirm command without any pre-configured scope."
+commands.allow = ["matrix_store_recovery_confirm"]
+
+[[permission]]
+identifier = "deny-matrix-store-recovery-confirm"
+description = "Denies the matrix_store_recovery_confirm command without any pre-configured scope."
+commands.deny = ["matrix_store_recovery_confirm"]
