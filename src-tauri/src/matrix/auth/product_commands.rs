@@ -396,15 +396,14 @@ pub async fn matrix_session_snapshot(
     crate::bridge::session_lifecycle::session_snapshot(core.inner().as_ref()).await
 }
 
+/// SNC-P3.3 — keep the existing payload-free sync-status command while
+/// routing its exact DTO through the managed Core registry. The desktop
+/// Platform remains the sole owner of the live SDK sync owner.
 #[tauri::command]
 pub async fn matrix_sync_status(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<SyncReadinessSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    Ok(match session.as_ref() {
-        Some(active) => active.sync.observe(),
-        None => unconfigured_snapshot(state.current_generation()),
-    })
+    crate::bridge::session_lifecycle::sync_status(core.inner().as_ref()).await
 }
 
 #[tauri::command]

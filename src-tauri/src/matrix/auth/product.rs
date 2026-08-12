@@ -440,6 +440,19 @@ impl MatrixAuthState {
         Self::default()
     }
 
+    /// Read the current SDK sync owner as the existing safe readiness DTO.
+    ///
+    /// This remains desktop-owned: no client, credential, store handle, or raw
+    /// SDK diagnostic leaves `MatrixAuthState`. The desktop `Platform` adapter
+    /// normalizes this legacy DTO into its string-free Core projection locally.
+    pub(crate) async fn sync_status_snapshot(&self) -> SyncReadinessSnapshot {
+        let session = self.session.lock().await;
+        match session.as_ref() {
+            Some(active) => active.sync.observe(),
+            None => unconfigured_snapshot(self.current_generation()),
+        }
+    }
+
     /// Resolve an opaque V-ROOMS invite-avatar capability for the native URI
     /// protocol. The handle is valid only for the live session generation and
     /// never reveals its MXC source to the webview or command IPC.

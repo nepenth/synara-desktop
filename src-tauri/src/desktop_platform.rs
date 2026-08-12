@@ -7,10 +7,13 @@
 
 use std::sync::Arc;
 
-use tauri::{AppHandle, Emitter, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use synara_core::dto::NotificationCandidate;
-use synara_core::platform::{Platform, PlatformStatus, SecretVault, UnavailableSecretVault};
+use synara_core::platform::{
+    Platform, PlatformStatus, PlatformSyncStatus, SecretVault, SyncStatusFuture,
+    UnavailableSecretVault,
+};
 use synara_core::transport::{MatrixIpcEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
 
 use crate::desktop_notifications::{desktop_notify, DesktopNotificationPayload};
@@ -52,6 +55,21 @@ impl<R: Runtime> Platform for TauriPlatform<R> {
     /// Use the established desktop product identity for core HTTP probes.
     fn http_user_agent(&self) -> String {
         crate::matrix::client_builder::default_user_agent()
+    }
+
+    /// Observe sync through the shell-owned Matrix session. The local snapshot
+    /// is normalized into a string-free Platform projection before it crosses
+    /// into Core; the SDK client, credentials, store, and raw diagnostics stay
+    /// inside `MatrixAuthState` on the desktop side.
+    fn sync_status(&self) -> SyncStatusFuture<'_> {
+        Box::pin(async move {
+            let snapshot = self
+                .app
+                .state::<crate::matrix::auth::MatrixAuthState>()
+                .sync_status_snapshot()
+                .await;
+            PlatformSyncStatus::from_desktop_snapshot(snapshot)
+        })
     }
 
     /// Deliver a native notification through the existing desktop path.

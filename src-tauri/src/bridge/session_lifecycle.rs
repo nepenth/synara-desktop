@@ -4,7 +4,10 @@
 //! persistence. This module mirrors only its already-installed, credential-free
 //! session projection into the one Core that P3.1 manages at application startup.
 
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Deserialize};
+use synara_core::app::sync::{
+    SyncReadiness, SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID,
+};
 use synara_core::dto::{SessionLifecycle, SessionSnapshot};
 use synara_core::transport::CommandEnvelope;
 use synara_core::Core;
@@ -12,6 +15,41 @@ use synara_core::Core;
 use crate::matrix::auth::product::{MatrixAuthCommandError, MatrixLoginIdentity};
 
 const SESSION_SNAPSHOT_COMMAND: &str = "matrix_session_snapshot";
+const SYNC_STATUS_COMMAND: &str = "matrix_sync_status";
+
+/// Owned wire form used only while the desktop bridge deserializes the Core
+/// response. The core DTO keeps its diagnostic lifetime static so a platform
+/// cannot attach a dynamic raw SDK error. This bridge validates that invariant
+/// before reconstructing the existing desktop response type.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SyncStatusWireResponse {
+    readiness: SyncReadiness,
+    session_generation: u64,
+    offline_mode_enabled: bool,
+    failure_diagnostic_id: Option<String>,
+    #[serde(default)]
+    sliding_sync_capable: Option<bool>,
+}
+
+impl TryFrom<SyncStatusWireResponse> for SyncReadinessSnapshot {
+    type Error = ();
+
+    fn try_from(response: SyncStatusWireResponse) -> Result<Self, Self::Error> {
+        let failure_diagnostic_id = match response.failure_diagnostic_id.as_deref() {
+            None => None,
+            Some(SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID) => Some(SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID),
+            Some(_) => return Err(()),
+        };
+        Ok(Self {
+            readiness: response.readiness,
+            session_generation: response.session_generation,
+            offline_mode_enabled: response.offline_mode_enabled,
+            failure_diagnostic_id,
+            sliding_sync_capable: response.sliding_sync_capable,
+        })
+    }
+}
 
 /// `matrix_session_snapshot` is read-only, so it has no live desktop request
 /// generation to forward. Zero is a valid JSON-safe Core envelope generation.
@@ -78,6 +116,28 @@ where
     serde_json::from_value(response.payload).map_err(|_| core_snapshot_response_error())
 }
 
+/// Forward the existing payload-free sync status command through Core. The
+/// desktop Platform samples the live shell-owned sync owner; Core owns the
+/// registry and wire response, and this bridge retains the exact Tauri DTO.
+pub(crate) async fn sync_status(
+    core: &Core,
+) -> Result<SyncReadinessSnapshot, MatrixAuthCommandError> {
+    let response = core
+        .command(CommandEnvelope {
+            command: SYNC_STATUS_COMMAND.to_owned(),
+            session_generation: READ_ONLY_SESSION_GENERATION,
+            request_id: None,
+            payload: serde_json::Value::Null,
+        })
+        .await
+        .map_err(|_| core_sync_status_error())?;
+    let response: SyncStatusWireResponse =
+        serde_json::from_value(response.payload).map_err(|_| core_sync_status_response_error())?;
+    response
+        .try_into()
+        .map_err(|_| core_sync_status_response_error())
+}
+
 fn core_lifecycle_error() -> MatrixAuthCommandError {
     MatrixAuthCommandError::new(
         "Unknown",
@@ -99,6 +159,22 @@ fn core_snapshot_response_error() -> MatrixAuthCommandError {
         "Unknown",
         "Native Matrix session snapshot is unavailable.",
         "snc-p3-2-session-snapshot-response-invalid",
+    )
+}
+
+fn core_sync_status_error() -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "Unknown",
+        "Native Matrix sync status is unavailable.",
+        "snc-p3-3-sync-status-core-failed",
+    )
+}
+
+fn core_sync_status_response_error() -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "Unknown",
+        "Native Matrix sync status is unavailable.",
+        "snc-p3-3-sync-status-response-invalid",
     )
 }
 
@@ -127,6 +203,19 @@ mod tests {
 
         fn http_user_agent(&self) -> String {
             "Synara-Desktop-Session-Bridge-Test/1.0".to_owned()
+        }
+
+        fn sync_status(&self) -> synara_core::platform::SyncStatusFuture<'_> {
+            Box::pin(async {
+                Ok(synara_core::platform::PlatformSyncStatus::new(
+                    synara_core::app::sync::SyncReadiness::Unconfigured,
+                    0,
+                    false,
+                    None,
+                    None,
+                )
+                .expect("unconfigured status is a valid string-free projection"))
+            })
         }
 
         fn notify(&self, _candidate: NotificationCandidate) -> Result<(), MatrixIpcError> {
@@ -199,20 +288,18 @@ mod tests {
     }
 
     fn core_returning(
+        command: &'static str,
         response_payload: serde_json::Value,
         forwarded: Arc<Mutex<Vec<CommandEnvelope>>>,
     ) -> Core {
         let mut registry = CommandRegistry::new();
         registry
-            .register(
-                SESSION_SNAPSHOT_COMMAND,
-                move |_state, request| -> CommandFuture {
-                    forwarded.lock().expect("test capture lock").push(request);
-                    let response_payload = response_payload.clone();
-                    Box::pin(async move { Ok(response_payload) })
-                },
-            )
-            .expect("session snapshot is in the desktop command census");
+            .register(command, move |_state, request| -> CommandFuture {
+                forwarded.lock().expect("test capture lock").push(request);
+                let response_payload = response_payload.clone();
+                Box::pin(async move { Ok(response_payload) })
+            })
+            .expect("read-only command is in the desktop command census");
         Core::with_registry(Arc::new(TestPlatform), registry)
     }
 
@@ -226,7 +313,11 @@ mod tests {
             "homeserver_url": "https://matrix.example.org",
             "sessionGeneration": 9,
         });
-        let core = core_returning(payload.clone(), Arc::clone(&forwarded));
+        let core = core_returning(
+            SESSION_SNAPSHOT_COMMAND,
+            payload.clone(),
+            Arc::clone(&forwarded),
+        );
 
         let snapshot: crate::matrix::auth::product::MatrixSessionSnapshot = session_snapshot(&core)
             .await
@@ -243,17 +334,41 @@ mod tests {
         );
     }
 
-    fn core_failing(error: MatrixIpcError) -> Core {
+    #[tokio::test]
+    async fn sync_status_bridge_forwards_exact_core_envelope_and_react_json() {
+        let forwarded = Arc::new(Mutex::new(Vec::new()));
+        let payload = serde_json::json!({
+            "readiness": "failed",
+            "sessionGeneration": 9,
+            "offlineModeEnabled": true,
+            "failureDiagnosticId": SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID,
+            "slidingSyncCapable": true,
+        });
+        let core = core_returning(SYNC_STATUS_COMMAND, payload.clone(), Arc::clone(&forwarded));
+
+        let snapshot = sync_status(&core)
+            .await
+            .expect("known Core status response remains the desktop DTO");
+        assert_eq!(serde_json::to_value(snapshot).unwrap(), payload);
+        assert_eq!(
+            forwarded.lock().unwrap().as_slice(),
+            &[CommandEnvelope {
+                command: SYNC_STATUS_COMMAND.to_owned(),
+                session_generation: READ_ONLY_SESSION_GENERATION,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            }]
+        );
+    }
+
+    fn core_failing(command: &'static str, error: MatrixIpcError) -> Core {
         let mut registry = CommandRegistry::new();
         registry
-            .register(
-                SESSION_SNAPSHOT_COMMAND,
-                move |_state, _request| -> CommandFuture {
-                    let error = error.clone();
-                    Box::pin(async move { Err(error) })
-                },
-            )
-            .expect("session snapshot is in the desktop command census");
+            .register(command, move |_state, _request| -> CommandFuture {
+                let error = error.clone();
+                Box::pin(async move { Err(error) })
+            })
+            .expect("read-only command is in the desktop command census");
         Core::with_registry(Arc::new(TestPlatform), registry)
     }
 
@@ -268,13 +383,14 @@ mod tests {
             request_id: Some(private_text.to_owned()),
         };
         assert!(format!("{core_error:?}").contains(private_text));
-        let core = core_failing(core_error);
+        let core = core_failing(SESSION_SNAPSHOT_COMMAND, core_error);
         let core_failure =
             session_snapshot::<crate::matrix::auth::product::MatrixSessionSnapshot>(&core)
                 .await
                 .expect_err("Core errors map to a static desktop error");
 
         let malformed = core_returning(
+            SESSION_SNAPSHOT_COMMAND,
             serde_json::json!({"status": "not_a_snapshot", "private": private_text}),
             Arc::new(Mutex::new(Vec::new())),
         );
@@ -302,6 +418,59 @@ mod tests {
                 assert!(
                     !json.contains(forbidden),
                     "bridge error must not reflect private Core data: {forbidden}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn sync_status_bridge_errors_are_static_and_reject_untrusted_diagnostics() {
+        let private_text = "https://private.example token=secret password=secret";
+        let core_error = MatrixIpcError {
+            category: MatrixIpcErrorCategory::Unknown,
+            message: Some(private_text.to_owned()),
+            diagnostic_id: Some(private_text.to_owned()),
+            retry_after_ms: Some(1),
+            request_id: Some(private_text.to_owned()),
+        };
+        let core_failure = sync_status(&core_failing(SYNC_STATUS_COMMAND, core_error))
+            .await
+            .expect_err("Core errors map to a static desktop status error");
+
+        let malformed = core_returning(
+            SYNC_STATUS_COMMAND,
+            serde_json::json!({
+                "readiness": "failed",
+                "sessionGeneration": 9,
+                "offlineModeEnabled": true,
+                "failureDiagnosticId": private_text,
+                "slidingSyncCapable": false,
+            }),
+            Arc::new(Mutex::new(Vec::new())),
+        );
+        let response_failure = sync_status(&malformed)
+            .await
+            .expect_err("untrusted Core status diagnostics must fail closed");
+
+        assert_eq!(
+            core_failure.diagnostic_id,
+            "snc-p3-3-sync-status-core-failed"
+        );
+        assert_eq!(
+            response_failure.diagnostic_id,
+            "snc-p3-3-sync-status-response-invalid"
+        );
+        for error in [
+            core_failure,
+            response_failure,
+            core_sync_status_error(),
+            core_sync_status_response_error(),
+        ] {
+            let json = serde_json::to_string(&error).expect("static error serializes");
+            for forbidden in ["private.example", "token", "secret", "password"] {
+                assert!(
+                    !json.contains(forbidden),
+                    "status bridge error must not reflect private Core data: {forbidden}"
                 );
             }
         }
