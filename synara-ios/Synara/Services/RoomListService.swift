@@ -1,4 +1,5 @@
 import Foundation
+import SynaraCore
 
 struct RoomSummary: Identifiable, Equatable {
     enum RoomKind: Equatable {
@@ -175,8 +176,16 @@ enum RoomActivityRecoveryPolicy {
         latestRequiresRecovery: Bool,
         previousActivityAt: Date?
     ) -> Bool {
-        latestRequiresRecovery
-            && (previousActivityAt == nil || previousActivityAt == .distantPast)
+        let previousState: SynaraCore.RoomActivityPreviousState
+        if previousActivityAt == nil || previousActivityAt == .distantPast {
+            previousState = .missing
+        } else {
+            previousState = .known
+        }
+        return SynaraCore.roomActivityRecoveryRequired(
+            latestRequiresRecovery: latestRequiresRecovery,
+            previousState: previousState
+        )
     }
 
     static func newestQualifyingTimestamp(from candidates: [Candidate]) -> Date? {

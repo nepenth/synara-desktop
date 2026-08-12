@@ -30,7 +30,8 @@ pub use core::Core;
 
 pub mod app;
 pub use app::room_list::{
-    room_unread_presentation, RoomUnreadMembership, RoomUnreadPresentationDto,
+    room_activity_recovery_required, room_unread_presentation, RoomActivityPreviousState,
+    RoomUnreadMembership, RoomUnreadPresentationDto,
 };
 
 pub mod dto;
