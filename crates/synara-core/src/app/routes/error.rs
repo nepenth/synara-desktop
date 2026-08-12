@@ -1,6 +1,6 @@
 //! Privacy-safe errors for route / deep-link resolution (P4.8).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Route parse / build failure.
 #[derive(Debug)]

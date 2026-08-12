@@ -1,10 +1,10 @@
-//! Privacy-safe errors for security status projection (P8.1).
+//! Privacy-safe errors for receipt projection (P6.2).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
-/// Security status apply / query failure.
+/// Receipt index / apply failure.
 #[derive(Debug)]
-pub enum SecurityError {
+pub enum ReceiptError {
     Invalid {
         diagnostic_id: &'static str,
     },
@@ -15,7 +15,7 @@ pub enum SecurityError {
     },
 }
 
-impl SecurityError {
+impl ReceiptError {
     pub fn diagnostic_id(&self) -> &'static str {
         match self {
             Self::Invalid { diagnostic_id } | Self::StaleGeneration { diagnostic_id, .. } => {
@@ -32,11 +32,11 @@ impl SecurityError {
     }
 }
 
-impl std::fmt::Display for SecurityError {
+impl std::fmt::Display for ReceiptError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Invalid { diagnostic_id } => {
-                write!(f, "invalid security operation ({diagnostic_id})")
+                write!(f, "invalid receipt operation ({diagnostic_id})")
             }
             Self::StaleGeneration {
                 diagnostic_id,
@@ -44,10 +44,10 @@ impl std::fmt::Display for SecurityError {
                 observed,
             } => write!(
                 f,
-                "stale security generation ({diagnostic_id}): expected {expected}, observed {observed}"
+                "stale receipt generation ({diagnostic_id}): expected {expected}, observed {observed}"
             ),
         }
     }
 }
 
-impl std::error::Error for SecurityError {}
+impl std::error::Error for ReceiptError {}

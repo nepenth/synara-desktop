@@ -1,7 +1,7 @@
 //! Unit tests for P4.8 route resolution.
 
 use super::*;
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 #[test]
 fn marker_stable() {

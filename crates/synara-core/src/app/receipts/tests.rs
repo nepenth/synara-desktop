@@ -1,8 +1,8 @@
 //! Unit tests for P6.2 receipt index.
 
 use super::*;
-use crate::matrix::dto::{Receipt, ReceiptType};
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::dto::{Receipt, ReceiptType};
+use crate::transport::MatrixIpcErrorCategory;
 
 fn receipt(room: &str, event: &str, user: &str, kind: ReceiptType, ts: Option<u64>) -> Receipt {
     Receipt {

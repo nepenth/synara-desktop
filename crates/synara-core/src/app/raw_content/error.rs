@@ -1,6 +1,6 @@
 //! Privacy-safe errors for custom raw-content extraction (P5.9).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Raw-content extraction failure.
 #[derive(Debug)]

@@ -8,8 +8,12 @@
 pub mod auth;
 pub mod notifications;
 pub mod polls;
+pub mod raw_content;
+pub mod receipts;
 pub mod relations;
 pub mod room_list;
+pub mod routes;
+pub mod security;
 pub mod sync;
 pub mod threads;
 pub mod timeline;
