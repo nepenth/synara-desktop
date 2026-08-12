@@ -198,6 +198,17 @@ mod tests {
             })
         }
 
+        fn crypto_status(&self) -> synara_core::platform::CryptoStatusFuture<'_> {
+            Box::pin(async {
+                Ok(synara_core::platform::PlatformCryptoStatus::new(
+                    0,
+                    false,
+                    synara_core::platform::PlatformCryptoCrossSigningState::Unavailable,
+                )
+                .expect("unavailable is a valid string-free crypto projection"))
+            })
+        }
+
         fn notify(&self, _candidate: NotificationCandidate) -> Result<(), MatrixIpcError> {
             Ok(())
         }

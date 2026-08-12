@@ -12,10 +12,13 @@ use synara_core::dto::{SessionLifecycle, SessionSnapshot};
 use synara_core::transport::CommandEnvelope;
 use synara_core::Core;
 
-use crate::matrix::auth::product::{MatrixAuthCommandError, MatrixLoginIdentity};
+use crate::matrix::auth::product::{
+    MatrixAuthCommandError, MatrixCrossSigningState, MatrixCryptoStatus, MatrixLoginIdentity,
+};
 
 const SESSION_SNAPSHOT_COMMAND: &str = "matrix_session_snapshot";
 const SYNC_STATUS_COMMAND: &str = "matrix_sync_status";
+const CRYPTO_STATUS_COMMAND: &str = "matrix_crypto_status";
 
 /// Owned wire form used only while the desktop bridge deserializes the Core
 /// response. The core DTO keeps its diagnostic lifetime static so a platform
@@ -48,6 +51,53 @@ impl TryFrom<SyncStatusWireResponse> for SyncReadinessSnapshot {
             failure_diagnostic_id,
             sliding_sync_capable: response.sliding_sync_capable,
         })
+    }
+}
+
+/// Closed response vocabulary accepted from Core for `matrix_crypto_status`.
+/// This is a bridge-only parser, not a Platform projection: it proves the Core
+/// response still has the exact legacy values before rebuilding the desktop DTO.
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum CryptoCrossSigningStateWire {
+    Unavailable,
+    NotSetUp,
+    Partial,
+    Ready,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CryptoStatusWireResponse {
+    session_generation: u64,
+    encryption_enabled: bool,
+    cross_signing_state: CryptoCrossSigningStateWire,
+}
+
+impl TryFrom<CryptoStatusWireResponse> for MatrixCryptoStatus {
+    type Error = ();
+
+    fn try_from(response: CryptoStatusWireResponse) -> Result<Self, Self::Error> {
+        let cross_signing_state = match response.cross_signing_state {
+            CryptoCrossSigningStateWire::Unavailable => MatrixCrossSigningState::Unavailable,
+            CryptoCrossSigningStateWire::NotSetUp => MatrixCrossSigningState::NotSetUp,
+            CryptoCrossSigningStateWire::Partial => MatrixCrossSigningState::Partial,
+            CryptoCrossSigningStateWire::Ready => MatrixCrossSigningState::Ready,
+        };
+        let pairing_is_valid = matches!(
+            (response.encryption_enabled, cross_signing_state),
+            (false, MatrixCrossSigningState::Unavailable)
+                | (true, MatrixCrossSigningState::NotSetUp)
+                | (true, MatrixCrossSigningState::Partial)
+                | (true, MatrixCrossSigningState::Ready)
+        );
+        pairing_is_valid
+            .then_some(MatrixCryptoStatus {
+                session_generation: response.session_generation,
+                encryption_enabled: response.encryption_enabled,
+                cross_signing_state,
+            })
+            .ok_or(())
     }
 }
 
@@ -138,6 +188,29 @@ pub(crate) async fn sync_status(
         .map_err(|_| core_sync_status_response_error())
 }
 
+/// Forward the existing payload-free crypto status command through Core. The
+/// desktop Platform remains the sole SDK Client/crypto owner and samples its
+/// fixed projection under the existing auth mutex; Core owns the envelope and
+/// exact public DTO serialization.
+pub(crate) async fn crypto_status(
+    core: &Core,
+) -> Result<MatrixCryptoStatus, MatrixAuthCommandError> {
+    let response = core
+        .command(CommandEnvelope {
+            command: CRYPTO_STATUS_COMMAND.to_owned(),
+            session_generation: READ_ONLY_SESSION_GENERATION,
+            request_id: None,
+            payload: serde_json::Value::Null,
+        })
+        .await
+        .map_err(|_| core_crypto_status_error())?;
+    let response: CryptoStatusWireResponse = serde_json::from_value(response.payload)
+        .map_err(|_| core_crypto_status_response_error())?;
+    response
+        .try_into()
+        .map_err(|_| core_crypto_status_response_error())
+}
+
 fn core_lifecycle_error() -> MatrixAuthCommandError {
     MatrixAuthCommandError::new(
         "Unknown",
@@ -178,6 +251,22 @@ fn core_sync_status_response_error() -> MatrixAuthCommandError {
     )
 }
 
+fn core_crypto_status_error() -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "Unknown",
+        "Native Matrix crypto status is unavailable.",
+        "snc-p3-4-crypto-status-core-failed",
+    )
+}
+
+fn core_crypto_status_response_error() -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "Unknown",
+        "Native Matrix crypto status is unavailable.",
+        "snc-p3-4-crypto-status-response-invalid",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, Mutex};
@@ -215,6 +304,17 @@ mod tests {
                     None,
                 )
                 .expect("unconfigured status is a valid string-free projection"))
+            })
+        }
+
+        fn crypto_status(&self) -> synara_core::platform::CryptoStatusFuture<'_> {
+            Box::pin(async {
+                Ok(synara_core::platform::PlatformCryptoStatus::new(
+                    0,
+                    false,
+                    synara_core::platform::PlatformCryptoCrossSigningState::Unavailable,
+                )
+                .expect("unavailable is a valid string-free crypto projection"))
             })
         }
 
@@ -361,6 +461,35 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn crypto_status_bridge_forwards_exact_core_envelope_and_react_json() {
+        let forwarded = Arc::new(Mutex::new(Vec::new()));
+        let payload = serde_json::json!({
+            "sessionGeneration": 9,
+            "encryptionEnabled": true,
+            "crossSigningState": "partial",
+        });
+        let core = core_returning(
+            CRYPTO_STATUS_COMMAND,
+            payload.clone(),
+            Arc::clone(&forwarded),
+        );
+
+        let status = crypto_status(&core)
+            .await
+            .expect("known Core crypto response remains the desktop DTO");
+        assert_eq!(serde_json::to_value(status).unwrap(), payload);
+        assert_eq!(
+            forwarded.lock().unwrap().as_slice(),
+            &[CommandEnvelope {
+                command: CRYPTO_STATUS_COMMAND.to_owned(),
+                session_generation: READ_ONLY_SESSION_GENERATION,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            }]
+        );
+    }
+
     fn core_failing(command: &'static str, error: MatrixIpcError) -> Core {
         let mut registry = CommandRegistry::new();
         registry
@@ -471,6 +600,75 @@ mod tests {
                 assert!(
                     !json.contains(forbidden),
                     "status bridge error must not reflect private Core data: {forbidden}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn crypto_status_bridge_errors_are_static_and_reject_hostile_or_invalid_core_data() {
+        let private_text = "https://private.example token=secret key=secret";
+        let core_error = MatrixIpcError {
+            category: MatrixIpcErrorCategory::Unknown,
+            message: Some(private_text.to_owned()),
+            diagnostic_id: Some(private_text.to_owned()),
+            retry_after_ms: Some(1),
+            request_id: Some(private_text.to_owned()),
+        };
+        let core_failure = crypto_status(&core_failing(CRYPTO_STATUS_COMMAND, core_error))
+            .await
+            .expect_err("Core errors map to a static desktop crypto error");
+
+        let hostile = core_returning(
+            CRYPTO_STATUS_COMMAND,
+            serde_json::json!({
+                "sessionGeneration": 9,
+                "encryptionEnabled": true,
+                "crossSigningState": private_text,
+            }),
+            Arc::new(Mutex::new(Vec::new())),
+        );
+        let hostile_failure = crypto_status(&hostile)
+            .await
+            .expect_err("unknown Core cross-signing text must fail closed");
+
+        let inconsistent = core_returning(
+            CRYPTO_STATUS_COMMAND,
+            serde_json::json!({
+                "sessionGeneration": 9,
+                "encryptionEnabled": false,
+                "crossSigningState": "ready",
+            }),
+            Arc::new(Mutex::new(Vec::new())),
+        );
+        let response_failure = crypto_status(&inconsistent)
+            .await
+            .expect_err("impossible encryption/state pairing must fail closed");
+
+        assert_eq!(
+            core_failure.diagnostic_id,
+            "snc-p3-4-crypto-status-core-failed"
+        );
+        assert_eq!(
+            hostile_failure.diagnostic_id,
+            "snc-p3-4-crypto-status-response-invalid"
+        );
+        assert_eq!(
+            response_failure.diagnostic_id,
+            "snc-p3-4-crypto-status-response-invalid"
+        );
+        for error in [
+            core_failure,
+            hostile_failure,
+            response_failure,
+            core_crypto_status_error(),
+            core_crypto_status_response_error(),
+        ] {
+            let json = serde_json::to_string(&error).expect("static error serializes");
+            for forbidden in ["private.example", "token", "secret", "key"] {
+                assert!(
+                    !json.contains(forbidden),
+                    "crypto bridge error must not reflect private Core data: {forbidden}"
                 );
             }
         }

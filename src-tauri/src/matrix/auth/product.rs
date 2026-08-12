@@ -12,7 +12,6 @@ use std::sync::Arc;
 use matrix_sdk::{
     attachment::AttachmentConfig,
     authentication::matrix::MatrixSession,
-    encryption::CrossSigningStatus,
     media::{MediaFormat, MediaRequestParameters},
     room::edit::EditedContent,
     room::reply::{EnforceThread, Reply as AttachmentReply},
@@ -50,6 +49,7 @@ use matrix_sdk::{
 };
 use mime::Mime;
 use serde::{Deserialize, Serialize};
+use synara_core::platform::{PlatformCryptoCrossSigningState, PlatformCryptoStatus};
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
 use zeroize::Zeroize;
@@ -453,6 +453,44 @@ impl MatrixAuthState {
         }
     }
 
+    /// Read the existing crypto-status observation as a closed Core projection.
+    ///
+    /// This intentionally keeps the auth mutex held while the live SDK crypto
+    /// owner is sampled, matching the pre-Core command behavior. The desktop
+    /// remains the sole Client/crypto/store owner: only a generation, boolean,
+    /// and fixed coarse state leave this method.
+    pub(crate) async fn crypto_status_projection(&self) -> PlatformCryptoStatus {
+        let session = self.session.lock().await;
+        let Some(active) = session.as_ref() else {
+            return PlatformCryptoStatus::new(
+                self.current_generation(),
+                false,
+                PlatformCryptoCrossSigningState::Unavailable,
+            )
+            .expect("unavailable is a valid closed crypto projection");
+        };
+
+        let cross_signing = active.client.encryption().cross_signing_status().await;
+        let (encryption_enabled, cross_signing_state) = match cross_signing.as_ref() {
+            None => (false, PlatformCryptoCrossSigningState::Unavailable),
+            Some(status) => (
+                true,
+                crypto_cross_signing_state(
+                    status.is_complete(),
+                    status.has_master,
+                    status.has_self_signing,
+                    status.has_user_signing,
+                ),
+            ),
+        };
+        PlatformCryptoStatus::new(
+            active.sync.session_generation(),
+            encryption_enabled,
+            cross_signing_state,
+        )
+        .expect("desktop crypto observation must map to a valid closed projection")
+    }
+
     /// Resolve an opaque V-ROOMS invite-avatar capability for the native URI
     /// protocol. The handle is valid only for the live session generation and
     /// never reveals its MXC source to the webview or command IPC.
@@ -478,6 +516,24 @@ impl MatrixAuthState {
         let active = session.as_ref()?;
         let source = active.timelines.resolve_media(handle).await?;
         Some((active.client.clone(), source))
+    }
+}
+
+/// Reduce the current desktop SDK observation to only the existing coarse
+/// cross-signing vocabulary. The inputs are booleans so no SDK type can cross
+/// the Platform/Core seam.
+fn crypto_cross_signing_state(
+    is_complete: bool,
+    has_master: bool,
+    has_self_signing: bool,
+    has_user_signing: bool,
+) -> PlatformCryptoCrossSigningState {
+    if is_complete {
+        PlatformCryptoCrossSigningState::Ready
+    } else if has_master || has_self_signing || has_user_signing {
+        PlatformCryptoCrossSigningState::Partial
+    } else {
+        PlatformCryptoCrossSigningState::NotSetUp
     }
 }
 

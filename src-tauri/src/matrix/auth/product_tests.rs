@@ -494,50 +494,74 @@ fn v_auth_2_product_has_no_token_login_command_or_login_token_sdk_call() {
 }
 
 #[test]
-fn crypto_status_projection_is_privacy_safe_and_reports_cross_signing_shape() {
-    let status = crypto_status(
-        7,
-        Some(CrossSigningStatus {
-            has_master: true,
-            has_self_signing: false,
-            has_user_signing: false,
-        }),
+fn crypto_status_routes_through_core_while_desktop_keeps_the_mutex_bound_sdk_read() {
+    let command = AUTH_PRODUCT_COMMANDS_SOURCE
+        .split("pub async fn matrix_crypto_status")
+        .nth(1)
+        .and_then(|source| source.split("pub async fn matrix_logout").next())
+        .expect("matrix_crypto_status command body");
+    assert!(
+        command.contains("crate::bridge::session_lifecycle::crypto_status"),
+        "the zero-argument command must delegate envelope/serialization to Core"
     );
-    assert!(status.encryption_enabled);
-    assert_eq!(status.cross_signing_state, MatrixCrossSigningState::Partial);
-
-    let json = serde_json::to_string(&status).unwrap();
-    assert_eq!(
-        json,
-        r#"{"sessionGeneration":7,"encryptionEnabled":true,"crossSigningState":"partial"}"#
-    );
-    for forbidden in ["token", "key", "ciphertext", "passphrase"] {
-        assert!(!json.to_ascii_lowercase().contains(forbidden));
+    for forbidden in [
+        "state.session",
+        "active.client",
+        "cross_signing_status",
+        "CrossSigningStatus",
+        "MatrixIpcError",
+    ] {
+        assert!(
+            !command.contains(forbidden),
+            "matrix_crypto_status command must not reclaim desktop crypto ownership: {forbidden}"
+        );
     }
-}
 
-#[test]
-fn crypto_status_distinguishes_unavailable_unset_and_ready() {
     assert_eq!(
-        cross_signing_state(None),
-        MatrixCrossSigningState::Unavailable
+        crypto_cross_signing_state(false, false, false, false),
+        PlatformCryptoCrossSigningState::NotSetUp
     );
     assert_eq!(
-        cross_signing_state(Some(&CrossSigningStatus {
-            has_master: false,
-            has_self_signing: false,
-            has_user_signing: false,
-        })),
-        MatrixCrossSigningState::NotSetUp
+        crypto_cross_signing_state(false, true, false, false),
+        PlatformCryptoCrossSigningState::Partial
     );
     assert_eq!(
-        cross_signing_state(Some(&CrossSigningStatus {
-            has_master: true,
-            has_self_signing: true,
-            has_user_signing: true,
-        })),
-        MatrixCrossSigningState::Ready
+        crypto_cross_signing_state(true, true, true, true),
+        PlatformCryptoCrossSigningState::Ready
     );
+
+    let product_source = include_str!("product.rs");
+    let projection = product_source
+        .split("pub(crate) async fn crypto_status_projection")
+        .nth(1)
+        .and_then(|source| source.split("/// Resolve an opaque V-ROOMS").next())
+        .expect("desktop crypto projection must remain isolated");
+    let lock = projection
+        .find("self.session.lock().await")
+        .expect("crypto projection must take the existing auth mutex");
+    let sample = projection
+        .find("cross_signing_status().await")
+        .expect("crypto projection must sample only the existing SDK status");
+    assert!(
+        lock < sample,
+        "the existing auth mutex must remain held while crypto status is awaited"
+    );
+    assert!(
+        !projection.contains("drop(session)"),
+        "crypto status must not transfer or release session ownership before sampling"
+    );
+    for forbidden in [
+        "MatrixIpcError",
+        "diagnostic_id",
+        "request_user_identity",
+        "bootstrap_cross_signing",
+        "store_key",
+    ] {
+        assert!(
+            !projection.contains(forbidden),
+            "desktop crypto projection must stay read-only and string-free: {forbidden}"
+        );
+    }
 }
 
 #[test]
