@@ -1,8 +1,9 @@
 # Shared Native Core (synara-core) — Program Plan
 
-**Status at `origin/feature/shared-native-core` `3bd0da01`:** P0 is complete;
-P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4 remain in
-progress. P5 has not started. Owner: Synara engineering.
+**Status at `origin/feature/shared-native-core` `fa6e6b63` (#710, following
+#708):** P0 is complete; P1 extraction and bounded P2, P3, and P4 slices are
+merged. P2–P4 remain in progress. P5 has not started. Owner: Synara
+engineering.
 
 ## Goal
 
@@ -38,9 +39,9 @@ acceptance criteria have all passed.
   `matrix_sync_status`, `matrix_crypto_status`, `matrix_media_config`,
   `matrix_cross_signing_status`, and `matrix_secret_storage_status`
   (#686–#689, #694, #698, #701–#702, #706). The latter six preserve bounded
-  legacy status/media/cross-signing/secret-storage contracts through Core. It
-  is not the complete desktop command registry; unregistered census names fail
-  closed.
+  legacy status/media/cross-signing/secret-storage contracts through Core.
+  Neither #708 nor #710 adds a Core command route. It is not the complete
+  desktop command registry; unregistered census names fail closed.
 - **P3 — in progress; a desktop seam is merged, not a whole adapter swap.**
   #690 routes the credential-free login and registration flow probes through
   Core. #691 mirrors only the installed safe session lifecycle, and #694/#698
@@ -55,9 +56,18 @@ acceptance criteria have all passed.
   it; #696 adds an XCTest that invokes `bindingScaffoldVersion()` through the
   generated Rust FFI; #699 adds only a safe transient session-projection mirror;
   #703 adds a display-only Settings readback that exact-matches Swift session
-  state and falls back safely. This does **not** migrate iOS session, room-list,
-  timeline, crypto, push/NSE, or `MatrixRustSDK` services, and it does not
-  remove the upstream Swift SDK dependency.
+  state and falls back safely. #708 adds only the pure iOS room-row unread
+  presentation from closed `Joined`/`Invited` membership, scalar counters, and
+  a marked-unread flag to a `u64` unread count plus highlight boolean. #710
+  adds only the pure cold-start recovery decision from a latest-state boolean
+  and `{Missing, Known}` to a boolean; Swift maps `nil`/`.distantPast` to
+  `Missing` and a real `Date` to `Known`. Neither slice adds a Core command
+  route or Core SDK/service owner. Actual SDK `Room` and timeline
+  listener/pagination/recovery execution, plus session, Keychain, store,
+  crypto, sync, and lifecycle ownership, remain `MatrixRustSDKService`-owned.
+  This does **not** migrate iOS session, room-list, timeline, crypto, push/NSE,
+  or `MatrixRustSDK` services, and it does not remove the upstream Swift SDK
+  dependency.
 - **P5 — not started.** Do not claim iOS shared-engine parity, iOS migration,
   or Apple release readiness from the bounded work above.
 

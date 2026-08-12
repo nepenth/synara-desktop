@@ -8,7 +8,7 @@ Desktop onto **one transport-agnostic Rust application-logic core** —
 |---|---|
 | Owner | Synara engineering |
 | Status | P0 complete; P1 extraction and bounded P2, P3, and P4 slices are merged at the evidence base below. P2–P4 remain in progress; P5 has not started. |
-| Evidence base | `origin/feature/shared-native-core` at `3bd0da01` (`feat(core): route secret-storage status through shared transport`, #706) |
+| Evidence base | `origin/feature/shared-native-core` at `fa6e6b63` (`feat(ios): route cold-start room activity recovery gate through SynaraCore`, #710; following #708) |
 | Decision | [ADR 0003](../adr/0003-shared-native-rust-core.md) |
 | Program ledger | `docs/shared-native-core/` (this directory) |
 | Related ADRs | [0001](../adr/0001-ios-repository-layout.md), [0002](../adr/0002-ios-architecture.md) |
@@ -30,8 +30,9 @@ Desktop onto **one transport-agnostic Rust application-logic core** —
   `matrix_session_snapshot`, `matrix_sync_status`, `matrix_crypto_status`,
   `matrix_media_config`, `matrix_cross_signing_status`, and
   `matrix_secret_storage_status`. The status, media, cross-signing, and
-  secret-storage paths preserve their bounded legacy DTO contracts; the rest
-  of the census remains unregistered and fail-closed.
+  secret-storage paths preserve their bounded legacy DTO contracts; neither
+  #708 nor #710 adds a Core command route, and the rest of the census remains
+  unregistered and fail-closed.
 - **P3 has a bounded desktop seam.** Existing Tauri commands route the two
   stateless auth probes and the session lifecycle/snapshot, sync-status, and
   crypto-status observations through the managed Core while retaining their
@@ -43,22 +44,29 @@ Desktop onto **one transport-agnostic Rust application-logic core** —
   discovery, iOS homeserver-discovery use, an XCTest that calls the generated
   Rust FFI scaffold, the bounded `SessionProjectionCore` mirror, and a
   Settings display-only readback that exact-matches the Swift session state and
-  otherwise falls back safely.** Neither the mirror nor that readback is
-  auth/session truth, and neither has migrated the iOS session, room-list,
-  timeline, crypto, push/NSE, or `MatrixRustSDK` service layer. P5 is not
-  complete and iOS is not migrated to the shared engine.
+  otherwise falls back safely.** #708 adds only a pure iOS room-row unread
+  presentation: closed `Joined`/`Invited` membership plus scalar counters and a
+  marked-unread flag produce a `u64` unread count and highlight boolean. #710
+  adds only a pure cold-start recovery decision: a latest-state boolean plus
+  `{Missing, Known}` produces a boolean; Swift maps `nil` and `.distantPast` to
+  `Missing` and a real `Date` to `Known`. Neither the mirror, readback, nor
+  these two pure functions is auth/session truth or a Core SDK/service owner,
+  and none migrates the iOS session, room-list, timeline, crypto, push/NSE, or
+  `MatrixRustSDK` service layer. P5 is not complete and iOS is not migrated to
+  the shared engine.
 
 ## Current milestone ledger
 
-The following describes only merged source reachable from `3bd0da01`.
+The following describes only merged source reachable from `fa6e6b63` (#710),
+following #708.
 
 | Phase | Merged evidence | Current boundary |
 |---|---|---|
 | P0 | ADR, plan, and census | Complete planning baseline. |
 | P1 | #669, #673–#677, #680–#681 | Extraction slices and the `Platform`/desktop adapter are merged; remaining matrix domains have not all moved. |
-| P2 | #683–#689, #694, #698, #701–#702, #706 | The eight-command registry above is live; it is not parity with the full desktop invoke census. |
+| P2 | #683–#689, #694, #698, #701–#702, #706 | The same eight-command registry above is live; #708/#710 add no Core command routes, and full desktop-invoke parity is not reached. |
 | P3 | #690–#691, #694, #698, #701–#702, #706 | The listed auth and read-only/session bridges use Core; `src-tauri` is not yet a fully thin shell. |
-| P4 | #685, #692–#693, #696, #699, #703 | UniFFI scaffold, bounded login discovery/link coverage, a safe session projection mirror, and display-only readback exist; service migration and Apple release proof do not. |
+| P4 | #685, #692–#693, #696, #699, #703, #708, #710 | UniFFI scaffold, bounded login discovery/link coverage, a safe session projection mirror, display-only readback, and only the two pure row/recovery policies exist; service migration and Apple release proof do not. |
 | P5 | None | Not started. The release gates below remain required. |
 
 ## Ownership, privacy, and release gates
@@ -68,7 +76,10 @@ The following describes only merged source reachable from `3bd0da01`.
   currently routed Core boundaries use only a safe session projection and
   closed platform-status projections; they do not transfer a live client or raw
   diagnostic. iOS continues to own SwiftUI, Keychain, APNs, app lifecycle, and
-  NSE behavior; the current UniFFI package is not a service replacement.
+  NSE behavior; the current UniFFI package is not a service replacement. The
+  actual SDK `Room` and timeline listener/pagination/recovery execution, and
+  session, Keychain, store, crypto, sync, and lifecycle ownership, remain
+  `MatrixRustSDKService`-owned.
 - **Privacy boundaries are intentional.** Core session open/close is an
   in-memory projection, not platform persistence. The sync and crypto seams
   reject dynamic shell diagnostics and SDK-bearing values; Core serializes the
