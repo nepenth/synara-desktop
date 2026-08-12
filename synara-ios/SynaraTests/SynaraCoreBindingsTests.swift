@@ -1,4 +1,5 @@
 import XCTest
+@testable import Synara
 import SynaraCore
 
 final class SynaraCoreBindingsTests: XCTestCase {
@@ -51,5 +52,88 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 XCTAssertFalse(publicError.contains(forbidden))
             }
         }
+    }
+
+    func testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose() async {
+        let mirror = MatrixSessionProjectionMirror()
+        let expected = CoreSessionIdentity(
+            userID: "@alice:matrix.org",
+            deviceID: "SYNARA-IOS-DEVICE",
+            homeserverURL: "https://matrix.org"
+        )
+
+        let beforeOpen = await mirror.coreSessionIdentity()
+        XCTAssertNil(beforeOpen)
+
+        await mirror.openAfterInstalledClient(
+            userID: expected.userID,
+            deviceID: expected.deviceID,
+            homeserverURL: expected.homeserverURL,
+            cryptoReady: true
+        )
+
+        let afterOpen = await mirror.coreSessionIdentity()
+        XCTAssertEqual(afterOpen, expected)
+
+        await mirror.closeBeforeSDKWipe()
+
+        let afterClose = await mirror.coreSessionIdentity()
+        XCTAssertNil(afterClose)
+    }
+
+    func testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots() async throws {
+        let core = SessionProjectionCore()
+        let mirror = MatrixSessionProjectionMirror(core: core)
+
+        await mirror.openAfterInstalledClient(
+            userID: "@alice:matrix.org",
+            deviceID: "SYNARA-IOS-DEVICE",
+            homeserverURL: "https://matrix.org",
+            cryptoReady: true
+        )
+
+        try await core.open(
+            projection: SessionProjection(
+                generation: 2,
+                userId: "@mallory:matrix.org",
+                deviceId: "OTHER-DEVICE",
+                homeserverUrl: "https://matrix.org",
+                lifecycle: .ready,
+                cryptoReady: true
+            )
+        )
+        let mismatchedIdentity = await mirror.coreSessionIdentity()
+        XCTAssertNil(mismatchedIdentity)
+
+        try await core.open(
+            projection: SessionProjection(
+                generation: 3,
+                userId: "@alice:matrix.org",
+                deviceId: "SYNARA-IOS-DEVICE",
+                homeserverUrl: "https://matrix.org",
+                lifecycle: .syncing,
+                cryptoReady: true
+            )
+        )
+        let nonReadyIdentity = await mirror.coreSessionIdentity()
+        XCTAssertNil(nonReadyIdentity)
+
+        try await core.close()
+        let missingIdentity = await mirror.coreSessionIdentity()
+        XCTAssertNil(missingIdentity)
+    }
+
+    func testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails() async {
+        let mirror = MatrixSessionProjectionMirror()
+
+        await mirror.openAfterInstalledClient(
+            userID: "@alice:matrix.org",
+            deviceID: "SYNARA-IOS-DEVICE",
+            homeserverURL: "https://user:access-token@private.example/?password=secret",
+            cryptoReady: true
+        )
+
+        let identity = await mirror.coreSessionIdentity()
+        XCTAssertNil(identity)
     }
 }

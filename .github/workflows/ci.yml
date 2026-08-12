@@ -454,6 +454,9 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Check SynaraCore Swift scaffold
+        run: node scripts/check-synara-core-swift-scaffold.mjs
+
       - name: Build and run unsigned simulator tests
         run: scripts/ci-build.sh
         working-directory: synara-ios

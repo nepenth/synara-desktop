@@ -69,6 +69,15 @@ protocol MatrixClientServicing: AnyObject {
     func resumeFromForeground(session: AuthenticatedSession) async
     func syncForBackgroundNotification(session: AuthenticatedSession) async -> Bool
     func resetLocalState(for session: AuthenticatedSession?) async
+    /// Optional, display-only readback. It must not affect SDK lifecycle or
+    /// session/credential ownership.
+    func coreSessionIdentity() async -> CoreSessionIdentity?
+}
+
+extension MatrixClientServicing {
+    func coreSessionIdentity() async -> CoreSessionIdentity? {
+        nil
+    }
 }
 
 protocol PushServicing {

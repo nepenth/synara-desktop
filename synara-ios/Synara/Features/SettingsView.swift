@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var isRegisteringPush = false
     @State private var isLogoutConfirmationPresented = false
     @State private var sessionCryptoStatus: SessionCryptoStatus = .unknown
+    @State private var coreSessionIdentity: CoreSessionIdentity?
     @State private var recoveryKey = ""
     @State private var cryptoActionMessage: String?
     @State private var isRunningCryptoAction = false
@@ -18,12 +19,22 @@ struct SettingsView: View {
             Section("Account") {
                 switch environment.session.currentState {
                 case .signedIn(let session):
-                    SettingsInfoRow(title: "User", value: session.userID)
+                    let displayIdentity = SettingsAccountIdentitySelection.matchingCoreIdentity(
+                        coreSessionIdentity,
+                        for: session
+                    )
+                    SettingsInfoRow(title: "User", value: displayIdentity?.userID ?? session.userID)
                         .accessibilityIdentifier("SettingsAccountUser")
-                    SettingsInfoRow(title: "Device", value: session.deviceID)
+                    SettingsInfoRow(title: "Device", value: displayIdentity?.deviceID ?? session.deviceID)
                         .accessibilityIdentifier("SettingsAccountDevice")
-                    SettingsInfoRow(title: "Homeserver", value: session.homeserverURL.host ?? session.homeserverURL.absoluteString)
-                        .accessibilityIdentifier("SettingsAccountHomeserver")
+                    SettingsInfoRow(
+                        title: "Homeserver",
+                        value: SettingsAccountIdentitySelection.homeserverDisplayValue(
+                            for: displayIdentity,
+                            fallback: session.homeserverURL
+                        )
+                    )
+                    .accessibilityIdentifier("SettingsAccountHomeserver")
                 case .signedOut:
                     Text("Not signed in")
                         .foregroundStyle(SynaraColor.secondaryText)
@@ -232,6 +243,14 @@ struct SettingsView: View {
             )
             await refreshNotificationStatus()
             await refreshCryptoStatus()
+            await refreshCoreSessionIdentity()
+        }
+    }
+
+    private func refreshCoreSessionIdentity() async {
+        let identity = await environment.matrix.coreSessionIdentity()
+        await MainActor.run {
+            coreSessionIdentity = identity
         }
     }
 
@@ -596,6 +615,31 @@ private enum SettingsState {
             return true
         }
         return false
+    }
+}
+
+/// Selects Core's optional values only as a matching account-display factor.
+/// Swift session state remains authoritative for all lifecycle and security use.
+enum SettingsAccountIdentitySelection {
+    static func matchingCoreIdentity(
+        _ candidate: CoreSessionIdentity?,
+        for session: AuthenticatedSession
+    ) -> CoreSessionIdentity? {
+        guard let candidate,
+              candidate.userID == session.userID,
+              candidate.deviceID == session.deviceID,
+              candidate.homeserverURL == session.homeserverURL.absoluteString
+        else {
+            return nil
+        }
+        return candidate
+    }
+
+    static func homeserverDisplayValue(for identity: CoreSessionIdentity?, fallback: URL) -> String {
+        guard let identity, let homeserverURL = URL(string: identity.homeserverURL) else {
+            return fallback.host ?? fallback.absoluteString
+        }
+        return homeserverURL.host ?? homeserverURL.absoluteString
     }
 }
 

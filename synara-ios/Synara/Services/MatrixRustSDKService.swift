@@ -465,6 +465,12 @@ actor MatrixRustSDKClientStore {
         syncStatus
     }
 
+    /// Read the optional Core projection only. This must never create, restore,
+    /// sync, or otherwise operate the Matrix SDK client or its persistence.
+    func coreSessionIdentity() async -> CoreSessionIdentity? {
+        await sessionProjectionMirror.coreSessionIdentity()
+    }
+
     func login(_ request: LoginRequest) async throws -> AuthenticatedSession {
         let username = request.username.trimmingCharacters(in: .whitespacesAndNewlines)
         guard username.isEmpty == false else {
@@ -2293,6 +2299,10 @@ final class MatrixRustSDKMatrixClientService: MatrixClientServicing {
         setSyncStatus(.starting)
         await clientStore.start(session: session)
         setSyncStatus(await clientStore.currentSyncStatus())
+    }
+
+    func coreSessionIdentity() async -> CoreSessionIdentity? {
+        await clientStore.coreSessionIdentity()
     }
 
     func stop() async {
