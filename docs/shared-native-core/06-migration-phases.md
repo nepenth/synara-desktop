@@ -1,9 +1,9 @@
 # 06 — Migration Phases (P1–P5)
 
 Methodology mirrors the js→rust burn-down: small additive slices, each a
-squashed PR onto `feature/matrix-rust-sdk-full-replacement` with green desktop
-CI (Quality + Desktop package + full matrix at tip), worktree isolation,
-provenance anchor maintained. **Never a big-bang move.**
+squashed PR onto `feature/shared-native-core` with green desktop CI (Quality +
+Desktop package + full matrix at tip), worktree isolation, provenance anchor
+maintained. **Never a big-bang move.**
 
 ## P0 — ADR + plan + census (done)
 
@@ -93,6 +93,17 @@ Acceptance: `ci.yml` `ios-tests` + `ios-skeleton.yml` green against the shared
 core; `grep -rn 'MatrixRustSDK' synara-ios/Synara --include='*.swift'` returns
 zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
+
+> **Bounded evidence note — not P4 acceptance:** At
+> `origin/feature/shared-native-core` `fa6e6b63` (#710, after #708), #708 is
+> only the pure iOS room-row unread presentation from closed
+> `Joined`/`Invited` membership, scalar counters, and a marked-unread flag to a
+> `u64` count plus highlight boolean. #710 is only the pure cold-start decision
+> from a latest-state boolean and `{Missing, Known}` to a boolean; Swift maps
+> `nil`/`.distantPast` to `Missing` and a real `Date` to `Known`. Neither adds a
+> Core command route or Core SDK/service owner. Actual SDK `Room` and timeline
+> listener/pagination/recovery execution, plus session, Keychain, store, crypto,
+> sync, and lifecycle ownership, remain `MatrixRustSDKService`-owned.
 
 ## P5 — Parity + release gates
 
