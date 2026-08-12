@@ -6,7 +6,8 @@
 //! domain chunks).
 
 // Generated from `src/synara_core.udl` by build.rs. Keep this at crate root:
-// P4-2 adds only credential-free login-flow discovery to the P4-1 bootstrap.
+// P4-3 adds only a safe Core session-projection mirror to the credential-free
+// P4-2 login-flow surface.
 uniffi::include_scaffolding!("synara_core");
 
 /// Identifies the project-owned UniFFI surface without exposing a product
@@ -18,6 +19,11 @@ pub fn binding_scaffold_version() -> String {
 
 mod ffi;
 pub use ffi::{login_flows, LoginFlowDto, LoginFlowsError};
+
+mod session_projection_ffi;
+pub use session_projection_ffi::{
+    SessionProjection, SessionProjectionCore, SessionProjectionError, SessionProjectionLifecycle,
+};
 
 mod core;
 pub use core::Core;

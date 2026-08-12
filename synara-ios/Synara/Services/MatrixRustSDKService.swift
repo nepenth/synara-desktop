@@ -439,6 +439,9 @@ actor MatrixRustSDKClientStore {
     private var verificationIdentityReady = false
     private var retainedClientHandles: [Client] = []
     private var retainedRoomHandlesByID: [String: Room] = [:]
+    /// Optional, projection-only Core mirror. It never owns or receives the
+    /// Matrix SDK client, AuthenticatedSession, credentials, or stores.
+    private let sessionProjectionMirror = MatrixSessionProjectionMirror()
     /// Serializes client creation, restoration, and teardown. Actors allow reentrancy
     /// across `await`, so concurrent ensure/reset calls could otherwise free the Rust
     /// client while another task still reads rooms from it.
@@ -476,6 +479,7 @@ actor MatrixRustSDKClientStore {
         defer { releaseClientMutationLock() }
 
         if activeSession != nil {
+            await sessionProjectionMirror.closeBeforeSDKWipe()
             await detachSyncServices()
             resetVerificationLifecycle(for: .sessionReplaced)
             retainClientHandle(client)
@@ -530,6 +534,12 @@ actor MatrixRustSDKClientStore {
             }
             self.client = client
             activeSession = session
+            await sessionProjectionMirror.openAfterInstalledClient(
+                userID: session.userID,
+                deviceID: session.deviceID,
+                homeserverURL: session.homeserverURL.absoluteString,
+                cryptoReady: true
+            )
             syncService = nil
             roomListService = nil
             lastSuccessfulSyncAt = nil
@@ -731,6 +741,7 @@ actor MatrixRustSDKClientStore {
         if let syncService {
             await syncService.stop()
         }
+        await sessionProjectionMirror.closeBeforeSDKWipe()
         retainClientHandle(client)
         client = nil
         activeSession = nil
@@ -1550,6 +1561,7 @@ actor MatrixRustSDKClientStore {
         }
 
         if let activeSession, activeSession != session {
+            await sessionProjectionMirror.closeBeforeSDKWipe()
             await detachSyncServices()
             resetVerificationLifecycle(for: .sessionReplaced)
             retainClientHandle(client)
@@ -1593,6 +1605,12 @@ actor MatrixRustSDKClientStore {
 
             client = newClient
             activeSession = session
+            await sessionProjectionMirror.openAfterInstalledClient(
+                userID: session.userID,
+                deviceID: session.deviceID,
+                homeserverURL: session.homeserverURL.absoluteString,
+                cryptoReady: true
+            )
 
             do {
                 try await installSessionVerificationDelegate(on: newClient)
