@@ -10,11 +10,17 @@
 
 mod error;
 mod index;
+mod native;
 
 pub use error::PresenceError;
 pub use index::{
     PresenceIndex, PresenceSnapshot, PresenceState, MAX_PRESENCE_TIMESTAMP_MS, MAX_PRESENCE_USERS,
     MAX_STATUS_MSG_CHARS,
+};
+pub use native::{
+    subscription_id_generation, NativePresenceSnapshot, NativePresenceSnapshotResult,
+    NativePresenceState, NativePresenceSubscription, NativePresenceUpdate,
+    NativePresenceUpdateOutcome, PresenceSubscriptionRegistry, PRESENCE_UPDATED_EVENT,
 };
 
 /// Static marker for link / schema smoke.
