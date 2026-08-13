@@ -39,6 +39,10 @@ use matrix_sdk_ui::timeline::{
 use serde::{Deserialize, Serialize};
 use tokio::{sync::Mutex as AsyncMutex, task::JoinHandle};
 
+use crate::app::send::{
+    message_content, parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id,
+    parse_transaction_id, send_message_to_room, MatrixSendTextResult, SendQueue,
+};
 use crate::app::utd_recovery::{UtdRecoveryCoordinator, UtdRecoveryKind, MAX_EVENT_IDS_PER_BATCH};
 use crate::dto::TimelineEncryptedUnavailableItem;
 
@@ -100,6 +104,7 @@ pub struct NativeTimelineOwner {
     emit: TimelineViewUpdateEmit,
     registry: tokio::sync::Mutex<NativeTimelineRegistry>,
     drafts: tokio::sync::Mutex<ComposerDraftRegistry>,
+    sends: tokio::sync::Mutex<SendQueue>,
 }
 
 impl NativeTimelineOwner {
@@ -109,6 +114,7 @@ impl NativeTimelineOwner {
             emit,
             registry: tokio::sync::Mutex::new(NativeTimelineRegistry::new(session_generation)),
             drafts: tokio::sync::Mutex::new(ComposerDraftRegistry::new()),
+            sends: tokio::sync::Mutex::new(SendQueue::new(session_generation)),
         }
     }
 
@@ -216,6 +222,61 @@ impl NativeTimelineOwner {
             .await
             .jump_latest(self.emit.clone(), &self.client, request)
             .await
+    }
+
+    pub async fn send_text(
+        &self,
+        room_id: String,
+        body: String,
+        msg_type: Option<String>,
+        formatted_body: Option<String>,
+        mention_user_ids: Option<Vec<String>>,
+        mention_room: Option<bool>,
+        reply_to: Option<String>,
+        thread_root: Option<String>,
+        txn_id: Option<String>,
+    ) -> Result<MatrixSendTextResult, &'static str> {
+        let parsed_room = parse_send_room_id(&room_id)?;
+        let reply_to = parse_reply_event_id(reply_to)?;
+        let thread_root = parse_thread_root_event_id(thread_root)?;
+        let txn_id = parse_transaction_id(txn_id)?;
+        let content = message_content(
+            body.clone(),
+            msg_type,
+            formatted_body,
+            mention_user_ids,
+            mention_room.unwrap_or(false),
+            reply_to,
+            thread_root,
+        )?;
+        let room = self
+            .client
+            .get_room(&parsed_room)
+            .ok_or("d0.4-send-room-not-found")?;
+        let local_txn_id = {
+            let mut sends = self.sends.lock().await;
+            sends
+                .enqueue_text(parsed_room.to_string(), body)
+                .map_err(|error| error.diagnostic_id())?
+                .local_txn_id
+                .clone()
+        };
+        let send_result = send_message_to_room(&room, content, txn_id).await;
+        {
+            let mut sends = self.sends.lock().await;
+            if send_result.is_ok() {
+                let _ = sends.mark_sent(&local_txn_id);
+            } else {
+                let _ = sends.mark_failed(&local_txn_id, "d0.4-send-sdk-failed");
+            }
+        }
+        let event_id = send_result?;
+        Ok(MatrixSendTextResult {
+            room_id: parsed_room.to_string(),
+            event_id,
+            local_txn_id,
+            status: "sent",
+        })
     }
 
     pub async fn edit_text(

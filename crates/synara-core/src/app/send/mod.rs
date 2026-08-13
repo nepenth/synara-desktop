@@ -17,6 +17,7 @@ mod error;
 mod ipc;
 mod poll;
 mod queue;
+mod text;
 
 pub use attachment_queue::{
     AttachmentEnqueue, AttachmentKind, AttachmentSendQueue, OutboundAttachment,
@@ -31,6 +32,10 @@ pub use poll::{
     normalize_poll, poll_response_content, poll_start_content, NormalizedPoll, PollSendError,
 };
 pub use queue::{LocalTxnId, OutboundTextMessage, SendQueue};
+pub use text::{
+    message_content, parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id,
+    parse_transaction_id, send_message_to_room,
+};
 
 /// Static marker for link / schema smoke (text + attachment queues).
 pub const MATRIX_SEND_MARKER: &str = "matrix-send-queue-p6.1+attachment-p7.4";
