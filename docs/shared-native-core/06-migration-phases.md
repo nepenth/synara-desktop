@@ -20,8 +20,8 @@ integration, or release path. **Never a big-bang move.**
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
 
-**Current bounded status at `588de584`
-(#801, after #800):** #713 mechanically moved notifications, polls,
+**Current bounded status at `93c3655b`
+(#803, after #802):** #713 mechanically moved notifications, polls,
 relations, threads, and unread; #714 moved raw content, receipts, routes, and
 security; #716 moved search, legacy, and media_cache; #717 moved media_export
 and crypto_store; #734 moved the room-directory session harness; #735 moved
@@ -63,7 +63,8 @@ DTOs (Client I/O stayed desktop); #798 moved media upload/download/config IPC DT
 (Client media I/O stayed desktop); #800 moved live `Client::builder` plus session
 persist/restore (Keyring vault and `SdkClientHandle` stayed desktop); #801 moved
 live password login / register / password-reset (Tauri product commands stayed
-desktop). These retain thin desktop re-exports and any
+desktop); #803 moved live `NativeTypingOwner` / `set_typing_notice` (Tauri
+typing commands stayed desktop). These retain thin desktop re-exports and any
 leftover `live.rs` / `product_commands.rs`. They are P1 extraction
 only: no P2 command registration, UDL, or iOS behavior changed.
 
@@ -147,7 +148,7 @@ zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
 
 > **Bounded evidence note — not P4 acceptance:** At the current feature tip
-> `588de584ba10455422af84078e1147858f5c98e4` (#801, after #800), the
+> `93c3655bdeda3be0bcc9c24c083145b397e120de` (#803, after #802), the
 > prior #708 work is only the pure iOS room-row unread presentation from closed
 > `Joined`/`Invited` membership, scalar counters, and a marked-unread flag to a
 > `u64` count plus highlight boolean. The prior #710 work is only the pure
