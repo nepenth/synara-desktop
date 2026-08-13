@@ -24,7 +24,8 @@ use crate::app::presence::{
 use crate::app::room_profile::{MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner};
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::app::timeline::{
-    NativeTimelineCloseRequest, NativeTimelineEventReadback, NativeTimelineOwner,
+    NativeTimelineCloseRequest, NativeTimelineDirection, NativeTimelineEventReadback,
+    NativeTimelineOwner, NativeTimelineViewPaginationRequest, TimelineViewSnapshot,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::app::verification::{
@@ -596,6 +597,14 @@ struct MatrixTimelineEventReadbackRequest {
     event_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_timeline_paginate`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixTimelinePaginateRequest {
+    stream_id: String,
+    direction: NativeTimelineDirection,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_verification_accept`.
 ///
 /// The renderer sends the camel-case `flowId` key; unknown keys are rejected
@@ -1110,6 +1119,9 @@ fn built_in_registry() -> CommandRegistry {
         )
         .expect("built-in matrix_timeline_event_readback must remain in the command census");
     registry
+        .register("matrix_timeline_paginate", matrix_timeline_paginate)
+        .expect("built-in matrix_timeline_paginate must remain in the command census");
+    registry
 }
 
 fn matrix_typing_set(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -1181,6 +1193,34 @@ fn timeline_event_readback_owner_error(diagnostic_id: &'static str) -> MatrixIpc
         "v-crypto.6-event-room-not-found" | "d0.3-timeline-room-not-found" => {
             MatrixIpcErrorCategory::Forbidden
         }
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn matrix_timeline_paginate(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelinePaginateRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-timeline-paginate-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-paginate-no-session")
+        })?;
+        let snapshot: TimelineViewSnapshot = owner
+            .paginate(NativeTimelineViewPaginationRequest {
+                stream_id: payload.stream_id,
+                direction: payload.direction,
+            })
+            .await
+            .map_err(timeline_paginate_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-timeline-paginate-serialization-failed"))
+    })
+}
+
+fn timeline_paginate_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-timeline-view-not-open" => MatrixIpcErrorCategory::SdkInvariant,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -2294,6 +2334,7 @@ mod tests {
                 "matrix_sync_status",
                 "matrix_timeline_close",
                 "matrix_timeline_event_readback",
+                "matrix_timeline_paginate",
                 "matrix_typing_set",
                 "matrix_typing_snapshot",
                 "matrix_verification_accept",
@@ -4183,6 +4224,48 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-timeline-event-readback-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_paginate_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_paginate".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"streamId":"view-1","direction":"backwards"}),
+            })
+            .await
+            .expect_err("timeline paginate without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-paginate-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_paginate_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_paginate".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "streamId":"view-1",
+                    "direction":"backwards",
+                    "token":"no"
+                }),
+            })
+            .await
+            .expect_err("timeline paginate must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-paginate-invalid-payload")
         );
     }
 
