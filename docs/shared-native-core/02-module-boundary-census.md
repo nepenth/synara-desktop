@@ -3,13 +3,13 @@
 All paths relative to the repository root. Census technique: `git ls-files`,
 `grep -rl`, `grep -rn` over `src-tauri/src`, `synara-ios`, `.github/workflows`.
 The current source evidence is `feature/shared-native-core`
-`79aacab4` (#918, after #917).
+`82134fca` (#920, after #919).
 
 ## 2.1 Desktop application-logic layer
 
 The P0 census counted **285 `.rs` files** under `src-tauri/src/matrix/`. At the
 current evidence tip, there are 100 tracked Rust files under that desktop path
-and 243 under `crates/synara-core/src/app/`; the difference reflects P1 moves,
+and 244 under `crates/synara-core/src/app/`; the difference reflects P1 moves,
 not completion. The table remains the responsibility inventory rather than a
 claim that every listed domain is desktop-resident. Each domain is typically
 `mod.rs` (owning types/state) + `error.rs` + `live.rs` (actor/live state) +
@@ -40,7 +40,7 @@ nonclaim record.
 | `auth/` | login flows, UIA, register, reset password, device name, discovery, client config, `http_transport.rs` |
 | `backup/` | key backup flows (Core owns status; desktop keeps setup/restore/repair) |
 | `client_builder/` | client construction: features, open/drop, `sdk_handle.rs`, proxy handling |
-| `cross_signing/` | cross-signing identity + live state |
+| `cross_signing/` | cross-signing identity + live state (Core owns setup start; desktop keeps password UIAA) |
 | `crypto_store/` | crypto store continuity + tests |
 | `devices/` | device list (live + commands) |
 | `diagnostics/` | health, metrics, redaction, desktop compatibility |
