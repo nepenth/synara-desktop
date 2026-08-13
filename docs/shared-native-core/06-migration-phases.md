@@ -17,8 +17,8 @@ big-bang move.**
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
 
-**Current bounded status at `99066f9ad6577a9c990dc7fe9a6b139d652fc791`
-(#718, after #716/#717):** #713 mechanically moved notifications, polls,
+**Current bounded status at `6666556a4e5eb29c456fe9714cad2cf8d347286d`
+(#721, after #720):** #713 mechanically moved notifications, polls,
 relations, threads, and unread; #714 moved raw content, receipts, routes, and
 security; #716 moved search, legacy, and media_cache; #717 moved media_export
 and crypto_store. These retain thin desktop re-exports. They are P1 extraction
@@ -104,7 +104,7 @@ zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
 
 > **Bounded evidence note — not P4 acceptance:** At the current feature tip
-> `99066f9ad6577a9c990dc7fe9a6b139d652fc791` (#718, after P1-only #716/#717), the
+> `6666556a4e5eb29c456fe9714cad2cf8d347286d` (#721, after P1-only #720/#721), the
 > prior #708 work is only the pure iOS room-row unread presentation from closed
 > `Joined`/`Invited` membership, scalar counters, and a marked-unread flag to a
 > `u64` count plus highlight boolean. The prior #710 work is only the pure

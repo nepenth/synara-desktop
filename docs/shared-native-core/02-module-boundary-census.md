@@ -3,13 +3,13 @@
 All paths relative to the repository root. Census technique: `git ls-files`,
 `grep -rl`, `grep -rn` over `src-tauri/src`, `synara-ios`, `.github/workflows`.
 The current source evidence is `feature/shared-native-core`
-`99066f9ad6577a9c990dc7fe9a6b139d652fc791` (#718, after #716/#717).
+`6666556a4e5eb29c456fe9714cad2cf8d347286d` (#721, after #720).
 
 ## 2.1 Desktop application-logic layer
 
 The P0 census counted **285 `.rs` files** under `src-tauri/src/matrix/`. At the
-current evidence tip, there are 183 tracked Rust files under that desktop path
-and 97 under `crates/synara-core/src/app/`; the difference reflects P1 moves,
+current evidence tip, there are 177 tracked Rust files under that desktop path
+and 105 under `crates/synara-core/src/app/`; the difference reflects P1 moves,
 not completion. The table remains the responsibility inventory rather than a
 claim that every listed domain is desktop-resident. Each domain is typically
 `mod.rs` (owning types/state) + `error.rs` + `live.rs` (actor/live state) +
@@ -19,13 +19,13 @@ claim that every listed domain is desktop-resident. Each domain is typically
 At this tip, Core holds DTOs, transport/IPC, the pure task registry, and app
 modules for sync, room list, pure timeline, UTD recovery, notifications, polls,
 relations, threads, unread, raw content, receipts, routes, security, search,
-legacy, media_cache, media_export, and crypto_store. #713 moved the
-notifications/polls/relations/threads/unread cluster; #714 moved
-raw_content/receipts/routes/security; #716 moved search/legacy/media_cache;
-#717 moved media_export/crypto_store. Their desktop modules are thin
-re-exports. Desktop retains the remaining domains and the adapter-side command,
-live, and proof surfaces; see `10-current-handoff.md` for the full residency
-and nonclaim record.
+legacy, media_cache, media_export, crypto_store, members, and user_profile.
+#713–#717 moved whole harness directories; #720/#721 moved only the members
+and user_profile harness files and left live `product_commands.rs` on desktop.
+Their desktop modules are thin re-exports (plus leftover command files).
+Desktop retains the remaining domains and the adapter-side command, live, and
+proof surfaces; see `10-current-handoff.md` for the full residency and
+nonclaim record.
 
 | Domain dir | Responsibility (authoritative module: read the `mod.rs`) |
 |---|---|
