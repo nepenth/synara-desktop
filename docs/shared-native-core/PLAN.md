@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`93c3655b` (#803, after #802):** P0 is
+`c040632b` (#805, after #804):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -75,7 +75,8 @@ acceptance criteria have all passed.
   #798 moved media upload/download/config IPC DTOs (Client media I/O stayed desktop);
   #800 moved live `Client::builder` plus session persist/restore (Keyring vault and `SdkClientHandle` stayed desktop);
   #801 moved live password login / register / password-reset (Tauri product commands stayed desktop);
-  #803 moved live `NativeTypingOwner` / `set_typing_notice` (Tauri typing commands stayed desktop).
+  #803 moved live `NativeTypingOwner` / `set_typing_notice` (Tauri typing commands stayed desktop);
+  #805 moved live `NativeRoomJoinRuleOwner` behind a shell emit sink (Tauri event adapter stayed desktop).
   These retain thin desktop re-exports and
   add no P2 command, UDL, or iOS behavior. Compatibility re-exports remain, and many matrix domains are
   still desktop-owned, so the full extraction/end state is not yet complete.
