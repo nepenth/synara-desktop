@@ -18,7 +18,9 @@ use crate::app::auth::{
     RegisterFlowsProbe,
 };
 use crate::app::devices::{NativeDeviceOwner, NativeDeviceSnapshot};
-use crate::app::presence::{NativePresenceOwner, NativePresenceSnapshotResult};
+use crate::app::presence::{
+    NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceSubscription,
+};
 use crate::app::room_profile::{MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner};
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
@@ -500,6 +502,26 @@ struct MatrixPresenceSnapshotRequest {
     user_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_presence_subscribe`.
+///
+/// Shares the snapshot's camel-case `userId` key. Unknown keys are rejected
+/// so this subscribe route cannot grow extra identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixPresenceSubscribeRequest {
+    user_id: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_presence_unsubscribe`.
+///
+/// The renderer sends the camel-case `subscriptionId` key; unknown keys are
+/// rejected so this release route cannot grow extra identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixPresenceUnsubscribeRequest {
+    subscription_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_get_room_image_packs`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -857,6 +879,12 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_presence_snapshot", matrix_presence_snapshot)
         .expect("built-in matrix_presence_snapshot must remain in the command census");
     registry
+        .register("matrix_presence_subscribe", matrix_presence_subscribe)
+        .expect("built-in matrix_presence_subscribe must remain in the command census");
+    registry
+        .register("matrix_presence_unsubscribe", matrix_presence_unsubscribe)
+        .expect("built-in matrix_presence_unsubscribe must remain in the command census");
+    registry
         .register("matrix_verification_list", matrix_verification_list)
         .expect("built-in matrix_verification_list must remain in the command census");
     registry
@@ -952,6 +980,39 @@ fn matrix_presence_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> 
             .map_err(presence_snapshot_owner_error)?;
         serde_json::to_value(snapshot)
             .map_err(|_| core_state_error("p2-presence-snapshot-serialization-failed"))
+    })
+}
+
+fn matrix_presence_subscribe(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixPresenceSubscribeRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-presence-subscribe-invalid-payload"))?;
+        let owner = state.presence_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-presence-subscribe-no-session")
+        })?;
+        let subscription: NativePresenceSubscription = owner
+            .subscribe(&payload.user_id)
+            .await
+            .map_err(presence_snapshot_owner_error)?;
+        serde_json::to_value(subscription)
+            .map_err(|_| core_state_error("p2-presence-subscribe-serialization-failed"))
+    })
+}
+
+fn matrix_presence_unsubscribe(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixPresenceUnsubscribeRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-presence-unsubscribe-invalid-payload"))?;
+        let owner = state.presence_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-presence-unsubscribe-no-session")
+        })?;
+        owner
+            .unsubscribe(&payload.subscription_id)
+            .await
+            .map_err(presence_snapshot_owner_error)?;
+        Ok(serde_json::Value::Null)
     })
 }
 
@@ -1157,7 +1218,9 @@ fn device_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
 
 fn presence_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
-        "v-presence-invalid-user-id" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-presence-invalid-user-id" | "v-presence-invalid-subscription-id" => {
+            MatrixIpcErrorCategory::SdkInvariant
+        }
         "v-presence-user-owner-missing" | "v-presence-session-not-live" => {
             MatrixIpcErrorCategory::Forbidden
         }
@@ -1788,6 +1851,8 @@ mod tests {
                 "matrix_login_flows",
                 "matrix_media_config",
                 "matrix_presence_snapshot",
+                "matrix_presence_subscribe",
+                "matrix_presence_unsubscribe",
                 "matrix_register_flows",
                 "matrix_room_join_rule_snapshot",
                 "matrix_secret_storage_status",
@@ -2959,6 +3024,82 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-presence-snapshot-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_presence_subscribe_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_presence_subscribe".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"userId":"@alice:example.org"}),
+            })
+            .await
+            .expect_err("presence subscribe without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-presence-subscribe-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_presence_subscribe_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_presence_subscribe".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"userId":"@alice:example.org","token":"no"}),
+            })
+            .await
+            .expect_err("presence subscribe must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-presence-subscribe-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_presence_unsubscribe_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_presence_unsubscribe".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"subscriptionId":"presence-1-0"}),
+            })
+            .await
+            .expect_err("presence unsubscribe without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-presence-unsubscribe-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_presence_unsubscribe_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_presence_unsubscribe".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"subscriptionId":"presence-1-0","token":"no"}),
+            })
+            .await
+            .expect_err("presence unsubscribe must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-presence-unsubscribe-invalid-payload")
         );
     }
 

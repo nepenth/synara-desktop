@@ -1,6 +1,7 @@
 //! Credential-free V-PRESENCE.USER presentation DTOs and subscription registry.
 //!
-//! Live Client stream and Tauri subscribe stay in the desktop shell.
+//! Live Client stream lives on `NativePresenceOwner`. Subscribe/unsubscribe
+//! route through Core; shells only attach the owner and emit updates.
 
 use std::collections::HashMap;
 
@@ -49,7 +50,7 @@ pub enum NativePresenceSnapshotResult {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativePresenceSubscription {
     pub subscription_id: String,
