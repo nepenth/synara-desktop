@@ -623,6 +623,17 @@ struct MatrixVerificationMismatchRequest {
     flow_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_verification_start`.
+///
+/// The renderer sends optional camel-case `deviceId`. Unknown keys are
+/// rejected so this write cannot grow extra identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixVerificationStartRequest {
+    #[serde(default)]
+    device_id: Option<String>,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_room_join_rule_snapshot`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -982,6 +993,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_verification_mismatch", matrix_verification_mismatch)
         .expect("built-in matrix_verification_mismatch must remain in the command census");
     registry
+        .register("matrix_verification_start", matrix_verification_start)
+        .expect("built-in matrix_verification_start must remain in the command census");
+    registry
         .register("matrix_device_snapshot", matrix_device_snapshot)
         .expect("built-in matrix_device_snapshot must remain in the command census");
     registry
@@ -1154,8 +1168,10 @@ fn verification_accept_owner_error(diagnostic_id: &'static str) -> MatrixIpcErro
         | "v-crypto.1-sas-invalid-state"
         | "v-crypto.1-confirm-before-sas"
         | "v-crypto.1-sas-unavailable"
-        | "v-crypto.1-dismiss-active-flow" => MatrixIpcErrorCategory::SdkInvariant,
+        | "v-crypto.1-dismiss-active-flow"
+        | "v-crypto.1-device-not-found" => MatrixIpcErrorCategory::SdkInvariant,
         "v-crypto.1-start-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        "v-crypto.1-own-identity-unavailable" => MatrixIpcErrorCategory::UnsupportedCapability,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -1242,6 +1258,23 @@ fn matrix_verification_mismatch(state: Arc<CoreState>, request: CommandEnvelope)
             .map_err(verification_accept_owner_error)?;
         serde_json::to_value(request)
             .map_err(|_| core_state_error("p2-verification-mismatch-serialization-failed"))
+    })
+}
+
+fn matrix_verification_start(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixVerificationStartRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-verification-start-invalid-payload"))?;
+        let owner = state.verification_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-verification-start-no-session")
+        })?;
+        let request: NativeVerificationRequest = owner
+            .start(payload.device_id)
+            .await
+            .map_err(verification_accept_owner_error)?;
+        serde_json::to_value(request)
+            .map_err(|_| core_state_error("p2-verification-start-serialization-failed"))
     })
 }
 
@@ -2100,6 +2133,7 @@ mod tests {
                 "matrix_verification_dismiss",
                 "matrix_verification_list",
                 "matrix_verification_mismatch",
+                "matrix_verification_start",
             ]
         );
 
@@ -3564,6 +3598,44 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-verification-mismatch-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_verification_start_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_verification_start".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"deviceId":"DEVICE"}),
+            })
+            .await
+            .expect_err("verification start without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-verification-start-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_verification_start_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_verification_start".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"deviceId":"DEVICE","token":"no"}),
+            })
+            .await
+            .expect_err("verification start must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-verification-start-invalid-payload")
         );
     }
 

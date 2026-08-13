@@ -23,3 +23,4 @@ pub(crate) mod verification_confirm;
 pub(crate) mod verification_dismiss;
 pub(crate) mod verification_list;
 pub(crate) mod verification_mismatch;
+pub(crate) mod verification_start;
