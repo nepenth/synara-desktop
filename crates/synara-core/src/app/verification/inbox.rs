@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use crate::matrix::dto::{DeviceId, UserId};
+use crate::dto::{DeviceId, UserId};
 
 use super::error::VerificationError;
 

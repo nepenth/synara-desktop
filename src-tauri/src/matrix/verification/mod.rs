@@ -1,36 +1,7 @@
 //! P8.3 — Verification request inbox + SAS display foundation (harness).
-//!
-//! Pure index of product verification flows. **No SAS secrets, MAC keys,
-//! recovery material, or tokens.** Display-only emoji short names only.
-//! No SDK crypto APIs, no dual-backend.
-//!
-//! Authoritative design note: `docs/matrix-rust-sdk/p8.3-verification.md`
-
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
-mod error;
-mod inbox;
+pub use synara_core::app::verification::*;
+
 pub mod live;
-
-pub use error::VerificationError;
-pub use inbox::{
-    VerificationDirection, VerificationFlow, VerificationInbox, VerificationPhase, MAX_OPEN_FLOWS,
-    MAX_SAS_EMOJI,
-};
-
-/// Static marker for link / schema smoke.
-pub const MATRIX_VERIFICATION_MARKER: &str = "matrix-verification-p8.3";
-
-/// Touch verification paths so they remain linked in non-test builds.
-pub fn matrix_verification_markers() -> &'static str {
-    let inbox = VerificationInbox::new(0);
-    debug_assert!(inbox.is_empty());
-    debug_assert_eq!(inbox.len(), 0);
-    debug_assert!(!inbox.has_pending_attention());
-    debug_assert_eq!(MATRIX_VERIFICATION_MARKER, "matrix-verification-p8.3");
-    MATRIX_VERIFICATION_MARKER
-}
-
-#[cfg(test)]
-mod tests;

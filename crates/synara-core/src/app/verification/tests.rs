@@ -1,7 +1,7 @@
 //! Unit tests for P8.3 verification inbox.
 
 use super::*;
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 fn flow(id: &str, phase: VerificationPhase) -> VerificationFlow {
     VerificationFlow {
