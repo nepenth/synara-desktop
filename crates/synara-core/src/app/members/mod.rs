@@ -11,6 +11,7 @@
 mod error;
 mod index;
 mod native;
+mod power_levels;
 
 pub use error::MemberError;
 pub use index::{MemberIndex, MAX_MEMBERS_PER_ROOM};
@@ -18,6 +19,10 @@ pub use native::{
     NativePowerLevelWriteResult, NativeRoomCreatorsSnapshot, NativeRoomMembersSnapshot,
     NativeRoomPowerLevelTagsSnapshot, NativeRoomPowerLevelsSnapshot, ROOM_CREATE_EVENT_TYPE,
     ROOM_POWER_LEVELS_EVENT_TYPE, ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
+};
+pub use power_levels::{
+    validate_power_level_tags_content, validate_room_power_levels_content,
+    MAX_POWER_LEVEL_CONTENT_JSON_BYTES,
 };
 
 /// Static marker for link / schema smoke.

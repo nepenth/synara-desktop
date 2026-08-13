@@ -14,7 +14,7 @@ use matrix_sdk::{
     deserialized_responses::RawSyncOrStrippedState,
     event_handler::EventHandlerDropGuard,
     ruma::{
-        api::client::room::Visibility,
+        api::client::{room::Visibility, state::get_state_event_for_key},
         events::{
             room::join_rules::{RoomJoinRulesEventContent, SyncRoomJoinRulesEvent},
             StateEventType,
@@ -25,6 +25,10 @@ use matrix_sdk::{
     Client, Room, RoomState,
 };
 
+use crate::app::members::{
+    validate_power_level_tags_content, validate_room_power_levels_content,
+    NativePowerLevelWriteResult, ROOM_POWER_LEVELS_EVENT_TYPE, ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
+};
 use crate::app::user_profile::MatrixProfileWriteResult;
 
 use super::{
@@ -319,6 +323,62 @@ impl NativeRoomJoinRuleOwner {
             .map_err(|_| "v-rooms-members-moderation-power-level-failed")
     }
 
+    pub async fn set_power_level_state(
+        &self,
+        room_id: &str,
+        content: serde_json::Value,
+        event_type: &str,
+    ) -> Result<NativePowerLevelWriteResult, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let event_type = match event_type {
+            ROOM_POWER_LEVELS_EVENT_TYPE => {
+                validate_room_power_levels_content(&content)?;
+                ROOM_POWER_LEVELS_EVENT_TYPE
+            }
+            ROOM_POWER_LEVEL_TAGS_EVENT_TYPE => {
+                validate_power_level_tags_content(&content)?;
+                ROOM_POWER_LEVEL_TAGS_EVENT_TYPE
+            }
+            _ => return Err("v-rooms-power-levels-invalid-content"),
+        };
+        let room_id = parse_power_level_room_id(room_id)?;
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-rooms-power-levels-room-not-found")?;
+        room.send_state_event_raw(event_type, "", content.clone())
+            .await
+            .map_err(|_| "v-rooms-power-levels-send-failed")?;
+        let readback = self
+            .client
+            .send(get_state_event_for_key::v3::Request::new(
+                room_id.clone(),
+                StateEventType::from(event_type),
+                String::new(),
+            ))
+            .await
+            .map_err(|_| "v-rooms-power-levels-readback-failed")?
+            .into_content()
+            .deserialize_as_unchecked::<serde_json::Value>()
+            .map_err(|_| "v-rooms-power-levels-readback-malformed")?;
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-rooms-power-levels-stale-session-generation");
+        }
+        if readback != content {
+            return Err("v-rooms-power-levels-readback-mismatch");
+        }
+        Ok(NativePowerLevelWriteResult {
+            status: "ok",
+            room_id: room_id.to_string(),
+            event_type,
+            state_key: "",
+            session_generation: self.session_generation,
+            content: readback,
+        })
+    }
+
     pub async fn get_directory_visibility(
         &self,
         room_id: &str,
@@ -467,6 +527,15 @@ fn parse_room_moderation_power_level(power_level: i64) -> Result<Int, &'static s
     power_level
         .try_into()
         .map_err(|_| "v-rooms-members-moderation-invalid-power-level")
+}
+
+fn parse_power_level_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
+    if room_id.is_empty() || room_id.trim() != room_id {
+        return Err("v-rooms-power-levels-invalid-room");
+    }
+    room_id
+        .parse()
+        .map_err(|_| "v-rooms-power-levels-invalid-room")
 }
 
 fn normalize_moderation_reason(reason: Option<String>) -> Option<String> {
