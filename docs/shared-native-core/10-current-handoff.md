@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `b26b2a4b`, the merge commit for #755. |
-| Immediately preceding merges | #754 docs after #753, #755 lifecycle error. |
+| Feature evidence tip | `feature/shared-native-core` is `18b5c647`, the merge commit for #758. |
+| Immediately preceding merges | #757 lifecycle recovery/remote-logout/wipe, #758 client-builder config. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -53,11 +53,13 @@ residency changes are:
 | #751 / `3c089693` | auth device-name harness | Desktop keeps live login/discovery/UIA/product commands. |
 | #753 / `d1c5d6bb` | store vault trait + key material; auth discovery/UIA/client_config | Desktop keeps `KeyringStoreKeyVault`, `HttpDiscoveryTransport`, live login/product/register/reset. |
 | #755 / `b26b2a4b` | lifecycle error domain | Desktop keeps logout, session vault I/O, wipe, persist/restore (`keyring` / `matrix_sdk`). |
+| #757 / `ca7160de` | lifecycle recovery / remote-logout / wipe | Desktop keeps logout orchestration, session vault I/O, persist/restore. |
+| #758 / `18b5c647` | client-builder config harness | Desktop keeps SDK `open.rs` / `sdk_handle.rs` / tests. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `b26b2a4b`/#755 for
+anchor, but it is no longer the feature-tip provenance; use `18b5c647`/#758 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -105,18 +107,18 @@ and the P1 app domains `sync`, `room_list`, pure `timeline`,
 `media_cache`, `media_export`, `crypto_store`, `members`, `user_profile`,
 `room_directory` session, `verification` inbox, `account_data` index,
 `send` queue, `room_keys` transfer flow, `supervisor` actor,
-`diagnostics` health, `store` identity/paths, `client_builder`
-error/features, `lifecycle` recovery-copy / remote-logout policy enums,
-auth device-name, store key-material / vault trait, auth
-discovery/UIA/client_config, and lifecycle error.
+`diagnostics` health, `store` identity/paths/key-material/vault-trait,
+`client_builder` error/features/config, `lifecycle` recovery-copy /
+remote-logout / wipe / error, auth device-name, and auth
+discovery/UIA/client_config.
 Later mechanical splits left live `product_commands.rs` and `live.rs` on
 desktop where those files exist. Compatibility re-exports remain deliberately
 in the desktop shell.
 
 Desktop still owns the unmoved or leftover matrix surfaces: live auth
 login/product/register/reset_password and the well-known HTTP adapter,
-client-builder SDK open/config, devices, lifecycle vault/SDK leftovers,
-media commands, secret storage, store Keyring I/O, and the
+client-builder SDK open/handle, devices, lifecycle logout/session vault I/O
+and persist/restore, media commands, secret storage, store Keyring I/O, and the
 live/command leftovers
 for already-split domains (including account-data image_packs/later/notes, send
 product commands / synapse proofs, and room-keys live/commands). It

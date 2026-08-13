@@ -3,13 +3,13 @@
 All paths relative to the repository root. Census technique: `git ls-files`,
 `grep -rl`, `grep -rn` over `src-tauri/src`, `synara-ios`, `.github/workflows`.
 The current source evidence is `feature/shared-native-core`
-`b26b2a4b` (#755, after #754).
+`18b5c647` (#758, after #757).
 
 ## 2.1 Desktop application-logic layer
 
 The P0 census counted **285 `.rs` files** under `src-tauri/src/matrix/`. At the
-current evidence tip, there are 113 tracked Rust files under that desktop path
-and 189 under `crates/synara-core/src/app/`; the difference reflects P1 moves,
+current evidence tip, there are 109 tracked Rust files under that desktop path
+and 193 under `crates/synara-core/src/app/`; the difference reflects P1 moves,
 not completion. The table remains the responsibility inventory rather than a
 claim that every listed domain is desktop-resident. Each domain is typically
 `mod.rs` (owning types/state) + `error.rs` + `live.rs` (actor/live state) +
@@ -22,8 +22,8 @@ relations, threads, unread, raw content, receipts, routes, security, search,
 legacy, media_cache, media_export, crypto_store, members, user_profile,
 room_directory session, verification inbox, account-data index, send
 queue, room-keys transfer flow, supervisor actor, diagnostics health,
-store identity/paths/key-material/vault-trait, client-builder error/features, lifecycle
-recovery-copy / remote-logout policy enums / lifecycle error, auth device-name, and auth
+store identity/paths/key-material/vault-trait, client-builder error/features/config,
+lifecycle recovery-copy / remote-logout / wipe / error, auth device-name, and auth
 discovery/UIA/client_config.
 #713–#717 moved whole harness directories; later splits moved only harness
 files and left live `product_commands.rs` / `live.rs` on desktop.
