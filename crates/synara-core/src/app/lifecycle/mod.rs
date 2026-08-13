@@ -3,14 +3,16 @@
 //! Shared-core harness / foundation only until cutover. Owns the privacy-safe
 //! [`LifecycleError`] domain, recovery / transition UX copy, failed-store
 //! recovery policy (never auto-wipe), remote-logout state machine, and
-//! exact-target account wipe, and the session-material vault *trait* plus
-//! sealed envelope / in-memory harness. Desktop still owns logout
-//! orchestration, Keyring session I/O, persist/restore (`matrix_sdk`), and tests.
+//! exact-target account wipe, logout / local-wipe orchestration, and the
+//! session-material vault *trait* plus sealed envelope / in-memory harness.
+//! Desktop still owns Keyring session I/O, persist/restore (`matrix_sdk`),
+//! and tests.
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
 mod error;
+mod logout;
 mod recovery;
 mod recovery_copy;
 mod remote_logout;
@@ -19,6 +21,7 @@ mod session_material;
 mod wipe;
 
 pub use error::LifecycleError;
+pub use logout::{perform_local_wipe, perform_logout, LogoutOutcome, WipeOutcome};
 pub use recovery::{
     apply_store_failure, recovery_action_for, surface_store_corrupt, surface_store_unavailable,
     RecoveryAction, StoreFailure, StoreFailureKind,

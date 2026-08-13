@@ -24,12 +24,10 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
-mod logout;
 mod session_material;
 mod session_persist;
 mod session_restore;
 
-pub use logout::{perform_local_wipe, perform_logout, LogoutOutcome, WipeOutcome};
 pub use session_material::{KeyringSessionMaterialRefs, KeyringSessionMaterialVault};
 pub use session_persist::{
     persist_session_after_login, session_material_from_auth_session, SessionPersistOutcome,

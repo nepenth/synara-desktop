@@ -7,15 +7,15 @@
 //!
 //! Remote/server logout is **P3.8**. No production Tauri commands here.
 
-use crate::matrix::diagnostics::MatrixMetrics;
-use crate::matrix::store::StoreKeyVault;
-use crate::matrix::supervisor::{
+use crate::app::diagnostics::MatrixMetrics;
+use crate::app::store::StoreKeyVault;
+use crate::app::supervisor::{
     MatrixSupervisor, SupervisorCommand, SupervisorError, SupervisorState,
 };
-use crate::matrix::tasks::{follow_supervisor_generation, TaskSupervisor};
+use crate::task::{follow_supervisor_generation, TaskSupervisor};
 
-use super::session_material::{clear_session_material, SessionMaterialVault};
 use super::LifecycleError;
+use super::{clear_session_material, SessionMaterialVault};
 use super::{wipe_account_store, WipeReport, WipeTarget};
 
 /// Privacy-safe logout outcome.
@@ -45,7 +45,7 @@ pub async fn perform_logout<S>(
     supervisor: &mut MatrixSupervisor,
     tasks: &mut TaskSupervisor,
     session_vault: &S,
-    identity: &crate::matrix::store::AccountIdentity,
+    identity: &crate::app::store::AccountIdentity,
     metrics: Option<&mut MatrixMetrics>,
 ) -> Result<LogoutOutcome, LifecycleError>
 where
@@ -137,7 +137,7 @@ where
         Ok(cleared) => cleared,
         Err(e) => {
             let _ = supervisor.fail(
-                crate::matrix::ipc::MatrixIpcErrorCategory::StoreUnavailable,
+                crate::transport::MatrixIpcErrorCategory::StoreUnavailable,
                 "r0.5-wipe-session-vault-failed",
             );
             return Err(e);
@@ -150,7 +150,7 @@ where
             // Fail from Wiping is legal (P2.6): do not CompleteWipe on I/O
             // failure, and never auto-retry delete.
             let _ = supervisor.fail(
-                crate::matrix::ipc::MatrixIpcErrorCategory::StoreUnavailable,
+                crate::transport::MatrixIpcErrorCategory::StoreUnavailable,
                 "r0.5-wipe-io-failed",
             );
             return Err(e);
@@ -163,7 +163,7 @@ where
     if let Some(m) = metrics {
         m.observe_supervisor(supervisor);
         m.observe_tasks(tasks);
-        m.set_store_status(crate::matrix::diagnostics::StoreHealthStatus::Missing);
+        m.set_store_status(crate::app::diagnostics::StoreHealthStatus::Missing);
     }
 
     Ok(WipeOutcome {
