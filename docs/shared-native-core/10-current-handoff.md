@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `213b5cc5`, the merge commit for #798. |
-| Immediately preceding merges | #797 docs after #796, #798 media upload/download/config IPC DTOs. |
+| Feature evidence tip | `feature/shared-native-core` is `588de584`, the merge commit for #801. |
+| Immediately preceding merges | #799 docs after #798, #800 live client builder + persist/restore, #801 live login/register/reset. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -76,11 +76,13 @@ residency changes are:
 | #794 / `fe55ac06` | timeline presentation DTOs | Desktop keeps `NativeTimelineRegistry` and Client/Tauri streams. |
 | #796 / `6dd69bc6` | send/profile-write/room-create/room-profile IPC DTOs | Desktop keeps Client I/O and re-exports. |
 | #798 / `213b5cc5` | media upload/download/config IPC DTOs | Desktop keeps Client media I/O. |
+| #800 / `571cffde` | live `Client::builder` + persist/restore | Desktop keeps Keyring vault and `SdkClientHandle`. |
+| #801 / `588de584` | live login / register / password-reset | Desktop keeps Tauri product commands. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `213b5cc5`/#798 for
+anchor, but it is no longer the feature-tip provenance; use `588de584`/#801 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
