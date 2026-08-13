@@ -6,18 +6,11 @@ use matrix_sdk::{
     event_handler::EventHandlerDropGuard, ruma::events::typing::SyncTypingEvent, Client, Room,
     RoomState,
 };
-use serde::Serialize;
 use tokio::sync::Mutex;
 
 use super::{TypingIndex, MAX_TYPING_USERS_PER_ROOM};
-use crate::matrix::dto::TypingSnapshot;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NativeTypingSnapshot {
-    pub session_generation: u64,
-    pub rooms: Vec<TypingSnapshot>,
-}
+pub use synara_core::app::typing::NativeTypingSnapshot;
 
 /// Owns live `m.typing` projection for one managed session.
 pub struct NativeTypingOwner {
@@ -84,24 +77,4 @@ pub async fn set_typing_notice(
         .await
         .map_err(|_| "v-rooms.4-typing-notice-failed")?;
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn native_snapshot_serializes_camel_case() {
-        let snap = NativeTypingSnapshot {
-            session_generation: 3,
-            rooms: vec![TypingSnapshot {
-                room_id: "!r:example.org".into(),
-                user_ids: vec!["@alice:example.org".into()],
-            }],
-        };
-        let value = serde_json::to_value(&snap).expect("serialize");
-        assert_eq!(value["sessionGeneration"], 3);
-        assert_eq!(value["rooms"][0]["roomId"], "!r:example.org");
-        assert_eq!(value["rooms"][0]["userIds"][0], "@alice:example.org");
-    }
 }
