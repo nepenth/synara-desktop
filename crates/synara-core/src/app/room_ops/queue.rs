@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use crate::matrix::dto::{RoomId, UserId};
+use crate::dto::{RoomId, UserId};
 
 use super::error::RoomOpsError;
 
