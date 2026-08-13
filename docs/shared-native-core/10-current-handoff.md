@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `ffb22699`, the merge commit for #766. |
-| Immediately preceding merges | #765 docs after #764, #766 later/room-notes codecs. |
+| Feature evidence tip | `feature/shared-native-core` is `187cb780`, the merge commit for #768. |
+| Immediately preceding merges | #767 docs after #766, #768 image-pack DTO / type filters / write guards. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -59,11 +59,12 @@ residency changes are:
 | #762 / `615b501b` | well-known HTTP discovery transport | Desktop keeps product user-agent helper and live login/product. |
 | #764 / `4dae1b16` | logout orchestration + task-supervisor bridge | Desktop keeps Keyring session I/O and SDK persist/restore. |
 | #766 / `ffb22699` | later / room-notes codecs | Desktop keeps Client RMW live wrappers. |
+| #768 / `187cb780` | image-pack DTO, type filters, write guards | Desktop keeps Client snapshot/set and `NativeImagePackOwner`. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `ffb22699`/#766 for
+anchor, but it is no longer the feature-tip provenance; use `187cb780`/#768 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -114,7 +115,8 @@ and the P1 app domains `sync`, `room_list`, pure `timeline`,
 `diagnostics` health, `store` identity/paths/key-material/vault-trait,
 `client_builder` error/features/config, `lifecycle` recovery-copy /
 remote-logout / wipe / error / session-material trait / logout, auth device-name, and auth
-discovery/UIA/client_config, well-known HTTP transport, and later/room-notes codecs.
+discovery/UIA/client_config, well-known HTTP transport, later/room-notes codecs,
+and image-pack DTO/type-filters/write-guards.
 Later mechanical splits left live `product_commands.rs` and `live.rs` on
 desktop where those files exist. Compatibility re-exports remain deliberately
 in the desktop shell.
@@ -124,7 +126,7 @@ login/product/register/reset_password,
 client-builder SDK open/handle, devices, Keyring session I/O
 and persist/restore, media commands, secret storage, store Keyring I/O, and the
 live/command leftovers
-for already-split domains (including account-data image_packs/later/notes, send
+for already-split domains (including account-data image_packs/later/notes live Client RMW, send
 product commands / synapse proofs, and room-keys live/commands). It
 also retains the desktop-side commands, live/platform adapters, and applicable
 tests/proofs for moved domains. Core-owned discovery/UIA types and the vault

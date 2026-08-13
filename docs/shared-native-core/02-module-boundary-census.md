@@ -3,13 +3,13 @@
 All paths relative to the repository root. Census technique: `git ls-files`,
 `grep -rl`, `grep -rn` over `src-tauri/src`, `synara-ios`, `.github/workflows`.
 The current source evidence is `feature/shared-native-core`
-`ffb22699` (#766, after #765).
+`187cb780` (#768, after #767).
 
 ## 2.1 Desktop application-logic layer
 
 The P0 census counted **285 `.rs` files** under `src-tauri/src/matrix/`. At the
 current evidence tip, there are 107 tracked Rust files under that desktop path
-and 197 under `crates/synara-core/src/app/`; the difference reflects P1 moves,
+and 198 under `crates/synara-core/src/app/`; the difference reflects P1 moves,
 not completion. The table remains the responsibility inventory rather than a
 claim that every listed domain is desktop-resident. Each domain is typically
 `mod.rs` (owning types/state) + `error.rs` + `live.rs` (actor/live state) +
@@ -25,7 +25,7 @@ queue, room-keys transfer flow, supervisor actor, diagnostics health,
 store identity/paths/key-material/vault-trait, client-builder error/features/config,
 lifecycle recovery-copy / remote-logout / wipe / error / session-material trait / logout,
 auth device-name, auth discovery/UIA/client_config, well-known HTTP transport,
-and later/room-notes codecs.
+later/room-notes codecs, and image-pack DTO/type-filters/write-guards.
 #713–#717 moved whole harness directories; later splits moved only harness
 files and left live `product_commands.rs` / `live.rs` on desktop.
 Their desktop modules are thin re-exports (plus leftover command files).
@@ -35,7 +35,7 @@ nonclaim record.
 
 | Domain dir | Responsibility (authoritative module: read the `mod.rs`) |
 |---|---|
-| `account_data/` | account-data-backed features: image packs, later list, room notes, `image_packs.rs` |
+| `account_data/` | account-data-backed features: image packs, later list, room notes (Core owns codecs; desktop keeps live Client RMW + `image_packs` subscribe) |
 | `auth/` | login flows, UIA, register, reset password, device name, discovery, client config, `http_transport.rs` |
 | `backup/` | key backup flows (`flow.rs`, `live.rs`) |
 | `client_builder/` | client construction: features, open/drop, `sdk_handle.rs`, proxy handling |
