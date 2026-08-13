@@ -1871,10 +1871,22 @@ fn room_moderation_error_mapping_is_stable() {
 fn room_moderation_commands_use_live_sdk_methods_without_js_fallbacks() {
     let product = PRODUCT_SOURCE;
     let expected_methods = [
-        ("matrix_room_invite", "invite_user_by_id"),
-        ("matrix_room_kick", "kick_user"),
-        ("matrix_room_ban", "ban_user"),
-        ("matrix_room_unban", "unban_user"),
+        (
+            "matrix_room_invite",
+            "crate::bridge::room_moderation::room_invite",
+        ),
+        (
+            "matrix_room_kick",
+            "crate::bridge::room_moderation::room_kick",
+        ),
+        (
+            "matrix_room_ban",
+            "crate::bridge::room_moderation::room_ban",
+        ),
+        (
+            "matrix_room_unban",
+            "crate::bridge::room_moderation::room_unban",
+        ),
         ("matrix_room_set_power_level", "update_power_levels"),
     ];
 

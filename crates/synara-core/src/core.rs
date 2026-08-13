@@ -917,6 +917,22 @@ struct MatrixRoomJoinRequest {
     via_servers: Option<Vec<String>>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomModerationRequest {
+    room_id: String,
+    user_id: String,
+    #[serde(default)]
+    reason: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomUnbanRequest {
+    room_id: String,
+    user_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_set_room_name`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1362,6 +1378,18 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_room_join", matrix_room_join)
         .expect("built-in matrix_room_join must remain in the command census");
+    registry
+        .register("matrix_room_invite", matrix_room_invite)
+        .expect("built-in matrix_room_invite must remain in the command census");
+    registry
+        .register("matrix_room_kick", matrix_room_kick)
+        .expect("built-in matrix_room_kick must remain in the command census");
+    registry
+        .register("matrix_room_ban", matrix_room_ban)
+        .expect("built-in matrix_room_ban must remain in the command census");
+    registry
+        .register("matrix_room_unban", matrix_room_unban)
+        .expect("built-in matrix_room_unban must remain in the command census");
     registry
         .register("matrix_set_room_name", matrix_set_room_name)
         .expect("built-in matrix_set_room_name must remain in the command census");
@@ -2409,6 +2437,81 @@ fn room_leave_join_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         | "v-rooms-room-leave-room-not-found"
         | "v-rooms-room-join-invalid-room"
         | "v-rooms-room-join-invalid-via-server" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn matrix_room_invite(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomModerationRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-invite-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-invite-no-session")
+        })?;
+        owner
+            .invite(&payload.room_id, &payload.user_id, payload.reason)
+            .await
+            .map_err(room_moderation_owner_error)?;
+        Ok(serde_json::Value::Null)
+    })
+}
+
+fn matrix_room_kick(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomModerationRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-kick-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-kick-no-session")
+        })?;
+        owner
+            .kick(&payload.room_id, &payload.user_id, payload.reason)
+            .await
+            .map_err(room_moderation_owner_error)?;
+        Ok(serde_json::Value::Null)
+    })
+}
+
+fn matrix_room_ban(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomModerationRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-ban-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-ban-no-session")
+        })?;
+        owner
+            .ban(&payload.room_id, &payload.user_id, payload.reason)
+            .await
+            .map_err(room_moderation_owner_error)?;
+        Ok(serde_json::Value::Null)
+    })
+}
+
+fn matrix_room_unban(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomUnbanRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-unban-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-unban-no-session")
+        })?;
+        owner
+            .unban(&payload.room_id, &payload.user_id)
+            .await
+            .map_err(room_moderation_owner_error)?;
+        Ok(serde_json::Value::Null)
+    })
+}
+
+fn room_moderation_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-rooms-members-moderation-invalid-room"
+        | "v-rooms-members-moderation-invalid-user"
+        | "v-rooms-members-moderation-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
         "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
         _ => MatrixIpcErrorCategory::Unknown,
     };
@@ -3628,14 +3731,18 @@ mod tests {
                 "matrix_reaction_ensure",
                 "matrix_reaction_redact",
                 "matrix_register_flows",
+                "matrix_room_ban",
+                "matrix_room_invite",
                 "matrix_room_join",
                 "matrix_room_join_rule_snapshot",
+                "matrix_room_kick",
                 "matrix_room_leave",
                 "matrix_room_notes_complete_todo",
                 "matrix_room_notes_delete",
                 "matrix_room_notes_move_todo",
                 "matrix_room_notes_snapshot",
                 "matrix_room_notes_upsert",
+                "matrix_room_unban",
                 "matrix_secret_storage_status",
                 "matrix_session_snapshot",
                 "matrix_set_global_image_packs",
@@ -5615,6 +5722,94 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-room-join-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_invite_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_invite".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "userId":"@alice:example.org"
+                }),
+            })
+            .await
+            .expect_err("room invite without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-invite-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_kick_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_kick".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "userId":"@alice:example.org"
+                }),
+            })
+            .await
+            .expect_err("room kick without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-kick-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_ban_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_ban".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "userId":"@alice:example.org"
+                }),
+            })
+            .await
+            .expect_err("room ban without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-ban-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_unban_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_unban".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "userId":"@alice:example.org"
+                }),
+            })
+            .await
+            .expect_err("room unban without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-unban-no-session")
         );
     }
 
