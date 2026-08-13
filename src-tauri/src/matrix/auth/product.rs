@@ -243,7 +243,7 @@ struct ManagedMatrixSession {
     client: Client,
     identity: MatrixLoginIdentity,
     sync: Arc<SyncServiceOwner>,
-    invite_avatars: InviteAvatarHandles,
+    invite_avatars: Arc<tokio::sync::Mutex<InviteAvatarHandles>>,
     timelines: Arc<NativeTimelineOwner>,
     sends: SendQueue,
     attachments: AttachmentSendQueue,
@@ -426,6 +426,8 @@ impl MatrixAuthState {
         let active = session.as_ref()?;
         let source = active
             .invite_avatars
+            .lock()
+            .await
             .resolve(active.sync.session_generation(), handle)?;
         Some((active.client.clone(), source))
     }

@@ -35,7 +35,9 @@ use crate::app::room_directory::{
     NativeRoomDirectorySearchResponse,
 };
 use crate::app::room_keys::NativeRoomKeyTransferStatus;
-use crate::app::room_list::{snapshot_from_sync_owner, NativeRoomListSnapshot};
+use crate::app::room_list::{
+    snapshot_from_sync_owner, NativeInviteSnapshot, NativeRoomListSnapshot,
+};
 use crate::app::room_ops::MatrixRoomCreateRequest;
 use crate::app::room_profile::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
@@ -1544,6 +1546,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_room_list_snapshot", matrix_room_list_snapshot)
         .expect("built-in matrix_room_list_snapshot must remain in the command census");
     registry
+        .register("matrix_invites_snapshot", matrix_invites_snapshot)
+        .expect("built-in matrix_invites_snapshot must remain in the command census");
+    registry
         .register("matrix_secret_storage_status", matrix_secret_storage_status)
         .expect("built-in matrix_secret_storage_status must remain in the command census");
     registry
@@ -2897,6 +2902,33 @@ fn matrix_room_list_snapshot(state: Arc<CoreState>, request: CommandEnvelope) ->
 
 fn room_list_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     MatrixIpcError::new(MatrixIpcErrorCategory::Unknown).with_diagnostic(diagnostic_id)
+}
+
+fn matrix_invites_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-invites-snapshot-invalid-payload"));
+        }
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-invites-snapshot-no-session")
+        })?;
+        let snapshot: NativeInviteSnapshot = owner
+            .invites_snapshot()
+            .await
+            .map_err(invites_snapshot_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-invites-snapshot-serialization-failed"))
+    })
+}
+
+fn invites_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-rooms.1-invites-requires-session"
+        | "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 fn matrix_room_directory_protocols(
@@ -4809,6 +4841,7 @@ mod tests {
                 "matrix_get_room_directory_visibility",
                 "matrix_get_room_image_packs",
                 "matrix_get_user_image_pack",
+                "matrix_invites_snapshot",
                 "matrix_later_clear_completed",
                 "matrix_later_complete",
                 "matrix_later_mark_reminded",
@@ -6496,6 +6529,25 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-room-list-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_invites_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_invites_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("invites snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-invites-snapshot-no-session")
         );
     }
 

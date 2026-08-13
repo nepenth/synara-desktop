@@ -22,12 +22,15 @@ pub async fn matrix_invites_accept(
             .await
             .map_err(|_| map_invite_error("v-rooms.1-invite-direct-mark-failed"))?;
     }
-    active.invite_avatars.revoke_room(&invite.room_id);
-    snapshot_invites(
-        &active.client,
-        active.sync.session_generation(),
-        &mut active.invite_avatars,
-    )
+    {
+        let mut handles = active.invite_avatars.lock().await;
+        handles.revoke_room(&invite.room_id);
+        snapshot_invites(
+            &active.client,
+            active.sync.session_generation(),
+            &mut handles,
+        )
+    }
     .await
     .map_err(map_invite_error)
 }
@@ -44,12 +47,15 @@ pub async fn matrix_invites_decline(
         .leave()
         .await
         .map_err(|_| map_invite_error("v-rooms.1-invite-decline-failed"))?;
-    active.invite_avatars.revoke_room(&invite.room_id);
-    snapshot_invites(
-        &active.client,
-        active.sync.session_generation(),
-        &mut active.invite_avatars,
-    )
+    {
+        let mut handles = active.invite_avatars.lock().await;
+        handles.revoke_room(&invite.room_id);
+        snapshot_invites(
+            &active.client,
+            active.sync.session_generation(),
+            &mut handles,
+        )
+    }
     .await
     .map_err(map_invite_error)
 }
@@ -197,12 +203,15 @@ pub async fn matrix_invites_report_spam(
         .report_room("Spam Invite".to_owned())
         .await
         .map_err(|_| map_invite_error("v-rooms.1-invite-report-failed"))?;
-    active.invite_avatars.revoke_room(&invite.room_id);
-    snapshot_invites(
-        &active.client,
-        active.sync.session_generation(),
-        &mut active.invite_avatars,
-    )
+    {
+        let mut handles = active.invite_avatars.lock().await;
+        handles.revoke_room(&invite.room_id);
+        snapshot_invites(
+            &active.client,
+            active.sync.session_generation(),
+            &mut handles,
+        )
+    }
     .await
     .map_err(map_invite_error)
 }
@@ -223,12 +232,15 @@ pub async fn matrix_invites_block_sender(
         .ignore_user(&sender_id)
         .await
         .map_err(|_| map_invite_error("v-rooms.1-invite-block-failed"))?;
-    active.invite_avatars.revoke_room(&invite.room_id);
-    snapshot_invites(
-        &active.client,
-        active.sync.session_generation(),
-        &mut active.invite_avatars,
-    )
+    {
+        let mut handles = active.invite_avatars.lock().await;
+        handles.revoke_room(&invite.room_id);
+        snapshot_invites(
+            &active.client,
+            active.sync.session_generation(),
+            &mut handles,
+        )
+    }
     .await
     .map_err(map_invite_error)
 }
@@ -445,11 +457,14 @@ pub(super) async fn native_invite_target(
     if normalized_room_id.is_empty() {
         return Err(map_invite_error("v-rooms.1-invite-invalid-room"));
     }
-    let snapshot = snapshot_invites(
-        &active.client,
-        active.sync.session_generation(),
-        &mut active.invite_avatars,
-    )
+    let snapshot = {
+        let mut handles = active.invite_avatars.lock().await;
+        snapshot_invites(
+            &active.client,
+            active.sync.session_generation(),
+            &mut handles,
+        )
+    }
     .await
     .map_err(map_invite_error)?;
     snapshot

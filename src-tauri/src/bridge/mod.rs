@@ -12,6 +12,7 @@ pub(crate) mod directory_search;
 pub(crate) mod directory_visibility;
 pub(crate) mod global_image_packs;
 pub(crate) mod image_pack_writes;
+pub(crate) mod invites_snapshot;
 pub(crate) mod join_rule_snapshot;
 pub(crate) mod later;
 pub(crate) mod mdirect;
