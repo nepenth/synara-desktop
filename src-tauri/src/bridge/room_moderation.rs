@@ -70,6 +70,27 @@ pub(crate) async fn room_ban(
     Ok(())
 }
 
+pub(crate) async fn room_set_power_level(
+    core: &Core,
+    room_id: String,
+    user_id: String,
+    power_level: i64,
+) -> Result<(), MatrixAuthCommandError> {
+    core.command(CommandEnvelope {
+        command: "matrix_room_set_power_level".to_owned(),
+        session_generation: READ_ONLY_SESSION_GENERATION,
+        request_id: None,
+        payload: serde_json::json!({
+            "roomId": room_id,
+            "userId": user_id,
+            "powerLevel": power_level,
+        }),
+    })
+    .await
+    .map_err(map_room_moderation_core_error)?;
+    Ok(())
+}
+
 pub(crate) async fn room_unban(
     core: &Core,
     room_id: String,

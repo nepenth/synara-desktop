@@ -20,7 +20,7 @@ use matrix_sdk::{
             StateEventType,
         },
         room::JoinRule,
-        OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId, OwnedServerName, OwnedUserId,
+        Int, OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId, OwnedServerName, OwnedUserId,
     },
     Client, Room, RoomState,
 };
@@ -304,6 +304,21 @@ impl NativeRoomJoinRuleOwner {
             .map_err(|_| "v-rooms-members-moderation-unban-failed")
     }
 
+    pub async fn set_power_level(
+        &self,
+        room_id: &str,
+        user_id: &str,
+        power_level: i64,
+    ) -> Result<(), &'static str> {
+        let room = self.moderation_room(room_id)?;
+        let user_id = parse_room_moderation_user_id(user_id)?;
+        let power_level = parse_room_moderation_power_level(power_level)?;
+        room.update_power_levels(vec![(&user_id, power_level)])
+            .await
+            .map(|_| ())
+            .map_err(|_| "v-rooms-members-moderation-power-level-failed")
+    }
+
     pub async fn get_directory_visibility(
         &self,
         room_id: &str,
@@ -446,6 +461,12 @@ fn parse_room_moderation_user_id(user_id: &str) -> Result<OwnedUserId, &'static 
         .trim()
         .parse()
         .map_err(|_| "v-rooms-members-moderation-invalid-user")
+}
+
+fn parse_room_moderation_power_level(power_level: i64) -> Result<Int, &'static str> {
+    power_level
+        .try_into()
+        .map_err(|_| "v-rooms-members-moderation-invalid-power-level")
 }
 
 fn normalize_moderation_reason(reason: Option<String>) -> Option<String> {

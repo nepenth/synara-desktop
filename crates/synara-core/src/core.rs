@@ -933,6 +933,14 @@ struct MatrixRoomUnbanRequest {
     user_id: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomSetPowerLevelRequest {
+    room_id: String,
+    user_id: String,
+    power_level: i64,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_set_room_name`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1390,6 +1398,9 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_room_unban", matrix_room_unban)
         .expect("built-in matrix_room_unban must remain in the command census");
+    registry
+        .register("matrix_room_set_power_level", matrix_room_set_power_level)
+        .expect("built-in matrix_room_set_power_level must remain in the command census");
     registry
         .register("matrix_set_room_name", matrix_set_room_name)
         .expect("built-in matrix_set_room_name must remain in the command census");
@@ -2511,11 +2522,28 @@ fn room_moderation_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "v-rooms-members-moderation-invalid-room"
         | "v-rooms-members-moderation-invalid-user"
+        | "v-rooms-members-moderation-invalid-power-level"
         | "v-rooms-members-moderation-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
         "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn matrix_room_set_power_level(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomSetPowerLevelRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-set-power-level-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-set-power-level-no-session")
+        })?;
+        owner
+            .set_power_level(&payload.room_id, &payload.user_id, payload.power_level)
+            .await
+            .map_err(room_moderation_owner_error)?;
+        Ok(serde_json::Value::Null)
+    })
 }
 
 fn matrix_set_room_name(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -3742,6 +3770,7 @@ mod tests {
                 "matrix_room_notes_move_todo",
                 "matrix_room_notes_snapshot",
                 "matrix_room_notes_upsert",
+                "matrix_room_set_power_level",
                 "matrix_room_unban",
                 "matrix_secret_storage_status",
                 "matrix_session_snapshot",
@@ -5810,6 +5839,29 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-room-unban-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_set_power_level_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_set_power_level".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "userId":"@alice:example.org",
+                    "powerLevel":50
+                }),
+            })
+            .await
+            .expect_err("set power level without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-set-power-level-no-session")
         );
     }
 

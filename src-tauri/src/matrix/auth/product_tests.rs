@@ -1887,7 +1887,10 @@ fn room_moderation_commands_use_live_sdk_methods_without_js_fallbacks() {
             "matrix_room_unban",
             "crate::bridge::room_moderation::room_unban",
         ),
-        ("matrix_room_set_power_level", "update_power_levels"),
+        (
+            "matrix_room_set_power_level",
+            "crate::bridge::room_moderation::room_set_power_level",
+        ),
     ];
 
     for (command_name, sdk_method) in expected_methods {

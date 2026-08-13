@@ -145,24 +145,18 @@ pub async fn matrix_room_unban(
 /// V-ROOMS members moderation: set one user's power level through the live SDK.
 #[tauri::command]
 pub async fn matrix_room_set_power_level(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     user_id: String,
     power_level: i64,
 ) -> Result<(), MatrixAuthCommandError> {
-    let room_id = parse_room_moderation_room_id(&room_id)?;
-    let user_id = parse_room_moderation_user_id(&user_id)?;
-    let power_level = parse_room_moderation_power_level(power_level)?;
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    let room = active
-        .client
-        .get_room(&room_id)
-        .ok_or_else(|| map_room_moderation_error("v-rooms-members-moderation-room-not-found"))?;
-    room.update_power_levels(vec![(&user_id, power_level)])
-        .await
-        .map(|_| ())
-        .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-power-level-failed"))
+    crate::bridge::room_moderation::room_set_power_level(
+        core.inner().as_ref(),
+        room_id,
+        user_id,
+        power_level,
+    )
+    .await
 }
 
 /// V-ROOMS.R-POWERS-BULK — replace the complete `m.room.power_levels` state
