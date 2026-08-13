@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `94a95017`, the merge commit for #744. |
-| Immediately preceding merges | #742 docs after #740/#741, #744 diagnostics health. |
+| Feature evidence tip | `feature/shared-native-core` is `ddacf34a`, the merge commit for #743. |
+| Immediately preceding merges | #745 docs after #744, #743 store identity/paths. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -47,11 +47,12 @@ residency changes are:
 | #740 / `b78fc531` | room-keys transfer harness | Desktop keeps `live.rs` + `product_commands.rs`. |
 | #741 / `46f698e6` | supervisor actor harness | Thin desktop re-export; no leftover live file. |
 | #744 / `94a95017` | diagnostics health harness | Thin desktop re-export; supervisor/task imports retargeted to core. |
+| #743 / `ddacf34a` | store identity/paths harness | Desktop keeps keyring vault (`key_material` / `key_vault` / tests). |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `94a95017`/#744 for
+anchor, but it is no longer the feature-tip provenance; use `ddacf34a`/#743 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -98,18 +99,17 @@ and the P1 app domains `sync`, `room_list`, pure `timeline`,
 `raw_content`, `receipts`, `routes`, `security`, `search`, `legacy`,
 `media_cache`, `media_export`, `crypto_store`, `members`, `user_profile`,
 `room_directory` session, `verification` inbox, `account_data` index,
-`send` queue, `room_keys` transfer flow, `supervisor` actor, and
-`diagnostics` health.
+`send` queue, `room_keys` transfer flow, `supervisor` actor,
+`diagnostics` health, and `store` identity/paths.
 Later mechanical splits left live `product_commands.rs` and `live.rs` on
 desktop where those files exist. Compatibility re-exports remain deliberately
 in the desktop shell.
 
 Desktop still owns the unmoved or leftover matrix surfaces: full auth
 execution, client construction, devices, lifecycle, media commands, secret
-storage, store (keyring vault; identity/paths extract is still in flight
-as #743), and the live/command leftovers for already-split domains
-(including account-data image_packs/later/notes, send product commands /
-synapse proofs, and room-keys live/commands). It
+storage, store keyring vault, and the live/command leftovers for
+already-split domains (including account-data image_packs/later/notes, send
+product commands / synapse proofs, and room-keys live/commands). It
 also retains the desktop-side commands, live/platform adapters, and applicable
 tests/proofs for moved domains. A narrow P2 auth discovery slice in Core does
 not make full desktop auth Core-owned. Therefore P1 is not complete and
