@@ -521,6 +521,13 @@ struct MatrixSetRoomImagePackRequest {
     content: serde_json::Value,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixTypingSetRequest {
+    room_id: String,
+    typing: bool,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_room_join_rule_snapshot`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -886,6 +893,34 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_set_room_image_pack", matrix_set_room_image_pack)
         .expect("built-in matrix_set_room_image_pack must remain in the command census");
     registry
+        .register("matrix_typing_set", matrix_typing_set)
+        .expect("built-in matrix_typing_set must remain in the command census");
+    registry
+}
+
+fn matrix_typing_set(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTypingSetRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-typing-set-invalid-payload"))?;
+        let owner = state.typing_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-typing-set-no-session")
+        })?;
+        owner
+            .set(&payload.room_id, payload.typing)
+            .await
+            .map_err(typing_set_owner_error)?;
+        Ok(serde_json::Value::Null)
+    })
+}
+
+fn typing_set_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-rooms.4-typing-invalid-room" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-rooms.4-typing-owner-user-missing" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 fn matrix_typing_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -1761,6 +1796,7 @@ mod tests {
                 "matrix_set_room_image_pack",
                 "matrix_set_user_image_pack",
                 "matrix_sync_status",
+                "matrix_typing_set",
                 "matrix_typing_snapshot",
                 "matrix_verification_list",
             ]
@@ -3079,6 +3115,25 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-set-user-image-pack-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_typing_set_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_typing_set".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org","typing":true}),
+            })
+            .await
+            .expect_err("typing set without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-typing-set-no-session")
         );
     }
 
