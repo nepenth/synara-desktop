@@ -20,8 +20,8 @@ integration, or release path. **Never a big-bang move.**
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
 
-**Current bounded status at `e23801ec`
-(#781, after #780):** #713 mechanically moved notifications, polls,
+**Current bounded status at `b2e1dacc`
+(#784, after #783):** #713 mechanically moved notifications, polls,
 relations, threads, and unread; #714 moved raw content, receipts, routes, and
 security; #716 moved search, legacy, and media_cache; #717 moved media_export
 and crypto_store; #734 moved the room-directory session harness; #735 moved
@@ -50,7 +50,9 @@ backup/recovery I/O stayed desktop); #778 moved presence DTOs and subscription
 registry (Client stream and Tauri owner stayed desktop); #780 moved typing
 presentation snapshot DTO (Client m.typing owner stayed desktop); #781 moved
 verification presentation DTOs and phase rank (Client request/SAS owner stayed
-desktop). These retain thin desktop re-exports and any
+desktop); #783 moved room-directory DTOs and search normalize (ruma request/Client
+fetch stayed desktop); #784 moved space presentation DTOs and cycle guard (Client
+hierarchy/child I/O stayed desktop). These retain thin desktop re-exports and any
 leftover `live.rs` / `product_commands.rs`. They are P1 extraction
 only: no P2 command registration, UDL, or iOS behavior changed.
 
@@ -134,7 +136,7 @@ zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
 
 > **Bounded evidence note — not P4 acceptance:** At the current feature tip
-> `e23801ec43fb23f54dcb807a91068145b51716a2` (#781, after #780), the
+> `b2e1daccf1b74df0012033be93bfe42be93e51dd` (#784, after #783), the
 > prior #708 work is only the pure iOS room-row unread presentation from closed
 > `Joined`/`Invited` membership, scalar counters, and a marked-unread flag to a
 > `u64` count plus highlight boolean. The prior #710 work is only the pure
