@@ -11,10 +11,17 @@
 
 mod error;
 mod identity;
+mod native;
 
 pub use error::CrossSigningError;
 pub use identity::{
     CrossSigningStore, IdentityTrust, LocalCrossSigningKeys, RemoteIdentity, MAX_TRACKED_IDENTITIES,
+};
+pub use native::{
+    project_cross_signing_status, NativeCrossSigningBootstrap, NativeCrossSigningKeyPublication,
+    NativeCrossSigningPrivateFlags, NativeCrossSigningPrivateIdentity, NativeCrossSigningReadiness,
+    NativeCrossSigningSetupOutcome, NativeCrossSigningSetupResult, NativeCrossSigningStatus,
+    NativeOwnIdentityVerification,
 };
 
 /// Static marker for link / schema smoke.
