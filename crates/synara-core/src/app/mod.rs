@@ -6,6 +6,7 @@
 //! src-tauri/`crate::matrix::*` surfaces, which re-export this module.
 
 pub mod auth;
+pub mod backup;
 pub mod crypto_store;
 pub mod legacy;
 pub mod media;

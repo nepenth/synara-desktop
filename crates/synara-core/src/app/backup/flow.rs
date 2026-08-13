@@ -5,7 +5,7 @@
 //! transient secure UI; this module tracks phase + privacy-safe status enums.
 //! No SDK crypto APIs, no dual-backend.
 
-use crate::matrix::dto::{BackupStatus, RecoveryStatus};
+use crate::dto::{BackupStatus, RecoveryStatus};
 
 use super::error::BackupError;
 
