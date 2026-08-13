@@ -12,7 +12,6 @@ use matrix_sdk::{
     attachment::AttachmentConfig,
     authentication::matrix::MatrixSession,
     media::{MediaFormat, MediaRequestParameters},
-    room::edit::EditedContent,
     room::reply::{EnforceThread, Reply as AttachmentReply},
     ruma::{
         api::client::{
@@ -31,7 +30,6 @@ use matrix_sdk::{
                 message::{
                     AddMentions, MessageFormat, MessageType, Relation, RelationWithoutReplacement,
                     ReplacementMetadata, ReplyWithinThread, RoomMessageEventContent,
-                    RoomMessageEventContentWithoutRelation,
                 },
                 power_levels::UserPowerLevel,
                 ImageInfo, MediaSource,

@@ -1,0 +1,108 @@
+//! Desktop bridges for timeline edit/redact through `Core::command`.
+
+use synara_core::app::timeline::NativeTimelineActionReadback;
+use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::Core;
+
+use crate::matrix::auth::product::MatrixAuthCommandError;
+
+const TIMELINE_EDIT_TEXT_COMMAND: &str = "matrix_timeline_edit_text";
+const TIMELINE_REDACT_COMMAND: &str = "matrix_timeline_redact";
+const READ_ONLY_SESSION_GENERATION: u64 = 0;
+
+pub(crate) async fn timeline_edit_text(
+    core: &Core,
+    room_id: String,
+    event_id: String,
+    body: String,
+    formatted_body: Option<String>,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let mut payload = serde_json::json!({
+        "roomId": room_id,
+        "eventId": event_id,
+        "body": body,
+    });
+    if let Some(formatted_body) = formatted_body {
+        payload["formattedBody"] = serde_json::Value::String(formatted_body);
+    }
+    let response = core
+        .command(CommandEnvelope {
+            command: TIMELINE_EDIT_TEXT_COMMAND.to_owned(),
+            session_generation: READ_ONLY_SESSION_GENERATION,
+            request_id: None,
+            payload,
+        })
+        .await
+        .map_err(map_timeline_action_core_error)?;
+    serde_json::from_value(response.payload).map_err(|_| timeline_action_response_error())
+}
+
+pub(crate) async fn timeline_redact(
+    core: &Core,
+    room_id: String,
+    event_id: String,
+    reason: Option<String>,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let mut payload = serde_json::json!({
+        "roomId": room_id,
+        "eventId": event_id,
+    });
+    if let Some(reason) = reason {
+        payload["reason"] = serde_json::Value::String(reason);
+    }
+    let response = core
+        .command(CommandEnvelope {
+            command: TIMELINE_REDACT_COMMAND.to_owned(),
+            session_generation: READ_ONLY_SESSION_GENERATION,
+            request_id: None,
+            payload,
+        })
+        .await
+        .map_err(map_timeline_action_core_error)?;
+    serde_json::from_value(response.payload).map_err(|_| timeline_action_response_error())
+}
+
+fn map_timeline_action_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
+    match error.category {
+        MatrixIpcErrorCategory::Forbidden => MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            "d0.4-send-requires-session",
+        ),
+        MatrixIpcErrorCategory::SdkInvariant => {
+            let diagnostic = error
+                .diagnostic_id
+                .as_deref()
+                .unwrap_or("v-timeline-edit-empty-body");
+            let (code, message) = match diagnostic {
+                "v-timeline-edit-room-not-found" | "v-timeline-redact-room-not-found" => {
+                    ("NotFound", "The native Matrix room is not available.")
+                }
+                _ => (
+                    "InvalidRequest",
+                    "The native Matrix timeline action request is invalid.",
+                ),
+            };
+            MatrixAuthCommandError::new(code, message, diagnostic)
+        }
+        _ => {
+            let diagnostic = error
+                .diagnostic_id
+                .as_deref()
+                .unwrap_or("v-timeline-edit-send-failed");
+            MatrixAuthCommandError::new(
+                "InvalidRequest",
+                "The native Matrix timeline action request is invalid.",
+                diagnostic,
+            )
+        }
+    }
+}
+
+fn timeline_action_response_error() -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "Unknown",
+        "The native Matrix timeline action request is invalid.",
+        "v-timeline-edit-send-failed",
+    )
+}

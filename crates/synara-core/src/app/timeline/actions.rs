@@ -96,7 +96,7 @@ pub struct NativeTimelineCallDeclineRequest {
     pub event_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineActionReadback {
     pub schema_version: u32,
@@ -104,7 +104,40 @@ pub struct NativeTimelineActionReadback {
     pub room_id: String,
     /// For edit/forward: the newly sent event id. For redact: the redacted event id.
     pub event_id: String,
+    #[serde(deserialize_with = "deserialize_action_status")]
     pub status: &'static str,
+}
+
+fn deserialize_action_status<'de, D>(deserializer: D) -> Result<&'static str, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+    match value.as_str() {
+        "sent" => Ok("sent"),
+        "redacted" => Ok("redacted"),
+        "reported" => Ok("reported"),
+        "pinned" => Ok("pinned"),
+        "unpinned" => Ok("unpinned"),
+        "already_pinned" => Ok("already_pinned"),
+        "already_unpinned" => Ok("already_unpinned"),
+        "voted" => Ok("voted"),
+        "declined" => Ok("declined"),
+        other => Err(serde::de::Error::unknown_variant(
+            other,
+            &[
+                "sent",
+                "redacted",
+                "reported",
+                "pinned",
+                "unpinned",
+                "already_pinned",
+                "already_unpinned",
+                "voted",
+                "declined",
+            ],
+        )),
+    }
 }
 
 /// Choose whether outbound Matrix HTML should be attached beside plain text.
@@ -242,5 +275,8 @@ mod tests {
         assert_eq!(json["schemaVersion"], 1);
         assert_eq!(json["action"], "edit_text");
         assert_eq!(json["status"], "sent");
+        let decoded: NativeTimelineActionReadback = serde_json::from_value(json).unwrap();
+        assert_eq!(decoded.status, "sent");
+        assert_eq!(decoded.action, NativeTimelineActionKind::EditText);
     }
 }

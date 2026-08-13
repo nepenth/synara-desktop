@@ -14,6 +14,7 @@ pub(crate) mod presence_subscriptions;
 pub(crate) mod room_image_packs;
 pub(crate) mod secret_storage_status;
 pub(crate) mod session_lifecycle;
+pub(crate) mod timeline_actions;
 pub(crate) mod timeline_close;
 pub(crate) mod timeline_event_readback;
 pub(crate) mod timeline_open;

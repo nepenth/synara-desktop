@@ -12,9 +12,13 @@ use eyeball_im::VectorDiff;
 use futures_util::{stream, StreamExt};
 use matrix_sdk::{
     event_cache::PaginationStatus,
+    room::edit::EditedContent,
     ruma::{
         api::client::receipt::create_receipt::v3::ReceiptType,
-        events::{reaction::ReactionEventContent, relation::Annotation},
+        events::{
+            reaction::ReactionEventContent, relation::Annotation,
+            room::message::RoomMessageEventContentWithoutRelation,
+        },
         OwnedEventId, OwnedRoomId, OwnedUserId, UserId,
     },
     Client, Room,
@@ -32,17 +36,19 @@ use crate::app::utd_recovery::{UtdRecoveryCoordinator, UtdRecoveryKind, MAX_EVEN
 use crate::dto::TimelineEncryptedUnavailableItem;
 
 use super::{
-    project_timeline_diffs_with_media, project_timeline_item_with_media, NativeDecryptionState,
-    NativeReactionMutation, NativeReactionMutationResult, NativeTimelineCloseRequest,
-    NativeTimelineDirection, NativeTimelineEventReadback, NativeTimelineItem,
-    NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
-    NativeTimelineOpenRequest, NativeTimelineReaction, NativeTimelineReactionSender,
-    NativeTimelineReadAction, NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
-    NativeTimelineSnapshot, NativeTimelineViewPaginationRequest, NativeTimelineViewportHint,
-    NativeUtdPhase, NativeUtdStatus, TimelineMediaRegistry, TimelineMediaSource, TimelinePageState,
-    TimelinePaginationState, TimelineReadState, TimelineViewCapabilities, TimelineViewDeltaBatch,
-    TimelineViewPosition, TimelineViewSnapshot, TimelineViewUpdateEmit, UtdIndex, UtdPhase,
-    UtdReasonCode, ViewDeltaEmitter, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
+    project_timeline_diffs_with_media, project_timeline_item_with_media,
+    should_attach_formatted_body, NativeDecryptionState, NativeReactionMutation,
+    NativeReactionMutationResult, NativeTimelineActionKind, NativeTimelineActionReadback,
+    NativeTimelineCloseRequest, NativeTimelineDirection, NativeTimelineEventReadback,
+    NativeTimelineItem, NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition,
+    NativeTimelineOpenReadback, NativeTimelineOpenRequest, NativeTimelineReaction,
+    NativeTimelineReactionSender, NativeTimelineReadAction, NativeTimelineReadStateReadback,
+    NativeTimelineReadStateRequest, NativeTimelineSnapshot, NativeTimelineViewPaginationRequest,
+    NativeTimelineViewportHint, NativeUtdPhase, NativeUtdStatus, TimelineMediaRegistry,
+    TimelineMediaSource, TimelinePageState, TimelinePaginationState, TimelineReadState,
+    TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewPosition, TimelineViewSnapshot,
+    TimelineViewUpdateEmit, UtdIndex, UtdPhase, UtdReasonCode, ViewDeltaEmitter,
+    NATIVE_TIMELINE_ACTION_SCHEMA_VERSION, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
     NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS, TIMELINE_VIEW_SCHEMA_VERSION,
 };
 
@@ -199,6 +205,70 @@ impl NativeTimelineOwner {
             .await
             .jump_latest(self.emit.clone(), &self.client, request)
             .await
+    }
+
+    pub async fn edit_text(
+        &self,
+        room_id: &str,
+        event_id: &str,
+        body: &str,
+        formatted_body: Option<&str>,
+    ) -> Result<NativeTimelineActionReadback, &'static str> {
+        let room_id = parse_action_room_id(room_id)?;
+        let event_id = parse_action_event_id(event_id, "v-timeline-edit-invalid-event-id")?;
+        let body = body.trim();
+        if body.is_empty() {
+            return Err("v-timeline-edit-empty-body");
+        }
+        let formatted_body = normalize_edit_formatted_body(body, formatted_body)?;
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-timeline-edit-room-not-found")?;
+        let new_content = match formatted_body {
+            Some(html) => RoomMessageEventContentWithoutRelation::text_html(body.to_owned(), html),
+            None => RoomMessageEventContentWithoutRelation::text_plain(body.to_owned()),
+        };
+        let edit_content = room
+            .make_edit_event(&event_id, EditedContent::RoomMessage(new_content))
+            .await
+            .map_err(|_| "v-timeline-edit-prepare-failed")?;
+        let response = room
+            .send(edit_content)
+            .await
+            .map_err(|_| "v-timeline-edit-send-failed")?;
+        Ok(NativeTimelineActionReadback {
+            schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+            action: NativeTimelineActionKind::EditText,
+            room_id: room_id.to_string(),
+            event_id: response.response.event_id.to_string(),
+            status: "sent",
+        })
+    }
+
+    pub async fn redact_event(
+        &self,
+        room_id: &str,
+        event_id: &str,
+        reason: Option<&str>,
+    ) -> Result<NativeTimelineActionReadback, &'static str> {
+        let room_id = parse_action_room_id(room_id)?;
+        let event_id = parse_action_event_id(event_id, "v-timeline-redact-invalid-event-id")?;
+        let reason = reason.map(str::trim).filter(|value| !value.is_empty());
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-timeline-redact-room-not-found")?;
+        room.redact(&event_id, reason, None)
+            .await
+            .map_err(|_| "v-timeline-redact-failed")?;
+        Ok(NativeTimelineActionReadback {
+            schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+            action: NativeTimelineActionKind::Redact,
+            room_id: room_id.to_string(),
+            event_id: event_id.to_string(),
+            status: "redacted",
+        })
     }
 }
 
@@ -1595,8 +1665,38 @@ fn parse_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
     OwnedRoomId::try_from(room_id.trim()).map_err(|_| "d0.3-timeline-invalid-room-id")
 }
 
+fn parse_action_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
+    OwnedRoomId::try_from(room_id.trim()).map_err(|_| "d0.4-send-invalid-room-id")
+}
+
 fn parse_event_id(event_id: &str) -> Result<OwnedEventId, &'static str> {
     OwnedEventId::try_from(event_id.trim()).map_err(|_| "v-crypto.6-invalid-event-id")
+}
+
+fn parse_action_event_id(
+    event_id: &str,
+    diagnostic_id: &'static str,
+) -> Result<OwnedEventId, &'static str> {
+    OwnedEventId::try_from(event_id.trim()).map_err(|_| diagnostic_id)
+}
+
+fn normalize_edit_formatted_body(
+    body: &str,
+    formatted_body: Option<&str>,
+) -> Result<Option<String>, &'static str> {
+    let Some(html) = formatted_body
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
+    };
+    if html.len() > 65_536 {
+        return Err("d0.4-send-formatted-body-too-large");
+    }
+    if !should_attach_formatted_body(body, Some(html)) {
+        return Ok(None);
+    }
+    Ok(Some(html.to_owned()))
 }
 
 fn validate_reaction_key(key: &str) -> Result<(), &'static str> {
