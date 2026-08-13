@@ -4,18 +4,27 @@
 //! Product verticals: `docs/matrix-rust-sdk/v-rooms-5-mdirect.md`,
 //! `docs/matrix-rust-sdk/v-timeline-full-replacement-contract.md` (later/notes).
 //! Live Client RMW (image_packs/later/live/room_notes owners) and
-//! product_commands stay in the desktop shell. Codec types for later and
-//! room_notes live here.
+//! product_commands stay in the desktop shell. Codec types for image_packs,
+//! later, and room_notes live here.
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
 mod error;
+mod image_packs;
 mod index;
 mod later;
 mod room_notes;
 
 pub use error::AccountDataError;
+pub use image_packs::{
+    is_image_pack_account_data_type, is_image_pack_room_state_type, pack_from_account_data,
+    set_global_image_packs_content_guard, set_room_image_pack_content_guard,
+    set_user_image_pack_content_guard, EmoteRoomsContent, NativeGlobalImagePacksSnapshot,
+    NativeImagePack, NativeRoomImagePacksSnapshot, NativeUserImagePackSnapshot,
+    EMOTE_ROOMS_EVENT_TYPE, IMAGE_PACKS_UPDATED_EVENT, ROOM_EMOTES_EVENT_TYPE,
+    USER_EMOTES_EVENT_TYPE,
+};
 pub use index::{
     AccountDataEntry, AccountDataIndex, MAX_CONTENT_FIELDS, MAX_GLOBAL_TYPES, MAX_KEY_LEN,
     MAX_ROOMS_WITH_ACCOUNT_DATA, MAX_ROOM_TYPES, MAX_VALUE_LEN, TYPE_DIRECT, TYPE_FULLY_READ,
