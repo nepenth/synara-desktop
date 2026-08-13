@@ -1,8 +1,8 @@
 //! Unit tests for P6.8 search session.
 
 use super::*;
-use crate::matrix::dto::{SearchResult, SearchResultItem};
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::dto::{SearchResult, SearchResultItem};
+use crate::transport::MatrixIpcErrorCategory;
 
 fn item(event: &str, room: &str) -> SearchResultItem {
     SearchResultItem {

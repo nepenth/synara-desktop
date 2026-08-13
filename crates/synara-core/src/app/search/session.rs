@@ -3,7 +3,7 @@
 //! Pure projection of Synara [`SearchResult`] DTOs. No SDK search APIs,
 //! no dual-backend. Supports cancel + stale-result protection via request ids.
 
-use crate::matrix::dto::{SearchResult, SearchResultItem};
+use crate::dto::{SearchResult, SearchResultItem};
 
 use super::error::SearchError;
 

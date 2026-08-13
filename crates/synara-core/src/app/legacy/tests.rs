@@ -1,7 +1,7 @@
 //! Unit tests for P3.7 legacy transition coordinator.
 
 use super::*;
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 fn signal(kind: LegacySignalKind, label: &str) -> LegacyDetectionSignal {
     LegacyDetectionSignal {
