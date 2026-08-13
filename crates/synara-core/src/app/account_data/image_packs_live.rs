@@ -291,6 +291,17 @@ impl NativeImagePackOwner {
     pub async fn snapshot_global(&self) -> Result<NativeGlobalImagePacksSnapshot, &'static str> {
         snapshot_global_image_packs(&self.client, self.session_generation).await
     }
+
+    pub async fn snapshot_user(&self) -> Result<NativeUserImagePackSnapshot, &'static str> {
+        snapshot_user_image_pack(&self.client, self.session_generation).await
+    }
+
+    pub async fn snapshot_room(
+        &self,
+        room_id: &str,
+    ) -> Result<NativeRoomImagePacksSnapshot, &'static str> {
+        snapshot_room_image_packs(&self.client, self.session_generation, room_id).await
+    }
 }
 
 #[cfg(test)]

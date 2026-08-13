@@ -8,7 +8,10 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
-use crate::app::account_data::{NativeGlobalImagePacksSnapshot, NativeImagePackOwner};
+use crate::app::account_data::{
+    NativeGlobalImagePacksSnapshot, NativeImagePackOwner, NativeRoomImagePacksSnapshot,
+    NativeUserImagePackSnapshot,
+};
 use crate::app::auth::{
     discover_login_flows, login_flows_response, probe_register_flows, AuthError,
     HttpLoginFlowTransport, HttpRegisterFlowTransport, MatrixLoginFlowsResponse,
@@ -497,6 +500,13 @@ struct MatrixPresenceSnapshotRequest {
     user_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_get_room_image_packs`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixGetRoomImagePacksRequest {
+    room_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_room_join_rule_snapshot`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -844,6 +854,12 @@ fn built_in_registry() -> CommandRegistry {
         )
         .expect("built-in matrix_get_global_image_packs must remain in the command census");
     registry
+        .register("matrix_get_user_image_pack", matrix_get_user_image_pack)
+        .expect("built-in matrix_get_user_image_pack must remain in the command census");
+    registry
+        .register("matrix_get_room_image_packs", matrix_get_room_image_packs)
+        .expect("built-in matrix_get_room_image_packs must remain in the command census");
+    registry
 }
 
 fn matrix_typing_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -949,6 +965,41 @@ fn matrix_get_global_image_packs(state: Arc<CoreState>, request: CommandEnvelope
             .map_err(image_pack_snapshot_owner_error)?;
         serde_json::to_value(snapshot)
             .map_err(|_| core_state_error("p2-global-image-packs-serialization-failed"))
+    })
+}
+
+fn matrix_get_user_image_pack(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-user-image-pack-invalid-payload"));
+        }
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-user-image-pack-no-session")
+        })?;
+        let snapshot: NativeUserImagePackSnapshot = owner
+            .snapshot_user()
+            .await
+            .map_err(image_pack_snapshot_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-user-image-pack-serialization-failed"))
+    })
+}
+
+fn matrix_get_room_image_packs(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixGetRoomImagePacksRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-image-packs-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-image-packs-no-session")
+        })?;
+        let snapshot: NativeRoomImagePacksSnapshot = owner
+            .snapshot_room(&payload.room_id)
+            .await
+            .map_err(image_pack_snapshot_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-room-image-packs-serialization-failed"))
     })
 }
 
@@ -1613,6 +1664,8 @@ mod tests {
                 "matrix_crypto_status",
                 "matrix_device_snapshot",
                 "matrix_get_global_image_packs",
+                "matrix_get_room_image_packs",
+                "matrix_get_user_image_pack",
                 "matrix_login_flows",
                 "matrix_media_config",
                 "matrix_presence_snapshot",
@@ -2882,6 +2935,44 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-global-image-packs-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_get_user_image_pack_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_get_user_image_pack".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("user image pack without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-user-image-pack-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_get_room_image_packs_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_get_room_image_packs".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org"}),
+            })
+            .await
+            .expect_err("room image packs without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-image-packs-no-session")
         );
     }
 
