@@ -1,7 +1,8 @@
 //! Credential-free V-CRYPTO.7 device presentation plus live device-list owner.
 //!
 //! Shells supply the emit sink (desktop Tauri event / later iOS UniFFI).
-//! UIAA delete product commands stay in the desktop shell.
+//! Password UIAA continuation stays in the desktop shell so the password
+//! never crosses `Core::command`. Start/cancel route through the owner.
 
 use serde::{Deserialize, Serialize};
 
@@ -49,13 +50,13 @@ impl NativeDeviceSnapshot {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeDeviceDeleteAuthentication {
     Password,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NativeDeviceDeleteChallenge {
     pub operation_id: u64,
@@ -64,7 +65,7 @@ pub struct NativeDeviceDeleteChallenge {
     pub authentication_failed: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "outcome", rename_all = "snake_case")]
 pub enum NativeDeviceDeleteResult {
     Complete {

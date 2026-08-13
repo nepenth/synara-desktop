@@ -17,7 +17,7 @@ use crate::app::auth::{
     HttpLoginFlowTransport, HttpRegisterFlowTransport, MatrixLoginFlowsResponse,
     RegisterFlowsProbe,
 };
-use crate::app::devices::{NativeDeviceOwner, NativeDeviceSnapshot};
+use crate::app::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot};
 use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceSubscription,
 };
@@ -563,6 +563,21 @@ struct MatrixDeviceRenameRequest {
     display_name: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_device_delete_start`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixDeviceDeleteStartRequest {
+    device_ids: Vec<String>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_device_delete_cancel`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixDeviceDeleteCancelRequest {
+    operation_id: u64,
+    session_generation: u64,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_verification_accept`.
 ///
 /// The renderer sends the camel-case `flowId` key; unknown keys are rejected
@@ -1002,6 +1017,12 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_device_rename", matrix_device_rename)
         .expect("built-in matrix_device_rename must remain in the command census");
     registry
+        .register("matrix_device_delete_start", matrix_device_delete_start)
+        .expect("built-in matrix_device_delete_start must remain in the command census");
+    registry
+        .register("matrix_device_delete_cancel", matrix_device_delete_cancel)
+        .expect("built-in matrix_device_delete_cancel must remain in the command census");
+    registry
         .register(
             "matrix_room_join_rule_snapshot",
             matrix_room_join_rule_snapshot,
@@ -1313,6 +1334,38 @@ fn matrix_device_rename(state: Arc<CoreState>, request: CommandEnvelope) -> Comm
     })
 }
 
+fn matrix_device_delete_start(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixDeviceDeleteStartRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-device-delete-start-invalid-payload"))?;
+        let owner = state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-device-delete-start-no-session")
+        })?;
+        let result: NativeDeviceDeleteResult = owner
+            .delete_start(payload.device_ids)
+            .await
+            .map_err(device_snapshot_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-device-delete-start-serialization-failed"))
+    })
+}
+
+fn matrix_device_delete_cancel(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixDeviceDeleteCancelRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-device-delete-cancel-invalid-payload"))?;
+        let owner = state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-device-delete-cancel-no-session")
+        })?;
+        owner
+            .delete_cancel(payload.operation_id, payload.session_generation)
+            .map_err(device_snapshot_owner_error)?;
+        Ok(serde_json::Value::Null)
+    })
+}
+
 fn matrix_room_join_rule_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1469,10 +1522,20 @@ fn join_rule_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError
 
 fn device_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
-        "v-crypto.7-device-rename-empty" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-crypto.7-device-rename-empty"
+        | "v-crypto.7-device-delete-selection-empty"
+        | "v-crypto.7-device-delete-selection-invalid"
+        | "v-crypto.7-device-delete-not-pending"
+        | "v-crypto.7-device-delete-operation-mismatch" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-crypto.7-device-delete-stale-generation" => {
+            MatrixIpcErrorCategory::StaleSessionGeneration
+        }
         "v-crypto.7-device-owner-user-missing"
         | "v-crypto.7-device-snapshot-current-missing"
-        | "v-crypto.7-device-snapshot-user-missing" => MatrixIpcErrorCategory::Forbidden,
+        | "v-crypto.7-device-snapshot-user-missing"
+        | "v-crypto.7-device-delete-current-missing"
+        | "v-crypto.7-device-delete-user-missing"
+        | "v-crypto.7-device-delete-auth-unsupported" => MatrixIpcErrorCategory::Forbidden,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -2106,6 +2169,8 @@ mod tests {
             vec![
                 "matrix_cross_signing_status",
                 "matrix_crypto_status",
+                "matrix_device_delete_cancel",
+                "matrix_device_delete_start",
                 "matrix_device_rename",
                 "matrix_device_snapshot",
                 "matrix_get_global_image_packs",
@@ -3716,6 +3781,86 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-device-rename-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_device_delete_start_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_device_delete_start".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"deviceIds":["OTHER"]}),
+            })
+            .await
+            .expect_err("device delete start without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-device-delete-start-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_device_delete_start_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_device_delete_start".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"deviceIds":["OTHER"],"token":"no"}),
+            })
+            .await
+            .expect_err("device delete start must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-device-delete-start-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_device_delete_cancel_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_device_delete_cancel".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"operationId":1,"sessionGeneration":1}),
+            })
+            .await
+            .expect_err("device delete cancel without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-device-delete-cancel-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_device_delete_cancel_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_device_delete_cancel".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "operationId":1,
+                    "sessionGeneration":1,
+                    "token":"no"
+                }),
+            })
+            .await
+            .expect_err("device delete cancel must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-device-delete-cancel-invalid-payload")
         );
     }
 

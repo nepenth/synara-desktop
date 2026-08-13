@@ -85,11 +85,7 @@ use crate::matrix::cross_signing::live::{
     project_status, supported_authentication, NativeCrossSigningSetupOutcome,
     NativeCrossSigningSetupResult, NativeCrossSigningStatus, SupportedBootstrapAuthentication,
 };
-use crate::matrix::devices::{
-    live::{snapshot as live_device_snapshot, supported_delete_authentication},
-    NativeDeviceDeleteChallenge, NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot,
-    PendingDeviceDeletion,
-};
+use crate::matrix::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot};
 use crate::matrix::dto::{Membership as ProductMembership, RoomMember as ProductRoomMember};
 use crate::matrix::ipc::MAX_WIRE_COUNTER;
 use crate::matrix::lifecycle::{
@@ -275,13 +271,11 @@ struct ManagedMatrixSession {
     sends: SendQueue,
     attachments: AttachmentSendQueue,
     verification: Arc<NativeVerificationOwner>,
-    _devices: Arc<NativeDeviceOwner>,
+    devices: Arc<NativeDeviceOwner>,
     _image_packs: Arc<NativeImagePackOwner>,
     typing: Arc<NativeTypingOwner>,
     presence: Arc<NativePresenceOwner>,
     join_rules: Arc<NativeRoomJoinRuleOwner>,
-    pending_device_deletion: Option<PendingDeviceDeletion>,
-    next_device_delete_operation_id: u64,
     pending_cross_signing_auth_session: Option<String>,
     room_key_transfer: Arc<Mutex<RoomKeyTransferFlow>>,
     selected_room_key_import: Option<SelectedRoomKeyImport>,

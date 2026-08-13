@@ -1,7 +1,7 @@
 //! Live V-CRYPTO.7 device projection and session-scoped update signal.
 
 use std::collections::BTreeSet;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use futures_util::StreamExt;
 use matrix_sdk::{
@@ -15,8 +15,8 @@ use serde::Serialize;
 use tokio::task::JoinHandle;
 
 use super::{
-    sort_native_device_summaries, NativeDeviceDeleteAuthentication, NativeDeviceSnapshot,
-    NativeDeviceSummary, NativeDeviceTrust,
+    sort_native_device_summaries, NativeDeviceDeleteAuthentication, NativeDeviceDeleteChallenge,
+    NativeDeviceDeleteResult, NativeDeviceSnapshot, NativeDeviceSummary, NativeDeviceTrust,
 };
 
 /// Shell-supplied sink for device-list wakeups. Desktop maps this to the
@@ -40,10 +40,16 @@ pub struct NativeDeviceUpdateSignal {
 ///
 /// The stream is only a trigger. Every UI read still goes through
 /// `Client::devices`, so it never becomes a second device-list owner.
+struct DeviceDeleteState {
+    pending: Option<PendingDeviceDeletion>,
+    next_operation_id: u64,
+}
+
 pub struct NativeDeviceOwner {
     client: Client,
     session_generation: u64,
     task: JoinHandle<()>,
+    delete: Mutex<DeviceDeleteState>,
 }
 
 impl NativeDeviceOwner {
@@ -75,6 +81,10 @@ impl NativeDeviceOwner {
             client: client.clone(),
             session_generation,
             task,
+            delete: Mutex::new(DeviceDeleteState {
+                pending: None,
+                next_operation_id: 0,
+            }),
         })
     }
 
@@ -99,6 +109,200 @@ impl NativeDeviceOwner {
             .await
             .map_err(|_| "v-crypto.7-device-rename-failed")?;
         self.snapshot().await
+    }
+
+    pub async fn delete_start(
+        &self,
+        device_ids: Vec<String>,
+    ) -> Result<NativeDeviceDeleteResult, &'static str> {
+        self.clear_pending()?;
+        let device_ids = self.validate_deletion(device_ids).await?;
+        match self.client.delete_devices(&device_ids, None).await {
+            Ok(_) => self.complete_deletion(&device_ids).await,
+            Err(error) => {
+                let info = error
+                    .as_uiaa_response()
+                    .ok_or("v-crypto.7-device-delete-start-failed")?;
+                self.retain_challenge(device_ids, info)
+            }
+        }
+    }
+
+    pub fn delete_cancel(
+        &self,
+        operation_id: u64,
+        session_generation: u64,
+    ) -> Result<(), &'static str> {
+        self.validate_pending(operation_id, session_generation)?;
+        self.clear_pending()
+    }
+
+    /// Clone the live pending challenge so the shell can finish password UIAA
+    /// without putting the password on the Core envelope.
+    pub fn pending_deletion(
+        &self,
+        operation_id: u64,
+        session_generation: u64,
+    ) -> Result<PendingDeviceDeletion, &'static str> {
+        self.validate_pending(operation_id, session_generation)
+    }
+
+    pub fn refresh_delete_challenge(
+        &self,
+        info: &UiaaInfo,
+        authentication_failed: bool,
+    ) -> Result<NativeDeviceDeleteResult, &'static str> {
+        let pending = {
+            let mut state = self
+                .delete
+                .lock()
+                .map_err(|_| "v-crypto.7-device-delete-state-poisoned")?;
+            state
+                .pending
+                .take()
+                .ok_or("v-crypto.7-device-delete-not-pending")?
+        };
+        self.install_challenge(
+            pending.operation_id,
+            pending.device_ids,
+            info,
+            authentication_failed,
+        )
+    }
+
+    pub async fn complete_deletion(
+        &self,
+        deleted: &[OwnedDeviceId],
+    ) -> Result<NativeDeviceDeleteResult, &'static str> {
+        let snapshot = self.snapshot().await?;
+        if deleted
+            .iter()
+            .any(|device_id| snapshot.contains(device_id.as_str()))
+        {
+            return Err("v-crypto.7-device-delete-readback-incomplete");
+        }
+        self.clear_pending()?;
+        Ok(NativeDeviceDeleteResult::Complete { snapshot })
+    }
+
+    fn clear_pending(&self) -> Result<(), &'static str> {
+        let mut state = self
+            .delete
+            .lock()
+            .map_err(|_| "v-crypto.7-device-delete-state-poisoned")?;
+        state.pending = None;
+        Ok(())
+    }
+
+    fn validate_pending(
+        &self,
+        operation_id: u64,
+        session_generation: u64,
+    ) -> Result<PendingDeviceDeletion, &'static str> {
+        if self.session_generation != session_generation {
+            return Err("v-crypto.7-device-delete-stale-generation");
+        }
+        let state = self
+            .delete
+            .lock()
+            .map_err(|_| "v-crypto.7-device-delete-state-poisoned")?;
+        let pending = state
+            .pending
+            .as_ref()
+            .ok_or("v-crypto.7-device-delete-not-pending")?;
+        if pending.session_generation != session_generation {
+            return Err("v-crypto.7-device-delete-stale-generation");
+        }
+        if pending.operation_id != operation_id {
+            return Err("v-crypto.7-device-delete-operation-mismatch");
+        }
+        Ok(PendingDeviceDeletion {
+            operation_id: pending.operation_id,
+            session_generation: pending.session_generation,
+            device_ids: pending.device_ids.clone(),
+            auth_session: pending.auth_session.clone(),
+        })
+    }
+
+    async fn validate_deletion(
+        &self,
+        device_ids: Vec<String>,
+    ) -> Result<Vec<OwnedDeviceId>, &'static str> {
+        if device_ids.is_empty() {
+            return Err("v-crypto.7-device-delete-selection-empty");
+        }
+        let snapshot = self.snapshot().await?;
+        let current = snapshot
+            .devices
+            .iter()
+            .find(|device| device.is_current)
+            .map(|device| device.device_id.as_str())
+            .ok_or("v-crypto.7-device-delete-current-missing")?;
+        let mut unique = BTreeSet::new();
+        for device_id in device_ids {
+            if device_id.is_empty() || device_id == current || !snapshot.contains(&device_id) {
+                return Err("v-crypto.7-device-delete-selection-invalid");
+            }
+            unique.insert(OwnedDeviceId::from(device_id));
+        }
+        Ok(unique.into_iter().collect())
+    }
+
+    fn retain_challenge(
+        &self,
+        device_ids: Vec<OwnedDeviceId>,
+        info: &UiaaInfo,
+    ) -> Result<NativeDeviceDeleteResult, &'static str> {
+        let operation_id = {
+            let mut state = self
+                .delete
+                .lock()
+                .map_err(|_| "v-crypto.7-device-delete-state-poisoned")?;
+            let operation_id = state
+                .next_operation_id
+                .checked_add(1)
+                .ok_or("v-crypto.7-device-delete-operation-overflow")?;
+            state.next_operation_id = operation_id;
+            operation_id
+        };
+        self.install_challenge(operation_id, device_ids, info, false)
+    }
+
+    fn install_challenge(
+        &self,
+        operation_id: u64,
+        device_ids: Vec<OwnedDeviceId>,
+        info: &UiaaInfo,
+        authentication_failed: bool,
+    ) -> Result<NativeDeviceDeleteResult, &'static str> {
+        let auth_session = info
+            .session
+            .clone()
+            .ok_or("v-crypto.7-device-delete-auth-session-missing")?;
+        let available = supported_delete_authentication(info);
+        if !available.contains(&NativeDeviceDeleteAuthentication::Password) {
+            return Err("v-crypto.7-device-delete-auth-unsupported");
+        }
+        {
+            let mut state = self
+                .delete
+                .lock()
+                .map_err(|_| "v-crypto.7-device-delete-state-poisoned")?;
+            state.pending = Some(PendingDeviceDeletion {
+                operation_id,
+                session_generation: self.session_generation,
+                device_ids,
+                auth_session,
+            });
+        }
+        Ok(NativeDeviceDeleteResult::AuthenticationRequired {
+            challenge: NativeDeviceDeleteChallenge {
+                operation_id,
+                session_generation: self.session_generation,
+                authentication: NativeDeviceDeleteAuthentication::Password,
+                authentication_failed,
+            },
+        })
     }
 }
 
