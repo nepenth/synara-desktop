@@ -689,6 +689,24 @@ struct MatrixTimelinePinRequest {
     event_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_timeline_poll_vote`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixTimelinePollVoteRequest {
+    room_id: String,
+    event_id: String,
+    #[serde(default)]
+    answer_ids: Vec<String>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_timeline_call_decline`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixTimelineCallDeclineRequest {
+    room_id: String,
+    event_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_verification_accept`.
 ///
 /// The renderer sends the camel-case `flowId` key; unknown keys are rejected
@@ -1245,6 +1263,12 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_timeline_unpin", matrix_timeline_unpin)
         .expect("built-in matrix_timeline_unpin must remain in the command census");
     registry
+        .register("matrix_timeline_poll_vote", matrix_timeline_poll_vote)
+        .expect("built-in matrix_timeline_poll_vote must remain in the command census");
+    registry
+        .register("matrix_timeline_call_decline", matrix_timeline_call_decline)
+        .expect("built-in matrix_timeline_call_decline must remain in the command census");
+    registry
 }
 
 fn matrix_typing_set(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -1589,6 +1613,40 @@ fn matrix_timeline_unpin(state: Arc<CoreState>, request: CommandEnvelope) -> Com
     })
 }
 
+fn matrix_timeline_poll_vote(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelinePollVoteRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-timeline-poll-vote-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-poll-vote-no-session")
+        })?;
+        let readback: NativeTimelineActionReadback = owner
+            .poll_vote(&payload.room_id, &payload.event_id, payload.answer_ids)
+            .await
+            .map_err(timeline_action_owner_error)?;
+        serde_json::to_value(readback)
+            .map_err(|_| core_state_error("p2-timeline-poll-vote-serialization-failed"))
+    })
+}
+
+fn matrix_timeline_call_decline(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelineCallDeclineRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-timeline-call-decline-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-call-decline-no-session")
+        })?;
+        let readback: NativeTimelineActionReadback = owner
+            .decline_call(&payload.room_id, &payload.event_id)
+            .await
+            .map_err(timeline_action_owner_error)?;
+        serde_json::to_value(readback)
+            .map_err(|_| core_state_error("p2-timeline-call-decline-serialization-failed"))
+    })
+}
+
 fn timeline_action_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "d0.4-send-invalid-room-id"
@@ -1603,7 +1661,13 @@ fn timeline_action_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         | "v-timeline-pin-invalid-event-id"
         | "v-timeline-pin-room-not-found"
         | "v-timeline-unpin-invalid-event-id"
-        | "v-timeline-unpin-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        | "v-timeline-unpin-room-not-found"
+        | "v-timeline-poll-vote-invalid-event-id"
+        | "v-timeline-poll-vote-room-not-found"
+        | "v-timeline-call-decline-invalid-event-id"
+        | "v-timeline-call-decline-room-not-found"
+        | "v-timeline-call-decline-own-call"
+        | "v-timeline-call-decline-bad-event-type" => MatrixIpcErrorCategory::SdkInvariant,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -2717,6 +2781,7 @@ mod tests {
                 "matrix_set_room_image_pack",
                 "matrix_set_user_image_pack",
                 "matrix_sync_status",
+                "matrix_timeline_call_decline",
                 "matrix_timeline_close",
                 "matrix_timeline_edit_text",
                 "matrix_timeline_event_readback",
@@ -2724,6 +2789,7 @@ mod tests {
                 "matrix_timeline_open",
                 "matrix_timeline_paginate",
                 "matrix_timeline_pin",
+                "matrix_timeline_poll_vote",
                 "matrix_timeline_reaction_toggle",
                 "matrix_timeline_redact",
                 "matrix_timeline_report",
@@ -4984,6 +5050,51 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-timeline-unpin-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_poll_vote_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_poll_vote".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "eventId":"$e",
+                    "answerIds":["yes"]
+                }),
+            })
+            .await
+            .expect_err("timeline poll vote without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-poll-vote-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_call_decline_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_call_decline".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "eventId":"$e"
+                }),
+            })
+            .await
+            .expect_err("timeline call decline without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-call-decline-no-session")
         );
     }
 

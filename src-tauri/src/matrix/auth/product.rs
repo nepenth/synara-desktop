@@ -23,7 +23,6 @@ use matrix_sdk::{
             uiaa,
         },
         events::{
-            poll::unstable_response::UnstablePollResponseEventContent,
             relation::{Reply, Thread},
             room::{
                 member::MembershipState,

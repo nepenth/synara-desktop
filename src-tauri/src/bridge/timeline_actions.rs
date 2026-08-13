@@ -11,6 +11,8 @@ const TIMELINE_REDACT_COMMAND: &str = "matrix_timeline_redact";
 const TIMELINE_REPORT_COMMAND: &str = "matrix_timeline_report";
 const TIMELINE_PIN_COMMAND: &str = "matrix_timeline_pin";
 const TIMELINE_UNPIN_COMMAND: &str = "matrix_timeline_unpin";
+const TIMELINE_POLL_VOTE_COMMAND: &str = "matrix_timeline_poll_vote";
+const TIMELINE_CALL_DECLINE_COMMAND: &str = "matrix_timeline_call_decline";
 const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 pub(crate) async fn timeline_edit_text(
@@ -127,6 +129,48 @@ async fn dispatch_pin(
     serde_json::from_value(response.payload).map_err(|_| timeline_action_response_error())
 }
 
+pub(crate) async fn timeline_poll_vote(
+    core: &Core,
+    room_id: String,
+    event_id: String,
+    answer_ids: Vec<String>,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let response = core
+        .command(CommandEnvelope {
+            command: TIMELINE_POLL_VOTE_COMMAND.to_owned(),
+            session_generation: READ_ONLY_SESSION_GENERATION,
+            request_id: None,
+            payload: serde_json::json!({
+                "roomId": room_id,
+                "eventId": event_id,
+                "answerIds": answer_ids,
+            }),
+        })
+        .await
+        .map_err(map_timeline_action_core_error)?;
+    serde_json::from_value(response.payload).map_err(|_| timeline_action_response_error())
+}
+
+pub(crate) async fn timeline_call_decline(
+    core: &Core,
+    room_id: String,
+    event_id: String,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let response = core
+        .command(CommandEnvelope {
+            command: TIMELINE_CALL_DECLINE_COMMAND.to_owned(),
+            session_generation: READ_ONLY_SESSION_GENERATION,
+            request_id: None,
+            payload: serde_json::json!({
+                "roomId": room_id,
+                "eventId": event_id,
+            }),
+        })
+        .await
+        .map_err(map_timeline_action_core_error)?;
+    serde_json::from_value(response.payload).map_err(|_| timeline_action_response_error())
+}
+
 fn map_timeline_action_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
     match error.category {
         MatrixIpcErrorCategory::Forbidden => MatrixAuthCommandError::new(
@@ -144,9 +188,19 @@ fn map_timeline_action_core_error(error: MatrixIpcError) -> MatrixAuthCommandErr
                 | "v-timeline-redact-room-not-found"
                 | "v-timeline-report-room-not-found"
                 | "v-timeline-pin-room-not-found"
-                | "v-timeline-unpin-room-not-found" => {
+                | "v-timeline-unpin-room-not-found"
+                | "v-timeline-poll-vote-room-not-found"
+                | "v-timeline-call-decline-room-not-found" => {
                     ("NotFound", "The native Matrix room is not available.")
                 }
+                "v-timeline-call-decline-own-call" => (
+                    "InvalidRequest",
+                    "A call started by this session cannot be declined.",
+                ),
+                "v-timeline-call-decline-bad-event-type" => (
+                    "InvalidRequest",
+                    "Only m.rtc.notification events can be declined.",
+                ),
                 _ => (
                     "InvalidRequest",
                     "The native Matrix timeline action request is invalid.",

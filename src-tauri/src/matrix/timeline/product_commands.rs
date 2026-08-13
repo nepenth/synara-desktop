@@ -355,103 +355,29 @@ pub async fn matrix_timeline_unpin(
 
 #[tauri::command]
 pub async fn matrix_timeline_poll_vote(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     request: NativeTimelinePollVoteRequest,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
-    let room_id = parse_send_room_id(&request.room_id)?;
-    let event_id =
-        parse_required_event_id(&request.event_id, "v-timeline-poll-vote-invalid-event-id")?;
-    let answer_ids = request
-        .answer_ids
-        .into_iter()
-        .map(|answer| answer.trim().to_owned())
-        .filter(|answer| !answer.is_empty())
-        .collect::<Vec<_>>();
-
-    let room = {
-        let mut session = state.session.lock().await;
-        let active = require_send_session_mut(session.as_mut())?;
-        active.client.get_room(&room_id).ok_or_else(|| {
-            MatrixAuthCommandError::new(
-                "NotFound",
-                "The native Matrix room is not available.",
-                "v-timeline-poll-vote-room-not-found",
-            )
-        })?
-    };
-
-    let content = UnstablePollResponseEventContent::new(answer_ids, event_id.clone());
-    let sent_event_id = room
-        .send(content)
-        .await
-        .map_err(|_| map_timeline_action_error("v-timeline-poll-vote-send-failed"))?
-        .response
-        .event_id
-        .to_string();
-
-    Ok(NativeTimelineActionReadback {
-        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
-        action: NativeTimelineActionKind::PollVote,
-        room_id: room_id.to_string(),
-        event_id: sent_event_id,
-        status: "voted",
-    })
+    crate::bridge::timeline_actions::timeline_poll_vote(
+        core.inner().as_ref(),
+        request.room_id,
+        request.event_id,
+        request.answer_ids,
+    )
+    .await
 }
 
 #[tauri::command]
 pub async fn matrix_timeline_call_decline(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     request: NativeTimelineCallDeclineRequest,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
-    let room_id = parse_send_room_id(&request.room_id)?;
-    let event_id = parse_required_event_id(
-        &request.event_id,
-        "v-timeline-call-decline-invalid-event-id",
-    )?;
-
-    let room = {
-        let mut session = state.session.lock().await;
-        let active = require_send_session_mut(session.as_mut())?;
-        active.client.get_room(&room_id).ok_or_else(|| {
-            MatrixAuthCommandError::new(
-                "NotFound",
-                "The native Matrix room is not available.",
-                "v-timeline-call-decline-room-not-found",
-            )
-        })?
-    };
-
-    let content = room
-        .make_decline_call_event(&event_id)
-        .await
-        .map_err(|error| match error {
-            matrix_sdk::room::calls::CallError::DeclineOwnCall => MatrixAuthCommandError::new(
-                "InvalidRequest",
-                "A call started by this session cannot be declined.",
-                "v-timeline-call-decline-own-call",
-            ),
-            matrix_sdk::room::calls::CallError::BadEventType => MatrixAuthCommandError::new(
-                "InvalidRequest",
-                "Only m.rtc.notification events can be declined.",
-                "v-timeline-call-decline-bad-event-type",
-            ),
-            _ => map_timeline_action_error("v-timeline-call-decline-prepare-failed"),
-        })?;
-    let sent_event_id = room
-        .send(content)
-        .await
-        .map_err(|_| map_timeline_action_error("v-timeline-call-decline-send-failed"))?
-        .response
-        .event_id
-        .to_string();
-
-    Ok(NativeTimelineActionReadback {
-        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
-        action: NativeTimelineActionKind::CallDecline,
-        room_id: room_id.to_string(),
-        event_id: sent_event_id,
-        status: "declined",
-    })
+    crate::bridge::timeline_actions::timeline_call_decline(
+        core.inner().as_ref(),
+        request.room_id,
+        request.event_id,
+    )
+    .await
 }
 
 pub(super) fn map_timeline_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
