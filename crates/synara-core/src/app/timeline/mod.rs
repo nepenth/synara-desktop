@@ -22,6 +22,7 @@ mod composer;
 mod delta;
 mod error;
 mod focus;
+mod live;
 mod media;
 mod native;
 mod pagination;
@@ -50,6 +51,7 @@ pub use error::TimelineError;
 pub use focus::{
     ContextWindow, FocusOpenOutcome, FocusOpenRequest, NavigationPhase, TimelineFocus, TimelineMode,
 };
+pub use live::NativeTimelineRegistry;
 pub use media::{
     is_timeline_media_handle, TimelineMediaRegistry, TimelineMediaSource,
     TIMELINE_MEDIA_HANDLE_PREFIX,

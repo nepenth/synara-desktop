@@ -3,8 +3,7 @@
 //! SNC-P1-5c: the pure timeline logic now lives in the shared native core at
 //! `crates/synara-core/src/app/timeline`. This module keeps every
 //! `crate::matrix::timeline::*` path resolving with **identical behavior** by
-//! re-exporting the core items plus the desktop `live.rs` module. View-delta
-//! emit is a Core sink; desktop maps AppHandle onto that callback.
+//! re-exporting the core items plus the desktop `live.rs` AppHandle adapter.
 //!
 //! `product_commands.rs`, `tests.rs`, and `live_synapse_proof/` also stay here
 //! (Platform commands = serial product lane; tests.rs = desktop suite via
