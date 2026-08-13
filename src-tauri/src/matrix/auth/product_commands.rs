@@ -91,12 +91,14 @@ pub async fn matrix_login_password(
         crate::matrix::presence::start_presence_owner(&client, app.clone(), session_generation)
             .map_err(map_presence_error)?,
     );
-    let join_rules = crate::matrix::room_profile::start_join_rule_owner(
-        &client,
-        app.clone(),
-        session_generation,
-    )
-    .map_err(map_room_join_rule_owner_error)?;
+    let join_rules = Arc::new(
+        crate::matrix::room_profile::start_join_rule_owner(
+            &client,
+            app.clone(),
+            session_generation,
+        )
+        .map_err(map_room_join_rule_owner_error)?,
+    );
     let sync = start_sync_owner(&client, session_generation).await?;
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
@@ -132,7 +134,7 @@ pub async fn matrix_login_password(
         _image_packs: image_packs,
         typing: typing.clone(),
         presence: presence.clone(),
-        join_rules,
+        join_rules: join_rules.clone(),
         pending_device_deletion: None,
         next_device_delete_operation_id: 0,
         pending_cross_signing_auth_session: None,
@@ -159,6 +161,9 @@ pub async fn matrix_login_password(
     core.inner()
         .attach_devices(devices)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-device-attach-failed"))?;
+    core.inner()
+        .attach_join_rules(join_rules)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-join-rule-attach-failed"))?;
     Ok(identity)
 }
 
@@ -305,7 +310,7 @@ pub async fn matrix_register(
         RegisterSubmitOutcome::Complete(secrets) => {
             let (identity, session_generation) =
                 install_session_from_register_secrets(&app, &state, &mut session, secrets).await?;
-            let (typing, presence, verification, devices) = session
+            let (typing, presence, verification, devices, join_rules) = session
                 .as_ref()
                 .map(|active| {
                     (
@@ -313,6 +318,7 @@ pub async fn matrix_register(
                         active.presence.clone(),
                         active.verification.clone(),
                         active._devices.clone(),
+                        active.join_rules.clone(),
                     )
                 })
                 .ok_or_else(|| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
@@ -337,6 +343,9 @@ pub async fn matrix_register(
             core.inner()
                 .attach_devices(devices)
                 .map_err(|_| MatrixAuthCommandError::unavailable("p2-device-attach-failed"))?;
+            core.inner()
+                .attach_join_rules(join_rules)
+                .map_err(|_| MatrixAuthCommandError::unavailable("p2-join-rule-attach-failed"))?;
             Ok(MatrixRegisterOutcome::Complete { identity })
         }
     }
@@ -397,12 +406,14 @@ pub(super) async fn install_session_from_register_secrets(
         crate::matrix::presence::start_presence_owner(&client, app.clone(), session_generation)
             .map_err(map_presence_error)?,
     );
-    let join_rules = crate::matrix::room_profile::start_join_rule_owner(
-        &client,
-        app.clone(),
-        session_generation,
-    )
-    .map_err(map_room_join_rule_owner_error)?;
+    let join_rules = Arc::new(
+        crate::matrix::room_profile::start_join_rule_owner(
+            &client,
+            app.clone(),
+            session_generation,
+        )
+        .map_err(map_room_join_rule_owner_error)?,
+    );
     let sync = start_sync_owner(&client, session_generation).await?;
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
@@ -438,7 +449,7 @@ pub(super) async fn install_session_from_register_secrets(
         _image_packs: image_packs,
         typing: typing.clone(),
         presence: presence.clone(),
-        join_rules,
+        join_rules: join_rules.clone(),
         pending_device_deletion: None,
         next_device_delete_operation_id: 0,
         pending_cross_signing_auth_session: None,
@@ -582,12 +593,14 @@ pub async fn matrix_restore_session(
         crate::matrix::presence::start_presence_owner(&client, app.clone(), session_generation)
             .map_err(map_presence_error)?,
     );
-    let join_rules = crate::matrix::room_profile::start_join_rule_owner(
-        &client,
-        app.clone(),
-        session_generation,
-    )
-    .map_err(map_room_join_rule_owner_error)?;
+    let join_rules = Arc::new(
+        crate::matrix::room_profile::start_join_rule_owner(
+            &client,
+            app.clone(),
+            session_generation,
+        )
+        .map_err(map_room_join_rule_owner_error)?,
+    );
     let sync = start_sync_owner(&client, session_generation).await?;
     *session = Some(ManagedMatrixSession {
         client,
@@ -603,7 +616,7 @@ pub async fn matrix_restore_session(
         _image_packs: image_packs,
         typing: typing.clone(),
         presence: presence.clone(),
-        join_rules,
+        join_rules: join_rules.clone(),
         pending_device_deletion: None,
         next_device_delete_operation_id: 0,
         pending_cross_signing_auth_session: None,
@@ -630,6 +643,9 @@ pub async fn matrix_restore_session(
     core.inner()
         .attach_devices(devices)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-device-attach-failed"))?;
+    core.inner()
+        .attach_join_rules(join_rules)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-join-rule-attach-failed"))?;
     Ok(identity)
 }
 

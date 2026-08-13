@@ -279,7 +279,7 @@ struct ManagedMatrixSession {
     _image_packs: NativeImagePackOwner,
     typing: Arc<NativeTypingOwner>,
     presence: Arc<NativePresenceOwner>,
-    join_rules: NativeRoomJoinRuleOwner,
+    join_rules: Arc<NativeRoomJoinRuleOwner>,
     pending_device_deletion: Option<PendingDeviceDeletion>,
     next_device_delete_operation_id: u64,
     pending_cross_signing_auth_session: Option<String>,
