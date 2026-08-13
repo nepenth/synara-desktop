@@ -57,7 +57,7 @@ pub struct NativeTimelineOpenRequest {
 /// Bounded authoritative result of opening the requested native timeline
 /// position. This is the versioned, SDK-neutral view boundary; it has no
 /// active React consumer until the complete presenter cutover is ready.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineOpenReadback {
     pub schema_version: u32,
