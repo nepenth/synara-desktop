@@ -16,7 +16,11 @@ pub async fn matrix_verification_start(
 ) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
     let session = state.session.lock().await;
     let active = require_verification_session(session.as_ref())?;
-    active.verification.start(&active.client, device_id).await
+    active
+        .verification
+        .start(&active.client, device_id)
+        .await
+        .map_err(crate::matrix::verification::live::map_verification_error)
 }
 
 #[tauri::command]
@@ -26,7 +30,11 @@ pub async fn matrix_verification_accept(
 ) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
     let session = state.session.lock().await;
     let active = require_verification_session(session.as_ref())?;
-    active.verification.accept(&flow_id).await
+    active
+        .verification
+        .accept(&flow_id)
+        .await
+        .map_err(crate::matrix::verification::live::map_verification_error)
 }
 
 #[tauri::command]
@@ -36,7 +44,11 @@ pub async fn matrix_verification_begin_sas(
 ) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
     let session = state.session.lock().await;
     let active = require_verification_session(session.as_ref())?;
-    active.verification.begin_sas(&flow_id).await
+    active
+        .verification
+        .begin_sas(&flow_id)
+        .await
+        .map_err(crate::matrix::verification::live::map_verification_error)
 }
 
 #[tauri::command]
@@ -46,7 +58,11 @@ pub async fn matrix_verification_confirm(
 ) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
     let session = state.session.lock().await;
     let active = require_verification_session(session.as_ref())?;
-    active.verification.confirm(&flow_id).await
+    active
+        .verification
+        .confirm(&flow_id)
+        .await
+        .map_err(crate::matrix::verification::live::map_verification_error)
 }
 
 #[tauri::command]
@@ -56,7 +72,11 @@ pub async fn matrix_verification_mismatch(
 ) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
     let session = state.session.lock().await;
     let active = require_verification_session(session.as_ref())?;
-    active.verification.mismatch(&flow_id).await
+    active
+        .verification
+        .mismatch(&flow_id)
+        .await
+        .map_err(crate::matrix::verification::live::map_verification_error)
 }
 
 #[tauri::command]
@@ -66,7 +86,11 @@ pub async fn matrix_verification_cancel(
 ) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
     let session = state.session.lock().await;
     let active = require_verification_session(session.as_ref())?;
-    active.verification.cancel(&flow_id).await
+    active
+        .verification
+        .cancel(&flow_id)
+        .await
+        .map_err(crate::matrix::verification::live::map_verification_error)
 }
 
 #[tauri::command]
@@ -76,5 +100,9 @@ pub async fn matrix_verification_dismiss(
 ) -> Result<(), MatrixAuthCommandError> {
     let session = state.session.lock().await;
     let active = require_verification_session(session.as_ref())?;
-    active.verification.dismiss(&flow_id).await
+    active
+        .verification
+        .dismiss(&flow_id)
+        .await
+        .map_err(crate::matrix::verification::live::map_verification_error)
 }

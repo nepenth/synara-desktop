@@ -1,8 +1,8 @@
 //! P8.3 — Verification request inbox + SAS display foundation (harness).
 //!
-//! Pure index of product verification flows. **No SAS secrets, MAC keys,
-//! recovery material, or tokens.** Display-only emoji short names only.
-//! No SDK crypto APIs, no dual-backend.
+//! Pure index plus live `NativeVerificationOwner`. **No SAS secrets, MAC
+//! keys, recovery material, or tokens.** Display-only emoji short names
+//! only. Desktop maps diagnostic ids onto Tauri command errors.
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p8.3-verification.md`
 
@@ -11,6 +11,7 @@
 
 mod error;
 mod inbox;
+mod live;
 mod native;
 
 pub use error::VerificationError;
@@ -18,6 +19,7 @@ pub use inbox::{
     VerificationDirection, VerificationFlow, VerificationInbox, VerificationPhase, MAX_OPEN_FLOWS,
     MAX_SAS_EMOJI,
 };
+pub use live::NativeVerificationOwner;
 pub use native::{
     phase_rank, NativeVerificationDirection, NativeVerificationEmoji, NativeVerificationInbox,
     NativeVerificationPhase, NativeVerificationRequest, NativeVerificationSas,
