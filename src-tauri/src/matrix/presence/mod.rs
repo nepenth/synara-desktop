@@ -13,8 +13,4 @@
 pub use synara_core::app::presence::*;
 
 pub mod live;
-pub use live::{
-    NativePresenceOwner, NativePresenceSnapshot, NativePresenceSnapshotResult, NativePresenceState,
-    NativePresenceSubscription, NativePresenceUpdate, NativePresenceUpdateOutcome,
-    PRESENCE_UPDATED_EVENT,
-};
+pub use live::start as start_presence_owner;
