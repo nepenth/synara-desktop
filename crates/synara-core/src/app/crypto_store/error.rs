@@ -1,6 +1,6 @@
 //! Privacy-safe errors for crypto-store continuity (P8.8).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Crypto-store continuity / health failure.
 #[derive(Debug)]

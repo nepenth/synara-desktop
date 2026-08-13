@@ -1,7 +1,7 @@
 //! Unit tests for P7.5 metadata-only media export intents.
 
 use super::*;
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 fn enqueue(queue: &mut ExportQueue, kind: ExportKind) -> ExportJobId {
     queue
