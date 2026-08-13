@@ -16,4 +16,5 @@ pub(crate) mod session_lifecycle;
 pub(crate) mod typing_set;
 pub(crate) mod typing_snapshot;
 pub(crate) mod user_image_pack;
+pub(crate) mod verification_accept;
 pub(crate) mod verification_list;

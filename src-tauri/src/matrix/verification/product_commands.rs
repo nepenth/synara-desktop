@@ -23,16 +23,10 @@ pub async fn matrix_verification_start(
 
 #[tauri::command]
 pub async fn matrix_verification_accept(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     flow_id: String,
 ) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_verification_session(session.as_ref())?;
-    active
-        .verification
-        .accept(&flow_id)
-        .await
-        .map_err(crate::matrix::verification::live::map_verification_error)
+    crate::bridge::verification_accept::verification_accept(core.inner().as_ref(), flow_id).await
 }
 
 #[tauri::command]

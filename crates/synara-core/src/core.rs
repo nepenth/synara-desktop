@@ -24,7 +24,9 @@ use crate::app::presence::{
 use crate::app::room_profile::{MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner};
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
-use crate::app::verification::{NativeVerificationInbox, NativeVerificationOwner};
+use crate::app::verification::{
+    NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
+};
 use crate::dto::SessionSnapshot;
 use crate::platform::{
     Platform, PlatformCrossSigningOwnIdentity, PlatformCrossSigningPrivateState,
@@ -561,6 +563,16 @@ struct MatrixDeviceRenameRequest {
     display_name: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_verification_accept`.
+///
+/// The renderer sends the camel-case `flowId` key; unknown keys are rejected
+/// so this write cannot grow extra identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixVerificationAcceptRequest {
+    flow_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_room_join_rule_snapshot`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -896,6 +908,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_presence_unsubscribe", matrix_presence_unsubscribe)
         .expect("built-in matrix_presence_unsubscribe must remain in the command census");
     registry
+        .register("matrix_verification_accept", matrix_verification_accept)
+        .expect("built-in matrix_verification_accept must remain in the command census");
+    registry
         .register("matrix_verification_list", matrix_verification_list)
         .expect("built-in matrix_verification_list must remain in the command census");
     registry
@@ -1046,6 +1061,34 @@ fn matrix_verification_list(state: Arc<CoreState>, request: CommandEnvelope) -> 
         serde_json::to_value(inbox)
             .map_err(|_| core_state_error("p2-verification-list-serialization-failed"))
     })
+}
+
+fn matrix_verification_accept(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixVerificationAcceptRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-verification-accept-invalid-payload"))?;
+        let owner = state.verification_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-verification-accept-no-session")
+        })?;
+        let request: NativeVerificationRequest = owner
+            .accept(&payload.flow_id)
+            .await
+            .map_err(verification_accept_owner_error)?;
+        serde_json::to_value(request)
+            .map_err(|_| core_state_error("p2-verification-accept-serialization-failed"))
+    })
+}
+
+fn verification_accept_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-crypto.1-flow-not-found" | "v-crypto.1-sas-invalid-state" => {
+            MatrixIpcErrorCategory::SdkInvariant
+        }
+        "v-crypto.1-start-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 fn matrix_device_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -1896,6 +1939,7 @@ mod tests {
                 "matrix_sync_status",
                 "matrix_typing_set",
                 "matrix_typing_snapshot",
+                "matrix_verification_accept",
                 "matrix_verification_list",
             ]
         );
@@ -3133,6 +3177,44 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-presence-unsubscribe-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_verification_accept_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_verification_accept".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"flowId":"flow-1"}),
+            })
+            .await
+            .expect_err("verification accept without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-verification-accept-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_verification_accept_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_verification_accept".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"flowId":"flow-1","token":"no"}),
+            })
+            .await
+            .expect_err("verification accept must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-verification-accept-invalid-payload")
         );
     }
 
