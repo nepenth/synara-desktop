@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `26caf58d`, the merge commit for #776. |
-| Immediately preceding merges | #775 docs after #774, #776 backup presentation DTOs and projector. |
+| Feature evidence tip | `feature/shared-native-core` is `f31e8af2`, the merge commit for #778. |
+| Immediately preceding merges | #777 docs after #776, #778 presence DTOs and subscription registry. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -64,11 +64,12 @@ residency changes are:
 | #772 / `12f07e8b` | device presentation DTOs and sort helper | Desktop keeps Client snapshot, UIAA delete, and `NativeDeviceOwner`. |
 | #774 / `56fc4841` | secret-storage presentation DTOs and projector | Desktop keeps Client recovery I/O and host recovery-document write. |
 | #776 / `26caf58d` | backup presentation DTOs and projector | Desktop keeps Client backup/recovery I/O and SDK state mapping. |
+| #778 / `f31e8af2` | presence DTOs and subscription registry | Desktop keeps Client stream, event projection, and `NativePresenceOwner`. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `26caf58d`/#776 for
+anchor, but it is no longer the feature-tip provenance; use `f31e8af2`/#778 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -121,7 +122,7 @@ and the P1 app domains `sync`, `room_list`, pure `timeline`,
 remote-logout / wipe / error / session-material trait / logout, auth device-name, and auth
 discovery/UIA/client_config, well-known HTTP transport, later/room-notes codecs,
 image-pack DTO/type-filters/write-guards, m.direct snapshot helpers,
-device presentation DTOs, secret-storage presentation DTOs, and backup presentation DTOs.
+device presentation DTOs, secret-storage presentation DTOs, backup presentation DTOs, and presence DTOs.
 Later mechanical splits left live `product_commands.rs` and `live.rs` on
 desktop where those files exist. Compatibility re-exports remain deliberately
 in the desktop shell.

@@ -4,8 +4,8 @@ Legend: ✅ shipping / 🔨 in progress / ⛔ not yet
 
 ## Current bounded evidence (not parity completion)
 
-At `feature/shared-native-core` `26caf58d`
-(#776, after #775), P2 still registers exactly the same eight names—
+At `feature/shared-native-core` `f31e8af2`
+(#778, after #777), P2 still registers exactly the same eight names—
 `matrix_login_flows`, `matrix_register_flows`, `matrix_session_snapshot`,
 `matrix_sync_status`, `matrix_crypto_status`, `matrix_media_config`,
 `matrix_cross_signing_status`, and `matrix_secret_storage_status`—and all
