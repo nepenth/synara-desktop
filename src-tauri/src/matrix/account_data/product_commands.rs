@@ -14,26 +14,18 @@ pub async fn matrix_mdirect_snapshot(
 /// V-SEND.R-PACK-READ: personal `im.ponies.user_emotes` account-data pack.
 #[tauri::command]
 pub async fn matrix_get_user_image_pack(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeUserImagePackSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    snapshot_user_image_pack(&active.client, active.sync.session_generation())
-        .await
-        .map_err(map_pack_read_error)
+    crate::bridge::user_image_pack::user_image_pack(core.inner().as_ref()).await
 }
 
 /// V-SEND.R-PACK-READ: `im.ponies.room_emotes` state packs for a room.
 #[tauri::command]
 pub async fn matrix_get_room_image_packs(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
 ) -> Result<NativeRoomImagePacksSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    snapshot_room_image_packs(&active.client, active.sync.session_generation(), &room_id)
-        .await
-        .map_err(map_pack_read_error)
+    crate::bridge::room_image_packs::room_image_packs(core.inner().as_ref(), room_id).await
 }
 
 /// V-SEND.R-PACK-READ: global packs enabled via `im.ponies.emote_rooms`.
