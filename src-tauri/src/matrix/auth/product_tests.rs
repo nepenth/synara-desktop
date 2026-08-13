@@ -1513,6 +1513,56 @@ fn room_members_snapshot_owns_live_sdk_members_without_js_fallback() {
 }
 
 #[test]
+fn space_commands_route_through_core_without_desktop_client_io() {
+    let product = PRODUCT_SOURCE;
+    for (name, bridge) in [
+        (
+            "matrix_space_parents_snapshot",
+            "crate::bridge::spaces::space_parents_snapshot",
+        ),
+        (
+            "matrix_space_hierarchy_snapshot",
+            "crate::bridge::spaces::space_hierarchy_snapshot",
+        ),
+        (
+            "matrix_space_children_snapshot",
+            "crate::bridge::spaces::space_children_snapshot",
+        ),
+        (
+            "matrix_space_child_set",
+            "crate::bridge::spaces::space_child_set",
+        ),
+        (
+            "matrix_space_child_remove",
+            "crate::bridge::spaces::space_child_remove",
+        ),
+        (
+            "matrix_restricted_join_reparent",
+            "crate::bridge::spaces::restricted_join_reparent",
+        ),
+    ] {
+        let command = product
+            .split(&format!("pub async fn {name}"))
+            .nth(1)
+            .unwrap_or_else(|| panic!("{name} command"));
+        let command = command
+            .split("#[tauri::command]")
+            .next()
+            .unwrap_or_else(|| panic!("{name} command body"));
+        assert!(
+            command.contains(bridge),
+            "{name} must dispatch through {bridge}"
+        );
+        assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+        assert!(!command.contains("active.client"));
+        assert!(!command.contains("snapshot_space_"));
+        assert!(!command.contains("set_space_child"));
+        assert!(!command.contains("remove_space_child"));
+        assert!(!command.contains("reparent_restricted_join_allow"));
+    }
+}
+
+#[test]
 fn power_level_and_creator_snapshots_have_fixed_wire_shapes() {
     let power_levels = NativeRoomPowerLevelsSnapshot {
         status: "ok",

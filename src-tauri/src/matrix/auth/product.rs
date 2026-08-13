@@ -102,10 +102,8 @@ use crate::matrix::send::{
     AttachmentSendQueue, SendQueue,
 };
 use crate::matrix::spaces::{
-    remove_space_child, reparent_restricted_join_allow, set_space_child, snapshot_space_children,
-    snapshot_space_hierarchy, snapshot_space_parents, NativeRestrictedJoinReparentResult,
-    NativeSpaceChildMutationResult, NativeSpaceChildrenSnapshot, NativeSpaceHierarchySnapshot,
-    NativeSpaceParentsSnapshot,
+    NativeRestrictedJoinReparentResult, NativeSpaceChildMutationResult,
+    NativeSpaceChildrenSnapshot, NativeSpaceHierarchySnapshot, NativeSpaceParentsSnapshot,
 };
 use crate::matrix::store::{
     get_or_create_store_key, AccountIdentity, KeyringStoreKeyVault, StoreKeyId, StoreKeyMaterial,

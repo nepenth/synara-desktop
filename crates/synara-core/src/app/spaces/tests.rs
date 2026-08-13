@@ -1,8 +1,8 @@
 //! Unit tests for P4.5 space hierarchy foundation.
 
 use super::*;
-use crate::dto::SpaceSummary;
 use crate::app::room_list::RoomSummaryBuilder;
+use crate::dto::SpaceSummary;
 
 fn space(
     id: &str,

@@ -27,6 +27,7 @@ pub(crate) mod send_poll;
 pub(crate) mod send_sticker;
 pub(crate) mod send_text;
 pub(crate) mod session_lifecycle;
+pub(crate) mod spaces;
 pub(crate) mod timeline_actions;
 pub(crate) mod timeline_close;
 pub(crate) mod timeline_composer;
