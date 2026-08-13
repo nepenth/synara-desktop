@@ -20,8 +20,8 @@ integration, or release path. **Never a big-bang move.**
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
 
-**Current bounded status at `615b501b`
-(#762, after #761):** #713 mechanically moved notifications, polls,
+**Current bounded status at `4dae1b16`
+(#764, after #763):** #713 mechanically moved notifications, polls,
 relations, threads, and unread; #714 moved raw content, receipts, routes, and
 security; #716 moved search, legacy, and media_cache; #717 moved media_export
 and crypto_store; #734 moved the room-directory session harness; #735 moved
@@ -37,7 +37,8 @@ and live login stayed desktop); #755 moved the lifecycle error domain
 recovery/remote-logout/wipe; #758 moved client-builder config (SDK open stayed
 desktop); #760 moved the session-material vault trait / sealed envelope
 (Keyring I/O stayed desktop); #762 moved the well-known HTTP discovery
-transport (live login stayed desktop). These retain thin desktop re-exports and any
+transport (live login stayed desktop); #764 moved logout orchestration and
+the task-supervisor bridge. These retain thin desktop re-exports and any
 leftover `live.rs` / `product_commands.rs`. They are P1 extraction
 only: no P2 command registration, UDL, or iOS behavior changed.
 
@@ -121,7 +122,7 @@ zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
 
 > **Bounded evidence note — not P4 acceptance:** At the current feature tip
-> `615b501b17650d3f6ea40dde2b2aa031012d8f0c` (#762, after #761), the
+> `4dae1b16645f1bc1d012271c182661352e6fccd7` (#764, after #763), the
 > prior #708 work is only the pure iOS room-row unread presentation from closed
 > `Joined`/`Invited` membership, scalar counters, and a marked-unread flag to a
 > `u64` count plus highlight boolean. The prior #710 work is only the pure
