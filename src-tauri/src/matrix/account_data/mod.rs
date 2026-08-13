@@ -10,12 +10,7 @@ pub mod later;
 pub mod live;
 pub mod room_notes;
 
-pub use image_packs::{
-    set_global_image_packs, set_room_image_pack, set_user_image_pack, snapshot_global_image_packs,
-    snapshot_room_image_packs, snapshot_user_image_pack, NativeGlobalImagePacksSnapshot,
-    NativeImagePack, NativeImagePackOwner, NativeRoomImagePacksSnapshot,
-    NativeUserImagePackSnapshot, IMAGE_PACKS_UPDATED_EVENT,
-};
+pub use image_packs::start as start_image_pack_owner;
 pub use later::{
     clear_completed_later_live, complete_later_item_live, mark_later_reminded_live, snapshot_later,
     snooze_later_item_live, upsert_later_item, NativeLaterSnapshot, SynaraLaterContent,

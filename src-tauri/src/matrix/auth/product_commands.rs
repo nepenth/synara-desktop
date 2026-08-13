@@ -78,8 +78,12 @@ pub async fn matrix_login_password(
         crate::matrix::devices::start_device_owner(&client, app.clone(), session_generation)
             .await
             .map_err(map_device_error)?;
-    let image_packs = NativeImagePackOwner::start(&client, app.clone(), session_generation)
-        .map_err(map_pack_read_subscribe_error)?;
+    let image_packs = crate::matrix::account_data::start_image_pack_owner(
+        &client,
+        app.clone(),
+        session_generation,
+    )
+    .map_err(map_pack_read_subscribe_error)?;
     let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
     let presence =
         crate::matrix::presence::start_presence_owner(&client, app.clone(), session_generation)
@@ -340,8 +344,12 @@ pub(super) async fn install_session_from_register_secrets(
         crate::matrix::devices::start_device_owner(&client, app.clone(), session_generation)
             .await
             .map_err(map_device_error)?;
-    let image_packs = NativeImagePackOwner::start(&client, app.clone(), session_generation)
-        .map_err(map_pack_read_subscribe_error)?;
+    let image_packs = crate::matrix::account_data::start_image_pack_owner(
+        &client,
+        app.clone(),
+        session_generation,
+    )
+    .map_err(map_pack_read_subscribe_error)?;
     let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
     let presence =
         crate::matrix::presence::start_presence_owner(&client, app.clone(), session_generation)
@@ -518,8 +526,12 @@ pub async fn matrix_restore_session(
         crate::matrix::devices::start_device_owner(&client, app.clone(), session_generation)
             .await
             .map_err(map_device_error)?;
-    let image_packs = NativeImagePackOwner::start(&client, app.clone(), session_generation)
-        .map_err(map_pack_read_subscribe_error)?;
+    let image_packs = crate::matrix::account_data::start_image_pack_owner(
+        &client,
+        app.clone(),
+        session_generation,
+    )
+    .map_err(map_pack_read_subscribe_error)?;
     let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
     let presence =
         crate::matrix::presence::start_presence_owner(&client, app.clone(), session_generation)
