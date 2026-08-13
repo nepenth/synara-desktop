@@ -65,14 +65,8 @@ pub async fn matrix_verification_cancel(
 
 #[tauri::command]
 pub async fn matrix_verification_dismiss(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     flow_id: String,
 ) -> Result<(), MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_verification_session(session.as_ref())?;
-    active
-        .verification
-        .dismiss(&flow_id)
-        .await
-        .map_err(crate::matrix::verification::live::map_verification_error)
+    crate::bridge::verification_dismiss::verification_dismiss(core.inner().as_ref(), flow_id).await
 }
