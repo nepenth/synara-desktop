@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`6dd69bc6` (#796, after #795):** P0 is
+`213b5cc5` (#798, after #797):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -71,7 +71,8 @@ acceptance criteria have all passed.
   #790 moved members presentation snapshots and write result (Client member/power-level I/O stayed desktop);
   #792 moved room join-rule presentation DTO (SDK mapping and Tauri owner stayed desktop);
   #794 moved timeline presentation DTOs (NativeTimelineRegistry and Client/Tauri streams stayed desktop);
-  #796 moved send/profile-write/room-create/room-profile IPC DTOs (Client I/O stayed desktop).
+  #796 moved send/profile-write/room-create/room-profile IPC DTOs (Client I/O stayed desktop);
+  #798 moved media upload/download/config IPC DTOs (Client media I/O stayed desktop).
   These retain thin desktop re-exports and
   add no P2 command, UDL, or iOS behavior. Compatibility re-exports remain, and many matrix domains are
   still desktop-owned, so the full extraction/end state is not yet complete.
