@@ -44,6 +44,9 @@ getrandom = "0.3"
 # P4-1 binding metadata/runtime. The version is pinned so the UDL scaffolding,
 # generated Swift, and Apple libraries are produced by one reproducible toolchain.
 uniffi = { version = "=0.28.3" }
+# Store identity fingerprints directory names (moved from desktop store/identity.rs).
+# Pin matches src-tauri (`sha2 = "0.10"`).
+sha2 = "0.10"
 
 [build-dependencies]
 uniffi = { version = "=0.28.3", features = ["build"] }
