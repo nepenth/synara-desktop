@@ -162,7 +162,7 @@ pub struct NativeTimelineReactionSender {
     pub reaction_event_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeReactionMutation {
     Added,
@@ -171,7 +171,7 @@ pub enum NativeReactionMutation {
     Redacted,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeReactionMutationResult {
     pub room_id: String,

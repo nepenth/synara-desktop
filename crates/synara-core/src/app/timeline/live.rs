@@ -130,6 +130,52 @@ impl NativeTimelineOwner {
             .set_read_state(&self.client, request)
             .await
     }
+
+    pub async fn toggle_reaction(
+        &self,
+        room_id: &str,
+        event_id: &str,
+        key: &str,
+    ) -> Result<NativeReactionMutationResult, &'static str> {
+        self.registry
+            .lock()
+            .await
+            .toggle_reaction(&self.client, room_id, event_id, key)
+            .await
+    }
+
+    pub async fn ensure_reaction(
+        &self,
+        room_id: &str,
+        event_id: &str,
+        key: &str,
+    ) -> Result<NativeReactionMutationResult, &'static str> {
+        self.registry
+            .lock()
+            .await
+            .ensure_reaction(&self.client, room_id, event_id, key)
+            .await
+    }
+
+    pub async fn redact_reaction(
+        &self,
+        room_id: &str,
+        target_event_id: &str,
+        reaction_event_id: &str,
+        key: &str,
+    ) -> Result<NativeReactionMutationResult, &'static str> {
+        self.registry
+            .lock()
+            .await
+            .redact_reaction(
+                &self.client,
+                room_id,
+                target_event_id,
+                reaction_event_id,
+                key,
+            )
+            .await
+    }
 }
 
 impl NativeTimelineRegistry {

@@ -92,63 +92,52 @@ pub async fn matrix_timeline_set_read_state(
 
 #[tauri::command]
 pub async fn matrix_timeline_reaction_toggle(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     event_id: String,
     key: String,
 ) -> Result<NativeReactionMutationResult, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
-    let active = require_session_mut(session.as_mut())?;
-    active
-        .timelines
-        .lock()
-        .await
-        .toggle_reaction(&active.client, &room_id, &event_id, &key)
-        .await
-        .map_err(map_reaction_error)
+    crate::bridge::timeline_reactions::reaction_toggle(
+        core.inner().as_ref(),
+        room_id,
+        event_id,
+        key,
+    )
+    .await
 }
 
 #[tauri::command]
 pub async fn matrix_reaction_ensure(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     event_id: String,
     key: String,
 ) -> Result<NativeReactionMutationResult, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
-    let active = require_session_mut(session.as_mut())?;
-    active
-        .timelines
-        .lock()
-        .await
-        .ensure_reaction(&active.client, &room_id, &event_id, &key)
-        .await
-        .map_err(map_reaction_error)
+    crate::bridge::timeline_reactions::reaction_ensure(
+        core.inner().as_ref(),
+        room_id,
+        event_id,
+        key,
+    )
+    .await
 }
 
 #[tauri::command]
 pub async fn matrix_reaction_redact(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     target_event_id: String,
     reaction_event_id: String,
     key: String,
 ) -> Result<NativeReactionMutationResult, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
-    let active = require_session_mut(session.as_mut())?;
-    active
-        .timelines
-        .lock()
-        .await
-        .redact_reaction(
-            &active.client,
-            &room_id,
-            &target_event_id,
-            &reaction_event_id,
-            &key,
-        )
-        .await
-        .map_err(map_reaction_error)
+    crate::bridge::timeline_reactions::reaction_redact(
+        core.inner().as_ref(),
+        room_id,
+        target_event_id,
+        reaction_event_id,
+        key,
+    )
+    .await
 }
 
 #[tauri::command]
