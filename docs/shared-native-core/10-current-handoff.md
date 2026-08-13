@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `b9573e41`, the merge commit for #816. |
-| Immediately preceding merges | #815 docs after #814, #816 live `NativeVerificationOwner`. |
+| Feature evidence tip | `feature/shared-native-core` is `0df2595e`, the merge commit for #818. |
+| Immediately preceding merges | #817 docs after #816, #818 `matrix_typing_snapshot` through Core::command. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -86,11 +86,12 @@ residency changes are:
 | #812 / `dcb0783e` | timeline `ViewDeltaEmitter` behind emit sink | Desktop keeps AppHandle adapter. |
 | #814 / `986dc538` | live `NativeTimelineRegistry` | Desktop keeps `timeline_view_emit`. |
 | #816 / `b9573e41` | live `NativeVerificationOwner` | Desktop maps diagnostic ids onto Tauri errors. |
+| #818 / `0df2595e` | `matrix_typing_snapshot` via `Core::command` | Desktop attaches the typing owner after login. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `b9573e41`/#816 for
+anchor, but it is no longer the feature-tip provenance; use `0df2595e`/#818 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -160,9 +161,9 @@ tests/proofs for moved domains. Core-owned discovery/UIA types and the vault
 trait do not make live login or Keychain I/O Core-owned. Therefore P1 is not
 complete and `src-tauri` is not a thin shell.
 
-### P2 — in progress: exactly eight registered commands
+### P2 — in progress: nine registered commands
 
-The Core registry registers exactly these eight names:
+The Core registry registers exactly these nine names:
 
 1. `matrix_login_flows`
 2. `matrix_register_flows`
@@ -172,10 +173,10 @@ The Core registry registers exactly these eight names:
 6. `matrix_media_config`
 7. `matrix_cross_signing_status`
 8. `matrix_secret_storage_status`
+9. `matrix_typing_snapshot` (#818)
 
-All other census command names remain unregistered and fail closed. #713 and
-#714 did not change this list. This is neither complete desktop command parity
-nor a basis to add a speculative route.
+All other census command names remain unregistered and fail closed. This is
+neither complete desktop command parity nor a basis to add a speculative route.
 
 ### P3 — in progress: bounded desktop bridges only
 
