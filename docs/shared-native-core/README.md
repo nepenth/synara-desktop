@@ -8,7 +8,7 @@ Desktop onto **one transport-agnostic Rust application-logic core** —
 |---|---|
 | Owner | Synara engineering |
 | Status | P0 complete; P1 extraction and bounded P2, P3, and P4 slices are merged at the evidence base below. P2–P4 remain in progress; P5 has not started. |
-| Evidence base | `feature/shared-native-core` at `e99a61c3` (#826, after #825; prior bounded P4 evidence remains #708/#710) |
+| Evidence base | `feature/shared-native-core` at `89b90bad` (#828, after #827; prior bounded P4 evidence remains #708/#710) |
 | Decision | [ADR 0003](../adr/0003-shared-native-rust-core.md) |
 | Program ledger | `docs/shared-native-core/` (this directory) |
 | Related ADRs | [0001](../adr/0001-ios-repository-layout.md), [0002](../adr/0002-ios-architecture.md) |
@@ -78,9 +78,9 @@ Desktop onto **one transport-agnostic Rust application-logic core** —
   The remaining desktop-owned matrix domains still make the full P1 end-state
   incomplete.
 - **P2 is a partial transport registry, not the complete command migration.**
-  `Core::command` has typed envelopes and currently registers thirteen
-  desktop-census commands: the prior twelve plus `matrix_room_join_rule_snapshot`
-  (#826). The rest of the census remains unregistered and fail-closed.
+  `Core::command` has typed envelopes and currently registers fourteen
+  desktop-census commands: the prior thirteen plus `matrix_get_global_image_packs`
+  (#828). The rest of the census remains unregistered and fail-closed.
 - **P3 has a bounded desktop seam.** Existing Tauri commands route the two
   stateless auth probes and the session lifecycle/snapshot, sync-status, and
   crypto-status observations through the managed Core while retaining their
@@ -106,14 +106,14 @@ Desktop onto **one transport-agnostic Rust application-logic core** —
 ## Current milestone ledger
 
 The following describes merged source reachable from
-`e99a61c3` (#826, after #825). #708 and #710
+`89b90bad` (#828, after #827). #708 and #710
 remain the prior bounded P4 evidence.
 
 | Phase | Merged evidence | Current boundary |
 |---|---|---|
 | P0 | ADR, plan, and census | Complete planning baseline. |
 | P1 | #669, #673–#677, #680–#681, #713–#714, #716–#717, #720–#721, #723–#726, #728–#729, #731–#732, #734–#735, #737–#738, #740–#741, #743–#744, #747–#748, #751, #753, #755, #757–#758, #760, #762, #764, #766, #768, #770, #772, #774, #776, #778, #780–#781, #783–#784, #786, #788, #790, #792, #794, #796, #798, #800–#801, #803, #805, #807–#808, #810, #812, #814, #816 | Extraction slices plus live client/login adapters, emit owners, NativeTimelineRegistry, and NativeVerificationOwner; leftover Keychain/Tauri commands not all moved. |
-| P2 | #683–#689, #694, #698, #701–#702, #706, #818, #820, #822, #824, #826 | Thirteen-command registry (`matrix_room_join_rule_snapshot` added); full desktop-invoke parity is not reached. |
+| P2 | #683–#689, #694, #698, #701–#702, #706, #818, #820, #822, #824, #826, #828 | Fourteen-command registry (`matrix_get_global_image_packs` added); full desktop-invoke parity is not reached. |
 | P3 | #690–#691, #694, #698, #701–#702, #706 | The listed auth and read-only/session bridges use Core; `src-tauri` is not yet a fully thin shell. |
 | P4 | #685, #692–#693, #696, #699, #703, #708, #710 | UniFFI scaffold, bounded login discovery/link coverage, a safe session projection mirror, display-only readback, and only the two pure row/recovery policies exist; service migration and Apple release proof do not. |
 | P5 | None | Not started. The release gates below remain required. |
