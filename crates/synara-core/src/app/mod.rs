@@ -32,6 +32,7 @@ pub mod room_ops;
 pub mod room_profile;
 pub mod routes;
 pub mod search;
+pub mod secret_storage;
 pub mod security;
 pub mod send;
 pub mod spaces;
