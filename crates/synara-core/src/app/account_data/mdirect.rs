@@ -1,15 +1,16 @@
 //! Credential-free `m.direct` snapshot DTO and string-map mutate helpers.
 //!
-//! Live Client load/store and ruma `DirectEventContent` stay in the desktop shell.
+//! Live Client load/store is in `mdirect_live` and is owned by the image-pack
+//! session owner.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// user_id → room_ids, matching the `m.direct` account-data map.
 pub type MDirectRooms = BTreeMap<String, Vec<String>>;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeMDirectSnapshot {
     pub session_generation: u64,

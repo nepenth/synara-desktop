@@ -9,8 +9,8 @@ use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 
 use crate::app::account_data::{
-    NativeGlobalImagePacksSnapshot, NativeImagePackOwner, NativeRoomImagePacksSnapshot,
-    NativeUserImagePackSnapshot,
+    NativeGlobalImagePacksSnapshot, NativeImagePackOwner, NativeMDirectMutationResult,
+    NativeMDirectSnapshot, NativeRoomImagePacksSnapshot, NativeUserImagePackSnapshot,
 };
 use crate::app::auth::{
     discover_login_flows, login_flows_response, probe_register_flows, AuthError,
@@ -555,6 +555,21 @@ struct MatrixSetRoomImagePackRequest {
     room_id: String,
     state_key: String,
     content: serde_json::Value,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_mdirect_add`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixMDirectAddRequest {
+    room_id: String,
+    user_id: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_mdirect_remove`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixMDirectRemoveRequest {
+    room_id: String,
 }
 
 #[derive(Deserialize)]
@@ -1312,6 +1327,15 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_set_room_image_pack", matrix_set_room_image_pack)
         .expect("built-in matrix_set_room_image_pack must remain in the command census");
+    registry
+        .register("matrix_mdirect_snapshot", matrix_mdirect_snapshot)
+        .expect("built-in matrix_mdirect_snapshot must remain in the command census");
+    registry
+        .register("matrix_mdirect_add", matrix_mdirect_add)
+        .expect("built-in matrix_mdirect_add must remain in the command census");
+    registry
+        .register("matrix_mdirect_remove", matrix_mdirect_remove)
+        .expect("built-in matrix_mdirect_remove must remain in the command census");
     registry
         .register("matrix_typing_set", matrix_typing_set)
         .expect("built-in matrix_typing_set must remain in the command census");
@@ -2464,6 +2488,68 @@ fn matrix_set_room_image_pack(state: Arc<CoreState>, request: CommandEnvelope) -
     })
 }
 
+fn matrix_mdirect_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-mdirect-snapshot-invalid-payload"));
+        }
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-mdirect-snapshot-no-session")
+        })?;
+        let snapshot: NativeMDirectSnapshot = owner
+            .mdirect_snapshot()
+            .await
+            .map_err(mdirect_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-mdirect-snapshot-serialization-failed"))
+    })
+}
+
+fn matrix_mdirect_add(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixMDirectAddRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-mdirect-add-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-mdirect-add-no-session")
+        })?;
+        let result: NativeMDirectMutationResult = owner
+            .mdirect_add(&payload.room_id, &payload.user_id)
+            .await
+            .map_err(mdirect_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-mdirect-add-serialization-failed"))
+    })
+}
+
+fn matrix_mdirect_remove(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixMDirectRemoveRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-mdirect-remove-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-mdirect-remove-no-session")
+        })?;
+        let result: NativeMDirectMutationResult = owner
+            .mdirect_remove(&payload.room_id)
+            .await
+            .map_err(mdirect_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-mdirect-remove-serialization-failed"))
+    })
+}
+
+fn mdirect_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-rooms.5-mdirect-invalid-room" | "v-rooms.5-mdirect-invalid-user" => {
+            MatrixIpcErrorCategory::SdkInvariant
+        }
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
 fn image_pack_write_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "v-send.r-pack-write-invalid-content"
@@ -3158,6 +3244,9 @@ mod tests {
                 "matrix_get_room_image_packs",
                 "matrix_get_user_image_pack",
                 "matrix_login_flows",
+                "matrix_mdirect_add",
+                "matrix_mdirect_remove",
+                "matrix_mdirect_snapshot",
                 "matrix_media_config",
                 "matrix_presence_snapshot",
                 "matrix_presence_subscribe",
@@ -4963,6 +5052,66 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-set-room-directory-visibility-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_mdirect_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_mdirect_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("mdirect snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-mdirect-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_mdirect_add_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_mdirect_add".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "userId":"@alice:example.org"
+                }),
+            })
+            .await
+            .expect_err("mdirect add without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-mdirect-add-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_mdirect_remove_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_mdirect_remove".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org"}),
+            })
+            .await
+            .expect_err("mdirect remove without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-mdirect-remove-no-session")
         );
     }
 

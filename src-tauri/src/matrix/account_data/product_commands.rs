@@ -2,13 +2,9 @@ use super::*;
 
 #[tauri::command]
 pub async fn matrix_mdirect_snapshot(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeMDirectSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    snapshot_mdirect(&active.client, active.sync.session_generation())
-        .await
-        .map_err(map_mdirect_error)
+    crate::bridge::mdirect::mdirect_snapshot(core.inner().as_ref()).await
 }
 
 /// V-SEND.R-PACK-READ: personal `im.ponies.user_emotes` account-data pack.
@@ -82,27 +78,19 @@ pub async fn matrix_set_room_image_pack(
 
 #[tauri::command]
 pub async fn matrix_mdirect_add(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     user_id: String,
 ) -> Result<NativeMDirectMutationResult, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    add_room_to_mdirect(&active.client, &room_id, &user_id)
-        .await
-        .map_err(map_mdirect_error)
+    crate::bridge::mdirect::mdirect_add(core.inner().as_ref(), room_id, user_id).await
 }
 
 #[tauri::command]
 pub async fn matrix_mdirect_remove(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
 ) -> Result<NativeMDirectMutationResult, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    remove_room_from_mdirect(&active.client, &room_id)
-        .await
-        .map_err(map_mdirect_error)
+    crate::bridge::mdirect::mdirect_remove(core.inner().as_ref(), room_id).await
 }
 
 #[tauri::command]
