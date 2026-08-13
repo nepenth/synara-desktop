@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`0df2595e` (#818, after #817):** P0 is
+`14828f73` (#820, after #819):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -88,12 +88,14 @@ acceptance criteria have all passed.
   still desktop-owned, so the full extraction/end state is not yet complete.
 - **P2 — in progress; transport registry is intentionally partial.** #683–#684
   added `Core::command`, typed envelopes, the registry, and the desktop command
-  census. The merged registry currently has exactly:
+  census. The merged registry currently has exactly those eight plus
+  `matrix_typing_snapshot` (#818) and `matrix_presence_snapshot` (#820):
   `matrix_login_flows`, `matrix_register_flows`, `matrix_session_snapshot`,
   `matrix_sync_status`, `matrix_crypto_status`, `matrix_media_config`,
-  `matrix_cross_signing_status`, and `matrix_secret_storage_status`
-  (#686–#689, #694, #698, #701–#702, #706). The latter six preserve bounded
-  legacy status/media/cross-signing/secret-storage contracts through Core.
+  `matrix_cross_signing_status`, `matrix_secret_storage_status`,
+  `matrix_typing_snapshot`, and `matrix_presence_snapshot`
+  (#686–#689, #694, #698, #701–#702, #706, #818, #820). The status/media
+  routes preserve bounded legacy contracts through Core.
   Neither #708, #710, #713, #714, #716, nor #717 adds a Core command route. It is not the
   complete desktop command registry; unregistered census names fail closed.
 - **P3 — in progress; a desktop seam is merged, not a whole adapter swap.**
