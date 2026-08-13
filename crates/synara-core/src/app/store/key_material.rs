@@ -1,6 +1,6 @@
 //! Store encryption key material (CSPRNG) and keyring key identifiers.
 
-use super::AccountIdentity;
+use super::identity::AccountIdentity;
 
 /// Length of a Matrix store encryption key (bytes). Matches common SQLite store
 /// passphrase/key expectations; product never logs these bytes.

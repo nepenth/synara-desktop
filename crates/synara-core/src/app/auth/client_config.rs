@@ -7,7 +7,7 @@
 use super::discovery::DiscoveryResult;
 use super::error::AuthError;
 use super::input::normalize_homeserver_url;
-use crate::matrix::store::{AccountIdentity, AccountIdentityError};
+use crate::app::store::{AccountIdentity, AccountIdentityError};
 
 /// Apply a discovery result's homeserver base URL onto an existing account
 /// identity (user id preserved). Validates via [`AccountIdentity::new`].
