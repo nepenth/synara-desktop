@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `760a058a`, the merge commit for #888. |
-| Immediately preceding merges | #887 docs after #886, #888 room leave and join. |
+| Feature evidence tip | `feature/shared-native-core` is `bfeb2352`, the merge commit for #890. |
+| Immediately preceding merges | #889 docs after #888, #890 room invite/kick/ban/unban. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -122,11 +122,12 @@ residency changes are:
 | #884 / `311d7b0a` | later account-data via `Core::command` | Same attached account-data owner. |
 | #886 / `abaf750a` | room-notes account-data via `Core::command` | Same attached account-data owner. |
 | #888 / `760a058a` | room leave/join via `Core::command` | Same attached room-profile owner. |
+| #890 / `bfeb2352` | room invite/kick/ban/unban via `Core::command` | Same attached room-profile owner. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `760a058a`/#888 for
+anchor, but it is no longer the feature-tip provenance; use `bfeb2352`/#890 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -196,9 +197,9 @@ tests/proofs for moved domains. Core-owned discovery/UIA types and the vault
 trait do not make live login or Keychain I/O Core-owned. Therefore P1 is not
 complete and `src-tauri` is not a thin shell.
 
-### P2 — in progress: seventy-four registered commands
+### P2 — in progress: seventy-eight registered commands
 
-The Core registry registers exactly these seventy-four names:
+The Core registry registers exactly these seventy-eight names:
 
 1. `matrix_login_flows`
 2. `matrix_register_flows`
@@ -274,6 +275,10 @@ The Core registry registers exactly these seventy-four names:
 72. `matrix_room_notes_move_todo` (#886)
 73. `matrix_room_leave` (#888)
 74. `matrix_room_join` (#888)
+75. `matrix_room_invite` (#890)
+76. `matrix_room_kick` (#890)
+77. `matrix_room_ban` (#890)
+78. `matrix_room_unban` (#890)
 
 All other census command names remain unregistered and fail closed. This is
 neither complete desktop command parity nor a basis to add a speculative route.
