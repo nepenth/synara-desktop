@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`986dc538` (#814, after #813):** P0 is
+`b9573e41` (#816, after #815):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -81,7 +81,8 @@ acceptance criteria have all passed.
   #808 moved live `NativePresenceOwner` behind a shell emit sink (Tauri event adapter stayed desktop);
   #810 moved live `NativeImagePackOwner` plus snapshot/set behind a shell emit sink (Tauri adapter stayed desktop);
   #812 extracted the timeline `ViewDeltaEmitter` behind a shell emit sink;
-  #814 moved live `NativeTimelineRegistry` into Core (desktop keeps the AppHandle adapter).
+  #814 moved live `NativeTimelineRegistry` into Core (desktop keeps the AppHandle adapter);
+  #816 moved live `NativeVerificationOwner` into Core (desktop maps diagnostic ids onto Tauri errors).
   These retain thin desktop re-exports and
   add no P2 command, UDL, or iOS behavior. Compatibility re-exports remain, and many matrix domains are
   still desktop-owned, so the full extraction/end state is not yet complete.

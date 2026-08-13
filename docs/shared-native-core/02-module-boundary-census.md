@@ -3,13 +3,13 @@
 All paths relative to the repository root. Census technique: `git ls-files`,
 `grep -rl`, `grep -rn` over `src-tauri/src`, `synara-ios`, `.github/workflows`.
 The current source evidence is `feature/shared-native-core`
-`986dc538` (#814, after #813).
+`b9573e41` (#816, after #815).
 
 ## 2.1 Desktop application-logic layer
 
 The P0 census counted **285 `.rs` files** under `src-tauri/src/matrix/`. At the
 current evidence tip, there are 100 tracked Rust files under that desktop path
-and 229 under `crates/synara-core/src/app/`; the difference reflects P1 moves,
+and 230 under `crates/synara-core/src/app/`; the difference reflects P1 moves,
 not completion. The table remains the responsibility inventory rather than a
 claim that every listed domain is desktop-resident. Each domain is typically
 `mod.rs` (owning types/state) + `error.rs` + `live.rs` (actor/live state) +
