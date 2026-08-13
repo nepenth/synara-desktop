@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `c2282aa2`, the merge commit for #876. |
-| Immediately preceding merges | #875 docs after #874, #876 composer reply-draft trio. |
+| Feature evidence tip | `feature/shared-native-core` is `928c0925`, the merge commit for #878. |
+| Immediately preceding merges | #877 docs after #876, #878 room name/topic/avatar writes. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -116,11 +116,12 @@ residency changes are:
 | #872 / `53f49a20` | timeline poll-vote/call-decline via `Core::command` | Same attached timeline owner. |
 | #874 / `fecf19cd` | timeline forward text/media via `Core::command` | Same attached timeline owner. |
 | #876 / `c2282aa2` | composer reply-draft trio via `Core::command` | Timeline owner now holds the draft registry. |
+| #878 / `928c0925` | room name/topic/avatar via `Core::command` | Join-rule owner now owns those writes. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `c2282aa2`/#876 for
+anchor, but it is no longer the feature-tip provenance; use `928c0925`/#878 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -190,9 +191,9 @@ tests/proofs for moved domains. Core-owned discovery/UIA types and the vault
 trait do not make live login or Keychain I/O Core-owned. Therefore P1 is not
 complete and `src-tauri` is not a thin shell.
 
-### P2 — in progress: fifty-three registered commands
+### P2 — in progress: fifty-six registered commands
 
-The Core registry registers exactly these fifty-three names:
+The Core registry registers exactly these fifty-six names:
 
 1. `matrix_login_flows`
 2. `matrix_register_flows`
@@ -247,6 +248,9 @@ The Core registry registers exactly these fifty-three names:
 51. `matrix_composer_set_reply_draft` (#876)
 52. `matrix_composer_clear_reply_draft` (#876)
 53. `matrix_composer_get_reply_draft` (#876)
+54. `matrix_set_room_name` (#878)
+55. `matrix_set_room_topic` (#878)
+56. `matrix_set_room_avatar` (#878)
 
 All other census command names remain unregistered and fail closed. This is
 neither complete desktop command parity nor a basis to add a speculative route.
