@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `c51ab072`, the merge commit for #906. |
-| Immediately preceding merges | #905 docs after #904, #906 send_poll / poll_respond. |
+| Feature evidence tip | `feature/shared-native-core` is `7315ffe6`, the merge commit for #908. |
+| Immediately preceding merges | #907 docs after #906, #908 space snapshots / child writes / restricted-join reparent. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -68,7 +68,7 @@ residency changes are:
 | #780 / `0ec8e902` | typing presentation snapshot DTO | Desktop keeps Client `m.typing` owner and typing-notice send. |
 | #781 / `e23801ec` | verification presentation DTOs and phase rank | Desktop keeps Client request/SAS owner. |
 | #783 / `7d277c23` | room-directory DTOs and search normalize | Desktop keeps ruma request mapping and Client protocol fetch. |
-| #784 / `b2e1dacc` | space presentation DTOs and cycle guard | Desktop keeps Client hierarchy/child I/O and AllowRule reparent. |
+| #784 / `b2e1dacc` | space presentation DTOs and cycle guard | Live Client I/O later moved in #908; desktop `live.rs` is a re-export. |
 | #786 / `c7b83d22` | cross-signing presentation DTOs and projector | Desktop keeps Client crypto I/O and UIAA. |
 | #788 / `e53c4fbf` | room-key transfer presentation DTOs and projector | Desktop keeps Client/file I/O and `SelectedRoomKeyImport`. |
 | #790 / `09e84e02` | members presentation snapshots and write result | Desktop keeps Client member/power-level I/O. |
@@ -131,11 +131,12 @@ residency changes are:
 | #902 / `0c9e9a09` | edit_message via `Core::command` | Same attached timeline owner and text SendQueue. |
 | #904 / `f4fbf42f` | send_sticker via `Core::command` | Same attached timeline owner. Attachment send stays desktop. |
 | #906 / `c51ab072` | send_poll / poll_respond via `Core::command` | Same attached timeline owner. |
+| #908 / `7315ffe6` | space snapshots / child writes / restricted-join reparent via `Core::command` | Join-rule owner now owns space live I/O. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `c51ab072`/#906 for
+anchor, but it is no longer the feature-tip provenance; use `7315ffe6`/#908 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -205,9 +206,9 @@ tests/proofs for moved domains. Core-owned discovery/UIA types and the vault
 trait do not make live login or Keychain I/O Core-owned. Therefore P1 is not
 complete and `src-tauri` is not a thin shell.
 
-### P2 — in progress: ninety-one registered commands
+### P2 — in progress: ninety-seven registered commands
 
-The Core registry registers exactly these ninety-one names:
+The Core registry registers exactly these ninety-seven names:
 
 1. `matrix_login_flows`
 2. `matrix_register_flows`
@@ -300,6 +301,12 @@ The Core registry registers exactly these ninety-one names:
 89. `matrix_send_sticker` (#904)
 90. `matrix_send_poll` (#906)
 91. `matrix_poll_respond` (#906)
+92. `matrix_space_parents_snapshot` (#908)
+93. `matrix_space_hierarchy_snapshot` (#908)
+94. `matrix_space_children_snapshot` (#908)
+95. `matrix_space_child_set` (#908)
+96. `matrix_space_child_remove` (#908)
+97. `matrix_restricted_join_reparent` (#908)
 
 All other census command names remain unregistered and fail closed. `matrix_send_attachment` stays desktop because attachment bytes can exceed the 1 MiB Core envelope. This is
 neither complete desktop command parity nor a basis to add a speculative route.

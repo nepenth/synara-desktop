@@ -3,13 +3,13 @@
 All paths relative to the repository root. Census technique: `git ls-files`,
 `grep -rl`, `grep -rn` over `src-tauri/src`, `synara-ios`, `.github/workflows`.
 The current source evidence is `feature/shared-native-core`
-`c51ab072` (#906, after #905).
+`7315ffe6` (#908, after #907).
 
 ## 2.1 Desktop application-logic layer
 
 The P0 census counted **285 `.rs` files** under `src-tauri/src/matrix/`. At the
 current evidence tip, there are 100 tracked Rust files under that desktop path
-and 230 under `crates/synara-core/src/app/`; the difference reflects P1 moves,
+and 239 under `crates/synara-core/src/app/`; the difference reflects P1 moves,
 not completion. The table remains the responsibility inventory rather than a
 claim that every listed domain is desktop-resident. Each domain is typically
 `mod.rs` (owning types/state) + `error.rs` + `live.rs` (actor/live state) +
@@ -65,7 +65,7 @@ nonclaim record.
 | `secret_storage/` | secret store bootstrap/reset/status/unlock |
 | `security/` | security status |
 | `send/` | message/composer send, attachment queue, poll send, `live_synapse_proof/` |
-| `spaces/` | space hierarchy |
+| `spaces/` | space hierarchy (Core owns live Client I/O; desktop `live.rs` is a re-export) |
 | `store/` | key material, key vault, identity, paths |
 | `supervisor/` | state machine actor (session supervision) |
 | `sync/` | **sync service** + readiness (`readiness.rs`), reconnect, sliding-sync capability probe |
