@@ -315,58 +315,42 @@ pub async fn matrix_timeline_forward_media(
 
 #[tauri::command]
 pub async fn matrix_timeline_report(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     request: NativeTimelineReportRequest,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
-    let room_id = parse_send_room_id(&request.room_id)?;
-    let event_id =
-        parse_required_event_id(&request.event_id, "v-timeline-report-invalid-event-id")?;
-    let reason = request
-        .reason
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_owned);
-
-    let room = {
-        let mut session = state.session.lock().await;
-        let active = require_send_session_mut(session.as_mut())?;
-        active.client.get_room(&room_id).ok_or_else(|| {
-            MatrixAuthCommandError::new(
-                "NotFound",
-                "The native Matrix room is not available.",
-                "v-timeline-report-room-not-found",
-            )
-        })?
-    };
-
-    room.report_content(event_id.clone(), reason)
-        .await
-        .map_err(|_| map_timeline_action_error("v-timeline-report-failed"))?;
-
-    Ok(NativeTimelineActionReadback {
-        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
-        action: NativeTimelineActionKind::Report,
-        room_id: room_id.to_string(),
-        event_id: event_id.to_string(),
-        status: "reported",
-    })
+    crate::bridge::timeline_actions::timeline_report(
+        core.inner().as_ref(),
+        request.room_id,
+        request.event_id,
+        request.reason,
+    )
+    .await
 }
 
 #[tauri::command]
 pub async fn matrix_timeline_pin(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     request: NativeTimelinePinRequest,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
-    pin_or_unpin_event(state, request, true).await
+    crate::bridge::timeline_actions::timeline_pin(
+        core.inner().as_ref(),
+        request.room_id,
+        request.event_id,
+    )
+    .await
 }
 
 #[tauri::command]
 pub async fn matrix_timeline_unpin(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     request: NativeTimelinePinRequest,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
-    pin_or_unpin_event(state, request, false).await
+    crate::bridge::timeline_actions::timeline_unpin(
+        core.inner().as_ref(),
+        request.room_id,
+        request.event_id,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -467,70 +451,6 @@ pub async fn matrix_timeline_call_decline(
         room_id: room_id.to_string(),
         event_id: sent_event_id,
         status: "declined",
-    })
-}
-
-pub(super) async fn pin_or_unpin_event(
-    state: State<'_, MatrixAuthState>,
-    request: NativeTimelinePinRequest,
-    pin: bool,
-) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
-    let room_id = parse_send_room_id(&request.room_id)?;
-    let event_id = parse_required_event_id(
-        &request.event_id,
-        if pin {
-            "v-timeline-pin-invalid-event-id"
-        } else {
-            "v-timeline-unpin-invalid-event-id"
-        },
-    )?;
-
-    let room = {
-        let mut session = state.session.lock().await;
-        let active = require_send_session_mut(session.as_mut())?;
-        active.client.get_room(&room_id).ok_or_else(|| {
-            MatrixAuthCommandError::new(
-                "NotFound",
-                "The native Matrix room is not available.",
-                if pin {
-                    "v-timeline-pin-room-not-found"
-                } else {
-                    "v-timeline-unpin-room-not-found"
-                },
-            )
-        })?
-    };
-
-    let changed = if pin {
-        room.pin_event(&event_id)
-            .await
-            .map_err(|_| map_timeline_action_error("v-timeline-pin-failed"))?
-    } else {
-        room.unpin_event(&event_id)
-            .await
-            .map_err(|_| map_timeline_action_error("v-timeline-unpin-failed"))?
-    };
-
-    Ok(NativeTimelineActionReadback {
-        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
-        action: if pin {
-            NativeTimelineActionKind::Pin
-        } else {
-            NativeTimelineActionKind::Unpin
-        },
-        room_id: room_id.to_string(),
-        event_id: event_id.to_string(),
-        status: if changed {
-            if pin {
-                "pinned"
-            } else {
-                "unpinned"
-            }
-        } else if pin {
-            "already_pinned"
-        } else {
-            "already_unpinned"
-        },
     })
 }
 
