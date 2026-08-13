@@ -11,9 +11,11 @@
 
 mod error;
 mod index;
+mod native;
 
 pub use error::TypingError;
 pub use index::{TypingIndex, MAX_TYPING_USERS_PER_ROOM};
+pub use native::NativeTypingSnapshot;
 
 /// Static marker for link / schema smoke.
 pub const MATRIX_TYPING_MARKER: &str = "matrix-typing-p6.3";
