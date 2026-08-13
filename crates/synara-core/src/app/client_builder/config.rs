@@ -4,7 +4,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use super::ClientBuilderError;
-use crate::matrix::store::{
+use crate::app::store::{
     AccountIdentity, StoreKeyMaterial, StoreLayout, StorePaths, STORE_KEY_LEN,
 };
 
@@ -60,7 +60,7 @@ impl NetworkPolicy {
                 ));
             }
             // R0.6 / REV-003: reject credential-bearing proxy URLs.
-            if crate::matrix::diagnostics::looks_like_url_with_credentials(p) {
+            if crate::app::diagnostics::looks_like_url_with_credentials(p) {
                 return Err(ClientBuilderError::InvalidConfig(
                     "proxy url must not embed credentials",
                 ));

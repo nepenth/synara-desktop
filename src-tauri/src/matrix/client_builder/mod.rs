@@ -4,14 +4,9 @@
 
 pub use synara_core::app::client_builder::*;
 
-mod config;
 mod open;
 mod sdk_handle;
 
-pub use config::{
-    default_user_agent, ClientBuildConfig, ClientBuildPlan, HomeserverMode, NetworkPolicy,
-    TimeoutPolicy, DEFAULT_REQUEST_TIMEOUT_SECS, DEFAULT_RETRY_LIMIT,
-};
 pub use open::build_unauthenticated_client;
 pub use sdk_handle::SdkClientHandle;
 
