@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `c9a315ea`, the merge commit for #916. |
-| Immediately preceding merges | #915 docs after #914, #916 directory search/cancel. |
+| Feature evidence tip | `feature/shared-native-core` is `79aacab4`, the merge commit for #918. |
+| Immediately preceding merges | #917 docs after #916, #918 room-key transfer status. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -136,11 +136,12 @@ residency changes are:
 | #912 / `00e90a2f` | backup status via `Core::command` | Device owner now owns live backup status. Setup/restore/repair stay desktop. |
 | #914 / `b72a2f9a` | directory protocols via `Core::command` | Join-rule owner now owns protocol listing. Search/cancel later moved in #916. |
 | #916 / `c9a315ea` | directory search/cancel via `Core::command` | Join-rule owner now owns search, cancel, and the request-authority registry. |
+| #918 / `79aacab4` | room-key transfer status via `Core::command` | Device owner now holds the transfer flow. Export/import stay desktop. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `c9a315ea`/#916 for
+anchor, but it is no longer the feature-tip provenance; use `79aacab4`/#918 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -210,9 +211,9 @@ tests/proofs for moved domains. Core-owned discovery/UIA types and the vault
 trait do not make live login or Keychain I/O Core-owned. Therefore P1 is not
 complete and `src-tauri` is not a thin shell.
 
-### P2 — in progress: one hundred three registered commands
+### P2 — in progress: one hundred four registered commands
 
-The Core registry registers exactly these one hundred three names:
+The Core registry registers exactly these one hundred four names:
 
 1. `matrix_login_flows`
 2. `matrix_register_flows`
@@ -317,8 +318,9 @@ The Core registry registers exactly these one hundred three names:
 101. `matrix_room_directory_protocols` (#914)
 102. `matrix_room_directory_search` (#916)
 103. `matrix_room_directory_cancel` (#916)
+104. `matrix_room_key_transfer_status` (#918)
 
-All other census command names remain unregistered and fail closed. `matrix_send_attachment` stays desktop because attachment bytes can exceed the 1 MiB Core envelope. Backup setup/restore/repair stay desktop so secrets never cross the envelope. This is
+All other census command names remain unregistered and fail closed. `matrix_send_attachment` stays desktop because attachment bytes can exceed the 1 MiB Core envelope. Backup setup/restore/repair and room-key export/import stay desktop so secrets never cross the envelope. This is
 neither complete desktop command parity nor a basis to add a speculative route.
 
 ### P3 — in progress: bounded desktop bridges only
