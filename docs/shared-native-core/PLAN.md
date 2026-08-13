@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`187cb780` (#768, after #767):** P0 is
+`dfdfdaf4` (#770, after #769):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -54,7 +54,9 @@ acceptance criteria have all passed.
   discovery transport (live login stayed desktop); #764 moved logout
   orchestration and the task-supervisor bridge; #766 moved later/room-notes
   codecs (Client RMW stayed desktop); #768 moved image-pack DTO, type filters,
-  and write guards (Client snapshot/set and Tauri subscribe stayed desktop).
+  and write guards (Client snapshot/set and Tauri subscribe stayed desktop);
+  #770 moved m.direct snapshot DTO and string-map helpers (Client load/store
+  and DirectEventContent write stayed desktop).
   These retain thin desktop re-exports and
   add no P2 command, UDL, or iOS behavior. Compatibility re-exports remain, and many matrix domains are
   still desktop-owned, so the full extraction/end state is not yet complete.

@@ -8,7 +8,7 @@ Desktop onto **one transport-agnostic Rust application-logic core** —
 |---|---|
 | Owner | Synara engineering |
 | Status | P0 complete; P1 extraction and bounded P2, P3, and P4 slices are merged at the evidence base below. P2–P4 remain in progress; P5 has not started. |
-| Evidence base | `feature/shared-native-core` at `187cb780` (#768, after #767; prior bounded P4 evidence remains #708/#710) |
+| Evidence base | `feature/shared-native-core` at `dfdfdaf4` (#770, after #769; prior bounded P4 evidence remains #708/#710) |
 | Decision | [ADR 0003](../adr/0003-shared-native-rust-core.md) |
 | Program ledger | `docs/shared-native-core/` (this directory) |
 | Related ADRs | [0001](../adr/0001-ios-repository-layout.md), [0002](../adr/0002-ios-architecture.md) |
@@ -45,7 +45,8 @@ Desktop onto **one transport-agnostic Rust application-logic core** —
   #762 moved the well-known HTTP discovery transport (live login stayed desktop);
   #764 moved logout orchestration and the task-supervisor bridge;
   #766 moved later/room-notes codecs (Client RMW stayed desktop);
-  #768 moved image-pack DTO, type filters, and write guards (Client snapshot/set and Tauri subscribe stayed desktop).
+  #768 moved image-pack DTO, type filters, and write guards (Client snapshot/set and Tauri subscribe stayed desktop);
+  #770 moved m.direct snapshot DTO and string-map helpers (Client load/store and DirectEventContent write stayed desktop).
   `src-tauri` retains thin compatibility re-exports. P1.6 also
   introduced the `Platform` trait and a desktop `AppHandle` adapter with no
   intended behavior change. #713/#714/#716/#717 add no P2 command, UDL, or iOS behavior.
@@ -85,13 +86,13 @@ Desktop onto **one transport-agnostic Rust application-logic core** —
 ## Current milestone ledger
 
 The following describes merged source reachable from
-`187cb780` (#768, after #767). #708 and #710
+`dfdfdaf4` (#770, after #769). #708 and #710
 remain the prior bounded P4 evidence.
 
 | Phase | Merged evidence | Current boundary |
 |---|---|---|
 | P0 | ADR, plan, and census | Complete planning baseline. |
-| P1 | #669, #673–#677, #680–#681, #713–#714, #716–#717, #720–#721, #723–#726, #728–#729, #731–#732, #734–#735, #737–#738, #740–#741, #743–#744, #747–#748, #751, #753, #755, #757–#758, #760, #762, #764, #766, #768 | Extraction slices plus later/room-notes/image-pack codecs; leftover live/SDK/Keyring adapters not all moved. |
+| P1 | #669, #673–#677, #680–#681, #713–#714, #716–#717, #720–#721, #723–#726, #728–#729, #731–#732, #734–#735, #737–#738, #740–#741, #743–#744, #747–#748, #751, #753, #755, #757–#758, #760, #762, #764, #766, #768, #770 | Extraction slices plus later/room-notes/image-pack/m.direct codecs; leftover live/SDK/Keyring adapters not all moved. |
 | P2 | #683–#689, #694, #698, #701–#702, #706 | The same eight-command registry above is live; #708/#710/#713/#714/#716/#717 add no Core command routes, and full desktop-invoke parity is not reached. |
 | P3 | #690–#691, #694, #698, #701–#702, #706 | The listed auth and read-only/session bridges use Core; `src-tauri` is not yet a fully thin shell. |
 | P4 | #685, #692–#693, #696, #699, #703, #708, #710 | UniFFI scaffold, bounded login discovery/link coverage, a safe session projection mirror, display-only readback, and only the two pure row/recovery policies exist; service migration and Apple release proof do not. |
