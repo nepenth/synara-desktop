@@ -5,24 +5,7 @@
 //! dual-backend, no production Tauri commands.**
 
 use super::error::LifecycleError;
-
-/// How local cleanup relates to remote logout.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum RemoteLogoutScope {
-    /// Invalidate only this device session on the homeserver.
-    ThisDevice,
-    /// Request server-side logout of all devices (destructive; host confirms).
-    AllDevices,
-}
-
-impl RemoteLogoutScope {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::ThisDevice => "this_device",
-            Self::AllDevices => "all_devices",
-        }
-    }
-}
+pub use synara_core::app::lifecycle::{LocalCleanupPolicy, RemoteLogoutScope};
 
 /// Phase of a remote logout attempt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -55,24 +38,6 @@ impl RemoteLogoutPhase {
 
     pub fn is_busy(self) -> bool {
         matches!(self, Self::RequestingRemote | Self::LocalCleanupPending)
-    }
-}
-
-/// Local cleanup policy after remote (or when remote is skipped).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum LocalCleanupPolicy {
-    /// Drop client + clear session material; retain encrypted stores (soft logout).
-    LogoutRetainStores,
-    /// Exact-target local wipe of account store (hard reset).
-    WipeAccountStore,
-}
-
-impl LocalCleanupPolicy {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::LogoutRetainStores => "logout_retain_stores",
-            Self::WipeAccountStore => "wipe_account_store",
-        }
     }
 }
 

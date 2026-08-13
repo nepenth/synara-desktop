@@ -11,5 +11,7 @@
 #![allow(unused_imports)]
 
 mod recovery_copy;
+mod remote_policy;
 
 pub use recovery_copy::{copy_for_remote_outcome, recovery_copy_en, RecoveryCopyKey};
+pub use remote_policy::{LocalCleanupPolicy, RemoteLogoutScope};

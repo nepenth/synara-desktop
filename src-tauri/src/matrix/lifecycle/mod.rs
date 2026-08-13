@@ -39,9 +39,7 @@ pub use recovery::{
     apply_store_failure, recovery_action_for, surface_store_corrupt, surface_store_unavailable,
     RecoveryAction, StoreFailure, StoreFailureKind,
 };
-pub use remote_logout::{
-    LocalCleanupPolicy, RemoteLogoutFlow, RemoteLogoutOutcome, RemoteLogoutPhase, RemoteLogoutScope,
-};
+pub use remote_logout::{RemoteLogoutFlow, RemoteLogoutOutcome, RemoteLogoutPhase};
 pub use session_material::{
     clear_session_material, load_session_material, persist_session_material,
     rotate_persisted_session_tokens, HostMatrixSessionSecrets, InMemorySessionMaterialVault,

@@ -95,10 +95,10 @@ pub fn recovery_copy_en(key: RecoveryCopyKey) -> &'static str {
 pub fn copy_for_remote_outcome(
     remote_succeeded: bool,
     remote_skipped: bool,
-    scope: super::remote_logout::RemoteLogoutScope,
-    local_policy: super::remote_logout::LocalCleanupPolicy,
+    scope: super::remote_policy::RemoteLogoutScope,
+    local_policy: super::remote_policy::LocalCleanupPolicy,
 ) -> RecoveryCopyKey {
-    use super::remote_logout::{LocalCleanupPolicy, RemoteLogoutScope};
+    use super::remote_policy::{LocalCleanupPolicy, RemoteLogoutScope};
 
     if remote_skipped {
         return RecoveryCopyKey::RemoteLogoutSkippedOffline;
