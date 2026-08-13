@@ -18,7 +18,10 @@ pub use index::{
     MAX_ALIAS_CHARS, MAX_ALT_ALIASES, MAX_AVATAR_URL_CHARS, MAX_CACHED_ROOMS, MAX_NAME_CHARS,
     MAX_TOPIC_CHARS,
 };
-pub use native::{NativeRoomJoinRuleUpdate, ROOM_JOIN_RULE_UPDATED_EVENT};
+pub use native::{
+    MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
+    MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleUpdate, ROOM_JOIN_RULE_UPDATED_EVENT,
+};
 
 /// Static marker for link / schema smoke.
 pub const MATRIX_ROOM_PROFILE_MARKER: &str = "matrix-room-profile-p6.5";

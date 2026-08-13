@@ -3,7 +3,6 @@
 //! This is the only desktop product boundary for password login. The live
 //! `matrix_sdk::Client` and all access/refresh tokens remain in the Rust host.
 
-use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -200,57 +199,11 @@ pub struct MatrixAuthCommandError {
 }
 
 pub use synara_core::app::members::NativeRoomMembersSnapshot;
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixSendTextResult {
-    pub room_id: String,
-    pub event_id: String,
-    pub local_txn_id: String,
-    pub status: &'static str,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixSendAttachmentResult {
-    pub room_id: String,
-    pub event_id: String,
-    pub local_txn_id: String,
-    pub status: &'static str,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixSendStickerResult {
-    pub room_id: String,
-    pub event_id: String,
-    pub status: &'static str,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixSendPollResult {
-    pub room_id: String,
-    pub event_id: String,
-    pub status: &'static str,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixPollRespondResult {
-    pub room_id: String,
-    pub poll_event_id: String,
-    pub event_id: String,
-    pub status: &'static str,
-}
-
-/// V-SEND.R-AVATAR-UPLOAD — result of a native user-profile write
-/// (display name or avatar URL). `status` is always `"ok"` on success.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixProfileWriteResult {
-    pub status: &'static str,
-}
+pub use synara_core::app::send::{
+    MatrixPollRespondResult, MatrixSendAttachmentResult, MatrixSendPollResult,
+    MatrixSendStickerResult, MatrixSendTextResult,
+};
+pub use synara_core::app::user_profile::MatrixProfileWriteResult;
 
 /// V-SEND.R-AVATAR-UPLOAD — result of a native media upload for a user
 /// avatar. Returns the homeserver `mxc://` URI; no file bytes cross back.
@@ -282,68 +235,10 @@ pub struct MatrixMediaDownloadRequest {
 }
 
 pub use synara_core::app::members::NativePowerLevelWriteResult;
-
-/// JSON-friendly create-room request owned by the desktop Matrix SDK route.
-/// `parent_room_id` is used for restricted join rules; the post-create space
-/// child edge remains an explicit `matrix_space_child_set` operation in TS.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct MatrixRoomCreateRequest {
-    pub name: Option<String>,
-    pub topic: Option<String>,
-    pub room_version: Option<String>,
-    pub room_alias_name: Option<String>,
-    #[serde(default)]
-    pub is_direct: bool,
-    #[serde(default)]
-    pub invite: Vec<String>,
-    pub visibility: Option<MatrixRoomCreateVisibility>,
-    pub preset: Option<MatrixRoomCreatePreset>,
-    pub creation_content: Option<MatrixRoomCreateContent>,
-    #[serde(default)]
-    pub encryption: bool,
-    pub join_rule: Option<String>,
-    #[serde(default)]
-    pub knock: bool,
-    pub parent_room_id: Option<String>,
-    pub power_level_content_override: Option<MatrixRoomCreatePowerLevels>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MatrixRoomCreateVisibility {
-    Private,
-    Public,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MatrixRoomCreatePreset {
-    #[serde(rename = "private_chat")]
-    Private,
-    #[serde(rename = "public_chat")]
-    Public,
-    #[serde(rename = "trusted_private_chat")]
-    TrustedPrivate,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct MatrixRoomCreateContent {
-    #[serde(rename = "type")]
-    pub room_type: Option<String>,
-    #[serde(rename = "m.federate", alias = "federate")]
-    pub federate: Option<bool>,
-    pub additional_creators: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct MatrixRoomCreatePowerLevels {
-    pub events_default: Option<i64>,
-    #[serde(default)]
-    pub events: BTreeMap<String, i64>,
-}
+pub use synara_core::app::room_ops::{
+    MatrixRoomCreateContent, MatrixRoomCreatePowerLevels, MatrixRoomCreatePreset,
+    MatrixRoomCreateRequest, MatrixRoomCreateVisibility,
+};
 
 /// Soft IPC/body cap for one-shot composer attachment transfer (bytes).
 const MAX_ATTACHMENT_IPC_BYTES: usize = 32 * 1024 * 1024;

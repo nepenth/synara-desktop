@@ -10,12 +10,14 @@
 
 mod error;
 mod index;
+mod ipc;
 
 pub use error::UserProfileError;
 pub use index::{
     UserProfile, UserProfileIndex, MAX_AVATAR_URL_CHARS, MAX_CACHED_PROFILES,
     MAX_DISPLAY_NAME_CHARS, MAX_IGNORED_USERS,
 };
+pub use ipc::MatrixProfileWriteResult;
 
 /// Static marker for link / schema smoke.
 pub const MATRIX_USER_PROFILE_MARKER: &str = "matrix-user-profile-p6.6";

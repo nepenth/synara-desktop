@@ -26,6 +26,33 @@ pub enum NativeRoomJoinRuleUpdate {
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixRoomDirectoryVisibilityResult {
+    pub status: &'static str,
+    pub room_id: String,
+    pub session_generation: u64,
+    pub visibility: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixRoomDirectoryVisibilityWriteResult {
+    pub status: &'static str,
+    pub room_id: String,
+    pub session_generation: u64,
+    pub requested_visibility: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixRoomJoinRuleSnapshot {
+    pub status: &'static str,
+    pub room_id: String,
+    pub session_generation: u64,
+    pub join_rule: &'static str,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

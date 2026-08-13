@@ -32,32 +32,10 @@ const JOIN_RULE_READ_SDK_FAILED: &str = "v-send.r-room-profile-join-rule-read-sd
 const JOIN_RULE_DESERIALIZE_FAILED: &str = "v-send.r-room-profile-join-rule-deserialize-failed";
 const JOIN_RULE_UNSUPPORTED: &str = "v-send.r-room-profile-join-rule-unsupported";
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixRoomDirectoryVisibilityResult {
-    pub status: &'static str,
-    pub room_id: String,
-    pub session_generation: u64,
-    pub visibility: &'static str,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixRoomDirectoryVisibilityWriteResult {
-    pub status: &'static str,
-    pub room_id: String,
-    pub session_generation: u64,
-    pub requested_visibility: &'static str,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixRoomJoinRuleSnapshot {
-    pub status: &'static str,
-    pub room_id: String,
-    pub session_generation: u64,
-    pub join_rule: &'static str,
-}
+pub use synara_core::app::room_profile::{
+    MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
+    MatrixRoomJoinRuleSnapshot,
+};
 
 /// V-SEND.R-ROOM-PROFILE-JOIN-RULE — authoritative live room-scoped join-rule
 /// read through the managed native Matrix SDK client. This is intentionally a
