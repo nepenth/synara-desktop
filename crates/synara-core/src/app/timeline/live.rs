@@ -12,10 +12,11 @@ use eyeball_im::VectorDiff;
 use futures_util::{stream, StreamExt};
 use matrix_sdk::{
     event_cache::PaginationStatus,
-    room::edit::EditedContent,
+    room::{calls::CallError, edit::EditedContent},
     ruma::{
         api::client::receipt::create_receipt::v3::ReceiptType,
         events::{
+            poll::unstable_response::UnstablePollResponseEventContent,
             reaction::ReactionEventContent, relation::Annotation,
             room::message::RoomMessageEventContentWithoutRelation,
         },
@@ -364,6 +365,75 @@ impl NativeTimelineOwner {
             } else {
                 "already_unpinned"
             },
+        })
+    }
+
+    pub async fn poll_vote(
+        &self,
+        room_id: &str,
+        event_id: &str,
+        answer_ids: Vec<String>,
+    ) -> Result<NativeTimelineActionReadback, &'static str> {
+        let room_id = parse_action_room_id(room_id)?;
+        let event_id = parse_action_event_id(event_id, "v-timeline-poll-vote-invalid-event-id")?;
+        let answer_ids = answer_ids
+            .into_iter()
+            .map(|answer| answer.trim().to_owned())
+            .filter(|answer| !answer.is_empty())
+            .collect::<Vec<_>>();
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-timeline-poll-vote-room-not-found")?;
+        let content = UnstablePollResponseEventContent::new(answer_ids, event_id);
+        let sent_event_id = room
+            .send(content)
+            .await
+            .map_err(|_| "v-timeline-poll-vote-send-failed")?
+            .response
+            .event_id
+            .to_string();
+        Ok(NativeTimelineActionReadback {
+            schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+            action: NativeTimelineActionKind::PollVote,
+            room_id: room_id.to_string(),
+            event_id: sent_event_id,
+            status: "voted",
+        })
+    }
+
+    pub async fn decline_call(
+        &self,
+        room_id: &str,
+        event_id: &str,
+    ) -> Result<NativeTimelineActionReadback, &'static str> {
+        let room_id = parse_action_room_id(room_id)?;
+        let event_id = parse_action_event_id(event_id, "v-timeline-call-decline-invalid-event-id")?;
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-timeline-call-decline-room-not-found")?;
+        let content =
+            room.make_decline_call_event(&event_id)
+                .await
+                .map_err(|error| match error {
+                    CallError::DeclineOwnCall => "v-timeline-call-decline-own-call",
+                    CallError::BadEventType => "v-timeline-call-decline-bad-event-type",
+                    _ => "v-timeline-call-decline-prepare-failed",
+                })?;
+        let sent_event_id = room
+            .send(content)
+            .await
+            .map_err(|_| "v-timeline-call-decline-send-failed")?
+            .response
+            .event_id
+            .to_string();
+        Ok(NativeTimelineActionReadback {
+            schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+            action: NativeTimelineActionKind::CallDecline,
+            room_id: room_id.to_string(),
+            event_id: sent_event_id,
+            status: "declined",
         })
     }
 }
