@@ -2,9 +2,9 @@
 
 use std::fmt;
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
-use crate::matrix::store::{AccountIdentityError, StorePathError};
-use crate::matrix::supervisor::FactoryError;
+use crate::app::store::{AccountIdentityError, StorePathError};
+use crate::app::supervisor::FactoryError;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Failure while validating config or constructing an unauthenticated Client.
 #[derive(Debug)]
