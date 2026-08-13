@@ -1,6 +1,6 @@
 //! Privacy-safe errors for room profile / alias / upgrade projection (P6.5).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Room profile index / apply failure.
 #[derive(Debug)]
