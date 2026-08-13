@@ -20,6 +20,7 @@ use crate::app::auth::{
     RegisterFlowsProbe,
 };
 use crate::app::backup::NativeBackupStatus;
+use crate::app::cross_signing::NativeCrossSigningSetupResult;
 use crate::app::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot};
 use crate::app::members::{
     NativePowerLevelWriteResult, NativeRoomCreatorsSnapshot, NativeRoomMembersSnapshot,
@@ -1508,6 +1509,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_cross_signing_status", matrix_cross_signing_status)
         .expect("built-in matrix_cross_signing_status must remain in the command census");
     registry
+        .register("matrix_cross_signing_setup", matrix_cross_signing_setup)
+        .expect("built-in matrix_cross_signing_setup must remain in the command census");
+    registry
         .register("matrix_secret_storage_status", matrix_secret_storage_status)
         .expect("built-in matrix_secret_storage_status must remain in the command census");
     registry
@@ -2813,6 +2817,33 @@ fn matrix_room_key_transfer_status(
         serde_json::to_value(snapshot)
             .map_err(|_| core_state_error("p2-room-key-transfer-status-serialization-failed"))
     })
+}
+
+fn matrix_cross_signing_setup(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-cross-signing-setup-invalid-payload"));
+        }
+        let owner = state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-cross-signing-setup-no-session")
+        })?;
+        let result: NativeCrossSigningSetupResult = owner
+            .cross_signing_setup()
+            .await
+            .map_err(cross_signing_setup_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-cross-signing-setup-serialization-failed"))
+    })
+}
+
+fn cross_signing_setup_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-crypto.2-cross-signing-auth-unsupported" => MatrixIpcErrorCategory::Forbidden,
+        "v-crypto.2-cross-signing-user-missing" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 fn matrix_room_directory_protocols(
@@ -4713,6 +4744,7 @@ mod tests {
                 "matrix_composer_clear_reply_draft",
                 "matrix_composer_get_reply_draft",
                 "matrix_composer_set_reply_draft",
+                "matrix_cross_signing_setup",
                 "matrix_cross_signing_status",
                 "matrix_crypto_status",
                 "matrix_device_delete_cancel",
@@ -6372,6 +6404,25 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-room-key-transfer-status-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_cross_signing_setup_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_cross_signing_setup".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("cross-signing setup without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-cross-signing-setup-no-session")
         );
     }
 

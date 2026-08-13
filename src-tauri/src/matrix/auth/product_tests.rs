@@ -603,6 +603,20 @@ fn cross_signing_status_routes_only_through_core_and_holds_the_auth_mutex_across
         );
     }
 
+    let setup = command_source
+        .split("pub async fn matrix_cross_signing_setup")
+        .nth(1)
+        .and_then(|source| {
+            source
+                .split("pub async fn matrix_cross_signing_setup_password")
+                .next()
+        })
+        .expect("cross-signing setup command body");
+    assert!(setup.contains("crate::bridge::cross_signing_setup::cross_signing_setup"));
+    assert!(setup.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!setup.contains("active.client"));
+    assert!(!setup.contains("bootstrap_cross_signing"));
+
     let product_source = include_str!("product.rs");
     let projection = product_source
         .split("pub(crate) async fn cross_signing_status_projection")

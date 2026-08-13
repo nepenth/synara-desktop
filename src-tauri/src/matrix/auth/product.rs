@@ -71,10 +71,7 @@ use crate::matrix::backup::live::{
     self as live_backup, NativeBackupOperationResult, NativeBackupStatus,
 };
 use crate::matrix::client_builder::{build_unauthenticated_client, ClientBuildConfig};
-use crate::matrix::cross_signing::live::{
-    project_status, supported_authentication, NativeCrossSigningSetupOutcome,
-    NativeCrossSigningSetupResult, NativeCrossSigningStatus, SupportedBootstrapAuthentication,
-};
+use crate::matrix::cross_signing::live::{NativeCrossSigningSetupResult, NativeCrossSigningStatus};
 use crate::matrix::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot};
 use crate::matrix::lifecycle::{
     clear_session_material, persist_session_after_login, restore_session_from_vault,
@@ -256,7 +253,6 @@ struct ManagedMatrixSession {
     typing: Arc<NativeTypingOwner>,
     presence: Arc<NativePresenceOwner>,
     join_rules: Arc<NativeRoomJoinRuleOwner>,
-    pending_cross_signing_auth_session: Option<String>,
     room_key_transfer: Arc<Mutex<RoomKeyTransferFlow>>,
     selected_room_key_import: Option<SelectedRoomKeyImport>,
     next_room_key_import_selection_id: u64,

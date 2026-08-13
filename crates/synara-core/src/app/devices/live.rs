@@ -57,6 +57,7 @@ pub struct NativeDeviceOwner {
     task: JoinHandle<()>,
     delete: Mutex<DeviceDeleteState>,
     room_keys: Arc<AsyncMutex<RoomKeyTransferFlow>>,
+    pending_cross_signing: Mutex<Option<String>>,
 }
 
 impl NativeDeviceOwner {
@@ -95,6 +96,7 @@ impl NativeDeviceOwner {
             room_keys: Arc::new(AsyncMutex::new(RoomKeyTransferFlow::new(
                 session_generation,
             ))),
+            pending_cross_signing: Mutex::new(None),
         })
     }
 
@@ -116,6 +118,38 @@ impl NativeDeviceOwner {
         &self,
     ) -> Result<crate::app::backup::NativeBackupStatus, &'static str> {
         crate::app::backup::status(&self.client, self.session_generation).await
+    }
+
+    pub async fn cross_signing_setup(
+        &self,
+    ) -> Result<crate::app::cross_signing::NativeCrossSigningSetupResult, &'static str> {
+        let (result, pending) =
+            crate::app::cross_signing::setup(&self.client, self.session_generation).await?;
+        self.set_pending_cross_signing(pending)?;
+        Ok(result)
+    }
+
+    pub fn pending_cross_signing_auth(&self) -> Result<String, &'static str> {
+        self.pending_cross_signing
+            .lock()
+            .map_err(|_| "v-crypto.2-cross-signing-state-poisoned")?
+            .clone()
+            .ok_or("v-crypto.2-cross-signing-auth-not-pending")
+    }
+
+    pub fn set_pending_cross_signing(&self, pending: Option<String>) -> Result<(), &'static str> {
+        *self
+            .pending_cross_signing
+            .lock()
+            .map_err(|_| "v-crypto.2-cross-signing-state-poisoned")? = pending;
+        Ok(())
+    }
+
+    pub async fn finish_cross_signing_setup(
+        &self,
+    ) -> Result<crate::app::cross_signing::NativeCrossSigningSetupResult, &'static str> {
+        self.set_pending_cross_signing(None)?;
+        crate::app::cross_signing::complete(&self.client, self.session_generation).await
     }
 
     /// Rename a device, then re-snapshot the live list.
