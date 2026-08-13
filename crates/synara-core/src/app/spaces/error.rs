@@ -1,6 +1,6 @@
 //! Privacy-safe errors for space hierarchy projection (P4.5).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Space hierarchy foundation failure.
 #[derive(Debug)]

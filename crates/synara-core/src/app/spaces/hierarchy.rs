@@ -4,7 +4,7 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use crate::matrix::dto::{RoomId, RoomSummary, SpaceChild, SpaceSummary};
+use crate::dto::{RoomId, RoomSummary, SpaceChild, SpaceSummary};
 
 use super::error::SpaceError;
 
