@@ -33,6 +33,7 @@ use crate::app::room_profile::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
     MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner,
 };
+use crate::app::send::MatrixSendTextResult;
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::app::timeline::{
     NativeComposerReplyDraftReadback, NativeReactionMutationResult, NativeTimelineActionReadback,
@@ -736,6 +737,28 @@ struct MatrixReactionRedactRequest {
     key: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_send_text`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixSendTextRequest {
+    room_id: String,
+    body: String,
+    #[serde(default)]
+    msg_type: Option<String>,
+    #[serde(default)]
+    formatted_body: Option<String>,
+    #[serde(default)]
+    mention_user_ids: Option<Vec<String>>,
+    #[serde(default)]
+    mention_room: Option<bool>,
+    #[serde(default)]
+    reply_to: Option<String>,
+    #[serde(default)]
+    thread_root: Option<String>,
+    #[serde(default)]
+    txn_id: Option<String>,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_timeline_edit_text`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1334,6 +1357,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_secret_storage_status", matrix_secret_storage_status)
         .expect("built-in matrix_secret_storage_status must remain in the command census");
     registry
+        .register("matrix_send_text", matrix_send_text)
+        .expect("built-in matrix_send_text must remain in the command census");
+    registry
         .register("matrix_media_config", matrix_media_config)
         .expect("built-in matrix_media_config must remain in the command census");
     registry
@@ -1872,6 +1898,50 @@ fn timeline_reaction_owner_error(diagnostic_id: &'static str) -> MatrixIpcError 
         | "v-crypto.6-invalid-event-id"
         | "v-send.2-reaction-invalid-key"
         | "v-send.2-reaction-redact-annotation-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn matrix_send_text(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSendTextRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-send-text-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-send-text-no-session")
+        })?;
+        let result: MatrixSendTextResult = owner
+            .send_text(
+                payload.room_id,
+                payload.body,
+                payload.msg_type,
+                payload.formatted_body,
+                payload.mention_user_ids,
+                payload.mention_room,
+                payload.reply_to,
+                payload.thread_root,
+                payload.txn_id,
+            )
+            .await
+            .map_err(send_text_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-send-text-serialization-failed"))
+    })
+}
+
+fn send_text_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "d0.4-send-invalid-room-id"
+        | "d0.4-send-invalid-reply-event-id"
+        | "d0.4-send-invalid-transaction-id"
+        | "d0.4-send-room-not-found"
+        | "v-send.4-invalid-message-type"
+        | "v-send.4-invalid-mention-user-id"
+        | "v-send.5-invalid-thread-root-event-id"
+        | "p6.1-invalid-room-id"
+        | "p6.1-empty-body"
+        | "p6.1-body-too-large" => MatrixIpcErrorCategory::SdkInvariant,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -4021,6 +4091,7 @@ mod tests {
                 "matrix_room_set_power_levels",
                 "matrix_room_unban",
                 "matrix_secret_storage_status",
+                "matrix_send_text",
                 "matrix_session_snapshot",
                 "matrix_set_global_image_packs",
                 "matrix_set_room_avatar",
@@ -6684,6 +6755,28 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-reaction-redact-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_send_text_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_send_text".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "body":"hello"
+                }),
+            })
+            .await
+            .expect_err("send text without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-send-text-no-session")
         );
     }
 

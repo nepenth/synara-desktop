@@ -23,6 +23,7 @@ pub(crate) mod room_notes;
 pub(crate) mod room_power_levels;
 pub(crate) mod room_profile_writes;
 pub(crate) mod secret_storage_status;
+pub(crate) mod send_text;
 pub(crate) mod session_lifecycle;
 pub(crate) mod timeline_actions;
 pub(crate) mod timeline_close;

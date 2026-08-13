@@ -3,7 +3,7 @@ use super::*;
 #[tauri::command]
 #[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
 pub async fn matrix_send_text(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     body: String,
     msg_type: Option<String>,
@@ -15,64 +15,19 @@ pub async fn matrix_send_text(
     thread_root: Option<String>,
     txn_id: Option<String>,
 ) -> Result<MatrixSendTextResult, MatrixAuthCommandError> {
-    let room_id = parse_send_room_id(&room_id)?;
-    let reply_to = parse_reply_event_id(reply_to)?;
-    let thread_root = parse_thread_root_event_id(thread_root)?;
-    let txn_id = parse_transaction_id(txn_id)?;
-    let content = message_content(
-        body.clone(),
+    crate::bridge::send_text::send_text(
+        core.inner().as_ref(),
+        room_id,
+        body,
         msg_type,
         formatted_body,
         mention_user_ids,
-        mention_room.unwrap_or(false),
+        mention_room,
         reply_to,
         thread_root,
-    )?;
-    let (room, session_generation, local_txn_id) = {
-        let mut session = state.session.lock().await;
-        let active = require_send_session_mut(session.as_mut())?;
-        let room = active.client.get_room(&room_id).ok_or_else(|| {
-            MatrixAuthCommandError::new(
-                "NotFound",
-                "The native Matrix room is not available.",
-                "d0.4-send-room-not-found",
-            )
-        })?;
-        let session_generation = active.sends.session_generation();
-        let item = active
-            .sends
-            .enqueue_text(room_id.to_string(), body.clone())
-            .map_err(|error| map_send_error(error.diagnostic_id()))?;
-        (room, session_generation, item.local_txn_id.clone())
-    };
-
-    let send_result = send_message_to_room(&room, content, txn_id).await;
-    let mut session = state.session.lock().await;
-    if let Some(active) = session.as_mut() {
-        if active.sends.session_generation() == session_generation {
-            if send_result.is_ok() {
-                let _ = active.sends.mark_sent(&local_txn_id);
-            } else {
-                let _ = active
-                    .sends
-                    .mark_failed(&local_txn_id, "d0.4-send-sdk-failed");
-            }
-        }
-    }
-
-    let event_id = send_result.map_err(|_| {
-        MatrixAuthCommandError::new(
-            "Unknown",
-            "The native Matrix message could not be sent.",
-            "d0.4-send-sdk-failed",
-        )
-    })?;
-    Ok(MatrixSendTextResult {
-        room_id: room_id.to_string(),
-        event_id,
-        local_txn_id,
-        status: "sent",
-    })
+        txn_id,
+    )
+    .await
 }
 
 /// V-SEND.R-EDIT sole native message-edit owner.
@@ -545,45 +500,28 @@ pub(crate) fn message_content(
     reply_to: Option<OwnedEventId>,
     thread_root: Option<OwnedEventId>,
 ) -> Result<RoomMessageEventContent, MatrixAuthCommandError> {
-    let mut content = match (msg_type.as_deref().unwrap_or("m.text"), formatted_body) {
-        ("m.text", Some(html)) => RoomMessageEventContent::text_html(body, html),
-        ("m.text", None) => RoomMessageEventContent::text_plain(body),
-        ("m.emote", Some(html)) => RoomMessageEventContent::emote_html(body, html),
-        ("m.emote", None) => RoomMessageEventContent::emote_plain(body),
-        ("m.notice", Some(html)) => RoomMessageEventContent::notice_html(body, html),
-        ("m.notice", None) => RoomMessageEventContent::notice_plain(body),
-        _ => {
-            return Err(MatrixAuthCommandError::new(
-                "InvalidRequest",
-                "The native Matrix message type is invalid.",
-                "v-send.4-invalid-message-type",
-            ));
-        }
-    };
-    let user_ids = mention_user_ids
-        .unwrap_or_default()
-        .into_iter()
-        .map(|user_id| {
-            user_id.parse::<OwnedUserId>().map_err(|_| {
-                MatrixAuthCommandError::new(
-                    "InvalidRequest",
-                    "A native Matrix mention user ID is invalid.",
-                    "v-send.4-invalid-mention-user-id",
-                )
-            })
-        })
-        .collect::<Result<BTreeSet<_>, _>>()?;
-    let mut mentions = Mentions::new();
-    mentions.user_ids = user_ids;
-    mentions.room = mention_room;
-    content.mentions = Some(mentions);
-    content.relates_to = match (thread_root, reply_to) {
-        (Some(root), Some(reply)) => Some(Relation::Thread(Thread::reply(root, reply))),
-        (Some(root), None) => Some(Relation::Thread(Thread::without_fallback(root))),
-        (None, Some(reply)) => Some(Relation::Reply(Reply::with_event_id(reply))),
-        (None, None) => None,
-    };
-    Ok(content)
+    synara_core::app::send::message_content(
+        body,
+        msg_type,
+        formatted_body,
+        mention_user_ids,
+        mention_room,
+        reply_to,
+        thread_root,
+    )
+    .map_err(|diagnostic| match diagnostic {
+        "v-send.4-invalid-message-type" => MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "The native Matrix message type is invalid.",
+            diagnostic,
+        ),
+        "v-send.4-invalid-mention-user-id" => MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "A native Matrix mention user ID is invalid.",
+            diagnostic,
+        ),
+        _ => map_send_error(diagnostic),
+    })
 }
 
 /// Build validated `m.replace` replacement content for the native edit owner.
