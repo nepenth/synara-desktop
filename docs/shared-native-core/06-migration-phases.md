@@ -3,9 +3,12 @@
 Methodology mirrors the js→rust burn-down: small additive slices, each a
 squashed PR onto `feature/shared-native-core` with a provenance anchor and the
 path-scoped CI required by the workflow plus its aggregate Quality gate.
-Desktop package and full Synapse evidence run only when selected or explicitly
-required by the relevant protected, integration, or release path. **Never a
-big-bang move.**
+On PRs that target the development feature branch, mechanical `src/app/`
+harness moves run fmt/clippy/check (clippy compiles tests) and skip
+`cargo test` plus Synapse live proofs unless send/timeline product commands
+or `live_synapse_proof` change. Desktop package and full Synapse evidence
+run only when selected or explicitly required by the relevant protected,
+integration, or release path. **Never a big-bang move.**
 
 ## P0 — ADR + plan + census (done)
 
@@ -17,11 +20,13 @@ big-bang move.**
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
 
-**Current bounded status at `fc08edf7`
-(#732, after #731):** #713 mechanically moved notifications, polls,
+**Current bounded status at `a37bcbb1`
+(#735, after #734):** #713 mechanically moved notifications, polls,
 relations, threads, and unread; #714 moved raw content, receipts, routes, and
 security; #716 moved search, legacy, and media_cache; #717 moved media_export
-and crypto_store. These retain thin desktop re-exports. They are P1 extraction
+and crypto_store; #734 moved the room-directory session harness; #735 moved
+the verification inbox harness. These retain thin desktop re-exports and any
+leftover `live.rs` / `product_commands.rs`. They are P1 extraction
 only: no P2 command registration, UDL, or iOS behavior changed.
 
 Slicing (each slice = one PR):
@@ -104,7 +109,7 @@ zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
 
 > **Bounded evidence note — not P4 acceptance:** At the current feature tip
-> `6666556a4e5eb29c456fe9714cad2cf8d347286d` (#721, after P1-only #720/#721), the
+> `a37bcbb1a6b7f8e9a61d638c8c3d8d56ea1cfbd3` (#735, after P1-only #734/#735), the
 > prior #708 work is only the pure iOS room-row unread presentation from closed
 > `Joined`/`Invited` membership, scalar counters, and a marked-unread flag to a
 > `u64` count plus highlight boolean. The prior #710 work is only the pure

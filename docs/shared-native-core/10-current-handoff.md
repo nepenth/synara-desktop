@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `fc08edf7`, the merge commit for #732. |
-| Immediately preceding merges | #731 backup flow, #732 cross-signing identity. |
+| Feature evidence tip | `feature/shared-native-core` is `a37bcbb1`, the merge commit for #735. |
+| Immediately preceding merges | #734 room-directory session, #735 verification inbox. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -40,11 +40,13 @@ residency changes are:
 | #729 / `5cd9f5d1` | room_ops queue harness | Desktop keeps `product_commands.rs`. |
 | #731 / `f75def05` | backup flow harness | Desktop keeps `live.rs` + `product_commands.rs`. |
 | #732 / `fc08edf7` | cross-signing identity harness | Desktop keeps `live.rs` + `product_commands.rs`. |
+| #734 / `9293c1f7` | room-directory session harness | Desktop keeps `live.rs` + `product_commands.rs`. |
+| #735 / `a37bcbb1` | verification inbox harness | Desktop keeps `live.rs` + `product_commands.rs`. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `fc08edf7`/#732 for
+anchor, but it is no longer the feature-tip provenance; use `a37bcbb1`/#735 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -89,17 +91,17 @@ Core-resident pieces now include DTOs, transport/IPC, the pure task registry,
 and the P1 app domains `sync`, `room_list`, pure `timeline`,
 `utd_recovery`, `notifications`, `polls`, `relations`, `threads`, `unread`,
 `raw_content`, `receipts`, `routes`, `security`, `search`, `legacy`,
-`media_cache`, `media_export`, `crypto_store`, `members`, and `user_profile`.
-The latter sixteen are the mechanical clusters #713–#717 plus the #720/#721
-splits. Compatibility re-exports remain deliberately in the desktop shell;
-members and user_profile still keep live `product_commands.rs` on desktop.
+`media_cache`, `media_export`, `crypto_store`, `members`, `user_profile`,
+`room_directory` session, and `verification` inbox.
+Later mechanical splits left live `product_commands.rs` and `live.rs` on
+desktop where those files exist. Compatibility re-exports remain deliberately
+in the desktop shell.
 
-Desktop still owns the unmoved matrix domains: account data, full auth
-execution, backup, client construction, cross-signing, devices,
-diagnostics, lifecycle, media (upload/download queues), presence, room
-directory, room keys, room operations, room profile, secret storage,
-send, spaces, store, supervisor, typing, and verification. Live member and
-user-profile *commands* remain desktop-owned. It
+Desktop still owns the unmoved or leftover matrix surfaces: account data
+(index not yet moved), full auth execution, client construction, devices,
+diagnostics (depends on the desktop supervisor), lifecycle, media
+commands, room keys, secret storage, send, store, supervisor, and the
+live/command leftovers for already-split domains. It
 also retains the desktop-side commands, live/platform adapters, and applicable
 tests/proofs for moved domains. A narrow P2 auth discovery slice in Core does
 not make full desktop auth Core-owned. Therefore P1 is not complete and
@@ -221,10 +223,15 @@ for any of those gates.
 - CI is path-scoped. A docs-only diff under this directory is expected to skip
   Rust, frontend, iOS, and Synapse heavy jobs while the CI scope and aggregate
   gate report. Hosted iOS simulator coverage is selected only when the UniFFI /
-  UDL / bindgen / Swift / iOS-shell surface can change. Mechanical P1
-  `src/app/` extraction is covered by `validate-rust`. Desktop-source work
-  selects the applicable desktop validation and proofs. Push to `main` /
-  `release/**` and `workflow_dispatch` still run the full suite.
+  UDL / bindgen / Swift / iOS-shell surface can change. On PRs targeting
+  `feature/shared-native-core`, mechanical P1 `src/app/` extraction runs
+  `validate-rust` fmt/clippy/check (clippy compiles tests) and skips
+  `cargo test`, `cargo-audit`, and Synapse live proofs unless send/timeline
+  product commands, `live_synapse_proof`, lockfiles, or this workflow change.
+  Development merges of those mechanical extracts may proceed after review
+  without waiting for the full quality-gate wall-clock; P1 completion still
+  requires later formatting/lint/test evidence at the exact head. Push to
+  `main` / `release/**` and `workflow_dispatch` still run the full suite.
 
 ## 7. Ordered resume playbook
 

@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`fc08edf7` (#732, after #731):** P0 is
+`a37bcbb1` (#735, after #734):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -36,7 +36,9 @@ acceptance criteria have all passed.
   mechanically moved raw content, receipts, routes, and security; #716 moved
   search, legacy, and media_cache; #717 moved media_export and crypto_store;
   #720/#721 moved the members and user_profile harnesses while leaving live
-  `product_commands.rs` on desktop. These retain thin desktop re-exports and
+  `product_commands.rs` on desktop; #734/#735 moved the room-directory session
+  and verification inbox harnesses the same way (`live.rs` + commands stayed
+  desktop). These retain thin desktop re-exports and
   add no P2 command, UDL, or iOS behavior. Compatibility re-exports remain, and many matrix domains are
   still desktop-owned, so the full extraction/end state is not yet complete.
 - **P2 — in progress; transport registry is intentionally partial.** #683–#684
