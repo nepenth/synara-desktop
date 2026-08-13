@@ -671,6 +671,24 @@ struct MatrixTimelineRedactRequest {
     reason: Option<String>,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_timeline_report`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixTimelineReportRequest {
+    room_id: String,
+    event_id: String,
+    #[serde(default)]
+    reason: Option<String>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_timeline_pin` / `matrix_timeline_unpin`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixTimelinePinRequest {
+    room_id: String,
+    event_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_verification_accept`.
 ///
 /// The renderer sends the camel-case `flowId` key; unknown keys are rejected
@@ -1218,6 +1236,15 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_timeline_redact", matrix_timeline_redact)
         .expect("built-in matrix_timeline_redact must remain in the command census");
     registry
+        .register("matrix_timeline_report", matrix_timeline_report)
+        .expect("built-in matrix_timeline_report must remain in the command census");
+    registry
+        .register("matrix_timeline_pin", matrix_timeline_pin)
+        .expect("built-in matrix_timeline_pin must remain in the command census");
+    registry
+        .register("matrix_timeline_unpin", matrix_timeline_unpin)
+        .expect("built-in matrix_timeline_unpin must remain in the command census");
+    registry
 }
 
 fn matrix_typing_set(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -1507,6 +1534,61 @@ fn matrix_timeline_redact(state: Arc<CoreState>, request: CommandEnvelope) -> Co
     })
 }
 
+fn matrix_timeline_report(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelineReportRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-timeline-report-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-report-no-session")
+        })?;
+        let readback: NativeTimelineActionReadback = owner
+            .report(
+                &payload.room_id,
+                &payload.event_id,
+                payload.reason.as_deref(),
+            )
+            .await
+            .map_err(timeline_action_owner_error)?;
+        serde_json::to_value(readback)
+            .map_err(|_| core_state_error("p2-timeline-report-serialization-failed"))
+    })
+}
+
+fn matrix_timeline_pin(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelinePinRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-timeline-pin-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-pin-no-session")
+        })?;
+        let readback: NativeTimelineActionReadback = owner
+            .pin_event(&payload.room_id, &payload.event_id)
+            .await
+            .map_err(timeline_action_owner_error)?;
+        serde_json::to_value(readback)
+            .map_err(|_| core_state_error("p2-timeline-pin-serialization-failed"))
+    })
+}
+
+fn matrix_timeline_unpin(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelinePinRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-timeline-unpin-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-unpin-no-session")
+        })?;
+        let readback: NativeTimelineActionReadback = owner
+            .unpin_event(&payload.room_id, &payload.event_id)
+            .await
+            .map_err(timeline_action_owner_error)?;
+        serde_json::to_value(readback)
+            .map_err(|_| core_state_error("p2-timeline-unpin-serialization-failed"))
+    })
+}
+
 fn timeline_action_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "d0.4-send-invalid-room-id"
@@ -1515,7 +1597,13 @@ fn timeline_action_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         | "v-timeline-edit-empty-body"
         | "v-timeline-edit-room-not-found"
         | "v-timeline-redact-invalid-event-id"
-        | "v-timeline-redact-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        | "v-timeline-redact-room-not-found"
+        | "v-timeline-report-invalid-event-id"
+        | "v-timeline-report-room-not-found"
+        | "v-timeline-pin-invalid-event-id"
+        | "v-timeline-pin-room-not-found"
+        | "v-timeline-unpin-invalid-event-id"
+        | "v-timeline-unpin-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -2635,9 +2723,12 @@ mod tests {
                 "matrix_timeline_jump_latest",
                 "matrix_timeline_open",
                 "matrix_timeline_paginate",
+                "matrix_timeline_pin",
                 "matrix_timeline_reaction_toggle",
                 "matrix_timeline_redact",
+                "matrix_timeline_report",
                 "matrix_timeline_set_read_state",
+                "matrix_timeline_unpin",
                 "matrix_typing_set",
                 "matrix_typing_snapshot",
                 "matrix_verification_accept",
@@ -4827,6 +4918,72 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-timeline-redact-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_report_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_report".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "eventId":"$e"
+                }),
+            })
+            .await
+            .expect_err("timeline report without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-report-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_pin_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_pin".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "eventId":"$e"
+                }),
+            })
+            .await
+            .expect_err("timeline pin without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-pin-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_unpin_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_unpin".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "eventId":"$e"
+                }),
+            })
+            .await
+            .expect_err("timeline unpin without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-unpin-no-session")
         );
     }
 

@@ -270,6 +270,102 @@ impl NativeTimelineOwner {
             status: "redacted",
         })
     }
+
+    pub async fn report(
+        &self,
+        room_id: &str,
+        event_id: &str,
+        reason: Option<&str>,
+    ) -> Result<NativeTimelineActionReadback, &'static str> {
+        let room_id = parse_action_room_id(room_id)?;
+        let event_id = parse_action_event_id(event_id, "v-timeline-report-invalid-event-id")?;
+        let reason = reason
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned);
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-timeline-report-room-not-found")?;
+        room.report_content(event_id.clone(), reason)
+            .await
+            .map_err(|_| "v-timeline-report-failed")?;
+        Ok(NativeTimelineActionReadback {
+            schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+            action: NativeTimelineActionKind::Report,
+            room_id: room_id.to_string(),
+            event_id: event_id.to_string(),
+            status: "reported",
+        })
+    }
+
+    pub async fn pin_event(
+        &self,
+        room_id: &str,
+        event_id: &str,
+    ) -> Result<NativeTimelineActionReadback, &'static str> {
+        self.set_pinned(room_id, event_id, true).await
+    }
+
+    pub async fn unpin_event(
+        &self,
+        room_id: &str,
+        event_id: &str,
+    ) -> Result<NativeTimelineActionReadback, &'static str> {
+        self.set_pinned(room_id, event_id, false).await
+    }
+
+    async fn set_pinned(
+        &self,
+        room_id: &str,
+        event_id: &str,
+        pin: bool,
+    ) -> Result<NativeTimelineActionReadback, &'static str> {
+        let room_id = parse_action_room_id(room_id)?;
+        let event_id = parse_action_event_id(
+            event_id,
+            if pin {
+                "v-timeline-pin-invalid-event-id"
+            } else {
+                "v-timeline-unpin-invalid-event-id"
+            },
+        )?;
+        let room = self.client.get_room(&room_id).ok_or(if pin {
+            "v-timeline-pin-room-not-found"
+        } else {
+            "v-timeline-unpin-room-not-found"
+        })?;
+        let changed = if pin {
+            room.pin_event(&event_id)
+                .await
+                .map_err(|_| "v-timeline-pin-failed")?
+        } else {
+            room.unpin_event(&event_id)
+                .await
+                .map_err(|_| "v-timeline-unpin-failed")?
+        };
+        Ok(NativeTimelineActionReadback {
+            schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+            action: if pin {
+                NativeTimelineActionKind::Pin
+            } else {
+                NativeTimelineActionKind::Unpin
+            },
+            room_id: room_id.to_string(),
+            event_id: event_id.to_string(),
+            status: if changed {
+                if pin {
+                    "pinned"
+                } else {
+                    "unpinned"
+                }
+            } else if pin {
+                "already_pinned"
+            } else {
+                "already_unpinned"
+            },
+        })
+    }
 }
 
 impl NativeTimelineRegistry {
