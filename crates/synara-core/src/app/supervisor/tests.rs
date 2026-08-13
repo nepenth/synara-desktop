@@ -5,8 +5,8 @@ use super::handle::{FailingClientFactory, NullClientFactory, TestClientFactory};
 use super::state::SupervisorState;
 use super::transition::SupervisorCommand;
 use super::*;
-use crate::matrix::dto::SessionLifecycle;
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::dto::SessionLifecycle;
+use crate::transport::MatrixIpcErrorCategory;
 
 #[test]
 fn marker_and_command_table_non_empty() {

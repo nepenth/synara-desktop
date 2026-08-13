@@ -31,6 +31,7 @@ pub mod search;
 pub mod security;
 pub mod send;
 pub mod spaces;
+pub mod supervisor;
 pub mod sync;
 pub mod threads;
 pub mod timeline;

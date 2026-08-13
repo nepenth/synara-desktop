@@ -2,7 +2,7 @@
 
 use super::state::SupervisorState;
 use super::transition::SupervisorCommand;
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Illegal or rejected lifecycle transition.
 #[derive(Debug, Clone, PartialEq, Eq)]

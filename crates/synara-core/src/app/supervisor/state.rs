@@ -1,11 +1,11 @@
 //! Supervisor lifecycle states and high-level product events.
 //!
-//! Wire-identical names to [`crate::matrix::dto::SessionLifecycle`] so product
+//! Wire-identical names to [`crate::dto::SessionLifecycle`] so product
 //! snapshots can project actor state without inventing a second vocabulary.
 //! Commands that drive the pure transition table live in
 //! [`super::transition::SupervisorCommand`].
 
-use crate::matrix::dto::SessionLifecycle;
+use crate::dto::SessionLifecycle;
 
 /// High-level Matrix client lifecycle under the single-owner supervisor.
 ///
