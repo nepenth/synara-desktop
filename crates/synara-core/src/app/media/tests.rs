@@ -1,8 +1,8 @@
 //! Unit tests for P6.4 media upload + P7.2 media download queues.
 
 use super::*;
-use crate::matrix::dto::UploadState;
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::dto::UploadState;
+use crate::transport::MatrixIpcErrorCategory;
 
 #[test]
 fn marker_stable() {

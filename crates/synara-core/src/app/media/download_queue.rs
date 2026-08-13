@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use crate::matrix::dto::RoomId;
+use crate::dto::RoomId;
 
 use super::error::MediaError;
 
