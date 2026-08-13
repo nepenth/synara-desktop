@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`89b90bad` (#828, after #827):** P0 is
+`9f12bc38` (#830, after #829):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -91,14 +91,16 @@ acceptance criteria have all passed.
   census. The merged registry currently has exactly those eight plus
   `matrix_typing_snapshot` (#818), `matrix_presence_snapshot` (#820),
   `matrix_verification_list` (#822), `matrix_device_snapshot` (#824), and
-  `matrix_room_join_rule_snapshot` (#826), and `matrix_get_global_image_packs` (#828):
+  `matrix_room_join_rule_snapshot` (#826), `matrix_get_global_image_packs` (#828),
+  `matrix_get_user_image_pack` (#830), and `matrix_get_room_image_packs` (#830):
   `matrix_login_flows`, `matrix_register_flows`, `matrix_session_snapshot`,
   `matrix_sync_status`, `matrix_crypto_status`, `matrix_media_config`,
   `matrix_cross_signing_status`, `matrix_secret_storage_status`,
   `matrix_typing_snapshot`, `matrix_presence_snapshot`,
   `matrix_verification_list`, `matrix_device_snapshot`,
-  `matrix_room_join_rule_snapshot`, and `matrix_get_global_image_packs`
-  (#686–#689, #694, #698, #701–#702, #706, #818, #820, #822, #824, #826, #828). The status/media
+  `matrix_room_join_rule_snapshot`, `matrix_get_global_image_packs`,
+  `matrix_get_user_image_pack`, and `matrix_get_room_image_packs`
+  (#686–#689, #694, #698, #701–#702, #706, #818, #820, #822, #824, #826, #828, #830). The status/media
   routes preserve bounded legacy contracts through Core.
   Neither #708, #710, #713, #714, #716, nor #717 adds a Core command route. It is not the
   complete desktop command registry; unregistered census names fail closed.
