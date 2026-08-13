@@ -1,6 +1,6 @@
 //! Privacy-safe errors for media export intents (P7.5).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Media export queue failure.
 ///
