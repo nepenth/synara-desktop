@@ -23,6 +23,7 @@ use crate::app::presence::{
 };
 use crate::app::room_profile::{MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner};
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
+use crate::app::timeline::{NativeTimelineCloseRequest, NativeTimelineOwner};
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::app::verification::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
@@ -578,6 +579,13 @@ struct MatrixDeviceDeleteCancelRequest {
     session_generation: u64,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_timeline_close`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixTimelineCloseRequest {
+    stream_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_verification_accept`.
 ///
 /// The renderer sends the camel-case `flowId` key; unknown keys are rejected
@@ -682,6 +690,7 @@ pub struct CoreState {
     devices: Mutex<Option<Arc<NativeDeviceOwner>>>,
     join_rules: Mutex<Option<Arc<NativeRoomJoinRuleOwner>>>,
     image_packs: Mutex<Option<Arc<NativeImagePackOwner>>>,
+    timelines: Mutex<Option<Arc<NativeTimelineOwner>>>,
 }
 
 impl CoreState {
@@ -737,6 +746,13 @@ impl CoreState {
             .map(|guard| guard.clone())
             .map_err(|_| core_state_error("p2-core-state-poisoned"))
     }
+
+    fn timeline_owner(&self) -> Result<Option<Arc<NativeTimelineOwner>>, MatrixIpcError> {
+        self.timelines
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))
+    }
 }
 
 /// Platform-neutral native engine root.
@@ -764,6 +780,7 @@ impl Core {
                 devices: Mutex::new(None),
                 join_rules: Mutex::new(None),
                 image_packs: Mutex::new(None),
+                timelines: Mutex::new(None),
             }),
             registry,
         }
@@ -850,6 +867,13 @@ impl Core {
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *image_packs = None;
+        drop(image_packs);
+        let mut timelines = self
+            .state
+            .timelines
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *timelines = None;
         Ok(())
     }
 
@@ -933,6 +957,17 @@ impl Core {
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *image_packs = Some(owner);
+        Ok(())
+    }
+
+    /// Install the live timeline registry created by the shell after login/restore.
+    pub fn attach_timelines(&self, owner: Arc<NativeTimelineOwner>) -> Result<(), MatrixIpcError> {
+        let mut timelines = self
+            .state
+            .timelines
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *timelines = Some(owner);
         Ok(())
     }
 
@@ -1056,6 +1091,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_typing_set", matrix_typing_set)
         .expect("built-in matrix_typing_set must remain in the command census");
     registry
+        .register("matrix_timeline_close", matrix_timeline_close)
+        .expect("built-in matrix_timeline_close must remain in the command census");
+    registry
 }
 
 fn matrix_typing_set(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -1081,6 +1119,21 @@ fn typing_set_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn matrix_timeline_close(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelineCloseRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-timeline-close-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-close-no-session")
+        })?;
+        let closed = owner.lock().await.close_view(NativeTimelineCloseRequest {
+            stream_id: payload.stream_id,
+        });
+        Ok(serde_json::Value::Bool(closed))
+    })
 }
 
 fn matrix_typing_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -2189,6 +2242,7 @@ mod tests {
                 "matrix_set_room_image_pack",
                 "matrix_set_user_image_pack",
                 "matrix_sync_status",
+                "matrix_timeline_close",
                 "matrix_typing_set",
                 "matrix_typing_snapshot",
                 "matrix_verification_accept",
@@ -3998,6 +4052,44 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-typing-set-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_close_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_close".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"streamId":"view-1"}),
+            })
+            .await
+            .expect_err("timeline close without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-close-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_close_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_close".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"streamId":"view-1","token":"no"}),
+            })
+            .await
+            .expect_err("timeline close must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-close-invalid-payload")
         );
     }
 

@@ -122,12 +122,13 @@ pub async fn matrix_login_password(
         return Err(error);
     }
 
+    let timelines = Arc::new(NativeTimelineOwner::new(session_generation));
     *session = Some(ManagedMatrixSession {
         client,
         identity: identity.clone(),
         sync,
         invite_avatars: InviteAvatarHandles::new(session_generation),
-        timelines: NativeTimelineRegistry::new(session_generation),
+        timelines: timelines.clone(),
         composer_drafts: ComposerDraftRegistry::new(),
         sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
@@ -168,6 +169,9 @@ pub async fn matrix_login_password(
     core.inner()
         .attach_image_packs(image_packs)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-image-pack-attach-failed"))?;
+    core.inner()
+        .attach_timelines(timelines)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-timeline-attach-failed"))?;
     Ok(identity)
 }
 
@@ -314,19 +318,23 @@ pub async fn matrix_register(
         RegisterSubmitOutcome::Complete(secrets) => {
             let (identity, session_generation) =
                 install_session_from_register_secrets(&app, &state, &mut session, secrets).await?;
-            let (typing, presence, verification, devices, join_rules, image_packs) = session
-                .as_ref()
-                .map(|active| {
-                    (
-                        active.typing.clone(),
-                        active.presence.clone(),
-                        active.verification.clone(),
-                        active.devices.clone(),
-                        active.join_rules.clone(),
-                        active._image_packs.clone(),
-                    )
-                })
-                .ok_or_else(|| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
+            let (typing, presence, verification, devices, join_rules, image_packs, timelines) =
+                session
+                    .as_ref()
+                    .map(|active| {
+                        (
+                            active.typing.clone(),
+                            active.presence.clone(),
+                            active.verification.clone(),
+                            active.devices.clone(),
+                            active.join_rules.clone(),
+                            active._image_packs.clone(),
+                            active.timelines.clone(),
+                        )
+                    })
+                    .ok_or_else(|| {
+                        MatrixAuthCommandError::unavailable("p2-typing-attach-failed")
+                    })?;
             drop(session);
             crate::bridge::session_lifecycle::open_after_desktop_session_install(
                 core.inner().as_ref(),
@@ -354,6 +362,9 @@ pub async fn matrix_register(
             core.inner()
                 .attach_image_packs(image_packs)
                 .map_err(|_| MatrixAuthCommandError::unavailable("p2-image-pack-attach-failed"))?;
+            core.inner()
+                .attach_timelines(timelines)
+                .map_err(|_| MatrixAuthCommandError::unavailable("p2-timeline-attach-failed"))?;
             Ok(MatrixRegisterOutcome::Complete { identity })
         }
     }
@@ -450,7 +461,7 @@ pub(super) async fn install_session_from_register_secrets(
         identity: identity.clone(),
         sync,
         invite_avatars: InviteAvatarHandles::new(session_generation),
-        timelines: NativeTimelineRegistry::new(session_generation),
+        timelines: Arc::new(NativeTimelineOwner::new(session_generation)),
         composer_drafts: ComposerDraftRegistry::new(),
         sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
@@ -613,12 +624,13 @@ pub async fn matrix_restore_session(
         .map_err(map_room_join_rule_owner_error)?,
     );
     let sync = start_sync_owner(&client, session_generation).await?;
+    let timelines = Arc::new(NativeTimelineOwner::new(session_generation));
     *session = Some(ManagedMatrixSession {
         client,
         identity: identity.clone(),
         sync,
         invite_avatars: InviteAvatarHandles::new(session_generation),
-        timelines: NativeTimelineRegistry::new(session_generation),
+        timelines: timelines.clone(),
         composer_drafts: ComposerDraftRegistry::new(),
         sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
@@ -659,6 +671,9 @@ pub async fn matrix_restore_session(
     core.inner()
         .attach_image_packs(image_packs)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-image-pack-attach-failed"))?;
+    core.inner()
+        .attach_timelines(timelines)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-timeline-attach-failed"))?;
     Ok(identity)
 }
 

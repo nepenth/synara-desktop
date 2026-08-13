@@ -14,6 +14,7 @@ pub(crate) mod presence_subscriptions;
 pub(crate) mod room_image_packs;
 pub(crate) mod secret_storage_status;
 pub(crate) mod session_lifecycle;
+pub(crate) mod timeline_close;
 pub(crate) mod typing_set;
 pub(crate) mod typing_snapshot;
 pub(crate) mod user_image_pack;
