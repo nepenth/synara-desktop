@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `a37bcbb1`, the merge commit for #735. |
-| Immediately preceding merges | #734 room-directory session, #735 verification inbox. |
+| Feature evidence tip | `feature/shared-native-core` is `fac3ddce`, the merge commit for #738. |
+| Immediately preceding merges | #737 account-data index, #738 send-queue harness. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -42,11 +42,13 @@ residency changes are:
 | #732 / `fc08edf7` | cross-signing identity harness | Desktop keeps `live.rs` + `product_commands.rs`. |
 | #734 / `9293c1f7` | room-directory session harness | Desktop keeps `live.rs` + `product_commands.rs`. |
 | #735 / `a37bcbb1` | verification inbox harness | Desktop keeps `live.rs` + `product_commands.rs`. |
+| #737 / `6e1609c4` | account-data index harness | Desktop keeps image_packs/later/live/room_notes + `product_commands.rs`. |
+| #738 / `fac3ddce` | send-queue harness | Desktop keeps `product_commands.rs` + `live_synapse_proof`. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `a37bcbb1`/#735 for
+anchor, but it is no longer the feature-tip provenance; use `fac3ddce`/#738 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -92,16 +94,18 @@ and the P1 app domains `sync`, `room_list`, pure `timeline`,
 `utd_recovery`, `notifications`, `polls`, `relations`, `threads`, `unread`,
 `raw_content`, `receipts`, `routes`, `security`, `search`, `legacy`,
 `media_cache`, `media_export`, `crypto_store`, `members`, `user_profile`,
-`room_directory` session, and `verification` inbox.
+`room_directory` session, `verification` inbox, `account_data` index, and
+`send` queue.
 Later mechanical splits left live `product_commands.rs` and `live.rs` on
 desktop where those files exist. Compatibility re-exports remain deliberately
 in the desktop shell.
 
-Desktop still owns the unmoved or leftover matrix surfaces: account data
-(index not yet moved), full auth execution, client construction, devices,
-diagnostics (depends on the desktop supervisor), lifecycle, media
-commands, room keys, secret storage, send, store, supervisor, and the
-live/command leftovers for already-split domains. It
+Desktop still owns the unmoved or leftover matrix surfaces: full auth
+execution, client construction, devices, diagnostics (depends on the
+desktop supervisor), lifecycle, media commands, room keys, secret
+storage, store (keyring), supervisor, and the live/command leftovers for
+already-split domains (including account-data image_packs/later/notes and
+send product commands / synapse proofs). It
 also retains the desktop-side commands, live/platform adapters, and applicable
 tests/proofs for moved domains. A narrow P2 auth discovery slice in Core does
 not make full desktop auth Core-owned. Therefore P1 is not complete and
