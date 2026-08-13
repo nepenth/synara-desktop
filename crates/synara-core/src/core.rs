@@ -14,6 +14,7 @@ use crate::app::auth::{
     RegisterFlowsProbe,
 };
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
+use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::dto::SessionSnapshot;
 use crate::platform::{
     Platform, PlatformCrossSigningOwnIdentity, PlatformCrossSigningPrivateState,
@@ -500,6 +501,7 @@ struct MatrixRegisterFlowsRequest {
 pub struct CoreState {
     platform: Arc<dyn Platform>,
     session: Mutex<Option<SessionSnapshot>>,
+    typing: Mutex<Option<Arc<NativeTypingOwner>>>,
 }
 
 impl CoreState {
@@ -509,6 +511,13 @@ impl CoreState {
 
     pub fn session_snapshot(&self) -> Result<Option<SessionSnapshot>, MatrixIpcError> {
         self.session
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))
+    }
+
+    fn typing_owner(&self) -> Result<Option<Arc<NativeTypingOwner>>, MatrixIpcError> {
+        self.typing
             .lock()
             .map(|guard| guard.clone())
             .map_err(|_| core_state_error("p2-core-state-poisoned"))
@@ -534,6 +543,7 @@ impl Core {
             state: Arc::new(CoreState {
                 platform,
                 session: Mutex::new(None),
+                typing: Mutex::new(None),
             }),
             registry,
         }
@@ -578,6 +588,26 @@ impl Core {
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *guard = None;
+        drop(guard);
+        let mut typing = self
+            .state
+            .typing
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *typing = None;
+        Ok(())
+    }
+
+    /// Install the live typing owner created by the shell after login/restore.
+    /// Core snapshots it for `matrix_typing_snapshot`; the shell keeps an Arc
+    /// for event-handler lifetime.
+    pub fn attach_typing(&self, owner: Arc<NativeTypingOwner>) -> Result<(), MatrixIpcError> {
+        let mut typing = self
+            .state
+            .typing
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *typing = Some(owner);
         Ok(())
     }
 
@@ -617,6 +647,24 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_register_flows", matrix_register_flows)
         .expect("built-in matrix_register_flows must remain in the command census");
     registry
+        .register("matrix_typing_snapshot", matrix_typing_snapshot)
+        .expect("built-in matrix_typing_snapshot must remain in the command census");
+    registry
+}
+
+fn matrix_typing_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-typing-snapshot-invalid-payload"));
+        }
+        let owner = state.typing_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-typing-snapshot-no-session")
+        })?;
+        let snapshot: NativeTypingSnapshot = owner.snapshot().await;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-typing-snapshot-serialization-failed"))
+    })
 }
 
 fn matrix_session_snapshot(state: Arc<CoreState>, _request: CommandEnvelope) -> CommandFuture {
@@ -1239,6 +1287,7 @@ mod tests {
                 "matrix_secret_storage_status",
                 "matrix_session_snapshot",
                 "matrix_sync_status",
+                "matrix_typing_snapshot",
             ]
         );
 
@@ -2343,6 +2392,25 @@ mod tests {
             .unwrap();
         assert_eq!(response.payload, serde_json::json!({"safe":true}));
         assert_eq!(core.registered_commands(), vec!["matrix_login_flows"]);
+    }
+
+    #[tokio::test]
+    async fn matrix_typing_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_typing_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("typing snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-typing-snapshot-no-session")
+        );
     }
 
     #[tokio::test]

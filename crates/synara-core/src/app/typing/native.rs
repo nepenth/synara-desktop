@@ -2,11 +2,11 @@
 //!
 //! Live Client `m.typing` ownership lives in [`super::live`].
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::dto::TypingSnapshot;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTypingSnapshot {
     pub session_generation: u64,
