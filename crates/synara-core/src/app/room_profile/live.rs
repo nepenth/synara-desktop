@@ -149,6 +149,98 @@ impl NativeRoomJoinRuleOwner {
             .await
     }
 
+    pub async fn invite_accept(
+        &self,
+        room_id: &str,
+    ) -> Result<crate::app::room_list::NativeInviteSnapshot, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let invite = self.invite_target(room_id).await?;
+        let room = self.invite_room(&invite)?;
+        room.join()
+            .await
+            .map_err(|_| "v-rooms.1-invite-accept-failed")?;
+        if invite.is_direct {
+            let sender_id = OwnedUserId::try_from(invite.sender_id.as_str())
+                .map_err(|_| "v-rooms.1-invite-invalid-sender")?;
+            self.client
+                .account()
+                .mark_as_dm(room.room_id(), &[sender_id])
+                .await
+                .map_err(|_| "v-rooms.1-invite-direct-mark-failed")?;
+        }
+        {
+            let mut handles = self.invite_avatars.lock().await;
+            handles.revoke_room(&invite.room_id);
+            crate::app::room_list::snapshot_invites(
+                &self.client,
+                self.session_generation,
+                &mut handles,
+            )
+            .await
+        }
+    }
+
+    pub async fn invite_decline(
+        &self,
+        room_id: &str,
+    ) -> Result<crate::app::room_list::NativeInviteSnapshot, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let invite = self.invite_target(room_id).await?;
+        self.invite_room(&invite)?
+            .leave()
+            .await
+            .map_err(|_| "v-rooms.1-invite-decline-failed")?;
+        {
+            let mut handles = self.invite_avatars.lock().await;
+            handles.revoke_room(&invite.room_id);
+            crate::app::room_list::snapshot_invites(
+                &self.client,
+                self.session_generation,
+                &mut handles,
+            )
+            .await
+        }
+    }
+
+    async fn invite_target(
+        &self,
+        room_id: &str,
+    ) -> Result<crate::app::room_list::NativeInvite, &'static str> {
+        let normalized_room_id = room_id.trim();
+        if normalized_room_id.is_empty() {
+            return Err("v-rooms.1-invite-invalid-room");
+        }
+        let snapshot = {
+            let mut handles = self.invite_avatars.lock().await;
+            crate::app::room_list::snapshot_invites(
+                &self.client,
+                self.session_generation,
+                &mut handles,
+            )
+            .await?
+        };
+        snapshot
+            .invites
+            .into_iter()
+            .find(|invite| invite.room_id == normalized_room_id)
+            .ok_or("v-rooms.1-invite-not-found")
+    }
+
+    fn invite_room(
+        &self,
+        invite: &crate::app::room_list::NativeInvite,
+    ) -> Result<Room, &'static str> {
+        let room_id = OwnedRoomId::try_from(invite.room_id.as_str())
+            .map_err(|_| "v-rooms.1-invite-invalid-room")?;
+        self.client
+            .get_room(&room_id)
+            .ok_or("v-rooms.1-invite-not-found")
+    }
+
     pub fn session_generation(&self) -> u64 {
         self.session_generation
     }
