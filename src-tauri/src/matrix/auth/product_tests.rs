@@ -1200,6 +1200,38 @@ fn avatar_mxc_parser_rejects_invalid_uri() {
 }
 
 #[test]
+fn own_profile_writes_route_through_core_without_desktop_client_io() {
+    let product = PRODUCT_SOURCE;
+    for (name, bridge) in [
+        (
+            "matrix_set_own_display_name",
+            "crate::bridge::own_profile::set_own_display_name",
+        ),
+        (
+            "matrix_set_own_avatar",
+            "crate::bridge::own_profile::set_own_avatar",
+        ),
+    ] {
+        let command = product
+            .split(&format!("pub async fn {name}"))
+            .nth(1)
+            .unwrap_or_else(|| panic!("{name} command"));
+        let command = command
+            .split("#[tauri::command]")
+            .next()
+            .unwrap_or_else(|| panic!("{name} command body"));
+        assert!(
+            command.contains(bridge),
+            "{name} must dispatch through {bridge}"
+        );
+        assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+        assert!(!command.contains("active.client"));
+        assert!(!command.contains("set_display_name"));
+        assert!(!command.contains("set_avatar_url"));
+    }
+}
+
+#[test]
 fn avatar_mime_validator_accepts_images_only() {
     assert_eq!(
         validate_avatar_mime("image/png").unwrap().essence_str(),

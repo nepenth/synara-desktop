@@ -11,6 +11,7 @@
 mod error;
 mod index;
 mod ipc;
+mod live;
 
 pub use error::UserProfileError;
 pub use index::{
@@ -18,6 +19,9 @@ pub use index::{
     MAX_DISPLAY_NAME_CHARS, MAX_IGNORED_USERS,
 };
 pub use ipc::MatrixProfileWriteResult;
+pub use live::{
+    parse_own_avatar_mxc, parse_own_display_name, set_own_avatar, set_own_display_name,
+};
 
 /// Static marker for link / schema smoke.
 pub const MATRIX_USER_PROFILE_MARKER: &str = "matrix-user-profile-p6.6";

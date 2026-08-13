@@ -445,6 +445,20 @@ impl NativeImagePackOwner {
     ) -> Result<(), &'static str> {
         set_room_image_pack(&self.client, room_id, state_key, content).await
     }
+
+    pub async fn set_own_display_name(
+        &self,
+        display_name: &str,
+    ) -> Result<crate::app::user_profile::MatrixProfileWriteResult, &'static str> {
+        crate::app::user_profile::set_own_display_name(&self.client, display_name).await
+    }
+
+    pub async fn set_own_avatar(
+        &self,
+        mxc: &str,
+    ) -> Result<crate::app::user_profile::MatrixProfileWriteResult, &'static str> {
+        crate::app::user_profile::set_own_avatar(&self.client, mxc).await
+    }
 }
 
 #[cfg(test)]
