@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `4dae1b16`, the merge commit for #764. |
-| Immediately preceding merges | #763 docs after #762, #764 logout orchestration + task-supervisor bridge. |
+| Feature evidence tip | `feature/shared-native-core` is `ffb22699`, the merge commit for #766. |
+| Immediately preceding merges | #765 docs after #764, #766 later/room-notes codecs. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -58,11 +58,12 @@ residency changes are:
 | #760 / `fd8f9df3` | session-material vault trait + envelope | Desktop keeps `KeyringSessionMaterialVault`, persist/restore (`matrix_sdk`). |
 | #762 / `615b501b` | well-known HTTP discovery transport | Desktop keeps product user-agent helper and live login/product. |
 | #764 / `4dae1b16` | logout orchestration + task-supervisor bridge | Desktop keeps Keyring session I/O and SDK persist/restore. |
+| #766 / `ffb22699` | later / room-notes codecs | Desktop keeps Client RMW live wrappers. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `4dae1b16`/#764 for
+anchor, but it is no longer the feature-tip provenance; use `ffb22699`/#766 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -113,7 +114,7 @@ and the P1 app domains `sync`, `room_list`, pure `timeline`,
 `diagnostics` health, `store` identity/paths/key-material/vault-trait,
 `client_builder` error/features/config, `lifecycle` recovery-copy /
 remote-logout / wipe / error / session-material trait / logout, auth device-name, and auth
-discovery/UIA/client_config, and well-known HTTP transport.
+discovery/UIA/client_config, well-known HTTP transport, and later/room-notes codecs.
 Later mechanical splits left live `product_commands.rs` and `live.rs` on
 desktop where those files exist. Compatibility re-exports remain deliberately
 in the desktop shell.
