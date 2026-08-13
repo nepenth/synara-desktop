@@ -1,6 +1,6 @@
 //! Privacy-safe errors for room-key import/export (P8.6).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Room-key transfer flow failure.
 #[derive(Debug)]

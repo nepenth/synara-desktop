@@ -22,6 +22,7 @@ pub mod raw_content;
 pub mod receipts;
 pub mod relations;
 pub mod room_directory;
+pub mod room_keys;
 pub mod room_list;
 pub mod room_ops;
 pub mod room_profile;
