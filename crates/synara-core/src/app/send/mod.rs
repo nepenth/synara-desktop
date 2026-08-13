@@ -14,6 +14,7 @@
 
 mod attachment_queue;
 mod error;
+mod ipc;
 mod poll;
 mod queue;
 
@@ -22,6 +23,10 @@ pub use attachment_queue::{
     MAX_ACTIVE_ATTACHMENTS, MAX_CAPTION_CHARS, MAX_HANDLE_CHARS,
 };
 pub use error::SendError;
+pub use ipc::{
+    MatrixPollRespondResult, MatrixSendAttachmentResult, MatrixSendPollResult,
+    MatrixSendStickerResult, MatrixSendTextResult,
+};
 pub use poll::{
     normalize_poll, poll_response_content, poll_start_content, NormalizedPoll, PollSendError,
 };

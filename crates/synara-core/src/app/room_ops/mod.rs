@@ -9,9 +9,14 @@
 #![allow(unused_imports)]
 
 mod error;
+mod ipc;
 mod queue;
 
 pub use error::RoomOpsError;
+pub use ipc::{
+    MatrixRoomCreateContent, MatrixRoomCreatePowerLevels, MatrixRoomCreatePreset,
+    MatrixRoomCreateRequest, MatrixRoomCreateVisibility,
+};
 pub use queue::{
     LocalOpId, RoomOp, RoomOpKind, RoomOpState, RoomOpsQueue, MAX_CREATE_NAME_CHARS,
     MAX_REASON_CHARS, MAX_TRACKED_OPS,
