@@ -204,8 +204,11 @@ for any of those gates.
   extraction.
 - CI is path-scoped. A docs-only diff under this directory is expected to skip
   Rust, frontend, iOS, and Synapse heavy jobs while the CI scope and aggregate
-  gate report. A Core, UDL, or Swift diff selects hosted iOS simulator coverage;
-  desktop-source work selects the applicable desktop validation and proofs.
+  gate report. Hosted iOS simulator coverage is selected only when the UniFFI /
+  UDL / bindgen / Swift / iOS-shell surface can change. Mechanical P1
+  `src/app/` extraction is covered by `validate-rust`. Desktop-source work
+  selects the applicable desktop validation and proofs. Push to `main` /
+  `release/**` and `workflow_dispatch` still run the full suite.
 
 ## 7. Ordered resume playbook
 

@@ -138,16 +138,24 @@ jobs:
             VALIDATE_FRONTEND=false
           fi
 
-          # iOS simulator suite — include each project-owned SynaraCore input
-          # because the local package is generated and linked before XcodeGen.
+          # iOS simulator suite — only when the UniFFI / Swift / iOS shell
+          # surface can change. Mechanical P1 moves under
+          # crates/synara-core/src/app/ are covered by validate-rust; they do
+          # not regenerate bindings. Full iOS still runs on push to main/release
+          # and on workflow_dispatch.
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
-            .github/workflows/ci.yml \
+            rust-toolchain.toml \
             Cargo.toml \
             Cargo.lock \
-            rust-toolchain.toml \
-            crates/synara-core \
+            crates/synara-core/Cargo.toml \
+            crates/synara-core/build.rs \
+            crates/synara-core/src/lib.rs \
+            crates/synara-core/src/synara_core.udl \
+            crates/synara-core/src/ffi.rs \
+            crates/synara-core/src/session_projection_ffi.rs \
             crates/synara-core-bindgen \
             scripts/generate-synara-core-swift.sh \
+            scripts/check-synara-core-swift-scaffold.mjs \
             synara-ios; then
             echo "ios=false" >> "$GITHUB_OUTPUT"
             IOS=false
