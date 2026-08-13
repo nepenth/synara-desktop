@@ -2,11 +2,9 @@ use super::*;
 
 #[tauri::command]
 pub async fn matrix_verification_list(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeVerificationInbox, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_verification_session(session.as_ref())?;
-    Ok(active.verification.list().await)
+    crate::bridge::verification_list::verification_list(core.inner().as_ref()).await
 }
 
 #[tauri::command]

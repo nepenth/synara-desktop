@@ -7,3 +7,4 @@ pub(crate) mod presence_snapshot;
 pub(crate) mod secret_storage_status;
 pub(crate) mod session_lifecycle;
 pub(crate) mod typing_snapshot;
+pub(crate) mod verification_list;

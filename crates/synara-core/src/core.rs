@@ -16,6 +16,7 @@ use crate::app::auth::{
 use crate::app::presence::{NativePresenceOwner, NativePresenceSnapshotResult};
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
+use crate::app::verification::{NativeVerificationInbox, NativeVerificationOwner};
 use crate::dto::SessionSnapshot;
 use crate::platform::{
     Platform, PlatformCrossSigningOwnIdentity, PlatformCrossSigningPrivateState,
@@ -514,6 +515,7 @@ pub struct CoreState {
     session: Mutex<Option<SessionSnapshot>>,
     typing: Mutex<Option<Arc<NativeTypingOwner>>>,
     presence: Mutex<Option<Arc<NativePresenceOwner>>>,
+    verification: Mutex<Option<Arc<NativeVerificationOwner>>>,
 }
 
 impl CoreState {
@@ -541,6 +543,13 @@ impl CoreState {
             .map(|guard| guard.clone())
             .map_err(|_| core_state_error("p2-core-state-poisoned"))
     }
+
+    fn verification_owner(&self) -> Result<Option<Arc<NativeVerificationOwner>>, MatrixIpcError> {
+        self.verification
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))
+    }
 }
 
 /// Platform-neutral native engine root.
@@ -564,6 +573,7 @@ impl Core {
                 session: Mutex::new(None),
                 typing: Mutex::new(None),
                 presence: Mutex::new(None),
+                verification: Mutex::new(None),
             }),
             registry,
         }
@@ -622,6 +632,13 @@ impl Core {
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *presence = None;
+        drop(presence);
+        let mut verification = self
+            .state
+            .verification
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *verification = None;
         Ok(())
     }
 
@@ -648,6 +665,22 @@ impl Core {
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *presence = Some(owner);
+        Ok(())
+    }
+
+    /// Install the live verification owner created by the shell after login/restore.
+    /// Core lists it for `matrix_verification_list`; the shell keeps an Arc
+    /// for request/SAS mutations.
+    pub fn attach_verification(
+        &self,
+        owner: Arc<NativeVerificationOwner>,
+    ) -> Result<(), MatrixIpcError> {
+        let mut verification = self
+            .state
+            .verification
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *verification = Some(owner);
         Ok(())
     }
 
@@ -693,6 +726,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_presence_snapshot", matrix_presence_snapshot)
         .expect("built-in matrix_presence_snapshot must remain in the command census");
     registry
+        .register("matrix_verification_list", matrix_verification_list)
+        .expect("built-in matrix_verification_list must remain in the command census");
+    registry
 }
 
 fn matrix_typing_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -730,6 +766,21 @@ fn matrix_presence_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> 
 /// Map live presence-owner diagnostics onto closed Core transport categories.
 /// Preserve the owner diagnostic id so the desktop bridge can restore the
 /// established Tauri error shape without leaking user ids or status text.
+fn matrix_verification_list(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-verification-list-invalid-payload"));
+        }
+        let owner = state.verification_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-verification-list-no-session")
+        })?;
+        let inbox: NativeVerificationInbox = owner.list().await;
+        serde_json::to_value(inbox)
+            .map_err(|_| core_state_error("p2-verification-list-serialization-failed"))
+    })
+}
+
 fn presence_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "v-presence-invalid-user-id" => MatrixIpcErrorCategory::SdkInvariant,
@@ -1364,6 +1415,7 @@ mod tests {
                 "matrix_session_snapshot",
                 "matrix_sync_status",
                 "matrix_typing_snapshot",
+                "matrix_verification_list",
             ]
         );
 
@@ -2524,6 +2576,25 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-presence-snapshot-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_verification_list_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_verification_list".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("verification list without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-verification-list-no-session")
         );
     }
 
