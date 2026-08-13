@@ -3,8 +3,9 @@
 //! Shared-core harness / foundation only until cutover. Owns the privacy-safe
 //! [`LifecycleError`] domain, recovery / transition UX copy, failed-store
 //! recovery policy (never auto-wipe), remote-logout state machine, and
-//! exact-target account wipe. Desktop still owns logout orchestration,
-//! session vault I/O, persist/restore (`matrix_sdk`), and tests.
+//! exact-target account wipe, and the session-material vault *trait* plus
+//! sealed envelope / in-memory harness. Desktop still owns logout
+//! orchestration, Keyring session I/O, persist/restore (`matrix_sdk`), and tests.
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
@@ -14,6 +15,7 @@ mod recovery;
 mod recovery_copy;
 mod remote_logout;
 mod remote_policy;
+mod session_material;
 mod wipe;
 
 pub use error::LifecycleError;
@@ -24,6 +26,12 @@ pub use recovery::{
 pub use recovery_copy::{copy_for_remote_outcome, recovery_copy_en, RecoveryCopyKey};
 pub use remote_logout::{RemoteLogoutFlow, RemoteLogoutOutcome, RemoteLogoutPhase};
 pub use remote_policy::{LocalCleanupPolicy, RemoteLogoutScope};
+pub use session_material::{
+    clear_session_material, load_session_material, persist_session_material,
+    rotate_persisted_session_tokens, HostMatrixSessionSecrets, InMemorySessionMaterialVault,
+    SessionMaterial, SessionMaterialId, SessionMaterialMeta, SessionMaterialVault,
+    SESSION_ENVELOPE_VERSION, SESSION_KIND_MATRIX, SESSION_MATERIAL_SERVICE,
+};
 pub use wipe::{
     assert_exact_account_root, assert_path_is_wipe_allowed, wipe_account_store, WipeReport,
     WipeTarget, WIPE_TARGET_KIND_ACCOUNT_ROOT,
