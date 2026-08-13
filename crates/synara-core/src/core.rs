@@ -13,6 +13,7 @@ use crate::app::auth::{
     HttpLoginFlowTransport, HttpRegisterFlowTransport, MatrixLoginFlowsResponse,
     RegisterFlowsProbe,
 };
+use crate::app::presence::{NativePresenceOwner, NativePresenceSnapshotResult};
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::dto::SessionSnapshot;
@@ -482,6 +483,16 @@ struct MatrixLoginFlowsRequest {
     homeserver_url: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_presence_snapshot`.
+///
+/// The renderer sends the camel-case `userId` key; unknown keys are rejected
+/// so this read-only route cannot grow extra identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixPresenceSnapshotRequest {
+    user_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_register_flows`.
 ///
 /// This read-only probe accepts exactly the existing camel-case homeserver
@@ -502,6 +513,7 @@ pub struct CoreState {
     platform: Arc<dyn Platform>,
     session: Mutex<Option<SessionSnapshot>>,
     typing: Mutex<Option<Arc<NativeTypingOwner>>>,
+    presence: Mutex<Option<Arc<NativePresenceOwner>>>,
 }
 
 impl CoreState {
@@ -518,6 +530,13 @@ impl CoreState {
 
     fn typing_owner(&self) -> Result<Option<Arc<NativeTypingOwner>>, MatrixIpcError> {
         self.typing
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))
+    }
+
+    fn presence_owner(&self) -> Result<Option<Arc<NativePresenceOwner>>, MatrixIpcError> {
+        self.presence
             .lock()
             .map(|guard| guard.clone())
             .map_err(|_| core_state_error("p2-core-state-poisoned"))
@@ -544,6 +563,7 @@ impl Core {
                 platform,
                 session: Mutex::new(None),
                 typing: Mutex::new(None),
+                presence: Mutex::new(None),
             }),
             registry,
         }
@@ -595,6 +615,13 @@ impl Core {
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *typing = None;
+        drop(typing);
+        let mut presence = self
+            .state
+            .presence
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *presence = None;
         Ok(())
     }
 
@@ -608,6 +635,19 @@ impl Core {
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *typing = Some(owner);
+        Ok(())
+    }
+
+    /// Install the live presence owner created by the shell after login/restore.
+    /// Core snapshots it for `matrix_presence_snapshot`; the shell keeps an Arc
+    /// for subscribe/unsubscribe and event-handler lifetime.
+    pub fn attach_presence(&self, owner: Arc<NativePresenceOwner>) -> Result<(), MatrixIpcError> {
+        let mut presence = self
+            .state
+            .presence
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *presence = Some(owner);
         Ok(())
     }
 
@@ -650,6 +690,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_typing_snapshot", matrix_typing_snapshot)
         .expect("built-in matrix_typing_snapshot must remain in the command census");
     registry
+        .register("matrix_presence_snapshot", matrix_presence_snapshot)
+        .expect("built-in matrix_presence_snapshot must remain in the command census");
+    registry
 }
 
 fn matrix_typing_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -665,6 +708,38 @@ fn matrix_typing_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> Co
         serde_json::to_value(snapshot)
             .map_err(|_| core_state_error("p2-typing-snapshot-serialization-failed"))
     })
+}
+
+fn matrix_presence_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixPresenceSnapshotRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-presence-snapshot-invalid-payload"))?;
+        let owner = state.presence_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-presence-snapshot-no-session")
+        })?;
+        let snapshot: NativePresenceSnapshotResult = owner
+            .snapshot(&payload.user_id)
+            .await
+            .map_err(presence_snapshot_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-presence-snapshot-serialization-failed"))
+    })
+}
+
+/// Map live presence-owner diagnostics onto closed Core transport categories.
+/// Preserve the owner diagnostic id so the desktop bridge can restore the
+/// established Tauri error shape without leaking user ids or status text.
+fn presence_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-presence-invalid-user-id" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-presence-user-owner-missing" | "v-presence-session-not-live" => {
+            MatrixIpcErrorCategory::Forbidden
+        }
+        "v-presence-stale-session-generation" => MatrixIpcErrorCategory::StaleSessionGeneration,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 fn matrix_session_snapshot(state: Arc<CoreState>, _request: CommandEnvelope) -> CommandFuture {
@@ -1283,6 +1358,7 @@ mod tests {
                 "matrix_crypto_status",
                 "matrix_login_flows",
                 "matrix_media_config",
+                "matrix_presence_snapshot",
                 "matrix_register_flows",
                 "matrix_secret_storage_status",
                 "matrix_session_snapshot",
@@ -2410,6 +2486,44 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-typing-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_presence_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_presence_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"userId":"@alice:example.org"}),
+            })
+            .await
+            .expect_err("presence snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-presence-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_presence_snapshot_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_presence_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"userId":"@alice:example.org","token":"no"}),
+            })
+            .await
+            .expect_err("presence snapshot must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-presence-snapshot-invalid-payload")
         );
     }
 

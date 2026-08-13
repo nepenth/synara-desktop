@@ -4,13 +4,13 @@
 
 use std::collections::HashMap;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Tauri event: presence may have changed; UI re-snapshots via matrix_get_* commands.
 /// Signal only — never carries secret material.
 pub const PRESENCE_UPDATED_EVENT: &str = "matrix-presence-updated";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativePresenceState {
     Unknown,
@@ -19,7 +19,7 @@ pub enum NativePresenceState {
     Unavailable,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativePresenceSnapshot {
     pub user_id: String,
@@ -31,7 +31,7 @@ pub struct NativePresenceSnapshot {
     pub status_msg: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum NativePresenceSnapshotResult {
     Ready {
@@ -171,9 +171,11 @@ mod tests {
                 user_id: "@alice:example.org".to_owned(),
             }
         );
-        let raw = serde_json::to_value(result).unwrap();
+        let raw = serde_json::to_value(&result).unwrap();
         assert_eq!(raw["status"], "unknown");
         assert!(raw.get("snapshot").is_none());
+        let back: NativePresenceSnapshotResult = serde_json::from_value(raw).unwrap();
+        assert_eq!(back, result);
     }
 
     #[test]

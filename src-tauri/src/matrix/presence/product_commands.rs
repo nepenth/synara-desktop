@@ -3,16 +3,10 @@ use crate::matrix::presence::{NativePresenceSnapshotResult, NativePresenceSubscr
 
 #[tauri::command]
 pub async fn matrix_presence_snapshot(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     user_id: String,
 ) -> Result<NativePresenceSnapshotResult, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    active
-        .presence
-        .snapshot(&user_id)
-        .await
-        .map_err(map_presence_error)
+    crate::bridge::presence_snapshot::presence_snapshot(core.inner().as_ref(), user_id).await
 }
 
 #[tauri::command]

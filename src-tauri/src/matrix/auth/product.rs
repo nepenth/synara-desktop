@@ -278,7 +278,7 @@ struct ManagedMatrixSession {
     _devices: NativeDeviceOwner,
     _image_packs: NativeImagePackOwner,
     typing: Arc<NativeTypingOwner>,
-    presence: NativePresenceOwner,
+    presence: Arc<NativePresenceOwner>,
     join_rules: NativeRoomJoinRuleOwner,
     pending_device_deletion: Option<PendingDeviceDeletion>,
     next_device_delete_operation_id: u64,
