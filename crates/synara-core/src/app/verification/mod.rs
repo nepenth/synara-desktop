@@ -11,11 +11,16 @@
 
 mod error;
 mod inbox;
+mod native;
 
 pub use error::VerificationError;
 pub use inbox::{
     VerificationDirection, VerificationFlow, VerificationInbox, VerificationPhase, MAX_OPEN_FLOWS,
     MAX_SAS_EMOJI,
+};
+pub use native::{
+    phase_rank, NativeVerificationDirection, NativeVerificationEmoji, NativeVerificationInbox,
+    NativeVerificationPhase, NativeVerificationRequest, NativeVerificationSas,
 };
 
 /// Static marker for link / schema smoke.
