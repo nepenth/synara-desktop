@@ -1,4 +1,4 @@
-//! Approved Matrix Rust SDK Cargo feature surface for desktop (P2.3).
+//! Approved Matrix Rust SDK Cargo feature surface for synara-core (P2.3).
 
 /// Program crate pin (exact crates.io version; git alignment is
 /// `1c44fb66214667c6d00acaf72ab592493653708b` / tag `matrix-sdk-0.18.0`).

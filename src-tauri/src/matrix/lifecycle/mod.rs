@@ -25,17 +25,8 @@
 #![allow(unused_imports)]
 
 mod session_material;
-mod session_persist;
-mod session_restore;
 
 pub use session_material::{KeyringSessionMaterialRefs, KeyringSessionMaterialVault};
-pub use session_persist::{
-    persist_session_after_login, session_material_from_auth_session, SessionPersistOutcome,
-};
-pub use session_restore::{
-    has_persisted_session, matrix_session_from_host_secrets, restore_session_from_vault,
-    restore_session_onto_client, SessionRestoreOutcome,
-};
 pub use synara_core::app::lifecycle::*;
 
 /// Static marker for link / schema smoke (no network, no Client, no wipe).

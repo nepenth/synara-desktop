@@ -4,10 +4,8 @@
 
 pub use synara_core::app::client_builder::*;
 
-mod open;
 mod sdk_handle;
 
-pub use open::build_unauthenticated_client;
 pub use sdk_handle::SdkClientHandle;
 
 /// Static marker for link / schema smoke.
