@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`18b5c647` (#758, after #757):** P0 is
+`fd8f9df3` (#760, after #759):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -49,7 +49,8 @@ acceptance criteria have all passed.
   and live login stayed desktop); #755 moved the lifecycle error
   domain (logout/session vault I/O/SDK restore stayed desktop); #757 moved
   lifecycle recovery/remote-logout/wipe; #758 moved client-builder config
-  (SDK open stayed desktop). These retain thin desktop re-exports and
+  (SDK open stayed desktop); #760 moved the session-material vault trait
+  (Keyring I/O stayed desktop). These retain thin desktop re-exports and
   add no P2 command, UDL, or iOS behavior. Compatibility re-exports remain, and many matrix domains are
   still desktop-owned, so the full extraction/end state is not yet complete.
 - **P2 — in progress; transport registry is intentionally partial.** #683–#684
