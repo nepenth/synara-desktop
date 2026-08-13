@@ -33,7 +33,7 @@ use crate::app::room_profile::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
     MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner,
 };
-use crate::app::send::MatrixSendTextResult;
+use crate::app::send::{MatrixSendStickerResult, MatrixSendTextResult};
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::app::timeline::{
     NativeComposerReplyDraftReadback, NativeReactionMutationResult, NativeTimelineActionReadback,
@@ -759,6 +759,27 @@ struct MatrixSendTextRequest {
     txn_id: Option<String>,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_send_sticker`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixSendStickerRequest {
+    room_id: String,
+    body: String,
+    mxc: String,
+    #[serde(default)]
+    width: Option<u64>,
+    #[serde(default)]
+    height: Option<u64>,
+    #[serde(default)]
+    mimetype: Option<String>,
+    #[serde(default)]
+    size: Option<u64>,
+    #[serde(default)]
+    reply_to: Option<String>,
+    #[serde(default)]
+    thread_root: Option<String>,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_edit_message`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1379,6 +1400,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_send_text", matrix_send_text)
         .expect("built-in matrix_send_text must remain in the command census");
     registry
+        .register("matrix_send_sticker", matrix_send_sticker)
+        .expect("built-in matrix_send_sticker must remain in the command census");
+    registry
         .register("matrix_edit_message", matrix_edit_message)
         .expect("built-in matrix_edit_message must remain in the command census");
     registry
@@ -1963,12 +1987,43 @@ fn send_text_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         | "v-send.5-invalid-thread-root-event-id"
         | "v-send.r-edit-invalid-event-id"
         | "v-send.r-edit-room-not-found"
+        | "v-send-sticker-invalid-body"
+        | "v-send-sticker-invalid-mxc"
+        | "v-send-sticker-invalid-mimetype"
+        | "v-send-sticker-room-not-found"
         | "p6.1-invalid-room-id"
         | "p6.1-empty-body"
         | "p6.1-body-too-large" => MatrixIpcErrorCategory::SdkInvariant,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn matrix_send_sticker(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSendStickerRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-send-sticker-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-send-sticker-no-session")
+        })?;
+        let result: MatrixSendStickerResult = owner
+            .send_sticker(
+                payload.room_id,
+                payload.body,
+                payload.mxc,
+                payload.width,
+                payload.height,
+                payload.mimetype,
+                payload.size,
+                payload.reply_to,
+                payload.thread_root,
+            )
+            .await
+            .map_err(send_text_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-send-sticker-serialization-failed"))
+    })
 }
 
 fn matrix_edit_message(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -4142,6 +4197,7 @@ mod tests {
                 "matrix_room_set_power_levels",
                 "matrix_room_unban",
                 "matrix_secret_storage_status",
+                "matrix_send_sticker",
                 "matrix_send_text",
                 "matrix_session_snapshot",
                 "matrix_set_global_image_packs",
@@ -6828,6 +6884,29 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-send-text-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_send_sticker_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_send_sticker".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "body":"sticker",
+                    "mxc":"mxc://example.org/s"
+                }),
+            })
+            .await
+            .expect_err("send sticker without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-send-sticker-no-session")
         );
     }
 
