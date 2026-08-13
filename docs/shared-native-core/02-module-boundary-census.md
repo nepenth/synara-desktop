@@ -3,13 +3,13 @@
 All paths relative to the repository root. Census technique: `git ls-files`,
 `grep -rl`, `grep -rn` over `src-tauri/src`, `synara-ios`, `.github/workflows`.
 The current source evidence is `feature/shared-native-core`
-`b72a2f9a` (#914, after #913).
+`c9a315ea` (#916, after #915).
 
 ## 2.1 Desktop application-logic layer
 
 The P0 census counted **285 `.rs` files** under `src-tauri/src/matrix/`. At the
 current evidence tip, there are 100 tracked Rust files under that desktop path
-and 242 under `crates/synara-core/src/app/`; the difference reflects P1 moves,
+and 243 under `crates/synara-core/src/app/`; the difference reflects P1 moves,
 not completion. The table remains the responsibility inventory rather than a
 claim that every listed domain is desktop-resident. Each domain is typically
 `mod.rs` (owning types/state) + `error.rs` + `live.rs` (actor/live state) +
@@ -55,7 +55,7 @@ nonclaim record.
 | `presence/` | presence live + commands |
 | `raw_content/` | content extraction/sanitisation |
 | `receipts/` | read-receipt projection |
-| `room_directory/` | public room directory (Core owns protocol listing; desktop keeps search/cancel) |
+| `room_directory/` | public room directory (Core owns protocol listing, search, and cancel) |
 | `room_keys/` | room keys UI/flow surface |
 | `room_list/` | **room list projection** (summary, filters, sort, invites, counts, delta, badges) |
 | `room_ops/` | room actions/queue |
