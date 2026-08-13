@@ -5,6 +5,11 @@
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p4.7-presence.md`
 
+// Restored from the pre-split module so `live.rs` (Tauri/SDK owner) keeps the
+// same clippy allowances it had as a child of the harness `mod.rs`.
+#![allow(dead_code)]
+#![allow(unused_imports)]
+
 pub use synara_core::app::presence::*;
 
 pub mod live;
