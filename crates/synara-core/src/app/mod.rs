@@ -10,6 +10,7 @@ pub mod crypto_store;
 pub mod legacy;
 pub mod media_cache;
 pub mod media_export;
+pub mod members;
 pub mod notifications;
 pub mod polls;
 pub mod raw_content;
