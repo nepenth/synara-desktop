@@ -4,9 +4,9 @@ Legend: ✅ shipping / 🔨 in progress / ⛔ not yet
 
 ## Current bounded evidence (not parity completion)
 
-At `feature/shared-native-core` `19a28273`
-(#900, after #899), P2 registers eighty-seven names—the prior eighty-six plus
-`matrix_send_text`. The previous eighty-six remain—
+At `feature/shared-native-core` `0c9e9a09`
+(#902, after #901), P2 registers eighty-eight names—the prior eighty-seven plus
+`matrix_edit_message`. The previous eighty-seven remain—
 `matrix_login_flows`, `matrix_register_flows`, `matrix_session_snapshot`,
 `matrix_sync_status`, `matrix_crypto_status`, `matrix_media_config`,
 `matrix_cross_signing_status`, `matrix_secret_storage_status`,
