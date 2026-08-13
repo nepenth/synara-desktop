@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`c51ab072` (#906, after #905):** P0 is
+`7315ffe6` (#908, after #907):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -65,7 +65,7 @@ acceptance criteria have all passed.
   #780 moved typing presentation snapshot DTO (Client m.typing owner stayed desktop);
   #781 moved verification presentation DTOs and phase rank (Client request/SAS owner stayed desktop);
   #783 moved room-directory DTOs and search normalize (ruma request/Client fetch stayed desktop);
-  #784 moved space presentation DTOs and cycle guard (Client hierarchy/child I/O stayed desktop);
+  #784 moved space presentation DTOs and cycle guard (live Client I/O later moved in #908);
   #786 moved cross-signing presentation DTOs and projector (Client crypto I/O and UIAA stayed desktop);
   #788 moved room-key transfer presentation DTOs and projector (Client/file I/O stayed desktop);
   #790 moved members presentation snapshots and write result (Client member/power-level I/O stayed desktop);
@@ -105,8 +105,10 @@ acceptance criteria have all passed.
   `matrix_set_room_image_pack`
   (#686–#689, #694, #698, #701–#702, #706, #818, #820, #822, #824, #826, #828, #830, #832). The status/media
   routes preserve bounded legacy contracts through Core.
-  Neither #708, #710, #713, #714, #716, nor #717 adds a Core command route. It is not the
-  complete desktop command registry; unregistered census names fail closed.
+  Later 7B slices through #908 grow that registry to ninety-seven names,
+  including the six space snapshot and write routes. Neither #708, #710, #713,
+  #714, #716, nor #717 adds a Core command route. It is not the complete
+  desktop command registry; unregistered census names fail closed.
 - **P3 — in progress; a desktop seam is merged, not a whole adapter swap.**
   #690 routes the credential-free login and registration flow probes through
   Core. #691 mirrors only the installed safe session lifecycle, and #694/#698
