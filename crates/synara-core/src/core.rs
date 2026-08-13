@@ -583,6 +583,16 @@ struct MatrixVerificationBeginSasRequest {
     flow_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_verification_confirm`.
+///
+/// Shares accept's camel-case `flowId` key. Unknown keys are rejected so
+/// this write cannot grow extra identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixVerificationConfirmRequest {
+    flow_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_room_join_rule_snapshot`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -927,6 +937,9 @@ fn built_in_registry() -> CommandRegistry {
         )
         .expect("built-in matrix_verification_begin_sas must remain in the command census");
     registry
+        .register("matrix_verification_confirm", matrix_verification_confirm)
+        .expect("built-in matrix_verification_confirm must remain in the command census");
+    registry
         .register("matrix_verification_list", matrix_verification_list)
         .expect("built-in matrix_verification_list must remain in the command census");
     registry
@@ -1098,9 +1111,10 @@ fn matrix_verification_accept(state: Arc<CoreState>, request: CommandEnvelope) -
 
 fn verification_accept_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
-        "v-crypto.1-flow-not-found" | "v-crypto.1-sas-invalid-state" => {
-            MatrixIpcErrorCategory::SdkInvariant
-        }
+        "v-crypto.1-flow-not-found"
+        | "v-crypto.1-sas-invalid-state"
+        | "v-crypto.1-confirm-before-sas"
+        | "v-crypto.1-sas-unavailable" => MatrixIpcErrorCategory::SdkInvariant,
         "v-crypto.1-start-requires-session" => MatrixIpcErrorCategory::Forbidden,
         _ => MatrixIpcErrorCategory::Unknown,
     };
@@ -1121,6 +1135,23 @@ fn matrix_verification_begin_sas(state: Arc<CoreState>, request: CommandEnvelope
             .map_err(verification_accept_owner_error)?;
         serde_json::to_value(request)
             .map_err(|_| core_state_error("p2-verification-begin-sas-serialization-failed"))
+    })
+}
+
+fn matrix_verification_confirm(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixVerificationConfirmRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-verification-confirm-invalid-payload"))?;
+        let owner = state.verification_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-verification-confirm-no-session")
+        })?;
+        let request: NativeVerificationRequest = owner
+            .confirm(&payload.flow_id)
+            .await
+            .map_err(verification_accept_owner_error)?;
+        serde_json::to_value(request)
+            .map_err(|_| core_state_error("p2-verification-confirm-serialization-failed"))
     })
 }
 
@@ -1974,6 +2005,7 @@ mod tests {
                 "matrix_typing_snapshot",
                 "matrix_verification_accept",
                 "matrix_verification_begin_sas",
+                "matrix_verification_confirm",
                 "matrix_verification_list",
             ]
         );
@@ -3287,6 +3319,44 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-verification-begin-sas-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_verification_confirm_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_verification_confirm".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"flowId":"flow-1"}),
+            })
+            .await
+            .expect_err("verification confirm without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-verification-confirm-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_verification_confirm_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_verification_confirm".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"flowId":"flow-1","token":"no"}),
+            })
+            .await
+            .expect_err("verification confirm must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-verification-confirm-invalid-payload")
         );
     }
 
