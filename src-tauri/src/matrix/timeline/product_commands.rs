@@ -10,7 +10,11 @@ pub async fn matrix_timeline_open(
     let active = require_session_mut(session.as_mut())?;
     active
         .timelines
-        .open_at(app, &active.client, request)
+        .open_at(
+            crate::matrix::timeline::timeline_view_emit(app),
+            &active.client,
+            request,
+        )
         .await
         .map_err(map_timeline_error)
 }
@@ -35,7 +39,11 @@ pub async fn matrix_timeline_jump_latest(
     let active = require_session_mut(session.as_mut())?;
     active
         .timelines
-        .jump_latest(app, &active.client, request)
+        .jump_latest(
+            crate::matrix::timeline::timeline_view_emit(app),
+            &active.client,
+            request,
+        )
         .await
         .map_err(map_timeline_error)
 }

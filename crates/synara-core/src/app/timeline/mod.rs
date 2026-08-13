@@ -29,6 +29,7 @@ mod projection;
 mod registry;
 mod utd;
 mod view;
+mod view_emit;
 
 pub use actions::{
     format_forwarded_media_body, format_forwarded_plain_body, should_attach_formatted_body,
@@ -82,6 +83,7 @@ pub use view::{
     TimelineViewDeltaOp, TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot,
     NATIVE_TIMELINE_VIEW_UPDATED_EVENT, TIMELINE_VIEW_SCHEMA_VERSION,
 };
+pub use view_emit::{TimelineViewUpdateEmit, ViewDeltaEmitter};
 
 /// Static marker for link / schema smoke.
 pub const MATRIX_TIMELINE_MARKER: &str =
