@@ -1,6 +1,6 @@
 //! Privacy-safe errors for media upload / download queues (P6.4 / P7.2).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Media upload or download queue failure.
 #[derive(Debug)]

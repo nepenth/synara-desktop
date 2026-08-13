@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use crate::matrix::dto::{RoomId, UploadId, UploadJob, UploadState};
+use crate::dto::{RoomId, UploadId, UploadJob, UploadState};
 
 use super::error::MediaError;
 

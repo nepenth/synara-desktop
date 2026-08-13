@@ -8,6 +8,7 @@
 pub mod auth;
 pub mod crypto_store;
 pub mod legacy;
+pub mod media;
 pub mod media_cache;
 pub mod media_export;
 pub mod members;
