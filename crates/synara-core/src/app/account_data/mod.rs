@@ -3,8 +3,8 @@
 //! Authoritative design note: `docs/matrix-rust-sdk/p6.7-account-data.md`
 //! Product verticals: `docs/matrix-rust-sdk/v-rooms-5-mdirect.md`,
 //! `docs/matrix-rust-sdk/v-timeline-full-replacement-contract.md` (later/notes).
-//! Live image-pack snapshot/set/owner and m.direct Client RMW live here.
-//! later/room_notes product_commands stay in the desktop shell.
+//! Live image-pack snapshot/set/owner, m.direct, and later Client RMW live
+//! here. room_notes product_commands stay in the desktop shell.
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
@@ -14,6 +14,7 @@ mod image_packs;
 mod image_packs_live;
 mod index;
 mod later;
+mod later_live;
 mod mdirect;
 mod mdirect_live;
 mod room_notes;
@@ -42,6 +43,10 @@ pub use later::{
     normalize_later_item, put_later_item, snooze_later_item, NativeLaterSnapshot,
     SynaraLaterContent, SynaraLaterItem, SynaraLaterItemKind, LATER_ACCOUNT_DATA_VERSION,
     LATER_EVENT_TYPE,
+};
+pub use later_live::{
+    clear_completed_later_live, complete_later_item_live, later_timestamp_or_now,
+    mark_later_reminded_live, snapshot_later, snooze_later_item_live, upsert_later_item,
 };
 pub use mdirect::{
     apply_add_mdirect_room, apply_remove_mdirect_room, snapshot_from_mdirect_rooms, MDirectRooms,

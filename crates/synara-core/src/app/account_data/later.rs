@@ -48,7 +48,7 @@ pub enum SynaraLaterItemKind {
     Reminder,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeLaterSnapshot {
     pub session_generation: u64,
