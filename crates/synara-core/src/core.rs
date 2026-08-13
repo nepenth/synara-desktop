@@ -33,7 +33,9 @@ use crate::app::room_profile::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
     MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner,
 };
-use crate::app::send::{MatrixSendStickerResult, MatrixSendTextResult};
+use crate::app::send::{
+    MatrixPollRespondResult, MatrixSendPollResult, MatrixSendStickerResult, MatrixSendTextResult,
+};
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::app::timeline::{
     NativeComposerReplyDraftReadback, NativeReactionMutationResult, NativeTimelineActionReadback,
@@ -780,6 +782,29 @@ struct MatrixSendStickerRequest {
     thread_root: Option<String>,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_send_poll`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixSendPollRequest {
+    room_id: String,
+    question: String,
+    answers: Vec<String>,
+    max_selections: u32,
+    #[serde(default)]
+    thread_root: Option<String>,
+    #[serde(default)]
+    reply_to: Option<String>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_poll_respond`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixPollRespondRequest {
+    room_id: String,
+    poll_event_id: String,
+    answer_ids: Vec<String>,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_edit_message`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1403,6 +1428,12 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_send_sticker", matrix_send_sticker)
         .expect("built-in matrix_send_sticker must remain in the command census");
     registry
+        .register("matrix_send_poll", matrix_send_poll)
+        .expect("built-in matrix_send_poll must remain in the command census");
+    registry
+        .register("matrix_poll_respond", matrix_poll_respond)
+        .expect("built-in matrix_poll_respond must remain in the command census");
+    registry
         .register("matrix_edit_message", matrix_edit_message)
         .expect("built-in matrix_edit_message must remain in the command census");
     registry
@@ -1991,6 +2022,11 @@ fn send_text_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         | "v-send-sticker-invalid-mxc"
         | "v-send-sticker-invalid-mimetype"
         | "v-send-sticker-room-not-found"
+        | "v-send.3-poll-invalid-question"
+        | "v-send.3-poll-invalid-answers"
+        | "v-send.3-poll-invalid-event-id"
+        | "v-send.3-poll-invalid-answer-ids"
+        | "v-send.3-poll-room-not-found"
         | "p6.1-invalid-room-id"
         | "p6.1-empty-body"
         | "p6.1-body-too-large" => MatrixIpcErrorCategory::SdkInvariant,
@@ -2023,6 +2059,47 @@ fn matrix_send_sticker(state: Arc<CoreState>, request: CommandEnvelope) -> Comma
             .map_err(send_text_owner_error)?;
         serde_json::to_value(result)
             .map_err(|_| core_state_error("p2-send-sticker-serialization-failed"))
+    })
+}
+
+fn matrix_send_poll(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSendPollRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-send-poll-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-send-poll-no-session")
+        })?;
+        let result: MatrixSendPollResult = owner
+            .send_poll(
+                payload.room_id,
+                payload.question,
+                payload.answers,
+                payload.max_selections,
+                payload.thread_root,
+                payload.reply_to,
+            )
+            .await
+            .map_err(send_text_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-send-poll-serialization-failed"))
+    })
+}
+
+fn matrix_poll_respond(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixPollRespondRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-poll-respond-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-poll-respond-no-session")
+        })?;
+        let result: MatrixPollRespondResult = owner
+            .poll_respond(payload.room_id, payload.poll_event_id, payload.answer_ids)
+            .await
+            .map_err(send_text_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-poll-respond-serialization-failed"))
     })
 }
 
@@ -4170,6 +4247,7 @@ mod tests {
                 "matrix_mdirect_remove",
                 "matrix_mdirect_snapshot",
                 "matrix_media_config",
+                "matrix_poll_respond",
                 "matrix_presence_snapshot",
                 "matrix_presence_subscribe",
                 "matrix_presence_unsubscribe",
@@ -4197,6 +4275,7 @@ mod tests {
                 "matrix_room_set_power_levels",
                 "matrix_room_unban",
                 "matrix_secret_storage_status",
+                "matrix_send_poll",
                 "matrix_send_sticker",
                 "matrix_send_text",
                 "matrix_session_snapshot",
@@ -6907,6 +6986,53 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-send-sticker-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_send_poll_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_send_poll".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "question":"Q?",
+                    "answers":["A","B"],
+                    "maxSelections":1
+                }),
+            })
+            .await
+            .expect_err("send poll without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-send-poll-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_poll_respond_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_poll_respond".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "pollEventId":"$e:example.org",
+                    "answerIds":["a1"]
+                }),
+            })
+            .await
+            .expect_err("poll respond without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-poll-respond-no-session")
         );
     }
 

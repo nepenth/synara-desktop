@@ -40,9 +40,11 @@ use serde::{Deserialize, Serialize};
 use tokio::{sync::Mutex as AsyncMutex, task::JoinHandle};
 
 use crate::app::send::{
-    edit_message_content, message_content, parse_edit_event_id, parse_reply_event_id,
-    parse_send_room_id, parse_thread_root_event_id, parse_transaction_id, send_message_to_room,
-    sticker_content, MatrixSendStickerResult, MatrixSendTextResult, SendQueue,
+    apply_poll_start_relations, edit_message_content, message_content, normalize_poll,
+    parse_edit_event_id, parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id,
+    parse_transaction_id, poll_response_content, poll_start_content, send_message_to_room,
+    sticker_content, MatrixPollRespondResult, MatrixSendPollResult, MatrixSendStickerResult,
+    MatrixSendTextResult, SendQueue,
 };
 use crate::app::utd_recovery::{UtdRecoveryCoordinator, UtdRecoveryKind, MAX_EVENT_IDS_PER_BATCH};
 use crate::dto::TimelineEncryptedUnavailableItem;
@@ -315,6 +317,62 @@ impl NativeTimelineOwner {
             .map_err(|_| "v-send-sticker-sdk-failed")?;
         Ok(MatrixSendStickerResult {
             room_id: parsed_room.to_string(),
+            event_id: response.response.event_id.to_string(),
+            status: "sent",
+        })
+    }
+
+    pub async fn send_poll(
+        &self,
+        room_id: String,
+        question: String,
+        answers: Vec<String>,
+        max_selections: u32,
+        thread_root: Option<String>,
+        reply_to: Option<String>,
+    ) -> Result<MatrixSendPollResult, &'static str> {
+        let parsed_room = parse_send_room_id(&room_id)?;
+        let thread_root = parse_thread_root_event_id(thread_root)?;
+        let reply_to = parse_reply_event_id(reply_to)?;
+        let normalized =
+            normalize_poll(&question, &answers, max_selections).map_err(|e| e.diagnostic_id())?;
+        let mut content = poll_start_content(&normalized).map_err(|e| e.diagnostic_id())?;
+        apply_poll_start_relations(&mut content, reply_to, thread_root);
+        let room = self
+            .client
+            .get_room(&parsed_room)
+            .ok_or("v-send.3-poll-room-not-found")?;
+        let response = room
+            .send(content)
+            .await
+            .map_err(|_| "v-send.3-poll-sdk-failed")?;
+        Ok(MatrixSendPollResult {
+            room_id: parsed_room.to_string(),
+            event_id: response.response.event_id.to_string(),
+            status: "sent",
+        })
+    }
+
+    pub async fn poll_respond(
+        &self,
+        room_id: String,
+        poll_event_id: String,
+        answer_ids: Vec<String>,
+    ) -> Result<MatrixPollRespondResult, &'static str> {
+        let parsed_room = parse_send_room_id(&room_id)?;
+        let content =
+            poll_response_content(&poll_event_id, &answer_ids).map_err(|e| e.diagnostic_id())?;
+        let room = self
+            .client
+            .get_room(&parsed_room)
+            .ok_or("v-send.3-poll-room-not-found")?;
+        let response = room
+            .send(content)
+            .await
+            .map_err(|_| "v-send.3-poll-response-sdk-failed")?;
+        Ok(MatrixPollRespondResult {
+            room_id: parsed_room.to_string(),
+            poll_event_id,
             event_id: response.response.event_id.to_string(),
             status: "sent",
         })

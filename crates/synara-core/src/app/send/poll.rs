@@ -4,13 +4,17 @@
 //! remain readable by the retained PollContent renderer.
 
 use matrix_sdk::ruma::{
-    events::poll::{
-        start::PollKind,
-        unstable_response::UnstablePollResponseEventContent,
-        unstable_start::{
-            NewUnstablePollStartEventContent, UnstablePollAnswer, UnstablePollAnswers,
-            UnstablePollStartContentBlock,
+    events::{
+        poll::{
+            start::PollKind,
+            unstable_response::UnstablePollResponseEventContent,
+            unstable_start::{
+                NewUnstablePollStartEventContent, UnstablePollAnswer, UnstablePollAnswers,
+                UnstablePollStartContentBlock,
+            },
         },
+        relation::{Reply, Thread},
+        room::message::RelationWithoutReplacement,
     },
     OwnedEventId, UInt,
 };
@@ -143,6 +147,25 @@ pub fn poll_start_content(
         normalized.fallback_text.clone(),
         block,
     ))
+}
+
+pub fn apply_poll_start_relations(
+    content: &mut NewUnstablePollStartEventContent,
+    reply_to: Option<OwnedEventId>,
+    thread_root: Option<OwnedEventId>,
+) {
+    content.relates_to = match (thread_root, reply_to) {
+        (Some(root), Some(reply)) => Some(RelationWithoutReplacement::Thread(Thread::reply(
+            root, reply,
+        ))),
+        (Some(root), None) => Some(RelationWithoutReplacement::Thread(
+            Thread::without_fallback(root),
+        )),
+        (None, Some(reply)) => Some(RelationWithoutReplacement::Reply(Reply::with_event_id(
+            reply,
+        ))),
+        (None, None) => None,
+    };
 }
 
 pub fn poll_response_content(
