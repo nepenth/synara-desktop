@@ -3,7 +3,7 @@
 All paths relative to the repository root. Census technique: `git ls-files`,
 `grep -rl`, `grep -rn` over `src-tauri/src`, `synara-ios`, `.github/workflows`.
 The current source evidence is `feature/shared-native-core`
-`fd8f9df3` (#760, after #759).
+`615b501b` (#762, after #761).
 
 ## 2.1 Desktop application-logic layer
 
@@ -24,7 +24,7 @@ room_directory session, verification inbox, account-data index, send
 queue, room-keys transfer flow, supervisor actor, diagnostics health,
 store identity/paths/key-material/vault-trait, client-builder error/features/config,
 lifecycle recovery-copy / remote-logout / wipe / error / session-material trait,
-auth device-name, and auth discovery/UIA/client_config.
+auth device-name, auth discovery/UIA/client_config, and well-known HTTP transport.
 #713–#717 moved whole harness directories; later splits moved only harness
 files and left live `product_commands.rs` / `live.rs` on desktop.
 Their desktop modules are thin re-exports (plus leftover command files).
