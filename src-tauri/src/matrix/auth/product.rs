@@ -274,7 +274,7 @@ struct ManagedMatrixSession {
     composer_drafts: ComposerDraftRegistry,
     sends: SendQueue,
     attachments: AttachmentSendQueue,
-    verification: NativeVerificationOwner,
+    verification: Arc<NativeVerificationOwner>,
     _devices: NativeDeviceOwner,
     _image_packs: NativeImagePackOwner,
     typing: Arc<NativeTypingOwner>,
