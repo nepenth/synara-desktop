@@ -1507,7 +1507,7 @@ fn room_members_snapshot_owns_live_sdk_members_without_js_fallback() {
         .split("#[tauri::command]")
         .next()
         .expect("room members snapshot command body");
-    assert!(command.contains("members(RoomMemberships::empty())"));
+    assert!(command.contains("crate::bridge::room_members::room_members_snapshot"));
     assert!(!command.contains("getMembers"));
     assert!(!command.contains("matrix-js-sdk"));
 }
@@ -1701,8 +1701,7 @@ fn power_read_commands_are_registered_and_use_live_room_state() {
         .split("#[tauri::command]")
         .next()
         .expect("power-level read command body");
-    assert!(power_command.contains("read_room_state_content"));
-    assert!(product.contains("get_state_event(StateEventType::from(event_type), \"\")"));
+    assert!(power_command.contains("crate::bridge::room_members::room_power_levels_snapshot"));
     assert!(!power_command.contains("send_state_event"));
     assert!(!power_command.contains("matrix-js-sdk"));
 
@@ -1713,7 +1712,7 @@ fn power_read_commands_are_registered_and_use_live_room_state() {
         .split("#[tauri::command]")
         .next()
         .expect("power-level tag read command body");
-    assert!(tags_command.contains("read_room_state_content"));
+    assert!(tags_command.contains("crate::bridge::room_members::room_power_level_tags_snapshot"));
     assert!(!tags_command.contains("send_state_event"));
 }
 

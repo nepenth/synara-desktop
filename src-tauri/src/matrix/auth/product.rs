@@ -21,12 +21,10 @@ use matrix_sdk::{
         events::{
             relation::{Reply, Thread},
             room::{
-                member::MembershipState,
                 message::{
                     AddMentions, MessageFormat, MessageType, Relation, RelationWithoutReplacement,
                     ReplacementMetadata, ReplyWithinThread, RoomMessageEventContent,
                 },
-                power_levels::UserPowerLevel,
                 ImageInfo, MediaSource,
             },
             sticker::StickerEventContent,
@@ -36,7 +34,7 @@ use matrix_sdk::{
         EventId, Int, MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId,
         OwnedServerName, OwnedTransactionId, OwnedUserId, UInt,
     },
-    Client, Room, RoomMemberships, SessionMeta, SessionTokens,
+    Client, Room, SessionMeta, SessionTokens,
 };
 use mime::Mime;
 use serde::{Deserialize, Serialize};
@@ -78,8 +76,6 @@ use crate::matrix::cross_signing::live::{
     NativeCrossSigningSetupResult, NativeCrossSigningStatus, SupportedBootstrapAuthentication,
 };
 use crate::matrix::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot};
-use crate::matrix::dto::{Membership as ProductMembership, RoomMember as ProductRoomMember};
-use crate::matrix::ipc::MAX_WIRE_COUNTER;
 use crate::matrix::lifecycle::{
     clear_session_material, persist_session_after_login, restore_session_from_vault,
     restore_session_onto_client, KeyringSessionMaterialVault, SessionMaterial,

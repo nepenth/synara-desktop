@@ -22,12 +22,15 @@ use matrix_sdk::{
         room::JoinRule,
         Int, OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId, OwnedServerName, OwnedUserId,
     },
-    Client, Room, RoomState,
+    Client, Room, RoomMemberships, RoomState,
 };
 
 use crate::app::members::{
-    validate_power_level_tags_content, validate_room_power_levels_content,
-    NativePowerLevelWriteResult, ROOM_POWER_LEVELS_EVENT_TYPE, ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
+    parse_room_members_room_id, project_room_creators, project_room_member,
+    validate_power_level_tags_snapshot_content, validate_power_levels_snapshot_content,
+    validate_room_power_levels_content, NativePowerLevelWriteResult, NativeRoomCreatorsSnapshot,
+    NativeRoomMembersSnapshot, NativeRoomPowerLevelTagsSnapshot, NativeRoomPowerLevelsSnapshot,
+    ROOM_CREATE_EVENT_TYPE, ROOM_POWER_LEVELS_EVENT_TYPE, ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
 };
 use crate::app::room_ops::{build_room_create_request, MatrixRoomCreateRequest};
 use crate::app::user_profile::MatrixProfileWriteResult;
@@ -395,6 +398,97 @@ impl NativeRoomJoinRuleOwner {
             .map_err(|_| "v-rooms-room-create-failed")
     }
 
+    pub async fn members_snapshot(
+        &self,
+        room_id: &str,
+    ) -> Result<NativeRoomMembersSnapshot, &'static str> {
+        let room = self.members_room(room_id)?;
+        let room_id = room.room_id().to_owned();
+        let is_direct = room.is_direct().await.unwrap_or(false);
+        let current_user = self.client.user_id();
+        let sdk_members = room
+            .members(RoomMemberships::empty())
+            .await
+            .map_err(|_| "v-rooms-members-read-members-failed")?;
+        let is_two_party_direct = is_direct && sdk_members.len() == 2;
+
+        let mut members = sdk_members
+            .iter()
+            .map(|member| project_room_member(&room_id, member, is_two_party_direct, current_user))
+            .collect::<Result<Vec<_>, _>>()?;
+        members.sort_by(|left, right| left.user_id.cmp(&right.user_id));
+
+        Ok(NativeRoomMembersSnapshot {
+            session_generation: self.session_generation,
+            room_id: room_id.to_string(),
+            members,
+        })
+    }
+
+    pub async fn power_levels_snapshot(
+        &self,
+        room_id: &str,
+    ) -> Result<NativeRoomPowerLevelsSnapshot, &'static str> {
+        let room = self.members_room(room_id)?;
+        let content = read_room_state_content(&room, ROOM_POWER_LEVELS_EVENT_TYPE)
+            .await?
+            .unwrap_or_else(|| serde_json::json!({}));
+        validate_power_levels_snapshot_content(&content)?;
+        Ok(NativeRoomPowerLevelsSnapshot {
+            status: "ok",
+            session_generation: self.session_generation,
+            room_id: room.room_id().to_string(),
+            event_type: ROOM_POWER_LEVELS_EVENT_TYPE,
+            state_key: "",
+            content,
+        })
+    }
+
+    pub async fn creators_snapshot(
+        &self,
+        room_id: &str,
+    ) -> Result<NativeRoomCreatorsSnapshot, &'static str> {
+        let room = self.members_room(room_id)?;
+        let Some(event) = read_room_state_event(&room, ROOM_CREATE_EVENT_TYPE).await? else {
+            return Ok(NativeRoomCreatorsSnapshot {
+                status: "ok",
+                session_generation: self.session_generation,
+                room_id: room.room_id().to_string(),
+                event_type: ROOM_CREATE_EVENT_TYPE,
+                state_key: "",
+                creators: Vec::new(),
+            });
+        };
+        let creators = project_room_creators(&event)?;
+        Ok(NativeRoomCreatorsSnapshot {
+            status: "ok",
+            session_generation: self.session_generation,
+            room_id: room.room_id().to_string(),
+            event_type: ROOM_CREATE_EVENT_TYPE,
+            state_key: "",
+            creators,
+        })
+    }
+
+    pub async fn power_level_tags_snapshot(
+        &self,
+        room_id: &str,
+    ) -> Result<NativeRoomPowerLevelTagsSnapshot, &'static str> {
+        let room = self.members_room(room_id)?;
+        let content = read_room_state_content(&room, ROOM_POWER_LEVEL_TAGS_EVENT_TYPE)
+            .await?
+            .unwrap_or_else(|| serde_json::json!({}));
+        validate_power_level_tags_snapshot_content(&content)?;
+        Ok(NativeRoomPowerLevelTagsSnapshot {
+            status: "ok",
+            session_generation: self.session_generation,
+            room_id: room.room_id().to_string(),
+            event_type: ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
+            state_key: "",
+            content,
+        })
+    }
+
     pub async fn get_directory_visibility(
         &self,
         room_id: &str,
@@ -482,6 +576,16 @@ impl NativeRoomJoinRuleOwner {
             .ok_or("v-send.r-room-profile-room-not-found")
     }
 
+    fn members_room(&self, room_id: &str) -> Result<Room, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let room_id = parse_room_members_room_id(room_id)?;
+        self.client
+            .get_room(&room_id)
+            .ok_or("v-rooms-members-read-room-not-found")
+    }
+
     fn moderation_room(&self, room_id: &str) -> Result<Room, &'static str> {
         if self.retired.load(Ordering::Acquire) {
             return Err("v-send.r-room-profile-join-rule-requires-session");
@@ -491,6 +595,30 @@ impl NativeRoomJoinRuleOwner {
             .get_room(&room_id)
             .ok_or("v-rooms-members-moderation-room-not-found")
     }
+}
+
+async fn read_room_state_content(
+    room: &Room,
+    event_type: &str,
+) -> Result<Option<serde_json::Value>, &'static str> {
+    read_room_state_event(room, event_type)
+        .await
+        .map(|event| event.map(|event| event["content"].clone()))
+}
+
+async fn read_room_state_event(
+    room: &Room,
+    event_type: &str,
+) -> Result<Option<serde_json::Value>, &'static str> {
+    let event = room
+        .get_state_event(StateEventType::from(event_type), "")
+        .await
+        .map_err(|_| "v-rooms-members-read-state-failed")?;
+    event
+        .map(|event| {
+            serde_json::to_value(event).map_err(|_| "v-rooms-members-read-state-malformed")
+        })
+        .transpose()
 }
 
 fn parse_join_rule_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {

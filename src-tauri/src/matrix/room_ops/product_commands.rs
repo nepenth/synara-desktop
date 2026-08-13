@@ -367,44 +367,7 @@ pub(super) fn parse_room_leave_id(room_id: &str) -> Result<OwnedRoomId, MatrixAu
 }
 
 pub(super) fn parse_room_members_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
-    room_id
-        .trim()
-        .parse()
-        .map_err(|_| "v-rooms-members-read-invalid-room")
-}
-
-pub(super) fn project_room_member(
-    room_id: &OwnedRoomId,
-    member: &matrix_sdk::room::RoomMember,
-    is_two_party_direct: bool,
-    current_user: Option<&matrix_sdk::ruma::UserId>,
-) -> Result<ProductRoomMember, &'static str> {
-    let membership = match member.membership() {
-        MembershipState::Ban => ProductMembership::Ban,
-        MembershipState::Invite => ProductMembership::Invite,
-        MembershipState::Join => ProductMembership::Join,
-        MembershipState::Knock => ProductMembership::Knock,
-        MembershipState::Leave => ProductMembership::Leave,
-        _ => return Err("v-rooms-members-read-unsupported-membership"),
-    };
-    let power_level = match member.power_level() {
-        UserPowerLevel::Infinite => i32::MAX,
-        UserPowerLevel::Int(value) => {
-            i32::try_from(value).map_err(|_| "v-rooms-members-read-power-level-invalid")?
-        }
-        _ => return Err("v-rooms-members-read-power-level-invalid"),
-    };
-
-    Ok(ProductRoomMember {
-        room_id: room_id.to_string(),
-        user_id: member.user_id().to_string(),
-        display_name: member.display_name().map(ToOwned::to_owned),
-        avatar_url: member.avatar_url().map(ToString::to_string),
-        membership,
-        power_level,
-        is_direct_target: is_two_party_direct
-            .then(|| current_user.is_some_and(|current_user| current_user != member.user_id())),
-    })
+    synara_core::app::members::parse_room_members_room_id(room_id)
 }
 
 pub(super) fn parse_room_moderation_room_id(

@@ -2,7 +2,7 @@
 //!
 //! Live Client member/power-level I/O stays in the desktop shell.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::dto::RoomMember;
 
@@ -11,7 +11,7 @@ pub const ROOM_CREATE_EVENT_TYPE: &str = "m.room.create";
 pub const ROOM_POWER_LEVEL_TAGS_EVENT_TYPE: &str = "in.synara.room.power_level_tags";
 
 /// V-ROOMS.R-MEMBERS-READ — live native room-member projection.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomMembersSnapshot {
     pub session_generation: u64,
