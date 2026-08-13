@@ -15,7 +15,6 @@ use matrix_sdk::{
     },
     Client,
 };
-use serde::Serialize;
 use zeroize::Zeroize;
 
 use crate::{
@@ -23,64 +22,11 @@ use crate::{
     matrix::auth::product::MatrixAuthCommandError,
 };
 
-const RECOVERY_DOCUMENT_NAME: &str = "synara-recovery-key.txt";
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NativeSecretStorageState {
-    Unavailable,
-    NotSetUp,
-    Locked,
-    Ready,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NativeSecretStorageAction {
-    BootstrapRequired,
-    UnlockRequired,
-    None,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NativeMissingSecret {
-    CrossSigningMaster,
-    CrossSigningSelfSigning,
-    CrossSigningUserSigning,
-    EncryptionBackup,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NativeSecretStorageStatus {
-    pub session_generation: u64,
-    pub state: NativeSecretStorageState,
-    pub exists: bool,
-    pub unlocked: bool,
-    pub default_key_set: bool,
-    pub passphrase_configured: bool,
-    pub bootstrap_ready: bool,
-    pub missing_secrets: Vec<NativeMissingSecret>,
-    pub action: NativeSecretStorageAction,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NativeSecretStorageOutcome {
-    Complete,
-    AlreadyConfigured,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NativeSecretStorageOperationResult {
-    pub outcome: NativeSecretStorageOutcome,
-    pub recovery_document_saved: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub recovery_document_name: Option<&'static str>,
-    pub status: NativeSecretStorageStatus,
-}
+pub use synara_core::app::secret_storage::{
+    operation_result, project_secret_storage_status, NativeMissingSecret, NativeRecoveryPhase,
+    NativeSecretStorageAction, NativeSecretStorageOperationResult, NativeSecretStorageOutcome,
+    NativeSecretStorageState, NativeSecretStorageStatus, RECOVERY_DOCUMENT_NAME,
+};
 
 pub async fn status(
     client: &Client,
@@ -242,16 +188,12 @@ pub async fn reset(
     ))
 }
 
-fn operation_result(
-    outcome: NativeSecretStorageOutcome,
-    recovery_document_saved: bool,
-    status: NativeSecretStorageStatus,
-) -> NativeSecretStorageOperationResult {
-    NativeSecretStorageOperationResult {
-        outcome,
-        recovery_document_saved,
-        recovery_document_name: recovery_document_saved.then_some(RECOVERY_DOCUMENT_NAME),
-        status,
+fn recovery_phase(state: RecoveryState) -> NativeRecoveryPhase {
+    match state {
+        RecoveryState::Unknown => NativeRecoveryPhase::Unknown,
+        RecoveryState::Disabled => NativeRecoveryPhase::Disabled,
+        RecoveryState::Incomplete => NativeRecoveryPhase::Incomplete,
+        RecoveryState::Enabled => NativeRecoveryPhase::Enabled,
     }
 }
 
@@ -311,39 +253,15 @@ fn project_status(
     bootstrap_ready: bool,
     missing_secrets: Vec<NativeMissingSecret>,
 ) -> NativeSecretStorageStatus {
-    let (state, unlocked, action) = match recovery_state {
-        RecoveryState::Unknown => (
-            NativeSecretStorageState::Unavailable,
-            false,
-            NativeSecretStorageAction::UnlockRequired,
-        ),
-        RecoveryState::Disabled => (
-            NativeSecretStorageState::NotSetUp,
-            false,
-            NativeSecretStorageAction::BootstrapRequired,
-        ),
-        RecoveryState::Incomplete => (
-            NativeSecretStorageState::Locked,
-            false,
-            NativeSecretStorageAction::UnlockRequired,
-        ),
-        RecoveryState::Enabled => (
-            NativeSecretStorageState::Ready,
-            true,
-            NativeSecretStorageAction::None,
-        ),
-    };
-    NativeSecretStorageStatus {
+    project_secret_storage_status(
         session_generation,
-        state,
+        recovery_phase(recovery_state),
         exists,
-        unlocked,
         default_key_set,
         passphrase_configured,
         bootstrap_ready,
         missing_secrets,
-        action,
-    }
+    )
 }
 
 fn map_bootstrap_error(error: RecoveryError) -> MatrixAuthCommandError {
@@ -396,64 +314,4 @@ fn secret_storage_error(
     diagnostic_id: &'static str,
 ) -> MatrixAuthCommandError {
     MatrixAuthCommandError::new("Recovery", message, diagnostic_id)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn projection_distinguishes_setup_unlock_and_ready() {
-        let disabled = project_status(
-            4,
-            RecoveryState::Disabled,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-        );
-        assert_eq!(disabled.state, NativeSecretStorageState::NotSetUp);
-        assert_eq!(
-            disabled.action,
-            NativeSecretStorageAction::BootstrapRequired
-        );
-        assert!(!disabled.unlocked);
-
-        let locked = project_status(4, RecoveryState::Incomplete, true, true, true, true, vec![]);
-        assert_eq!(locked.state, NativeSecretStorageState::Locked);
-        assert_eq!(locked.action, NativeSecretStorageAction::UnlockRequired);
-
-        let ready = project_status(4, RecoveryState::Enabled, true, true, true, true, vec![]);
-        assert_eq!(ready.state, NativeSecretStorageState::Ready);
-        assert_eq!(ready.action, NativeSecretStorageAction::None);
-        assert!(ready.unlocked);
-    }
-
-    #[test]
-    fn status_and_operation_results_never_serialize_secret_material() {
-        let status = project_status(
-            8,
-            RecoveryState::Incomplete,
-            true,
-            true,
-            true,
-            true,
-            vec![NativeMissingSecret::EncryptionBackup],
-        );
-        let result = operation_result(NativeSecretStorageOutcome::Complete, true, status);
-        let json = serde_json::to_string(&result).unwrap().to_ascii_lowercase();
-        for forbidden in [
-            "recoverykey",
-            "recovery_key",
-            "privatekey",
-            "private_key",
-            "ciphertext",
-            "passphrase\":\"",
-            "secret_storage_key",
-        ] {
-            assert!(!json.contains(forbidden), "{json}");
-        }
-        assert!(json.contains("\"recoverydocumentsaved\":true"));
-    }
 }
