@@ -79,6 +79,23 @@ pub struct NativeTimelineRegistry {
     utd_recovery: UtdRecoveryCoordinator,
 }
 
+/// Shared handle so Core and the desktop session own one live registry.
+pub struct NativeTimelineOwner {
+    registry: tokio::sync::Mutex<NativeTimelineRegistry>,
+}
+
+impl NativeTimelineOwner {
+    pub fn new(session_generation: u64) -> Self {
+        Self {
+            registry: tokio::sync::Mutex::new(NativeTimelineRegistry::new(session_generation)),
+        }
+    }
+
+    pub async fn lock(&self) -> tokio::sync::MutexGuard<'_, NativeTimelineRegistry> {
+        self.registry.lock().await
+    }
+}
+
 impl NativeTimelineRegistry {
     pub fn new(session_generation: u64) -> Self {
         Self {

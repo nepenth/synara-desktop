@@ -10,6 +10,8 @@ pub async fn matrix_timeline_open(
     let active = require_session_mut(session.as_mut())?;
     active
         .timelines
+        .lock()
+        .await
         .open_at(
             crate::matrix::timeline::timeline_view_emit(app),
             &active.client,
@@ -21,12 +23,10 @@ pub async fn matrix_timeline_open(
 
 #[tauri::command]
 pub async fn matrix_timeline_close(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     request: NativeTimelineCloseRequest,
 ) -> Result<bool, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
-    let active = require_session_mut(session.as_mut())?;
-    Ok(active.timelines.close_view(request))
+    crate::bridge::timeline_close::timeline_close(core.inner().as_ref(), request.stream_id).await
 }
 
 #[tauri::command]
@@ -39,6 +39,8 @@ pub async fn matrix_timeline_jump_latest(
     let active = require_session_mut(session.as_mut())?;
     active
         .timelines
+        .lock()
+        .await
         .jump_latest(
             crate::matrix::timeline::timeline_view_emit(app),
             &active.client,
@@ -58,6 +60,8 @@ pub async fn matrix_timeline_event_readback(
     let active = require_session_mut(session.as_mut())?;
     active
         .timelines
+        .lock()
+        .await
         .event_readback(&active.client, &room_id, &event_id)
         .await
         .map_err(map_timeline_error)
@@ -72,6 +76,8 @@ pub async fn matrix_timeline_paginate(
     let active = require_session_mut(session.as_mut())?;
     active
         .timelines
+        .lock()
+        .await
         .paginate(&active.client, request)
         .await
         .map_err(map_timeline_error)
@@ -86,6 +92,8 @@ pub async fn matrix_timeline_set_read_state(
     let active = require_session_mut(session.as_mut())?;
     active
         .timelines
+        .lock()
+        .await
         .set_read_state(&active.client, request)
         .await
         .map_err(map_timeline_error)
@@ -102,6 +110,8 @@ pub async fn matrix_timeline_reaction_toggle(
     let active = require_session_mut(session.as_mut())?;
     active
         .timelines
+        .lock()
+        .await
         .toggle_reaction(&active.client, &room_id, &event_id, &key)
         .await
         .map_err(map_reaction_error)
@@ -118,6 +128,8 @@ pub async fn matrix_reaction_ensure(
     let active = require_session_mut(session.as_mut())?;
     active
         .timelines
+        .lock()
+        .await
         .ensure_reaction(&active.client, &room_id, &event_id, &key)
         .await
         .map_err(map_reaction_error)
@@ -135,6 +147,8 @@ pub async fn matrix_reaction_redact(
     let active = require_session_mut(session.as_mut())?;
     active
         .timelines
+        .lock()
+        .await
         .redact_reaction(
             &active.client,
             &room_id,

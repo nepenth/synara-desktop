@@ -135,8 +135,8 @@ use crate::matrix::timeline::{
     NativeTimelineDirection, NativeTimelineEditTextRequest, NativeTimelineEventReadback,
     NativeTimelineForwardMediaRequest, NativeTimelineForwardTextRequest,
     NativeTimelineJumpLatestRequest, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
-    NativeTimelinePinRequest, NativeTimelinePollVoteRequest, NativeTimelineReadStateReadback,
-    NativeTimelineReadStateRequest, NativeTimelineRedactRequest, NativeTimelineRegistry,
+    NativeTimelineOwner, NativeTimelinePinRequest, NativeTimelinePollVoteRequest,
+    NativeTimelineReadStateReadback, NativeTimelineReadStateRequest, NativeTimelineRedactRequest,
     NativeTimelineReportRequest, NativeTimelineSnapshot, NativeTimelineViewPaginationRequest,
     TimelineMediaSource, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
 };
@@ -266,7 +266,7 @@ struct ManagedMatrixSession {
     identity: MatrixLoginIdentity,
     sync: SyncServiceOwner,
     invite_avatars: InviteAvatarHandles,
-    timelines: NativeTimelineRegistry,
+    timelines: Arc<NativeTimelineOwner>,
     composer_drafts: ComposerDraftRegistry,
     sends: SendQueue,
     attachments: AttachmentSendQueue,
@@ -462,7 +462,7 @@ impl MatrixAuthState {
     ) -> Option<(Client, TimelineMediaSource)> {
         let session = self.session.lock().await;
         let active = session.as_ref()?;
-        let source = active.timelines.resolve_media(handle).await?;
+        let source = active.timelines.lock().await.resolve_media(handle).await?;
         Some((active.client.clone(), source))
     }
 }
