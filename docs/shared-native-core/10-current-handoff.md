@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `f31e8af2`, the merge commit for #778. |
-| Immediately preceding merges | #777 docs after #776, #778 presence DTOs and subscription registry. |
+| Feature evidence tip | `feature/shared-native-core` is `e23801ec`, the merge commit for #781. |
+| Immediately preceding merges | #779 docs after #778, #780 typing snapshot DTO, #781 verification presentation DTOs. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -65,11 +65,13 @@ residency changes are:
 | #774 / `56fc4841` | secret-storage presentation DTOs and projector | Desktop keeps Client recovery I/O and host recovery-document write. |
 | #776 / `26caf58d` | backup presentation DTOs and projector | Desktop keeps Client backup/recovery I/O and SDK state mapping. |
 | #778 / `f31e8af2` | presence DTOs and subscription registry | Desktop keeps Client stream, event projection, and `NativePresenceOwner`. |
+| #780 / `0ec8e902` | typing presentation snapshot DTO | Desktop keeps Client `m.typing` owner and typing-notice send. |
+| #781 / `e23801ec` | verification presentation DTOs and phase rank | Desktop keeps Client request/SAS owner. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `f31e8af2`/#778 for
+anchor, but it is no longer the feature-tip provenance; use `e23801ec`/#781 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -122,7 +124,7 @@ and the P1 app domains `sync`, `room_list`, pure `timeline`,
 remote-logout / wipe / error / session-material trait / logout, auth device-name, and auth
 discovery/UIA/client_config, well-known HTTP transport, later/room-notes codecs,
 image-pack DTO/type-filters/write-guards, m.direct snapshot helpers,
-device presentation DTOs, secret-storage presentation DTOs, backup presentation DTOs, and presence DTOs.
+device presentation DTOs, secret-storage presentation DTOs, backup presentation DTOs, presence DTOs, typing snapshot DTO, and verification presentation DTOs.
 Later mechanical splits left live `product_commands.rs` and `live.rs` on
 desktop where those files exist. Compatibility re-exports remain deliberately
 in the desktop shell.
