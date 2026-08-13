@@ -5,7 +5,7 @@
 //! `docs/matrix-rust-sdk/v-timeline-full-replacement-contract.md` (later/notes).
 //! Live Client RMW (image_packs/later/live/room_notes owners) and
 //! product_commands stay in the desktop shell. Codec types for image_packs,
-//! later, and room_notes live here.
+//! later, room_notes, and m.direct live here.
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
@@ -14,6 +14,7 @@ mod error;
 mod image_packs;
 mod index;
 mod later;
+mod mdirect;
 mod room_notes;
 
 pub use error::AccountDataError;
@@ -35,6 +36,10 @@ pub use later::{
     normalize_later_item, put_later_item, snooze_later_item, NativeLaterSnapshot,
     SynaraLaterContent, SynaraLaterItem, SynaraLaterItemKind, LATER_ACCOUNT_DATA_VERSION,
     LATER_EVENT_TYPE,
+};
+pub use mdirect::{
+    apply_add_mdirect_room, apply_remove_mdirect_room, snapshot_from_mdirect_rooms, MDirectRooms,
+    NativeMDirectMutationResult, NativeMDirectSnapshot,
 };
 pub use room_notes::{
     complete_room_todo_item, move_room_todo_item, normalize_room_note_item,
