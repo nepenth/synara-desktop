@@ -27,7 +27,6 @@
 #![allow(unused_imports)]
 
 mod client_config;
-mod device_name;
 mod discovery;
 mod error;
 mod http_transport;
@@ -40,7 +39,7 @@ mod reset_password;
 mod uia;
 
 pub use client_config::{homeserver_url_for_client_builder, identity_with_discovered_homeserver};
-pub use device_name::{
+pub use synara_core::app::auth::{
     host_device_platform, platform_device_display_name, DevicePlatform,
     DEVICE_DISPLAY_NAME_DESKTOP_FALLBACK, DEVICE_DISPLAY_NAME_IOS, DEVICE_DISPLAY_NAME_LINUX,
     DEVICE_DISPLAY_NAME_MACOS,
