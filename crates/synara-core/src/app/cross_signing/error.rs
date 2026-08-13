@@ -1,6 +1,6 @@
 //! Privacy-safe errors for cross-signing / identity projection (P8.4).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Cross-signing index failure.
 #[derive(Debug)]

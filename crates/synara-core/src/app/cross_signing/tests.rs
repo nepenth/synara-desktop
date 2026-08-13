@@ -1,7 +1,7 @@
 //! Unit tests for P8.4 cross-signing / identity store.
 
 use super::*;
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 fn remote(user: &str, trust: IdentityTrust) -> RemoteIdentity {
     RemoteIdentity {
