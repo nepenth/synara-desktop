@@ -11,6 +11,10 @@
 //! captcha response) are never stored on the coordinator and never appear in
 //! diagnostic ids or Display text. No dual-backend.
 
+use super::{
+    has_unsupported_only_register_flows, RegisterFlowsProbe, RegisterUiaFlow,
+    SUPPORTED_REGISTER_STAGES,
+};
 use matrix_sdk::ruma::{
     api::client::{
         account::{register, request_registration_token_via_email},
@@ -23,10 +27,6 @@ use matrix_sdk::ruma::{
 use matrix_sdk::{Client, Error as SdkError, HttpError};
 use serde::Serialize;
 use serde_json::{json, Map, Value as JsonValue};
-use synara_core::app::auth::{
-    has_unsupported_only_register_flows, RegisterFlowsProbe, RegisterUiaFlow,
-    SUPPORTED_REGISTER_STAGES,
-};
 use zeroize::Zeroizing;
 
 use super::error::AuthError;

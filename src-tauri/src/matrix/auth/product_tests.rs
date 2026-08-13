@@ -38,6 +38,7 @@ const PRODUCT_SOURCE: &str = concat!(
 // directly rather than the product.rs module wrapper.
 const AUTH_PRODUCT_COMMANDS_SOURCE: &str = include_str!("product_commands.rs");
 const DEVICE_PRODUCT_COMMANDS_SOURCE: &str = include_str!("../devices/product_commands.rs");
+const LOGIN_SOURCE: &str = include_str!("../../../../crates/synara-core/src/app/auth/login.rs");
 
 #[test]
 fn v_presence_registers_the_frozen_native_surface() {
@@ -379,7 +380,7 @@ fn v_auth_3b_product_has_no_matrix_uia_login_stage_commands() {
         .next()
         .expect("product production section");
     let lib_src = include_str!("../../lib.rs");
-    let login_src = include_str!("login.rs");
+    let login_src = LOGIN_SOURCE;
     let login_prod = login_src
         .split("#[cfg(test)]")
         .next()
@@ -436,7 +437,7 @@ fn v_auth_2_product_has_no_token_login_command_or_login_token_sdk_call() {
         .split("#[cfg(test)]")
         .next()
         .expect("product production section");
-    let login_src = include_str!("login.rs");
+    let login_src = LOGIN_SOURCE;
     let login_prod = login_src
         .split("#[cfg(test)]")
         .next()

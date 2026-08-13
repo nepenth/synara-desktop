@@ -48,6 +48,9 @@ uniffi = { version = "=0.28.3" }
 # Store identity fingerprints directory names (moved from desktop store/identity.rs).
 # Pin matches src-tauri (`sha2 = "0.10"`).
 sha2 = "0.10"
+# Host-only register token buffers (moved with live register orchestration).
+# Pin matches src-tauri (`zeroize = "1"`).
+zeroize = "1"
 
 [build-dependencies]
 uniffi = { version = "=0.28.3", features = ["build"] }

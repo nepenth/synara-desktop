@@ -1,10 +1,12 @@
-//! Shared, credential-free Matrix auth domain and read-only transports.
+//! Shared Matrix auth domain: credential-free discovery plus live login /
+//! register / reset orchestration.
 //!
 //! Owns input normalization, well-known discovery, login-type / register
 //! probes, the UIA coordinator, device display names, the identity
-//! bridge, and read-only well-known / login-flow HTTP transports. It
-//! neither accepts nor returns credentials. Live password login and
-//! session product commands stay in the shell.
+//! bridge, read-only HTTP transports, and live password login / register /
+//! password-reset against an SDK `Client`. Shells collect credentials and
+//! persist tokens through the session vault trait. Tauri product commands
+//! stay in the desktop shell.
 
 mod client_config;
 mod device_name;
@@ -12,8 +14,11 @@ mod discovery;
 mod error;
 mod http_transport;
 mod input;
+mod login;
 mod login_flow;
+mod register;
 mod register_flow;
+mod reset_password;
 mod uia;
 
 pub use client_config::{homeserver_url_for_client_builder, identity_with_discovered_homeserver};
@@ -35,14 +40,23 @@ pub use input::{
     normalize_homeserver_url, normalize_server_name, parse_discovery_input, DiscoveryInput,
     DiscoveryInputKind, NormalizedHomeserverUrl, NormalizedServerName,
 };
+pub use login::{login_with_password, LoginMethodKind, LoginOptions, LoginResult};
 pub use login_flow::{
     discover_login_flows, login_flows_response, map_matrix_login_types, LoginFlow,
     LoginFlowDiscoveryResult, LoginFlowKind, LoginFlowTransport, MatrixLoginFlowDto,
     MatrixLoginFlowsResponse, MockLoginFlowTransport,
 };
+pub use register::{
+    register_ephemeral_user_id, register_submit, request_register_email_token, RegisterAuthStage,
+    RegisterCompleteSecrets, RegisterSubmitOutcome, RegisterUiaChallenge,
+};
 pub use register_flow::{
     has_unsupported_only_register_flows, parse_register_uiaa_json, probe_register_flows,
     RegisterFlowsProbe, RegisterFlowsTransport, RegisterUiaFlow, SUPPORTED_REGISTER_STAGES,
+};
+pub use reset_password::{
+    complete_password_reset, password_reset_ephemeral_user_id, request_password_email_token,
+    PasswordEmailTokenResult, PasswordResetOutcome,
 };
 pub use uia::{
     UiaFlowKind, UiaOutcome, UiaPhase, UiaSession, UiaStage, UiaStageKind, MAX_UIA_ID_CHARS,

@@ -296,7 +296,7 @@ pub(super) async fn install_session_from_register_secrets(
     app: &AppHandle,
     state: &State<'_, MatrixAuthState>,
     session: &mut Option<ManagedMatrixSession>,
-    secrets: super::super::register::RegisterCompleteSecrets,
+    secrets: super::super::RegisterCompleteSecrets,
 ) -> Result<(MatrixLoginIdentity, u64), MatrixAuthCommandError> {
     let homeserver_url = normalize_homeserver_url(&secrets.homeserver_url)
         .map_err(map_register_auth_error)?
