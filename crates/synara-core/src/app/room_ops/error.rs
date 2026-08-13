@@ -1,6 +1,6 @@
 //! Privacy-safe errors for room membership ops queue (P6.9).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Room ops queue failure.
 #[derive(Debug)]
