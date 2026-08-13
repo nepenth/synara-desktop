@@ -20,8 +20,8 @@ integration, or release path. **Never a big-bang move.**
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
 
-**Current bounded status at `7315ffe6`
-(#908, after #907):** #713 mechanically moved notifications, polls,
+**Current bounded status at `00116f01`
+(#910, after #909):** #713 mechanically moved notifications, polls,
 relations, threads, and unread; #714 moved raw content, receipts, routes, and
 security; #716 moved search, legacy, and media_cache; #717 moved media_export
 and crypto_store; #734 moved the room-directory session harness; #735 moved
@@ -157,7 +157,7 @@ zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
 
 > **Bounded evidence note — not P4 acceptance:** At the current feature tip
-> `7315ffe6ae3cf1a657f7c730fa7ed07b475d2187` (#908, after #907), the
+> `00116f01fd2a3ef7d4a1e7f4da9ff5740e97600f` (#910, after #909), the
 > prior #708 work is only the pure iOS room-row unread presentation from closed
 > `Joined`/`Invited` membership, scalar counters, and a marked-unread flag to a
 > `u64` count plus highlight boolean. The prior #710 work is only the pure
