@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`c45ad6ae` (#822, after #821):** P0 is
+`13c40365` (#824, after #823):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -89,14 +89,14 @@ acceptance criteria have all passed.
 - **P2 — in progress; transport registry is intentionally partial.** #683–#684
   added `Core::command`, typed envelopes, the registry, and the desktop command
   census. The merged registry currently has exactly those eight plus
-  `matrix_typing_snapshot` (#818), `matrix_presence_snapshot` (#820), and
-  `matrix_verification_list` (#822):
+  `matrix_typing_snapshot` (#818), `matrix_presence_snapshot` (#820),
+  `matrix_verification_list` (#822), and `matrix_device_snapshot` (#824):
   `matrix_login_flows`, `matrix_register_flows`, `matrix_session_snapshot`,
   `matrix_sync_status`, `matrix_crypto_status`, `matrix_media_config`,
   `matrix_cross_signing_status`, `matrix_secret_storage_status`,
-  `matrix_typing_snapshot`, `matrix_presence_snapshot`, and
-  `matrix_verification_list`
-  (#686–#689, #694, #698, #701–#702, #706, #818, #820, #822). The status/media
+  `matrix_typing_snapshot`, `matrix_presence_snapshot`,
+  `matrix_verification_list`, and `matrix_device_snapshot`
+  (#686–#689, #694, #698, #701–#702, #706, #818, #820, #822, #824). The status/media
   routes preserve bounded legacy contracts through Core.
   Neither #708, #710, #713, #714, #716, nor #717 adds a Core command route. It is not the
   complete desktop command registry; unregistered census names fail closed.
