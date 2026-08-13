@@ -13,6 +13,8 @@ const TIMELINE_PIN_COMMAND: &str = "matrix_timeline_pin";
 const TIMELINE_UNPIN_COMMAND: &str = "matrix_timeline_unpin";
 const TIMELINE_POLL_VOTE_COMMAND: &str = "matrix_timeline_poll_vote";
 const TIMELINE_CALL_DECLINE_COMMAND: &str = "matrix_timeline_call_decline";
+const TIMELINE_FORWARD_TEXT_COMMAND: &str = "matrix_timeline_forward_text";
+const TIMELINE_FORWARD_MEDIA_COMMAND: &str = "matrix_timeline_forward_media";
 const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 pub(crate) async fn timeline_edit_text(
@@ -171,6 +173,52 @@ pub(crate) async fn timeline_call_decline(
     serde_json::from_value(response.payload).map_err(|_| timeline_action_response_error())
 }
 
+pub(crate) async fn timeline_forward_text(
+    core: &Core,
+    source_room_id: String,
+    event_id: String,
+    target_room_id: String,
+    as_quote: bool,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let response = core
+        .command(CommandEnvelope {
+            command: TIMELINE_FORWARD_TEXT_COMMAND.to_owned(),
+            session_generation: READ_ONLY_SESSION_GENERATION,
+            request_id: None,
+            payload: serde_json::json!({
+                "sourceRoomId": source_room_id,
+                "eventId": event_id,
+                "targetRoomId": target_room_id,
+                "asQuote": as_quote,
+            }),
+        })
+        .await
+        .map_err(map_timeline_action_core_error)?;
+    serde_json::from_value(response.payload).map_err(|_| timeline_action_response_error())
+}
+
+pub(crate) async fn timeline_forward_media(
+    core: &Core,
+    source_room_id: String,
+    event_id: String,
+    target_room_id: String,
+) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
+    let response = core
+        .command(CommandEnvelope {
+            command: TIMELINE_FORWARD_MEDIA_COMMAND.to_owned(),
+            session_generation: READ_ONLY_SESSION_GENERATION,
+            request_id: None,
+            payload: serde_json::json!({
+                "sourceRoomId": source_room_id,
+                "eventId": event_id,
+                "targetRoomId": target_room_id,
+            }),
+        })
+        .await
+        .map_err(map_timeline_action_core_error)?;
+    serde_json::from_value(response.payload).map_err(|_| timeline_action_response_error())
+}
+
 fn map_timeline_action_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
     match error.category {
         MatrixIpcErrorCategory::Forbidden => MatrixAuthCommandError::new(
@@ -190,7 +238,11 @@ fn map_timeline_action_core_error(error: MatrixIpcError) -> MatrixAuthCommandErr
                 | "v-timeline-pin-room-not-found"
                 | "v-timeline-unpin-room-not-found"
                 | "v-timeline-poll-vote-room-not-found"
-                | "v-timeline-call-decline-room-not-found" => {
+                | "v-timeline-call-decline-room-not-found"
+                | "v-timeline-forward-source-room-not-found"
+                | "v-timeline-forward-target-room-not-found"
+                | "v-timeline-forward-media-source-room-not-found"
+                | "v-timeline-forward-media-target-room-not-found" => {
                     ("NotFound", "The native Matrix room is not available.")
                 }
                 "v-timeline-call-decline-own-call" => (

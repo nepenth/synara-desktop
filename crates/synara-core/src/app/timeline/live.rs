@@ -17,8 +17,13 @@ use matrix_sdk::{
         api::client::receipt::create_receipt::v3::ReceiptType,
         events::{
             poll::unstable_response::UnstablePollResponseEventContent,
-            reaction::ReactionEventContent, relation::Annotation,
-            room::message::RoomMessageEventContentWithoutRelation,
+            reaction::ReactionEventContent,
+            relation::Annotation,
+            room::message::{
+                MessageType, RoomMessageEventContent, RoomMessageEventContentWithoutRelation,
+            },
+            sticker::StickerEventContent,
+            AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncTimelineEvent, Mentions,
         },
         OwnedEventId, OwnedRoomId, OwnedUserId, UserId,
     },
@@ -37,20 +42,21 @@ use crate::app::utd_recovery::{UtdRecoveryCoordinator, UtdRecoveryKind, MAX_EVEN
 use crate::dto::TimelineEncryptedUnavailableItem;
 
 use super::{
-    project_timeline_diffs_with_media, project_timeline_item_with_media,
-    should_attach_formatted_body, NativeDecryptionState, NativeReactionMutation,
-    NativeReactionMutationResult, NativeTimelineActionKind, NativeTimelineActionReadback,
-    NativeTimelineCloseRequest, NativeTimelineDirection, NativeTimelineEventReadback,
-    NativeTimelineItem, NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition,
-    NativeTimelineOpenReadback, NativeTimelineOpenRequest, NativeTimelineReaction,
-    NativeTimelineReactionSender, NativeTimelineReadAction, NativeTimelineReadStateReadback,
-    NativeTimelineReadStateRequest, NativeTimelineSnapshot, NativeTimelineViewPaginationRequest,
-    NativeTimelineViewportHint, NativeUtdPhase, NativeUtdStatus, TimelineMediaRegistry,
-    TimelineMediaSource, TimelinePageState, TimelinePaginationState, TimelineReadState,
-    TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewPosition, TimelineViewSnapshot,
-    TimelineViewUpdateEmit, UtdIndex, UtdPhase, UtdReasonCode, ViewDeltaEmitter,
-    NATIVE_TIMELINE_ACTION_SCHEMA_VERSION, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
-    NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS, TIMELINE_VIEW_SCHEMA_VERSION,
+    format_forwarded_media_body, format_forwarded_plain_body, project_timeline_diffs_with_media,
+    project_timeline_item_with_media, should_attach_formatted_body, NativeDecryptionState,
+    NativeReactionMutation, NativeReactionMutationResult, NativeTimelineActionKind,
+    NativeTimelineActionReadback, NativeTimelineCloseRequest, NativeTimelineDirection,
+    NativeTimelineEventReadback, NativeTimelineItem, NativeTimelineJumpLatestRequest,
+    NativeTimelineOpenPosition, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
+    NativeTimelineReaction, NativeTimelineReactionSender, NativeTimelineReadAction,
+    NativeTimelineReadStateReadback, NativeTimelineReadStateRequest, NativeTimelineSnapshot,
+    NativeTimelineViewPaginationRequest, NativeTimelineViewportHint, NativeUtdPhase,
+    NativeUtdStatus, TimelineMediaRegistry, TimelineMediaSource, TimelinePageState,
+    TimelinePaginationState, TimelineReadState, TimelineViewCapabilities, TimelineViewDeltaBatch,
+    TimelineViewPosition, TimelineViewSnapshot, TimelineViewUpdateEmit, UtdIndex, UtdPhase,
+    UtdReasonCode, ViewDeltaEmitter, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+    NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
+    TIMELINE_VIEW_SCHEMA_VERSION,
 };
 
 const PAGINATION_BATCH_SIZE: u16 = 30;
@@ -434,6 +440,79 @@ impl NativeTimelineOwner {
             room_id: room_id.to_string(),
             event_id: sent_event_id,
             status: "declined",
+        })
+    }
+
+    pub async fn forward_text(
+        &self,
+        source_room_id: &str,
+        event_id: &str,
+        target_room_id: &str,
+        as_quote: bool,
+    ) -> Result<NativeTimelineActionReadback, &'static str> {
+        let source_room_id = parse_action_room_id(source_room_id)?;
+        let target_room_id = parse_action_room_id(target_room_id)?;
+        let event_id = parse_action_event_id(event_id, "v-timeline-forward-invalid-event-id")?;
+        let source_room = self
+            .client
+            .get_room(&source_room_id)
+            .ok_or("v-timeline-forward-source-room-not-found")?;
+        let target_room = self
+            .client
+            .get_room(&target_room_id)
+            .ok_or("v-timeline-forward-target-room-not-found")?;
+        let (sender_label, body) = load_forwardable_text(&source_room, &event_id).await?;
+        let forwarded_body = format_forwarded_plain_body(&sender_label, &body, as_quote);
+        let mut content = RoomMessageEventContent::text_plain(forwarded_body);
+        content.mentions = Some(Mentions::new());
+        let sent_event_id = target_room
+            .send(content)
+            .await
+            .map_err(|_| "v-timeline-forward-send-failed")?
+            .response
+            .event_id
+            .to_string();
+        Ok(NativeTimelineActionReadback {
+            schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+            action: NativeTimelineActionKind::ForwardText,
+            room_id: target_room_id.to_string(),
+            event_id: sent_event_id,
+            status: "sent",
+        })
+    }
+
+    pub async fn forward_media(
+        &self,
+        source_room_id: &str,
+        event_id: &str,
+        target_room_id: &str,
+    ) -> Result<NativeTimelineActionReadback, &'static str> {
+        let source_room_id = parse_action_room_id(source_room_id)?;
+        let target_room_id = parse_action_room_id(target_room_id)?;
+        let event_id =
+            parse_action_event_id(event_id, "v-timeline-forward-media-invalid-event-id")?;
+        let source_room = self
+            .client
+            .get_room(&source_room_id)
+            .ok_or("v-timeline-forward-media-source-room-not-found")?;
+        let target_room = self
+            .client
+            .get_room(&target_room_id)
+            .ok_or("v-timeline-forward-media-target-room-not-found")?;
+        let content = load_forwardable_media(&source_room, &event_id).await?;
+        let sent_event_id = target_room
+            .send(content)
+            .await
+            .map_err(|_| "v-timeline-forward-media-send-failed")?
+            .response
+            .event_id
+            .to_string();
+        Ok(NativeTimelineActionReadback {
+            schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+            action: NativeTimelineActionKind::ForwardMedia,
+            room_id: target_room_id.to_string(),
+            event_id: sent_event_id,
+            status: "sent",
         })
     }
 }
@@ -1863,6 +1942,87 @@ fn normalize_edit_formatted_body(
         return Ok(None);
     }
     Ok(Some(html.to_owned()))
+}
+
+async fn load_forwardable_text(
+    room: &Room,
+    event_id: &OwnedEventId,
+) -> Result<(String, String), &'static str> {
+    let timeline_event = room
+        .load_or_fetch_event(event_id, None)
+        .await
+        .map_err(|_| "v-timeline-forward-event-unavailable")?;
+    let sync_event = timeline_event
+        .raw()
+        .deserialize()
+        .map_err(|_| "v-timeline-forward-event-decode-failed")?;
+    match sync_event {
+        AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomMessage(message)) => {
+            let original = message
+                .as_original()
+                .ok_or("v-timeline-forward-event-redacted")?;
+            Ok((
+                original.sender.to_string(),
+                original.content.body().to_owned(),
+            ))
+        }
+        _ => Err("v-timeline-forward-unsupported-event"),
+    }
+}
+
+async fn load_forwardable_media(
+    room: &Room,
+    event_id: &OwnedEventId,
+) -> Result<AnyMessageLikeEventContent, &'static str> {
+    let timeline_event = room
+        .load_or_fetch_event(event_id, None)
+        .await
+        .map_err(|_| "v-timeline-forward-media-event-unavailable")?;
+    let sync_event = timeline_event
+        .raw()
+        .deserialize()
+        .map_err(|_| "v-timeline-forward-media-event-decode-failed")?;
+    match sync_event {
+        AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomMessage(message)) => {
+            let original = message
+                .as_original()
+                .ok_or("v-timeline-forward-media-event-redacted")?;
+            let sender = original.sender.to_string();
+            let mut msgtype = original.content.msgtype.clone();
+            match &mut msgtype {
+                MessageType::Image(content) => {
+                    content.body = format_forwarded_media_body(&sender, &content.body);
+                }
+                MessageType::File(content) => {
+                    content.body = format_forwarded_media_body(&sender, &content.body);
+                }
+                MessageType::Audio(content) => {
+                    content.body = format_forwarded_media_body(&sender, &content.body);
+                }
+                MessageType::Video(content) => {
+                    content.body = format_forwarded_media_body(&sender, &content.body);
+                }
+                _ => return Err("v-timeline-forward-media-unsupported-event"),
+            }
+            Ok(AnyMessageLikeEventContent::RoomMessage(
+                RoomMessageEventContent::new(msgtype),
+            ))
+        }
+        AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::Sticker(sticker)) => {
+            let original = sticker
+                .as_original()
+                .ok_or("v-timeline-forward-media-event-redacted")?;
+            let sender = original.sender.to_string();
+            Ok(AnyMessageLikeEventContent::Sticker(
+                StickerEventContent::with_source(
+                    format_forwarded_media_body(&sender, &original.content.body),
+                    original.content.info.clone(),
+                    original.content.source.clone(),
+                ),
+            ))
+        }
+        _ => Err("v-timeline-forward-media-unsupported-event"),
+    }
 }
 
 fn validate_reaction_key(key: &str) -> Result<(), &'static str> {
