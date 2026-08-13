@@ -5,6 +5,7 @@
 //! via `git mv` + path corrections; behavior is identical to the pre-move
 //! src-tauri/`crate::matrix::*` surfaces, which re-export this module.
 
+pub mod account_data;
 pub mod auth;
 pub mod backup;
 pub mod cross_signing;

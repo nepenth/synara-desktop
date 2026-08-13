@@ -1,6 +1,6 @@
 //! Privacy-safe errors for account-data service (P6.7).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Account-data index / apply failure.
 #[derive(Debug)]
