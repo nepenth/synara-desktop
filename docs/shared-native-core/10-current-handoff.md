@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `494f2646`, the merge commit for #882. |
-| Immediately preceding merges | #881 docs after #880, #882 m.direct snapshot/add/remove. |
+| Feature evidence tip | `feature/shared-native-core` is `311d7b0a`, the merge commit for #884. |
+| Immediately preceding merges | #883 docs after #882, #884 later account-data commands. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -119,11 +119,12 @@ residency changes are:
 | #878 / `928c0925` | room name/topic/avatar via `Core::command` | Join-rule owner now owns those writes. |
 | #880 / `44c674ce` | directory visibility get/set via `Core::command` | Same attached room-profile owner. |
 | #882 / `494f2646` | m.direct snapshot/add/remove via `Core::command` | Image-pack owner now owns m.direct. |
+| #884 / `311d7b0a` | later account-data via `Core::command` | Same attached account-data owner. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `494f2646`/#882 for
+anchor, but it is no longer the feature-tip provenance; use `311d7b0a`/#884 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -193,9 +194,9 @@ tests/proofs for moved domains. Core-owned discovery/UIA types and the vault
 trait do not make live login or Keychain I/O Core-owned. Therefore P1 is not
 complete and `src-tauri` is not a thin shell.
 
-### P2 — in progress: sixty-one registered commands
+### P2 — in progress: sixty-seven registered commands
 
-The Core registry registers exactly these sixty-one names:
+The Core registry registers exactly these sixty-seven names:
 
 1. `matrix_login_flows`
 2. `matrix_register_flows`
@@ -258,6 +259,12 @@ The Core registry registers exactly these sixty-one names:
 59. `matrix_mdirect_snapshot` (#882)
 60. `matrix_mdirect_add` (#882)
 61. `matrix_mdirect_remove` (#882)
+62. `matrix_later_snapshot` (#884)
+63. `matrix_later_upsert` (#884)
+64. `matrix_later_complete` (#884)
+65. `matrix_later_snooze` (#884)
+66. `matrix_later_clear_completed` (#884)
+67. `matrix_later_mark_reminded` (#884)
 
 All other census command names remain unregistered and fail closed. This is
 neither complete desktop command parity nor a basis to add a speculative route.
