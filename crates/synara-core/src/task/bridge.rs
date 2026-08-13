@@ -1,18 +1,16 @@
-//! Light integration between [`crate::matrix::tasks::TaskSupervisor`] (hosted
-//! in `synara_core::task`, SNC-P1-4) and
-//! [`crate::matrix::supervisor::MatrixSupervisor`].
+//! Light integration between [`TaskSupervisor`] and
+//! [`crate::app::supervisor::MatrixSupervisor`].
 //!
 //! The lifecycle actor stays pure/synchronous (P2.1). Task cancellation is
 //! async, so composition is explicit: after a generation-bumping command,
 //! call [`follow_supervisor_generation`] to cancel and await stale work.
 //!
-//! SNC-P1-4: this adapter stays in src-tauri because the supervisor module is
-//! still desktop-local (it moves with the P1.5 "rest" chunk). It consumes the
-//! core registry types and keeps the original follow/mirror behavior identical.
+//! Supervisor now lives in Core, so this adapter lives next to the task
+//! registry. Behavior is identical to the former src-tauri bridge.
 
-use crate::matrix::supervisor::MatrixSupervisor;
+use crate::app::supervisor::MatrixSupervisor;
 
-use synara_core::task::TaskSupervisor;
+use super::TaskSupervisor;
 
 /// Align task live generation with the Matrix supervisor and retire stale tasks.
 ///
