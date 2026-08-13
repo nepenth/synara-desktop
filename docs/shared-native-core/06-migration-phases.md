@@ -17,11 +17,12 @@ big-bang move.**
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
 
-**Current bounded status at `b811319f0fcc7ecd6eee82e4255d57e8e5699360`
-(#714, after #713):** #713 mechanically moved notifications, polls, relations,
-threads, and unread; #714 mechanically moved raw content, receipts, routes, and
-security. Both retain thin desktop re-exports. They are P1 extraction only: no
-P2 command registration, UDL, or iOS behavior changed.
+**Current bounded status at `99066f9ad6577a9c990dc7fe9a6b139d652fc791`
+(#718, after #716/#717):** #713 mechanically moved notifications, polls,
+relations, threads, and unread; #714 moved raw content, receipts, routes, and
+security; #716 moved search, legacy, and media_cache; #717 moved media_export
+and crypto_store. These retain thin desktop re-exports. They are P1 extraction
+only: no P2 command registration, UDL, or iOS behavior changed.
 
 Slicing (each slice = one PR):
 1. Workspace scaffolding: root `Cargo.toml` workspace; `crates/synara-core`
@@ -103,13 +104,13 @@ zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
 
 > **Bounded evidence note — not P4 acceptance:** At the current feature tip
-> `b811319f0fcc7ecd6eee82e4255d57e8e5699360` (#714, after P1-only #713), the
+> `99066f9ad6577a9c990dc7fe9a6b139d652fc791` (#718, after P1-only #716/#717), the
 > prior #708 work is only the pure iOS room-row unread presentation from closed
 > `Joined`/`Invited` membership, scalar counters, and a marked-unread flag to a
 > `u64` count plus highlight boolean. The prior #710 work is only the pure
 > cold-start decision from a latest-state boolean and `{Missing, Known}` to a
 > boolean; Swift maps `nil`/`.distantPast` to `Missing` and a real `Date` to
-> `Known`. #713/#714 add no Core command route, UDL, or iOS behavior. Neither
+> `Known`. #713/#714/#716/#717 add no Core command route, UDL, or iOS behavior. Neither
 > P4 policy slice adds a Core SDK/service owner. Actual SDK `Room` and timeline
 > listener/pagination/recovery execution, plus session, Keychain, store, crypto,
 > sync, and lifecycle ownership, remain `MatrixRustSDKService`-owned.

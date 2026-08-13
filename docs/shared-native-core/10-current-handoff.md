@@ -1,4 +1,4 @@
-# 10 — Current Handoff Ledger (post-#714)
+# 10 — Current Handoff Ledger (post-#718)
 
 > **Purpose and scope.** This is the transfer record for the shared-native-core
 > program. It records source, repository, and gate state; it does not authorize
@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `b811319f0fcc7ecd6eee82e4255d57e8e5699360`, the merge commit for #714. |
-| Immediately preceding merge | #713 merged as `3c179f03c2820b8a0405578aca9af71d3988fe1e`. |
+| Feature evidence tip | `feature/shared-native-core` is `99066f9ad6577a9c990dc7fe9a6b139d652fc791`, the merge commit for #718. |
+| Immediately preceding merges | #716 `4b0775e8`, #717 `abef91dc`, then #718. Prior P1 cluster tip remains #714 `b811319f`. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -28,12 +28,15 @@ residency changes are:
 |---|---|---|
 | #713 / `3c179f03` | notifications, polls, relations, threads, unread | Thin `src-tauri/src/matrix/` re-exports preserve the desktop paths. |
 | #714 / `b811319f` | raw_content, receipts, routes, security | The same thin desktop re-export pattern preserves the desktop paths. |
+| #716 / `4b0775e8` | search, legacy, media_cache | Same thin desktop re-export pattern. |
+| #717 / `abef91dc` | media_export, crypto_store | Same thin desktop re-export pattern. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `b811319f`/#714 for
-current feature claims.
+anchor, but it is no longer the feature-tip provenance; use `99066f9a`/#718 for
+current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
+Swift / iOS-shell surface; it does not change product behavior.
 
 ## 2. Live pull-request and release state
 
@@ -75,14 +78,15 @@ gate.
 Core-resident pieces now include DTOs, transport/IPC, the pure task registry,
 and the P1 app domains `sync`, `room_list`, pure `timeline`,
 `utd_recovery`, `notifications`, `polls`, `relations`, `threads`, `unread`,
-`raw_content`, `receipts`, `routes`, and `security`. The latter ten are the two
-mechanical clusters above. Compatibility re-exports remain deliberately in the
-desktop shell.
+`raw_content`, `receipts`, `routes`, `security`, `search`, `legacy`,
+`media_cache`, `media_export`, and `crypto_store`. The latter fourteen are the
+mechanical clusters #713–#717. Compatibility re-exports remain deliberately in
+the desktop shell.
 
 Desktop still owns the unmoved matrix domains: account data, full auth
-execution, backup, client construction, cross-signing, crypto-store, devices,
-diagnostics, legacy, lifecycle, media/cache/export, members, presence, room
-directory, room keys, room operations, room profile, search, secret storage,
+execution, backup, client construction, cross-signing, devices,
+diagnostics, lifecycle, media (upload/download queues), members, presence, room
+directory, room keys, room operations, room profile, secret storage,
 send, spaces, store, supervisor, typing, user profile, and verification. It
 also retains the desktop-side commands, live/platform adapters, and applicable
 tests/proofs for moved domains. A narrow P2 auth discovery slice in Core does
