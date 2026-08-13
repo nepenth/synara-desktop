@@ -1,6 +1,6 @@
 //! Credential-free V-ROOMS.4 typing presentation DTO.
 //!
-//! Live Client `m.typing` ownership stays in the desktop shell.
+//! Live Client `m.typing` ownership lives in [`super::live`].
 
 use serde::Serialize;
 
