@@ -2,62 +2,18 @@ use super::*;
 
 #[tauri::command]
 pub async fn matrix_invites_accept(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
 ) -> Result<NativeInviteSnapshot, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
-    let active = require_session_mut(session.as_mut())?;
-    let invite = native_invite_target(active, &room_id).await?;
-    let room = native_invite_room(active, &invite)?;
-    room.join()
-        .await
-        .map_err(|_| map_invite_error("v-rooms.1-invite-accept-failed"))?;
-    if invite.is_direct {
-        let sender_id = OwnedUserId::try_from(invite.sender_id.as_str())
-            .map_err(|_| map_invite_error("v-rooms.1-invite-invalid-sender"))?;
-        active
-            .client
-            .account()
-            .mark_as_dm(room.room_id(), &[sender_id])
-            .await
-            .map_err(|_| map_invite_error("v-rooms.1-invite-direct-mark-failed"))?;
-    }
-    {
-        let mut handles = active.invite_avatars.lock().await;
-        handles.revoke_room(&invite.room_id);
-        snapshot_invites(
-            &active.client,
-            active.sync.session_generation(),
-            &mut handles,
-        )
-    }
-    .await
-    .map_err(map_invite_error)
+    crate::bridge::invites_snapshot::invites_accept(core.inner().as_ref(), room_id).await
 }
 
 #[tauri::command]
 pub async fn matrix_invites_decline(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
 ) -> Result<NativeInviteSnapshot, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
-    let active = require_session_mut(session.as_mut())?;
-    let invite = native_invite_target(active, &room_id).await?;
-    native_invite_room(active, &invite)?
-        .leave()
-        .await
-        .map_err(|_| map_invite_error("v-rooms.1-invite-decline-failed"))?;
-    {
-        let mut handles = active.invite_avatars.lock().await;
-        handles.revoke_room(&invite.room_id);
-        snapshot_invites(
-            &active.client,
-            active.sync.session_generation(),
-            &mut handles,
-        )
-    }
-    .await
-    .map_err(map_invite_error)
+    crate::bridge::invites_snapshot::invites_decline(core.inner().as_ref(), room_id).await
 }
 
 /// V-ROOMS room creation: create the room through the live native Matrix SDK.

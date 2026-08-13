@@ -1015,6 +1015,12 @@ struct MatrixRoomJoinRuleSnapshotRequest {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixInviteActionRequest {
+    room_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct MatrixRoomLeaveRequest {
     room_id: String,
 }
@@ -1545,6 +1551,12 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_room_list_snapshot", matrix_room_list_snapshot)
         .expect("built-in matrix_room_list_snapshot must remain in the command census");
+    registry
+        .register("matrix_invites_accept", matrix_invites_accept)
+        .expect("built-in matrix_invites_accept must remain in the command census");
+    registry
+        .register("matrix_invites_decline", matrix_invites_decline)
+        .expect("built-in matrix_invites_decline must remain in the command census");
     registry
         .register("matrix_invites_snapshot", matrix_invites_snapshot)
         .expect("built-in matrix_invites_snapshot must remain in the command census");
@@ -2922,8 +2934,55 @@ fn matrix_invites_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> C
     })
 }
 
+fn matrix_invites_accept(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixInviteActionRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-invites-accept-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-invites-accept-no-session")
+        })?;
+        let snapshot: NativeInviteSnapshot = owner
+            .invite_accept(&payload.room_id)
+            .await
+            .map_err(invite_action_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-invites-accept-serialization-failed"))
+    })
+}
+
+fn matrix_invites_decline(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixInviteActionRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-invites-decline-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-invites-decline-no-session")
+        })?;
+        let snapshot: NativeInviteSnapshot = owner
+            .invite_decline(&payload.room_id)
+            .await
+            .map_err(invite_action_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-invites-decline-serialization-failed"))
+    })
+}
+
 fn invites_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
+        "v-rooms.1-invites-requires-session"
+        | "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn invite_action_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-rooms.1-invite-invalid-room"
+        | "v-rooms.1-invite-invalid-sender"
+        | "v-rooms.1-invite-not-found"
+        | "v-rooms.1-invite-member-missing" => MatrixIpcErrorCategory::SdkInvariant,
         "v-rooms.1-invites-requires-session"
         | "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
         _ => MatrixIpcErrorCategory::Unknown,
@@ -4841,6 +4900,8 @@ mod tests {
                 "matrix_get_room_directory_visibility",
                 "matrix_get_room_image_packs",
                 "matrix_get_user_image_pack",
+                "matrix_invites_accept",
+                "matrix_invites_decline",
                 "matrix_invites_snapshot",
                 "matrix_later_clear_completed",
                 "matrix_later_complete",
@@ -6548,6 +6609,44 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-invites-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_invites_accept_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_invites_accept".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org"}),
+            })
+            .await
+            .expect_err("invite accept without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-invites-accept-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_invites_decline_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_invites_decline".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org"}),
+            })
+            .await
+            .expect_err("invite decline without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-invites-decline-no-session")
         );
     }
 
