@@ -1,7 +1,7 @@
 //! Unit tests for P6.6 user profile / ignore index.
 
 use super::*;
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 #[test]
 fn marker_stable() {

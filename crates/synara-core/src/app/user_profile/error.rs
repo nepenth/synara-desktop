@@ -1,6 +1,6 @@
 //! Privacy-safe errors for user profile projection (P6.6).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// User profile / ignore index failure.
 #[derive(Debug)]
