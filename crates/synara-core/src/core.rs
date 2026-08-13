@@ -21,7 +21,10 @@ use crate::app::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, NativeDev
 use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceSubscription,
 };
-use crate::app::room_profile::{MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner};
+use crate::app::room_profile::{
+    MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
+    MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner,
+};
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::app::timeline::{
     NativeComposerReplyDraftReadback, NativeReactionMutationResult, NativeTimelineActionReadback,
@@ -849,6 +852,23 @@ struct MatrixSetRoomAvatarRequest {
     mxc: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_get_room_directory_visibility`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixGetRoomDirectoryVisibilityRequest {
+    room_id: String,
+    session_generation: u64,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_set_room_directory_visibility`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixSetRoomDirectoryVisibilityRequest {
+    room_id: String,
+    session_generation: u64,
+    visibility: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_register_flows`.
 ///
 /// This read-only probe accepts exactly the existing camel-case homeserver
@@ -1256,6 +1276,18 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_set_room_avatar", matrix_set_room_avatar)
         .expect("built-in matrix_set_room_avatar must remain in the command census");
+    registry
+        .register(
+            "matrix_get_room_directory_visibility",
+            matrix_get_room_directory_visibility,
+        )
+        .expect("built-in matrix_get_room_directory_visibility must remain in the command census");
+    registry
+        .register(
+            "matrix_set_room_directory_visibility",
+            matrix_set_room_directory_visibility,
+        )
+        .expect("built-in matrix_set_room_directory_visibility must remain in the command census");
     registry
         .register(
             "matrix_get_global_image_packs",
@@ -2250,6 +2282,74 @@ fn matrix_set_room_avatar(state: Arc<CoreState>, request: CommandEnvelope) -> Co
     })
 }
 
+fn matrix_get_room_directory_visibility(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixGetRoomDirectoryVisibilityRequest =
+            serde_json::from_value(request.payload).map_err(|_| {
+                core_state_error("p2-get-room-directory-visibility-invalid-payload")
+            })?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-get-room-directory-visibility-no-session")
+        })?;
+        let result: MatrixRoomDirectoryVisibilityResult = owner
+            .get_directory_visibility(&payload.room_id, payload.session_generation)
+            .await
+            .map_err(directory_visibility_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-get-room-directory-visibility-serialization-failed"))
+    })
+}
+
+fn matrix_set_room_directory_visibility(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSetRoomDirectoryVisibilityRequest =
+            serde_json::from_value(request.payload).map_err(|_| {
+                core_state_error("p2-set-room-directory-visibility-invalid-payload")
+            })?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-set-room-directory-visibility-no-session")
+        })?;
+        let result: MatrixRoomDirectoryVisibilityWriteResult = owner
+            .set_directory_visibility(
+                &payload.room_id,
+                payload.session_generation,
+                &payload.visibility,
+            )
+            .await
+            .map_err(directory_visibility_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-set-room-directory-visibility-serialization-failed"))
+    })
+}
+
+fn directory_visibility_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-send.r-room-profile-directory-visibility-invalid"
+        | "v-send.r-room-profile-directory-visibility-room-not-found" => {
+            MatrixIpcErrorCategory::SdkInvariant
+        }
+        "v-send.r-room-profile-directory-visibility-requires-session" => {
+            MatrixIpcErrorCategory::Forbidden
+        }
+        "v-send.r-room-profile-directory-visibility-stale-generation" => {
+            MatrixIpcErrorCategory::StaleSessionGeneration
+        }
+        "v-send.r-room-profile-directory-visibility-permission-denied" => {
+            MatrixIpcErrorCategory::Forbidden
+        }
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
 fn room_profile_write_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "d0.4-send-invalid-room-id"
@@ -3054,6 +3154,7 @@ mod tests {
                 "matrix_device_rename",
                 "matrix_device_snapshot",
                 "matrix_get_global_image_packs",
+                "matrix_get_room_directory_visibility",
                 "matrix_get_room_image_packs",
                 "matrix_get_user_image_pack",
                 "matrix_login_flows",
@@ -3069,6 +3170,7 @@ mod tests {
                 "matrix_session_snapshot",
                 "matrix_set_global_image_packs",
                 "matrix_set_room_avatar",
+                "matrix_set_room_directory_visibility",
                 "matrix_set_room_image_pack",
                 "matrix_set_room_name",
                 "matrix_set_room_topic",
@@ -4819,6 +4921,48 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-set-room-avatar-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_get_room_directory_visibility_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_get_room_directory_visibility".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org","sessionGeneration":1}),
+            })
+            .await
+            .expect_err("directory visibility get without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-get-room-directory-visibility-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_set_room_directory_visibility_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_set_room_directory_visibility".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "sessionGeneration":1,
+                    "visibility":"public"
+                }),
+            })
+            .await
+            .expect_err("directory visibility set without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-set-room-directory-visibility-no-session")
         );
     }
 

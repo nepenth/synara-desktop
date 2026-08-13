@@ -14,7 +14,11 @@ use matrix_sdk::{
     deserialized_responses::RawSyncOrStrippedState,
     event_handler::EventHandlerDropGuard,
     ruma::{
-        events::room::join_rules::{RoomJoinRulesEventContent, SyncRoomJoinRulesEvent},
+        api::client::room::Visibility,
+        events::{
+            room::join_rules::{RoomJoinRulesEventContent, SyncRoomJoinRulesEvent},
+            StateEventType,
+        },
         room::JoinRule,
         OwnedMxcUri, OwnedRoomId,
     },
@@ -23,7 +27,10 @@ use matrix_sdk::{
 
 use crate::app::user_profile::MatrixProfileWriteResult;
 
-use super::{MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleUpdate};
+use super::{
+    MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
+    MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleUpdate,
+};
 
 /// Shell-supplied sink for join-rule updates. Desktop maps this to the
 /// existing Tauri event; iOS can map it to a UniFFI callback later.
@@ -217,6 +224,86 @@ impl NativeRoomJoinRuleOwner {
         Ok(MatrixProfileWriteResult { status: "ok" })
     }
 
+    pub async fn get_directory_visibility(
+        &self,
+        room_id: &str,
+        session_generation: u64,
+    ) -> Result<MatrixRoomDirectoryVisibilityResult, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-directory-visibility-requires-session");
+        }
+        if session_generation == 0 || session_generation != self.session_generation {
+            return Err("v-send.r-room-profile-directory-visibility-stale-generation");
+        }
+        let room_id = parse_directory_visibility_room_id(room_id)?;
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-send.r-room-profile-directory-visibility-room-not-found")?;
+        let visibility = room
+            .privacy_settings()
+            .get_room_visibility()
+            .await
+            .map_err(|_| "v-send.r-room-profile-directory-visibility-get-sdk-failed")?;
+        let visibility = match visibility {
+            Visibility::Public => "public",
+            Visibility::Private => "private",
+            _ => return Err("v-send.r-room-profile-directory-visibility-get-sdk-failed"),
+        };
+        Ok(MatrixRoomDirectoryVisibilityResult {
+            status: "ok",
+            room_id: room_id.to_string(),
+            session_generation: self.session_generation,
+            visibility,
+        })
+    }
+
+    pub async fn set_directory_visibility(
+        &self,
+        room_id: &str,
+        session_generation: u64,
+        visibility: &str,
+    ) -> Result<MatrixRoomDirectoryVisibilityWriteResult, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-directory-visibility-requires-session");
+        }
+        if session_generation == 0 || session_generation != self.session_generation {
+            return Err("v-send.r-room-profile-directory-visibility-stale-generation");
+        }
+        let room_id = parse_directory_visibility_room_id(room_id)?;
+        let (native_visibility, requested_visibility) = parse_directory_visibility(visibility)?;
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-send.r-room-profile-directory-visibility-room-not-found")?;
+        let Some(room_version) = room.version() else {
+            return Err("v-send.r-room-profile-directory-visibility-permission-state-unavailable");
+        };
+        if room_version.rules().is_none() {
+            return Err("v-send.r-room-profile-directory-visibility-permission-state-unavailable");
+        }
+        let power_levels = room.power_levels().await.map_err(|_| {
+            "v-send.r-room-profile-directory-visibility-permission-state-unavailable"
+        })?;
+        let user_id = self
+            .client
+            .user_id()
+            .ok_or("v-send.r-room-profile-directory-visibility-permission-state-unavailable")?;
+        if !power_levels.user_can_send_state(user_id, StateEventType::RoomCanonicalAlias) {
+            return Err("v-send.r-room-profile-directory-visibility-permission-denied");
+        }
+        room.privacy_settings()
+            .update_room_visibility(native_visibility)
+            .await
+            .map_err(|_| "v-send.r-room-profile-directory-visibility-set-sdk-failed")?;
+        Ok(MatrixRoomDirectoryVisibilityWriteResult {
+            status: "ok",
+            room_id: room_id.to_string(),
+            session_generation: self.session_generation,
+            requested_visibility,
+        })
+    }
+
     fn profile_room(&self, room_id: &str) -> Result<Room, &'static str> {
         let room_id = parse_profile_room_id(room_id)?;
         self.client
@@ -241,6 +328,22 @@ fn parse_join_rule_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
 
 fn parse_profile_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
     OwnedRoomId::try_from(room_id.trim()).map_err(|_| "d0.4-send-invalid-room-id")
+}
+
+fn parse_directory_visibility_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
+    room_id
+        .parse()
+        .map_err(|_| "v-send.r-room-profile-directory-visibility-invalid")
+}
+
+fn parse_directory_visibility(
+    visibility: &str,
+) -> Result<(Visibility, &'static str), &'static str> {
+    match visibility {
+        "public" => Ok((Visibility::Public, "public")),
+        "private" => Ok((Visibility::Private, "private")),
+        _ => Err("v-send.r-room-profile-directory-visibility-invalid"),
+    }
 }
 
 fn parse_room_name(name: &str) -> Result<String, &'static str> {

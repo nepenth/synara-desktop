@@ -5,6 +5,7 @@ pub(crate) mod cross_signing_status;
 pub(crate) mod device_delete;
 pub(crate) mod device_rename;
 pub(crate) mod device_snapshot;
+pub(crate) mod directory_visibility;
 pub(crate) mod global_image_packs;
 pub(crate) mod image_pack_writes;
 pub(crate) mod join_rule_snapshot;
