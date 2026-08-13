@@ -242,6 +242,8 @@ pub async fn set_room_image_pack(
 
 /// V-SEND.R-PACK-READ subscribe: live push of pack account-data/state changes.
 pub struct NativeImagePackOwner {
+    client: Client,
+    session_generation: u64,
     _account_data: EventHandlerDropGuard,
     _state: EventHandlerDropGuard,
 }
@@ -279,9 +281,15 @@ impl NativeImagePackOwner {
         });
 
         Ok(Self {
+            client: client.clone(),
+            session_generation,
             _account_data: client.event_handler_drop_guard(account_handle),
             _state: client.event_handler_drop_guard(state_handle),
         })
+    }
+
+    pub async fn snapshot_global(&self) -> Result<NativeGlobalImagePacksSnapshot, &'static str> {
+        snapshot_global_image_packs(&self.client, self.session_generation).await
     }
 }
 
