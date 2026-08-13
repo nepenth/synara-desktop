@@ -3,8 +3,8 @@
 //! Authoritative design note: `docs/matrix-rust-sdk/p6.7-account-data.md`
 //! Product verticals: `docs/matrix-rust-sdk/v-rooms-5-mdirect.md`,
 //! `docs/matrix-rust-sdk/v-timeline-full-replacement-contract.md` (later/notes).
-//! Live image-pack snapshot/set/owner live here. later/room_notes/m.direct
-//! Client RMW and product_commands stay in the desktop shell.
+//! Live image-pack snapshot/set/owner and m.direct Client RMW live here.
+//! later/room_notes product_commands stay in the desktop shell.
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
@@ -15,6 +15,7 @@ mod image_packs_live;
 mod index;
 mod later;
 mod mdirect;
+mod mdirect_live;
 mod room_notes;
 
 pub use error::AccountDataError;
@@ -46,6 +47,7 @@ pub use mdirect::{
     apply_add_mdirect_room, apply_remove_mdirect_room, snapshot_from_mdirect_rooms, MDirectRooms,
     NativeMDirectMutationResult, NativeMDirectSnapshot,
 };
+pub use mdirect_live::{add_room_to_mdirect, remove_room_from_mdirect, snapshot_mdirect};
 pub use room_notes::{
     complete_room_todo_item, move_room_todo_item, normalize_room_note_item,
     normalize_room_notes_content, put_room_note_item, remove_room_note_item,

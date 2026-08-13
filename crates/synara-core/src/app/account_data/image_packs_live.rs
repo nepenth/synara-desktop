@@ -23,8 +23,9 @@ use super::{
     is_image_pack_account_data_type, is_image_pack_room_state_type, pack_from_account_data,
     set_global_image_packs_content_guard, set_room_image_pack_content_guard,
     set_user_image_pack_content_guard, EmoteRoomsContent, NativeGlobalImagePacksSnapshot,
-    NativeImagePack, NativeRoomImagePacksSnapshot, NativeUserImagePackSnapshot,
-    EMOTE_ROOMS_EVENT_TYPE, ROOM_EMOTES_EVENT_TYPE, USER_EMOTES_EVENT_TYPE,
+    NativeImagePack, NativeMDirectMutationResult, NativeMDirectSnapshot,
+    NativeRoomImagePacksSnapshot, NativeUserImagePackSnapshot, EMOTE_ROOMS_EVENT_TYPE,
+    ROOM_EMOTES_EVENT_TYPE, USER_EMOTES_EVENT_TYPE,
 };
 
 /// Shell-supplied sink for image-pack wakeups.
@@ -309,6 +310,25 @@ impl NativeImagePackOwner {
 
     pub async fn set_global(&self, content: JsonValue) -> Result<(), &'static str> {
         set_global_image_packs(&self.client, content).await
+    }
+
+    pub async fn mdirect_snapshot(&self) -> Result<NativeMDirectSnapshot, &'static str> {
+        super::snapshot_mdirect(&self.client, self.session_generation).await
+    }
+
+    pub async fn mdirect_add(
+        &self,
+        room_id: &str,
+        user_id: &str,
+    ) -> Result<NativeMDirectMutationResult, &'static str> {
+        super::add_room_to_mdirect(&self.client, room_id, user_id).await
+    }
+
+    pub async fn mdirect_remove(
+        &self,
+        room_id: &str,
+    ) -> Result<NativeMDirectMutationResult, &'static str> {
+        super::remove_room_from_mdirect(&self.client, room_id).await
     }
 
     pub async fn set_room(
