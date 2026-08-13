@@ -4,12 +4,12 @@
 
 use std::collections::BTreeMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// JSON-friendly create-room request owned by the native Matrix route.
 /// `parent_room_id` is used for restricted join rules; the post-create space
 /// child edge remains an explicit `matrix_space_child_set` operation in TS.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixRoomCreateRequest {
     pub name: Option<String>,
@@ -32,14 +32,14 @@ pub struct MatrixRoomCreateRequest {
     pub power_level_content_override: Option<MatrixRoomCreatePowerLevels>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MatrixRoomCreateVisibility {
     Private,
     Public,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MatrixRoomCreatePreset {
     #[serde(rename = "private_chat")]
@@ -50,7 +50,7 @@ pub enum MatrixRoomCreatePreset {
     TrustedPrivate,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixRoomCreateContent {
     #[serde(rename = "type")]
@@ -60,7 +60,7 @@ pub struct MatrixRoomCreateContent {
     pub additional_creators: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatrixRoomCreatePowerLevels {
     pub events_default: Option<i64>,

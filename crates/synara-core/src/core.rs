@@ -26,6 +26,7 @@ use crate::app::members::{
 use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceSubscription,
 };
+use crate::app::room_ops::MatrixRoomCreateRequest;
 use crate::app::room_profile::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
     MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner,
@@ -1406,6 +1407,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_room_ban", matrix_room_ban)
         .expect("built-in matrix_room_ban must remain in the command census");
     registry
+        .register("matrix_room_create", matrix_room_create)
+        .expect("built-in matrix_room_create must remain in the command census");
+    registry
         .register("matrix_room_unban", matrix_room_unban)
         .expect("built-in matrix_room_unban must remain in the command census");
     registry
@@ -2535,6 +2539,41 @@ fn matrix_room_unban(state: Arc<CoreState>, request: CommandEnvelope) -> Command
             .map_err(room_moderation_owner_error)?;
         Ok(serde_json::Value::Null)
     })
+}
+
+fn matrix_room_create(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomCreateRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-create-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-create-no-session")
+        })?;
+        let room_id = owner
+            .create_room(payload)
+            .await
+            .map_err(room_create_owner_error)?;
+        Ok(serde_json::Value::String(room_id))
+    })
+}
+
+fn room_create_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-rooms-room-create-invalid-name"
+        | "v-rooms-room-create-invalid-topic"
+        | "v-rooms-room-create-invalid-room-version"
+        | "v-rooms-room-create-invalid-alias"
+        | "v-rooms-room-create-invalid-invite"
+        | "v-rooms-room-create-invalid-creation-content"
+        | "v-rooms-room-create-invalid-additional-creator"
+        | "v-rooms-room-create-invalid-parent"
+        | "v-rooms-room-create-invalid-join-rule"
+        | "v-rooms-room-create-missing-restricted-parent"
+        | "v-rooms-room-create-invalid-power-level" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 fn room_moderation_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
@@ -3848,6 +3887,7 @@ mod tests {
                 "matrix_reaction_redact",
                 "matrix_register_flows",
                 "matrix_room_ban",
+                "matrix_room_create",
                 "matrix_room_invite",
                 "matrix_room_join",
                 "matrix_room_join_rule_snapshot",
@@ -5996,6 +6036,31 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-room-set-power-level-tags-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_create_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_create".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "name":"Room",
+                    "encryption":false,
+                    "isDirect":false,
+                    "invite":[],
+                    "knock":false
+                }),
+            })
+            .await
+            .expect_err("room create without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-create-no-session")
         );
     }
 
