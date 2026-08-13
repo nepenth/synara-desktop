@@ -14,10 +14,10 @@ use matrix_sdk::Client;
 
 use crate::matrix::store::AccountIdentity;
 
-use super::error::LifecycleError;
 use super::session_material::{
     persist_session_material, SessionMaterial, SessionMaterialMeta, SessionMaterialVault,
 };
+use super::LifecycleError;
 
 /// Privacy-safe outcome of persisting session secrets after login.
 ///

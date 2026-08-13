@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::matrix::store::AccountIdentity;
 
-use super::error::LifecycleError;
+use super::LifecycleError;
 
 /// Credential service name for Matrix session material (native only).
 ///

@@ -24,7 +24,6 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
-mod error;
 mod logout;
 mod recovery;
 mod remote_logout;
@@ -33,7 +32,6 @@ mod session_persist;
 mod session_restore;
 mod wipe;
 
-pub use error::LifecycleError;
 pub use logout::{perform_local_wipe, perform_logout, LogoutOutcome, WipeOutcome};
 pub use recovery::{
     apply_store_failure, recovery_action_for, surface_store_corrupt, surface_store_unavailable,

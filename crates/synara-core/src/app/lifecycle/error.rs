@@ -5,8 +5,8 @@
 
 use std::io;
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
-use crate::matrix::store::StoreKeyVaultError;
+use crate::app::store::StoreKeyVaultError;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Destructive lifecycle failure (logout / wipe / recovery).
 #[derive(Debug)]

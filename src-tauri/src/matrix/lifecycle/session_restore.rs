@@ -15,11 +15,11 @@ use matrix_sdk::{Client, SessionMeta, SessionTokens};
 
 use crate::matrix::store::AccountIdentity;
 
-use super::error::LifecycleError;
 use super::session_material::{
     load_session_material, HostMatrixSessionSecrets, SessionMaterial, SessionMaterialMeta,
     SessionMaterialVault,
 };
+use super::LifecycleError;
 
 /// Privacy-safe outcome of a successful session restore.
 ///

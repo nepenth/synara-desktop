@@ -8,7 +8,7 @@ use crate::matrix::diagnostics::{MatrixMetrics, StoreHealthStatus};
 use crate::matrix::ipc::MatrixIpcErrorCategory;
 use crate::matrix::supervisor::{MatrixSupervisor, SupervisorError};
 
-use super::error::LifecycleError;
+use super::LifecycleError;
 
 /// Class of store failure observed by open/continuity layers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
