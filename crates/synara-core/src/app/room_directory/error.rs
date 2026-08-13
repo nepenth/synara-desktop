@@ -1,6 +1,6 @@
 //! Privacy-safe errors for room directory session (P6.10).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Room directory session / apply failure.
 #[derive(Debug)]
