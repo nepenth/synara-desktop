@@ -1,6 +1,6 @@
 //! Privacy-safe errors for presence projection (P4.7).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Presence index failure.
 #[derive(Debug)]

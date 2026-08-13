@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use crate::matrix::dto::UserId;
+use crate::dto::UserId;
 use matrix_sdk::ruma::UserId as RumaUserId;
 
 use super::error::PresenceError;
