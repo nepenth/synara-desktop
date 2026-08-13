@@ -23,9 +23,9 @@ use super::{
     is_image_pack_account_data_type, is_image_pack_room_state_type, pack_from_account_data,
     set_global_image_packs_content_guard, set_room_image_pack_content_guard,
     set_user_image_pack_content_guard, EmoteRoomsContent, NativeGlobalImagePacksSnapshot,
-    NativeImagePack, NativeMDirectMutationResult, NativeMDirectSnapshot,
-    NativeRoomImagePacksSnapshot, NativeUserImagePackSnapshot, EMOTE_ROOMS_EVENT_TYPE,
-    ROOM_EMOTES_EVENT_TYPE, USER_EMOTES_EVENT_TYPE,
+    NativeImagePack, NativeLaterSnapshot, NativeMDirectMutationResult, NativeMDirectSnapshot,
+    NativeRoomImagePacksSnapshot, NativeUserImagePackSnapshot, SynaraLaterItem,
+    EMOTE_ROOMS_EVENT_TYPE, ROOM_EMOTES_EVENT_TYPE, USER_EMOTES_EVENT_TYPE,
 };
 
 /// Shell-supplied sink for image-pack wakeups.
@@ -329,6 +329,57 @@ impl NativeImagePackOwner {
         room_id: &str,
     ) -> Result<NativeMDirectMutationResult, &'static str> {
         super::remove_room_from_mdirect(&self.client, room_id).await
+    }
+
+    pub async fn later_snapshot(&self) -> Result<NativeLaterSnapshot, &'static str> {
+        super::snapshot_later(&self.client, self.session_generation).await
+    }
+
+    pub async fn later_upsert(
+        &self,
+        item: SynaraLaterItem,
+    ) -> Result<NativeLaterSnapshot, &'static str> {
+        super::upsert_later_item(&self.client, self.session_generation, item).await
+    }
+
+    pub async fn later_complete(
+        &self,
+        item_id: String,
+        completed_at: Option<f64>,
+    ) -> Result<NativeLaterSnapshot, &'static str> {
+        super::complete_later_item_live(
+            &self.client,
+            self.session_generation,
+            item_id,
+            super::later_timestamp_or_now(completed_at),
+        )
+        .await
+    }
+
+    pub async fn later_snooze(
+        &self,
+        item_id: String,
+        due_ts: f64,
+    ) -> Result<NativeLaterSnapshot, &'static str> {
+        super::snooze_later_item_live(&self.client, self.session_generation, item_id, due_ts).await
+    }
+
+    pub async fn later_clear_completed(&self) -> Result<NativeLaterSnapshot, &'static str> {
+        super::clear_completed_later_live(&self.client, self.session_generation).await
+    }
+
+    pub async fn later_mark_reminded(
+        &self,
+        item_id: String,
+        reminded_at: Option<f64>,
+    ) -> Result<NativeLaterSnapshot, &'static str> {
+        super::mark_later_reminded_live(
+            &self.client,
+            self.session_generation,
+            item_id,
+            super::later_timestamp_or_now(reminded_at),
+        )
+        .await
     }
 
     pub async fn set_room(

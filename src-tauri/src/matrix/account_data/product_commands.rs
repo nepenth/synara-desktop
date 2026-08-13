@@ -95,102 +95,51 @@ pub async fn matrix_mdirect_remove(
 
 #[tauri::command]
 pub async fn matrix_later_snapshot(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    snapshot_later(&active.client, active.sync.session_generation())
-        .await
-        .map_err(map_later_notes_error)
+    crate::bridge::later::later_snapshot(core.inner().as_ref()).await
 }
 
 #[tauri::command]
 pub async fn matrix_later_upsert(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     item: SynaraLaterItem,
 ) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    upsert_later_item(&active.client, active.sync.session_generation(), item)
-        .await
-        .map_err(map_later_notes_error)
+    crate::bridge::later::later_upsert(core.inner().as_ref(), item).await
 }
 
 #[tauri::command]
 pub async fn matrix_later_complete(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     item_id: String,
     completed_at: Option<f64>,
 ) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    let completed_at = completed_at.unwrap_or_else(|| {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as f64)
-            .unwrap_or(0.0)
-    });
-    complete_later_item_live(
-        &active.client,
-        active.sync.session_generation(),
-        item_id,
-        completed_at,
-    )
-    .await
-    .map_err(map_later_notes_error)
+    crate::bridge::later::later_complete(core.inner().as_ref(), item_id, completed_at).await
 }
 
 #[tauri::command]
 pub async fn matrix_later_snooze(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     item_id: String,
     due_ts: f64,
 ) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    snooze_later_item_live(
-        &active.client,
-        active.sync.session_generation(),
-        item_id,
-        due_ts,
-    )
-    .await
-    .map_err(map_later_notes_error)
+    crate::bridge::later::later_snooze(core.inner().as_ref(), item_id, due_ts).await
 }
 
 #[tauri::command]
 pub async fn matrix_later_clear_completed(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    clear_completed_later_live(&active.client, active.sync.session_generation())
-        .await
-        .map_err(map_later_notes_error)
+    crate::bridge::later::later_clear_completed(core.inner().as_ref()).await
 }
 
 #[tauri::command]
 pub async fn matrix_later_mark_reminded(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     item_id: String,
     reminded_at: Option<f64>,
 ) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    let reminded_at = reminded_at.unwrap_or_else(|| {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as f64)
-            .unwrap_or(0.0)
-    });
-    mark_later_reminded_live(
-        &active.client,
-        active.sync.session_generation(),
-        item_id,
-        reminded_at,
-    )
-    .await
-    .map_err(map_later_notes_error)
+    crate::bridge::later::later_mark_reminded(core.inner().as_ref(), item_id, reminded_at).await
 }
 
 #[tauri::command]
