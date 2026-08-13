@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 use matrix_sdk::ruma::{
     events::{
         relation::{Reply, Thread},
-        room::message::{Relation, RoomMessageEventContent},
+        room::message::{Relation, ReplacementMetadata, RoomMessageEventContent},
         Mentions,
     },
     OwnedEventId, OwnedRoomId, OwnedTransactionId, OwnedUserId,
@@ -108,4 +108,31 @@ pub async fn send_message_to_room(
     result
         .map(|result| result.response.event_id.to_string())
         .map_err(|_| "d0.4-send-sdk-failed")
+}
+
+pub fn parse_edit_event_id(event_id: &str) -> Result<OwnedEventId, &'static str> {
+    event_id
+        .parse()
+        .map_err(|_| "v-send.r-edit-invalid-event-id")
+}
+
+pub fn edit_message_content(
+    body: String,
+    msg_type: Option<String>,
+    formatted_body: Option<String>,
+    mention_user_ids: Option<Vec<String>>,
+    mention_room: bool,
+    event_id: OwnedEventId,
+) -> Result<RoomMessageEventContent, &'static str> {
+    let content = message_content(
+        body,
+        msg_type,
+        formatted_body,
+        mention_user_ids,
+        mention_room,
+        None,
+        None,
+    )?;
+    let mentions = content.mentions.clone();
+    Ok(content.make_replacement(ReplacementMetadata::new(event_id, mentions)))
 }

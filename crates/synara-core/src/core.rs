@@ -759,6 +759,25 @@ struct MatrixSendTextRequest {
     txn_id: Option<String>,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_edit_message`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixEditMessageRequest {
+    room_id: String,
+    event_id: String,
+    body: String,
+    #[serde(default)]
+    msg_type: Option<String>,
+    #[serde(default)]
+    formatted_body: Option<String>,
+    #[serde(default)]
+    mention_user_ids: Option<Vec<String>>,
+    #[serde(default)]
+    mention_room: Option<bool>,
+    #[serde(default)]
+    txn_id: Option<String>,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_timeline_edit_text`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1360,6 +1379,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_send_text", matrix_send_text)
         .expect("built-in matrix_send_text must remain in the command census");
     registry
+        .register("matrix_edit_message", matrix_edit_message)
+        .expect("built-in matrix_edit_message must remain in the command census");
+    registry
         .register("matrix_media_config", matrix_media_config)
         .expect("built-in matrix_media_config must remain in the command census");
     registry
@@ -1939,12 +1961,40 @@ fn send_text_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         | "v-send.4-invalid-message-type"
         | "v-send.4-invalid-mention-user-id"
         | "v-send.5-invalid-thread-root-event-id"
+        | "v-send.r-edit-invalid-event-id"
+        | "v-send.r-edit-room-not-found"
         | "p6.1-invalid-room-id"
         | "p6.1-empty-body"
         | "p6.1-body-too-large" => MatrixIpcErrorCategory::SdkInvariant,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn matrix_edit_message(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixEditMessageRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-edit-message-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-edit-message-no-session")
+        })?;
+        let result: MatrixSendTextResult = owner
+            .edit_message(
+                payload.room_id,
+                payload.event_id,
+                payload.body,
+                payload.msg_type,
+                payload.formatted_body,
+                payload.mention_user_ids,
+                payload.mention_room,
+                payload.txn_id,
+            )
+            .await
+            .map_err(send_text_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-edit-message-serialization-failed"))
+    })
 }
 
 fn matrix_timeline_edit_text(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -4049,6 +4099,7 @@ mod tests {
                 "matrix_device_delete_start",
                 "matrix_device_rename",
                 "matrix_device_snapshot",
+                "matrix_edit_message",
                 "matrix_get_global_image_packs",
                 "matrix_get_room_directory_visibility",
                 "matrix_get_room_image_packs",
@@ -6777,6 +6828,29 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-send-text-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_edit_message_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_edit_message".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "eventId":"$e:example.org",
+                    "body":"hello"
+                }),
+            })
+            .await
+            .expect_err("edit message without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-edit-message-no-session")
         );
     }
 

@@ -41,7 +41,7 @@ pub async fn matrix_send_text(
 #[tauri::command]
 #[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
 pub async fn matrix_edit_message(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     event_id: String,
     body: String,
@@ -51,64 +51,18 @@ pub async fn matrix_edit_message(
     mention_room: Option<bool>,
     txn_id: Option<String>,
 ) -> Result<MatrixSendTextResult, MatrixAuthCommandError> {
-    let room_id = parse_send_room_id(&room_id)?;
-    let event_id = parse_edit_event_id(event_id)?;
-    let txn_id = parse_transaction_id(txn_id)?;
-    let content = edit_message_content(
-        body.clone(),
+    crate::bridge::send_text::edit_message(
+        core.inner().as_ref(),
+        room_id,
+        event_id,
+        body,
         msg_type,
         formatted_body,
         mention_user_ids,
-        mention_room.unwrap_or(false),
-        event_id,
-    )?;
-
-    let (room, session_generation, local_txn_id) = {
-        let mut session = state.session.lock().await;
-        let active = require_send_session_mut(session.as_mut())?;
-        let room = active.client.get_room(&room_id).ok_or_else(|| {
-            MatrixAuthCommandError::new(
-                "NotFound",
-                "The native Matrix room is not available.",
-                "v-send.r-edit-room-not-found",
-            )
-        })?;
-        let session_generation = active.sends.session_generation();
-        let item = active
-            .sends
-            .enqueue_text(room_id.to_string(), body.clone())
-            .map_err(|error| map_send_error(error.diagnostic_id()))?;
-        (room, session_generation, item.local_txn_id.clone())
-    };
-
-    let send_result = send_message_to_room(&room, content, txn_id).await;
-
-    let mut session = state.session.lock().await;
-    if let Some(active) = session.as_mut() {
-        if active.sends.session_generation() == session_generation {
-            if send_result.is_ok() {
-                let _ = active.sends.mark_sent(&local_txn_id);
-            } else {
-                let _ = active
-                    .sends
-                    .mark_failed(&local_txn_id, "v-send.r-edit-sdk-failed");
-            }
-        }
-    }
-
-    let event_id = send_result.map_err(|_| {
-        MatrixAuthCommandError::new(
-            "Unknown",
-            "The native Matrix message edit could not be sent.",
-            "v-send.r-edit-sdk-failed",
-        )
-    })?;
-    Ok(MatrixSendTextResult {
-        room_id: room_id.to_string(),
-        event_id,
-        local_txn_id,
-        status: "sent",
-    })
+        mention_room,
+        txn_id,
+    )
+    .await
 }
 
 /// V-SEND.1 sole composer attachment upload+send owner. Bytes cross IPC once;
@@ -391,9 +345,7 @@ pub(super) fn parse_thread_root_event_id(
 pub(super) fn parse_edit_event_id(
     event_id: String,
 ) -> Result<OwnedEventId, MatrixAuthCommandError> {
-    event_id
-        .parse()
-        .map_err(|_| map_send_error("v-send.r-edit-invalid-event-id"))
+    synara_core::app::send::parse_edit_event_id(&event_id).map_err(map_send_error)
 }
 
 pub(super) fn parse_transaction_id(
@@ -539,17 +491,27 @@ pub(crate) fn edit_message_content(
     mention_room: bool,
     event_id: OwnedEventId,
 ) -> Result<RoomMessageEventContent, MatrixAuthCommandError> {
-    let content = message_content(
+    synara_core::app::send::edit_message_content(
         body,
         msg_type,
         formatted_body,
         mention_user_ids,
         mention_room,
-        None,
-        None,
-    )?;
-    let mentions = content.mentions.clone();
-    Ok(content.make_replacement(ReplacementMetadata::new(event_id, mentions)))
+        event_id,
+    )
+    .map_err(|diagnostic| match diagnostic {
+        "v-send.4-invalid-message-type" => MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "The native Matrix message type is invalid.",
+            diagnostic,
+        ),
+        "v-send.4-invalid-mention-user-id" => MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "A native Matrix mention user ID is invalid.",
+            diagnostic,
+        ),
+        _ => map_send_error(diagnostic),
+    })
 }
 
 pub(super) async fn send_message_to_room(
