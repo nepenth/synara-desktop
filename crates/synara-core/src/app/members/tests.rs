@@ -1,8 +1,8 @@
 //! Unit tests for P4.6 member index.
 
 use super::*;
-use crate::matrix::dto::{Membership, RoomMember};
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::dto::{Membership, RoomMember};
+use crate::transport::MatrixIpcErrorCategory;
 
 fn member(
     room: &str,

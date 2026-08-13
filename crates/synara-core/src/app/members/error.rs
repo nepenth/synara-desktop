@@ -1,6 +1,6 @@
 //! Privacy-safe errors for member projection (P4.6).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Member index / apply failure.
 #[derive(Debug)]
