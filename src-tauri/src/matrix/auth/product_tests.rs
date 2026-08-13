@@ -1249,6 +1249,23 @@ fn backup_status_routes_through_core_without_desktop_client_io() {
 }
 
 #[test]
+fn directory_protocols_routes_through_core_without_desktop_client_io() {
+    let product = PRODUCT_SOURCE;
+    let command = product
+        .split("pub async fn matrix_room_directory_protocols")
+        .nth(1)
+        .expect("directory protocols command");
+    let command = command
+        .split("#[tauri::command]")
+        .next()
+        .expect("directory protocols command body");
+    assert!(command.contains("crate::bridge::directory_protocols::room_directory_protocols"));
+    assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!command.contains("active.client"));
+    assert!(!command.contains("fetch_protocols"));
+}
+
+#[test]
 fn avatar_mime_validator_accepts_images_only() {
     assert_eq!(
         validate_avatar_mime("image/png").unwrap().essence_str(),

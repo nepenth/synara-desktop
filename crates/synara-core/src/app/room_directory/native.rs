@@ -1,6 +1,6 @@
 //! Credential-free V-ROOMS directory presentation DTOs and input normalize.
 //!
-//! Live Client directory fetch and ruma request mapping stay in the desktop shell.
+//! Live protocol listing lives in `live.rs`. Search request mapping stays desktop.
 
 use serde::{Deserialize, Serialize};
 
@@ -35,7 +35,7 @@ pub struct NormalizedDirectorySearch {
     pub since: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DirectoryProtocolInstance {
     pub protocol_id: String,
@@ -43,7 +43,7 @@ pub struct DirectoryProtocolInstance {
     pub description: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomDirectoryProtocols {
     pub session_generation: u64,

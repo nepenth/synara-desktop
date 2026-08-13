@@ -404,6 +404,15 @@ impl NativeRoomJoinRuleOwner {
             .map_err(|_| "v-rooms-room-create-failed")
     }
 
+    pub async fn directory_protocols(
+        &self,
+    ) -> Result<crate::app::room_directory::NativeRoomDirectoryProtocols, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        crate::app::room_directory::fetch_protocols(&self.client, self.session_generation).await
+    }
+
     pub async fn space_parents_snapshot(&self) -> Result<NativeSpaceParentsSnapshot, &'static str> {
         if self.retired.load(Ordering::Acquire) {
             return Err("v-send.r-room-profile-join-rule-requires-session");
