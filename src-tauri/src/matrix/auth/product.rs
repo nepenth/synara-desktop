@@ -277,7 +277,7 @@ struct ManagedMatrixSession {
     verification: NativeVerificationOwner,
     _devices: NativeDeviceOwner,
     _image_packs: NativeImagePackOwner,
-    typing: NativeTypingOwner,
+    typing: Arc<NativeTypingOwner>,
     presence: NativePresenceOwner,
     join_rules: NativeRoomJoinRuleOwner,
     pending_device_deletion: Option<PendingDeviceDeletion>,
