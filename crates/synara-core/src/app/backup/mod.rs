@@ -10,9 +10,16 @@
 
 mod error;
 mod flow;
+mod status;
 
 pub use error::BackupError;
 pub use flow::{BackupFlowKind, BackupFlowPhase, BackupRecoveryFlow};
+pub use status::{
+    project_backup_status, NativeBackupAction, NativeBackupAvailability, NativeBackupDeviceState,
+    NativeBackupEnginePhase, NativeBackupOperationOutcome, NativeBackupOperationResult,
+    NativeBackupRecoveryPhase, NativeBackupRecoveryState, NativeBackupStatus,
+    ServerBackupProjection,
+};
 
 /// Static marker for link / schema smoke.
 pub const MATRIX_BACKUP_MARKER: &str = "matrix-backup-p8.5";
