@@ -1347,6 +1347,23 @@ fn room_list_snapshot_routes_through_core_without_desktop_sync_owner() {
 }
 
 #[test]
+fn invites_snapshot_routes_through_core_without_desktop_client_io() {
+    let product = PRODUCT_SOURCE;
+    let command = product
+        .split("pub async fn matrix_invites_snapshot")
+        .nth(1)
+        .expect("invites snapshot command");
+    let command = command
+        .split("#[tauri::command]")
+        .next()
+        .expect("invites snapshot command body");
+    assert!(command.contains("crate::bridge::invites_snapshot::invites_snapshot"));
+    assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!command.contains("snapshot_invites"));
+    assert!(!command.contains("active.client"));
+}
+
+#[test]
 fn avatar_mime_validator_accepts_images_only() {
     assert_eq!(
         validate_avatar_mime("image/png").unwrap().essence_str(),

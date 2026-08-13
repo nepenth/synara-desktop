@@ -10,6 +10,8 @@ use std::sync::{
     Arc,
 };
 
+use tokio::sync::Mutex as AsyncMutex;
+
 use matrix_sdk::{
     deserialized_responses::RawSyncOrStrippedState,
     event_handler::EventHandlerDropGuard,
@@ -74,6 +76,7 @@ pub struct NativeRoomJoinRuleOwner {
     session_generation: u64,
     retired: Arc<AtomicBool>,
     _handler: EventHandlerDropGuard,
+    invite_avatars: Arc<AsyncMutex<crate::app::room_list::InviteAvatarHandles>>,
 }
 
 impl NativeRoomJoinRuleOwner {
@@ -125,7 +128,25 @@ impl NativeRoomJoinRuleOwner {
             session_generation,
             retired,
             _handler: client.event_handler_drop_guard(handler),
+            invite_avatars: Arc::new(AsyncMutex::new(
+                crate::app::room_list::InviteAvatarHandles::new(session_generation),
+            )),
         })
+    }
+
+    pub fn invite_avatars(&self) -> Arc<AsyncMutex<crate::app::room_list::InviteAvatarHandles>> {
+        Arc::clone(&self.invite_avatars)
+    }
+
+    pub async fn invites_snapshot(
+        &self,
+    ) -> Result<crate::app::room_list::NativeInviteSnapshot, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let mut handles = self.invite_avatars.lock().await;
+        crate::app::room_list::snapshot_invites(&self.client, self.session_generation, &mut handles)
+            .await
     }
 
     pub fn session_generation(&self) -> u64 {
