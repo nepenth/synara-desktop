@@ -29,6 +29,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 use tokio::{sync::Mutex as AsyncMutex, task::JoinHandle};
 
+use synara_core::app::timeline::{TimelineViewUpdateEmit, ViewDeltaEmitter};
+
 use crate::matrix::{
     dto::TimelineEncryptedUnavailableItem,
     utd_recovery::{UtdRecoveryCoordinator, UtdRecoveryKind},
@@ -41,6 +43,13 @@ use super::{
     UtdIndex, UtdPhase, UtdReasonCode, NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
     TIMELINE_VIEW_SCHEMA_VERSION,
 };
+
+/// Map a Tauri AppHandle onto the Core timeline view-delta sink.
+pub fn timeline_view_emit(app: AppHandle) -> TimelineViewUpdateEmit {
+    Arc::new(move |batch| {
+        let _ = app.emit(NATIVE_TIMELINE_VIEW_UPDATED_EVENT, batch);
+    })
+}
 
 const PAGINATION_BATCH_SIZE: u16 = 30;
 const REDACTED_PLACEHOLDER: &str = "Message removed";
@@ -137,7 +146,7 @@ impl NativeTimelineRegistry {
     /// collapsing an event-link focus into the live-bottom route.
     pub async fn open_at(
         &mut self,
-        app: AppHandle,
+        emit: TimelineViewUpdateEmit,
         client: &Client,
         request: NativeTimelineOpenRequest,
     ) -> Result<NativeTimelineOpenReadback, &'static str> {
@@ -418,7 +427,7 @@ impl NativeTimelineRegistry {
             subscription_key.clone(),
             spawn_view_update_owner(
                 ViewUpdateOwnerInput {
-                    app,
+                    emit,
                     session_generation: self.session_generation,
                     stream_id: subscription_key.clone(),
                     room_id: room_id_string.clone(),
@@ -608,7 +617,7 @@ impl NativeTimelineRegistry {
     /// the new stream id from readback.
     pub async fn jump_latest(
         &mut self,
-        app: AppHandle,
+        emit: TimelineViewUpdateEmit,
         client: &Client,
         request: NativeTimelineJumpLatestRequest,
     ) -> Result<NativeTimelineOpenReadback, &'static str> {
@@ -622,7 +631,7 @@ impl NativeTimelineRegistry {
             stream_id: request.stream_id,
         });
         self.open_at(
-            app,
+            emit,
             client,
             NativeTimelineOpenRequest {
                 room_id,
@@ -1175,7 +1184,7 @@ fn view_subscription_key(room_id: &str, position: &TimelineViewPosition) -> Stri
 }
 
 struct ViewUpdateOwnerInput {
-    app: AppHandle,
+    emit: TimelineViewUpdateEmit,
     session_generation: u64,
     stream_id: String,
     room_id: String,
@@ -1192,7 +1201,7 @@ fn spawn_view_update_owner(
     updates: impl futures_util::Stream<Item = Vec<VectorDiff<Arc<SdkTimelineItem>>>> + Send + 'static,
 ) -> JoinHandle<()> {
     let ViewUpdateOwnerInput {
-        app,
+        emit,
         session_generation,
         stream_id,
         room_id,
@@ -1205,13 +1214,7 @@ fn spawn_view_update_owner(
         hit_start,
     } = input;
     tokio::spawn(async move {
-        let emitter = ViewDeltaEmitter {
-            app,
-            session_generation,
-            stream_id,
-            room_id,
-            revision,
-        };
+        let emitter = ViewDeltaEmitter::new(emit, session_generation, stream_id, room_id, revision);
         let mut last_read_state =
             project_live_read_state(&timeline, &position, own_user_id.as_deref()).await;
         let mut last_pagination =
@@ -1293,50 +1296,6 @@ fn spawn_view_update_owner(
             }
         }
     })
-}
-
-struct ViewDeltaEmitter {
-    app: AppHandle,
-    session_generation: u64,
-    stream_id: String,
-    room_id: String,
-    revision: Arc<AtomicU64>,
-}
-
-impl ViewDeltaEmitter {
-    fn emit(
-        &self,
-        ops: Vec<super::TimelineViewDeltaOp>,
-        read_state: Option<TimelineReadState>,
-        pagination: Option<TimelinePaginationState>,
-        pinned_event_ids: Option<Vec<String>>,
-    ) {
-        if ops.is_empty()
-            && read_state.is_none()
-            && pagination.is_none()
-            && pinned_event_ids.is_none()
-        {
-            return;
-        }
-        let next_revision = self
-            .revision
-            .fetch_add(1, Ordering::AcqRel)
-            .saturating_add(1);
-        let _ = self.app.emit(
-            NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
-            TimelineViewDeltaBatch {
-                schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
-                session_generation: self.session_generation,
-                stream_id: self.stream_id.clone(),
-                room_id: self.room_id.clone(),
-                revision: next_revision,
-                ops,
-                read_state,
-                pagination,
-                pinned_event_ids,
-            },
-        );
-    }
 }
 
 fn pagination_state_from_hit_start(hit_start: bool) -> TimelinePaginationState {

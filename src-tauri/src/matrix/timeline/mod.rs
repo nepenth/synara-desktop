@@ -3,9 +3,8 @@
 //! SNC-P1-5c: the pure timeline logic now lives in the shared native core at
 //! `crates/synara-core/src/app/timeline`. This module keeps every
 //! `crate::matrix::timeline::*` path resolving with **identical behavior** by
-//! re-exporting the core items plus the desktop `live.rs` module (which stays
-//! here because it uses `tauri::AppHandle` for the React view-update stream —
-//! the P1.6 `Platform` seam will pull it into the core later).
+//! re-exporting the core items plus the desktop `live.rs` module. View-delta
+//! emit is a Core sink; desktop maps AppHandle onto that callback.
 //!
 //! `product_commands.rs`, `tests.rs`, and `live_synapse_proof/` also stay here
 //! (Platform commands = serial product lane; tests.rs = desktop suite via
@@ -51,14 +50,15 @@ pub use synara_core::app::timeline::{
 };
 
 pub use live::{
-    NativeDecryptionState, NativeReactionMutation, NativeReactionMutationResult,
-    NativeTimelineCloseRequest, NativeTimelineDirection, NativeTimelineEventReadback,
-    NativeTimelineItem, NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition,
-    NativeTimelineOpenReadback, NativeTimelineOpenRequest, NativeTimelineReaction,
-    NativeTimelineReactionSender, NativeTimelineReadAction, NativeTimelineReadStateReadback,
-    NativeTimelineReadStateRequest, NativeTimelineRegistry, NativeTimelineSnapshot,
-    NativeTimelineViewPaginationRequest, NativeTimelineViewportHint, NativeUtdPhase,
-    NativeUtdStatus, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
+    timeline_view_emit, NativeDecryptionState, NativeReactionMutation,
+    NativeReactionMutationResult, NativeTimelineCloseRequest, NativeTimelineDirection,
+    NativeTimelineEventReadback, NativeTimelineItem, NativeTimelineJumpLatestRequest,
+    NativeTimelineOpenPosition, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
+    NativeTimelineReaction, NativeTimelineReactionSender, NativeTimelineReadAction,
+    NativeTimelineReadStateReadback, NativeTimelineReadStateRequest, NativeTimelineRegistry,
+    NativeTimelineSnapshot, NativeTimelineViewPaginationRequest, NativeTimelineViewportHint,
+    NativeUtdPhase, NativeUtdStatus, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
+    NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
 };
 
 #[cfg(test)]
