@@ -3,20 +3,36 @@
 //! Authoritative design note: `docs/matrix-rust-sdk/p6.7-account-data.md`
 //! Product verticals: `docs/matrix-rust-sdk/v-rooms-5-mdirect.md`,
 //! `docs/matrix-rust-sdk/v-timeline-full-replacement-contract.md` (later/notes).
-//! Live Synara account-data owners (image_packs/later/live/room_notes) and
-//! product_commands stay in the desktop shell (`src-tauri/src/matrix/account_data/`).
+//! Live Client RMW (image_packs/later/live/room_notes owners) and
+//! product_commands stay in the desktop shell. Codec types for later and
+//! room_notes live here.
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
 mod error;
 mod index;
+mod later;
+mod room_notes;
 
 pub use error::AccountDataError;
 pub use index::{
     AccountDataEntry, AccountDataIndex, MAX_CONTENT_FIELDS, MAX_GLOBAL_TYPES, MAX_KEY_LEN,
     MAX_ROOMS_WITH_ACCOUNT_DATA, MAX_ROOM_TYPES, MAX_VALUE_LEN, TYPE_DIRECT, TYPE_FULLY_READ,
     TYPE_IGNORED_USER_LIST, TYPE_PUSH_RULES, TYPE_TAG,
+};
+pub use later::{
+    clear_completed_later_items, complete_later_item, mark_later_reminded, normalize_later_content,
+    normalize_later_item, put_later_item, snooze_later_item, NativeLaterSnapshot,
+    SynaraLaterContent, SynaraLaterItem, SynaraLaterItemKind, LATER_ACCOUNT_DATA_VERSION,
+    LATER_EVENT_TYPE,
+};
+pub use room_notes::{
+    complete_room_todo_item, move_room_todo_item, normalize_room_note_item,
+    normalize_room_notes_content, put_room_note_item, remove_room_note_item,
+    NativeRoomNotesSnapshot, RoomNoteMoveDirection, SynaraRoomNoteItem, SynaraRoomNoteItemKind,
+    SynaraRoomNotesContent, SynaraRoomNotesRoom, ROOM_NOTES_ACCOUNT_DATA_VERSION,
+    ROOM_NOTES_EVENT_TYPE,
 };
 
 /// Static marker for link / schema smoke.
