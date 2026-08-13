@@ -33,6 +33,7 @@ use crate::app::room_directory::{
     DirectoryRoomTypeFilter, DirectorySearchInput, NativeRoomDirectoryProtocols,
     NativeRoomDirectorySearchResponse,
 };
+use crate::app::room_keys::NativeRoomKeyTransferStatus;
 use crate::app::room_ops::MatrixRoomCreateRequest;
 use crate::app::room_profile::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
@@ -1514,6 +1515,12 @@ fn built_in_registry() -> CommandRegistry {
         .expect("built-in matrix_backup_status must remain in the command census");
     registry
         .register(
+            "matrix_room_key_transfer_status",
+            matrix_room_key_transfer_status,
+        )
+        .expect("built-in matrix_room_key_transfer_status must remain in the command census");
+    registry
+        .register(
             "matrix_room_directory_protocols",
             matrix_room_directory_protocols,
         )
@@ -2786,6 +2793,26 @@ fn matrix_backup_status(state: Arc<CoreState>, request: CommandEnvelope) -> Comm
 
 fn backup_status_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     MatrixIpcError::new(MatrixIpcErrorCategory::Unknown).with_diagnostic(diagnostic_id)
+}
+
+fn matrix_room_key_transfer_status(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error(
+                "p2-room-key-transfer-status-invalid-payload",
+            ));
+        }
+        let owner = state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-key-transfer-status-no-session")
+        })?;
+        let snapshot: NativeRoomKeyTransferStatus = owner.room_key_status().await;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-room-key-transfer-status-serialization-failed"))
+    })
 }
 
 fn matrix_room_directory_protocols(
@@ -4725,6 +4752,7 @@ mod tests {
                 "matrix_room_invite",
                 "matrix_room_join",
                 "matrix_room_join_rule_snapshot",
+                "matrix_room_key_transfer_status",
                 "matrix_room_kick",
                 "matrix_room_leave",
                 "matrix_room_members_snapshot",
@@ -6325,6 +6353,25 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-backup-status-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_key_transfer_status_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_key_transfer_status".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("room-key transfer status without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-key-transfer-status-no-session")
         );
     }
 

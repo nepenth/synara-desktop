@@ -1,21 +1,21 @@
 //! Credential-free V-CRYPTO.5 room-key transfer presentation DTOs.
 //!
-//! Live Client/file I/O stays in the desktop shell.
+//! Live Client/file I/O stays in the desktop shell. Status projection is Core-owned.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::flow::{RoomKeyTransferFlow, RoomKeyTransferKind, RoomKeyTransferPhase};
 
 pub const EXPORT_FILE_NAME: &str = "synara-room-keys.txt";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeRoomKeyTransferKind {
     Export,
     Import,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeRoomKeyTransferPhase {
     Idle,

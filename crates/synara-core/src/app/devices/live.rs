@@ -3,6 +3,8 @@
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
+use tokio::sync::Mutex as AsyncMutex;
+
 use futures_util::StreamExt;
 use matrix_sdk::{
     ruma::{
@@ -13,6 +15,10 @@ use matrix_sdk::{
 };
 use serde::Serialize;
 use tokio::task::JoinHandle;
+
+use crate::app::room_keys::{
+    project_room_key_status, NativeRoomKeyTransferStatus, RoomKeyTransferFlow,
+};
 
 use super::{
     sort_native_device_summaries, NativeDeviceDeleteAuthentication, NativeDeviceDeleteChallenge,
@@ -50,6 +56,7 @@ pub struct NativeDeviceOwner {
     session_generation: u64,
     task: JoinHandle<()>,
     delete: Mutex<DeviceDeleteState>,
+    room_keys: Arc<AsyncMutex<RoomKeyTransferFlow>>,
 }
 
 impl NativeDeviceOwner {
@@ -85,7 +92,19 @@ impl NativeDeviceOwner {
                 pending: None,
                 next_operation_id: 0,
             }),
+            room_keys: Arc::new(AsyncMutex::new(RoomKeyTransferFlow::new(
+                session_generation,
+            ))),
         })
+    }
+
+    pub fn room_key_transfer(&self) -> Arc<AsyncMutex<RoomKeyTransferFlow>> {
+        Arc::clone(&self.room_keys)
+    }
+
+    pub async fn room_key_status(&self) -> NativeRoomKeyTransferStatus {
+        let flow = self.room_keys.lock().await;
+        project_room_key_status(self.session_generation, &flow)
     }
 
     /// UI reads still go through `Client::devices`. This is not a second list.
