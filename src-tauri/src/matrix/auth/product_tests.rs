@@ -1299,6 +1299,23 @@ fn directory_search_and_cancel_route_through_core_without_desktop_client_io() {
 }
 
 #[test]
+fn room_key_transfer_status_routes_through_core_without_desktop_flow() {
+    let product = PRODUCT_SOURCE;
+    let command = product
+        .split("pub async fn matrix_room_key_transfer_status")
+        .nth(1)
+        .expect("room-key transfer status command");
+    let command = command
+        .split("#[tauri::command]")
+        .next()
+        .expect("room-key transfer status command body");
+    assert!(command.contains("crate::bridge::room_key_status::room_key_transfer_status"));
+    assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!command.contains("room_key_transfer"));
+    assert!(!command.contains("project_status"));
+}
+
+#[test]
 fn avatar_mime_validator_accepts_images_only() {
     assert_eq!(
         validate_avatar_mime("image/png").unwrap().essence_str(),

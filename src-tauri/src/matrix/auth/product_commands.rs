@@ -143,7 +143,7 @@ pub async fn matrix_login_password(
         join_rules: join_rules.clone(),
 
         pending_cross_signing_auth_session: None,
-        room_key_transfer: Arc::new(Mutex::new(RoomKeyTransferFlow::new(session_generation))),
+        room_key_transfer: devices.room_key_transfer(),
         selected_room_key_import: None,
         next_room_key_import_selection_id: 0,
     });
@@ -479,7 +479,7 @@ pub(super) async fn install_session_from_register_secrets(
         join_rules: join_rules.clone(),
 
         pending_cross_signing_auth_session: None,
-        room_key_transfer: Arc::new(Mutex::new(RoomKeyTransferFlow::new(session_generation))),
+        room_key_transfer: devices.room_key_transfer(),
         selected_room_key_import: None,
         next_room_key_import_selection_id: 0,
     });
@@ -651,7 +651,7 @@ pub async fn matrix_restore_session(
         join_rules: join_rules.clone(),
 
         pending_cross_signing_auth_session: None,
-        room_key_transfer: Arc::new(Mutex::new(RoomKeyTransferFlow::new(session_generation))),
+        room_key_transfer: devices.room_key_transfer(),
         selected_room_key_import: None,
         next_room_key_import_selection_id: 0,
     });
