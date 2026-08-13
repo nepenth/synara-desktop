@@ -1,8 +1,8 @@
 //! Unit tests for P8.5 backup / recovery flow.
 
 use super::*;
-use crate::matrix::dto::{BackupStatus, RecoveryStatus};
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::dto::{BackupStatus, RecoveryStatus};
+use crate::transport::MatrixIpcErrorCategory;
 
 #[test]
 fn marker_stable() {

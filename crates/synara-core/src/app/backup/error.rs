@@ -1,6 +1,6 @@
 //! Privacy-safe errors for backup / recovery flow projection (P8.5).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Backup / recovery flow failure.
 #[derive(Debug)]
