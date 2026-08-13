@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `53f49a20`, the merge commit for #872. |
-| Immediately preceding merges | #871 docs after #870, #872 timeline poll-vote/call-decline. |
+| Feature evidence tip | `feature/shared-native-core` is `fecf19cd`, the merge commit for #874. |
+| Immediately preceding merges | #873 docs after #872, #874 timeline forward text/media. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -114,11 +114,12 @@ residency changes are:
 | #868 / `10bc7441` | timeline edit/redact via `Core::command` | Same attached timeline owner. |
 | #870 / `d125c7ad` | timeline report/pin/unpin via `Core::command` | Same attached timeline owner. |
 | #872 / `53f49a20` | timeline poll-vote/call-decline via `Core::command` | Same attached timeline owner. |
+| #874 / `fecf19cd` | timeline forward text/media via `Core::command` | Same attached timeline owner. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `53f49a20`/#872 for
+anchor, but it is no longer the feature-tip provenance; use `fecf19cd`/#874 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -188,9 +189,9 @@ tests/proofs for moved domains. Core-owned discovery/UIA types and the vault
 trait do not make live login or Keychain I/O Core-owned. Therefore P1 is not
 complete and `src-tauri` is not a thin shell.
 
-### P2 — in progress: forty-eight registered commands
+### P2 — in progress: fifty registered commands
 
-The Core registry registers exactly these forty-eight names:
+The Core registry registers exactly these fifty names:
 
 1. `matrix_login_flows`
 2. `matrix_register_flows`
@@ -240,6 +241,8 @@ The Core registry registers exactly these forty-eight names:
 46. `matrix_timeline_unpin` (#870)
 47. `matrix_timeline_poll_vote` (#872)
 48. `matrix_timeline_call_decline` (#872)
+49. `matrix_timeline_forward_text` (#874)
+50. `matrix_timeline_forward_media` (#874)
 
 All other census command names remain unregistered and fail closed. This is
 neither complete desktop command parity nor a basis to add a speculative route.
