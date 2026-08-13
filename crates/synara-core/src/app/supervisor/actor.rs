@@ -1,7 +1,7 @@
 //! Matrix supervisor actor — sole owner of client handle + lifecycle state.
 
-use crate::matrix::dto::SessionLifecycle;
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::dto::SessionLifecycle;
+use crate::transport::MatrixIpcErrorCategory;
 
 use super::error::{SupervisorError, TransitionError};
 use super::handle::{ClientFactory, ClientHandle, NullClientFactory};

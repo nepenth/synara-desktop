@@ -5,7 +5,7 @@
 //! construction remains test-harness-only (guardrails). No production
 //! login/sync.
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Opaque Matrix client slot owned exclusively by [`super::MatrixSupervisor`].
 ///
