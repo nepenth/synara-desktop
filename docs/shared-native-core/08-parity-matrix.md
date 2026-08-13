@@ -4,10 +4,10 @@ Legend: ✅ shipping / 🔨 in progress / ⛔ not yet
 
 ## Current bounded evidence (not parity completion)
 
-At `feature/shared-native-core` `aeb5b13e`
-(#866, after #865), P2 registers forty-one names—the prior thirty-nine plus
-`matrix_timeline_open` and `matrix_timeline_jump_latest`. The previous
-thirty-nine remain—
+At `feature/shared-native-core` `10bc7441`
+(#868, after #867), P2 registers forty-three names—the prior forty-one plus
+`matrix_timeline_edit_text` and `matrix_timeline_redact`. The previous
+forty-one remain—
 `matrix_login_flows`, `matrix_register_flows`, `matrix_session_snapshot`,
 `matrix_sync_status`, `matrix_crypto_status`, `matrix_media_config`,
 `matrix_cross_signing_status`, `matrix_secret_storage_status`,
