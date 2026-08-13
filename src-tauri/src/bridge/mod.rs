@@ -8,6 +8,7 @@ pub(crate) mod image_pack_writes;
 pub(crate) mod join_rule_snapshot;
 pub(crate) mod media_config;
 pub(crate) mod presence_snapshot;
+pub(crate) mod presence_subscriptions;
 pub(crate) mod room_image_packs;
 pub(crate) mod secret_storage_status;
 pub(crate) mod session_lifecycle;
