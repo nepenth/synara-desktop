@@ -69,7 +69,7 @@ pub struct NativeTimelineOpenReadback {
     pub snapshot: TimelineViewSnapshot,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeTimelineDirection {
     Backwards,

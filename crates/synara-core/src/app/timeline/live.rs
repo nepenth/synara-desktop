@@ -108,6 +108,17 @@ impl NativeTimelineOwner {
             .event_readback(&self.client, room_id, event_id)
             .await
     }
+
+    pub async fn paginate(
+        &self,
+        request: NativeTimelineViewPaginationRequest,
+    ) -> Result<TimelineViewSnapshot, &'static str> {
+        self.registry
+            .lock()
+            .await
+            .paginate(&self.client, request)
+            .await
+    }
 }
 
 impl NativeTimelineRegistry {
