@@ -4,9 +4,9 @@
 //! records diagnostics. Explicit wipe is a separate deliberate call to
 //! [`super::logout::perform_local_wipe`] / [`super::wipe::wipe_account_store`].
 
-use crate::matrix::diagnostics::{MatrixMetrics, StoreHealthStatus};
-use crate::matrix::ipc::MatrixIpcErrorCategory;
-use crate::matrix::supervisor::{MatrixSupervisor, SupervisorError};
+use crate::app::diagnostics::{MatrixMetrics, StoreHealthStatus};
+use crate::app::supervisor::{MatrixSupervisor, SupervisorError};
+use crate::transport::MatrixIpcErrorCategory;
 
 use super::LifecycleError;
 

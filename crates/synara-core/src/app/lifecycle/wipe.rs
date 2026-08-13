@@ -9,7 +9,7 @@
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-use crate::matrix::store::{
+use crate::app::store::{
     AccountIdentity, StoreKeyId, StoreKeyVault, StorePathError, StorePaths,
     MATRIX_STORE_ROOT_SEGMENT,
 };
