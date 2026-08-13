@@ -4,14 +4,14 @@ Legend: ✅ shipping / 🔨 in progress / ⛔ not yet
 
 ## Current bounded evidence (not parity completion)
 
-At `feature/shared-native-core` `13c40365`
-(#824, after #823), P2 registers twelve names—the prior eleven plus
-`matrix_device_snapshot`. The previous eleven remain—
+At `feature/shared-native-core` `e99a61c3`
+(#826, after #825), P2 registers thirteen names—the prior twelve plus
+`matrix_room_join_rule_snapshot`. The previous twelve remain—
 `matrix_login_flows`, `matrix_register_flows`, `matrix_session_snapshot`,
 `matrix_sync_status`, `matrix_crypto_status`, `matrix_media_config`,
 `matrix_cross_signing_status`, `matrix_secret_storage_status`,
-`matrix_typing_snapshot`, `matrix_presence_snapshot`, and
-`matrix_verification_list`—and all
+`matrix_typing_snapshot`, `matrix_presence_snapshot`,
+`matrix_verification_list`, and `matrix_device_snapshot`—and all
 other census names fail closed. #713/#714/#716/#717 are P1-only mechanical
 extraction: they add no Core command route, UDL, or iOS behavior. The prior #708 work is
 only a pure iOS room-row unread presentation from closed `Joined`/`Invited`
