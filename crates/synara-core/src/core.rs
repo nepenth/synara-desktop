@@ -583,6 +583,16 @@ struct MatrixVerificationBeginSasRequest {
     flow_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_verification_cancel`.
+///
+/// Shares accept's camel-case `flowId` key. Unknown keys are rejected so
+/// this write cannot grow extra identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixVerificationCancelRequest {
+    flow_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_verification_confirm`.
 ///
 /// Shares accept's camel-case `flowId` key. Unknown keys are rejected so
@@ -947,6 +957,9 @@ fn built_in_registry() -> CommandRegistry {
         )
         .expect("built-in matrix_verification_begin_sas must remain in the command census");
     registry
+        .register("matrix_verification_cancel", matrix_verification_cancel)
+        .expect("built-in matrix_verification_cancel must remain in the command census");
+    registry
         .register("matrix_verification_confirm", matrix_verification_confirm)
         .expect("built-in matrix_verification_confirm must remain in the command census");
     registry
@@ -1148,6 +1161,23 @@ fn matrix_verification_begin_sas(state: Arc<CoreState>, request: CommandEnvelope
             .map_err(verification_accept_owner_error)?;
         serde_json::to_value(request)
             .map_err(|_| core_state_error("p2-verification-begin-sas-serialization-failed"))
+    })
+}
+
+fn matrix_verification_cancel(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixVerificationCancelRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-verification-cancel-invalid-payload"))?;
+        let owner = state.verification_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-verification-cancel-no-session")
+        })?;
+        let request: NativeVerificationRequest = owner
+            .cancel(&payload.flow_id)
+            .await
+            .map_err(verification_accept_owner_error)?;
+        serde_json::to_value(request)
+            .map_err(|_| core_state_error("p2-verification-cancel-serialization-failed"))
     })
 }
 
@@ -2035,6 +2065,7 @@ mod tests {
                 "matrix_typing_snapshot",
                 "matrix_verification_accept",
                 "matrix_verification_begin_sas",
+                "matrix_verification_cancel",
                 "matrix_verification_confirm",
                 "matrix_verification_list",
                 "matrix_verification_mismatch",
@@ -3350,6 +3381,44 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-verification-begin-sas-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_verification_cancel_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_verification_cancel".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"flowId":"flow-1"}),
+            })
+            .await
+            .expect_err("verification cancel without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-verification-cancel-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_verification_cancel_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_verification_cancel".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"flowId":"flow-1","token":"no"}),
+            })
+            .await
+            .expect_err("verification cancel must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-verification-cancel-invalid-payload")
         );
     }
 
