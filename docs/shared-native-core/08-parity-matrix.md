@@ -4,9 +4,9 @@ Legend: ✅ shipping / 🔨 in progress / ⛔ not yet
 
 ## Current bounded evidence (not parity completion)
 
-At `feature/shared-native-core` `cf04eae0`
-(#858, after #857), P2 registers thirty-four names—the prior thirty-three plus
-`matrix_timeline_event_readback`. The previous thirty-three remain—
+At `feature/shared-native-core` `b9b9d2db`
+(#860, after #859), P2 registers thirty-five names—the prior thirty-four plus
+`matrix_timeline_paginate`. The previous thirty-four remain—
 `matrix_login_flows`, `matrix_register_flows`, `matrix_session_snapshot`,
 `matrix_sync_status`, `matrix_crypto_status`, `matrix_media_config`,
 `matrix_cross_signing_status`, `matrix_secret_storage_status`,
