@@ -1,119 +1,25 @@
 //! Desktop well-known HTTP adapter plus shared login-flow transport re-exports.
 //!
-//! Login-type HTTP parsing, well-known JSON parsing, and login-flow fetching
-//! live in `synara-core::app::auth`; this shell file retains the live
-//! well-known HTTP adapter (product user-agent).
-
-use std::time::Duration;
+//! Well-known fetching lives in `synara-core::app::auth`. This shell file
+//! constructs the product user-agent and re-exports the Core transport.
 
 use super::error::AuthError;
 use crate::matrix::client_builder::default_user_agent;
-use synara_core::app::auth::{DiscoveryTransport, WellKnownClientConfig};
 
 pub use synara_core::app::auth::{
-    parse_login_types_json, parse_well_known_client_json, HttpLoginFlowTransport,
-    AUTH_HTTP_MAX_RESPONSE_BYTES, AUTH_HTTP_TIMEOUT_SECS,
+    parse_login_types_json, parse_well_known_client_json, HttpDiscoveryTransport,
+    HttpLoginFlowTransport, AUTH_HTTP_MAX_RESPONSE_BYTES, AUTH_HTTP_TIMEOUT_SECS,
 };
 
-/// Live HTTP transport for well-known discovery (CS API).
-#[derive(Debug, Clone)]
-pub struct HttpDiscoveryTransport {
-    http: reqwest::Client,
-}
-
-impl HttpDiscoveryTransport {
-    /// Build a transport with product user-agent and bounded timeout.
-    pub fn new() -> Result<Self, AuthError> {
-        let http = reqwest::ClientBuilder::new()
-            .timeout(Duration::from_secs(AUTH_HTTP_TIMEOUT_SECS))
-            .user_agent(default_user_agent())
-            .build()
-            .map_err(|_| AuthError::Connectivity {
-                diagnostic_id: "r0.7-http-client-init",
-            })?;
-        Ok(Self { http })
-    }
-}
-
-impl Default for HttpDiscoveryTransport {
-    fn default() -> Self {
-        Self::new().unwrap_or_else(|_| Self {
-            http: reqwest::Client::default(),
-        })
-    }
-}
-
-impl DiscoveryTransport for HttpDiscoveryTransport {
-    async fn fetch_well_known(
-        &self,
-        server_name: &str,
-    ) -> Result<WellKnownClientConfig, AuthError> {
-        let url = format!("https://{server_name}/.well-known/matrix/client");
-        let response = self
-            .http
-            .get(&url)
-            .send()
-            .await
-            .map_err(map_reqwest_error)?;
-        let status = response.status();
-        if status.as_u16() == 404 {
-            return Err(AuthError::WellKnownNotFound {
-                diagnostic_id: "r0.7-well-known-404",
-            });
-        }
-        if !status.is_success() {
-            return Err(map_http_status(status.as_u16(), "r0.7-well-known"));
-        }
-        let body = response.text().await.map_err(|_| AuthError::Connectivity {
-            diagnostic_id: "r0.7-well-known-body",
-        })?;
-        parse_well_known_client_json(&body)
-    }
-}
-
-fn map_reqwest_error(err: reqwest::Error) -> AuthError {
-    // Privacy: never include the raw error string (may contain URLs/hosts).
-    if err.is_timeout() || err.is_connect() {
-        return AuthError::Connectivity {
-            diagnostic_id: "r0.7-http-connect",
-        };
-    }
-    if err.is_request() {
-        return AuthError::Connectivity {
-            diagnostic_id: "r0.7-http-request",
-        };
-    }
-    AuthError::HomeserverUnavailable {
-        diagnostic_id: "r0.7-http-unavailable",
-    }
-}
-
-fn map_http_status(status: u16, prefix: &'static str) -> AuthError {
-    match status {
-        404 => AuthError::UnsupportedCapability {
-            diagnostic_id: match prefix {
-                "r0.7-well-known" => "r0.7-well-known-404",
-                _ => "r0.7-login-types-404",
-            },
-        },
-        408 | 429 | 502 | 503 | 504 => AuthError::Connectivity {
-            diagnostic_id: "r0.7-http-retryable",
-        },
-        status if (500..600).contains(&status) => AuthError::HomeserverUnavailable {
-            diagnostic_id: "r0.7-http-5xx",
-        },
-        status if (400..500).contains(&status) => AuthError::UnsupportedCapability {
-            diagnostic_id: "r0.7-http-4xx",
-        },
-        _ => AuthError::Unknown {
-            diagnostic_id: "r0.7-http-status",
-        },
-    }
+/// Product well-known transport (desktop user-agent).
+pub fn product_http_discovery_transport() -> Result<HttpDiscoveryTransport, AuthError> {
+    HttpDiscoveryTransport::new_with_user_agent(default_user_agent())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use synara_core::app::auth::AuthError;
 
     #[test]
     fn parse_well_known_minimal() {
@@ -150,6 +56,7 @@ mod tests {
 
     #[test]
     fn discovery_transport_constructor_does_not_panic() {
+        let _ = product_http_discovery_transport();
         let _ = HttpDiscoveryTransport::new();
     }
 }

@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 
+use super::discovery::{parse_well_known_client_json, DiscoveryTransport, WellKnownClientConfig};
 use super::error::AuthError;
 use super::input::normalize_homeserver_url;
 use super::login_flow::{LoginFlow, LoginFlowTransport};
@@ -74,6 +75,70 @@ impl HttpRegisterFlowTransport {
         Ok(Self {
             http: bounded_http_client(user_agent)?,
         })
+    }
+}
+
+/// Live read-only transport for `GET /.well-known/matrix/client`.
+#[derive(Debug, Clone)]
+pub struct HttpDiscoveryTransport {
+    http: reqwest::Client,
+}
+
+impl HttpDiscoveryTransport {
+    /// Build the shared core default bounded client.
+    pub fn new() -> Result<Self, AuthError> {
+        Self::new_with_user_agent(concat!(
+            "Synara-Core/",
+            env!("CARGO_PKG_VERSION"),
+            " (matrix-sdk/0.18.0)"
+        ))
+    }
+
+    /// Build a bounded well-known client with a shell-owned product identifier.
+    pub fn new_with_user_agent(user_agent: impl Into<String>) -> Result<Self, AuthError> {
+        Ok(Self {
+            http: bounded_http_client(user_agent)?,
+        })
+    }
+}
+
+impl Default for HttpDiscoveryTransport {
+    fn default() -> Self {
+        Self::new().expect("bounded well-known HTTP client must initialize")
+    }
+}
+
+impl DiscoveryTransport for HttpDiscoveryTransport {
+    async fn fetch_well_known(
+        &self,
+        server_name: &str,
+    ) -> Result<WellKnownClientConfig, AuthError> {
+        let url = format!("https://{server_name}/.well-known/matrix/client");
+        let mut response = self
+            .http
+            .get(&url)
+            .send()
+            .await
+            .map_err(map_reqwest_error)?;
+        let status = response.status();
+        if status.as_u16() == 404 {
+            return Err(AuthError::WellKnownNotFound {
+                diagnostic_id: "r0.7-well-known-404",
+            });
+        }
+        if !status.is_success() {
+            return Err(map_http_status(status.as_u16()));
+        }
+        let body = read_bounded_response(
+            &mut response,
+            ResponseReadDiagnostics {
+                too_large: "r0.7-well-known-response-too-large",
+                body: "r0.7-well-known-body",
+                invalid_utf8: "r0.7-well-known-json",
+            },
+        )
+        .await?;
+        parse_well_known_client_json(&body)
     }
 }
 

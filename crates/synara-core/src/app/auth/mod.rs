@@ -1,9 +1,10 @@
 //! Shared, credential-free Matrix auth domain and read-only transports.
 //!
 //! Owns input normalization, well-known discovery, login-type / register
-//! probes, the UIA coordinator, device display names, and the identity
-//! bridge. It neither accepts nor returns credentials. Live password login,
-//! session product commands, and the well-known HTTP adapter stay in the shell.
+//! probes, the UIA coordinator, device display names, the identity
+//! bridge, and read-only well-known / login-flow HTTP transports. It
+//! neither accepts nor returns credentials. Live password login and
+//! session product commands stay in the shell.
 
 mod client_config;
 mod device_name;
@@ -27,8 +28,8 @@ pub use discovery::{
 };
 pub use error::AuthError;
 pub use http_transport::{
-    parse_login_types_json, HttpLoginFlowTransport, HttpRegisterFlowTransport,
-    AUTH_HTTP_MAX_RESPONSE_BYTES, AUTH_HTTP_TIMEOUT_SECS,
+    parse_login_types_json, HttpDiscoveryTransport, HttpLoginFlowTransport,
+    HttpRegisterFlowTransport, AUTH_HTTP_MAX_RESPONSE_BYTES, AUTH_HTTP_TIMEOUT_SECS,
 };
 pub use input::{
     normalize_homeserver_url, normalize_server_name, parse_discovery_input, DiscoveryInput,
