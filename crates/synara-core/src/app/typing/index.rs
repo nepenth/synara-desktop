@@ -5,7 +5,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use crate::matrix::dto::{RoomId, TypingSnapshot, UserId};
+use crate::dto::{RoomId, TypingSnapshot, UserId};
 
 use super::error::TypingError;
 

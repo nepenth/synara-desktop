@@ -1,6 +1,6 @@
 //! Privacy-safe errors for typing projection (P6.3).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Typing index failure.
 #[derive(Debug)]
