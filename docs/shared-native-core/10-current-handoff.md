@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `9f12bc38`, the merge commit for #830. |
-| Immediately preceding merges | #829 docs after #828, #830 user and room image-pack snapshots through Core::command. |
+| Feature evidence tip | `feature/shared-native-core` is `f003d8f7`, the merge commit for #832. |
+| Immediately preceding merges | #831 docs after #830, #832 image-pack writes through Core::command. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -93,11 +93,12 @@ residency changes are:
 | #826 / `e99a61c3` | `matrix_room_join_rule_snapshot` via `Core::command` | Desktop attaches the join-rule owner after login. |
 | #828 / `89b90bad` | `matrix_get_global_image_packs` via `Core::command` | Desktop attaches the image-pack owner after login. |
 | #830 / `9f12bc38` | user and room image-pack snapshots via `Core::command` | Same attached image-pack owner. |
+| #832 / `f003d8f7` | image-pack writes via `Core::command` | Same attached image-pack owner. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `9f12bc38`/#830 for
+anchor, but it is no longer the feature-tip provenance; use `f003d8f7`/#832 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -167,9 +168,9 @@ tests/proofs for moved domains. Core-owned discovery/UIA types and the vault
 trait do not make live login or Keychain I/O Core-owned. Therefore P1 is not
 complete and `src-tauri` is not a thin shell.
 
-### P2 — in progress: sixteen registered commands
+### P2 — in progress: nineteen registered commands
 
-The Core registry registers exactly these sixteen names:
+The Core registry registers exactly these nineteen names:
 
 1. `matrix_login_flows`
 2. `matrix_register_flows`
@@ -187,6 +188,9 @@ The Core registry registers exactly these sixteen names:
 14. `matrix_get_global_image_packs` (#828)
 15. `matrix_get_user_image_pack` (#830)
 16. `matrix_get_room_image_packs` (#830)
+17. `matrix_set_user_image_pack` (#832)
+18. `matrix_set_global_image_packs` (#832)
+19. `matrix_set_room_image_pack` (#832)
 
 All other census command names remain unregistered and fail closed. This is
 neither complete desktop command parity nor a basis to add a speculative route.
