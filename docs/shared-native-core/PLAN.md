@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`4dae1b16` (#764, after #763):** P0 is
+`ffb22699` (#766, after #765):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -52,7 +52,8 @@ acceptance criteria have all passed.
   (SDK open stayed desktop); #760 moved the session-material vault trait
   (Keyring I/O stayed desktop); #762 moved the well-known HTTP
   discovery transport (live login stayed desktop); #764 moved logout
-  orchestration and the task-supervisor bridge. These retain thin desktop re-exports and
+  orchestration and the task-supervisor bridge; #766 moved later/room-notes
+  codecs (Client RMW stayed desktop). These retain thin desktop re-exports and
   add no P2 command, UDL, or iOS behavior. Compatibility re-exports remain, and many matrix domains are
   still desktop-owned, so the full extraction/end state is not yet complete.
 - **P2 — in progress; transport registry is intentionally partial.** #683–#684
