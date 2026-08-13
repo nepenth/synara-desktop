@@ -29,6 +29,7 @@ use crate::app::members::{
     validate_power_level_tags_content, validate_room_power_levels_content,
     NativePowerLevelWriteResult, ROOM_POWER_LEVELS_EVENT_TYPE, ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
 };
+use crate::app::room_ops::{build_room_create_request, MatrixRoomCreateRequest};
 use crate::app::user_profile::MatrixProfileWriteResult;
 
 use super::{
@@ -377,6 +378,21 @@ impl NativeRoomJoinRuleOwner {
             session_generation: self.session_generation,
             content: readback,
         })
+    }
+
+    pub async fn create_room(
+        &self,
+        input: MatrixRoomCreateRequest,
+    ) -> Result<String, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let request = build_room_create_request(input)?;
+        self.client
+            .create_room(request)
+            .await
+            .map(|room| room.room_id().to_string())
+            .map_err(|_| "v-rooms-room-create-failed")
     }
 
     pub async fn get_directory_visibility(

@@ -8,10 +8,12 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+mod create;
 mod error;
 mod ipc;
 mod queue;
 
+pub use create::build_room_create_request;
 pub use error::RoomOpsError;
 pub use ipc::{
     MatrixRoomCreateContent, MatrixRoomCreatePowerLevels, MatrixRoomCreatePreset,

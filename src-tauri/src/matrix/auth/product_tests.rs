@@ -1401,7 +1401,7 @@ fn room_create_command_owns_sdk_create_without_a_js_fallback() {
         .split("#[tauri::command]")
         .next()
         .expect("room create command body");
-    assert!(command.contains("create_room(request)"));
+    assert!(command.contains("crate::bridge::room_create::room_create"));
     assert!(!command.contains("mx.createRoom"));
 }
 

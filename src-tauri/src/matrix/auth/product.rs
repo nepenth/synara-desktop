@@ -15,10 +15,7 @@ use matrix_sdk::{
     room::reply::{EnforceThread, Reply as AttachmentReply},
     ruma::{
         api::client::{
-            room::{
-                create_room::{self, v3::RoomPreset},
-                Visibility,
-            },
+            room::{create_room, Visibility},
             uiaa,
         },
         events::{
@@ -33,12 +30,11 @@ use matrix_sdk::{
                 ImageInfo, MediaSource,
             },
             sticker::StickerEventContent,
-            AnyInitialStateEvent, AnyMessageLikeEventContent, AnySyncMessageLikeEvent,
-            AnySyncTimelineEvent, Mentions, StateEventType,
+            AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncTimelineEvent, Mentions,
+            StateEventType,
         },
-        serde::Raw,
         EventId, Int, MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId,
-        OwnedServerName, OwnedTransactionId, OwnedUserId, RoomVersionId, UInt,
+        OwnedServerName, OwnedTransactionId, OwnedUserId, UInt,
     },
     Client, Room, RoomMemberships, SessionMeta, SessionTokens,
 };
