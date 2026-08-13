@@ -1,6 +1,6 @@
 //! Privacy-safe errors for media cache index (P7.3).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Media cache index failure.
 #[derive(Debug)]

@@ -1,10 +1,10 @@
-//! Privacy-safe errors for search projection (P6.8).
+//! Privacy-safe errors for legacy session transition (P3.7).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
-/// Search session / apply failure.
+/// Legacy detection / transition failure.
 #[derive(Debug)]
-pub enum SearchError {
+pub enum LegacyError {
     Invalid {
         diagnostic_id: &'static str,
     },
@@ -13,17 +13,14 @@ pub enum SearchError {
         expected: u64,
         observed: u64,
     },
-    Cancelled {
-        diagnostic_id: &'static str,
-    },
 }
 
-impl SearchError {
+impl LegacyError {
     pub fn diagnostic_id(&self) -> &'static str {
         match self {
-            Self::Invalid { diagnostic_id }
-            | Self::StaleGeneration { diagnostic_id, .. }
-            | Self::Cancelled { diagnostic_id } => diagnostic_id,
+            Self::Invalid { diagnostic_id } | Self::StaleGeneration { diagnostic_id, .. } => {
+                diagnostic_id
+            }
         }
     }
 
@@ -31,16 +28,15 @@ impl SearchError {
         match self {
             Self::Invalid { .. } => MatrixIpcErrorCategory::SdkInvariant,
             Self::StaleGeneration { .. } => MatrixIpcErrorCategory::StaleSessionGeneration,
-            Self::Cancelled { .. } => MatrixIpcErrorCategory::Cancellation,
         }
     }
 }
 
-impl std::fmt::Display for SearchError {
+impl std::fmt::Display for LegacyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Invalid { diagnostic_id } => {
-                write!(f, "invalid search operation ({diagnostic_id})")
+                write!(f, "invalid legacy transition operation ({diagnostic_id})")
             }
             Self::StaleGeneration {
                 diagnostic_id,
@@ -48,13 +44,10 @@ impl std::fmt::Display for SearchError {
                 observed,
             } => write!(
                 f,
-                "stale search generation ({diagnostic_id}): expected {expected}, observed {observed}"
+                "stale legacy transition generation ({diagnostic_id}): expected {expected}, observed {observed}"
             ),
-            Self::Cancelled { diagnostic_id } => {
-                write!(f, "search cancelled ({diagnostic_id})")
-            }
         }
     }
 }
 
-impl std::error::Error for SearchError {}
+impl std::error::Error for LegacyError {}
