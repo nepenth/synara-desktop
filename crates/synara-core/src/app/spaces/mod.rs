@@ -11,9 +11,15 @@
 
 mod error;
 mod hierarchy;
+mod native;
 
 pub use error::SpaceError;
 pub use hierarchy::{space_child, SpaceHierarchy};
+pub use native::{
+    would_introduce_cycle, NativeRestrictedJoinReparentResult, NativeSpaceChildEdge,
+    NativeSpaceChildMutationResult, NativeSpaceChildrenSnapshot, NativeSpaceHierarchyRoom,
+    NativeSpaceHierarchySnapshot, NativeSpaceParentEntry, NativeSpaceParentsSnapshot,
+};
 
 /// Static marker for link / schema smoke.
 pub const MATRIX_SPACES_MARKER: &str = "matrix-spaces-hierarchy-p4.5";
