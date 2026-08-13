@@ -187,7 +187,7 @@ pub async fn matrix_send_sticker(
 /// V-SEND.3 sole poll-start owner (composer board + `/poll` command).
 #[tauri::command]
 pub async fn matrix_send_poll(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     question: String,
     answers: Vec<String>,
@@ -196,94 +196,33 @@ pub async fn matrix_send_poll(
     thread_root: Option<String>,
     reply_to: Option<String>,
 ) -> Result<MatrixSendPollResult, MatrixAuthCommandError> {
-    let room_id = parse_send_room_id(&room_id)?;
-    let thread_root = parse_thread_root_event_id(thread_root)?;
-    let reply_to = parse_reply_event_id(reply_to)?;
-    let normalized = normalize_poll(&question, &answers, max_selections)
-        .map_err(|error| map_poll_error(error.diagnostic_id()))?;
-    let mut content =
-        poll_start_content(&normalized).map_err(|error| map_poll_error(error.diagnostic_id()))?;
-    // Relation rules match text/attachment (V-SEND.5): thread_root + reply_to →
-    // in-thread reply; thread_root only → thread without fallback; reply_to only →
-    // classic reply.
-    content.relates_to = match (thread_root, reply_to) {
-        (Some(root), Some(reply)) => Some(RelationWithoutReplacement::Thread(Thread::reply(
-            root, reply,
-        ))),
-        (Some(root), None) => Some(RelationWithoutReplacement::Thread(
-            Thread::without_fallback(root),
-        )),
-        (None, Some(reply)) => Some(RelationWithoutReplacement::Reply(Reply::with_event_id(
-            reply,
-        ))),
-        (None, None) => None,
-    };
-
-    let room = {
-        let mut session = state.session.lock().await;
-        let active = require_send_session_mut(session.as_mut())?;
-        active.client.get_room(&room_id).ok_or_else(|| {
-            MatrixAuthCommandError::new(
-                "NotFound",
-                "The native Matrix room is not available.",
-                "v-send.3-poll-room-not-found",
-            )
-        })?
-    };
-
-    let response = room.send(content).await.map_err(|_| {
-        MatrixAuthCommandError::new(
-            "Unknown",
-            "The native Matrix poll could not be sent.",
-            "v-send.3-poll-sdk-failed",
-        )
-    })?;
-
-    Ok(MatrixSendPollResult {
-        room_id: room_id.to_string(),
-        event_id: response.response.event_id.to_string(),
-        status: "sent",
-    })
+    crate::bridge::send_poll::send_poll(
+        core.inner().as_ref(),
+        room_id,
+        question,
+        answers,
+        max_selections,
+        thread_root,
+        reply_to,
+    )
+    .await
 }
 
 /// V-SEND.3 sole poll-response (vote) owner.
 #[tauri::command]
 pub async fn matrix_poll_respond(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     poll_event_id: String,
     answer_ids: Vec<String>,
 ) -> Result<MatrixPollRespondResult, MatrixAuthCommandError> {
-    let room_id = parse_send_room_id(&room_id)?;
-    let content = poll_response_content(&poll_event_id, &answer_ids)
-        .map_err(|error| map_poll_error(error.diagnostic_id()))?;
-
-    let room = {
-        let mut session = state.session.lock().await;
-        let active = require_send_session_mut(session.as_mut())?;
-        active.client.get_room(&room_id).ok_or_else(|| {
-            MatrixAuthCommandError::new(
-                "NotFound",
-                "The native Matrix room is not available.",
-                "v-send.3-poll-room-not-found",
-            )
-        })?
-    };
-
-    let response = room.send(content).await.map_err(|_| {
-        MatrixAuthCommandError::new(
-            "Unknown",
-            "The native Matrix poll response could not be sent.",
-            "v-send.3-poll-response-sdk-failed",
-        )
-    })?;
-
-    Ok(MatrixPollRespondResult {
-        room_id: room_id.to_string(),
+    crate::bridge::send_poll::poll_respond(
+        core.inner().as_ref(),
+        room_id,
         poll_event_id,
-        event_id: response.response.event_id.to_string(),
-        status: "sent",
-    })
+        answer_ids,
+    )
+    .await
 }
 
 pub(super) fn map_poll_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {

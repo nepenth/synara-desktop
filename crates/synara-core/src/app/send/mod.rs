@@ -30,7 +30,8 @@ pub use ipc::{
     MatrixSendStickerResult, MatrixSendTextResult,
 };
 pub use poll::{
-    normalize_poll, poll_response_content, poll_start_content, NormalizedPoll, PollSendError,
+    apply_poll_start_relations, normalize_poll, poll_response_content, poll_start_content,
+    NormalizedPoll, PollSendError,
 };
 pub use queue::{LocalTxnId, OutboundTextMessage, SendQueue};
 pub use sticker::sticker_content;
