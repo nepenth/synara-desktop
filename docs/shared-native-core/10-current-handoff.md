@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `8e517c84`, the merge commit for #808. |
-| Immediately preceding merges | #806 docs after #805, #807 live `NativeDeviceOwner`, #808 live `NativePresenceOwner`. |
+| Feature evidence tip | `feature/shared-native-core` is `e197beea`, the merge commit for #810. |
+| Immediately preceding merges | #809 docs after #808, #810 live `NativeImagePackOwner`. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -82,11 +82,12 @@ residency changes are:
 | #805 / `c040632b` | live `NativeRoomJoinRuleOwner` behind emit sink | Desktop keeps Tauri event adapter. |
 | #807 / `2eca137f` | live `NativeDeviceOwner` behind emit sink | Desktop keeps Tauri wakeup adapter. |
 | #808 / `8e517c84` | live `NativePresenceOwner` behind emit sink | Desktop keeps Tauri event adapter. |
+| #810 / `e197beea` | live `NativeImagePackOwner` plus snapshot/set | Desktop keeps Tauri event adapter. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `8e517c84`/#808 for
+anchor, but it is no longer the feature-tip provenance; use `e197beea`/#810 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
