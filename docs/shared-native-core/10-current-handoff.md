@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `fe55ac06`, the merge commit for #794. |
-| Immediately preceding merges | #793 docs after #792, #794 timeline presentation DTOs. |
+| Feature evidence tip | `feature/shared-native-core` is `6dd69bc6`, the merge commit for #796. |
+| Immediately preceding merges | #795 docs after #794, #796 send/profile-write/room-create/room-profile IPC DTOs. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -74,11 +74,12 @@ residency changes are:
 | #790 / `09e84e02` | members presentation snapshots and write result | Desktop keeps Client member/power-level I/O. |
 | #792 / `7ee604e6` | room join-rule presentation DTO | Desktop keeps SDK JoinRule mapping and `NativeRoomJoinRuleOwner`. |
 | #794 / `fe55ac06` | timeline presentation DTOs | Desktop keeps `NativeTimelineRegistry` and Client/Tauri streams. |
+| #796 / `6dd69bc6` | send/profile-write/room-create/room-profile IPC DTOs | Desktop keeps Client I/O and re-exports. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `fe55ac06`/#794 for
+anchor, but it is no longer the feature-tip provenance; use `6dd69bc6`/#796 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -131,7 +132,7 @@ and the P1 app domains `sync`, `room_list`, pure `timeline`,
 remote-logout / wipe / error / session-material trait / logout, auth device-name, and auth
 discovery/UIA/client_config, well-known HTTP transport, later/room-notes codecs,
 image-pack DTO/type-filters/write-guards, m.direct snapshot helpers,
-device presentation DTOs, secret-storage presentation DTOs, backup presentation DTOs, presence DTOs, typing snapshot DTO, verification presentation DTOs, room-directory DTOs, space presentation DTOs, cross-signing presentation DTOs, room-key transfer DTOs, members presentation snapshots, room join-rule presentation DTO, and timeline presentation DTOs.
+device presentation DTOs, secret-storage presentation DTOs, backup presentation DTOs, presence DTOs, typing snapshot DTO, verification presentation DTOs, room-directory DTOs, space presentation DTOs, cross-signing presentation DTOs, room-key transfer DTOs, members presentation snapshots, room join-rule presentation DTO, timeline presentation DTOs, and send/profile-write/room-create/room-profile IPC DTOs.
 Later mechanical splits left live `product_commands.rs` and `live.rs` on
 desktop where those files exist. Compatibility re-exports remain deliberately
 in the desktop shell.
