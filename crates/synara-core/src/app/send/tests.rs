@@ -1,8 +1,8 @@
 //! Unit tests for P6.1 send queue.
 
 use super::*;
-use crate::matrix::dto::LocalEchoState;
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::dto::LocalEchoState;
+use crate::transport::MatrixIpcErrorCategory;
 
 #[test]
 fn marker_stable() {

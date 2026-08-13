@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use crate::matrix::dto::{LocalEchoState, RoomId};
+use crate::dto::{LocalEchoState, RoomId};
 
 use super::error::SendError;
 use super::queue::LocalTxnId;
