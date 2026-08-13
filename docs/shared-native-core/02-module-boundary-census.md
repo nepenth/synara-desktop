@@ -2,13 +2,28 @@
 
 All paths relative to the repository root. Census technique: `git ls-files`,
 `grep -rl`, `grep -rn` over `src-tauri/src`, `synara-ios`, `.github/workflows`.
+The current source evidence is `feature/shared-native-core`
+`b811319f0fcc7ecd6eee82e4255d57e8e5699360` (#714, after #713).
 
 ## 2.1 Desktop application-logic layer
 
-`src-tauri/src/matrix/` holds **285 `.rs` files** organised by domain. Each
-domain is typically `mod.rs` (owning types/state) + `error.rs` + `live.rs`
-(actor/live state) + `product_commands.rs` (Tauri command registration anytime
-the UI needs it) + `tests.rs` (or `live_synapse_proof/` for integration proofs).
+The P0 census counted **285 `.rs` files** under `src-tauri/src/matrix/`. At the
+current evidence tip, there are 199 tracked Rust files under that desktop path
+and 78 under `crates/synara-core/src/app/`; the difference reflects P1 moves,
+not completion. The table remains the responsibility inventory rather than a
+claim that every listed domain is desktop-resident. Each domain is typically
+`mod.rs` (owning types/state) + `error.rs` + `live.rs` (actor/live state) +
+`product_commands.rs` (Tauri command registration anytime the UI needs it) +
+`tests.rs` (or `live_synapse_proof/` for integration proofs).
+
+At this tip, Core holds DTOs, transport/IPC, the pure task registry, and app
+modules for sync, room list, pure timeline, UTD recovery, notifications, polls,
+relations, threads, unread, raw content, receipts, routes, and security. #713
+moved the notifications/polls/relations/threads/unread cluster; #714 moved the
+raw_content/receipts/routes/security cluster. Their desktop modules are thin
+re-exports. Desktop retains the remaining domains and the adapter-side command,
+live, and proof surfaces; see `10-current-handoff.md` for the full residency
+and nonclaim record.
 
 | Domain dir | Responsibility (authoritative module: read the `mod.rs`) |
 |---|---|
@@ -90,14 +105,18 @@ a handful of OS actions (window/tray/badge). This is the seam that becomes the
 **Consequence:** more than 97% of the matrix layer is already pure Rust with no
 Tauri types — extraction is a packaging boundary, not a rewrite.
 
-## 2.3 Dependency pins (src-tauri/Cargo.toml)
+## 2.3 Dependency pins and package topology
 
-- No cargo workspace yet — `src-tauri` is the single package today.
-- `matrix-sdk = "=0.18.0"` (exact), `default-features = false`, features:
-  `sqlite`, `markdown` (ruma/markdown), `qrcode`, and e2e (vía
-  `matrix-sdk-ui` feature unification). `matrix-sdk-ui = "=0.18.0"`,
-  `matrix-sdk-crypto = "=0.18.0"`.
-- A `synara-core` workspace crate will carry these pins centrally.
+- The root `Cargo.toml` now defines a workspace for `crates/synara-core` and
+  `crates/synara-core-bindgen`. `src-tauri` remains deliberately excluded and
+  is still a standalone package with its own committed lockfile.
+- `src-tauri/Cargo.toml` pins `matrix-sdk = "=0.18.0"` (exact),
+  `default-features = false`, with `bundled-sqlite`, `sqlite`, `markdown`
+  (ruma/markdown), `qrcode`, and e2e (via `matrix-sdk-ui` feature unification).
+  `matrix-sdk-ui = "=0.18.0"` and `matrix-sdk-crypto = "=0.18.0"` remain
+  exact pins.
+- The workspace and current Core residency do not mean the desktop package has
+  completed its P1/P3 transition.
 
 ## 2.4 The existing transport protocol (`matrix/ipc/`)
 

@@ -1,0 +1,271 @@
+# 10 — Current Handoff Ledger (post-#714)
+
+> **Purpose and scope.** This is the transfer record for the shared-native-core
+> program. It records source, repository, and gate state; it does not authorize
+> a merge, reconciliation, release, tag, Apple action, or claim that a phase is
+> complete. The phase acceptance targets in `PLAN.md` and
+> `06-migration-phases.md` remain unchanged.
+
+## 1. Verified provenance and branch boundary
+
+| Item | Verified state |
+|---|---|
+| Feature evidence tip | `feature/shared-native-core` is `b811319f0fcc7ecd6eee82e4255d57e8e5699360`, the merge commit for #714. |
+| Immediately preceding merge | #713 merged as `3c179f03c2820b8a0405578aca9af71d3988fe1e`. |
+| Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
+| Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
+
+The two branch tips intentionally diverge after that common ancestor. The
+feature branch is the shared-core migration lane; the later recovery work on
+`main` has not thereby become feature evidence. Do not describe main recovery
+documentation as reachable from this feature tip, and do not infer that either
+lane has reconciled the other.
+
+#713 and #714 are **P1-only mechanical extraction clusters**. Their exact
+residency changes are:
+
+| Merge | Domains now in `crates/synara-core/src/app/` | Desktop result |
+|---|---|---|
+| #713 / `3c179f03` | notifications, polls, relations, threads, unread | Thin `src-tauri/src/matrix/` re-exports preserve the desktop paths. |
+| #714 / `b811319f` | raw_content, receipts, routes, security | The same thin desktop re-export pattern preserves the desktop paths. |
+
+They move pure projection code and path references only. They add **no** P2
+command registration, no UDL expansion, and no iOS behavior or service-owner
+change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
+anchor, but it is no longer the feature-tip provenance; use `b811319f`/#714 for
+current feature claims.
+
+## 2. Live pull-request and release state
+
+This state was checked at the evidence snapshot **before this ledger PR**:
+
+- There was no open shared-core PR and no open release PR. This docs-only PR is
+  the sole intended new scoped PR; it is not a source or release path.
+- #705 is closed, stale, and approval-gated. Its remote head was deleted. It
+  must not be reopened or merged.
+- #672 is closed, stale, and unauthorized. Its remote head was deleted. It
+  must not be reopened, rebased, merged, tagged, or published.
+- The two open Dependabot PRs are external, stale, behind-`main`, dependency
+  PRs. They target `main` and are not shared-core or release work; they are not
+  part of this ledger.
+- #39 is closed and draft. It authorizes no `main` action.
+
+A **new** reconciliation PR may exist only after explicit recorded approval
+from both the auth/store-security owner and the shared-Core owner. It must then
+be a fresh, union-preserving reconciliation of current `main` into current
+`feature/shared-native-core`, followed by fresh exact-head CI and independent
+union review. These are replacement conditions, not permission to revive #705.
+
+A **new** v2.0.4 preparation PR may exist only after separate explicit
+authorization. It must start from then-current `main`, receive new review, CI,
+and required physical/release evidence, and use only a new immutable v2.0.4 tag
+at the exact resulting `main` SHA. v2.0.3 is untouched and is never reused.
+These conditions do not authorize an action through #39.
+
+## 3. Phase status at the feature evidence tip
+
+### P0 — complete
+
+ADR-0003, the plan, and the module census are established. P0 completion is a
+planning baseline, not proof of an implementation, parity, release, or Apple
+gate.
+
+### P1 — in progress: extraction, not an end-state
+
+Core-resident pieces now include DTOs, transport/IPC, the pure task registry,
+and the P1 app domains `sync`, `room_list`, pure `timeline`,
+`utd_recovery`, `notifications`, `polls`, `relations`, `threads`, `unread`,
+`raw_content`, `receipts`, `routes`, and `security`. The latter ten are the two
+mechanical clusters above. Compatibility re-exports remain deliberately in the
+desktop shell.
+
+Desktop still owns the unmoved matrix domains: account data, full auth
+execution, backup, client construction, cross-signing, crypto-store, devices,
+diagnostics, legacy, lifecycle, media/cache/export, members, presence, room
+directory, room keys, room operations, room profile, search, secret storage,
+send, spaces, store, supervisor, typing, user profile, and verification. It
+also retains the desktop-side commands, live/platform adapters, and applicable
+tests/proofs for moved domains. A narrow P2 auth discovery slice in Core does
+not make full desktop auth Core-owned. Therefore P1 is not complete and
+`src-tauri` is not a thin shell.
+
+### P2 — in progress: exactly eight registered commands
+
+The Core registry registers exactly these eight names:
+
+1. `matrix_login_flows`
+2. `matrix_register_flows`
+3. `matrix_session_snapshot`
+4. `matrix_sync_status`
+5. `matrix_crypto_status`
+6. `matrix_media_config`
+7. `matrix_cross_signing_status`
+8. `matrix_secret_storage_status`
+
+All other census command names remain unregistered and fail closed. #713 and
+#714 did not change this list. This is neither complete desktop command parity
+nor a basis to add a speculative route.
+
+### P3 — in progress: bounded desktop bridges only
+
+The merged desktop seam routes credential-free login and registration probes,
+the safe session lifecycle/snapshot, sync status, crypto status, payload-free
+media configuration, read-only cross-signing status, and read-only
+secret-storage status through Core while preserving the React-facing DTOs.
+Desktop retains its live SDK client, credentials, persistence, and direct
+command paths. It is not yet the planned whole-shell adapter swap.
+
+P3 remains bounded. Future eligible bounded command work remains subject to
+normal scope, privacy, and ownership review plus exact-head CI. Only a
+`Platform`-boundary expansion or proposal to carry unsafe/dynamic material
+requires a separately approved ADR/foundation.
+
+### P4 — in progress: narrow iOS use, not a service migration
+
+The exact bounded iOS evidence is:
+
+- #685: project-owned UniFFI/Swift package scaffold.
+- #692: typed, credential-free login-flow discovery only.
+- #693: iOS homeserver discovery calls that bounded surface.
+- #696: XCTest invokes the generated Rust FFI scaffold.
+- #699: safe transient session-projection mirror only.
+- #703: display-only Settings readback, exact-matched to Swift state with a
+  safe fallback.
+- #708: pure room-row unread presentation from closed `Joined`/`Invited`
+  membership, scalar counters, and a marked-unread flag to a `u64` unread count
+  and highlight boolean.
+- #710: pure cold-start room-activity recovery decision from a latest-state
+  boolean and `{Missing, Known}`; Swift maps `nil`/`.distantPast` to `Missing`
+  and a real `Date` to `Known`.
+
+#708 and #710 add no Core command route. None of these slices makes Core an SDK
+or service owner. Actual SDK `Room` work, timeline listener/pagination/recovery
+execution, and session, platform credential storage, store, crypto, sync, and
+lifecycle ownership remain in `MatrixRustSDKService`. iOS has not migrated its
+session, room-list, timeline, crypto, push/NSE, or `MatrixRustSDK` service
+layer, and the direct Swift SDK dependency has not been retired.
+
+### P5 — not started
+
+Do not claim shared-engine iOS parity, an iOS migration, or Apple release
+readiness. P5 remains bounded by the engineering work and operator/Apple gates
+listed in the existing phase and release documents.
+
+## 4. Main recovery and physical-Mac evidence boundary
+
+The source recovery work from #695 and #697 remains on `main`; it is not a
+feature-branch recovery claim. `main` commit
+`608763799125a121572fc3b7ff613680159cbf2a` (#712) adds MAC-IOS-006 in the
+main-only version of `MACOS_WORKSTATION_HANDOFF.md` and updates
+`MACOS_IOS_VALIDATION_QUEUE.md`. This ledger intentionally does not treat that
+main documentation change as a feature source link or a reconciliation.
+
+MAC-IOS-006 is source-independent and operator-gated. It requires a physical
+Mac rehearsal and a fixed, privacy-safe record only: commit SHA; platform/tool
+category; fixed-case pass/fail; static diagnostic ID; and minimal redacted
+failure class. Physical-Mac proof is still absent. The record is not source,
+CI, release, signing, archive, or Apple proof, and it must not be expanded with
+raw logs, diagnostics, identities, or private artifacts.
+
+## 5. Gates and non-authorizations
+
+1. **Reconciliation:** require both auth/store-security and shared-Core-owner
+   approval before a *new* union-preserving current-main → current-feature PR;
+   then require fresh exact-head CI and independent union review.
+2. **Physical recovery:** require the approved physical-Mac operator evidence
+   before treating MAC-IOS-006 as satisfied.
+3. **P2/P3 boundary:** the current qualified-candidate audit found no safe
+   next command under the closed, string-free platform seam. A future eligible
+   bounded command may be proposed under normal review; a platform-boundary
+   expansion or unsafe/dynamic field requires a separately approved
+   ADR/foundation.
+4. **v2.0.4:** require its separate explicit authorization, a new current-main
+   PR, later review/CI/physical evidence, and a new immutable tag. Do not alter
+   v2.0.3.
+5. **P5:** require the remaining Core/iOS engineering migration plus the
+   existing simulator, physical-device/profiling, push, distribution, and E2EE
+   operator/Apple prerequisites.
+
+No merged implementation, docs record, CI result, or #39 status substitutes
+for any of those gates.
+
+## 6. Operating model for a successor
+
+- For each future PR, record clearly scoped ownership and fresh provenance,
+  then obtain the review and exact-head CI required by repository policy. Merge
+  only a reviewed, green exact head; do not merge a stale head or treat an
+  apparent recovery/release path as authorization.
+- Preserve shared ownership and privacy. Core accepts only bounded,
+  privacy-safe projections; shells retain their live client, credentials,
+  persistence, and platform behavior until an approved migration moves them.
+- Batch only mechanical P1 domains with their path/re-export changes. Semantic
+  Core, UDL, or Swift changes require hosted iOS coverage in addition to the
+  appropriate desktop/contract review; do not disguise them as mechanical
+  extraction.
+- CI is path-scoped. A docs-only diff under this directory is expected to skip
+  Rust, frontend, iOS, and Synapse heavy jobs while the CI scope and aggregate
+  gate report. A Core, UDL, or Swift diff selects hosted iOS simulator coverage;
+  desktop-source work selects the applicable desktop validation and proofs.
+
+## 7. Ordered resume playbook
+
+### Immediately safe
+
+1. Review and merge this docs-only ledger PR only if its exact head is green;
+   it changes neither source nor a release path.
+2. Retain the verified feature/main provenance above, then clean the worker's
+   own branch and worktree after that PR is merged or closed.
+3. For any future docs-only correction, fetch first, use the fresh feature tip,
+   and state its exact provenance. Do not reuse a stale branch or PR.
+
+### Requires new approval
+
+1. Obtain both named owner approvals before opening a new current-main →
+   current-feature reconciliation, then perform the required fresh union review
+   and exact-head CI.
+2. For P2/P3, use normal review for a future eligible bounded command. Obtain
+   a separately approved ADR/foundation only for a platform-boundary expansion
+   or unsafe/dynamic field.
+3. Obtain separate release authorization before opening a new v2.0.4
+   preparation PR from then-current `main`.
+
+### Requires a physical operator
+
+1. Run MAC-IOS-006 only in the approved physical-Mac operator environment and
+   retain only its fixed privacy-safe evidence record.
+2. For P5, obtain the required physical-device/profiling, push, distribution,
+   and production E2EE evidence through the existing operator/Apple procedures.
+
+### Prohibited without approval
+
+- Reopen, rebase, merge, tag from, or otherwise revive #705 or #672.
+- Reconcile `main` into feature, act on #39/`main`, create or move a release
+  tag, publish v2.0.4, or change v2.0.3.
+- Widen the platform boundary or introduce an unsafe/dynamic field without the
+  separately approved ADR/foundation.
+- Treat source, CI, docs, simulator, or this ledger as physical-Mac, release,
+  signing, distribution, Apple, or shared-engine-parity evidence.
+
+## 8. Evidence checklist before program-goal completion
+
+This checklist aggregates existing acceptance criteria; it does not replace or
+relax them.
+
+- [ ] P1 has moved the intended app logic with compatibility behavior preserved,
+  matrix-boundary proof, formatting/lint/test evidence, and review at the exact
+  head.
+- [ ] P2 covers the complete desktop command census with contract/parity
+  coverage and preserves the React-facing `matrix_*` contract.
+- [ ] P3 reduces `src-tauri` to the planned thin adapter with exact-head full
+  matrix, package-smoke, link-smoke, and boundary evidence.
+- [ ] P4 builds the project-owned Apple bindings, migrates services in safe
+  dependency order, passes hosted iOS coverage, and retires direct
+  `MatrixRustSDK` use only when no consumer remains.
+- [ ] P5 has the required shared-core desktop matrix/compatibility evidence,
+  iOS simulator evidence, signed physical-device and profiling evidence,
+  production push validation, distribution evidence, and production E2EE
+  recovery/verification/backup/media evidence.
+- [ ] MAC-IOS-006 has its separate approved physical-Mac, fixed privacy-safe
+  record; no source or CI substitute is accepted.
+- [ ] Any reconciliation or release action has its separate approvals, fresh
+  current-tip review/CI, and immutable-tag controls.

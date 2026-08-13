@@ -8,7 +8,7 @@ Desktop onto **one transport-agnostic Rust application-logic core** —
 |---|---|
 | Owner | Synara engineering |
 | Status | P0 complete; P1 extraction and bounded P2, P3, and P4 slices are merged at the evidence base below. P2–P4 remain in progress; P5 has not started. |
-| Evidence base | `origin/feature/shared-native-core` at `fa6e6b63` (`feat(ios): route cold-start room activity recovery gate through SynaraCore`, #710; following #708) |
+| Evidence base | `feature/shared-native-core` at `b811319f0fcc7ecd6eee82e4255d57e8e5699360` (#714, after #713; prior bounded P4 evidence remains #708/#710) |
 | Decision | [ADR 0003](../adr/0003-shared-native-rust-core.md) |
 | Program ledger | `docs/shared-native-core/` (this directory) |
 | Related ADRs | [0001](../adr/0001-ios-repository-layout.md), [0002](../adr/0002-ios-architecture.md) |
@@ -20,10 +20,13 @@ Desktop onto **one transport-agnostic Rust application-logic core** —
   the migration inventory, not evidence that every module has moved.
 - **P1 extraction slices are merged.** `synara-core` now owns the moved DTO,
   transport/IPC, pure task, sync, room-list, timeline, and UTD-recovery pieces;
-  `src-tauri` retains compatibility re-exports. P1.6 also introduced the
-  `Platform` trait and a desktop `AppHandle` adapter with no intended behavior
-  change. The remaining desktop-owned matrix domains still make the full P1
-  end-state incomplete.
+  #713 also mechanically moved notifications, polls, relations, threads, and
+  unread, while #714 mechanically moved raw_content, receipts, routes, and
+  security. `src-tauri` retains thin compatibility re-exports. P1.6 also
+  introduced the `Platform` trait and a desktop `AppHandle` adapter with no
+  intended behavior change. #713/#714 add no P2 command, UDL, or iOS behavior.
+  The remaining desktop-owned matrix domains still make the full P1 end-state
+  incomplete.
 - **P2 is a partial transport registry, not the complete command migration.**
   `Core::command` has typed envelopes and currently registers exactly eight
   desktop-census commands: `matrix_login_flows`, `matrix_register_flows`,
@@ -31,8 +34,8 @@ Desktop onto **one transport-agnostic Rust application-logic core** —
   `matrix_media_config`, `matrix_cross_signing_status`, and
   `matrix_secret_storage_status`. The status, media, cross-signing, and
   secret-storage paths preserve their bounded legacy DTO contracts; neither
-  #708 nor #710 adds a Core command route, and the rest of the census remains
-  unregistered and fail-closed.
+  #708, #710, #713, nor #714 adds a Core command route, and the rest of the
+  census remains unregistered and fail-closed.
 - **P3 has a bounded desktop seam.** Existing Tauri commands route the two
   stateless auth probes and the session lifecycle/snapshot, sync-status, and
   crypto-status observations through the managed Core while retaining their
@@ -57,17 +60,22 @@ Desktop onto **one transport-agnostic Rust application-logic core** —
 
 ## Current milestone ledger
 
-The following describes only merged source reachable from `fa6e6b63` (#710),
-following #708.
+The following describes merged source reachable from
+`b811319f0fcc7ecd6eee82e4255d57e8e5699360` (#714, after #713). #708 and #710
+remain the prior bounded P4 evidence.
 
 | Phase | Merged evidence | Current boundary |
 |---|---|---|
 | P0 | ADR, plan, and census | Complete planning baseline. |
-| P1 | #669, #673–#677, #680–#681 | Extraction slices and the `Platform`/desktop adapter are merged; remaining matrix domains have not all moved. |
-| P2 | #683–#689, #694, #698, #701–#702, #706 | The same eight-command registry above is live; #708/#710 add no Core command routes, and full desktop-invoke parity is not reached. |
+| P1 | #669, #673–#677, #680–#681, #713–#714 | Extraction slices, the `Platform`/desktop adapter, and the two mechanical pure-projection clusters are merged; remaining matrix domains have not all moved. |
+| P2 | #683–#689, #694, #698, #701–#702, #706 | The same eight-command registry above is live; #708/#710/#713/#714 add no Core command routes, and full desktop-invoke parity is not reached. |
 | P3 | #690–#691, #694, #698, #701–#702, #706 | The listed auth and read-only/session bridges use Core; `src-tauri` is not yet a fully thin shell. |
 | P4 | #685, #692–#693, #696, #699, #703, #708, #710 | UniFFI scaffold, bounded login discovery/link coverage, a safe session projection mirror, display-only readback, and only the two pure row/recovery policies exist; service migration and Apple release proof do not. |
 | P5 | None | Not started. The release gates below remain required. |
+
+Read [10-current-handoff.md](10-current-handoff.md) for the exact feature/main
+provenance, live PR state, recovery separation, non-authorizations, and ordered
+successor playbook. It does not change the acceptance criteria below.
 
 ## Ownership, privacy, and release gates
 
@@ -112,6 +120,7 @@ following #708.
 | [`07-risk-and-decisions.md`](07-risk-and-decisions.md) | Risk register, decision log, open questions |
 | [`08-parity-matrix.md`](08-parity-matrix.md) | Capability parity desktop vs iOS, now and after unification |
 | [`09-references.md`](09-references.md) | Glossary + concrete file/upstream references |
+| [`10-current-handoff.md`](10-current-handoff.md) | Current provenance, gates, nonclaims, and successor playbook |
 
 ## Core idea in one sentence
 
