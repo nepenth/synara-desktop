@@ -20,8 +20,8 @@ integration, or release path. **Never a big-bang move.**
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
 
-**Current bounded status at `e197beea`
-(#810, after #809):** #713 mechanically moved notifications, polls,
+**Current bounded status at `dcb0783e`
+(#812, after #811):** #713 mechanically moved notifications, polls,
 relations, threads, and unread; #714 moved raw content, receipts, routes, and
 security; #716 moved search, legacy, and media_cache; #717 moved media_export
 and crypto_store; #734 moved the room-directory session harness; #735 moved
@@ -69,7 +69,9 @@ behind a shell emit sink (Tauri event adapter stayed desktop); #807 moved live
 `NativeDeviceOwner` behind a shell emit sink (Tauri wakeup adapter stayed
 desktop); #808 moved live `NativePresenceOwner` behind a shell emit sink
 (Tauri event adapter stayed desktop); #810 moved live `NativeImagePackOwner`
-plus snapshot/set behind a shell emit sink (Tauri adapter stayed desktop). These retain thin desktop re-exports and any
+plus snapshot/set behind a shell emit sink (Tauri adapter stayed desktop);
+#812 extracted the timeline `ViewDeltaEmitter` behind a shell emit sink
+(`NativeTimelineRegistry` stayed desktop). These retain thin desktop re-exports and any
 leftover `live.rs` / `product_commands.rs`. They are P1 extraction
 only: no P2 command registration, UDL, or iOS behavior changed.
 
@@ -153,7 +155,7 @@ zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
 
 > **Bounded evidence note — not P4 acceptance:** At the current feature tip
-> `e197beeae752bfc8c40ee2ee2fa10c89f2746913` (#810, after #809), the
+> `dcb0783e7b029e0b9473e9202140d41ea72ff348` (#812, after #811), the
 > prior #708 work is only the pure iOS room-row unread presentation from closed
 > `Joined`/`Invited` membership, scalar counters, and a marked-unread flag to a
 > `u64` count plus highlight boolean. The prior #710 work is only the pure
