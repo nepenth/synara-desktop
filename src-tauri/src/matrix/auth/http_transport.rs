@@ -1,19 +1,18 @@
 //! Desktop well-known HTTP adapter plus shared login-flow transport re-exports.
 //!
-//! Login-type HTTP parsing and fetching live in `synara-core::app::auth`; this
-//! shell file retains only the unrelated well-known adapter.
+//! Login-type HTTP parsing, well-known JSON parsing, and login-flow fetching
+//! live in `synara-core::app::auth`; this shell file retains the live
+//! well-known HTTP adapter (product user-agent).
 
 use std::time::Duration;
 
-use serde_json::Value;
-
-use super::discovery::{DiscoveryTransport, WellKnownClientConfig};
 use super::error::AuthError;
 use crate::matrix::client_builder::default_user_agent;
+use synara_core::app::auth::{DiscoveryTransport, WellKnownClientConfig};
 
 pub use synara_core::app::auth::{
-    parse_login_types_json, HttpLoginFlowTransport, AUTH_HTTP_MAX_RESPONSE_BYTES,
-    AUTH_HTTP_TIMEOUT_SECS,
+    parse_login_types_json, parse_well_known_client_json, HttpLoginFlowTransport,
+    AUTH_HTTP_MAX_RESPONSE_BYTES, AUTH_HTTP_TIMEOUT_SECS,
 };
 
 /// Live HTTP transport for well-known discovery (CS API).
@@ -70,26 +69,6 @@ impl DiscoveryTransport for HttpDiscoveryTransport {
         })?;
         parse_well_known_client_json(&body)
     }
-}
-
-/// Parse `/.well-known/matrix/client` JSON into a domain config (no secrets).
-pub fn parse_well_known_client_json(raw: &str) -> Result<WellKnownClientConfig, AuthError> {
-    let value: Value = serde_json::from_str(raw).map_err(|_| AuthError::UnsupportedCapability {
-        diagnostic_id: "r0.7-well-known-json",
-    })?;
-    let hs = value
-        .get("m.homeserver")
-        .and_then(|object| object.get("base_url"))
-        .and_then(Value::as_str)
-        .ok_or(AuthError::UnsupportedCapability {
-            diagnostic_id: "r0.7-well-known-missing-homeserver",
-        })?;
-    let identity = value
-        .get("m.identity_server")
-        .and_then(|object| object.get("base_url"))
-        .and_then(Value::as_str)
-        .map(str::to_owned);
-    WellKnownClientConfig::new(hs, identity)
 }
 
 fn map_reqwest_error(err: reqwest::Error) -> AuthError {

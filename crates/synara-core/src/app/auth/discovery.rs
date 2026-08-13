@@ -37,6 +37,27 @@ impl WellKnownClientConfig {
     }
 }
 
+/// Parse `/.well-known/matrix/client` JSON into a domain config (no secrets).
+pub fn parse_well_known_client_json(raw: &str) -> Result<WellKnownClientConfig, AuthError> {
+    let value: serde_json::Value =
+        serde_json::from_str(raw).map_err(|_| AuthError::UnsupportedCapability {
+            diagnostic_id: "r0.7-well-known-json",
+        })?;
+    let hs = value
+        .get("m.homeserver")
+        .and_then(|object| object.get("base_url"))
+        .and_then(serde_json::Value::as_str)
+        .ok_or(AuthError::UnsupportedCapability {
+            diagnostic_id: "r0.7-well-known-missing-homeserver",
+        })?;
+    let identity = value
+        .get("m.identity_server")
+        .and_then(|object| object.get("base_url"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned);
+    WellKnownClientConfig::new(hs, identity)
+}
+
 /// Successful homeserver resolution ready for client construction / login-flow lookup.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiscoveryResult {
