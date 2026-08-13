@@ -1,17 +1,17 @@
 //! Credential-free V-CRYPTO.3 backup presentation DTOs and projector.
 //!
-//! Live Client backup/recovery I/O stays in the desktop shell.
+//! Live Client status I/O lives in `live.rs`. Setup/restore/repair stay desktop.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeBackupAvailability {
     Missing,
     Available,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeBackupDeviceState {
     Unavailable,
@@ -22,7 +22,7 @@ pub enum NativeBackupDeviceState {
     Ready,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeBackupRecoveryState {
     Unknown,
@@ -31,7 +31,7 @@ pub enum NativeBackupRecoveryState {
     Ready,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeBackupAction {
     SetupRequired,
@@ -40,7 +40,7 @@ pub enum NativeBackupAction {
     None,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeBackupStatus {
     pub session_generation: u64,
