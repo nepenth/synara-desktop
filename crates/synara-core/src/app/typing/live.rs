@@ -8,9 +8,7 @@ use matrix_sdk::{
 };
 use tokio::sync::Mutex;
 
-use super::{TypingIndex, MAX_TYPING_USERS_PER_ROOM};
-
-pub use synara_core::app::typing::NativeTypingSnapshot;
+use super::{NativeTypingSnapshot, TypingIndex, MAX_TYPING_USERS_PER_ROOM};
 
 /// Owns live `m.typing` projection for one managed session.
 pub struct NativeTypingOwner {
