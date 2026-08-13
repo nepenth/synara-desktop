@@ -1,6 +1,6 @@
 //! Privacy-safe errors for the send-queue foundation (P6.1).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Outbound message queue failure.
 #[derive(Debug)]

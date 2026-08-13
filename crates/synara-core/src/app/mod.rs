@@ -28,6 +28,7 @@ pub mod room_profile;
 pub mod routes;
 pub mod search;
 pub mod security;
+pub mod send;
 pub mod spaces;
 pub mod sync;
 pub mod threads;
