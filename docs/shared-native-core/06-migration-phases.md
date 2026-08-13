@@ -20,8 +20,8 @@ integration, or release path. **Never a big-bang move.**
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
 
-**Current bounded status at `3c089693`
-(#751, after #750):** #713 mechanically moved notifications, polls,
+**Current bounded status at `d1c5d6bb`
+(#753, after #752):** #713 mechanically moved notifications, polls,
 relations, threads, and unread; #714 moved raw content, receipts, routes, and
 security; #716 moved search, legacy, and media_cache; #717 moved media_export
 and crypto_store; #734 moved the room-directory session harness; #735 moved
@@ -30,7 +30,9 @@ the verification inbox harness; #737 moved the account-data index harness;
 #741 moved the supervisor actor harness; #744 moved the diagnostics health
 harness; #743 moved the store identity/paths harness; #748 moved the
 client-builder error/features harness; #747 moved the lifecycle recovery-copy
-harness; #751 moved the auth device-name harness. These retain thin desktop re-exports and any
+harness; #751 moved the auth device-name harness; #753 moved the store
+vault trait / key material and auth discovery/UIA/client_config (Keyring I/O
+and live login stayed desktop). These retain thin desktop re-exports and any
 leftover `live.rs` / `product_commands.rs`. They are P1 extraction
 only: no P2 command registration, UDL, or iOS behavior changed.
 
@@ -114,7 +116,7 @@ zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
 
 > **Bounded evidence note — not P4 acceptance:** At the current feature tip
-> `3c0896933374dc822be17282c4d1e1e7ec1aca20` (#751, after #750), the
+> `d1c5d6bb7b683380e928935fde7d58e9b6853ebc` (#753, after #752), the
 > prior #708 work is only the pure iOS room-row unread presentation from closed
 > `Joined`/`Invited` membership, scalar counters, and a marked-unread flag to a
 > `u64` count plus highlight boolean. The prior #710 work is only the pure
