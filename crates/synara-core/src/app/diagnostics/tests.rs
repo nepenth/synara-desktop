@@ -5,11 +5,11 @@
 use serde_json::json;
 
 use super::*;
-use crate::matrix::ipc::MatrixIpcErrorCategory;
-use crate::matrix::supervisor::{
+use crate::app::supervisor::{
     harness_login_ready, MatrixSupervisor, SupervisorCommand, TestClientFactory,
 };
-use crate::matrix::tasks::{TaskKind, TaskSupervisor};
+use crate::task::{TaskKind, TaskSupervisor};
+use crate::transport::MatrixIpcErrorCategory;
 
 #[test]
 fn empty_snapshot_is_privacy_safe_and_serializable() {

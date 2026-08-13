@@ -4,9 +4,9 @@
 //! task registry, stream queues) record privacy-safe counters; never attach
 //! tokens, MXIDs, or free-form error strings.
 
-use crate::matrix::ipc::{MatrixIpcErrorCategory, MAX_STREAM_QUEUE_DEPTH};
-use crate::matrix::supervisor::{MatrixSupervisor, SupervisorSnapshot};
-use crate::matrix::tasks::TaskSupervisor;
+use crate::app::supervisor::{MatrixSupervisor, SupervisorSnapshot};
+use crate::task::TaskSupervisor;
+use crate::transport::{MatrixIpcErrorCategory, MAX_STREAM_QUEUE_DEPTH};
 
 use super::health::{
     ErrorHealth, LifecycleHealth, MatrixHealthSnapshot, QueueHealth, StoreHealth,
