@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `4fb50ac3`, the merge commit for #848. |
-| Immediately preceding merges | #847 docs after #846, #848 `matrix_verification_cancel` through Core::command. |
+| Feature evidence tip | `feature/shared-native-core` is `11a430c1`, the merge commit for #850. |
+| Immediately preceding merges | #849 docs after #848, #850 `matrix_verification_dismiss` through Core::command. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -102,11 +102,12 @@ residency changes are:
 | #844 / `3937c9f0` | `matrix_verification_confirm` via `Core::command` | Same attached verification owner. |
 | #846 / `f00769fd` | `matrix_verification_mismatch` via `Core::command` | Same attached verification owner. |
 | #848 / `4fb50ac3` | `matrix_verification_cancel` via `Core::command` | Same attached verification owner. |
+| #850 / `11a430c1` | `matrix_verification_dismiss` via `Core::command` | Same attached verification owner. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `4fb50ac3`/#848 for
+anchor, but it is no longer the feature-tip provenance; use `11a430c1`/#850 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -176,9 +177,9 @@ tests/proofs for moved domains. Core-owned discovery/UIA types and the vault
 trait do not make live login or Keychain I/O Core-owned. Therefore P1 is not
 complete and `src-tauri` is not a thin shell.
 
-### P2 — in progress: twenty-eight registered commands
+### P2 — in progress: twenty-nine registered commands
 
-The Core registry registers exactly these twenty-eight names:
+The Core registry registers exactly these twenty-nine names:
 
 1. `matrix_login_flows`
 2. `matrix_register_flows`
@@ -208,6 +209,7 @@ The Core registry registers exactly these twenty-eight names:
 26. `matrix_verification_confirm` (#844)
 27. `matrix_verification_mismatch` (#846)
 28. `matrix_verification_cancel` (#848)
+29. `matrix_verification_dismiss` (#850)
 
 All other census command names remain unregistered and fail closed. This is
 neither complete desktop command parity nor a basis to add a speculative route.
