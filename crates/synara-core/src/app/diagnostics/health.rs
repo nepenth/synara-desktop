@@ -3,19 +3,18 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
-use crate::matrix::supervisor::{FailureInfo, SupervisorSnapshot, SupervisorState};
-use crate::matrix::tasks::{TaskKind, TaskSupervisor};
+use crate::app::supervisor::{FailureInfo, SupervisorSnapshot, SupervisorState};
+use crate::task::{TaskKind, TaskSupervisor};
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Schema version for [`MatrixHealthSnapshot`] JSON projections.
 pub const MATRIX_HEALTH_SCHEMA_VERSION: u32 = 1;
 
 /// High-level sync activity phase (product-neutral; no homeserver details).
 ///
-/// SNC-P1-5a seam: the pure enum now lives in the shared core
-/// (`crates/synara-core/src/app/sync`); re-export here so every
-/// `crate::matrix::diagnostics::SyncPhase` path keeps resolving identically.
-pub use synara_core::app::sync::SyncPhase;
+/// SNC-P1-5a seam: the pure enum lives in `crate::app::sync`; re-export here
+/// so every `crate::app::diagnostics::SyncPhase` path keeps resolving.
+pub use crate::app::sync::SyncPhase;
 
 /// Store subsystem readiness (no paths, keys, or account identifiers).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]

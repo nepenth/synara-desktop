@@ -10,6 +10,7 @@ pub mod auth;
 pub mod backup;
 pub mod cross_signing;
 pub mod crypto_store;
+pub mod diagnostics;
 pub mod legacy;
 pub mod media;
 pub mod media_cache;
