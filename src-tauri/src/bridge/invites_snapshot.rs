@@ -37,6 +37,20 @@ pub(crate) async fn invites_decline(
     invite_action(core, "matrix_invites_decline", room_id).await
 }
 
+pub(crate) async fn invites_report_spam(
+    core: &Core,
+    room_id: String,
+) -> Result<NativeInviteSnapshot, MatrixAuthCommandError> {
+    invite_action(core, "matrix_invites_report_spam", room_id).await
+}
+
+pub(crate) async fn invites_block_sender(
+    core: &Core,
+    room_id: String,
+) -> Result<NativeInviteSnapshot, MatrixAuthCommandError> {
+    invite_action(core, "matrix_invites_block_sender", room_id).await
+}
+
 async fn invite_action(
     core: &Core,
     command: &str,

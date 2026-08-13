@@ -1555,8 +1555,14 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_invites_accept", matrix_invites_accept)
         .expect("built-in matrix_invites_accept must remain in the command census");
     registry
+        .register("matrix_invites_block_sender", matrix_invites_block_sender)
+        .expect("built-in matrix_invites_block_sender must remain in the command census");
+    registry
         .register("matrix_invites_decline", matrix_invites_decline)
         .expect("built-in matrix_invites_decline must remain in the command census");
+    registry
+        .register("matrix_invites_report_spam", matrix_invites_report_spam)
+        .expect("built-in matrix_invites_report_spam must remain in the command census");
     registry
         .register("matrix_invites_snapshot", matrix_invites_snapshot)
         .expect("built-in matrix_invites_snapshot must remain in the command census");
@@ -2965,6 +2971,40 @@ fn matrix_invites_decline(state: Arc<CoreState>, request: CommandEnvelope) -> Co
             .map_err(invite_action_owner_error)?;
         serde_json::to_value(snapshot)
             .map_err(|_| core_state_error("p2-invites-decline-serialization-failed"))
+    })
+}
+
+fn matrix_invites_report_spam(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixInviteActionRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-invites-report-spam-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-invites-report-spam-no-session")
+        })?;
+        let snapshot: NativeInviteSnapshot = owner
+            .invite_report_spam(&payload.room_id)
+            .await
+            .map_err(invite_action_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-invites-report-spam-serialization-failed"))
+    })
+}
+
+fn matrix_invites_block_sender(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixInviteActionRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-invites-block-sender-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-invites-block-sender-no-session")
+        })?;
+        let snapshot: NativeInviteSnapshot = owner
+            .invite_block_sender(&payload.room_id)
+            .await
+            .map_err(invite_action_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-invites-block-sender-serialization-failed"))
     })
 }
 
@@ -4901,7 +4941,9 @@ mod tests {
                 "matrix_get_room_image_packs",
                 "matrix_get_user_image_pack",
                 "matrix_invites_accept",
+                "matrix_invites_block_sender",
                 "matrix_invites_decline",
+                "matrix_invites_report_spam",
                 "matrix_invites_snapshot",
                 "matrix_later_clear_completed",
                 "matrix_later_complete",
@@ -6647,6 +6689,44 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-invites-decline-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_invites_report_spam_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_invites_report_spam".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org"}),
+            })
+            .await
+            .expect_err("invite report spam without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-invites-report-spam-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_invites_block_sender_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_invites_block_sender".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org"}),
+            })
+            .await
+            .expect_err("invite block sender without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-invites-block-sender-no-session")
         );
     }
 
