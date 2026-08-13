@@ -101,7 +101,7 @@ pub async fn matrix_login_password(
         )
         .map_err(map_room_join_rule_owner_error)?,
     );
-    let sync = start_sync_owner(&client, session_generation).await?;
+    let sync = Arc::new(start_sync_owner(&client, session_generation).await?);
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
         .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-session-persist-failed"))?;
@@ -174,6 +174,9 @@ pub async fn matrix_login_password(
     core.inner()
         .attach_timelines(timelines)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-timeline-attach-failed"))?;
+    core.inner()
+        .attach_sync(sync)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-sync-attach-failed"))?;
     Ok(identity)
 }
 
@@ -320,7 +323,7 @@ pub async fn matrix_register(
         RegisterSubmitOutcome::Complete(secrets) => {
             let (identity, session_generation) =
                 install_session_from_register_secrets(&app, &state, &mut session, secrets).await?;
-            let (typing, presence, verification, devices, join_rules, image_packs, timelines) =
+            let (typing, presence, verification, devices, join_rules, image_packs, timelines, sync) =
                 session
                     .as_ref()
                     .map(|active| {
@@ -332,11 +335,10 @@ pub async fn matrix_register(
                             active.join_rules.clone(),
                             active._image_packs.clone(),
                             active.timelines.clone(),
+                            active.sync.clone(),
                         )
                     })
-                    .ok_or_else(|| {
-                        MatrixAuthCommandError::unavailable("p2-typing-attach-failed")
-                    })?;
+                    .ok_or_else(|| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
             drop(session);
             crate::bridge::session_lifecycle::open_after_desktop_session_install(
                 core.inner().as_ref(),
@@ -367,6 +369,9 @@ pub async fn matrix_register(
             core.inner()
                 .attach_timelines(timelines)
                 .map_err(|_| MatrixAuthCommandError::unavailable("p2-timeline-attach-failed"))?;
+            core.inner()
+                .attach_sync(sync)
+                .map_err(|_| MatrixAuthCommandError::unavailable("p2-sync-attach-failed"))?;
             Ok(MatrixRegisterOutcome::Complete { identity })
         }
     }
@@ -437,7 +442,7 @@ pub(super) async fn install_session_from_register_secrets(
         )
         .map_err(map_room_join_rule_owner_error)?,
     );
-    let sync = start_sync_owner(&client, session_generation).await?;
+    let sync = Arc::new(start_sync_owner(&client, session_generation).await?);
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
         .map_err(|_| MatrixAuthCommandError::unavailable("v-auth.4b-session-persist-failed"))?;
@@ -627,7 +632,7 @@ pub async fn matrix_restore_session(
         )
         .map_err(map_room_join_rule_owner_error)?,
     );
-    let sync = start_sync_owner(&client, session_generation).await?;
+    let sync = Arc::new(start_sync_owner(&client, session_generation).await?);
     let timelines = Arc::new(NativeTimelineOwner::new(
         &client,
         crate::matrix::timeline::timeline_view_emit(app.clone()),
@@ -680,6 +685,9 @@ pub async fn matrix_restore_session(
     core.inner()
         .attach_timelines(timelines)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-timeline-attach-failed"))?;
+    core.inner()
+        .attach_sync(sync)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-sync-attach-failed"))?;
     Ok(identity)
 }
 

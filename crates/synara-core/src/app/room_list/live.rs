@@ -10,14 +10,14 @@ use futures_util::StreamExt;
 use matrix_sdk::notification_settings::RoomNotificationMode;
 use matrix_sdk::{Room, RoomState};
 use matrix_sdk_ui::room_list_service::filters;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::app::sync::SyncServiceOwner;
 use crate::dto::{Membership, NotificationMode, RoomSummary};
 
 const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(5);
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomListSnapshot {
     pub session_generation: u64,

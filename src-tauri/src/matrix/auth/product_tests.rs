@@ -1330,6 +1330,23 @@ fn room_key_transfer_status_routes_through_core_without_desktop_flow() {
 }
 
 #[test]
+fn room_list_snapshot_routes_through_core_without_desktop_sync_owner() {
+    let product = PRODUCT_SOURCE;
+    let command = product
+        .split("pub async fn matrix_room_list_snapshot")
+        .nth(1)
+        .expect("room-list snapshot command");
+    let command = command
+        .split("#[tauri::command]")
+        .next()
+        .expect("room-list snapshot command body");
+    assert!(command.contains("crate::bridge::room_list::room_list_snapshot"));
+    assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!command.contains("snapshot_from_sync_owner"));
+    assert!(!command.contains("active.sync"));
+}
+
+#[test]
 fn avatar_mime_validator_accepts_images_only() {
     assert_eq!(
         validate_avatar_mime("image/png").unwrap().essence_str(),
