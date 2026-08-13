@@ -1,7 +1,7 @@
 //! P6.10 — Public room directory search and projection (harness).
 //!
-//! Pure projection of directory hits plus live protocol listing. Search
-//! request-authority still lives in the desktop shell.
+//! Pure projection of directory hits plus live protocol listing and
+//! search/cancel with the request-authority registry.
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p6.10-room-directory.md`
 
@@ -11,6 +11,7 @@
 mod error;
 mod live;
 mod native;
+mod search;
 mod session;
 
 pub use error::RoomDirectoryError;
@@ -20,6 +21,11 @@ pub use native::{
     DirectoryRoomTypeFilter, DirectorySearchInput, NativeRoomDirectoryPage,
     NativeRoomDirectoryProtocols, NativeRoomDirectorySearchResponse, NormalizedDirectorySearch,
     MAX_PROTOCOL_INSTANCES,
+};
+pub use search::{
+    build_public_rooms_request, cancel_directory, cancel_request, cancelled_response, project_hit,
+    project_response, register_request, request_authority, search_directory, stale_response,
+    RequestAuthority,
 };
 pub use session::{
     DirectoryRoomHit, DirectoryRoomType, DirectorySearchState, RoomDirectorySession,

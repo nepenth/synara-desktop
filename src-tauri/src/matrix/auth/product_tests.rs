@@ -1266,6 +1266,39 @@ fn directory_protocols_routes_through_core_without_desktop_client_io() {
 }
 
 #[test]
+fn directory_search_and_cancel_route_through_core_without_desktop_client_io() {
+    let product = PRODUCT_SOURCE;
+    for (name, bridge) in [
+        (
+            "matrix_room_directory_search",
+            "crate::bridge::directory_search::room_directory_search",
+        ),
+        (
+            "matrix_room_directory_cancel",
+            "crate::bridge::directory_search::room_directory_cancel",
+        ),
+    ] {
+        let command = product
+            .split(&format!("pub async fn {name}"))
+            .nth(1)
+            .unwrap_or_else(|| panic!("{name} command"));
+        let command = command
+            .split("#[tauri::command]")
+            .next()
+            .unwrap_or_else(|| panic!("{name} command body"));
+        assert!(
+            command.contains(bridge),
+            "{name} must dispatch through {bridge}"
+        );
+        assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+        assert!(!command.contains("active.client"));
+        assert!(!command.contains("public_rooms_filtered"));
+        assert!(!command.contains("register_request"));
+        assert!(!command.contains("cancel_request"));
+    }
+}
+
+#[test]
 fn avatar_mime_validator_accepts_images_only() {
     assert_eq!(
         validate_avatar_mime("image/png").unwrap().essence_str(),

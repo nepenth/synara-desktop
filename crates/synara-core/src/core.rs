@@ -29,7 +29,10 @@ use crate::app::members::{
 use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceSubscription,
 };
-use crate::app::room_directory::NativeRoomDirectoryProtocols;
+use crate::app::room_directory::{
+    DirectoryRoomTypeFilter, DirectorySearchInput, NativeRoomDirectoryProtocols,
+    NativeRoomDirectorySearchResponse,
+};
 use crate::app::room_ops::MatrixRoomCreateRequest;
 use crate::app::room_profile::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
@@ -1130,6 +1133,33 @@ struct MatrixSetOwnAvatarRequest {
     mxc: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_room_directory_search`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomDirectorySearchRequest {
+    session_generation: u64,
+    request_id: u64,
+    #[serde(default)]
+    server_name: Option<String>,
+    #[serde(default)]
+    term: Option<String>,
+    #[serde(default)]
+    room_type: Option<DirectoryRoomTypeFilter>,
+    #[serde(default)]
+    third_party_instance_id: Option<String>,
+    limit: u64,
+    #[serde(default)]
+    since: Option<String>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_room_directory_cancel`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomDirectoryCancelRequest {
+    session_generation: u64,
+    request_id: u64,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_get_room_directory_visibility`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1488,6 +1518,12 @@ fn built_in_registry() -> CommandRegistry {
             matrix_room_directory_protocols,
         )
         .expect("built-in matrix_room_directory_protocols must remain in the command census");
+    registry
+        .register("matrix_room_directory_search", matrix_room_directory_search)
+        .expect("built-in matrix_room_directory_search must remain in the command census");
+    registry
+        .register("matrix_room_directory_cancel", matrix_room_directory_cancel)
+        .expect("built-in matrix_room_directory_cancel must remain in the command census");
     registry
         .register("matrix_send_text", matrix_send_text)
         .expect("built-in matrix_send_text must remain in the command census");
@@ -2780,6 +2816,84 @@ fn directory_protocols_owner_error(diagnostic_id: &'static str) -> MatrixIpcErro
         "v-rooms.directory-protocol-id-cap"
         | "v-rooms.directory-protocol-instance-invalid"
         | "v-rooms.directory-protocol-instance-cap" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn directory_correlation_invalid(session_generation: u64, request_id: u64) -> bool {
+    session_generation == 0
+        || request_id == 0
+        || session_generation > MAX_WIRE_COUNTER
+        || request_id > MAX_WIRE_COUNTER
+}
+
+fn matrix_room_directory_search(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomDirectorySearchRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-directory-search-invalid-payload"))?;
+        if directory_correlation_invalid(payload.session_generation, payload.request_id) {
+            return Err(MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
+                .with_diagnostic("v-rooms.directory-invalid-correlation"));
+        }
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-directory-search-no-session")
+        })?;
+        let result: NativeRoomDirectorySearchResponse = owner
+            .directory_search(
+                payload.session_generation,
+                payload.request_id,
+                DirectorySearchInput {
+                    server_name: payload.server_name,
+                    term: payload.term,
+                    room_type: payload.room_type,
+                    third_party_instance_id: payload.third_party_instance_id,
+                    limit: payload.limit,
+                    since: payload.since,
+                },
+            )
+            .await
+            .map_err(directory_search_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-room-directory-search-serialization-failed"))
+    })
+}
+
+fn matrix_room_directory_cancel(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomDirectoryCancelRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-directory-cancel-invalid-payload"))?;
+        if directory_correlation_invalid(payload.session_generation, payload.request_id) {
+            return Err(MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
+                .with_diagnostic("v-rooms.directory-invalid-correlation"));
+        }
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-directory-cancel-no-session")
+        })?;
+        let result: NativeRoomDirectorySearchResponse = owner
+            .directory_cancel(payload.session_generation, payload.request_id)
+            .map_err(directory_search_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-room-directory-cancel-serialization-failed"))
+    })
+}
+
+fn directory_search_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-rooms.directory-invalid-correlation"
+        | "v-rooms.directory-invalid-limit"
+        | "v-rooms.directory-invalid-server"
+        | "v-rooms.directory-invalid-term"
+        | "v-rooms.directory-invalid-instance"
+        | "v-rooms.directory-invalid-since" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-rooms.directory-stale-generation-before-request"
+        | "v-rooms.directory-stale-generation-after-request"
+        | "v-rooms.directory-cancel-stale-generation" => {
+            MatrixIpcErrorCategory::StaleSessionGeneration
+        }
         "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
         _ => MatrixIpcErrorCategory::Unknown,
     };
@@ -4605,7 +4719,9 @@ mod tests {
                 "matrix_room_ban",
                 "matrix_room_create",
                 "matrix_room_creators_snapshot",
+                "matrix_room_directory_cancel",
                 "matrix_room_directory_protocols",
+                "matrix_room_directory_search",
                 "matrix_room_invite",
                 "matrix_room_join",
                 "matrix_room_join_rule_snapshot",
@@ -6228,6 +6344,51 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-room-directory-protocols-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_directory_search_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_directory_search".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "sessionGeneration":1,
+                    "requestId":1,
+                    "limit":20
+                }),
+            })
+            .await
+            .expect_err("directory search without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-directory-search-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_directory_cancel_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_directory_cancel".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "sessionGeneration":1,
+                    "requestId":1
+                }),
+            })
+            .await
+            .expect_err("directory cancel without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-directory-cancel-no-session")
         );
     }
 
