@@ -16,8 +16,8 @@
 
 use matrix_sdk::{Client, Error as MatrixSdkError, HttpError};
 
-use super::device_name::{platform_device_display_name, DevicePlatform};
 use super::error::AuthError;
+use synara_core::app::auth::{platform_device_display_name, DevicePlatform};
 
 /// How the caller authenticated (privacy-safe discriminator; no secrets).
 ///

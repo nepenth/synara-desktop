@@ -27,7 +27,6 @@
 #![allow(unused_imports)]
 
 mod client_config;
-mod device_name;
 mod discovery;
 mod error;
 mod http_transport;
@@ -40,11 +39,6 @@ mod reset_password;
 mod uia;
 
 pub use client_config::{homeserver_url_for_client_builder, identity_with_discovered_homeserver};
-pub use device_name::{
-    host_device_platform, platform_device_display_name, DevicePlatform,
-    DEVICE_DISPLAY_NAME_DESKTOP_FALLBACK, DEVICE_DISPLAY_NAME_IOS, DEVICE_DISPLAY_NAME_LINUX,
-    DEVICE_DISPLAY_NAME_MACOS,
-};
 pub use discovery::{
     discover_homeserver, discover_homeserver_and_login_flows, DiscoveryResult, DiscoveryTransport,
     MockDiscoveryTransport, WellKnownClientConfig,
@@ -73,6 +67,11 @@ pub use register::{
 pub use reset_password::{
     complete_password_reset, password_reset_ephemeral_user_id, request_password_email_token,
     PasswordEmailTokenResult, PasswordResetOutcome,
+};
+pub use synara_core::app::auth::{
+    host_device_platform, platform_device_display_name, DevicePlatform,
+    DEVICE_DISPLAY_NAME_DESKTOP_FALLBACK, DEVICE_DISPLAY_NAME_IOS, DEVICE_DISPLAY_NAME_LINUX,
+    DEVICE_DISPLAY_NAME_MACOS,
 };
 /// Desktop compatibility re-exports for the shared read-only registration probe.
 pub use synara_core::app::auth::{

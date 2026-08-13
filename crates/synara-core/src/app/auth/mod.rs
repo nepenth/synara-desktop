@@ -3,12 +3,18 @@
 //! This module owns only URL normalization, login-type discovery, and its
 //! bounded read-only HTTP client. It neither accepts nor returns credentials.
 
+mod device_name;
 mod error;
 mod http_transport;
 mod input;
 mod login_flow;
 mod register_flow;
 
+pub use device_name::{
+    host_device_platform, platform_device_display_name, DevicePlatform,
+    DEVICE_DISPLAY_NAME_DESKTOP_FALLBACK, DEVICE_DISPLAY_NAME_IOS, DEVICE_DISPLAY_NAME_LINUX,
+    DEVICE_DISPLAY_NAME_MACOS,
+};
 pub use error::AuthError;
 pub use http_transport::{
     parse_login_types_json, HttpLoginFlowTransport, HttpRegisterFlowTransport,
