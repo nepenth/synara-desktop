@@ -593,6 +593,16 @@ struct MatrixVerificationConfirmRequest {
     flow_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_verification_mismatch`.
+///
+/// Shares accept's camel-case `flowId` key. Unknown keys are rejected so
+/// this write cannot grow extra identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixVerificationMismatchRequest {
+    flow_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_room_join_rule_snapshot`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -943,6 +953,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_verification_list", matrix_verification_list)
         .expect("built-in matrix_verification_list must remain in the command census");
     registry
+        .register("matrix_verification_mismatch", matrix_verification_mismatch)
+        .expect("built-in matrix_verification_mismatch must remain in the command census");
+    registry
         .register("matrix_device_snapshot", matrix_device_snapshot)
         .expect("built-in matrix_device_snapshot must remain in the command census");
     registry
@@ -1152,6 +1165,23 @@ fn matrix_verification_confirm(state: Arc<CoreState>, request: CommandEnvelope) 
             .map_err(verification_accept_owner_error)?;
         serde_json::to_value(request)
             .map_err(|_| core_state_error("p2-verification-confirm-serialization-failed"))
+    })
+}
+
+fn matrix_verification_mismatch(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixVerificationMismatchRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-verification-mismatch-invalid-payload"))?;
+        let owner = state.verification_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-verification-mismatch-no-session")
+        })?;
+        let request: NativeVerificationRequest = owner
+            .mismatch(&payload.flow_id)
+            .await
+            .map_err(verification_accept_owner_error)?;
+        serde_json::to_value(request)
+            .map_err(|_| core_state_error("p2-verification-mismatch-serialization-failed"))
     })
 }
 
@@ -2007,6 +2037,7 @@ mod tests {
                 "matrix_verification_begin_sas",
                 "matrix_verification_confirm",
                 "matrix_verification_list",
+                "matrix_verification_mismatch",
             ]
         );
 
@@ -3357,6 +3388,44 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-verification-confirm-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_verification_mismatch_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_verification_mismatch".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"flowId":"flow-1"}),
+            })
+            .await
+            .expect_err("verification mismatch without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-verification-mismatch-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_verification_mismatch_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_verification_mismatch".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"flowId":"flow-1","token":"no"}),
+            })
+            .await
+            .expect_err("verification mismatch must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-verification-mismatch-invalid-payload")
         );
     }
 
