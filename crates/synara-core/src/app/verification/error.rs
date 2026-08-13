@@ -1,6 +1,6 @@
 //! Privacy-safe errors for verification inbox (P8.3).
 
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Verification inbox / SAS flow failure.
 #[derive(Debug)]
