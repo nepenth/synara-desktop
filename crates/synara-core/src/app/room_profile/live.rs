@@ -20,7 +20,7 @@ use matrix_sdk::{
             StateEventType,
         },
         room::JoinRule,
-        OwnedMxcUri, OwnedRoomId,
+        OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId, OwnedServerName,
     },
     Client, Room, RoomState,
 };
@@ -224,6 +224,35 @@ impl NativeRoomJoinRuleOwner {
         Ok(MatrixProfileWriteResult { status: "ok" })
     }
 
+    pub async fn leave(&self, room_id: &str) -> Result<(), &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let room_id = parse_room_leave_id(room_id)?;
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-rooms-room-leave-room-not-found")?;
+        room.leave().await.map_err(|_| "v-rooms-room-leave-failed")
+    }
+
+    pub async fn join(
+        &self,
+        room_id_or_alias: &str,
+        via_servers: Option<Vec<String>>,
+    ) -> Result<(), &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let target = parse_room_join_target(room_id_or_alias)?;
+        let via_servers = parse_room_join_via_servers(via_servers.as_deref())?;
+        self.client
+            .join_room_by_id_or_alias(&target, &via_servers)
+            .await
+            .map(|_| ())
+            .map_err(|_| "v-rooms-room-join-failed")
+    }
+
     pub async fn get_directory_visibility(
         &self,
         room_id: &str,
@@ -328,6 +357,35 @@ fn parse_join_rule_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
 
 fn parse_profile_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
     OwnedRoomId::try_from(room_id.trim()).map_err(|_| "d0.4-send-invalid-room-id")
+}
+
+fn parse_room_leave_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
+    room_id
+        .trim()
+        .parse()
+        .map_err(|_| "v-rooms-room-leave-invalid-room")
+}
+
+fn parse_room_join_target(room_id_or_alias: &str) -> Result<OwnedRoomOrAliasId, &'static str> {
+    room_id_or_alias
+        .trim()
+        .parse()
+        .map_err(|_| "v-rooms-room-join-invalid-room")
+}
+
+fn parse_room_join_via_servers(
+    via_servers: Option<&[String]>,
+) -> Result<Vec<OwnedServerName>, &'static str> {
+    via_servers
+        .unwrap_or_default()
+        .iter()
+        .map(|server| {
+            server
+                .trim()
+                .parse()
+                .map_err(|_| "v-rooms-room-join-invalid-via-server")
+        })
+        .collect()
 }
 
 fn parse_directory_visibility_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
