@@ -7,9 +7,8 @@ use super::*;
 use crate::matrix::auth::product::{MatrixAuthCommandError, MatrixAuthState};
 use crate::matrix::ipc::MAX_WIRE_COUNTER;
 use crate::matrix::room_directory::{
-    build_public_rooms_request, fetch_protocols, normalize_search_input, project_response,
-    DirectoryRoomTypeFilter, DirectorySearchInput, NativeRoomDirectoryProtocols,
-    NativeRoomDirectorySearchResponse,
+    build_public_rooms_request, normalize_search_input, project_response, DirectoryRoomTypeFilter,
+    DirectorySearchInput, NativeRoomDirectoryProtocols, NativeRoomDirectorySearchResponse,
 };
 use tauri::State;
 
@@ -147,22 +146,9 @@ fn stale_response(session_generation: u64, request_id: u64) -> NativeRoomDirecto
 /// managed authenticated client.
 #[tauri::command]
 pub async fn matrix_room_directory_protocols(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeRoomDirectoryProtocols, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref()).map_err(|_| {
-        directory_error("Forbidden", "v-rooms.directory-protocols-requires-session")
-    })?;
-    let generation = active.sync.session_generation();
-    let result = fetch_protocols(&active.client, generation)
-        .await
-        .map_err(|diagnostic_id| directory_error("Unknown", diagnostic_id))?;
-    if active.sync.session_generation() != generation {
-        return Err(stale_directory(
-            "v-rooms.directory-protocols-stale-generation",
-        ));
-    }
-    Ok(result)
+    crate::bridge::directory_protocols::room_directory_protocols(core.inner().as_ref()).await
 }
 
 /// Searches the public room directory through the sole managed Matrix SDK

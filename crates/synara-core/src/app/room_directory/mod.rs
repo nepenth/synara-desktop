@@ -1,7 +1,7 @@
 //! P6.10 — Public room directory search and projection (harness).
 //!
-//! Pure projection of directory hits for product UI. No SDK directory
-//! network, no dual-backend, no tokens. Stale request ids ignored.
+//! Pure projection of directory hits plus live protocol listing. Search
+//! request-authority still lives in the desktop shell.
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p6.10-room-directory.md`
 
@@ -9,10 +9,12 @@
 #![allow(unused_imports)]
 
 mod error;
+mod live;
 mod native;
 mod session;
 
 pub use error::RoomDirectoryError;
+pub use live::{fetch_protocols, project_protocols};
 pub use native::{
     normalize_search_input, DirectoryProtocolInstance, DirectoryRoomHitDto,
     DirectoryRoomTypeFilter, DirectorySearchInput, NativeRoomDirectoryPage,

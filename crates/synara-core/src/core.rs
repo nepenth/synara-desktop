@@ -29,6 +29,7 @@ use crate::app::members::{
 use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceSubscription,
 };
+use crate::app::room_directory::NativeRoomDirectoryProtocols;
 use crate::app::room_ops::MatrixRoomCreateRequest;
 use crate::app::room_profile::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
@@ -1482,6 +1483,12 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_backup_status", matrix_backup_status)
         .expect("built-in matrix_backup_status must remain in the command census");
     registry
+        .register(
+            "matrix_room_directory_protocols",
+            matrix_room_directory_protocols,
+        )
+        .expect("built-in matrix_room_directory_protocols must remain in the command census");
+    registry
         .register("matrix_send_text", matrix_send_text)
         .expect("built-in matrix_send_text must remain in the command census");
     registry
@@ -2743,6 +2750,40 @@ fn matrix_backup_status(state: Arc<CoreState>, request: CommandEnvelope) -> Comm
 
 fn backup_status_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     MatrixIpcError::new(MatrixIpcErrorCategory::Unknown).with_diagnostic(diagnostic_id)
+}
+
+fn matrix_room_directory_protocols(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error(
+                "p2-room-directory-protocols-invalid-payload",
+            ));
+        }
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-directory-protocols-no-session")
+        })?;
+        let snapshot: NativeRoomDirectoryProtocols = owner
+            .directory_protocols()
+            .await
+            .map_err(directory_protocols_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-room-directory-protocols-serialization-failed"))
+    })
+}
+
+fn directory_protocols_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-rooms.directory-protocol-id-cap"
+        | "v-rooms.directory-protocol-instance-invalid"
+        | "v-rooms.directory-protocol-instance-cap" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 fn matrix_device_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -4564,6 +4605,7 @@ mod tests {
                 "matrix_room_ban",
                 "matrix_room_create",
                 "matrix_room_creators_snapshot",
+                "matrix_room_directory_protocols",
                 "matrix_room_invite",
                 "matrix_room_join",
                 "matrix_room_join_rule_snapshot",
@@ -6167,6 +6209,25 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-backup-status-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_directory_protocols_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_directory_protocols".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("directory protocols without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-directory-protocols-no-session")
         );
     }
 
