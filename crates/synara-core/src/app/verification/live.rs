@@ -50,6 +50,7 @@ struct VerificationRegistry {
 }
 
 pub struct NativeVerificationOwner {
+    client: Client,
     registry: Arc<Mutex<VerificationRegistry>>,
     _request_handler: EventHandlerHandle,
 }
@@ -70,6 +71,7 @@ impl NativeVerificationOwner {
             },
         );
         Self {
+            client: client.clone(),
             registry,
             _request_handler: request_handler,
         }
@@ -97,16 +99,17 @@ impl NativeVerificationOwner {
 
     pub async fn start(
         &self,
-        client: &Client,
         device_id: Option<String>,
     ) -> Result<NativeVerificationRequest, &'static str> {
-        let user_id = client
+        let user_id = self
+            .client
             .user_id()
             .ok_or("v-crypto.1-start-requires-session")?;
         let (request, other_device_id) = match device_id {
             Some(device_id) => {
                 let device_id = OwnedDeviceId::from(device_id);
-                let device = client
+                let device = self
+                    .client
                     .encryption()
                     .get_device(user_id, &device_id)
                     .await
@@ -119,7 +122,8 @@ impl NativeVerificationOwner {
                 (request, Some(device_id))
             }
             None => {
-                let identity = client
+                let identity = self
+                    .client
                     .encryption()
                     .request_user_identity(user_id)
                     .await
