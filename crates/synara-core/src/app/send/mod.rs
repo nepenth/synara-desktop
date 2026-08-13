@@ -17,6 +17,7 @@ mod error;
 mod ipc;
 mod poll;
 mod queue;
+mod sticker;
 mod text;
 
 pub use attachment_queue::{
@@ -32,6 +33,7 @@ pub use poll::{
     normalize_poll, poll_response_content, poll_start_content, NormalizedPoll, PollSendError,
 };
 pub use queue::{LocalTxnId, OutboundTextMessage, SendQueue};
+pub use sticker::sticker_content;
 pub use text::{
     edit_message_content, message_content, parse_edit_event_id, parse_reply_event_id,
     parse_send_room_id, parse_thread_root_event_id, parse_transaction_id, send_message_to_room,

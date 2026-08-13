@@ -158,7 +158,7 @@ pub async fn matrix_send_attachment(
 #[tauri::command]
 #[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
 pub async fn matrix_send_sticker(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     body: String,
     mxc: String,
@@ -169,10 +169,9 @@ pub async fn matrix_send_sticker(
     reply_to: Option<String>,
     thread_root: Option<String>,
 ) -> Result<MatrixSendStickerResult, MatrixAuthCommandError> {
-    let room_id = parse_send_room_id(&room_id)?;
-    let reply_to = parse_reply_event_id(reply_to)?;
-    let thread_root = parse_thread_root_event_id(thread_root)?;
-    let content = sticker_content(
+    crate::bridge::send_sticker::send_sticker(
+        core.inner().as_ref(),
+        room_id,
         body,
         mxc,
         width,
@@ -181,32 +180,8 @@ pub async fn matrix_send_sticker(
         size,
         reply_to,
         thread_root,
-    )?;
-
-    let room = {
-        let mut session = state.session.lock().await;
-        let active = require_send_session_mut(session.as_mut())?;
-        active.client.get_room(&room_id).ok_or_else(|| {
-            MatrixAuthCommandError::new(
-                "NotFound",
-                "The native Matrix room is not available.",
-                "v-send-sticker-room-not-found",
-            )
-        })?
-    };
-
-    let response = room.send(content).await.map_err(|_| {
-        MatrixAuthCommandError::new(
-            "Unknown",
-            "The native Matrix sticker could not be sent.",
-            "v-send-sticker-sdk-failed",
-        )
-    })?;
-    Ok(MatrixSendStickerResult {
-        room_id: room_id.to_string(),
-        event_id: response.response.event_id.to_string(),
-        status: "sent",
-    })
+    )
+    .await
 }
 
 /// V-SEND.3 sole poll-start owner (composer board + `/poll` command).
@@ -397,42 +372,17 @@ pub(crate) fn sticker_content(
     reply_to: Option<OwnedEventId>,
     thread_root: Option<OwnedEventId>,
 ) -> Result<StickerEventContent, MatrixAuthCommandError> {
-    let body = body.trim();
-    if body.is_empty() || body.len() > 1024 {
-        return Err(map_send_error("v-send-sticker-invalid-body"));
-    }
-    let mxc = mxc.trim();
-    if mxc.is_empty() || mxc.len() > 1024 {
-        return Err(map_send_error("v-send-sticker-invalid-mxc"));
-    }
-    let mxc_ref: &MxcUri = mxc.into();
-    if !mxc_ref.is_valid() {
-        return Err(map_send_error("v-send-sticker-invalid-mxc"));
-    }
-    let url: OwnedMxcUri = mxc_ref.to_owned();
-
-    let mut info = ImageInfo::new();
-    info.width = width.and_then(UInt::new);
-    info.height = height.and_then(UInt::new);
-    info.size = size.and_then(UInt::new);
-    if let Some(mimetype) = mimetype {
-        let mime = mimetype.trim();
-        if !mime.is_empty() {
-            if mime.len() > 255 || !mime.chars().all(|c| c.is_ascii_graphic()) {
-                return Err(map_send_error("v-send-sticker-invalid-mimetype"));
-            }
-            info.mimetype = Some(mime.to_owned());
-        }
-    }
-
-    let mut content = StickerEventContent::new(body.to_owned(), info, url);
-    content.relates_to = match (thread_root, reply_to) {
-        (Some(root), Some(reply)) => Some(Relation::Thread(Thread::reply(root, reply))),
-        (Some(root), None) => Some(Relation::Thread(Thread::without_fallback(root))),
-        (None, Some(reply)) => Some(Relation::Reply(Reply::with_event_id(reply))),
-        (None, None) => None,
-    };
-    Ok(content)
+    synara_core::app::send::sticker_content(
+        body,
+        mxc,
+        width,
+        height,
+        mimetype,
+        size,
+        reply_to,
+        thread_root,
+    )
+    .map_err(map_send_error)
 }
 
 /// Build validated room-message content for the native composer owner.
