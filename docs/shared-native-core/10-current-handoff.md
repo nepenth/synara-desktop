@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `cf04eae0`, the merge commit for #858. |
-| Immediately preceding merges | #857 docs after #856, #858 `matrix_timeline_event_readback`. |
+| Feature evidence tip | `feature/shared-native-core` is `b9b9d2db`, the merge commit for #860. |
+| Immediately preceding merges | #859 docs after #858, #860 `matrix_timeline_paginate`. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -107,11 +107,12 @@ residency changes are:
 | #854 / `963f6719` | device delete start/cancel via `Core::command` | Owner now holds pending UIAA state. Password stays desktop. |
 | #856 / `0935062a` | timeline attach + `matrix_timeline_close` | Shared `NativeTimelineOwner`; other timeline cmds still desktop. |
 | #858 / `cf04eae0` | `matrix_timeline_event_readback` via `Core::command` | Timeline owner now holds a Client clone. |
+| #860 / `b9b9d2db` | `matrix_timeline_paginate` via `Core::command` | Same attached timeline owner. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `cf04eae0`/#858 for
+anchor, but it is no longer the feature-tip provenance; use `b9b9d2db`/#860 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -181,9 +182,9 @@ tests/proofs for moved domains. Core-owned discovery/UIA types and the vault
 trait do not make live login or Keychain I/O Core-owned. Therefore P1 is not
 complete and `src-tauri` is not a thin shell.
 
-### P2 — in progress: thirty-four registered commands
+### P2 — in progress: thirty-five registered commands
 
-The Core registry registers exactly these thirty-four names:
+The Core registry registers exactly these thirty-five names:
 
 1. `matrix_login_flows`
 2. `matrix_register_flows`
@@ -219,6 +220,7 @@ The Core registry registers exactly these thirty-four names:
 32. `matrix_device_delete_cancel` (#854)
 33. `matrix_timeline_close` (#856)
 34. `matrix_timeline_event_readback` (#858)
+35. `matrix_timeline_paginate` (#860)
 
 All other census command names remain unregistered and fail closed. This is
 neither complete desktop command parity nor a basis to add a speculative route.
