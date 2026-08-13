@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `93c3655b`, the merge commit for #803. |
-| Immediately preceding merges | #802 docs after #801, #803 live `NativeTypingOwner`. |
+| Feature evidence tip | `feature/shared-native-core` is `c040632b`, the merge commit for #805. |
+| Immediately preceding merges | #804 docs after #803, #805 live `NativeRoomJoinRuleOwner`. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -79,11 +79,12 @@ residency changes are:
 | #800 / `571cffde` | live `Client::builder` + persist/restore | Desktop keeps Keyring vault and `SdkClientHandle`. |
 | #801 / `588de584` | live login / register / password-reset | Desktop keeps Tauri product commands. |
 | #803 / `93c3655b` | live `NativeTypingOwner` / `set_typing_notice` | Desktop keeps Tauri typing commands. |
+| #805 / `c040632b` | live `NativeRoomJoinRuleOwner` behind emit sink | Desktop keeps Tauri event adapter. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `93c3655b`/#803 for
+anchor, but it is no longer the feature-tip provenance; use `c040632b`/#805 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
