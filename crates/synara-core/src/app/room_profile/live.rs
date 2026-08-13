@@ -1,9 +1,9 @@
 //! Live room-profile state owned by the managed native Matrix session.
 //!
-//! This module deliberately projects only the bounded join-rule vocabulary
-//! needed by the room-settings Publish-to-Directory gate. It does not own a
-//! join-rule writer and never sends SDK event objects over the application
-//! event boundary.
+//! This module projects the bounded join-rule vocabulary needed by the
+//! room-settings Publish-to-Directory gate and owns the room name/topic/avatar
+//! writes. It does not own a join-rule writer and never sends SDK event
+//! objects over the application event boundary.
 
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -16,10 +16,12 @@ use matrix_sdk::{
     ruma::{
         events::room::join_rules::{RoomJoinRulesEventContent, SyncRoomJoinRulesEvent},
         room::JoinRule,
-        OwnedRoomId,
+        OwnedMxcUri, OwnedRoomId,
     },
     Client, Room, RoomState,
 };
+
+use crate::app::user_profile::MatrixProfileWriteResult;
 
 use super::{MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleUpdate};
 
@@ -157,6 +159,70 @@ impl NativeRoomJoinRuleOwner {
             join_rule: join_rule.to_owned(),
         })
     }
+
+    pub async fn set_name(
+        &self,
+        room_id: &str,
+        name: &str,
+    ) -> Result<MatrixProfileWriteResult, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let name = parse_room_name(name)?;
+        let room = self.profile_room(room_id)?;
+        room.set_name(name)
+            .await
+            .map_err(|_| "v-send.r-room-profile-name-sdk-failed")?;
+        Ok(MatrixProfileWriteResult { status: "ok" })
+    }
+
+    pub async fn set_topic(
+        &self,
+        room_id: &str,
+        topic: &str,
+    ) -> Result<MatrixProfileWriteResult, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let topic = parse_room_topic(topic)?;
+        let room = self.profile_room(room_id)?;
+        room.set_room_topic(&topic)
+            .await
+            .map_err(|_| "v-send.r-room-profile-topic-sdk-failed")?;
+        Ok(MatrixProfileWriteResult { status: "ok" })
+    }
+
+    pub async fn set_avatar(
+        &self,
+        room_id: &str,
+        mxc: &str,
+    ) -> Result<MatrixProfileWriteResult, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let mxc = parse_avatar_mxc(mxc)?;
+        let room = self.profile_room(room_id)?;
+        match mxc {
+            Some(url) => {
+                room.set_avatar_url(&url, None)
+                    .await
+                    .map_err(|_| "v-send.r-room-profile-avatar-set-sdk-failed")?;
+            }
+            None => {
+                room.remove_avatar()
+                    .await
+                    .map_err(|_| "v-send.r-room-profile-avatar-remove-sdk-failed")?;
+            }
+        }
+        Ok(MatrixProfileWriteResult { status: "ok" })
+    }
+
+    fn profile_room(&self, room_id: &str) -> Result<Room, &'static str> {
+        let room_id = parse_profile_room_id(room_id)?;
+        self.client
+            .get_room(&room_id)
+            .ok_or("v-send.r-room-profile-room-not-found")
+    }
 }
 
 fn parse_join_rule_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
@@ -171,6 +237,41 @@ fn parse_join_rule_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
     room_id
         .parse()
         .map_err(|_| "v-send.r-room-profile-join-rule-invalid")
+}
+
+fn parse_profile_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
+    OwnedRoomId::try_from(room_id.trim()).map_err(|_| "d0.4-send-invalid-room-id")
+}
+
+fn parse_room_name(name: &str) -> Result<String, &'static str> {
+    let trimmed = name.trim();
+    if trimmed.chars().count() > 255 {
+        return Err("v-send.r-room-profile-name-too-long");
+    }
+    Ok(trimmed.to_owned())
+}
+
+fn parse_room_topic(topic: &str) -> Result<String, &'static str> {
+    let trimmed = topic.trim();
+    if trimmed.chars().count() > 2_048 {
+        return Err("v-send.r-room-profile-topic-too-long");
+    }
+    Ok(trimmed.to_owned())
+}
+
+fn parse_avatar_mxc(mxc: &str) -> Result<Option<OwnedMxcUri>, &'static str> {
+    let trimmed = mxc.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if !trimmed.starts_with("mxc://") {
+        return Err("v-send.r-avatar-invalid-mxc");
+    }
+    let owned = OwnedMxcUri::from(trimmed);
+    if owned.as_str().matches('/').count() < 3 {
+        return Err("v-send.r-avatar-invalid-mxc");
+    }
+    Ok(Some(owned))
 }
 
 #[cfg(test)]

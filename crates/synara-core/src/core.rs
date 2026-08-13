@@ -32,6 +32,7 @@ use crate::app::timeline::{
     NativeTimelineViewPaginationRequest, TimelineViewSnapshot,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
+use crate::app::user_profile::MatrixProfileWriteResult;
 use crate::app::verification::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
 };
@@ -824,6 +825,30 @@ struct MatrixRoomJoinRuleSnapshotRequest {
     session_generation: u64,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_set_room_name`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixSetRoomNameRequest {
+    room_id: String,
+    name: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_set_room_topic`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixSetRoomTopicRequest {
+    room_id: String,
+    topic: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_set_room_avatar`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixSetRoomAvatarRequest {
+    room_id: String,
+    mxc: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_register_flows`.
 ///
 /// This read-only probe accepts exactly the existing camel-case homeserver
@@ -1222,6 +1247,15 @@ fn built_in_registry() -> CommandRegistry {
             matrix_room_join_rule_snapshot,
         )
         .expect("built-in matrix_room_join_rule_snapshot must remain in the command census");
+    registry
+        .register("matrix_set_room_name", matrix_set_room_name)
+        .expect("built-in matrix_set_room_name must remain in the command census");
+    registry
+        .register("matrix_set_room_topic", matrix_set_room_topic)
+        .expect("built-in matrix_set_room_topic must remain in the command census");
+    registry
+        .register("matrix_set_room_avatar", matrix_set_room_avatar)
+        .expect("built-in matrix_set_room_avatar must remain in the command census");
     registry
         .register(
             "matrix_get_global_image_packs",
@@ -2165,6 +2199,70 @@ fn matrix_room_join_rule_snapshot(
     })
 }
 
+fn matrix_set_room_name(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSetRoomNameRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-set-room-name-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-set-room-name-no-session")
+        })?;
+        let result: MatrixProfileWriteResult = owner
+            .set_name(&payload.room_id, &payload.name)
+            .await
+            .map_err(room_profile_write_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-set-room-name-serialization-failed"))
+    })
+}
+
+fn matrix_set_room_topic(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSetRoomTopicRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-set-room-topic-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-set-room-topic-no-session")
+        })?;
+        let result: MatrixProfileWriteResult = owner
+            .set_topic(&payload.room_id, &payload.topic)
+            .await
+            .map_err(room_profile_write_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-set-room-topic-serialization-failed"))
+    })
+}
+
+fn matrix_set_room_avatar(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSetRoomAvatarRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-set-room-avatar-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-set-room-avatar-no-session")
+        })?;
+        let result: MatrixProfileWriteResult = owner
+            .set_avatar(&payload.room_id, &payload.mxc)
+            .await
+            .map_err(room_profile_write_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-set-room-avatar-serialization-failed"))
+    })
+}
+
+fn room_profile_write_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "d0.4-send-invalid-room-id"
+        | "v-send.r-room-profile-name-too-long"
+        | "v-send.r-room-profile-topic-too-long"
+        | "v-send.r-avatar-invalid-mxc"
+        | "v-send.r-room-profile-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
 fn matrix_get_global_image_packs(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         if !request.payload.is_null() {
@@ -2970,7 +3068,10 @@ mod tests {
                 "matrix_secret_storage_status",
                 "matrix_session_snapshot",
                 "matrix_set_global_image_packs",
+                "matrix_set_room_avatar",
                 "matrix_set_room_image_pack",
+                "matrix_set_room_name",
+                "matrix_set_room_topic",
                 "matrix_set_user_image_pack",
                 "matrix_sync_status",
                 "matrix_timeline_call_decline",
@@ -4661,6 +4762,63 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-device-delete-cancel-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_set_room_name_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_set_room_name".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org","name":"Room"}),
+            })
+            .await
+            .expect_err("set room name without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-set-room-name-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_set_room_topic_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_set_room_topic".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org","topic":"Hello"}),
+            })
+            .await
+            .expect_err("set room topic without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-set-room-topic-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_set_room_avatar_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_set_room_avatar".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org","mxc":""}),
+            })
+            .await
+            .expect_err("set room avatar without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-set-room-avatar-no-session")
         );
     }
 

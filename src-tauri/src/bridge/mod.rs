@@ -12,6 +12,7 @@ pub(crate) mod media_config;
 pub(crate) mod presence_snapshot;
 pub(crate) mod presence_subscriptions;
 pub(crate) mod room_image_packs;
+pub(crate) mod room_profile_writes;
 pub(crate) mod secret_storage_status;
 pub(crate) mod session_lifecycle;
 pub(crate) mod timeline_actions;
