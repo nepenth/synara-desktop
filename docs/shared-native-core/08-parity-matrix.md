@@ -4,13 +4,13 @@ Legend: ✅ shipping / 🔨 in progress / ⛔ not yet
 
 ## Current bounded evidence (not parity completion)
 
-At `feature/shared-native-core` `b811319f0fcc7ecd6eee82e4255d57e8e5699360`
-(#714, after #713), P2 still registers exactly the same eight names—
+At `feature/shared-native-core` `99066f9ad6577a9c990dc7fe9a6b139d652fc791`
+(#718, after #716/#717), P2 still registers exactly the same eight names—
 `matrix_login_flows`, `matrix_register_flows`, `matrix_session_snapshot`,
 `matrix_sync_status`, `matrix_crypto_status`, `matrix_media_config`,
 `matrix_cross_signing_status`, and `matrix_secret_storage_status`—and all
-other census names fail closed. #713/#714 are P1-only mechanical extraction:
-they add no Core command route, UDL, or iOS behavior. The prior #708 work is
+other census names fail closed. #713/#714/#716/#717 are P1-only mechanical
+extraction: they add no Core command route, UDL, or iOS behavior. The prior #708 work is
 only a pure iOS room-row unread presentation from closed `Joined`/`Invited`
 membership, scalar counters, and a marked-unread flag to a `u64` count plus
 highlight boolean. The prior #710 work is only a pure cold-start decision from

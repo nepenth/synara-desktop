@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`b811319f0fcc7ecd6eee82e4255d57e8e5699360` (#714, after #713):** P0 is
+`99066f9ad6577a9c990dc7fe9a6b139d652fc791` (#718, after #716/#717):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -33,10 +33,11 @@ acceptance criteria have all passed.
   UTD-recovery pieces. #681 added the `Platform` sink and desktop `AppHandle`
   adapter without changing intended behavior. #713 then mechanically moved the
   pure notifications, polls, relations, threads, and unread projections; #714
-  mechanically moved raw content, receipts, routes, and security. Both clusters
-  retain thin desktop re-exports and add no P2 command, UDL, or iOS behavior.
-  Compatibility re-exports remain, and many matrix domains are still
-  desktop-owned, so the full extraction/end state is not yet complete.
+  mechanically moved raw content, receipts, routes, and security; #716 moved
+  search, legacy, and media_cache; #717 moved media_export and crypto_store.
+  These clusters retain thin desktop re-exports and add no P2 command, UDL, or
+  iOS behavior. Compatibility re-exports remain, and many matrix domains are
+  still desktop-owned, so the full extraction/end state is not yet complete.
 - **P2 — in progress; transport registry is intentionally partial.** #683–#684
   added `Core::command`, typed envelopes, the registry, and the desktop command
   census. The merged registry currently has exactly:
@@ -45,7 +46,7 @@ acceptance criteria have all passed.
   `matrix_cross_signing_status`, and `matrix_secret_storage_status`
   (#686–#689, #694, #698, #701–#702, #706). The latter six preserve bounded
   legacy status/media/cross-signing/secret-storage contracts through Core.
-  Neither #708, #710, #713, nor #714 adds a Core command route. It is not the
+  Neither #708, #710, #713, #714, #716, nor #717 adds a Core command route. It is not the
   complete desktop command registry; unregistered census names fail closed.
 - **P3 — in progress; a desktop seam is merged, not a whole adapter swap.**
   #690 routes the credential-free login and registration flow probes through
