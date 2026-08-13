@@ -119,6 +119,17 @@ impl NativeTimelineOwner {
             .paginate(&self.client, request)
             .await
     }
+
+    pub async fn set_read_state(
+        &self,
+        request: NativeTimelineReadStateRequest,
+    ) -> Result<NativeTimelineReadStateReadback, &'static str> {
+        self.registry
+            .lock()
+            .await
+            .set_read_state(&self.client, request)
+            .await
+    }
 }
 
 impl NativeTimelineRegistry {

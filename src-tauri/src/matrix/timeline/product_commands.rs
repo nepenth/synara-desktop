@@ -79,18 +79,15 @@ pub async fn matrix_timeline_paginate(
 
 #[tauri::command]
 pub async fn matrix_timeline_set_read_state(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     request: NativeTimelineReadStateRequest,
 ) -> Result<NativeTimelineReadStateReadback, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
-    let active = require_session_mut(session.as_mut())?;
-    active
-        .timelines
-        .lock()
-        .await
-        .set_read_state(&active.client, request)
-        .await
-        .map_err(map_timeline_error)
+    crate::bridge::timeline_set_read_state::timeline_set_read_state(
+        core.inner().as_ref(),
+        request.stream_id,
+        request.action,
+    )
+    .await
 }
 
 #[tauri::command]

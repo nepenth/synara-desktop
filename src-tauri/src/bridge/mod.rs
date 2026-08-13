@@ -17,6 +17,7 @@ pub(crate) mod session_lifecycle;
 pub(crate) mod timeline_close;
 pub(crate) mod timeline_event_readback;
 pub(crate) mod timeline_paginate;
+pub(crate) mod timeline_set_read_state;
 pub(crate) mod typing_set;
 pub(crate) mod typing_snapshot;
 pub(crate) mod user_image_pack;
