@@ -2,6 +2,7 @@
 
 pub(crate) mod auth_probes;
 pub(crate) mod cross_signing_status;
+pub(crate) mod device_snapshot;
 pub(crate) mod media_config;
 pub(crate) mod presence_snapshot;
 pub(crate) mod secret_storage_status;

@@ -74,10 +74,11 @@ pub async fn matrix_login_password(
     ensure_crypto_ready(&client).await?;
     let session_generation = state.next_generation();
     let verification = Arc::new(NativeVerificationOwner::new(&client, session_generation));
-    let devices =
+    let devices = Arc::new(
         crate::matrix::devices::start_device_owner(&client, app.clone(), session_generation)
             .await
-            .map_err(map_device_error)?;
+            .map_err(map_device_error)?,
+    );
     let image_packs = crate::matrix::account_data::start_image_pack_owner(
         &client,
         app.clone(),
@@ -127,7 +128,7 @@ pub async fn matrix_login_password(
         sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
         verification: verification.clone(),
-        _devices: devices,
+        _devices: devices.clone(),
         _image_packs: image_packs,
         typing: typing.clone(),
         presence: presence.clone(),
@@ -155,6 +156,9 @@ pub async fn matrix_login_password(
     core.inner()
         .attach_verification(verification)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-verification-attach-failed"))?;
+    core.inner()
+        .attach_devices(devices)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-device-attach-failed"))?;
     Ok(identity)
 }
 
@@ -301,13 +305,14 @@ pub async fn matrix_register(
         RegisterSubmitOutcome::Complete(secrets) => {
             let (identity, session_generation) =
                 install_session_from_register_secrets(&app, &state, &mut session, secrets).await?;
-            let (typing, presence, verification) = session
+            let (typing, presence, verification, devices) = session
                 .as_ref()
                 .map(|active| {
                     (
                         active.typing.clone(),
                         active.presence.clone(),
                         active.verification.clone(),
+                        active._devices.clone(),
                     )
                 })
                 .ok_or_else(|| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
@@ -329,6 +334,9 @@ pub async fn matrix_register(
                 .map_err(|_| {
                     MatrixAuthCommandError::unavailable("p2-verification-attach-failed")
                 })?;
+            core.inner()
+                .attach_devices(devices)
+                .map_err(|_| MatrixAuthCommandError::unavailable("p2-device-attach-failed"))?;
             Ok(MatrixRegisterOutcome::Complete { identity })
         }
     }
@@ -372,10 +380,11 @@ pub(super) async fn install_session_from_register_secrets(
     ensure_crypto_ready(&client).await?;
     let session_generation = state.next_generation();
     let verification = Arc::new(NativeVerificationOwner::new(&client, session_generation));
-    let devices =
+    let devices = Arc::new(
         crate::matrix::devices::start_device_owner(&client, app.clone(), session_generation)
             .await
-            .map_err(map_device_error)?;
+            .map_err(map_device_error)?,
+    );
     let image_packs = crate::matrix::account_data::start_image_pack_owner(
         &client,
         app.clone(),
@@ -425,7 +434,7 @@ pub(super) async fn install_session_from_register_secrets(
         sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
         verification: verification.clone(),
-        _devices: devices,
+        _devices: devices.clone(),
         _image_packs: image_packs,
         typing: typing.clone(),
         presence: presence.clone(),
@@ -556,10 +565,11 @@ pub async fn matrix_restore_session(
     ensure_crypto_ready(&client).await?;
     let session_generation = state.next_generation();
     let verification = Arc::new(NativeVerificationOwner::new(&client, session_generation));
-    let devices =
+    let devices = Arc::new(
         crate::matrix::devices::start_device_owner(&client, app.clone(), session_generation)
             .await
-            .map_err(map_device_error)?;
+            .map_err(map_device_error)?,
+    );
     let image_packs = crate::matrix::account_data::start_image_pack_owner(
         &client,
         app.clone(),
@@ -589,7 +599,7 @@ pub async fn matrix_restore_session(
         sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
         verification: verification.clone(),
-        _devices: devices,
+        _devices: devices.clone(),
         _image_packs: image_packs,
         typing: typing.clone(),
         presence: presence.clone(),
@@ -617,6 +627,9 @@ pub async fn matrix_restore_session(
     core.inner()
         .attach_verification(verification)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-verification-attach-failed"))?;
+    core.inner()
+        .attach_devices(devices)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-device-attach-failed"))?;
     Ok(identity)
 }
 

@@ -3,7 +3,7 @@
 //! Shells supply the emit sink (desktop Tauri event / later iOS UniFFI).
 //! UIAA delete product commands stay in the desktop shell.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 mod live;
 pub use live::{
@@ -15,7 +15,7 @@ pub use live::{
 /// Signal only — never carries device keys or tokens.
 pub const DEVICE_LIST_UPDATED_EVENT: &str = "matrix-device-list-updated";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeDeviceTrust {
     Verified,
@@ -23,7 +23,7 @@ pub enum NativeDeviceTrust {
     Unsupported,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NativeDeviceSummary {
     pub device_id: String,
@@ -34,7 +34,7 @@ pub struct NativeDeviceSummary {
     pub is_current: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NativeDeviceSnapshot {
     pub session_generation: u64,
