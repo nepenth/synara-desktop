@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `d79dbd71`, the merge commit for #748. |
-| Immediately preceding merges | #746 docs after #743, #748 client-builder error/features. |
+| Feature evidence tip | `feature/shared-native-core` is `a030aeb1`, the merge commit for #747. |
+| Immediately preceding merges | #749 docs after #748, #747 lifecycle recovery-copy. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -49,11 +49,12 @@ residency changes are:
 | #744 / `94a95017` | diagnostics health harness | Thin desktop re-export; supervisor/task imports retargeted to core. |
 | #743 / `ddacf34a` | store identity/paths harness | Desktop keeps keyring vault (`key_material` / `key_vault` / tests). |
 | #748 / `d79dbd71` | client-builder error/features harness | Desktop keeps SDK open/config/`sdk_handle`/tests. |
+| #747 / `a030aeb1` | lifecycle recovery-copy harness | Desktop keeps vault/SDK leftovers; remote-logout policy enums moved with copy. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `d79dbd71`/#748 for
+anchor, but it is no longer the feature-tip provenance; use `a030aeb1`/#747 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -101,15 +102,16 @@ and the P1 app domains `sync`, `room_list`, pure `timeline`,
 `media_cache`, `media_export`, `crypto_store`, `members`, `user_profile`,
 `room_directory` session, `verification` inbox, `account_data` index,
 `send` queue, `room_keys` transfer flow, `supervisor` actor,
-`diagnostics` health, `store` identity/paths, and `client_builder`
-error/features.
+`diagnostics` health, `store` identity/paths, `client_builder`
+error/features, and `lifecycle` recovery-copy / remote-logout policy enums.
 Later mechanical splits left live `product_commands.rs` and `live.rs` on
 desktop where those files exist. Compatibility re-exports remain deliberately
 in the desktop shell.
 
 Desktop still owns the unmoved or leftover matrix surfaces: full auth
-execution, client-builder SDK open/config, devices, lifecycle, media
-commands, secret storage, store keyring vault, and the live/command leftovers
+execution, client-builder SDK open/config, devices, lifecycle vault/SDK
+leftovers, media commands, secret storage, store keyring vault, and the
+live/command leftovers
 for already-split domains (including account-data image_packs/later/notes, send
 product commands / synapse proofs, and room-keys live/commands). It
 also retains the desktop-side commands, live/platform adapters, and applicable
