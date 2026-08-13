@@ -11,10 +11,16 @@
 
 mod error;
 mod flow;
+mod native;
 
 pub use error::RoomKeyError;
 pub use flow::{
     RoomKeyTransferFlow, RoomKeyTransferKind, RoomKeyTransferOutcome, RoomKeyTransferPhase,
+};
+pub use native::{
+    project_room_key_status, NativeRoomKeyFileSelection, NativeRoomKeyTransferKind,
+    NativeRoomKeyTransferPhase, NativeRoomKeyTransferResult, NativeRoomKeyTransferStatus,
+    EXPORT_FILE_NAME,
 };
 
 /// Static marker for link / schema smoke.
