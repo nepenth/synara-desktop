@@ -3,15 +3,15 @@
 //! Authoritative design note: `docs/matrix-rust-sdk/p6.7-account-data.md`
 //! Product verticals: `docs/matrix-rust-sdk/v-rooms-5-mdirect.md`,
 //! `docs/matrix-rust-sdk/v-timeline-full-replacement-contract.md` (later/notes).
-//! Live Client RMW (image_packs/later/live/room_notes owners) and
-//! product_commands stay in the desktop shell. Codec types for image_packs,
-//! later, room_notes, and m.direct live here.
+//! Live image-pack snapshot/set/owner live here. later/room_notes/m.direct
+//! Client RMW and product_commands stay in the desktop shell.
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
 mod error;
 mod image_packs;
+mod image_packs_live;
 mod index;
 mod later;
 mod mdirect;
@@ -25,6 +25,11 @@ pub use image_packs::{
     NativeImagePack, NativeRoomImagePacksSnapshot, NativeUserImagePackSnapshot,
     EMOTE_ROOMS_EVENT_TYPE, IMAGE_PACKS_UPDATED_EVENT, ROOM_EMOTES_EVENT_TYPE,
     USER_EMOTES_EVENT_TYPE,
+};
+pub use image_packs_live::{
+    set_global_image_packs, set_room_image_pack, set_user_image_pack, snapshot_global_image_packs,
+    snapshot_room_image_packs, snapshot_user_image_pack, ImagePackUpdateEmit, NativeImagePackOwner,
+    NativeImagePackUpdateSignal,
 };
 pub use index::{
     AccountDataEntry, AccountDataIndex, MAX_CONTENT_FIELDS, MAX_GLOBAL_TYPES, MAX_KEY_LEN,

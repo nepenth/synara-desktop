@@ -1,6 +1,6 @@
 //! Credential-free im.ponies image-pack DTO, type filters, and write guards.
 //!
-//! Live Client snapshot/set and Tauri subscribe stay in the desktop shell.
+//! Live Client snapshot/set/owner live in [`super::image_packs_live`].
 
 use std::collections::BTreeMap;
 
