@@ -12,6 +12,7 @@ use super::{NativeTypingSnapshot, TypingIndex, MAX_TYPING_USERS_PER_ROOM};
 
 /// Owns live `m.typing` projection for one managed session.
 pub struct NativeTypingOwner {
+    client: Client,
     index: Arc<Mutex<TypingIndex>>,
     _handler: EventHandlerDropGuard,
 }
@@ -44,6 +45,7 @@ impl NativeTypingOwner {
             }
         });
         Ok(Self {
+            client: client.clone(),
             index,
             _handler: client.event_handler_drop_guard(handle),
         })
@@ -55,6 +57,10 @@ impl NativeTypingOwner {
             session_generation: index.session_generation(),
             rooms: index.nonempty_snapshots(),
         }
+    }
+
+    pub async fn set(&self, room_id: &str, typing: bool) -> Result<(), &'static str> {
+        set_typing_notice(&self.client, room_id, typing).await
     }
 }
 
