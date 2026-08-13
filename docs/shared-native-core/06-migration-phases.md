@@ -17,8 +17,8 @@ big-bang move.**
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
 
-**Current bounded status at `6666556a4e5eb29c456fe9714cad2cf8d347286d`
-(#721, after #720):** #713 mechanically moved notifications, polls,
+**Current bounded status at `d5cc78f84f60e5634ec0c2b53db26d6e4d269b34`
+(#726, after #723–#725):** #713 mechanically moved notifications, polls,
 relations, threads, and unread; #714 moved raw content, receipts, routes, and
 security; #716 moved search, legacy, and media_cache; #717 moved media_export
 and crypto_store. These retain thin desktop re-exports. They are P1 extraction

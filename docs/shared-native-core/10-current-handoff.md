@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `6666556a4e5eb29c456fe9714cad2cf8d347286d`, the merge commit for #721. |
-| Immediately preceding merges | #720 `6cae3220`, #721 `6666556a`. Prior CI/docs tip remains #718/`99066f9a` and #719/`094d022f`. |
+| Feature evidence tip | `feature/shared-native-core` is `d5cc78f84f60e5634ec0c2b53db26d6e4d269b34`, the merge commit for #726. |
+| Immediately preceding merges | #723 typing, #724 presence, #725 spaces, #726 room-profile. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -32,11 +32,15 @@ residency changes are:
 | #717 / `abef91dc` | media_export, crypto_store | Same thin desktop re-export pattern. |
 | #720 / `6cae3220` | members harness (error/index/tests/mod) | Desktop keeps `product_commands.rs` for `#[path]`. |
 | #721 / `6666556a` | user_profile harness (error/index/tests/mod) | Desktop keeps `product_commands.rs` for `#[path]`. |
+| #723 / `2df8d971` | typing index | Desktop keeps `live.rs` + `product_commands.rs`. |
+| #724 / `48b767be` | presence index | Desktop keeps `live.rs` + `product_commands.rs` (clippy allows on facade). |
+| #725 / `f6996ac5` | spaces hierarchy | Desktop keeps `live.rs` + `product_commands.rs`. |
+| #726 / `d5cc78f8` | room_profile index | Desktop keeps `live.rs` + `product_commands.rs`. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `6666556a`/#721 for
+anchor, but it is no longer the feature-tip provenance; use `d5cc78f8`/#726 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
