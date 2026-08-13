@@ -33,6 +33,12 @@ use crate::app::members::{
     ROOM_CREATE_EVENT_TYPE, ROOM_POWER_LEVELS_EVENT_TYPE, ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
 };
 use crate::app::room_ops::{build_room_create_request, MatrixRoomCreateRequest};
+use crate::app::spaces::{
+    remove_space_child, reparent_restricted_join_allow, set_space_child, snapshot_space_children,
+    snapshot_space_hierarchy, snapshot_space_parents, NativeRestrictedJoinReparentResult,
+    NativeSpaceChildMutationResult, NativeSpaceChildrenSnapshot, NativeSpaceHierarchySnapshot,
+    NativeSpaceParentsSnapshot,
+};
 use crate::app::user_profile::MatrixProfileWriteResult;
 
 use super::{
@@ -396,6 +402,69 @@ impl NativeRoomJoinRuleOwner {
             .await
             .map(|room| room.room_id().to_string())
             .map_err(|_| "v-rooms-room-create-failed")
+    }
+
+    pub async fn space_parents_snapshot(&self) -> Result<NativeSpaceParentsSnapshot, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        snapshot_space_parents(&self.client, self.session_generation).await
+    }
+
+    pub async fn space_hierarchy_snapshot(
+        &self,
+        room_id: &str,
+    ) -> Result<NativeSpaceHierarchySnapshot, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        snapshot_space_hierarchy(&self.client, self.session_generation, room_id).await
+    }
+
+    pub async fn space_children_snapshot(
+        &self,
+    ) -> Result<NativeSpaceChildrenSnapshot, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        snapshot_space_children(&self.client, self.session_generation).await
+    }
+
+    pub async fn space_child_set(
+        &self,
+        parent_id: &str,
+        child_id: &str,
+        via: &[String],
+        order: Option<&str>,
+        suggested: Option<bool>,
+    ) -> Result<NativeSpaceChildMutationResult, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        set_space_child(&self.client, parent_id, child_id, via, order, suggested).await
+    }
+
+    pub async fn space_child_remove(
+        &self,
+        parent_id: &str,
+        child_id: &str,
+    ) -> Result<NativeSpaceChildMutationResult, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        remove_space_child(&self.client, parent_id, child_id).await
+    }
+
+    pub async fn restricted_join_reparent(
+        &self,
+        room_id: &str,
+        remove_parent_id: Option<&str>,
+        add_parent_id: &str,
+    ) -> Result<NativeRestrictedJoinReparentResult, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        reparent_restricted_join_allow(&self.client, room_id, remove_parent_id, add_parent_id).await
     }
 
     pub async fn members_snapshot(

@@ -36,6 +36,10 @@ use crate::app::room_profile::{
 use crate::app::send::{
     MatrixPollRespondResult, MatrixSendPollResult, MatrixSendStickerResult, MatrixSendTextResult,
 };
+use crate::app::spaces::{
+    NativeRestrictedJoinReparentResult, NativeSpaceChildMutationResult,
+    NativeSpaceChildrenSnapshot, NativeSpaceHierarchySnapshot, NativeSpaceParentsSnapshot,
+};
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::app::timeline::{
     NativeComposerReplyDraftReadback, NativeReactionMutationResult, NativeTimelineActionReadback,
@@ -1048,6 +1052,44 @@ struct MatrixRoomMembersSnapshotRequest {
     room_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_space_hierarchy_snapshot`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixSpaceHierarchySnapshotRequest {
+    room_id: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_space_child_set`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixSpaceChildSetRequest {
+    parent_id: String,
+    child_id: String,
+    via: Vec<String>,
+    #[serde(default)]
+    order: Option<String>,
+    #[serde(default)]
+    suggested: Option<bool>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_space_child_remove`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixSpaceChildRemoveRequest {
+    parent_id: String,
+    child_id: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_restricted_join_reparent`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRestrictedJoinReparentRequest {
+    room_id: String,
+    #[serde(default)]
+    remove_parent_id: Option<String>,
+    add_parent_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_set_room_name`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1430,6 +1472,36 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_send_poll", matrix_send_poll)
         .expect("built-in matrix_send_poll must remain in the command census");
+    registry
+        .register(
+            "matrix_space_parents_snapshot",
+            matrix_space_parents_snapshot,
+        )
+        .expect("built-in matrix_space_parents_snapshot must remain in the command census");
+    registry
+        .register(
+            "matrix_space_hierarchy_snapshot",
+            matrix_space_hierarchy_snapshot,
+        )
+        .expect("built-in matrix_space_hierarchy_snapshot must remain in the command census");
+    registry
+        .register(
+            "matrix_space_children_snapshot",
+            matrix_space_children_snapshot,
+        )
+        .expect("built-in matrix_space_children_snapshot must remain in the command census");
+    registry
+        .register("matrix_space_child_set", matrix_space_child_set)
+        .expect("built-in matrix_space_child_set must remain in the command census");
+    registry
+        .register("matrix_space_child_remove", matrix_space_child_remove)
+        .expect("built-in matrix_space_child_remove must remain in the command census");
+    registry
+        .register(
+            "matrix_restricted_join_reparent",
+            matrix_restricted_join_reparent,
+        )
+        .expect("built-in matrix_restricted_join_reparent must remain in the command census");
     registry
         .register("matrix_poll_respond", matrix_poll_respond)
         .expect("built-in matrix_poll_respond must remain in the command census");
@@ -2942,6 +3014,149 @@ fn room_create_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
+fn matrix_space_parents_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error(
+                "p2-space-parents-snapshot-invalid-payload",
+            ));
+        }
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-space-parents-snapshot-no-session")
+        })?;
+        let snapshot: NativeSpaceParentsSnapshot = owner
+            .space_parents_snapshot()
+            .await
+            .map_err(space_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-space-parents-snapshot-serialization-failed"))
+    })
+}
+
+fn matrix_space_hierarchy_snapshot(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSpaceHierarchySnapshotRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-space-hierarchy-snapshot-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-space-hierarchy-snapshot-no-session")
+        })?;
+        let snapshot: NativeSpaceHierarchySnapshot = owner
+            .space_hierarchy_snapshot(&payload.room_id)
+            .await
+            .map_err(space_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-space-hierarchy-snapshot-serialization-failed"))
+    })
+}
+
+fn matrix_space_children_snapshot(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error(
+                "p2-space-children-snapshot-invalid-payload",
+            ));
+        }
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-space-children-snapshot-no-session")
+        })?;
+        let snapshot: NativeSpaceChildrenSnapshot = owner
+            .space_children_snapshot()
+            .await
+            .map_err(space_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-space-children-snapshot-serialization-failed"))
+    })
+}
+
+fn matrix_space_child_set(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSpaceChildSetRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-space-child-set-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-space-child-set-no-session")
+        })?;
+        let result: NativeSpaceChildMutationResult = owner
+            .space_child_set(
+                &payload.parent_id,
+                &payload.child_id,
+                &payload.via,
+                payload.order.as_deref(),
+                payload.suggested,
+            )
+            .await
+            .map_err(space_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-space-child-set-serialization-failed"))
+    })
+}
+
+fn matrix_space_child_remove(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSpaceChildRemoveRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-space-child-remove-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-space-child-remove-no-session")
+        })?;
+        let result: NativeSpaceChildMutationResult = owner
+            .space_child_remove(&payload.parent_id, &payload.child_id)
+            .await
+            .map_err(space_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-space-child-remove-serialization-failed"))
+    })
+}
+
+fn matrix_restricted_join_reparent(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRestrictedJoinReparentRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-restricted-join-reparent-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-restricted-join-reparent-no-session")
+        })?;
+        let result: NativeRestrictedJoinReparentResult = owner
+            .restricted_join_reparent(
+                &payload.room_id,
+                payload.remove_parent_id.as_deref(),
+                &payload.add_parent_id,
+            )
+            .await
+            .map_err(space_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-restricted-join-reparent-serialization-failed"))
+    })
+}
+
+fn space_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-rooms.2c-invalid-parent"
+        | "v-rooms.2c-invalid-child"
+        | "v-rooms.2c-invalid-room"
+        | "v-rooms.2c-invalid-via"
+        | "v-rooms.2c-invalid-order"
+        | "v-rooms.2b-space-hierarchy-invalid-room"
+        | "v-rooms.2c-room-missing"
+        | "v-rooms.2c-room-not-joined" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
 fn room_moderation_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "v-rooms-members-moderation-invalid-room"
@@ -4254,6 +4469,7 @@ mod tests {
                 "matrix_reaction_ensure",
                 "matrix_reaction_redact",
                 "matrix_register_flows",
+                "matrix_restricted_join_reparent",
                 "matrix_room_ban",
                 "matrix_room_create",
                 "matrix_room_creators_snapshot",
@@ -4286,6 +4502,11 @@ mod tests {
                 "matrix_set_room_name",
                 "matrix_set_room_topic",
                 "matrix_set_user_image_pack",
+                "matrix_space_child_remove",
+                "matrix_space_child_set",
+                "matrix_space_children_snapshot",
+                "matrix_space_hierarchy_snapshot",
+                "matrix_space_parents_snapshot",
                 "matrix_sync_status",
                 "matrix_timeline_call_decline",
                 "matrix_timeline_close",
@@ -7033,6 +7254,130 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-poll-respond-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_space_parents_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_space_parents_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("space parents snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-space-parents-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_space_hierarchy_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_space_hierarchy_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!space:example.org"}),
+            })
+            .await
+            .expect_err("space hierarchy snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-space-hierarchy-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_space_children_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_space_children_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("space children snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-space-children-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_space_child_set_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_space_child_set".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "parentId":"!space:example.org",
+                    "childId":"!room:example.org",
+                    "via":["example.org"]
+                }),
+            })
+            .await
+            .expect_err("space child set without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-space-child-set-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_space_child_remove_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_space_child_remove".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "parentId":"!space:example.org",
+                    "childId":"!room:example.org"
+                }),
+            })
+            .await
+            .expect_err("space child remove without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-space-child-remove-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_restricted_join_reparent_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_restricted_join_reparent".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!room:example.org",
+                    "addParentId":"!space:example.org"
+                }),
+            })
+            .await
+            .expect_err("restricted join reparent without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-restricted-join-reparent-no-session")
         );
     }
 

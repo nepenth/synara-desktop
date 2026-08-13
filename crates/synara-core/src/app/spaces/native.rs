@@ -1,26 +1,26 @@
 //! Credential-free V-ROOMS.2 space presentation DTOs and cycle guard.
 //!
-//! Live Client hierarchy/child I/O stays in the desktop shell.
+//! Live Client hierarchy/child I/O lives in `live.rs`.
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeSpaceParentEntry {
     pub room_id: String,
     pub parent_ids: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeSpaceParentsSnapshot {
     pub session_generation: u64,
     pub entries: Vec<NativeSpaceParentEntry>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeSpaceHierarchyRoom {
     pub room_id: String,
@@ -35,7 +35,7 @@ pub struct NativeSpaceHierarchyRoom {
     pub guest_can_join: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeSpaceHierarchySnapshot {
     pub session_generation: u64,
@@ -43,7 +43,7 @@ pub struct NativeSpaceHierarchySnapshot {
 }
 
 /// One valid local `m.space.child` edge from a joined space room state.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeSpaceChildEdge {
     pub parent_id: String,
@@ -55,7 +55,7 @@ pub struct NativeSpaceChildEdge {
     pub origin_server_ts: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeSpaceChildrenSnapshot {
     pub session_generation: u64,
