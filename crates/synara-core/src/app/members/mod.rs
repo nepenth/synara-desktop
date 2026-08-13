@@ -12,6 +12,7 @@ mod error;
 mod index;
 mod native;
 mod power_levels;
+mod snapshots;
 
 pub use error::MemberError;
 pub use index::{MemberIndex, MAX_MEMBERS_PER_ROOM};
@@ -23,6 +24,10 @@ pub use native::{
 pub use power_levels::{
     validate_power_level_tags_content, validate_room_power_levels_content,
     MAX_POWER_LEVEL_CONTENT_JSON_BYTES,
+};
+pub use snapshots::{
+    parse_room_members_room_id, project_room_creators, project_room_member,
+    validate_power_level_tags_snapshot_content, validate_power_levels_snapshot_content,
 };
 
 /// Static marker for link / schema smoke.

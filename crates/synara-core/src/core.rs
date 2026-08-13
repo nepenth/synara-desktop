@@ -21,7 +21,9 @@ use crate::app::auth::{
 };
 use crate::app::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot};
 use crate::app::members::{
-    NativePowerLevelWriteResult, ROOM_POWER_LEVELS_EVENT_TYPE, ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
+    NativePowerLevelWriteResult, NativeRoomCreatorsSnapshot, NativeRoomMembersSnapshot,
+    NativeRoomPowerLevelTagsSnapshot, NativeRoomPowerLevelsSnapshot, ROOM_POWER_LEVELS_EVENT_TYPE,
+    ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
 };
 use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceSubscription,
@@ -952,6 +954,12 @@ struct MatrixRoomSetPowerLevelStateRequest {
     content: serde_json::Value,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomMembersSnapshotRequest {
+    room_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_set_room_name`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1409,6 +1417,27 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_room_create", matrix_room_create)
         .expect("built-in matrix_room_create must remain in the command census");
+    registry
+        .register("matrix_room_members_snapshot", matrix_room_members_snapshot)
+        .expect("built-in matrix_room_members_snapshot must remain in the command census");
+    registry
+        .register(
+            "matrix_room_power_levels_snapshot",
+            matrix_room_power_levels_snapshot,
+        )
+        .expect("built-in matrix_room_power_levels_snapshot must remain in the command census");
+    registry
+        .register(
+            "matrix_room_creators_snapshot",
+            matrix_room_creators_snapshot,
+        )
+        .expect("built-in matrix_room_creators_snapshot must remain in the command census");
+    registry
+        .register(
+            "matrix_room_power_level_tags_snapshot",
+            matrix_room_power_level_tags_snapshot,
+        )
+        .expect("built-in matrix_room_power_level_tags_snapshot must remain in the command census");
     registry
         .register("matrix_room_unban", matrix_room_unban)
         .expect("built-in matrix_room_unban must remain in the command census");
@@ -2555,6 +2584,91 @@ fn matrix_room_create(state: Arc<CoreState>, request: CommandEnvelope) -> Comman
             .map_err(room_create_owner_error)?;
         Ok(serde_json::Value::String(room_id))
     })
+}
+
+fn matrix_room_members_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomMembersSnapshotRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-members-snapshot-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-members-snapshot-no-session")
+        })?;
+        let snapshot: NativeRoomMembersSnapshot = owner
+            .members_snapshot(&payload.room_id)
+            .await
+            .map_err(room_members_snapshot_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-room-members-snapshot-serialization-failed"))
+    })
+}
+
+fn matrix_room_power_levels_snapshot(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomMembersSnapshotRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-power-levels-snapshot-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-power-levels-snapshot-no-session")
+        })?;
+        let snapshot: NativeRoomPowerLevelsSnapshot = owner
+            .power_levels_snapshot(&payload.room_id)
+            .await
+            .map_err(room_members_snapshot_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-room-power-levels-snapshot-serialization-failed"))
+    })
+}
+
+fn matrix_room_creators_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomMembersSnapshotRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-creators-snapshot-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-creators-snapshot-no-session")
+        })?;
+        let snapshot: NativeRoomCreatorsSnapshot = owner
+            .creators_snapshot(&payload.room_id)
+            .await
+            .map_err(room_members_snapshot_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-room-creators-snapshot-serialization-failed"))
+    })
+}
+
+fn matrix_room_power_level_tags_snapshot(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomMembersSnapshotRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-power-level-tags-snapshot-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-power-level-tags-snapshot-no-session")
+        })?;
+        let snapshot: NativeRoomPowerLevelTagsSnapshot = owner
+            .power_level_tags_snapshot(&payload.room_id)
+            .await
+            .map_err(room_members_snapshot_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-room-power-level-tags-snapshot-serialization-failed"))
+    })
+}
+
+fn room_members_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-rooms-members-read-invalid-room" | "v-rooms-members-read-room-not-found" => {
+            MatrixIpcErrorCategory::SdkInvariant
+        }
+        "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 fn room_create_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
@@ -3888,16 +4002,20 @@ mod tests {
                 "matrix_register_flows",
                 "matrix_room_ban",
                 "matrix_room_create",
+                "matrix_room_creators_snapshot",
                 "matrix_room_invite",
                 "matrix_room_join",
                 "matrix_room_join_rule_snapshot",
                 "matrix_room_kick",
                 "matrix_room_leave",
+                "matrix_room_members_snapshot",
                 "matrix_room_notes_complete_todo",
                 "matrix_room_notes_delete",
                 "matrix_room_notes_move_todo",
                 "matrix_room_notes_snapshot",
                 "matrix_room_notes_upsert",
+                "matrix_room_power_level_tags_snapshot",
+                "matrix_room_power_levels_snapshot",
                 "matrix_room_set_power_level",
                 "matrix_room_set_power_level_tags",
                 "matrix_room_set_power_levels",
@@ -6061,6 +6179,82 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-room-create-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_members_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_members_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org"}),
+            })
+            .await
+            .expect_err("members snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-members-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_power_levels_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_power_levels_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org"}),
+            })
+            .await
+            .expect_err("power-levels snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-power-levels-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_creators_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_creators_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org"}),
+            })
+            .await
+            .expect_err("creators snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-creators-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_power_level_tags_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_power_level_tags_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org"}),
+            })
+            .await
+            .expect_err("power-level tags snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-power-level-tags-snapshot-no-session")
         );
     }
 
