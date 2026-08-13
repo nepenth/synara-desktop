@@ -1,7 +1,7 @@
 //! Unit tests for P4.7 presence index.
 
 use super::*;
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 #[test]
 fn marker_stable() {

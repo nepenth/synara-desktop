@@ -13,6 +13,7 @@ pub mod media_export;
 pub mod members;
 pub mod notifications;
 pub mod polls;
+pub mod presence;
 pub mod raw_content;
 pub mod receipts;
 pub mod relations;
