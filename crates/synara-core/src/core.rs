@@ -24,9 +24,10 @@ use crate::app::presence::{
 use crate::app::room_profile::{MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner};
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::app::timeline::{
-    NativeTimelineCloseRequest, NativeTimelineDirection, NativeTimelineEventReadback,
-    NativeTimelineOwner, NativeTimelineReadAction, NativeTimelineReadStateReadback,
-    NativeTimelineReadStateRequest, NativeTimelineViewPaginationRequest, TimelineViewSnapshot,
+    NativeReactionMutationResult, NativeTimelineCloseRequest, NativeTimelineDirection,
+    NativeTimelineEventReadback, NativeTimelineOwner, NativeTimelineReadAction,
+    NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
+    NativeTimelineViewPaginationRequest, TimelineViewSnapshot,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::app::verification::{
@@ -614,6 +615,25 @@ struct MatrixTimelineSetReadStateRequest {
     action: NativeTimelineReadAction,
 }
 
+/// Exact React/Tauri envelope payload for reaction toggle/ensure.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixTimelineReactionKeyRequest {
+    room_id: String,
+    event_id: String,
+    key: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_reaction_redact`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixReactionRedactRequest {
+    room_id: String,
+    target_event_id: String,
+    reaction_event_id: String,
+    key: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_verification_accept`.
 ///
 /// The renderer sends the camel-case `flowId` key; unknown keys are rejected
@@ -1132,10 +1152,22 @@ fn built_in_registry() -> CommandRegistry {
         .expect("built-in matrix_timeline_paginate must remain in the command census");
     registry
         .register(
+            "matrix_timeline_reaction_toggle",
+            matrix_timeline_reaction_toggle,
+        )
+        .expect("built-in matrix_timeline_reaction_toggle must remain in the command census");
+    registry
+        .register(
             "matrix_timeline_set_read_state",
             matrix_timeline_set_read_state,
         )
         .expect("built-in matrix_timeline_set_read_state must remain in the command census");
+    registry
+        .register("matrix_reaction_ensure", matrix_reaction_ensure)
+        .expect("built-in matrix_reaction_ensure must remain in the command census");
+    registry
+        .register("matrix_reaction_redact", matrix_reaction_redact)
+        .expect("built-in matrix_reaction_redact must remain in the command census");
     registry
 }
 
@@ -1262,6 +1294,76 @@ fn matrix_timeline_set_read_state(
         serde_json::to_value(readback)
             .map_err(|_| core_state_error("p2-timeline-set-read-state-serialization-failed"))
     })
+}
+
+fn matrix_timeline_reaction_toggle(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelineReactionKeyRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-timeline-reaction-toggle-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-reaction-toggle-no-session")
+        })?;
+        let result: NativeReactionMutationResult = owner
+            .toggle_reaction(&payload.room_id, &payload.event_id, &payload.key)
+            .await
+            .map_err(timeline_reaction_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-timeline-reaction-toggle-serialization-failed"))
+    })
+}
+
+fn matrix_reaction_ensure(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelineReactionKeyRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-reaction-ensure-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-reaction-ensure-no-session")
+        })?;
+        let result: NativeReactionMutationResult = owner
+            .ensure_reaction(&payload.room_id, &payload.event_id, &payload.key)
+            .await
+            .map_err(timeline_reaction_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-reaction-ensure-serialization-failed"))
+    })
+}
+
+fn matrix_reaction_redact(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixReactionRedactRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-reaction-redact-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-reaction-redact-no-session")
+        })?;
+        let result: NativeReactionMutationResult = owner
+            .redact_reaction(
+                &payload.room_id,
+                &payload.target_event_id,
+                &payload.reaction_event_id,
+                &payload.key,
+            )
+            .await
+            .map_err(timeline_reaction_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-reaction-redact-serialization-failed"))
+    })
+}
+
+fn timeline_reaction_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "d0.3-timeline-invalid-room-id"
+        | "v-crypto.6-invalid-event-id"
+        | "v-send.2-reaction-invalid-key"
+        | "v-send.2-reaction-redact-annotation-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 fn matrix_typing_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -2362,6 +2464,8 @@ mod tests {
                 "matrix_presence_snapshot",
                 "matrix_presence_subscribe",
                 "matrix_presence_unsubscribe",
+                "matrix_reaction_ensure",
+                "matrix_reaction_redact",
                 "matrix_register_flows",
                 "matrix_room_join_rule_snapshot",
                 "matrix_secret_storage_status",
@@ -2373,6 +2477,7 @@ mod tests {
                 "matrix_timeline_close",
                 "matrix_timeline_event_readback",
                 "matrix_timeline_paginate",
+                "matrix_timeline_reaction_toggle",
                 "matrix_timeline_set_read_state",
                 "matrix_typing_set",
                 "matrix_typing_snapshot",
@@ -4347,6 +4452,92 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-timeline-set-read-state-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_reaction_toggle_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_reaction_toggle".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org","eventId":"$e","key":"✅"}),
+            })
+            .await
+            .expect_err("reaction toggle without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-reaction-toggle-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_reaction_toggle_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_reaction_toggle".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "eventId":"$e",
+                    "key":"✅",
+                    "token":"no"
+                }),
+            })
+            .await
+            .expect_err("reaction toggle must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-reaction-toggle-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_reaction_ensure_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_reaction_ensure".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org","eventId":"$e","key":"✅"}),
+            })
+            .await
+            .expect_err("reaction ensure without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-reaction-ensure-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_reaction_redact_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_reaction_redact".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "targetEventId":"$e",
+                    "reactionEventId":"$r",
+                    "key":"✅"
+                }),
+            })
+            .await
+            .expect_err("reaction redact without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-reaction-redact-no-session")
         );
     }
 
