@@ -9,25 +9,12 @@ pub async fn matrix_device_snapshot(
 
 #[tauri::command]
 pub async fn matrix_device_rename(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     device_id: String,
     display_name: String,
 ) -> Result<NativeDeviceSnapshot, MatrixAuthCommandError> {
-    let display_name = display_name.trim();
-    if display_name.is_empty() {
-        return Err(map_device_error("v-crypto.7-device-rename-empty"));
-    }
-    let mut session = state.session.lock().await;
-    let active = require_device_session_mut(session.as_mut())?;
-    let device_id = matrix_sdk::ruma::OwnedDeviceId::from(device_id);
-    active
-        .client
-        .rename_device(&device_id, display_name)
+    crate::bridge::device_rename::device_rename(core.inner().as_ref(), device_id, display_name)
         .await
-        .map_err(|_| map_device_error("v-crypto.7-device-rename-failed"))?;
-    live_device_snapshot(&active.client, active.sync.session_generation())
-        .await
-        .map_err(map_device_error)
 }
 
 #[tauri::command]
