@@ -4,9 +4,9 @@ Legend: ✅ shipping / 🔨 in progress / ⛔ not yet
 
 ## Current bounded evidence (not parity completion)
 
-At `feature/shared-native-core` `11a430c1`
-(#850, after #849), P2 registers twenty-nine names—the prior twenty-eight plus
-`matrix_verification_dismiss`. The previous twenty-eight remain—
+At `feature/shared-native-core` `9bf4aa2c`
+(#852, after #851), P2 registers thirty names—the prior twenty-nine plus
+`matrix_verification_start`. The previous twenty-nine remain—
 `matrix_login_flows`, `matrix_register_flows`, `matrix_session_snapshot`,
 `matrix_sync_status`, `matrix_crypto_status`, `matrix_media_config`,
 `matrix_cross_signing_status`, `matrix_secret_storage_status`,
@@ -15,10 +15,8 @@ At `feature/shared-native-core` `11a430c1`
 `matrix_room_join_rule_snapshot`, `matrix_get_global_image_packs`,
 `matrix_get_user_image_pack`, `matrix_get_room_image_packs`, the
 three image-pack writes, `matrix_typing_set`, the two presence
-subscription routes, `matrix_device_rename`,
-`matrix_verification_accept`, `matrix_verification_begin_sas`,
-`matrix_verification_cancel`, `matrix_verification_confirm`, and
-`matrix_verification_mismatch`—and all
+subscription routes, `matrix_device_rename`, and the verification
+accept/begin_sas/cancel/confirm/dismiss/mismatch routes—and all
 other census names fail closed. #713/#714/#716/#717 are P1-only mechanical
 extraction: they add no Core command route, UDL, or iOS behavior. The prior #708 work is
 only a pure iOS room-row unread presentation from closed `Joined`/`Invited`
