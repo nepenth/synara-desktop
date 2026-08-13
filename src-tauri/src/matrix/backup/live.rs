@@ -8,7 +8,6 @@ use matrix_sdk::{
         backups::BackupState,
         recovery::{RecoveryError, RecoveryState},
     },
-    ruma::api::{client::backup::get_latest_backup_info, error::ErrorKind},
     Client,
 };
 use zeroize::Zeroize;
@@ -63,16 +62,15 @@ pub async fn status(
     client: &Client,
     session_generation: u64,
 ) -> Result<NativeBackupStatus, MatrixAuthCommandError> {
-    let backups = client.encryption().backups();
-    let server = fetch_server_backup(client).await?;
-    let enabled = backups.are_enabled().await;
-    Ok(project_status(
-        session_generation,
-        server,
-        enabled,
-        backups.state(),
-        client.encryption().recovery().state(),
-    ))
+    synara_core::app::backup::status(client, session_generation)
+        .await
+        .map_err(|diagnostic_id| {
+            backup_error(
+                "Unknown",
+                "Encryption backup status is unavailable.",
+                diagnostic_id,
+            )
+        })
 }
 
 pub async fn setup(
@@ -165,26 +163,6 @@ async fn operation_complete(
         outcome: NativeBackupOperationOutcome::Complete,
         status,
     })
-}
-
-async fn fetch_server_backup(
-    client: &Client,
-) -> Result<Option<ServerBackupProjection>, MatrixAuthCommandError> {
-    match client
-        .send(get_latest_backup_info::v3::Request::new())
-        .await
-    {
-        Ok(response) => Ok(Some(ServerBackupProjection {
-            version: response.version,
-            key_count: u64::from(response.count),
-        })),
-        Err(error) if error.client_api_error_kind() == Some(&ErrorKind::NotFound) => Ok(None),
-        Err(_) => Err(backup_error(
-            "Unknown",
-            "Encryption backup status is unavailable.",
-            "v-crypto.3-status-query-failed",
-        )),
-    }
 }
 
 fn map_recovery_setup_error(error: RecoveryError) -> MatrixAuthCommandError {

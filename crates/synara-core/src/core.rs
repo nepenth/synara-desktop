@@ -19,6 +19,7 @@ use crate::app::auth::{
     HttpLoginFlowTransport, HttpRegisterFlowTransport, MatrixLoginFlowsResponse,
     RegisterFlowsProbe,
 };
+use crate::app::backup::NativeBackupStatus;
 use crate::app::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot};
 use crate::app::members::{
     NativePowerLevelWriteResult, NativeRoomCreatorsSnapshot, NativeRoomMembersSnapshot,
@@ -1478,6 +1479,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_secret_storage_status", matrix_secret_storage_status)
         .expect("built-in matrix_secret_storage_status must remain in the command census");
     registry
+        .register("matrix_backup_status", matrix_backup_status)
+        .expect("built-in matrix_backup_status must remain in the command census");
+    registry
         .register("matrix_send_text", matrix_send_text)
         .expect("built-in matrix_send_text must remain in the command census");
     registry
@@ -2717,6 +2721,28 @@ fn matrix_verification_start(state: Arc<CoreState>, request: CommandEnvelope) ->
         serde_json::to_value(request)
             .map_err(|_| core_state_error("p2-verification-start-serialization-failed"))
     })
+}
+
+fn matrix_backup_status(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-backup-status-invalid-payload"));
+        }
+        let owner = state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-backup-status-no-session")
+        })?;
+        let snapshot: NativeBackupStatus = owner
+            .backup_status()
+            .await
+            .map_err(backup_status_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-backup-status-serialization-failed"))
+    })
+}
+
+fn backup_status_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    MatrixIpcError::new(MatrixIpcErrorCategory::Unknown).with_diagnostic(diagnostic_id)
 }
 
 fn matrix_device_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -4501,6 +4527,7 @@ mod tests {
         assert_eq!(
             core.registered_commands(),
             vec![
+                "matrix_backup_status",
                 "matrix_composer_clear_reply_draft",
                 "matrix_composer_get_reply_draft",
                 "matrix_composer_set_reply_draft",
@@ -6121,6 +6148,25 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-verification-list-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_backup_status_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_backup_status".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("backup status without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-backup-status-no-session")
         );
     }
 

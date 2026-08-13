@@ -2,11 +2,9 @@ use super::*;
 
 #[tauri::command]
 pub async fn matrix_backup_status(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeBackupStatus, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_backup_session(session.as_ref())?;
-    live_backup::status(&active.client, active.sync.session_generation()).await
+    crate::bridge::backup_status::backup_status(core.inner().as_ref()).await
 }
 
 #[tauri::command]

@@ -1232,6 +1232,23 @@ fn own_profile_writes_route_through_core_without_desktop_client_io() {
 }
 
 #[test]
+fn backup_status_routes_through_core_without_desktop_client_io() {
+    let product = PRODUCT_SOURCE;
+    let command = product
+        .split("pub async fn matrix_backup_status")
+        .nth(1)
+        .expect("backup status command");
+    let command = command
+        .split("#[tauri::command]")
+        .next()
+        .expect("backup status command body");
+    assert!(command.contains("crate::bridge::backup_status::backup_status"));
+    assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!command.contains("active.client"));
+    assert!(!command.contains("live_backup::status"));
+}
+
+#[test]
 fn avatar_mime_validator_accepts_images_only() {
     assert_eq!(
         validate_avatar_mime("image/png").unwrap().essence_str(),

@@ -93,6 +93,12 @@ impl NativeDeviceOwner {
         snapshot(&self.client, self.session_generation).await
     }
 
+    pub async fn backup_status(
+        &self,
+    ) -> Result<crate::app::backup::NativeBackupStatus, &'static str> {
+        crate::app::backup::status(&self.client, self.session_generation).await
+    }
+
     /// Rename a device, then re-snapshot the live list.
     pub async fn rename(
         &self,
