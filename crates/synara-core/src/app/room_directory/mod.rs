@@ -9,9 +9,16 @@
 #![allow(unused_imports)]
 
 mod error;
+mod native;
 mod session;
 
 pub use error::RoomDirectoryError;
+pub use native::{
+    normalize_search_input, DirectoryProtocolInstance, DirectoryRoomHitDto,
+    DirectoryRoomTypeFilter, DirectorySearchInput, NativeRoomDirectoryPage,
+    NativeRoomDirectoryProtocols, NativeRoomDirectorySearchResponse, NormalizedDirectorySearch,
+    MAX_PROTOCOL_INSTANCES,
+};
 pub use session::{
     DirectoryRoomHit, DirectoryRoomType, DirectorySearchState, RoomDirectorySession,
     MAX_ALIAS_CHARS, MAX_BATCH_CHARS, MAX_DIRECTORY_HITS, MAX_TEXT_CHARS,
