@@ -3,8 +3,8 @@
 //! After a successful password login, extract the native Matrix session
 //! from the live SDK `Client` and seal it into [`SessionMaterialVault`].
 //!
-//! - Tokens stay host-side only (vault blob); never on [`crate::matrix::auth::LoginResult`]
-//!   or [`crate::matrix::dto::SessionSnapshot`].
+//! - Tokens stay host-side only (vault blob); never on login IPC results
+//!   or [`crate::dto::SessionSnapshot`].
 //! - Does **not** call `Client::restore_session` (P3.6).
 //! - Overwrite via [`super::session_material::rotate_persisted_session_tokens`]
 //!   is the refresh-rotation structure.
@@ -12,7 +12,8 @@
 use matrix_sdk::authentication::AuthSession;
 use matrix_sdk::Client;
 
-use crate::matrix::store::AccountIdentity;
+use crate::app::store::AccountIdentity;
+use crate::transport::MatrixIpcErrorCategory;
 
 use super::session_material::{
     persist_session_material, SessionMaterial, SessionMaterialMeta, SessionMaterialVault,
@@ -40,7 +41,7 @@ pub fn persist_session_after_login<V: SessionMaterialVault + ?Sized>(
 ) -> Result<SessionPersistOutcome, LifecycleError> {
     let session = client.session().ok_or(LifecycleError::Vault {
         diagnostic_id: "p3.5-no-session-on-client",
-        category: crate::matrix::ipc::MatrixIpcErrorCategory::AuthenticationRejected,
+        category: MatrixIpcErrorCategory::AuthenticationRejected,
     })?;
 
     let material = session_material_from_auth_session(identity, &session)?;
@@ -72,12 +73,12 @@ pub fn session_material_from_auth_session(
         }
         AuthSession::OAuth(_) => Err(LifecycleError::Vault {
             diagnostic_id: "p3.5-oauth-session-unsupported",
-            category: crate::matrix::ipc::MatrixIpcErrorCategory::UnsupportedCapability,
+            category: MatrixIpcErrorCategory::UnsupportedCapability,
         }),
         // Non-exhaustive AuthSession — future variants.
         _ => Err(LifecycleError::Vault {
             diagnostic_id: "p3.5-session-kind-unsupported",
-            category: crate::matrix::ipc::MatrixIpcErrorCategory::UnsupportedCapability,
+            category: MatrixIpcErrorCategory::UnsupportedCapability,
         }),
     }
 }
@@ -85,7 +86,7 @@ pub fn session_material_from_auth_session(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::matrix::lifecycle::session_material::{
+    use crate::app::lifecycle::{
         clear_session_material, load_session_material, InMemorySessionMaterialVault,
     };
     use matrix_sdk::authentication::matrix::MatrixSession;

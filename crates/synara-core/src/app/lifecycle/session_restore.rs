@@ -13,7 +13,8 @@ use matrix_sdk::authentication::matrix::MatrixSession;
 use matrix_sdk::ruma::UserId;
 use matrix_sdk::{Client, SessionMeta, SessionTokens};
 
-use crate::matrix::store::AccountIdentity;
+use crate::app::store::AccountIdentity;
+use crate::transport::MatrixIpcErrorCategory;
 
 use super::session_material::{
     load_session_material, HostMatrixSessionSecrets, SessionMaterial, SessionMaterialMeta,
@@ -51,19 +52,19 @@ pub fn matrix_session_from_host_secrets(
     if secrets.device_id.trim().is_empty() {
         return Err(LifecycleError::Vault {
             diagnostic_id: "p3.6-session-device-empty",
-            category: crate::matrix::ipc::MatrixIpcErrorCategory::SdkInvariant,
+            category: MatrixIpcErrorCategory::SdkInvariant,
         });
     }
     if secrets.access_token.is_empty() {
         return Err(LifecycleError::Vault {
             diagnostic_id: "p3.6-session-access-empty",
-            category: crate::matrix::ipc::MatrixIpcErrorCategory::SdkInvariant,
+            category: MatrixIpcErrorCategory::SdkInvariant,
         });
     }
 
     let user_id = UserId::parse(secrets.user_id.as_str()).map_err(|_| LifecycleError::Vault {
         diagnostic_id: "p3.6-session-user-id-parse",
-        category: crate::matrix::ipc::MatrixIpcErrorCategory::SdkInvariant,
+        category: MatrixIpcErrorCategory::SdkInvariant,
     })?;
 
     Ok(MatrixSession {
@@ -90,7 +91,7 @@ pub async fn restore_session_onto_client(
     if client.session().is_some() {
         return Err(LifecycleError::Vault {
             diagnostic_id: "p3.6-client-already-has-session",
-            category: crate::matrix::ipc::MatrixIpcErrorCategory::SdkInvariant,
+            category: MatrixIpcErrorCategory::SdkInvariant,
         });
     }
 
@@ -106,7 +107,7 @@ pub async fn restore_session_onto_client(
     // Confirm session landed with privacy-safe identity only.
     let live = client.session().ok_or(LifecycleError::Vault {
         diagnostic_id: "p3.6-restore-no-session-after",
-        category: crate::matrix::ipc::MatrixIpcErrorCategory::SdkInvariant,
+        category: MatrixIpcErrorCategory::SdkInvariant,
     })?;
     match live {
         matrix_sdk::authentication::AuthSession::Matrix(m) => {
@@ -119,7 +120,7 @@ pub async fn restore_session_onto_client(
         _ => {
             return Err(LifecycleError::Vault {
                 diagnostic_id: "p3.6-restored-session-kind-unsupported",
-                category: crate::matrix::ipc::MatrixIpcErrorCategory::UnsupportedCapability,
+                category: MatrixIpcErrorCategory::UnsupportedCapability,
             });
         }
     }
@@ -135,7 +136,7 @@ pub async fn restore_session_from_vault<V: SessionMaterialVault + ?Sized>(
 ) -> Result<SessionRestoreOutcome, LifecycleError> {
     let material = load_session_material(vault, identity)?.ok_or(LifecycleError::Vault {
         diagnostic_id: "p3.6-session-material-missing",
-        category: crate::matrix::ipc::MatrixIpcErrorCategory::AuthenticationRejected,
+        category: MatrixIpcErrorCategory::AuthenticationRejected,
     })?;
     restore_session_onto_client(client, identity, &material).await
 }
@@ -166,19 +167,19 @@ fn map_restore_sdk_error(err: matrix_sdk::Error) -> LifecycleError {
     };
     LifecycleError::Vault {
         diagnostic_id,
-        category: crate::matrix::ipc::MatrixIpcErrorCategory::AuthenticationRejected,
+        category: MatrixIpcErrorCategory::AuthenticationRejected,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::matrix::client_builder::{build_unauthenticated_client, ClientBuildConfig};
-    use crate::matrix::lifecycle::session_material::{
+    use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig};
+    use crate::app::lifecycle::{
         clear_session_material, persist_session_material, InMemorySessionMaterialVault,
         SessionMaterial,
     };
-    use crate::matrix::store::StoreKeyMaterial;
+    use crate::app::store::StoreKeyMaterial;
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};

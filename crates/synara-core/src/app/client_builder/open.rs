@@ -1,7 +1,7 @@
 //! Apply [`super::ClientBuildConfig`] to `matrix_sdk::Client::builder`.
 //!
-//! This is the sole production construction site for `Client::builder` under
-//! `src-tauri/src/matrix/`. It never performs login, restore_session, or sync.
+//! This is the sole production construction site for `Client::builder` in
+//! `synara-core`. It never performs login, restore_session, or sync.
 
 use matrix_sdk::config::RequestConfig;
 use matrix_sdk::encryption::{BackupDownloadStrategy, EncryptionSettings};
@@ -9,7 +9,7 @@ use matrix_sdk::Client;
 
 use super::ClientBuilderError;
 use super::{ClientBuildConfig, HomeserverMode};
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 /// Build an **unauthenticated** Matrix Rust SDK client from a validated config.
 ///

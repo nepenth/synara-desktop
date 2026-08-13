@@ -5,8 +5,7 @@
 //! recovery policy (never auto-wipe), remote-logout state machine, and
 //! exact-target account wipe, logout / local-wipe orchestration, and the
 //! session-material vault *trait* plus sealed envelope / in-memory harness.
-//! Desktop still owns Keyring session I/O, persist/restore (`matrix_sdk`),
-//! and tests.
+//! Desktop still owns Keyring session I/O.
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
@@ -18,6 +17,8 @@ mod recovery_copy;
 mod remote_logout;
 mod remote_policy;
 mod session_material;
+mod session_persist;
+mod session_restore;
 mod wipe;
 
 pub use error::LifecycleError;
@@ -34,6 +35,13 @@ pub use session_material::{
     rotate_persisted_session_tokens, HostMatrixSessionSecrets, InMemorySessionMaterialVault,
     SessionMaterial, SessionMaterialId, SessionMaterialMeta, SessionMaterialVault,
     SESSION_ENVELOPE_VERSION, SESSION_KIND_MATRIX, SESSION_MATERIAL_SERVICE,
+};
+pub use session_persist::{
+    persist_session_after_login, session_material_from_auth_session, SessionPersistOutcome,
+};
+pub use session_restore::{
+    has_persisted_session, matrix_session_from_host_secrets, restore_session_from_vault,
+    restore_session_onto_client, SessionRestoreOutcome,
 };
 pub use wipe::{
     assert_exact_account_root, assert_path_is_wipe_allowed, wipe_account_store, WipeReport,
