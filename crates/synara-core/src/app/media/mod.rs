@@ -13,6 +13,7 @@
 
 mod download_queue;
 mod error;
+mod ipc;
 mod upload_queue;
 
 pub use download_queue::{
@@ -20,6 +21,10 @@ pub use download_queue::{
     MAX_MEDIA_ID_CHARS, MAX_TRACKED_DOWNLOADS,
 };
 pub use error::MediaError;
+pub use ipc::{
+    MatrixMediaConfigResult, MatrixMediaDownloadRequest, MatrixMediaDownloadResult,
+    MatrixUploadMediaResult,
+};
 pub use upload_queue::{UploadQueue, MAX_ACTIVE_UPLOADS};
 
 /// Static marker for link / schema smoke (upload + download foundations).
