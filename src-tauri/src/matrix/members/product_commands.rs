@@ -1,44 +1,9 @@
 use super::*;
 
-const ROOM_POWER_LEVELS_EVENT_TYPE: &str = "m.room.power_levels";
-const ROOM_CREATE_EVENT_TYPE: &str = "m.room.create";
-const ROOM_POWER_LEVEL_TAGS_EVENT_TYPE: &str = "in.synara.room.power_level_tags";
-
-/// V-ROOMS.MEMBERS-READ — live native room power-level projection.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NativeRoomPowerLevelsSnapshot {
-    pub status: &'static str,
-    pub session_generation: u64,
-    pub room_id: String,
-    pub event_type: &'static str,
-    pub state_key: &'static str,
-    pub content: serde_json::Value,
-}
-
-/// V-ROOMS.MEMBERS-READ — live native room creator projection.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NativeRoomCreatorsSnapshot {
-    pub status: &'static str,
-    pub session_generation: u64,
-    pub room_id: String,
-    pub event_type: &'static str,
-    pub state_key: &'static str,
-    pub creators: Vec<String>,
-}
-
-/// V-ROOMS.MEMBERS-READ — live native custom power-level tag projection.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NativeRoomPowerLevelTagsSnapshot {
-    pub status: &'static str,
-    pub session_generation: u64,
-    pub room_id: String,
-    pub event_type: &'static str,
-    pub state_key: &'static str,
-    pub content: serde_json::Value,
-}
+pub use synara_core::app::members::{
+    NativeRoomCreatorsSnapshot, NativeRoomPowerLevelTagsSnapshot, NativeRoomPowerLevelsSnapshot,
+    ROOM_CREATE_EVENT_TYPE, ROOM_POWER_LEVELS_EVENT_TYPE, ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
+};
 
 #[tauri::command]
 pub async fn matrix_room_members_snapshot(
