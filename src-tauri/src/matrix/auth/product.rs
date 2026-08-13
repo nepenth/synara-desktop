@@ -124,8 +124,7 @@ use crate::matrix::sync::{
     SyncServiceOwner,
 };
 use crate::matrix::timeline::{
-    format_forwarded_media_body, format_forwarded_plain_body, reply_draft_readback,
-    should_attach_formatted_body, ComposerDraftRegistry, NativeComposerReplyDraft,
+    format_forwarded_media_body, format_forwarded_plain_body, should_attach_formatted_body,
     NativeComposerReplyDraftReadback, NativeComposerReplyDraftRoomRequest,
     NativeComposerSetReplyDraftRequest, NativeReactionMutationResult, NativeTimelineActionKind,
     NativeTimelineActionReadback, NativeTimelineCallDeclineRequest, NativeTimelineCloseRequest,
@@ -264,7 +263,6 @@ struct ManagedMatrixSession {
     sync: SyncServiceOwner,
     invite_avatars: InviteAvatarHandles,
     timelines: Arc<NativeTimelineOwner>,
-    composer_drafts: ComposerDraftRegistry,
     sends: SendQueue,
     attachments: AttachmentSendQueue,
     verification: Arc<NativeVerificationOwner>,

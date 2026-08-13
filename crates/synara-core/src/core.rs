@@ -24,11 +24,12 @@ use crate::app::presence::{
 use crate::app::room_profile::{MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner};
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::app::timeline::{
-    NativeReactionMutationResult, NativeTimelineActionReadback, NativeTimelineCloseRequest,
-    NativeTimelineDirection, NativeTimelineEventReadback, NativeTimelineJumpLatestRequest,
-    NativeTimelineOpenPosition, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
-    NativeTimelineOwner, NativeTimelineReadAction, NativeTimelineReadStateReadback,
-    NativeTimelineReadStateRequest, NativeTimelineViewPaginationRequest, TimelineViewSnapshot,
+    NativeComposerReplyDraftReadback, NativeReactionMutationResult, NativeTimelineActionReadback,
+    NativeTimelineCloseRequest, NativeTimelineDirection, NativeTimelineEventReadback,
+    NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
+    NativeTimelineOpenRequest, NativeTimelineOwner, NativeTimelineReadAction,
+    NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
+    NativeTimelineViewPaginationRequest, TimelineViewSnapshot,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::app::verification::{
@@ -727,6 +728,23 @@ struct MatrixTimelineForwardMediaRequest {
     target_room_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_composer_set_reply_draft`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixComposerSetReplyDraftRequest {
+    room_id: String,
+    event_id: String,
+    #[serde(default)]
+    start_thread: bool,
+}
+
+/// Exact React/Tauri envelope payload for composer get/clear reply-draft.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixComposerReplyDraftRoomRequest {
+    room_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_verification_accept`.
 ///
 /// The renderer sends the camel-case `flowId` key; unknown keys are rejected
@@ -1298,6 +1316,24 @@ fn built_in_registry() -> CommandRegistry {
         )
         .expect("built-in matrix_timeline_forward_media must remain in the command census");
     registry
+        .register(
+            "matrix_composer_set_reply_draft",
+            matrix_composer_set_reply_draft,
+        )
+        .expect("built-in matrix_composer_set_reply_draft must remain in the command census");
+    registry
+        .register(
+            "matrix_composer_clear_reply_draft",
+            matrix_composer_clear_reply_draft,
+        )
+        .expect("built-in matrix_composer_clear_reply_draft must remain in the command census");
+    registry
+        .register(
+            "matrix_composer_get_reply_draft",
+            matrix_composer_get_reply_draft,
+        )
+        .expect("built-in matrix_composer_get_reply_draft must remain in the command census");
+    registry
 }
 
 fn matrix_typing_set(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -1719,6 +1755,67 @@ fn matrix_timeline_forward_media(state: Arc<CoreState>, request: CommandEnvelope
     })
 }
 
+fn matrix_composer_set_reply_draft(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixComposerSetReplyDraftRequest =
+            serde_json::from_value(request.payload)
+                .map_err(|_| core_state_error("p2-composer-set-reply-draft-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-composer-set-reply-draft-no-session")
+        })?;
+        let readback: NativeComposerReplyDraftReadback = owner
+            .set_reply_draft(&payload.room_id, &payload.event_id, payload.start_thread)
+            .await
+            .map_err(timeline_action_owner_error)?;
+        serde_json::to_value(readback)
+            .map_err(|_| core_state_error("p2-composer-set-reply-draft-serialization-failed"))
+    })
+}
+
+fn matrix_composer_clear_reply_draft(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixComposerReplyDraftRoomRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-composer-clear-reply-draft-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-composer-clear-reply-draft-no-session")
+        })?;
+        let readback: NativeComposerReplyDraftReadback = owner
+            .clear_reply_draft(&payload.room_id)
+            .await
+            .map_err(timeline_action_owner_error)?;
+        serde_json::to_value(readback)
+            .map_err(|_| core_state_error("p2-composer-clear-reply-draft-serialization-failed"))
+    })
+}
+
+fn matrix_composer_get_reply_draft(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixComposerReplyDraftRoomRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-composer-get-reply-draft-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-composer-get-reply-draft-no-session")
+        })?;
+        let readback: NativeComposerReplyDraftReadback = owner
+            .get_reply_draft(&payload.room_id)
+            .await
+            .map_err(timeline_action_owner_error)?;
+        serde_json::to_value(readback)
+            .map_err(|_| core_state_error("p2-composer-get-reply-draft-serialization-failed"))
+    })
+}
+
 fn timeline_action_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "d0.4-send-invalid-room-id"
@@ -1753,7 +1850,13 @@ fn timeline_action_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         | "v-timeline-forward-media-event-unavailable"
         | "v-timeline-forward-media-event-decode-failed"
         | "v-timeline-forward-media-event-redacted"
-        | "v-timeline-forward-media-unsupported-event" => MatrixIpcErrorCategory::SdkInvariant,
+        | "v-timeline-forward-media-unsupported-event"
+        | "v-timeline-reply-draft-invalid-event-id"
+        | "v-timeline-reply-draft-room-not-found"
+        | "v-timeline-reply-draft-event-unavailable"
+        | "v-timeline-reply-draft-event-decode-failed"
+        | "v-timeline-reply-draft-event-redacted"
+        | "v-timeline-reply-draft-unsupported-event" => MatrixIpcErrorCategory::SdkInvariant,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -2843,6 +2946,9 @@ mod tests {
         assert_eq!(
             core.registered_commands(),
             vec![
+                "matrix_composer_clear_reply_draft",
+                "matrix_composer_get_reply_draft",
+                "matrix_composer_set_reply_draft",
                 "matrix_cross_signing_status",
                 "matrix_crypto_status",
                 "matrix_device_delete_cancel",
@@ -5229,6 +5335,66 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-timeline-forward-media-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_composer_set_reply_draft_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_composer_set_reply_draft".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "eventId":"$e"
+                }),
+            })
+            .await
+            .expect_err("composer set reply draft without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-composer-set-reply-draft-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_composer_clear_reply_draft_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_composer_clear_reply_draft".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org"}),
+            })
+            .await
+            .expect_err("composer clear reply draft without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-composer-clear-reply-draft-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_composer_get_reply_draft_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_composer_get_reply_draft".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org"}),
+            })
+            .await
+            .expect_err("composer get reply draft without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-composer-get-reply-draft-no-session")
         );
     }
 

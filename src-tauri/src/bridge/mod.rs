@@ -16,6 +16,7 @@ pub(crate) mod secret_storage_status;
 pub(crate) mod session_lifecycle;
 pub(crate) mod timeline_actions;
 pub(crate) mod timeline_close;
+pub(crate) mod timeline_composer;
 pub(crate) mod timeline_event_readback;
 pub(crate) mod timeline_open;
 pub(crate) mod timeline_paginate;
