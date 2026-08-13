@@ -12,6 +12,7 @@ pub(crate) mod join_rule_snapshot;
 pub(crate) mod later;
 pub(crate) mod mdirect;
 pub(crate) mod media_config;
+pub(crate) mod own_profile;
 pub(crate) mod presence_snapshot;
 pub(crate) mod presence_subscriptions;
 pub(crate) mod room_create;

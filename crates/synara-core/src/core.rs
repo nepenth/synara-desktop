@@ -1114,6 +1114,20 @@ struct MatrixSetRoomAvatarRequest {
     mxc: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_set_own_display_name`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixSetOwnDisplayNameRequest {
+    display_name: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_set_own_avatar`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixSetOwnAvatarRequest {
+    mxc: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_get_room_directory_visibility`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1670,6 +1684,12 @@ fn built_in_registry() -> CommandRegistry {
             matrix_set_global_image_packs,
         )
         .expect("built-in matrix_set_global_image_packs must remain in the command census");
+    registry
+        .register("matrix_set_own_display_name", matrix_set_own_display_name)
+        .expect("built-in matrix_set_own_display_name must remain in the command census");
+    registry
+        .register("matrix_set_own_avatar", matrix_set_own_avatar)
+        .expect("built-in matrix_set_own_avatar must remain in the command census");
     registry
         .register("matrix_set_room_image_pack", matrix_set_room_image_pack)
         .expect("built-in matrix_set_room_image_pack must remain in the command census");
@@ -3597,6 +3617,50 @@ fn later_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
+fn matrix_set_own_display_name(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSetOwnDisplayNameRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-set-own-display-name-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-set-own-display-name-no-session")
+        })?;
+        let result: MatrixProfileWriteResult = owner
+            .set_own_display_name(&payload.display_name)
+            .await
+            .map_err(own_profile_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-set-own-display-name-serialization-failed"))
+    })
+}
+
+fn matrix_set_own_avatar(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSetOwnAvatarRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-set-own-avatar-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-set-own-avatar-no-session")
+        })?;
+        let result: MatrixProfileWriteResult = owner
+            .set_own_avatar(&payload.mxc)
+            .await
+            .map_err(own_profile_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-set-own-avatar-serialization-failed"))
+    })
+}
+
+fn own_profile_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-send.r-avatar-display-name-too-long" | "v-send.r-avatar-invalid-mxc" => {
+            MatrixIpcErrorCategory::SdkInvariant
+        }
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
 fn matrix_room_notes_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         if !request.payload.is_null() {
@@ -4496,6 +4560,8 @@ mod tests {
                 "matrix_send_text",
                 "matrix_session_snapshot",
                 "matrix_set_global_image_packs",
+                "matrix_set_own_avatar",
+                "matrix_set_own_display_name",
                 "matrix_set_room_avatar",
                 "matrix_set_room_directory_visibility",
                 "matrix_set_room_image_pack",
@@ -6253,6 +6319,44 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-set-room-avatar-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_set_own_display_name_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_set_own_display_name".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"displayName":"Alice"}),
+            })
+            .await
+            .expect_err("set own display name without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-set-own-display-name-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_set_own_avatar_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_set_own_avatar".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"mxc":"mxc://example.org/abc"}),
+            })
+            .await
+            .expect_err("set own avatar without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-set-own-avatar-no-session")
         );
     }
 
