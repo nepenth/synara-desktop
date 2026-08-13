@@ -122,7 +122,11 @@ pub async fn matrix_login_password(
         return Err(error);
     }
 
-    let timelines = Arc::new(NativeTimelineOwner::new(&client, session_generation));
+    let timelines = Arc::new(NativeTimelineOwner::new(
+        &client,
+        crate::matrix::timeline::timeline_view_emit(app.clone()),
+        session_generation,
+    ));
     *session = Some(ManagedMatrixSession {
         client,
         identity: identity.clone(),
@@ -461,7 +465,11 @@ pub(super) async fn install_session_from_register_secrets(
         identity: identity.clone(),
         sync,
         invite_avatars: InviteAvatarHandles::new(session_generation),
-        timelines: Arc::new(NativeTimelineOwner::new(&client, session_generation)),
+        timelines: Arc::new(NativeTimelineOwner::new(
+            &client,
+            crate::matrix::timeline::timeline_view_emit(app.clone()),
+            session_generation,
+        )),
         composer_drafts: ComposerDraftRegistry::new(),
         sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
@@ -624,7 +632,11 @@ pub async fn matrix_restore_session(
         .map_err(map_room_join_rule_owner_error)?,
     );
     let sync = start_sync_owner(&client, session_generation).await?;
-    let timelines = Arc::new(NativeTimelineOwner::new(&client, session_generation));
+    let timelines = Arc::new(NativeTimelineOwner::new(
+        &client,
+        crate::matrix::timeline::timeline_view_emit(app.clone()),
+        session_generation,
+    ));
     *session = Some(ManagedMatrixSession {
         client,
         identity: identity.clone(),

@@ -25,8 +25,9 @@ use crate::app::room_profile::{MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwn
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::app::timeline::{
     NativeReactionMutationResult, NativeTimelineCloseRequest, NativeTimelineDirection,
-    NativeTimelineEventReadback, NativeTimelineOwner, NativeTimelineReadAction,
-    NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
+    NativeTimelineEventReadback, NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition,
+    NativeTimelineOpenReadback, NativeTimelineOpenRequest, NativeTimelineOwner,
+    NativeTimelineReadAction, NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
     NativeTimelineViewPaginationRequest, TimelineViewSnapshot,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
@@ -591,6 +592,21 @@ struct MatrixTimelineCloseRequest {
     stream_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_timeline_open`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixTimelineOpenRequest {
+    room_id: String,
+    position: NativeTimelineOpenPosition,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_timeline_jump_latest`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixTimelineJumpLatestRequest {
+    stream_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_timeline_event_readback`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1142,6 +1158,12 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_timeline_close", matrix_timeline_close)
         .expect("built-in matrix_timeline_close must remain in the command census");
     registry
+        .register("matrix_timeline_open", matrix_timeline_open)
+        .expect("built-in matrix_timeline_open must remain in the command census");
+    registry
+        .register("matrix_timeline_jump_latest", matrix_timeline_jump_latest)
+        .expect("built-in matrix_timeline_jump_latest must remain in the command census");
+    registry
         .register(
             "matrix_timeline_event_readback",
             matrix_timeline_event_readback,
@@ -1209,6 +1231,55 @@ fn matrix_timeline_close(state: Arc<CoreState>, request: CommandEnvelope) -> Com
         });
         Ok(serde_json::Value::Bool(closed))
     })
+}
+
+fn matrix_timeline_open(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelineOpenRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-timeline-open-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-open-no-session")
+        })?;
+        let readback: NativeTimelineOpenReadback = owner
+            .open_at(NativeTimelineOpenRequest {
+                room_id: payload.room_id,
+                position: payload.position,
+            })
+            .await
+            .map_err(timeline_open_owner_error)?;
+        serde_json::to_value(readback)
+            .map_err(|_| core_state_error("p2-timeline-open-serialization-failed"))
+    })
+}
+
+fn matrix_timeline_jump_latest(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelineJumpLatestRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-timeline-jump-latest-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-jump-latest-no-session")
+        })?;
+        let readback: NativeTimelineOpenReadback = owner
+            .jump_latest(NativeTimelineJumpLatestRequest {
+                stream_id: payload.stream_id,
+            })
+            .await
+            .map_err(timeline_open_owner_error)?;
+        serde_json::to_value(readback)
+            .map_err(|_| core_state_error("p2-timeline-jump-latest-serialization-failed"))
+    })
+}
+
+fn timeline_open_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "d0.3-timeline-invalid-room-id"
+        | "v-timeline-view-not-open"
+        | "v-timeline-normal-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 fn matrix_timeline_event_readback(
@@ -2476,6 +2547,8 @@ mod tests {
                 "matrix_sync_status",
                 "matrix_timeline_close",
                 "matrix_timeline_event_readback",
+                "matrix_timeline_jump_latest",
+                "matrix_timeline_open",
                 "matrix_timeline_paginate",
                 "matrix_timeline_reaction_toggle",
                 "matrix_timeline_set_read_state",
@@ -4326,6 +4399,67 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-timeline-close-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_open_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_open".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org","position":{"kind":"live_bottom"}}),
+            })
+            .await
+            .expect_err("timeline open without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-open-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_open_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_open".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "position":{"kind":"live_bottom"},
+                    "token":"no"
+                }),
+            })
+            .await
+            .expect_err("timeline open must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-open-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_jump_latest_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_jump_latest".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"streamId":"view-1"}),
+            })
+            .await
+            .expect_err("timeline jump_latest without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-jump-latest-no-session")
         );
     }
 

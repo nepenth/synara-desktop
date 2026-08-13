@@ -2,23 +2,15 @@ use super::*;
 
 #[tauri::command]
 pub async fn matrix_timeline_open(
-    app: AppHandle,
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     request: NativeTimelineOpenRequest,
 ) -> Result<NativeTimelineOpenReadback, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
-    let active = require_session_mut(session.as_mut())?;
-    active
-        .timelines
-        .lock()
-        .await
-        .open_at(
-            crate::matrix::timeline::timeline_view_emit(app),
-            &active.client,
-            request,
-        )
-        .await
-        .map_err(map_timeline_error)
+    crate::bridge::timeline_open::timeline_open(
+        core.inner().as_ref(),
+        request.room_id,
+        request.position,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -31,23 +23,11 @@ pub async fn matrix_timeline_close(
 
 #[tauri::command]
 pub async fn matrix_timeline_jump_latest(
-    app: AppHandle,
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     request: NativeTimelineJumpLatestRequest,
 ) -> Result<NativeTimelineOpenReadback, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
-    let active = require_session_mut(session.as_mut())?;
-    active
-        .timelines
-        .lock()
+    crate::bridge::timeline_open::timeline_jump_latest(core.inner().as_ref(), request.stream_id)
         .await
-        .jump_latest(
-            crate::matrix::timeline::timeline_view_emit(app),
-            &active.client,
-            request,
-        )
-        .await
-        .map_err(map_timeline_error)
 }
 
 #[tauri::command]
