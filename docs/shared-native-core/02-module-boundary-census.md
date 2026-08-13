@@ -3,13 +3,13 @@
 All paths relative to the repository root. Census technique: `git ls-files`,
 `grep -rl`, `grep -rn` over `src-tauri/src`, `synara-ios`, `.github/workflows`.
 The current source evidence is `feature/shared-native-core`
-`c7b83d22` (#786, after #785).
+`e53c4fbf` (#788, after #787).
 
 ## 2.1 Desktop application-logic layer
 
 The P0 census counted **285 `.rs` files** under `src-tauri/src/matrix/`. At the
 current evidence tip, there are 107 tracked Rust files under that desktop path
-and 208 under `crates/synara-core/src/app/`; the difference reflects P1 moves,
+and 209 under `crates/synara-core/src/app/`; the difference reflects P1 moves,
 not completion. The table remains the responsibility inventory rather than a
 claim that every listed domain is desktop-resident. Each domain is typically
 `mod.rs` (owning types/state) + `error.rs` + `live.rs` (actor/live state) +
@@ -26,7 +26,7 @@ store identity/paths/key-material/vault-trait, client-builder error/features/con
 lifecycle recovery-copy / remote-logout / wipe / error / session-material trait / logout,
 auth device-name, auth discovery/UIA/client_config, well-known HTTP transport,
 later/room-notes codecs, image-pack DTO/type-filters/write-guards, m.direct snapshot helpers,
-device presentation DTOs, secret-storage presentation DTOs, backup presentation DTOs, presence DTOs, typing snapshot DTO, verification presentation DTOs, room-directory DTOs, space presentation DTOs, and cross-signing presentation DTOs.
+device presentation DTOs, secret-storage presentation DTOs, backup presentation DTOs, presence DTOs, typing snapshot DTO, verification presentation DTOs, room-directory DTOs, space presentation DTOs, cross-signing presentation DTOs, and room-key transfer DTOs.
 #713–#717 moved whole harness directories; later splits moved only harness
 files and left live `product_commands.rs` / `live.rs` on desktop.
 Their desktop modules are thin re-exports (plus leftover command files).
