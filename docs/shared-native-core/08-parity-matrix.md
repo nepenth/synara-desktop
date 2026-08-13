@@ -4,9 +4,9 @@ Legend: ✅ shipping / 🔨 in progress / ⛔ not yet
 
 ## Current bounded evidence (not parity completion)
 
-At `feature/shared-native-core` `c27c8009`
-(#892, after #891), P2 registers seventy-nine names—the prior seventy-eight plus
-`matrix_room_set_power_level`. The previous seventy-eight remain—
+At `feature/shared-native-core` `484e5b0f`
+(#894, after #893), P2 registers eighty-one names—the prior seventy-nine plus
+bulk power-level writes. The previous seventy-nine remain—
 `matrix_login_flows`, `matrix_register_flows`, `matrix_session_snapshot`,
 `matrix_sync_status`, `matrix_crypto_status`, `matrix_media_config`,
 `matrix_cross_signing_status`, `matrix_secret_storage_status`,
