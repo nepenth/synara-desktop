@@ -27,7 +27,6 @@
 mod error;
 mod logout;
 mod recovery;
-mod recovery_copy;
 mod remote_logout;
 mod session_material;
 mod session_persist;
@@ -40,7 +39,7 @@ pub use recovery::{
     apply_store_failure, recovery_action_for, surface_store_corrupt, surface_store_unavailable,
     RecoveryAction, StoreFailure, StoreFailureKind,
 };
-pub use recovery_copy::{copy_for_remote_outcome, recovery_copy_en, RecoveryCopyKey};
+pub use synara_core::app::lifecycle::*;
 pub use remote_logout::{
     LocalCleanupPolicy, RemoteLogoutFlow, RemoteLogoutOutcome, RemoteLogoutPhase, RemoteLogoutScope,
 };
