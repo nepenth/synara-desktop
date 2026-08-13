@@ -21,6 +21,7 @@ pub mod room_list;
 pub mod routes;
 pub mod search;
 pub mod security;
+pub mod spaces;
 pub mod sync;
 pub mod threads;
 pub mod timeline;

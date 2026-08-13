@@ -1,13 +1,13 @@
 //! Unit tests for P4.5 space hierarchy foundation.
 
 use super::*;
-use crate::matrix::dto::SpaceSummary;
-use crate::matrix::room_list::RoomSummaryBuilder;
+use crate::dto::SpaceSummary;
+use crate::app::room_list::RoomSummaryBuilder;
 
 fn space(
     id: &str,
     name: &str,
-    children: Vec<crate::matrix::dto::SpaceChild>,
+    children: Vec<crate::dto::SpaceChild>,
     parents: Option<Vec<String>>,
 ) -> SpaceSummary {
     SpaceSummary {
@@ -141,6 +141,6 @@ fn privacy_safe_errors() {
     assert!(!s.contains("access_token"));
     assert_eq!(
         err.category(),
-        crate::matrix::ipc::MatrixIpcErrorCategory::SdkInvariant
+        crate::transport::MatrixIpcErrorCategory::SdkInvariant
     );
 }
