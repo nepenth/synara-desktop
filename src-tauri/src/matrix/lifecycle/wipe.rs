@@ -14,7 +14,7 @@ use crate::matrix::store::{
     MATRIX_STORE_ROOT_SEGMENT,
 };
 
-use super::error::LifecycleError;
+use super::LifecycleError;
 
 /// Resolved wipe target for exactly one account under one app-data root.
 #[derive(Debug, Clone, PartialEq, Eq)]
