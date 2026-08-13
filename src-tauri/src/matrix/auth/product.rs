@@ -19,7 +19,6 @@ use matrix_sdk::{
                 create_room::{self, v3::RoomPreset},
                 Visibility,
             },
-            state::get_state_event_for_key,
             uiaa,
         },
         events::{
@@ -201,7 +200,9 @@ pub use synara_core::app::send::{
 };
 pub use synara_core::app::user_profile::MatrixProfileWriteResult;
 
-pub use synara_core::app::members::NativePowerLevelWriteResult;
+pub use synara_core::app::members::{
+    NativePowerLevelWriteResult, MAX_POWER_LEVEL_CONTENT_JSON_BYTES,
+};
 pub use synara_core::app::room_ops::{
     MatrixRoomCreateContent, MatrixRoomCreatePowerLevels, MatrixRoomCreatePreset,
     MatrixRoomCreateRequest, MatrixRoomCreateVisibility,
@@ -220,12 +221,6 @@ const MAX_CALL_WIDGET_MEDIA_DOWNLOAD_BYTES: usize = MAX_ATTACHMENT_IPC_BYTES;
 /// Avatars are small images; 8 MiB is generous and keeps the webview buffer
 /// bounded (well under the 32 MiB attachment cap).
 const MAX_AVATAR_IPC_BYTES: usize = 8 * 1024 * 1024;
-
-/// Power-level state is a JSON state event, so it uses the normal bounded
-/// Matrix IPC payload policy rather than an unbounded serde_json value.
-const MAX_POWER_LEVEL_CONTENT_JSON_BYTES: usize =
-    crate::matrix::ipc::MAX_ENVELOPE_PAYLOAD_JSON_BYTES;
-const MAX_POWER_LEVEL_TEXT_BYTES: usize = 4 * 1024;
 
 impl MatrixAuthCommandError {
     pub(crate) fn new(

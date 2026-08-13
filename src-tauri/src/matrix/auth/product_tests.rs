@@ -2022,6 +2022,7 @@ fn power_level_commands_are_registered_and_have_no_bulk_single_user_loop() {
         .split("#[tauri::command]")
         .next()
         .expect("bulk power-level command body");
+    assert!(bulk_command.contains("crate::bridge::room_power_levels::room_set_power_levels"));
     assert!(!bulk_command.contains("update_power_levels"));
 }
 

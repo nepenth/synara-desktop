@@ -164,18 +164,12 @@ pub async fn matrix_room_set_power_level(
 /// not implemented as repeated `matrix_room_set_power_level` calls.
 #[tauri::command]
 pub async fn matrix_room_set_power_levels(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     content: serde_json::Value,
 ) -> Result<NativePowerLevelWriteResult, MatrixAuthCommandError> {
-    set_room_power_level_state(
-        state,
-        room_id,
-        content,
-        ROOM_POWER_LEVELS_EVENT_TYPE,
-        validate_room_power_levels_content,
-    )
-    .await
+    crate::bridge::room_power_levels::room_set_power_levels(core.inner().as_ref(), room_id, content)
+        .await
 }
 
 /// V-ROOMS.R-POWERS-BULK — replace the complete
@@ -184,82 +178,20 @@ pub async fn matrix_room_set_power_levels(
 /// of all custom tags.
 #[tauri::command]
 pub async fn matrix_room_set_power_level_tags(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     content: serde_json::Value,
 ) -> Result<NativePowerLevelWriteResult, MatrixAuthCommandError> {
-    set_room_power_level_state(
-        state,
+    crate::bridge::room_power_levels::room_set_power_level_tags(
+        core.inner().as_ref(),
         room_id,
         content,
-        POWER_LEVEL_TAGS_EVENT_TYPE,
-        validate_power_level_tags_content,
     )
     .await
 }
 
 pub(super) const ROOM_POWER_LEVELS_EVENT_TYPE: &str = "m.room.power_levels";
 pub(super) const POWER_LEVEL_TAGS_EVENT_TYPE: &str = "in.synara.room.power_level_tags";
-
-pub(super) async fn set_room_power_level_state(
-    state: State<'_, MatrixAuthState>,
-    room_id: String,
-    content: serde_json::Value,
-    event_type: &'static str,
-    validate_content: fn(&serde_json::Value) -> Result<(), MatrixAuthCommandError>,
-) -> Result<NativePowerLevelWriteResult, MatrixAuthCommandError> {
-    let room_id = parse_power_level_room_id(&room_id)?;
-    validate_content(&content)?;
-    let state_event_type = StateEventType::from(event_type);
-
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    let session_generation = active.sync.session_generation();
-    let room = active
-        .client
-        .get_room(&room_id)
-        .ok_or_else(|| map_power_level_write_error("v-rooms-power-levels-room-not-found"))?;
-
-    room.send_state_event_raw(event_type, "", content.clone())
-        .await
-        .map_err(|_| map_power_level_write_error("v-rooms-power-levels-send-failed"))?;
-
-    // The PUT response only acknowledges an event ID. Read the accepted state
-    // back from the homeserver before reporting success; the request body is
-    // never returned as an optimistic echo.
-    let readback = active
-        .client
-        .send(get_state_event_for_key::v3::Request::new(
-            room_id.clone(),
-            state_event_type,
-            String::new(),
-        ))
-        .await
-        .map_err(|_| map_power_level_write_error("v-rooms-power-levels-readback-failed"))?
-        .into_content()
-        .deserialize_as_unchecked::<serde_json::Value>()
-        .map_err(|_| map_power_level_write_error("v-rooms-power-levels-readback-malformed"))?;
-
-    if active.sync.session_generation() != session_generation {
-        return Err(map_power_level_write_error(
-            "v-rooms-power-levels-stale-session-generation",
-        ));
-    }
-    if readback != content {
-        return Err(map_power_level_write_error(
-            "v-rooms-power-levels-readback-mismatch",
-        ));
-    }
-
-    Ok(NativePowerLevelWriteResult {
-        status: "ok",
-        room_id: room_id.to_string(),
-        event_type,
-        state_key: "",
-        session_generation,
-        content: readback,
-    })
-}
 
 #[tauri::command]
 pub async fn matrix_invites_report_spam(
@@ -394,213 +326,18 @@ pub(super) fn map_power_level_write_error(diagnostic_id: &'static str) -> Matrix
     MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
 
-pub(super) fn parse_power_level_room_id(
-    room_id: &str,
-) -> Result<OwnedRoomId, MatrixAuthCommandError> {
-    if room_id.is_empty() || room_id.trim() != room_id {
-        return Err(map_power_level_write_error(
-            "v-rooms-power-levels-invalid-room",
-        ));
-    }
-    room_id
-        .parse()
-        .map_err(|_| map_power_level_write_error("v-rooms-power-levels-invalid-room"))
-}
-
-pub(super) fn validate_power_level_payload_size(
-    content: &serde_json::Value,
-) -> Result<(), MatrixAuthCommandError> {
-    let byte_len = serde_json::to_vec(content)
-        .map_err(|_| map_power_level_write_error("v-rooms-power-levels-invalid-content"))?
-        .len();
-    if byte_len > MAX_POWER_LEVEL_CONTENT_JSON_BYTES {
-        return Err(map_power_level_write_error(
-            "v-rooms-power-levels-content-too-large",
-        ));
-    }
-    Ok(())
-}
-
-pub(super) fn validate_matrix_power_level(
-    value: &serde_json::Value,
-) -> Result<(), MatrixAuthCommandError> {
-    let valid = value
-        .as_i64()
-        .is_some_and(|value| value.unsigned_abs() <= MAX_WIRE_COUNTER)
-        || value
-            .as_u64()
-            .is_some_and(|value| value <= MAX_WIRE_COUNTER);
-    if valid {
-        Ok(())
-    } else {
-        Err(map_power_level_write_error(
-            "v-rooms-power-levels-invalid-power",
-        ))
-    }
-}
-
-pub(super) fn validate_power_level_map(
-    value: &serde_json::Value,
-) -> Result<(), MatrixAuthCommandError> {
-    let Some(map) = value.as_object() else {
-        return Err(map_power_level_write_error(
-            "v-rooms-power-levels-invalid-power-map",
-        ));
-    };
-    for value in map.values() {
-        validate_matrix_power_level(value)?;
-    }
-    Ok(())
-}
-
 pub(super) fn validate_room_power_levels_content(
     content: &serde_json::Value,
 ) -> Result<(), MatrixAuthCommandError> {
-    validate_power_level_payload_size(content)?;
-    let Some(content) = content.as_object() else {
-        return Err(map_power_level_write_error(
-            "v-rooms-power-levels-invalid-content",
-        ));
-    };
-
-    const POWER_LEVEL_FIELDS: &[&str] = &[
-        "ban",
-        "events_default",
-        "historical",
-        "invite",
-        "kick",
-        "redact",
-        "state_default",
-        "users_default",
-    ];
-    for field in POWER_LEVEL_FIELDS {
-        if let Some(value) = content.get(*field) {
-            validate_matrix_power_level(value)?;
-        }
-    }
-    for field in ["events", "notifications", "users"] {
-        if let Some(value) = content.get(field) {
-            validate_power_level_map(value)?;
-        }
-    }
-    Ok(())
-}
-
-pub(super) fn validate_bounded_text(
-    value: &serde_json::Value,
-    diagnostic_id: &'static str,
-    required: bool,
-) -> Result<(), MatrixAuthCommandError> {
-    let Some(value) = value.as_str() else {
-        return Err(map_power_level_write_error(diagnostic_id));
-    };
-    if value.len() > MAX_POWER_LEVEL_TEXT_BYTES || (required && value.is_empty()) {
-        return Err(map_power_level_write_error(diagnostic_id));
-    }
-    Ok(())
-}
-
-pub(super) fn validate_power_level_tag_icon(
-    value: &serde_json::Value,
-) -> Result<(), MatrixAuthCommandError> {
-    let Some(icon) = value.as_object() else {
-        return Err(map_power_level_write_error(
-            "v-rooms-power-levels-invalid-icon",
-        ));
-    };
-    for field in icon.keys() {
-        if field != "key" && field != "info" {
-            return Err(map_power_level_write_error(
-                "v-rooms-power-levels-invalid-icon-field",
-            ));
-        }
-    }
-    if let Some(key) = icon.get("key") {
-        validate_bounded_text(key, "v-rooms-power-levels-invalid-icon", false)?;
-    }
-    if let Some(info) = icon.get("info") {
-        let Some(info) = info.as_object() else {
-            return Err(map_power_level_write_error(
-                "v-rooms-power-levels-invalid-icon-info",
-            ));
-        };
-        for (field, value) in info {
-            match field.as_str() {
-                "w" | "h" | "size" => {
-                    let valid = value
-                        .as_u64()
-                        .is_some_and(|value| value <= MAX_WIRE_COUNTER);
-                    if !valid {
-                        return Err(map_power_level_write_error(
-                            "v-rooms-power-levels-invalid-icon-info",
-                        ));
-                    }
-                }
-                "mimetype" | "xyz.amorgan.blurhash" => {
-                    validate_bounded_text(value, "v-rooms-power-levels-invalid-icon-info", false)?;
-                }
-                _ => {
-                    return Err(map_power_level_write_error(
-                        "v-rooms-power-levels-invalid-icon-field",
-                    ));
-                }
-            }
-        }
-    }
-    Ok(())
+    synara_core::app::members::validate_room_power_levels_content(content)
+        .map_err(map_power_level_write_error)
 }
 
 pub(super) fn validate_power_level_tags_content(
     content: &serde_json::Value,
 ) -> Result<(), MatrixAuthCommandError> {
-    validate_power_level_payload_size(content)?;
-    let Some(tags) = content.as_object() else {
-        return Err(map_power_level_write_error(
-            "v-rooms-power-levels-invalid-content",
-        ));
-    };
-    for (power, value) in tags {
-        let parsed_power = power
-            .parse::<i64>()
-            .ok()
-            .filter(|value| value.unsigned_abs() <= MAX_WIRE_COUNTER);
-        if parsed_power.map(|value| value.to_string()).as_deref() != Some(power.as_str()) {
-            return Err(map_power_level_write_error(
-                "v-rooms-power-levels-invalid-tag-key",
-            ));
-        }
-
-        let Some(tag) = value.as_object() else {
-            return Err(map_power_level_write_error(
-                "v-rooms-power-levels-invalid-tag",
-            ));
-        };
-        let Some(name) = tag.get("name") else {
-            return Err(map_power_level_write_error(
-                "v-rooms-power-levels-invalid-tag-name",
-            ));
-        };
-        if name.as_str().is_none_or(|name| name.trim().is_empty()) {
-            return Err(map_power_level_write_error(
-                "v-rooms-power-levels-invalid-tag-name",
-            ));
-        }
-        validate_bounded_text(name, "v-rooms-power-levels-invalid-tag-name", true)?;
-        for field in tag.keys() {
-            if field != "name" && field != "color" && field != "icon" {
-                return Err(map_power_level_write_error(
-                    "v-rooms-power-levels-invalid-tag",
-                ));
-            }
-        }
-        if let Some(color) = tag.get("color") {
-            validate_bounded_text(color, "v-rooms-power-levels-invalid-tag-color", false)?;
-        }
-        if let Some(icon) = tag.get("icon") {
-            validate_power_level_tag_icon(icon)?;
-        }
-    }
-    Ok(())
+    synara_core::app::members::validate_power_level_tags_content(content)
+        .map_err(map_power_level_write_error)
 }
 
 pub(super) fn map_room_create_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
