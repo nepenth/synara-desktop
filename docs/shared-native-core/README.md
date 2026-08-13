@@ -8,7 +8,7 @@ Desktop onto **one transport-agnostic Rust application-logic core** —
 |---|---|
 | Owner | Synara engineering |
 | Status | P0 complete; P1 extraction and bounded P2, P3, and P4 slices are merged at the evidence base below. P2–P4 remain in progress; P5 has not started. |
-| Evidence base | `feature/shared-native-core` at `6666556a4e5eb29c456fe9714cad2cf8d347286d` (#721, after #720; prior bounded P4 evidence remains #708/#710) |
+| Evidence base | `feature/shared-native-core` at `d5cc78f84f60e5634ec0c2b53db26d6e4d269b34` (#726, after #723–#725; prior bounded P4 evidence remains #708/#710) |
 | Decision | [ADR 0003](../adr/0003-shared-native-rust-core.md) |
 | Program ledger | `docs/shared-native-core/` (this directory) |
 | Related ADRs | [0001](../adr/0001-ios-repository-layout.md), [0002](../adr/0002-ios-architecture.md) |
@@ -64,13 +64,13 @@ Desktop onto **one transport-agnostic Rust application-logic core** —
 ## Current milestone ledger
 
 The following describes merged source reachable from
-`6666556a4e5eb29c456fe9714cad2cf8d347286d` (#721, after #720). #708 and #710
+`d5cc78f84f60e5634ec0c2b53db26d6e4d269b34` (#726, after #723–#725). #708 and #710
 remain the prior bounded P4 evidence.
 
 | Phase | Merged evidence | Current boundary |
 |---|---|---|
 | P0 | ADR, plan, and census | Complete planning baseline. |
-| P1 | #669, #673–#677, #680–#681, #713–#714, #716–#717, #720–#721 | Extraction slices, the `Platform`/desktop adapter, four harness clusters, and the members/user_profile split harnesses are merged; remaining matrix domains have not all moved. |
+| P1 | #669, #673–#677, #680–#681, #713–#714, #716–#717, #720–#721, #723–#726 | Extraction slices plus index/harness splits through typing, presence, spaces, and room-profile; remaining live domains have not all moved. |
 | P2 | #683–#689, #694, #698, #701–#702, #706 | The same eight-command registry above is live; #708/#710/#713/#714/#716/#717 add no Core command routes, and full desktop-invoke parity is not reached. |
 | P3 | #690–#691, #694, #698, #701–#702, #706 | The listed auth and read-only/session bridges use Core; `src-tauri` is not yet a fully thin shell. |
 | P4 | #685, #692–#693, #696, #699, #703, #708, #710 | UniFFI scaffold, bounded login discovery/link coverage, a safe session projection mirror, display-only readback, and only the two pure row/recovery policies exist; service migration and Apple release proof do not. |
