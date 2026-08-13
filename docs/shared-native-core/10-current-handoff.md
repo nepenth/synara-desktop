@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `dcb0783e`, the merge commit for #812. |
-| Immediately preceding merges | #811 docs after #810, #812 timeline `ViewDeltaEmitter`. |
+| Feature evidence tip | `feature/shared-native-core` is `986dc538`, the merge commit for #814. |
+| Immediately preceding merges | #813 docs after #812, #814 live `NativeTimelineRegistry`. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -83,12 +83,13 @@ residency changes are:
 | #807 / `2eca137f` | live `NativeDeviceOwner` behind emit sink | Desktop keeps Tauri wakeup adapter. |
 | #808 / `8e517c84` | live `NativePresenceOwner` behind emit sink | Desktop keeps Tauri event adapter. |
 | #810 / `e197beea` | live `NativeImagePackOwner` plus snapshot/set | Desktop keeps Tauri event adapter. |
-| #812 / `dcb0783e` | timeline `ViewDeltaEmitter` behind emit sink | Desktop keeps `NativeTimelineRegistry`. |
+| #812 / `dcb0783e` | timeline `ViewDeltaEmitter` behind emit sink | Desktop keeps AppHandle adapter. |
+| #814 / `986dc538` | live `NativeTimelineRegistry` | Desktop keeps `timeline_view_emit`. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `dcb0783e`/#812 for
+anchor, but it is no longer the feature-tip provenance; use `986dc538`/#814 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
