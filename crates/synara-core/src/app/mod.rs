@@ -8,6 +8,7 @@
 pub mod account_data;
 pub mod auth;
 pub mod backup;
+pub mod client_builder;
 pub mod cross_signing;
 pub mod crypto_store;
 pub mod diagnostics;

@@ -8,7 +8,7 @@ use matrix_sdk::encryption::{BackupDownloadStrategy, EncryptionSettings};
 use matrix_sdk::Client;
 
 use super::config::{ClientBuildConfig, HomeserverMode};
-use super::error::ClientBuilderError;
+use super::ClientBuilderError;
 use crate::matrix::ipc::MatrixIpcErrorCategory;
 
 /// Build an **unauthenticated** Matrix Rust SDK client from a validated config.

@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::time::Duration;
 
-use super::error::ClientBuilderError;
+use super::ClientBuilderError;
 use crate::matrix::store::{
     AccountIdentity, StoreKeyMaterial, StoreLayout, StorePaths, STORE_KEY_LEN,
 };
@@ -107,7 +107,7 @@ pub fn default_user_agent() -> String {
     format!(
         "Synara-Desktop/{} (matrix-sdk/{})",
         env!("CARGO_PKG_VERSION"),
-        super::features::MATRIX_SDK_PIN_VERSION
+        super::MATRIX_SDK_PIN_VERSION
     )
 }
 
@@ -240,11 +240,11 @@ impl ClientBuildConfig {
             handle_refresh_tokens: self.handle_refresh_tokens,
             store_key_present: self.store_key.is_some(),
             store_layout: self.store_paths.layout(),
-            approved_features: super::features::APPROVED_MATRIX_SDK_FEATURES
+            approved_features: super::APPROVED_MATRIX_SDK_FEATURES
                 .iter()
                 .map(|s| (*s).to_owned())
                 .collect(),
-            matrix_sdk_version: super::features::MATRIX_SDK_PIN_VERSION.to_owned(),
+            matrix_sdk_version: super::MATRIX_SDK_PIN_VERSION.to_owned(),
         }
     }
 
