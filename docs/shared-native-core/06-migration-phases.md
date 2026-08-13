@@ -20,8 +20,8 @@ integration, or release path. **Never a big-bang move.**
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
 
-**Current bounded status at `c040632b`
-(#805, after #804):** #713 mechanically moved notifications, polls,
+**Current bounded status at `8e517c84`
+(#808, after #807):** #713 mechanically moved notifications, polls,
 relations, threads, and unread; #714 moved raw content, receipts, routes, and
 security; #716 moved search, legacy, and media_cache; #717 moved media_export
 and crypto_store; #734 moved the room-directory session harness; #735 moved
@@ -65,7 +65,10 @@ persist/restore (Keyring vault and `SdkClientHandle` stayed desktop); #801 moved
 live password login / register / password-reset (Tauri product commands stayed
 desktop); #803 moved live `NativeTypingOwner` / `set_typing_notice` (Tauri
 typing commands stayed desktop); #805 moved live `NativeRoomJoinRuleOwner`
-behind a shell emit sink (Tauri event adapter stayed desktop). These retain thin desktop re-exports and any
+behind a shell emit sink (Tauri event adapter stayed desktop); #807 moved live
+`NativeDeviceOwner` behind a shell emit sink (Tauri wakeup adapter stayed
+desktop); #808 moved live `NativePresenceOwner` behind a shell emit sink
+(Tauri event adapter stayed desktop). These retain thin desktop re-exports and any
 leftover `live.rs` / `product_commands.rs`. They are P1 extraction
 only: no P2 command registration, UDL, or iOS behavior changed.
 
@@ -149,7 +152,7 @@ zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
 
 > **Bounded evidence note — not P4 acceptance:** At the current feature tip
-> `c040632bfd3354fe15b43b81721b185f99147191` (#805, after #804), the
+> `8e517c8472183de111e94d4ff186d8519ec73ea2` (#808, after #807), the
 > prior #708 work is only the pure iOS room-row unread presentation from closed
 > `Joined`/`Invited` membership, scalar counters, and a marked-unread flag to a
 > `u64` count plus highlight boolean. The prior #710 work is only the pure
