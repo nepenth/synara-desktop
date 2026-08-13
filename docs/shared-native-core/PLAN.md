@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`76b3a80d` (#924, after #923):** P0 is
+`7b05a569` (#926, after #925):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -105,8 +105,8 @@ acceptance criteria have all passed.
   `matrix_set_room_image_pack`
   (#686–#689, #694, #698, #701–#702, #706, #818, #820, #822, #824, #826, #828, #830, #832). The status/media
   routes preserve bounded legacy contracts through Core.
-  Later 7B slices through #924 grow that registry to one hundred seven names,
-  including invites snapshot. Neither #708, #710, #713,
+  Later 7B slices through #926 grow that registry to one hundred nine names,
+  including invite accept/decline. Neither #708, #710, #713,
   #714, #716, nor #717 adds a Core command route. It is not the complete
   desktop command registry; unregistered census names fail closed.
 - **P3 — in progress; a desktop seam is merged, not a whole adapter swap.**
