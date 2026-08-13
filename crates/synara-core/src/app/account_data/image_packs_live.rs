@@ -24,8 +24,9 @@ use super::{
     set_global_image_packs_content_guard, set_room_image_pack_content_guard,
     set_user_image_pack_content_guard, EmoteRoomsContent, NativeGlobalImagePacksSnapshot,
     NativeImagePack, NativeLaterSnapshot, NativeMDirectMutationResult, NativeMDirectSnapshot,
-    NativeRoomImagePacksSnapshot, NativeUserImagePackSnapshot, SynaraLaterItem,
-    EMOTE_ROOMS_EVENT_TYPE, ROOM_EMOTES_EVENT_TYPE, USER_EMOTES_EVENT_TYPE,
+    NativeRoomImagePacksSnapshot, NativeRoomNotesSnapshot, NativeUserImagePackSnapshot,
+    RoomNoteMoveDirection, SynaraLaterItem, SynaraRoomNoteItem, EMOTE_ROOMS_EVENT_TYPE,
+    ROOM_EMOTES_EVENT_TYPE, USER_EMOTES_EVENT_TYPE,
 };
 
 /// Shell-supplied sink for image-pack wakeups.
@@ -378,6 +379,60 @@ impl NativeImagePackOwner {
             self.session_generation,
             item_id,
             super::later_timestamp_or_now(reminded_at),
+        )
+        .await
+    }
+
+    pub async fn room_notes_snapshot(&self) -> Result<NativeRoomNotesSnapshot, &'static str> {
+        super::snapshot_room_notes(&self.client, self.session_generation).await
+    }
+
+    pub async fn room_notes_upsert(
+        &self,
+        item: SynaraRoomNoteItem,
+    ) -> Result<NativeRoomNotesSnapshot, &'static str> {
+        super::upsert_room_note_item(&self.client, self.session_generation, item).await
+    }
+
+    pub async fn room_notes_delete(
+        &self,
+        room_id: String,
+        item_id: String,
+    ) -> Result<NativeRoomNotesSnapshot, &'static str> {
+        super::delete_room_note_item_live(&self.client, self.session_generation, room_id, item_id)
+            .await
+    }
+
+    pub async fn room_notes_complete_todo(
+        &self,
+        room_id: String,
+        item_id: String,
+        completed: bool,
+    ) -> Result<NativeRoomNotesSnapshot, &'static str> {
+        super::complete_room_todo_item_live(
+            &self.client,
+            self.session_generation,
+            room_id,
+            item_id,
+            completed,
+            super::room_notes_now_ms(),
+        )
+        .await
+    }
+
+    pub async fn room_notes_move_todo(
+        &self,
+        room_id: String,
+        item_id: String,
+        direction: RoomNoteMoveDirection,
+    ) -> Result<NativeRoomNotesSnapshot, &'static str> {
+        super::move_room_todo_item_live(
+            &self.client,
+            self.session_generation,
+            room_id,
+            item_id,
+            direction,
+            super::room_notes_now_ms(),
         )
         .await
     }
