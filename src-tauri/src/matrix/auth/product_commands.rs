@@ -82,8 +82,12 @@ pub async fn matrix_login_password(
     let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
     let presence = NativePresenceOwner::start(&client, app.clone(), session_generation)
         .map_err(map_presence_error)?;
-    let join_rules = NativeRoomJoinRuleOwner::start(&client, app.clone(), session_generation)
-        .map_err(map_room_join_rule_owner_error)?;
+    let join_rules = crate::matrix::room_profile::start_join_rule_owner(
+        &client,
+        app.clone(),
+        session_generation,
+    )
+    .map_err(map_room_join_rule_owner_error)?;
     let sync = start_sync_owner(&client, session_generation).await?;
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
@@ -338,8 +342,12 @@ pub(super) async fn install_session_from_register_secrets(
     let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
     let presence = NativePresenceOwner::start(&client, app.clone(), session_generation)
         .map_err(map_presence_error)?;
-    let join_rules = NativeRoomJoinRuleOwner::start(&client, app.clone(), session_generation)
-        .map_err(map_room_join_rule_owner_error)?;
+    let join_rules = crate::matrix::room_profile::start_join_rule_owner(
+        &client,
+        app.clone(),
+        session_generation,
+    )
+    .map_err(map_room_join_rule_owner_error)?;
     let sync = start_sync_owner(&client, session_generation).await?;
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
@@ -510,8 +518,12 @@ pub async fn matrix_restore_session(
     let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
     let presence = NativePresenceOwner::start(&client, app.clone(), session_generation)
         .map_err(map_presence_error)?;
-    let join_rules = NativeRoomJoinRuleOwner::start(&client, app.clone(), session_generation)
-        .map_err(map_room_join_rule_owner_error)?;
+    let join_rules = crate::matrix::room_profile::start_join_rule_owner(
+        &client,
+        app.clone(),
+        session_generation,
+    )
+    .map_err(map_room_join_rule_owner_error)?;
     let sync = start_sync_owner(&client, session_generation).await?;
     *session = Some(ManagedMatrixSession {
         client,

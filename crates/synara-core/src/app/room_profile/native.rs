@@ -1,6 +1,6 @@
 //! Credential-free room join-rule presentation DTO.
 //!
-//! Live Client subscribe and SDK JoinRule mapping stay in the desktop shell.
+//! Live subscribe lives in [`super::live`]; shells map updates onto their emit sink.
 
 use serde::Serialize;
 

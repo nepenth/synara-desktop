@@ -5,7 +5,4 @@
 pub use synara_core::app::room_profile::*;
 
 pub mod live;
-pub use live::{
-    project_join_rule, NativeRoomJoinRuleOwner, NativeRoomJoinRuleUpdate,
-    ROOM_JOIN_RULE_UPDATED_EVENT,
-};
+pub use live::start as start_join_rule_owner;
