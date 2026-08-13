@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `b2e1dacc`, the merge commit for #784. |
-| Immediately preceding merges | #782 docs after #780/#781, #783 room-directory DTOs, #784 space presentation DTOs. |
+| Feature evidence tip | `feature/shared-native-core` is `c7b83d22`, the merge commit for #786. |
+| Immediately preceding merges | #785 docs after #783/#784, #786 cross-signing presentation DTOs and projector. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -69,11 +69,12 @@ residency changes are:
 | #781 / `e23801ec` | verification presentation DTOs and phase rank | Desktop keeps Client request/SAS owner. |
 | #783 / `7d277c23` | room-directory DTOs and search normalize | Desktop keeps ruma request mapping and Client protocol fetch. |
 | #784 / `b2e1dacc` | space presentation DTOs and cycle guard | Desktop keeps Client hierarchy/child I/O and AllowRule reparent. |
+| #786 / `c7b83d22` | cross-signing presentation DTOs and projector | Desktop keeps Client crypto I/O and UIAA. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `b2e1dacc`/#784 for
+anchor, but it is no longer the feature-tip provenance; use `c7b83d22`/#786 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -126,7 +127,7 @@ and the P1 app domains `sync`, `room_list`, pure `timeline`,
 remote-logout / wipe / error / session-material trait / logout, auth device-name, and auth
 discovery/UIA/client_config, well-known HTTP transport, later/room-notes codecs,
 image-pack DTO/type-filters/write-guards, m.direct snapshot helpers,
-device presentation DTOs, secret-storage presentation DTOs, backup presentation DTOs, presence DTOs, typing snapshot DTO, verification presentation DTOs, room-directory DTOs, and space presentation DTOs.
+device presentation DTOs, secret-storage presentation DTOs, backup presentation DTOs, presence DTOs, typing snapshot DTO, verification presentation DTOs, room-directory DTOs, space presentation DTOs, and cross-signing presentation DTOs.
 Later mechanical splits left live `product_commands.rs` and `live.rs` on
 desktop where those files exist. Compatibility re-exports remain deliberately
 in the desktop shell.
