@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `d1c5d6bb`, the merge commit for #753. |
-| Immediately preceding merges | #752 docs after #751, #753 store vault trait + auth discovery/UIA. |
+| Feature evidence tip | `feature/shared-native-core` is `b26b2a4b`, the merge commit for #755. |
+| Immediately preceding merges | #754 docs after #753, #755 lifecycle error. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -52,11 +52,12 @@ residency changes are:
 | #747 / `a030aeb1` | lifecycle recovery-copy harness | Desktop keeps vault/SDK leftovers; remote-logout policy enums moved with copy. |
 | #751 / `3c089693` | auth device-name harness | Desktop keeps live login/discovery/UIA/product commands. |
 | #753 / `d1c5d6bb` | store vault trait + key material; auth discovery/UIA/client_config | Desktop keeps `KeyringStoreKeyVault`, `HttpDiscoveryTransport`, live login/product/register/reset. |
+| #755 / `b26b2a4b` | lifecycle error domain | Desktop keeps logout, session vault I/O, wipe, persist/restore (`keyring` / `matrix_sdk`). |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `d1c5d6bb`/#753 for
+anchor, but it is no longer the feature-tip provenance; use `b26b2a4b`/#755 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -106,8 +107,8 @@ and the P1 app domains `sync`, `room_list`, pure `timeline`,
 `send` queue, `room_keys` transfer flow, `supervisor` actor,
 `diagnostics` health, `store` identity/paths, `client_builder`
 error/features, `lifecycle` recovery-copy / remote-logout policy enums,
-auth device-name, store key-material / vault trait, and auth
-discovery/UIA/client_config.
+auth device-name, store key-material / vault trait, auth
+discovery/UIA/client_config, and lifecycle error.
 Later mechanical splits left live `product_commands.rs` and `live.rs` on
 desktop where those files exist. Compatibility re-exports remain deliberately
 in the desktop shell.
