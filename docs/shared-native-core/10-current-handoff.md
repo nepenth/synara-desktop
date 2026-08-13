@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `10bc7441`, the merge commit for #868. |
-| Immediately preceding merges | #867 docs after #866, #868 timeline edit/redact. |
+| Feature evidence tip | `feature/shared-native-core` is `d125c7ad`, the merge commit for #870. |
+| Immediately preceding merges | #869 docs after #868, #870 timeline report/pin/unpin. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -112,11 +112,12 @@ residency changes are:
 | #864 / `b2a19d3f` | timeline reaction mutations via `Core::command` | Toggle, ensure, and redact. |
 | #866 / `aeb5b13e` | timeline open/jump-latest via `Core::command` | Owner now holds the view-delta emit sink. |
 | #868 / `10bc7441` | timeline edit/redact via `Core::command` | Same attached timeline owner. |
+| #870 / `d125c7ad` | timeline report/pin/unpin via `Core::command` | Same attached timeline owner. |
 
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `10bc7441`/#868 for
+anchor, but it is no longer the feature-tip provenance; use `d125c7ad`/#870 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -186,9 +187,9 @@ tests/proofs for moved domains. Core-owned discovery/UIA types and the vault
 trait do not make live login or Keychain I/O Core-owned. Therefore P1 is not
 complete and `src-tauri` is not a thin shell.
 
-### P2 — in progress: forty-three registered commands
+### P2 — in progress: forty-six registered commands
 
-The Core registry registers exactly these forty-three names:
+The Core registry registers exactly these forty-six names:
 
 1. `matrix_login_flows`
 2. `matrix_register_flows`
@@ -233,6 +234,9 @@ The Core registry registers exactly these forty-three names:
 41. `matrix_timeline_jump_latest` (#866)
 42. `matrix_timeline_edit_text` (#868)
 43. `matrix_timeline_redact` (#868)
+44. `matrix_timeline_report` (#870)
+45. `matrix_timeline_pin` (#870)
+46. `matrix_timeline_unpin` (#870)
 
 All other census command names remain unregistered and fail closed. This is
 neither complete desktop command parity nor a basis to add a speculative route.
