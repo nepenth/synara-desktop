@@ -86,8 +86,8 @@ use crate::matrix::room_keys::{
     RoomKeyTransferFlow,
 };
 use crate::matrix::room_list::{
-    snapshot_from_sync_owner, snapshot_invites, InviteAvatarHandles, NativeInvite,
-    NativeInviteSnapshot, NativeRoomListSnapshot,
+    snapshot_invites, InviteAvatarHandles, NativeInvite, NativeInviteSnapshot,
+    NativeRoomListSnapshot,
 };
 use crate::matrix::room_profile::NativeRoomJoinRuleOwner;
 use crate::matrix::secret_storage::live::{
@@ -242,7 +242,7 @@ impl MatrixAuthCommandError {
 struct ManagedMatrixSession {
     client: Client,
     identity: MatrixLoginIdentity,
-    sync: SyncServiceOwner,
+    sync: Arc<SyncServiceOwner>,
     invite_avatars: InviteAvatarHandles,
     timelines: Arc<NativeTimelineOwner>,
     sends: SendQueue,

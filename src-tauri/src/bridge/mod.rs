@@ -23,6 +23,7 @@ pub(crate) mod room_create;
 pub(crate) mod room_image_packs;
 pub(crate) mod room_key_status;
 pub(crate) mod room_leave_join;
+pub(crate) mod room_list;
 pub(crate) mod room_members;
 pub(crate) mod room_moderation;
 pub(crate) mod room_notes;

@@ -35,6 +35,7 @@ use crate::app::room_directory::{
     NativeRoomDirectorySearchResponse,
 };
 use crate::app::room_keys::NativeRoomKeyTransferStatus;
+use crate::app::room_list::{snapshot_from_sync_owner, NativeRoomListSnapshot};
 use crate::app::room_ops::MatrixRoomCreateRequest;
 use crate::app::room_profile::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
@@ -47,7 +48,9 @@ use crate::app::spaces::{
     NativeRestrictedJoinReparentResult, NativeSpaceChildMutationResult,
     NativeSpaceChildrenSnapshot, NativeSpaceHierarchySnapshot, NativeSpaceParentsSnapshot,
 };
-use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
+use crate::app::sync::{
+    SyncReadinessSnapshot, SyncServiceOwner, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID,
+};
 use crate::app::timeline::{
     NativeComposerReplyDraftReadback, NativeReactionMutationResult, NativeTimelineActionReadback,
     NativeTimelineCloseRequest, NativeTimelineDirection, NativeTimelineEventReadback,
@@ -1205,6 +1208,7 @@ pub struct CoreState {
     join_rules: Mutex<Option<Arc<NativeRoomJoinRuleOwner>>>,
     image_packs: Mutex<Option<Arc<NativeImagePackOwner>>>,
     timelines: Mutex<Option<Arc<NativeTimelineOwner>>>,
+    sync: Mutex<Option<Arc<SyncServiceOwner>>>,
 }
 
 impl CoreState {
@@ -1235,6 +1239,13 @@ impl CoreState {
 
     fn verification_owner(&self) -> Result<Option<Arc<NativeVerificationOwner>>, MatrixIpcError> {
         self.verification
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))
+    }
+
+    fn sync_owner(&self) -> Result<Option<Arc<SyncServiceOwner>>, MatrixIpcError> {
+        self.sync
             .lock()
             .map(|guard| guard.clone())
             .map_err(|_| core_state_error("p2-core-state-poisoned"))
@@ -1295,6 +1306,7 @@ impl Core {
                 join_rules: Mutex::new(None),
                 image_packs: Mutex::new(None),
                 timelines: Mutex::new(None),
+                sync: Mutex::new(None),
             }),
             registry,
         }
@@ -1388,6 +1400,13 @@ impl Core {
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *timelines = None;
+        drop(timelines);
+        let mut sync = self
+            .state
+            .sync
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *sync = None;
         Ok(())
     }
 
@@ -1475,6 +1494,16 @@ impl Core {
     }
 
     /// Install the live timeline registry created by the shell after login/restore.
+    pub fn attach_sync(&self, owner: Arc<SyncServiceOwner>) -> Result<(), MatrixIpcError> {
+        let mut sync = self
+            .state
+            .sync
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *sync = Some(owner);
+        Ok(())
+    }
+
     pub fn attach_timelines(&self, owner: Arc<NativeTimelineOwner>) -> Result<(), MatrixIpcError> {
         let mut timelines = self
             .state
@@ -1511,6 +1540,9 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_cross_signing_setup", matrix_cross_signing_setup)
         .expect("built-in matrix_cross_signing_setup must remain in the command census");
+    registry
+        .register("matrix_room_list_snapshot", matrix_room_list_snapshot)
+        .expect("built-in matrix_room_list_snapshot must remain in the command census");
     registry
         .register("matrix_secret_storage_status", matrix_secret_storage_status)
         .expect("built-in matrix_secret_storage_status must remain in the command census");
@@ -2844,6 +2876,27 @@ fn cross_signing_setup_owner_error(diagnostic_id: &'static str) -> MatrixIpcErro
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn matrix_room_list_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-room-list-snapshot-invalid-payload"));
+        }
+        let owner = state.sync_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-list-snapshot-no-session")
+        })?;
+        let snapshot: NativeRoomListSnapshot = snapshot_from_sync_owner(&owner)
+            .await
+            .map_err(room_list_snapshot_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-room-list-snapshot-serialization-failed"))
+    })
+}
+
+fn room_list_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    MatrixIpcError::new(MatrixIpcErrorCategory::Unknown).with_diagnostic(diagnostic_id)
 }
 
 fn matrix_room_directory_protocols(
@@ -4787,6 +4840,7 @@ mod tests {
                 "matrix_room_key_transfer_status",
                 "matrix_room_kick",
                 "matrix_room_leave",
+                "matrix_room_list_snapshot",
                 "matrix_room_members_snapshot",
                 "matrix_room_notes_complete_todo",
                 "matrix_room_notes_delete",
@@ -6423,6 +6477,25 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-cross-signing-setup-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_list_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_list_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("room-list snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-list-snapshot-no-session")
         );
     }
 
