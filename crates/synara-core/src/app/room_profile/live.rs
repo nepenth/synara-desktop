@@ -404,6 +404,48 @@ impl NativeRoomJoinRuleOwner {
             .map_err(|_| "v-rooms-room-create-failed")
     }
 
+    pub async fn directory_search(
+        &self,
+        session_generation: u64,
+        request_id: u64,
+        input: crate::app::room_directory::DirectorySearchInput,
+    ) -> Result<crate::app::room_directory::NativeRoomDirectorySearchResponse, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        if session_generation != self.session_generation {
+            return Err("v-rooms.directory-stale-generation-before-request");
+        }
+        let result = crate::app::room_directory::search_directory(
+            &self.client,
+            session_generation,
+            request_id,
+            input,
+        )
+        .await?;
+        if self.retired.load(Ordering::Acquire) || session_generation != self.session_generation {
+            return Err("v-rooms.directory-stale-generation-after-request");
+        }
+        Ok(result)
+    }
+
+    pub fn directory_cancel(
+        &self,
+        session_generation: u64,
+        request_id: u64,
+    ) -> Result<crate::app::room_directory::NativeRoomDirectorySearchResponse, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        if session_generation != self.session_generation {
+            return Err("v-rooms.directory-cancel-stale-generation");
+        }
+        Ok(crate::app::room_directory::cancel_directory(
+            session_generation,
+            request_id,
+        ))
+    }
+
     pub async fn directory_protocols(
         &self,
     ) -> Result<crate::app::room_directory::NativeRoomDirectoryProtocols, &'static str> {
