@@ -3,7 +3,7 @@
 All paths relative to the repository root. Census technique: `git ls-files`,
 `grep -rl`, `grep -rn` over `src-tauri/src`, `synara-ios`, `.github/workflows`.
 The current source evidence is `feature/shared-native-core`
-`13c40365` (#824, after #823).
+`e99a61c3` (#826, after #825).
 
 ## 2.1 Desktop application-logic layer
 
