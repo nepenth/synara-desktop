@@ -30,13 +30,7 @@ mod session_persist;
 mod session_restore;
 
 pub use logout::{perform_local_wipe, perform_logout, LogoutOutcome, WipeOutcome};
-pub use session_material::{
-    clear_session_material, load_session_material, persist_session_material,
-    rotate_persisted_session_tokens, HostMatrixSessionSecrets, InMemorySessionMaterialVault,
-    KeyringSessionMaterialRefs, KeyringSessionMaterialVault, SessionMaterial, SessionMaterialId,
-    SessionMaterialMeta, SessionMaterialVault, SESSION_ENVELOPE_VERSION, SESSION_KIND_MATRIX,
-    SESSION_MATERIAL_SERVICE,
-};
+pub use session_material::{KeyringSessionMaterialRefs, KeyringSessionMaterialVault};
 pub use session_persist::{
     persist_session_after_login, session_material_from_auth_session, SessionPersistOutcome,
 };
