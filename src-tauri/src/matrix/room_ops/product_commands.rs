@@ -78,21 +78,10 @@ pub async fn matrix_room_create(
 /// Matrix session owns the room lifecycle.
 #[tauri::command]
 pub async fn matrix_room_leave(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
 ) -> Result<(), MatrixAuthCommandError> {
-    let room_id = parse_room_leave_id(&room_id)?;
-    let room = {
-        let session = state.session.lock().await;
-        let active = require_session(session.as_ref())?;
-        active
-            .client
-            .get_room(&room_id)
-            .ok_or_else(|| map_room_leave_error("v-rooms-room-leave-room-not-found"))?
-    };
-    room.leave()
-        .await
-        .map_err(|_| map_room_leave_error("v-rooms-room-leave-failed"))
+    crate::bridge::room_leave_join::room_leave(core.inner().as_ref(), room_id).await
 }
 
 /// V-ROOMS room membership: join a room or room alias through the native SDK.
@@ -100,20 +89,12 @@ pub async fn matrix_room_leave(
 /// Matrix session owns the room lifecycle.
 #[tauri::command]
 pub async fn matrix_room_join(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id_or_alias: String,
     via_servers: Option<Vec<String>>,
 ) -> Result<(), MatrixAuthCommandError> {
-    let target = parse_room_join_target(&room_id_or_alias)?;
-    let via_servers = parse_room_join_via_servers(via_servers.as_deref())?;
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    active
-        .client
-        .join_room_by_id_or_alias(&target, &via_servers)
+    crate::bridge::room_leave_join::room_join(core.inner().as_ref(), room_id_or_alias, via_servers)
         .await
-        .map(|_| ())
-        .map_err(|_| map_room_join_error("v-rooms-room-join-failed"))
 }
 
 /// V-ROOMS members moderation: invite a user through the live native Matrix SDK.

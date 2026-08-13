@@ -1271,7 +1271,7 @@ fn room_leave_command_owns_sdk_leave_without_a_js_fallback() {
         .split("#[tauri::command]")
         .next()
         .expect("room leave command body");
-    assert!(command.contains("room.leave()"));
+    assert!(command.contains("crate::bridge::room_leave_join::room_leave"));
     assert!(!command.contains("mx.leave"));
 }
 
@@ -1466,7 +1466,7 @@ fn room_join_command_owns_sdk_join_without_a_js_fallback() {
         .split("#[tauri::command]")
         .next()
         .expect("room join command body");
-    assert!(command.contains("join_room_by_id_or_alias"));
+    assert!(command.contains("crate::bridge::room_leave_join::room_join"));
     assert!(!command.contains("mx.joinRoom"));
 }
 

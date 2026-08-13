@@ -903,6 +903,20 @@ struct MatrixRoomJoinRuleSnapshotRequest {
     session_generation: u64,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomLeaveRequest {
+    room_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomJoinRequest {
+    room_id_or_alias: String,
+    #[serde(default)]
+    via_servers: Option<Vec<String>>,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_set_room_name`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1342,6 +1356,12 @@ fn built_in_registry() -> CommandRegistry {
             matrix_room_join_rule_snapshot,
         )
         .expect("built-in matrix_room_join_rule_snapshot must remain in the command census");
+    registry
+        .register("matrix_room_leave", matrix_room_leave)
+        .expect("built-in matrix_room_leave must remain in the command census");
+    registry
+        .register("matrix_room_join", matrix_room_join)
+        .expect("built-in matrix_room_join must remain in the command census");
     registry
         .register("matrix_set_room_name", matrix_set_room_name)
         .expect("built-in matrix_set_room_name must remain in the command census");
@@ -2349,6 +2369,50 @@ fn matrix_room_join_rule_snapshot(
         serde_json::to_value(snapshot)
             .map_err(|_| core_state_error("p2-join-rule-snapshot-serialization-failed"))
     })
+}
+
+fn matrix_room_leave(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomLeaveRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-leave-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-leave-no-session")
+        })?;
+        owner
+            .leave(&payload.room_id)
+            .await
+            .map_err(room_leave_join_owner_error)?;
+        Ok(serde_json::Value::Null)
+    })
+}
+
+fn matrix_room_join(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomJoinRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-join-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-join-no-session")
+        })?;
+        owner
+            .join(&payload.room_id_or_alias, payload.via_servers)
+            .await
+            .map_err(room_leave_join_owner_error)?;
+        Ok(serde_json::Value::Null)
+    })
+}
+
+fn room_leave_join_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-rooms-room-leave-invalid-room"
+        | "v-rooms-room-leave-room-not-found"
+        | "v-rooms-room-join-invalid-room"
+        | "v-rooms-room-join-invalid-via-server" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 fn matrix_set_room_name(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -3564,7 +3628,9 @@ mod tests {
                 "matrix_reaction_ensure",
                 "matrix_reaction_redact",
                 "matrix_register_flows",
+                "matrix_room_join",
                 "matrix_room_join_rule_snapshot",
+                "matrix_room_leave",
                 "matrix_room_notes_complete_todo",
                 "matrix_room_notes_delete",
                 "matrix_room_notes_move_todo",
@@ -5511,6 +5577,44 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-join-rule-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_leave_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_leave".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org"}),
+            })
+            .await
+            .expect_err("room leave without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-leave-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_join_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_join".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomIdOrAlias":"!r:example.org"}),
+            })
+            .await
+            .expect_err("room join without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-join-no-session")
         );
     }
 
