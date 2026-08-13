@@ -10,9 +10,15 @@
 
 mod error;
 mod index;
+mod native;
 
 pub use error::MemberError;
 pub use index::{MemberIndex, MAX_MEMBERS_PER_ROOM};
+pub use native::{
+    NativePowerLevelWriteResult, NativeRoomCreatorsSnapshot, NativeRoomMembersSnapshot,
+    NativeRoomPowerLevelTagsSnapshot, NativeRoomPowerLevelsSnapshot, ROOM_CREATE_EVENT_TYPE,
+    ROOM_POWER_LEVELS_EVENT_TYPE, ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
+};
 
 /// Static marker for link / schema smoke.
 pub const MATRIX_MEMBERS_MARKER: &str = "matrix-members-p4.6";

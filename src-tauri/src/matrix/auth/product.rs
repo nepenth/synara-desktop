@@ -199,14 +199,7 @@ pub struct MatrixAuthCommandError {
     pub diagnostic_id: &'static str,
 }
 
-/// V-ROOMS.R-MEMBERS-READ — live native room-member projection.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NativeRoomMembersSnapshot {
-    pub session_generation: u64,
-    pub room_id: String,
-    pub members: Vec<ProductRoomMember>,
-}
+pub use synara_core::app::members::NativeRoomMembersSnapshot;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -288,17 +281,7 @@ pub struct MatrixMediaDownloadRequest {
     pub content_uri: String,
 }
 
-/// V-ROOMS.R-POWERS-BULK — acknowledged complete state replacement.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NativePowerLevelWriteResult {
-    pub status: &'static str,
-    pub room_id: String,
-    pub event_type: &'static str,
-    pub state_key: &'static str,
-    pub session_generation: u64,
-    pub content: serde_json::Value,
-}
+pub use synara_core::app::members::NativePowerLevelWriteResult;
 
 /// JSON-friendly create-room request owned by the desktop Matrix SDK route.
 /// `parent_room_id` is used for restricted join rules; the post-create space
