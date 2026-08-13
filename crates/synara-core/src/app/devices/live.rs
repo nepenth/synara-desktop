@@ -41,6 +41,8 @@ pub struct NativeDeviceUpdateSignal {
 /// The stream is only a trigger. Every UI read still goes through
 /// `Client::devices`, so it never becomes a second device-list owner.
 pub struct NativeDeviceOwner {
+    client: Client,
+    session_generation: u64,
     task: JoinHandle<()>,
 }
 
@@ -69,7 +71,16 @@ impl NativeDeviceOwner {
                 }
             }
         });
-        Ok(Self { task })
+        Ok(Self {
+            client: client.clone(),
+            session_generation,
+            task,
+        })
+    }
+
+    /// UI reads still go through `Client::devices`. This is not a second list.
+    pub async fn snapshot(&self) -> Result<NativeDeviceSnapshot, &'static str> {
+        snapshot(&self.client, self.session_generation).await
     }
 }
 

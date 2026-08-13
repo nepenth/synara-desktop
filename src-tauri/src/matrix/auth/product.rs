@@ -275,7 +275,7 @@ struct ManagedMatrixSession {
     sends: SendQueue,
     attachments: AttachmentSendQueue,
     verification: Arc<NativeVerificationOwner>,
-    _devices: NativeDeviceOwner,
+    _devices: Arc<NativeDeviceOwner>,
     _image_packs: NativeImagePackOwner,
     typing: Arc<NativeTypingOwner>,
     presence: Arc<NativePresenceOwner>,

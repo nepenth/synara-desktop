@@ -13,6 +13,7 @@ use crate::app::auth::{
     HttpLoginFlowTransport, HttpRegisterFlowTransport, MatrixLoginFlowsResponse,
     RegisterFlowsProbe,
 };
+use crate::app::devices::{NativeDeviceOwner, NativeDeviceSnapshot};
 use crate::app::presence::{NativePresenceOwner, NativePresenceSnapshotResult};
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
@@ -516,6 +517,7 @@ pub struct CoreState {
     typing: Mutex<Option<Arc<NativeTypingOwner>>>,
     presence: Mutex<Option<Arc<NativePresenceOwner>>>,
     verification: Mutex<Option<Arc<NativeVerificationOwner>>>,
+    devices: Mutex<Option<Arc<NativeDeviceOwner>>>,
 }
 
 impl CoreState {
@@ -550,6 +552,13 @@ impl CoreState {
             .map(|guard| guard.clone())
             .map_err(|_| core_state_error("p2-core-state-poisoned"))
     }
+
+    fn device_owner(&self) -> Result<Option<Arc<NativeDeviceOwner>>, MatrixIpcError> {
+        self.devices
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))
+    }
 }
 
 /// Platform-neutral native engine root.
@@ -574,6 +583,7 @@ impl Core {
                 typing: Mutex::new(None),
                 presence: Mutex::new(None),
                 verification: Mutex::new(None),
+                devices: Mutex::new(None),
             }),
             registry,
         }
@@ -639,6 +649,13 @@ impl Core {
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *verification = None;
+        drop(verification);
+        let mut devices = self
+            .state
+            .devices
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *devices = None;
         Ok(())
     }
 
@@ -681,6 +698,19 @@ impl Core {
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *verification = Some(owner);
+        Ok(())
+    }
+
+    /// Install the live device owner created by the shell after login/restore.
+    /// Core snapshots it for `matrix_device_snapshot`; the shell keeps an Arc
+    /// for the wakeup stream lifetime.
+    pub fn attach_devices(&self, owner: Arc<NativeDeviceOwner>) -> Result<(), MatrixIpcError> {
+        let mut devices = self
+            .state
+            .devices
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *devices = Some(owner);
         Ok(())
     }
 
@@ -728,6 +758,9 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_verification_list", matrix_verification_list)
         .expect("built-in matrix_verification_list must remain in the command census");
+    registry
+        .register("matrix_device_snapshot", matrix_device_snapshot)
+        .expect("built-in matrix_device_snapshot must remain in the command census");
     registry
 }
 
@@ -779,6 +812,34 @@ fn matrix_verification_list(state: Arc<CoreState>, request: CommandEnvelope) -> 
         serde_json::to_value(inbox)
             .map_err(|_| core_state_error("p2-verification-list-serialization-failed"))
     })
+}
+
+fn matrix_device_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-device-snapshot-invalid-payload"));
+        }
+        let owner = state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-device-snapshot-no-session")
+        })?;
+        let snapshot: NativeDeviceSnapshot = owner
+            .snapshot()
+            .await
+            .map_err(device_snapshot_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-device-snapshot-serialization-failed"))
+    })
+}
+
+fn device_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-crypto.7-device-owner-user-missing"
+        | "v-crypto.7-device-snapshot-current-missing"
+        | "v-crypto.7-device-snapshot-user-missing" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 fn presence_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
@@ -1407,6 +1468,7 @@ mod tests {
             vec![
                 "matrix_cross_signing_status",
                 "matrix_crypto_status",
+                "matrix_device_snapshot",
                 "matrix_login_flows",
                 "matrix_media_config",
                 "matrix_presence_snapshot",
@@ -2595,6 +2657,25 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-verification-list-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_device_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_device_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("device snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-device-snapshot-no-session")
         );
     }
 

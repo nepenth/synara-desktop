@@ -2,13 +2,9 @@ use super::*;
 
 #[tauri::command]
 pub async fn matrix_device_snapshot(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeDeviceSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_device_session(session.as_ref())?;
-    live_device_snapshot(&active.client, active.sync.session_generation())
-        .await
-        .map_err(map_device_error)
+    crate::bridge::device_snapshot::device_snapshot(core.inner().as_ref()).await
 }
 
 #[tauri::command]
