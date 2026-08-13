@@ -707,6 +707,26 @@ struct MatrixTimelineCallDeclineRequest {
     event_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_timeline_forward_text`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixTimelineForwardTextRequest {
+    source_room_id: String,
+    event_id: String,
+    target_room_id: String,
+    #[serde(default)]
+    as_quote: bool,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_timeline_forward_media`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixTimelineForwardMediaRequest {
+    source_room_id: String,
+    event_id: String,
+    target_room_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_verification_accept`.
 ///
 /// The renderer sends the camel-case `flowId` key; unknown keys are rejected
@@ -1269,6 +1289,15 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_timeline_call_decline", matrix_timeline_call_decline)
         .expect("built-in matrix_timeline_call_decline must remain in the command census");
     registry
+        .register("matrix_timeline_forward_text", matrix_timeline_forward_text)
+        .expect("built-in matrix_timeline_forward_text must remain in the command census");
+    registry
+        .register(
+            "matrix_timeline_forward_media",
+            matrix_timeline_forward_media,
+        )
+        .expect("built-in matrix_timeline_forward_media must remain in the command census");
+    registry
 }
 
 fn matrix_typing_set(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -1647,6 +1676,49 @@ fn matrix_timeline_call_decline(state: Arc<CoreState>, request: CommandEnvelope)
     })
 }
 
+fn matrix_timeline_forward_text(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelineForwardTextRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-timeline-forward-text-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-forward-text-no-session")
+        })?;
+        let readback: NativeTimelineActionReadback = owner
+            .forward_text(
+                &payload.source_room_id,
+                &payload.event_id,
+                &payload.target_room_id,
+                payload.as_quote,
+            )
+            .await
+            .map_err(timeline_action_owner_error)?;
+        serde_json::to_value(readback)
+            .map_err(|_| core_state_error("p2-timeline-forward-text-serialization-failed"))
+    })
+}
+
+fn matrix_timeline_forward_media(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelineForwardMediaRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-timeline-forward-media-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-forward-media-no-session")
+        })?;
+        let readback: NativeTimelineActionReadback = owner
+            .forward_media(
+                &payload.source_room_id,
+                &payload.event_id,
+                &payload.target_room_id,
+            )
+            .await
+            .map_err(timeline_action_owner_error)?;
+        serde_json::to_value(readback)
+            .map_err(|_| core_state_error("p2-timeline-forward-media-serialization-failed"))
+    })
+}
+
 fn timeline_action_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "d0.4-send-invalid-room-id"
@@ -1667,7 +1739,21 @@ fn timeline_action_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         | "v-timeline-call-decline-invalid-event-id"
         | "v-timeline-call-decline-room-not-found"
         | "v-timeline-call-decline-own-call"
-        | "v-timeline-call-decline-bad-event-type" => MatrixIpcErrorCategory::SdkInvariant,
+        | "v-timeline-call-decline-bad-event-type"
+        | "v-timeline-forward-invalid-event-id"
+        | "v-timeline-forward-source-room-not-found"
+        | "v-timeline-forward-target-room-not-found"
+        | "v-timeline-forward-event-unavailable"
+        | "v-timeline-forward-event-decode-failed"
+        | "v-timeline-forward-event-redacted"
+        | "v-timeline-forward-unsupported-event"
+        | "v-timeline-forward-media-invalid-event-id"
+        | "v-timeline-forward-media-source-room-not-found"
+        | "v-timeline-forward-media-target-room-not-found"
+        | "v-timeline-forward-media-event-unavailable"
+        | "v-timeline-forward-media-event-decode-failed"
+        | "v-timeline-forward-media-event-redacted"
+        | "v-timeline-forward-media-unsupported-event" => MatrixIpcErrorCategory::SdkInvariant,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -2785,6 +2871,8 @@ mod tests {
                 "matrix_timeline_close",
                 "matrix_timeline_edit_text",
                 "matrix_timeline_event_readback",
+                "matrix_timeline_forward_media",
+                "matrix_timeline_forward_text",
                 "matrix_timeline_jump_latest",
                 "matrix_timeline_open",
                 "matrix_timeline_paginate",
@@ -5095,6 +5183,52 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-timeline-call-decline-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_forward_text_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_forward_text".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "sourceRoomId":"!s:example.org",
+                    "eventId":"$e",
+                    "targetRoomId":"!t:example.org"
+                }),
+            })
+            .await
+            .expect_err("timeline forward text without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-forward-text-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_forward_media_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_forward_media".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "sourceRoomId":"!s:example.org",
+                    "eventId":"$e",
+                    "targetRoomId":"!t:example.org"
+                }),
+            })
+            .await
+            .expect_err("timeline forward media without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-forward-media-no-session")
         );
     }
 
