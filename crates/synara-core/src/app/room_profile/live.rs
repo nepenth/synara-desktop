@@ -206,6 +206,57 @@ impl NativeRoomJoinRuleOwner {
         }
     }
 
+    pub async fn invite_report_spam(
+        &self,
+        room_id: &str,
+    ) -> Result<crate::app::room_list::NativeInviteSnapshot, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let invite = self.invite_target(room_id).await?;
+        self.invite_room(&invite)?
+            .report_room("Spam Invite".to_owned())
+            .await
+            .map_err(|_| "v-rooms.1-invite-report-failed")?;
+        {
+            let mut handles = self.invite_avatars.lock().await;
+            handles.revoke_room(&invite.room_id);
+            crate::app::room_list::snapshot_invites(
+                &self.client,
+                self.session_generation,
+                &mut handles,
+            )
+            .await
+        }
+    }
+
+    pub async fn invite_block_sender(
+        &self,
+        room_id: &str,
+    ) -> Result<crate::app::room_list::NativeInviteSnapshot, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let invite = self.invite_target(room_id).await?;
+        let sender_id = OwnedUserId::try_from(invite.sender_id.as_str())
+            .map_err(|_| "v-rooms.1-invite-invalid-sender")?;
+        self.client
+            .account()
+            .ignore_user(&sender_id)
+            .await
+            .map_err(|_| "v-rooms.1-invite-block-failed")?;
+        {
+            let mut handles = self.invite_avatars.lock().await;
+            handles.revoke_room(&invite.room_id);
+            crate::app::room_list::snapshot_invites(
+                &self.client,
+                self.session_generation,
+                &mut handles,
+            )
+            .await
+        }
+    }
+
     async fn invite_target(
         &self,
         room_id: &str,

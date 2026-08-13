@@ -1402,6 +1402,44 @@ fn invites_decline_routes_through_core_without_desktop_client_io() {
 }
 
 #[test]
+fn invites_report_spam_routes_through_core_without_desktop_client_io() {
+    let product = PRODUCT_SOURCE;
+    let command = product
+        .split("pub async fn matrix_invites_report_spam")
+        .nth(1)
+        .expect("invites report spam command");
+    let command = command
+        .split("#[tauri::command]")
+        .next()
+        .expect("invites report spam command body");
+    assert!(command.contains("crate::bridge::invites_snapshot::invites_report_spam"));
+    assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!command.contains("native_invite_target"));
+    assert!(!command.contains("native_invite_room"));
+    assert!(!command.contains("active.client"));
+    assert!(!command.contains("report_room"));
+}
+
+#[test]
+fn invites_block_sender_routes_through_core_without_desktop_client_io() {
+    let product = PRODUCT_SOURCE;
+    let command = product
+        .split("pub async fn matrix_invites_block_sender")
+        .nth(1)
+        .expect("invites block sender command");
+    let command = command
+        .split("#[tauri::command]")
+        .next()
+        .expect("invites block sender command body");
+    assert!(command.contains("crate::bridge::invites_snapshot::invites_block_sender"));
+    assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!command.contains("native_invite_target"));
+    assert!(!command.contains("native_invite_room"));
+    assert!(!command.contains("active.client"));
+    assert!(!command.contains("ignore_user"));
+}
+
+#[test]
 fn avatar_mime_validator_accepts_images_only() {
     assert_eq!(
         validate_avatar_mime("image/png").unwrap().essence_str(),

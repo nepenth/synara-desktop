@@ -149,74 +149,18 @@ pub(super) const POWER_LEVEL_TAGS_EVENT_TYPE: &str = "in.synara.room.power_level
 
 #[tauri::command]
 pub async fn matrix_invites_report_spam(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
 ) -> Result<NativeInviteSnapshot, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
-    let active = require_session_mut(session.as_mut())?;
-    let invite = native_invite_target(active, &room_id).await?;
-    native_invite_room(active, &invite)?
-        .report_room("Spam Invite".to_owned())
-        .await
-        .map_err(|_| map_invite_error("v-rooms.1-invite-report-failed"))?;
-    {
-        let mut handles = active.invite_avatars.lock().await;
-        handles.revoke_room(&invite.room_id);
-        snapshot_invites(
-            &active.client,
-            active.sync.session_generation(),
-            &mut handles,
-        )
-    }
-    .await
-    .map_err(map_invite_error)
+    crate::bridge::invites_snapshot::invites_report_spam(core.inner().as_ref(), room_id).await
 }
 
 #[tauri::command]
 pub async fn matrix_invites_block_sender(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
 ) -> Result<NativeInviteSnapshot, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
-    let active = require_session_mut(session.as_mut())?;
-    let invite = native_invite_target(active, &room_id).await?;
-    let sender_id = OwnedUserId::try_from(invite.sender_id.as_str())
-        .map_err(|_| map_invite_error("v-rooms.1-invite-invalid-sender"))?;
-    active
-        .client
-        .account()
-        .ignore_user(&sender_id)
-        .await
-        .map_err(|_| map_invite_error("v-rooms.1-invite-block-failed"))?;
-    {
-        let mut handles = active.invite_avatars.lock().await;
-        handles.revoke_room(&invite.room_id);
-        snapshot_invites(
-            &active.client,
-            active.sync.session_generation(),
-            &mut handles,
-        )
-    }
-    .await
-    .map_err(map_invite_error)
-}
-
-pub(super) fn map_invite_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
-    let (code, message) = match diagnostic_id {
-        "v-rooms.1-invite-invalid-room" | "v-rooms.1-invite-invalid-sender" => (
-            "InvalidRequest",
-            "The native Matrix invite request is invalid.",
-        ),
-        "v-rooms.1-invite-not-found" | "v-rooms.1-invite-member-missing" => (
-            "NotFound",
-            "The native Matrix invitation is no longer available.",
-        ),
-        _ => (
-            "Unknown",
-            "The native Matrix invite operation could not be completed.",
-        ),
-    };
-    MatrixAuthCommandError::new(code, message, diagnostic_id)
+    crate::bridge::invites_snapshot::invites_block_sender(core.inner().as_ref(), room_id).await
 }
 
 pub(super) fn map_room_leave_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
@@ -403,41 +347,4 @@ pub(super) fn parse_room_join_via_servers(
                 .map_err(|_| map_room_join_error("v-rooms-room-join-invalid-via-server"))
         })
         .collect()
-}
-
-pub(super) async fn native_invite_target(
-    active: &mut ManagedMatrixSession,
-    room_id: &str,
-) -> Result<NativeInvite, MatrixAuthCommandError> {
-    let normalized_room_id = room_id.trim();
-    if normalized_room_id.is_empty() {
-        return Err(map_invite_error("v-rooms.1-invite-invalid-room"));
-    }
-    let snapshot = {
-        let mut handles = active.invite_avatars.lock().await;
-        snapshot_invites(
-            &active.client,
-            active.sync.session_generation(),
-            &mut handles,
-        )
-    }
-    .await
-    .map_err(map_invite_error)?;
-    snapshot
-        .invites
-        .into_iter()
-        .find(|invite| invite.room_id == normalized_room_id)
-        .ok_or_else(|| map_invite_error("v-rooms.1-invite-not-found"))
-}
-
-pub(super) fn native_invite_room(
-    active: &ManagedMatrixSession,
-    invite: &NativeInvite,
-) -> Result<Room, MatrixAuthCommandError> {
-    let room_id = OwnedRoomId::try_from(invite.room_id.as_str())
-        .map_err(|_| map_invite_error("v-rooms.1-invite-invalid-room"))?;
-    active
-        .client
-        .get_room(&room_id)
-        .ok_or_else(|| map_invite_error("v-rooms.1-invite-not-found"))
 }
