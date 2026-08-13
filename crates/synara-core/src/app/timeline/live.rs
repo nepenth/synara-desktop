@@ -20,7 +20,8 @@ use matrix_sdk::{
             reaction::ReactionEventContent,
             relation::Annotation,
             room::message::{
-                MessageType, RoomMessageEventContent, RoomMessageEventContentWithoutRelation,
+                MessageFormat, MessageType, Relation, RoomMessageEventContent,
+                RoomMessageEventContentWithoutRelation,
             },
             sticker::StickerEventContent,
             AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncTimelineEvent, Mentions,
@@ -43,15 +44,16 @@ use crate::dto::TimelineEncryptedUnavailableItem;
 
 use super::{
     format_forwarded_media_body, format_forwarded_plain_body, project_timeline_diffs_with_media,
-    project_timeline_item_with_media, should_attach_formatted_body, NativeDecryptionState,
-    NativeReactionMutation, NativeReactionMutationResult, NativeTimelineActionKind,
-    NativeTimelineActionReadback, NativeTimelineCloseRequest, NativeTimelineDirection,
-    NativeTimelineEventReadback, NativeTimelineItem, NativeTimelineJumpLatestRequest,
-    NativeTimelineOpenPosition, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
-    NativeTimelineReaction, NativeTimelineReactionSender, NativeTimelineReadAction,
-    NativeTimelineReadStateReadback, NativeTimelineReadStateRequest, NativeTimelineSnapshot,
-    NativeTimelineViewPaginationRequest, NativeTimelineViewportHint, NativeUtdPhase,
-    NativeUtdStatus, TimelineMediaRegistry, TimelineMediaSource, TimelinePageState,
+    project_timeline_item_with_media, reply_draft_readback, should_attach_formatted_body,
+    ComposerDraftRegistry, NativeComposerReplyDraft, NativeComposerReplyDraftReadback,
+    NativeDecryptionState, NativeReactionMutation, NativeReactionMutationResult,
+    NativeTimelineActionKind, NativeTimelineActionReadback, NativeTimelineCloseRequest,
+    NativeTimelineDirection, NativeTimelineEventReadback, NativeTimelineItem,
+    NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
+    NativeTimelineOpenRequest, NativeTimelineReaction, NativeTimelineReactionSender,
+    NativeTimelineReadAction, NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
+    NativeTimelineSnapshot, NativeTimelineViewPaginationRequest, NativeTimelineViewportHint,
+    NativeUtdPhase, NativeUtdStatus, TimelineMediaRegistry, TimelineMediaSource, TimelinePageState,
     TimelinePaginationState, TimelineReadState, TimelineViewCapabilities, TimelineViewDeltaBatch,
     TimelineViewPosition, TimelineViewSnapshot, TimelineViewUpdateEmit, UtdIndex, UtdPhase,
     UtdReasonCode, ViewDeltaEmitter, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
@@ -97,6 +99,7 @@ pub struct NativeTimelineOwner {
     client: Client,
     emit: TimelineViewUpdateEmit,
     registry: tokio::sync::Mutex<NativeTimelineRegistry>,
+    drafts: tokio::sync::Mutex<ComposerDraftRegistry>,
 }
 
 impl NativeTimelineOwner {
@@ -105,6 +108,7 @@ impl NativeTimelineOwner {
             client: client.clone(),
             emit,
             registry: tokio::sync::Mutex::new(NativeTimelineRegistry::new(session_generation)),
+            drafts: tokio::sync::Mutex::new(ComposerDraftRegistry::new()),
         }
     }
 
@@ -514,6 +518,51 @@ impl NativeTimelineOwner {
             event_id: sent_event_id,
             status: "sent",
         })
+    }
+
+    pub async fn set_reply_draft(
+        &self,
+        room_id: &str,
+        event_id: &str,
+        start_thread: bool,
+    ) -> Result<NativeComposerReplyDraftReadback, &'static str> {
+        let room_id = parse_action_room_id(room_id)?;
+        let event_id = parse_action_event_id(event_id, "v-timeline-reply-draft-invalid-event-id")?;
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-timeline-reply-draft-room-not-found")?;
+        let draft = load_reply_draft_preview(&room, &event_id, start_thread).await?;
+        let room_id_string = room_id.to_string();
+        self.drafts
+            .lock()
+            .await
+            .set(room_id_string.clone(), draft.clone());
+        Ok(reply_draft_readback(room_id_string, "set", Some(draft)))
+    }
+
+    pub async fn clear_reply_draft(
+        &self,
+        room_id: &str,
+    ) -> Result<NativeComposerReplyDraftReadback, &'static str> {
+        let room_id = parse_action_room_id(room_id)?;
+        let room_id_string = room_id.to_string();
+        self.drafts.lock().await.clear(&room_id_string);
+        Ok(reply_draft_readback(room_id_string, "cleared", None))
+    }
+
+    pub async fn get_reply_draft(
+        &self,
+        room_id: &str,
+    ) -> Result<NativeComposerReplyDraftReadback, &'static str> {
+        let room_id = parse_action_room_id(room_id)?;
+        let room_id_string = room_id.to_string();
+        let draft = self.drafts.lock().await.get(&room_id_string).cloned();
+        Ok(reply_draft_readback(
+            room_id_string,
+            if draft.is_some() { "set" } else { "empty" },
+            draft,
+        ))
     }
 }
 
@@ -2022,6 +2071,55 @@ async fn load_forwardable_media(
             ))
         }
         _ => Err("v-timeline-forward-media-unsupported-event"),
+    }
+}
+
+async fn load_reply_draft_preview(
+    room: &Room,
+    event_id: &OwnedEventId,
+    start_thread: bool,
+) -> Result<NativeComposerReplyDraft, &'static str> {
+    let timeline_event = room
+        .load_or_fetch_event(event_id, None)
+        .await
+        .map_err(|_| "v-timeline-reply-draft-event-unavailable")?;
+    let sync_event = timeline_event
+        .raw()
+        .deserialize()
+        .map_err(|_| "v-timeline-reply-draft-event-decode-failed")?;
+    match sync_event {
+        AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomMessage(message)) => {
+            let original = message
+                .as_original()
+                .ok_or("v-timeline-reply-draft-event-redacted")?;
+            let body = original.content.body().to_owned();
+            let formatted_body = match original.content.msgtype {
+                MessageType::Text(ref content) => content.formatted.as_ref(),
+                MessageType::Notice(ref content) => content.formatted.as_ref(),
+                MessageType::Emote(ref content) => content.formatted.as_ref(),
+                _ => None,
+            }
+            .filter(|formatted| formatted.format == MessageFormat::Html)
+            .map(|formatted| formatted.body.trim().to_owned())
+            .filter(|html| !html.is_empty() && html != body.trim());
+            let existing_thread_root = match &original.content.relates_to {
+                Some(Relation::Thread(thread)) => Some(thread.event_id.to_string()),
+                _ => None,
+            };
+            let thread_root_event_id = if start_thread {
+                Some(event_id.to_string())
+            } else {
+                existing_thread_root
+            };
+            Ok(NativeComposerReplyDraft {
+                event_id: event_id.to_string(),
+                sender_id: original.sender.to_string(),
+                body,
+                formatted_body,
+                thread_root_event_id,
+            })
+        }
+        _ => Err("v-timeline-reply-draft-unsupported-event"),
     }
 }
 

@@ -122,70 +122,40 @@ pub async fn matrix_reaction_redact(
 
 #[tauri::command]
 pub async fn matrix_composer_set_reply_draft(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     request: NativeComposerSetReplyDraftRequest,
 ) -> Result<NativeComposerReplyDraftReadback, MatrixAuthCommandError> {
-    let room_id = parse_send_room_id(&request.room_id)?;
-    let event_id =
-        parse_required_event_id(&request.event_id, "v-timeline-reply-draft-invalid-event-id")?;
-
-    let room = {
-        let mut session = state.session.lock().await;
-        let active = require_send_session_mut(session.as_mut())?;
-        active.client.get_room(&room_id).ok_or_else(|| {
-            MatrixAuthCommandError::new(
-                "NotFound",
-                "The native Matrix room is not available.",
-                "v-timeline-reply-draft-room-not-found",
-            )
-        })?
-    };
-
-    let draft = load_reply_draft_preview(&room, &event_id, request.start_thread).await?;
-    let room_id_string = room_id.to_string();
-    {
-        let mut session = state.session.lock().await;
-        let active = require_send_session_mut(session.as_mut())?;
-        active
-            .composer_drafts
-            .set(room_id_string.clone(), draft.clone());
-    }
-
-    Ok(reply_draft_readback(room_id_string, "set", Some(draft)))
+    crate::bridge::timeline_composer::composer_set_reply_draft(
+        core.inner().as_ref(),
+        request.room_id,
+        request.event_id,
+        request.start_thread,
+    )
+    .await
 }
 
 #[tauri::command]
 pub async fn matrix_composer_clear_reply_draft(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     request: NativeComposerReplyDraftRoomRequest,
 ) -> Result<NativeComposerReplyDraftReadback, MatrixAuthCommandError> {
-    let room_id = parse_send_room_id(&request.room_id)?;
-    let room_id_string = room_id.to_string();
-    {
-        let mut session = state.session.lock().await;
-        let active = require_send_session_mut(session.as_mut())?;
-        active.composer_drafts.clear(&room_id_string);
-    }
-    Ok(reply_draft_readback(room_id_string, "cleared", None))
+    crate::bridge::timeline_composer::composer_clear_reply_draft(
+        core.inner().as_ref(),
+        request.room_id,
+    )
+    .await
 }
 
 #[tauri::command]
 pub async fn matrix_composer_get_reply_draft(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     request: NativeComposerReplyDraftRoomRequest,
 ) -> Result<NativeComposerReplyDraftReadback, MatrixAuthCommandError> {
-    let room_id = parse_send_room_id(&request.room_id)?;
-    let room_id_string = room_id.to_string();
-    let draft = {
-        let mut session = state.session.lock().await;
-        let active = require_send_session_mut(session.as_mut())?;
-        active.composer_drafts.get(&room_id_string).cloned()
-    };
-    Ok(reply_draft_readback(
-        room_id_string,
-        if draft.is_some() { "set" } else { "empty" },
-        draft,
-    ))
+    crate::bridge::timeline_composer::composer_get_reply_draft(
+        core.inner().as_ref(),
+        request.room_id,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -394,55 +364,4 @@ pub(super) fn map_timeline_action_error(diagnostic_id: &'static str) -> MatrixAu
         "The native Matrix timeline action request is invalid.",
         diagnostic_id,
     )
-}
-
-pub(super) async fn load_reply_draft_preview(
-    room: &Room,
-    event_id: &EventId,
-    start_thread: bool,
-) -> Result<NativeComposerReplyDraft, MatrixAuthCommandError> {
-    let timeline_event = room
-        .load_or_fetch_event(event_id, None)
-        .await
-        .map_err(|_| map_timeline_action_error("v-timeline-reply-draft-event-unavailable"))?;
-    let sync_event = timeline_event
-        .raw()
-        .deserialize()
-        .map_err(|_| map_timeline_action_error("v-timeline-reply-draft-event-decode-failed"))?;
-    match sync_event {
-        AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomMessage(message)) => {
-            let original = message.as_original().ok_or_else(|| {
-                map_timeline_action_error("v-timeline-reply-draft-event-redacted")
-            })?;
-            let body = original.content.body().to_owned();
-            let formatted_body = match original.content.msgtype {
-                MessageType::Text(ref content) => content.formatted.as_ref(),
-                MessageType::Notice(ref content) => content.formatted.as_ref(),
-                MessageType::Emote(ref content) => content.formatted.as_ref(),
-                _ => None,
-            }
-            .filter(|formatted| formatted.format == MessageFormat::Html)
-            .map(|formatted| formatted.body.trim().to_owned())
-            .filter(|html| !html.is_empty() && html != body.trim());
-            let existing_thread_root = match &original.content.relates_to {
-                Some(Relation::Thread(thread)) => Some(thread.event_id.to_string()),
-                _ => None,
-            };
-            let thread_root_event_id = if start_thread {
-                Some(event_id.to_string())
-            } else {
-                existing_thread_root
-            };
-            Ok(NativeComposerReplyDraft {
-                event_id: event_id.to_string(),
-                sender_id: original.sender.to_string(),
-                body,
-                formatted_body,
-                thread_root_event_id,
-            })
-        }
-        _ => Err(map_timeline_action_error(
-            "v-timeline-reply-draft-unsupported-event",
-        )),
-    }
 }

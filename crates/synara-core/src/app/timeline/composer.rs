@@ -41,15 +41,32 @@ pub struct NativeComposerReplyDraft {
     pub thread_root_event_id: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeComposerReplyDraftReadback {
     pub schema_version: u32,
     pub room_id: String,
     /// `set`, `cleared`, or `empty`.
+    #[serde(deserialize_with = "deserialize_reply_draft_status")]
     pub status: &'static str,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub draft: Option<NativeComposerReplyDraft>,
+}
+
+fn deserialize_reply_draft_status<'de, D>(deserializer: D) -> Result<&'static str, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+    match value.as_str() {
+        "set" => Ok("set"),
+        "cleared" => Ok("cleared"),
+        "empty" => Ok("empty"),
+        other => Err(serde::de::Error::unknown_variant(
+            other,
+            &["set", "cleared", "empty"],
+        )),
+    }
 }
 
 #[derive(Debug, Default)]
