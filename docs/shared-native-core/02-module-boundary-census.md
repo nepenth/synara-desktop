@@ -3,7 +3,7 @@
 All paths relative to the repository root. Census technique: `git ls-files`,
 `grep -rl`, `grep -rn` over `src-tauri/src`, `synara-ios`, `.github/workflows`.
 The current source evidence is `feature/shared-native-core`
-`b3ed8891` (#922, after #921).
+`76b3a80d` (#924, after #923).
 
 ## 2.1 Desktop application-logic layer
 
@@ -57,7 +57,7 @@ nonclaim record.
 | `receipts/` | read-receipt projection |
 | `room_directory/` | public room directory (Core owns protocol listing, search, and cancel) |
 | `room_keys/` | room keys UI/flow surface (Core owns status; desktop keeps export/import) |
-| `room_list/` | **room list projection** (Core owns joined snapshot; desktop keeps invite avatars) |
+| `room_list/` | **room list projection** (Core owns joined snapshot and invite inbox; desktop keeps invite actions) |
 | `room_ops/` | room actions/queue |
 | `room_profile/` | room profile/index |
 | `routes/` | route resolution |
