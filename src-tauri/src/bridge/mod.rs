@@ -18,4 +18,5 @@ pub(crate) mod typing_snapshot;
 pub(crate) mod user_image_pack;
 pub(crate) mod verification_accept;
 pub(crate) mod verification_begin_sas;
+pub(crate) mod verification_confirm;
 pub(crate) mod verification_list;
