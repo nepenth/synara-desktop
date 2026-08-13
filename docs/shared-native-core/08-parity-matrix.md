@@ -4,10 +4,10 @@ Legend: ✅ shipping / 🔨 in progress / ⛔ not yet
 
 ## Current bounded evidence (not parity completion)
 
-At `feature/shared-native-core` `d125c7ad`
-(#870, after #869), P2 registers forty-six names—the prior forty-three plus
-`matrix_timeline_report`, `matrix_timeline_pin`, and `matrix_timeline_unpin`.
-The previous forty-three remain—
+At `feature/shared-native-core` `53f49a20`
+(#872, after #871), P2 registers forty-eight names—the prior forty-six plus
+`matrix_timeline_poll_vote` and `matrix_timeline_call_decline`. The previous
+forty-six remain—
 `matrix_login_flows`, `matrix_register_flows`, `matrix_session_snapshot`,
 `matrix_sync_status`, `matrix_crypto_status`, `matrix_media_config`,
 `matrix_cross_signing_status`, `matrix_secret_storage_status`,
