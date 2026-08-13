@@ -86,9 +86,10 @@ pub async fn matrix_login_password(
     .map_err(map_pack_read_subscribe_error)?;
     let typing =
         Arc::new(NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?);
-    let presence =
+    let presence = Arc::new(
         crate::matrix::presence::start_presence_owner(&client, app.clone(), session_generation)
-            .map_err(map_presence_error)?;
+            .map_err(map_presence_error)?,
+    );
     let join_rules = crate::matrix::room_profile::start_join_rule_owner(
         &client,
         app.clone(),
@@ -129,7 +130,7 @@ pub async fn matrix_login_password(
         _devices: devices,
         _image_packs: image_packs,
         typing: typing.clone(),
-        presence,
+        presence: presence.clone(),
         join_rules,
         pending_device_deletion: None,
         next_device_delete_operation_id: 0,
@@ -148,6 +149,9 @@ pub async fn matrix_login_password(
     core.inner()
         .attach_typing(typing)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
+    core.inner()
+        .attach_presence(presence)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-presence-attach-failed"))?;
     Ok(identity)
 }
 
@@ -294,9 +298,9 @@ pub async fn matrix_register(
         RegisterSubmitOutcome::Complete(secrets) => {
             let (identity, session_generation) =
                 install_session_from_register_secrets(&app, &state, &mut session, secrets).await?;
-            let typing = session
+            let (typing, presence) = session
                 .as_ref()
-                .map(|active| active.typing.clone())
+                .map(|active| (active.typing.clone(), active.presence.clone()))
                 .ok_or_else(|| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
             drop(session);
             crate::bridge::session_lifecycle::open_after_desktop_session_install(
@@ -308,6 +312,9 @@ pub async fn matrix_register(
             core.inner()
                 .attach_typing(typing)
                 .map_err(|_| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
+            core.inner()
+                .attach_presence(presence)
+                .map_err(|_| MatrixAuthCommandError::unavailable("p2-presence-attach-failed"))?;
             Ok(MatrixRegisterOutcome::Complete { identity })
         }
     }
@@ -363,9 +370,10 @@ pub(super) async fn install_session_from_register_secrets(
     .map_err(map_pack_read_subscribe_error)?;
     let typing =
         Arc::new(NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?);
-    let presence =
+    let presence = Arc::new(
         crate::matrix::presence::start_presence_owner(&client, app.clone(), session_generation)
-            .map_err(map_presence_error)?;
+            .map_err(map_presence_error)?,
+    );
     let join_rules = crate::matrix::room_profile::start_join_rule_owner(
         &client,
         app.clone(),
@@ -406,7 +414,7 @@ pub(super) async fn install_session_from_register_secrets(
         _devices: devices,
         _image_packs: image_packs,
         typing: typing.clone(),
-        presence,
+        presence: presence.clone(),
         join_rules,
         pending_device_deletion: None,
         next_device_delete_operation_id: 0,
@@ -546,9 +554,10 @@ pub async fn matrix_restore_session(
     .map_err(map_pack_read_subscribe_error)?;
     let typing =
         Arc::new(NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?);
-    let presence =
+    let presence = Arc::new(
         crate::matrix::presence::start_presence_owner(&client, app.clone(), session_generation)
-            .map_err(map_presence_error)?;
+            .map_err(map_presence_error)?,
+    );
     let join_rules = crate::matrix::room_profile::start_join_rule_owner(
         &client,
         app.clone(),
@@ -569,7 +578,7 @@ pub async fn matrix_restore_session(
         _devices: devices,
         _image_packs: image_packs,
         typing: typing.clone(),
-        presence,
+        presence: presence.clone(),
         join_rules,
         pending_device_deletion: None,
         next_device_delete_operation_id: 0,
@@ -588,6 +597,9 @@ pub async fn matrix_restore_session(
     core.inner()
         .attach_typing(typing)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
+    core.inner()
+        .attach_presence(presence)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-presence-attach-failed"))?;
     Ok(identity)
 }
 
