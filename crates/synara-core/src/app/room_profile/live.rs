@@ -20,7 +20,7 @@ use matrix_sdk::{
             StateEventType,
         },
         room::JoinRule,
-        OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId, OwnedServerName,
+        OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId, OwnedServerName, OwnedUserId,
     },
     Client, Room, RoomState,
 };
@@ -253,6 +253,57 @@ impl NativeRoomJoinRuleOwner {
             .map_err(|_| "v-rooms-room-join-failed")
     }
 
+    pub async fn invite(
+        &self,
+        room_id: &str,
+        user_id: &str,
+        reason: Option<String>,
+    ) -> Result<(), &'static str> {
+        // matrix-sdk 0.18's invite_user_by_id API does not expose a reason field.
+        let _reason = normalize_moderation_reason(reason);
+        let room = self.moderation_room(room_id)?;
+        let user_id = parse_room_moderation_user_id(user_id)?;
+        room.invite_user_by_id(&user_id)
+            .await
+            .map_err(|_| "v-rooms-members-moderation-invite-failed")
+    }
+
+    pub async fn kick(
+        &self,
+        room_id: &str,
+        user_id: &str,
+        reason: Option<String>,
+    ) -> Result<(), &'static str> {
+        let room = self.moderation_room(room_id)?;
+        let user_id = parse_room_moderation_user_id(user_id)?;
+        let reason = normalize_moderation_reason(reason);
+        room.kick_user(&user_id, reason.as_deref())
+            .await
+            .map_err(|_| "v-rooms-members-moderation-kick-failed")
+    }
+
+    pub async fn ban(
+        &self,
+        room_id: &str,
+        user_id: &str,
+        reason: Option<String>,
+    ) -> Result<(), &'static str> {
+        let room = self.moderation_room(room_id)?;
+        let user_id = parse_room_moderation_user_id(user_id)?;
+        let reason = normalize_moderation_reason(reason);
+        room.ban_user(&user_id, reason.as_deref())
+            .await
+            .map_err(|_| "v-rooms-members-moderation-ban-failed")
+    }
+
+    pub async fn unban(&self, room_id: &str, user_id: &str) -> Result<(), &'static str> {
+        let room = self.moderation_room(room_id)?;
+        let user_id = parse_room_moderation_user_id(user_id)?;
+        room.unban_user(&user_id, None)
+            .await
+            .map_err(|_| "v-rooms-members-moderation-unban-failed")
+    }
+
     pub async fn get_directory_visibility(
         &self,
         room_id: &str,
@@ -339,6 +390,16 @@ impl NativeRoomJoinRuleOwner {
             .get_room(&room_id)
             .ok_or("v-send.r-room-profile-room-not-found")
     }
+
+    fn moderation_room(&self, room_id: &str) -> Result<Room, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let room_id = parse_room_moderation_room_id(room_id)?;
+        self.client
+            .get_room(&room_id)
+            .ok_or("v-rooms-members-moderation-room-not-found")
+    }
 }
 
 fn parse_join_rule_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
@@ -371,6 +432,26 @@ fn parse_room_join_target(room_id_or_alias: &str) -> Result<OwnedRoomOrAliasId, 
         .trim()
         .parse()
         .map_err(|_| "v-rooms-room-join-invalid-room")
+}
+
+fn parse_room_moderation_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
+    room_id
+        .trim()
+        .parse()
+        .map_err(|_| "v-rooms-members-moderation-invalid-room")
+}
+
+fn parse_room_moderation_user_id(user_id: &str) -> Result<OwnedUserId, &'static str> {
+    user_id
+        .trim()
+        .parse()
+        .map_err(|_| "v-rooms-members-moderation-invalid-user")
+}
+
+fn normalize_moderation_reason(reason: Option<String>) -> Option<String> {
+    reason
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
 }
 
 fn parse_room_join_via_servers(

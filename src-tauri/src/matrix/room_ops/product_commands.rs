@@ -101,88 +101,45 @@ pub async fn matrix_room_join(
 /// Fail-closed: desktop moderation must not use the JS SDK membership methods.
 #[tauri::command]
 pub async fn matrix_room_invite(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     user_id: String,
     reason: Option<String>,
 ) -> Result<(), MatrixAuthCommandError> {
-    let room_id = parse_room_moderation_room_id(&room_id)?;
-    let user_id = parse_room_moderation_user_id(&user_id)?;
-    // matrix-sdk 0.18's invite_user_by_id API does not expose a reason field.
-    let _reason = normalize_moderation_reason(reason);
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    let room = active
-        .client
-        .get_room(&room_id)
-        .ok_or_else(|| map_room_moderation_error("v-rooms-members-moderation-room-not-found"))?;
-    room.invite_user_by_id(&user_id)
+    crate::bridge::room_moderation::room_invite(core.inner().as_ref(), room_id, user_id, reason)
         .await
-        .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-invite-failed"))
 }
 
 /// V-ROOMS members moderation: kick a user through the live native Matrix SDK.
 #[tauri::command]
 pub async fn matrix_room_kick(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     user_id: String,
     reason: Option<String>,
 ) -> Result<(), MatrixAuthCommandError> {
-    let room_id = parse_room_moderation_room_id(&room_id)?;
-    let user_id = parse_room_moderation_user_id(&user_id)?;
-    let reason = normalize_moderation_reason(reason);
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    let room = active
-        .client
-        .get_room(&room_id)
-        .ok_or_else(|| map_room_moderation_error("v-rooms-members-moderation-room-not-found"))?;
-    room.kick_user(&user_id, reason.as_deref())
-        .await
-        .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-kick-failed"))
+    crate::bridge::room_moderation::room_kick(core.inner().as_ref(), room_id, user_id, reason).await
 }
 
 /// V-ROOMS members moderation: ban a user through the live native Matrix SDK.
 #[tauri::command]
 pub async fn matrix_room_ban(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     user_id: String,
     reason: Option<String>,
 ) -> Result<(), MatrixAuthCommandError> {
-    let room_id = parse_room_moderation_room_id(&room_id)?;
-    let user_id = parse_room_moderation_user_id(&user_id)?;
-    let reason = normalize_moderation_reason(reason);
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    let room = active
-        .client
-        .get_room(&room_id)
-        .ok_or_else(|| map_room_moderation_error("v-rooms-members-moderation-room-not-found"))?;
-    room.ban_user(&user_id, reason.as_deref())
-        .await
-        .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-ban-failed"))
+    crate::bridge::room_moderation::room_ban(core.inner().as_ref(), room_id, user_id, reason).await
 }
 
 /// V-ROOMS members moderation: unban a user through the live native Matrix SDK.
 #[tauri::command]
 pub async fn matrix_room_unban(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     user_id: String,
 ) -> Result<(), MatrixAuthCommandError> {
-    let room_id = parse_room_moderation_room_id(&room_id)?;
-    let user_id = parse_room_moderation_user_id(&user_id)?;
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    let room = active
-        .client
-        .get_room(&room_id)
-        .ok_or_else(|| map_room_moderation_error("v-rooms-members-moderation-room-not-found"))?;
-    room.unban_user(&user_id, None)
-        .await
-        .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-unban-failed"))
+    crate::bridge::room_moderation::room_unban(core.inner().as_ref(), room_id, user_id).await
 }
 
 /// V-ROOMS members moderation: set one user's power level through the live SDK.

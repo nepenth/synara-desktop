@@ -16,6 +16,7 @@ pub(crate) mod presence_snapshot;
 pub(crate) mod presence_subscriptions;
 pub(crate) mod room_image_packs;
 pub(crate) mod room_leave_join;
+pub(crate) mod room_moderation;
 pub(crate) mod room_notes;
 pub(crate) mod room_profile_writes;
 pub(crate) mod secret_storage_status;
