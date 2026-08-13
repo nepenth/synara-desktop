@@ -14,67 +14,11 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 use tokio::task::JoinHandle;
 
-pub const DEVICE_LIST_UPDATED_EVENT: &str = "matrix-device-list-updated";
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NativeDeviceTrust {
-    Verified,
-    Unverified,
-    Unsupported,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct NativeDeviceSummary {
-    pub device_id: String,
-    pub display_name: Option<String>,
-    pub last_seen_ip: Option<String>,
-    pub last_seen_ts: Option<u64>,
-    pub trust: NativeDeviceTrust,
-    pub is_current: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct NativeDeviceSnapshot {
-    pub session_generation: u64,
-    pub devices: Vec<NativeDeviceSummary>,
-}
-
-impl NativeDeviceSnapshot {
-    pub fn contains(&self, device_id: &str) -> bool {
-        self.devices
-            .iter()
-            .any(|device| device.device_id == device_id)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NativeDeviceDeleteAuthentication {
-    Password,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct NativeDeviceDeleteChallenge {
-    pub operation_id: u64,
-    pub session_generation: u64,
-    pub authentication: NativeDeviceDeleteAuthentication,
-    pub authentication_failed: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "outcome", rename_all = "snake_case")]
-pub enum NativeDeviceDeleteResult {
-    Complete {
-        snapshot: NativeDeviceSnapshot,
-    },
-    AuthenticationRequired {
-        challenge: NativeDeviceDeleteChallenge,
-    },
-}
+pub use synara_core::app::devices::{
+    sort_native_device_summaries, NativeDeviceDeleteAuthentication, NativeDeviceDeleteChallenge,
+    NativeDeviceDeleteResult, NativeDeviceSnapshot, NativeDeviceSummary, NativeDeviceTrust,
+    DEVICE_LIST_UPDATED_EVENT,
+};
 
 pub struct PendingDeviceDeletion {
     pub operation_id: u64,
@@ -180,15 +124,7 @@ pub async fn snapshot(
         })
         .collect::<Vec<_>>();
 
-    // Current first; other devices retain product parity by most-recent
-    // activity descending, with a deterministic ID tiebreaker.
-    devices.sort_by(|left, right| {
-        right
-            .is_current
-            .cmp(&left.is_current)
-            .then_with(|| right.last_seen_ts.cmp(&left.last_seen_ts))
-            .then_with(|| left.device_id.cmp(&right.device_id))
-    });
+    sort_native_device_summaries(&mut devices);
 
     Ok(NativeDeviceSnapshot {
         session_generation,
@@ -218,10 +154,7 @@ pub fn supported_delete_authentication(
 mod tests {
     use matrix_sdk::ruma::api::client::uiaa::{AuthFlow, AuthType, UiaaInfo};
 
-    use super::{
-        supported_delete_authentication, NativeDeviceDeleteAuthentication,
-        NativeDeviceDeleteChallenge, NativeDeviceSnapshot, NativeDeviceSummary, NativeDeviceTrust,
-    };
+    use super::{supported_delete_authentication, NativeDeviceDeleteAuthentication};
 
     #[test]
     fn deletion_auth_projection_supports_password_only_flows() {
@@ -239,45 +172,5 @@ mod tests {
 
         let sso_only = UiaaInfo::new(vec![AuthFlow::new(vec![AuthType::Sso])]);
         assert!(supported_delete_authentication(&sso_only).is_empty());
-    }
-
-    #[test]
-    fn snapshot_projection_contains_presentation_fields_but_no_device_keys() {
-        let snapshot = NativeDeviceSnapshot {
-            session_generation: 7,
-            devices: vec![NativeDeviceSummary {
-                device_id: "DEVICE".into(),
-                display_name: Some("Synara macOS".into()),
-                last_seen_ip: Some("192.0.2.1".into()),
-                last_seen_ts: Some(1),
-                trust: NativeDeviceTrust::Verified,
-                is_current: true,
-            }],
-        };
-        let json = serde_json::to_string(&snapshot)
-            .unwrap()
-            .to_ascii_lowercase();
-        assert!(json.contains("lastseenip"));
-        for forbidden in [
-            "access_token",
-            "refresh_token",
-            "device_key",
-            "ed25519",
-            "curve25519",
-            "password",
-            "auth_session",
-        ] {
-            assert!(!json.contains(forbidden));
-        }
-
-        let challenge = NativeDeviceDeleteChallenge {
-            operation_id: 3,
-            session_generation: 7,
-            authentication: NativeDeviceDeleteAuthentication::Password,
-            authentication_failed: false,
-        };
-        let challenge_json = serde_json::to_string(&challenge).unwrap();
-        assert!(challenge_json.contains(r#""authentication":"password""#));
-        assert!(!challenge_json.contains(r#""authentication":["#));
     }
 }
