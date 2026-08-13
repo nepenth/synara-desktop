@@ -302,6 +302,23 @@ impl NativeImagePackOwner {
     ) -> Result<NativeRoomImagePacksSnapshot, &'static str> {
         snapshot_room_image_packs(&self.client, self.session_generation, room_id).await
     }
+
+    pub async fn set_user(&self, content: JsonValue) -> Result<(), &'static str> {
+        set_user_image_pack(&self.client, content).await
+    }
+
+    pub async fn set_global(&self, content: JsonValue) -> Result<(), &'static str> {
+        set_global_image_packs(&self.client, content).await
+    }
+
+    pub async fn set_room(
+        &self,
+        room_id: &str,
+        state_key: &str,
+        content: JsonValue,
+    ) -> Result<(), &'static str> {
+        set_room_image_pack(&self.client, room_id, state_key, content).await
+    }
 }
 
 #[cfg(test)]

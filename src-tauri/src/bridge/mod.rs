@@ -4,6 +4,7 @@ pub(crate) mod auth_probes;
 pub(crate) mod cross_signing_status;
 pub(crate) mod device_snapshot;
 pub(crate) mod global_image_packs;
+pub(crate) mod image_pack_writes;
 pub(crate) mod join_rule_snapshot;
 pub(crate) mod media_config;
 pub(crate) mod presence_snapshot;
