@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
+use crate::app::account_data::{NativeGlobalImagePacksSnapshot, NativeImagePackOwner};
 use crate::app::auth::{
     discover_login_flows, login_flows_response, probe_register_flows, AuthError,
     HttpLoginFlowTransport, HttpRegisterFlowTransport, MatrixLoginFlowsResponse,
@@ -528,6 +529,7 @@ pub struct CoreState {
     verification: Mutex<Option<Arc<NativeVerificationOwner>>>,
     devices: Mutex<Option<Arc<NativeDeviceOwner>>>,
     join_rules: Mutex<Option<Arc<NativeRoomJoinRuleOwner>>>,
+    image_packs: Mutex<Option<Arc<NativeImagePackOwner>>>,
 }
 
 impl CoreState {
@@ -576,6 +578,13 @@ impl CoreState {
             .map(|guard| guard.clone())
             .map_err(|_| core_state_error("p2-core-state-poisoned"))
     }
+
+    fn image_pack_owner(&self) -> Result<Option<Arc<NativeImagePackOwner>>, MatrixIpcError> {
+        self.image_packs
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))
+    }
 }
 
 /// Platform-neutral native engine root.
@@ -602,6 +611,7 @@ impl Core {
                 verification: Mutex::new(None),
                 devices: Mutex::new(None),
                 join_rules: Mutex::new(None),
+                image_packs: Mutex::new(None),
             }),
             registry,
         }
@@ -681,6 +691,13 @@ impl Core {
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *join_rules = None;
+        drop(join_rules);
+        let mut image_packs = self
+            .state
+            .image_packs
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *image_packs = None;
         Ok(())
     }
 
@@ -753,6 +770,20 @@ impl Core {
         Ok(())
     }
 
+    /// Install the live image-pack owner created by the shell after login/restore.
+    pub fn attach_image_packs(
+        &self,
+        owner: Arc<NativeImagePackOwner>,
+    ) -> Result<(), MatrixIpcError> {
+        let mut image_packs = self
+            .state
+            .image_packs
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *image_packs = Some(owner);
+        Ok(())
+    }
+
     pub fn session_snapshot(&self) -> Result<Option<SessionSnapshot>, MatrixIpcError> {
         self.state.session_snapshot()
     }
@@ -806,6 +837,12 @@ fn built_in_registry() -> CommandRegistry {
             matrix_room_join_rule_snapshot,
         )
         .expect("built-in matrix_room_join_rule_snapshot must remain in the command census");
+    registry
+        .register(
+            "matrix_get_global_image_packs",
+            matrix_get_global_image_packs,
+        )
+        .expect("built-in matrix_get_global_image_packs must remain in the command census");
     registry
 }
 
@@ -895,6 +932,35 @@ fn matrix_room_join_rule_snapshot(
         serde_json::to_value(snapshot)
             .map_err(|_| core_state_error("p2-join-rule-snapshot-serialization-failed"))
     })
+}
+
+fn matrix_get_global_image_packs(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-global-image-packs-invalid-payload"));
+        }
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-global-image-packs-no-session")
+        })?;
+        let snapshot: NativeGlobalImagePacksSnapshot = owner
+            .snapshot_global()
+            .await
+            .map_err(image_pack_snapshot_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-global-image-packs-serialization-failed"))
+    })
+}
+
+fn image_pack_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-send.r-pack-read-invalid-room" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-send.r-pack-read-no-user" | "v-send.r-pack-read-subscribe-no-user" => {
+            MatrixIpcErrorCategory::Forbidden
+        }
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 fn join_rule_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
@@ -1546,6 +1612,7 @@ mod tests {
                 "matrix_cross_signing_status",
                 "matrix_crypto_status",
                 "matrix_device_snapshot",
+                "matrix_get_global_image_packs",
                 "matrix_login_flows",
                 "matrix_media_config",
                 "matrix_presence_snapshot",
@@ -2796,6 +2863,25 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-join-rule-snapshot-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_get_global_image_packs_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_get_global_image_packs".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("global image packs without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-global-image-packs-no-session")
         );
     }
 

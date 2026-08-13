@@ -79,12 +79,14 @@ pub async fn matrix_login_password(
             .await
             .map_err(map_device_error)?,
     );
-    let image_packs = crate::matrix::account_data::start_image_pack_owner(
-        &client,
-        app.clone(),
-        session_generation,
-    )
-    .map_err(map_pack_read_subscribe_error)?;
+    let image_packs = Arc::new(
+        crate::matrix::account_data::start_image_pack_owner(
+            &client,
+            app.clone(),
+            session_generation,
+        )
+        .map_err(map_pack_read_subscribe_error)?,
+    );
     let typing =
         Arc::new(NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?);
     let presence = Arc::new(
@@ -131,7 +133,7 @@ pub async fn matrix_login_password(
         attachments: AttachmentSendQueue::new(session_generation),
         verification: verification.clone(),
         _devices: devices.clone(),
-        _image_packs: image_packs,
+        _image_packs: image_packs.clone(),
         typing: typing.clone(),
         presence: presence.clone(),
         join_rules: join_rules.clone(),
@@ -164,6 +166,9 @@ pub async fn matrix_login_password(
     core.inner()
         .attach_join_rules(join_rules)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-join-rule-attach-failed"))?;
+    core.inner()
+        .attach_image_packs(image_packs)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-image-pack-attach-failed"))?;
     Ok(identity)
 }
 
@@ -310,7 +315,7 @@ pub async fn matrix_register(
         RegisterSubmitOutcome::Complete(secrets) => {
             let (identity, session_generation) =
                 install_session_from_register_secrets(&app, &state, &mut session, secrets).await?;
-            let (typing, presence, verification, devices, join_rules) = session
+            let (typing, presence, verification, devices, join_rules, image_packs) = session
                 .as_ref()
                 .map(|active| {
                     (
@@ -319,6 +324,7 @@ pub async fn matrix_register(
                         active.verification.clone(),
                         active._devices.clone(),
                         active.join_rules.clone(),
+                        active._image_packs.clone(),
                     )
                 })
                 .ok_or_else(|| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
@@ -346,6 +352,9 @@ pub async fn matrix_register(
             core.inner()
                 .attach_join_rules(join_rules)
                 .map_err(|_| MatrixAuthCommandError::unavailable("p2-join-rule-attach-failed"))?;
+            core.inner()
+                .attach_image_packs(image_packs)
+                .map_err(|_| MatrixAuthCommandError::unavailable("p2-image-pack-attach-failed"))?;
             Ok(MatrixRegisterOutcome::Complete { identity })
         }
     }
@@ -394,12 +403,14 @@ pub(super) async fn install_session_from_register_secrets(
             .await
             .map_err(map_device_error)?,
     );
-    let image_packs = crate::matrix::account_data::start_image_pack_owner(
-        &client,
-        app.clone(),
-        session_generation,
-    )
-    .map_err(map_pack_read_subscribe_error)?;
+    let image_packs = Arc::new(
+        crate::matrix::account_data::start_image_pack_owner(
+            &client,
+            app.clone(),
+            session_generation,
+        )
+        .map_err(map_pack_read_subscribe_error)?,
+    );
     let typing =
         Arc::new(NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?);
     let presence = Arc::new(
@@ -446,7 +457,7 @@ pub(super) async fn install_session_from_register_secrets(
         attachments: AttachmentSendQueue::new(session_generation),
         verification: verification.clone(),
         _devices: devices.clone(),
-        _image_packs: image_packs,
+        _image_packs: image_packs.clone(),
         typing: typing.clone(),
         presence: presence.clone(),
         join_rules: join_rules.clone(),
@@ -581,12 +592,14 @@ pub async fn matrix_restore_session(
             .await
             .map_err(map_device_error)?,
     );
-    let image_packs = crate::matrix::account_data::start_image_pack_owner(
-        &client,
-        app.clone(),
-        session_generation,
-    )
-    .map_err(map_pack_read_subscribe_error)?;
+    let image_packs = Arc::new(
+        crate::matrix::account_data::start_image_pack_owner(
+            &client,
+            app.clone(),
+            session_generation,
+        )
+        .map_err(map_pack_read_subscribe_error)?,
+    );
     let typing =
         Arc::new(NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?);
     let presence = Arc::new(
@@ -613,7 +626,7 @@ pub async fn matrix_restore_session(
         attachments: AttachmentSendQueue::new(session_generation),
         verification: verification.clone(),
         _devices: devices.clone(),
-        _image_packs: image_packs,
+        _image_packs: image_packs.clone(),
         typing: typing.clone(),
         presence: presence.clone(),
         join_rules: join_rules.clone(),
@@ -646,6 +659,9 @@ pub async fn matrix_restore_session(
     core.inner()
         .attach_join_rules(join_rules)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-join-rule-attach-failed"))?;
+    core.inner()
+        .attach_image_packs(image_packs)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-image-pack-attach-failed"))?;
     Ok(identity)
 }
 

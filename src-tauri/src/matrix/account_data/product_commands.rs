@@ -39,13 +39,9 @@ pub async fn matrix_get_room_image_packs(
 /// V-SEND.R-PACK-READ: global packs enabled via `im.ponies.emote_rooms`.
 #[tauri::command]
 pub async fn matrix_get_global_image_packs(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeGlobalImagePacksSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    snapshot_global_image_packs(&active.client, active.sync.session_generation())
-        .await
-        .map_err(map_pack_read_error)
+    crate::bridge::global_image_packs::global_image_packs(core.inner().as_ref()).await
 }
 
 /// V-SEND.R-PACK-WRITE — replace the personal `im.ponies.user_emotes`
