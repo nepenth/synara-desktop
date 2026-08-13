@@ -1,4 +1,7 @@
-//! Live V-ROOMS.5 `m.direct` projection + write ownership for DM nav filters.
+//! Live V-ROOMS.5 `m.direct` Client load/store.
+//!
+//! Snapshot DTO and string-map mutate helpers live in synara-core.
+//! Write-path apply stays on `DirectEventContent` so non-user-id keys round-trip.
 
 use std::collections::BTreeSet;
 
@@ -9,32 +12,23 @@ use matrix_sdk::{
     },
     Client, RoomState,
 };
-use serde::Serialize;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NativeMDirectSnapshot {
-    pub session_generation: u64,
-    pub room_ids: Vec<String>,
-    /// User keys in `m.direct` that still have at least one joined DM room.
-    pub user_ids: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NativeMDirectMutationResult {
-    pub room_id: String,
-    pub status: &'static str,
-}
+pub use synara_core::app::account_data::{
+    snapshot_from_mdirect_rooms, MDirectRooms, NativeMDirectMutationResult, NativeMDirectSnapshot,
+};
 
 pub async fn snapshot_mdirect(
     client: &Client,
     session_generation: u64,
 ) -> Result<NativeMDirectSnapshot, &'static str> {
     let content = load_mdirect_content(client).await?;
-    let joined_rooms = joined_room_ids(client);
-    Ok(snapshot_from_content(
-        content,
+    let rooms = mdirect_rooms_from_content(&content);
+    let joined_rooms = joined_room_ids(client)
+        .into_iter()
+        .map(|id| id.to_string())
+        .collect();
+    Ok(snapshot_from_mdirect_rooms(
+        &rooms,
         &joined_rooms,
         session_generation,
     ))
@@ -116,30 +110,16 @@ fn joined_room_ids(client: &Client) -> BTreeSet<OwnedRoomId> {
         .collect()
 }
 
-fn snapshot_from_content(
-    content: DirectEventContent,
-    joined_rooms: &BTreeSet<OwnedRoomId>,
-    session_generation: u64,
-) -> NativeMDirectSnapshot {
-    let mut room_ids = BTreeSet::new();
-    let mut user_ids = BTreeSet::new();
-    for (user, rooms) in content.iter() {
-        let mut has_joined = false;
-        for room_id in rooms {
-            room_ids.insert(room_id.to_string());
-            if joined_rooms.contains(room_id) {
-                has_joined = true;
-            }
-        }
-        if has_joined {
-            user_ids.insert(user.to_string());
-        }
-    }
-    NativeMDirectSnapshot {
-        session_generation,
-        room_ids: room_ids.into_iter().collect(),
-        user_ids: user_ids.into_iter().collect(),
-    }
+fn mdirect_rooms_from_content(content: &DirectEventContent) -> MDirectRooms {
+    content
+        .iter()
+        .map(|(user, rooms)| {
+            (
+                user.to_string(),
+                rooms.iter().map(|id| id.to_string()).collect(),
+            )
+        })
+        .collect()
 }
 
 fn parse_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
@@ -152,6 +132,7 @@ fn parse_direct_user(user_id: &str) -> Result<OwnedDirectUserIdentifier, &'stati
 }
 
 /// Product parity with legacy JS: a room is a DM for at most one user key.
+/// Kept on `DirectEventContent` so existing identifier types survive the write.
 fn apply_add_room(
     content: &mut DirectEventContent,
     room_id: &OwnedRoomId,
@@ -180,35 +161,6 @@ fn apply_remove_room(content: &mut DirectEventContent, room_id: &OwnedRoomId) {
 mod tests {
     use super::*;
     use matrix_sdk::ruma::{owned_room_id, user_id};
-
-    #[test]
-    fn snapshot_serializes_camel_case() {
-        let snap = NativeMDirectSnapshot {
-            session_generation: 4,
-            room_ids: vec!["!dm:example.org".into()],
-            user_ids: vec!["@bob:example.org".into()],
-        };
-        let value = serde_json::to_value(&snap).expect("serialize");
-        assert_eq!(value["sessionGeneration"], 4);
-        assert_eq!(value["roomIds"][0], "!dm:example.org");
-        assert_eq!(value["userIds"][0], "@bob:example.org");
-    }
-
-    #[test]
-    fn snapshot_user_ids_require_joined_room() {
-        let alice: OwnedDirectUserIdentifier = user_id!("@alice:example.org").into();
-        let bob: OwnedDirectUserIdentifier = user_id!("@bob:example.org").into();
-        let joined = owned_room_id!("!joined:example.org");
-        let left = owned_room_id!("!left:example.org");
-        let mut content = DirectEventContent::default();
-        content.insert(alice.clone(), vec![joined.clone()]);
-        content.insert(bob, vec![left]);
-        let mut joined_rooms = BTreeSet::new();
-        joined_rooms.insert(joined);
-        let snap = snapshot_from_content(content, &joined_rooms, 1);
-        assert_eq!(snap.user_ids, vec!["@alice:example.org".to_string()]);
-        assert_eq!(snap.room_ids.len(), 2);
-    }
 
     #[test]
     fn add_moves_room_to_single_user() {
