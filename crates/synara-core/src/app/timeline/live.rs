@@ -81,18 +81,32 @@ pub struct NativeTimelineRegistry {
 
 /// Shared handle so Core and the desktop session own one live registry.
 pub struct NativeTimelineOwner {
+    client: Client,
     registry: tokio::sync::Mutex<NativeTimelineRegistry>,
 }
 
 impl NativeTimelineOwner {
-    pub fn new(session_generation: u64) -> Self {
+    pub fn new(client: &Client, session_generation: u64) -> Self {
         Self {
+            client: client.clone(),
             registry: tokio::sync::Mutex::new(NativeTimelineRegistry::new(session_generation)),
         }
     }
 
     pub async fn lock(&self) -> tokio::sync::MutexGuard<'_, NativeTimelineRegistry> {
         self.registry.lock().await
+    }
+
+    pub async fn event_readback(
+        &self,
+        room_id: &str,
+        event_id: &str,
+    ) -> Result<NativeTimelineEventReadback, &'static str> {
+        self.registry
+            .lock()
+            .await
+            .event_readback(&self.client, room_id, event_id)
+            .await
     }
 }
 

@@ -23,7 +23,9 @@ use crate::app::presence::{
 };
 use crate::app::room_profile::{MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner};
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
-use crate::app::timeline::{NativeTimelineCloseRequest, NativeTimelineOwner};
+use crate::app::timeline::{
+    NativeTimelineCloseRequest, NativeTimelineEventReadback, NativeTimelineOwner,
+};
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::app::verification::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
@@ -586,6 +588,14 @@ struct MatrixTimelineCloseRequest {
     stream_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_timeline_event_readback`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixTimelineEventReadbackRequest {
+    room_id: String,
+    event_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_verification_accept`.
 ///
 /// The renderer sends the camel-case `flowId` key; unknown keys are rejected
@@ -1094,6 +1104,12 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_timeline_close", matrix_timeline_close)
         .expect("built-in matrix_timeline_close must remain in the command census");
     registry
+        .register(
+            "matrix_timeline_event_readback",
+            matrix_timeline_event_readback,
+        )
+        .expect("built-in matrix_timeline_event_readback must remain in the command census");
+    registry
 }
 
 fn matrix_typing_set(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -1134,6 +1150,40 @@ fn matrix_timeline_close(state: Arc<CoreState>, request: CommandEnvelope) -> Com
         });
         Ok(serde_json::Value::Bool(closed))
     })
+}
+
+fn matrix_timeline_event_readback(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelineEventReadbackRequest =
+            serde_json::from_value(request.payload)
+                .map_err(|_| core_state_error("p2-timeline-event-readback-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-event-readback-no-session")
+        })?;
+        let readback: NativeTimelineEventReadback = owner
+            .event_readback(&payload.room_id, &payload.event_id)
+            .await
+            .map_err(timeline_event_readback_owner_error)?;
+        serde_json::to_value(readback)
+            .map_err(|_| core_state_error("p2-timeline-event-readback-serialization-failed"))
+    })
+}
+
+fn timeline_event_readback_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "d0.3-timeline-invalid-room-id" | "v-crypto.6-invalid-event-id" => {
+            MatrixIpcErrorCategory::SdkInvariant
+        }
+        "v-crypto.6-event-room-not-found" | "d0.3-timeline-room-not-found" => {
+            MatrixIpcErrorCategory::Forbidden
+        }
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 fn matrix_typing_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -2243,6 +2293,7 @@ mod tests {
                 "matrix_set_user_image_pack",
                 "matrix_sync_status",
                 "matrix_timeline_close",
+                "matrix_timeline_event_readback",
                 "matrix_typing_set",
                 "matrix_typing_snapshot",
                 "matrix_verification_accept",
@@ -4090,6 +4141,48 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-timeline-close-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_event_readback_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_event_readback".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org","eventId":"$e"}),
+            })
+            .await
+            .expect_err("timeline event readback without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-event-readback-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_event_readback_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_event_readback".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "eventId":"$e",
+                    "token":"no"
+                }),
+            })
+            .await
+            .expect_err("timeline event readback must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-event-readback-invalid-payload")
         );
     }
 

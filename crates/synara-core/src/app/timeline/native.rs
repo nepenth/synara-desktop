@@ -124,7 +124,7 @@ pub struct NativeTimelineReadStateReadback {
     pub snapshot: TimelineViewSnapshot,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineItem {
     pub item_id: String,
@@ -142,7 +142,7 @@ pub struct NativeTimelineItem {
     pub reactions: Vec<NativeTimelineReaction>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineReaction {
     pub key: String,
@@ -152,7 +152,7 @@ pub struct NativeTimelineReaction {
     pub senders: Vec<NativeTimelineReactionSender>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineReactionSender {
     pub user_id: String,
@@ -182,7 +182,7 @@ pub struct NativeReactionMutationResult {
     pub readback: Option<NativeTimelineReaction>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeDecryptionState {
     Pending,
@@ -218,7 +218,7 @@ pub struct NativeTimelineSnapshot {
     pub utd: NativeUtdStatus,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineEventReadback {
     pub session_generation: u64,

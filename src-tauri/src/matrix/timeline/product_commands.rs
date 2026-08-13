@@ -52,19 +52,16 @@ pub async fn matrix_timeline_jump_latest(
 
 #[tauri::command]
 pub async fn matrix_timeline_event_readback(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     event_id: String,
 ) -> Result<NativeTimelineEventReadback, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
-    let active = require_session_mut(session.as_mut())?;
-    active
-        .timelines
-        .lock()
-        .await
-        .event_readback(&active.client, &room_id, &event_id)
-        .await
-        .map_err(map_timeline_error)
+    crate::bridge::timeline_event_readback::timeline_event_readback(
+        core.inner().as_ref(),
+        room_id,
+        event_id,
+    )
+    .await
 }
 
 #[tauri::command]
