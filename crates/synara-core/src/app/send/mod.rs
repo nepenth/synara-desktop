@@ -33,8 +33,8 @@ pub use poll::{
 };
 pub use queue::{LocalTxnId, OutboundTextMessage, SendQueue};
 pub use text::{
-    message_content, parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id,
-    parse_transaction_id, send_message_to_room,
+    edit_message_content, message_content, parse_edit_event_id, parse_reply_event_id,
+    parse_send_room_id, parse_thread_root_event_id, parse_transaction_id, send_message_to_room,
 };
 
 /// Static marker for link / schema smoke (text + attachment queues).

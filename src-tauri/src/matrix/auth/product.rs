@@ -23,7 +23,7 @@ use matrix_sdk::{
             room::{
                 message::{
                     AddMentions, MessageFormat, MessageType, Relation, RelationWithoutReplacement,
-                    ReplacementMetadata, ReplyWithinThread, RoomMessageEventContent,
+                    ReplyWithinThread, RoomMessageEventContent,
                 },
                 ImageInfo, MediaSource,
             },

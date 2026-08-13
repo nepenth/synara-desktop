@@ -43,6 +43,39 @@ pub(crate) async fn send_text(
     parse_send_text_result(response.payload)
 }
 
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn edit_message(
+    core: &Core,
+    room_id: String,
+    event_id: String,
+    body: String,
+    msg_type: Option<String>,
+    formatted_body: Option<String>,
+    mention_user_ids: Option<Vec<String>>,
+    mention_room: Option<bool>,
+    txn_id: Option<String>,
+) -> Result<MatrixSendTextResult, MatrixAuthCommandError> {
+    let response = core
+        .command(CommandEnvelope {
+            command: "matrix_edit_message".to_owned(),
+            session_generation: READ_ONLY_SESSION_GENERATION,
+            request_id: None,
+            payload: serde_json::json!({
+                "roomId": room_id,
+                "eventId": event_id,
+                "body": body,
+                "msgType": msg_type,
+                "formattedBody": formatted_body,
+                "mentionUserIds": mention_user_ids,
+                "mentionRoom": mention_room,
+                "txnId": txn_id,
+            }),
+        })
+        .await
+        .map_err(map_edit_message_core_error)?;
+    parse_send_text_result(response.payload)
+}
+
 fn parse_send_text_result(
     payload: serde_json::Value,
 ) -> Result<MatrixSendTextResult, MatrixAuthCommandError> {
@@ -79,7 +112,7 @@ fn map_send_text_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
         ),
         MatrixIpcErrorCategory::SdkInvariant => {
             let (code, message) = match diagnostic {
-                "d0.4-send-room-not-found" => {
+                "d0.4-send-room-not-found" | "v-send.r-edit-room-not-found" => {
                     ("NotFound", "The native Matrix room is not available.")
                 }
                 _ => (
@@ -92,6 +125,37 @@ fn map_send_text_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
         _ => MatrixAuthCommandError::new(
             "Unknown",
             "The native Matrix message could not be sent.",
+            diagnostic,
+        ),
+    }
+}
+
+fn map_edit_message_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
+    let diagnostic = error
+        .diagnostic_id
+        .as_deref()
+        .unwrap_or("v-send.r-edit-sdk-failed");
+    match error.category {
+        MatrixIpcErrorCategory::Forbidden => MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            "d0.4-send-requires-session",
+        ),
+        MatrixIpcErrorCategory::SdkInvariant => {
+            let (code, message) = match diagnostic {
+                "v-send.r-edit-room-not-found" => {
+                    ("NotFound", "The native Matrix room is not available.")
+                }
+                _ => (
+                    "InvalidRequest",
+                    "The native Matrix send request is invalid.",
+                ),
+            };
+            MatrixAuthCommandError::new(code, message, diagnostic)
+        }
+        _ => MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix message edit could not be sent.",
             diagnostic,
         ),
     }

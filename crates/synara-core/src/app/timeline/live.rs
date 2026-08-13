@@ -40,8 +40,9 @@ use serde::{Deserialize, Serialize};
 use tokio::{sync::Mutex as AsyncMutex, task::JoinHandle};
 
 use crate::app::send::{
-    message_content, parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id,
-    parse_transaction_id, send_message_to_room, MatrixSendTextResult, SendQueue,
+    edit_message_content, message_content, parse_edit_event_id, parse_reply_event_id,
+    parse_send_room_id, parse_thread_root_event_id, parse_transaction_id, send_message_to_room,
+    MatrixSendTextResult, SendQueue,
 };
 use crate::app::utd_recovery::{UtdRecoveryCoordinator, UtdRecoveryKind, MAX_EVENT_IDS_PER_BATCH};
 use crate::dto::TimelineEncryptedUnavailableItem;
@@ -268,6 +269,60 @@ impl NativeTimelineOwner {
                 let _ = sends.mark_sent(&local_txn_id);
             } else {
                 let _ = sends.mark_failed(&local_txn_id, "d0.4-send-sdk-failed");
+            }
+        }
+        let event_id = send_result?;
+        Ok(MatrixSendTextResult {
+            room_id: parsed_room.to_string(),
+            event_id,
+            local_txn_id,
+            status: "sent",
+        })
+    }
+
+    pub async fn edit_message(
+        &self,
+        room_id: String,
+        event_id: String,
+        body: String,
+        msg_type: Option<String>,
+        formatted_body: Option<String>,
+        mention_user_ids: Option<Vec<String>>,
+        mention_room: Option<bool>,
+        txn_id: Option<String>,
+    ) -> Result<MatrixSendTextResult, &'static str> {
+        let parsed_room = parse_send_room_id(&room_id)?;
+        let parsed_event = parse_edit_event_id(&event_id)?;
+        let txn_id = parse_transaction_id(txn_id)?;
+        let content = edit_message_content(
+            body.clone(),
+            msg_type,
+            formatted_body,
+            mention_user_ids,
+            mention_room.unwrap_or(false),
+            parsed_event,
+        )?;
+        let room = self
+            .client
+            .get_room(&parsed_room)
+            .ok_or("v-send.r-edit-room-not-found")?;
+        let local_txn_id = {
+            let mut sends = self.sends.lock().await;
+            sends
+                .enqueue_text(parsed_room.to_string(), body)
+                .map_err(|error| error.diagnostic_id())?
+                .local_txn_id
+                .clone()
+        };
+        let send_result = send_message_to_room(&room, content, txn_id)
+            .await
+            .map_err(|_| "v-send.r-edit-sdk-failed");
+        {
+            let mut sends = self.sends.lock().await;
+            if send_result.is_ok() {
+                let _ = sends.mark_sent(&local_txn_id);
+            } else {
+                let _ = sends.mark_failed(&local_txn_id, "v-send.r-edit-sdk-failed");
             }
         }
         let event_id = send_result?;
