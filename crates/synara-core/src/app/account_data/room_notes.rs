@@ -1,6 +1,6 @@
 //! Credential-free `in.synara.room_notes` account-data codec.
 //!
-//! Live Client RMW stays in the desktop shell.
+//! Live Client RMW is in `room_notes_live`.
 
 use std::collections::BTreeMap;
 
@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 
 pub const ROOM_NOTES_EVENT_TYPE: &str = "in.synara.room_notes";
 pub const ROOM_NOTES_ACCOUNT_DATA_VERSION: u32 = 1;
-const MAX_NOTE_BODY_LENGTH: usize = 4000;
-const MAX_MESSAGE_BODY_LENGTH: usize = 1000;
+pub const MAX_NOTE_BODY_LENGTH: usize = 4000;
+pub const MAX_MESSAGE_BODY_LENGTH: usize = 1000;
 const MAX_ITEMS_PER_ROOM: usize = 200;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -71,14 +71,14 @@ pub enum RoomNoteMoveDirection {
     Down,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeRoomNotesSnapshot {
     pub session_generation: u64,
     pub content: SynaraRoomNotesContent,
 }
 
-fn limit_text(value: &str, max_length: usize) -> String {
+pub fn limit_text(value: &str, max_length: usize) -> String {
     value.trim().chars().take(max_length).collect()
 }
 

@@ -3,8 +3,8 @@
 //! Authoritative design note: `docs/matrix-rust-sdk/p6.7-account-data.md`
 //! Product verticals: `docs/matrix-rust-sdk/v-rooms-5-mdirect.md`,
 //! `docs/matrix-rust-sdk/v-timeline-full-replacement-contract.md` (later/notes).
-//! Live image-pack snapshot/set/owner, m.direct, and later Client RMW live
-//! here. room_notes product_commands stay in the desktop shell.
+//! Live image-pack snapshot/set/owner, m.direct, later, and room-notes Client
+//! RMW live here.
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
@@ -18,6 +18,7 @@ mod later_live;
 mod mdirect;
 mod mdirect_live;
 mod room_notes;
+mod room_notes_live;
 
 pub use error::AccountDataError;
 pub use image_packs::{
@@ -54,11 +55,15 @@ pub use mdirect::{
 };
 pub use mdirect_live::{add_room_to_mdirect, remove_room_from_mdirect, snapshot_mdirect};
 pub use room_notes::{
-    complete_room_todo_item, move_room_todo_item, normalize_room_note_item,
+    complete_room_todo_item, limit_text, move_room_todo_item, normalize_room_note_item,
     normalize_room_notes_content, put_room_note_item, remove_room_note_item,
     NativeRoomNotesSnapshot, RoomNoteMoveDirection, SynaraRoomNoteItem, SynaraRoomNoteItemKind,
-    SynaraRoomNotesContent, SynaraRoomNotesRoom, ROOM_NOTES_ACCOUNT_DATA_VERSION,
-    ROOM_NOTES_EVENT_TYPE,
+    SynaraRoomNotesContent, SynaraRoomNotesRoom, MAX_MESSAGE_BODY_LENGTH, MAX_NOTE_BODY_LENGTH,
+    ROOM_NOTES_ACCOUNT_DATA_VERSION, ROOM_NOTES_EVENT_TYPE,
+};
+pub use room_notes_live::{
+    complete_room_todo_item_live, delete_room_note_item_live, move_room_todo_item_live,
+    room_notes_now_ms, snapshot_room_notes, upsert_room_note_item,
 };
 
 /// Static marker for link / schema smoke.

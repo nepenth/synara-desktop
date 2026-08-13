@@ -11,7 +11,8 @@ use serde::{Deserialize, Serialize};
 use crate::app::account_data::{
     NativeGlobalImagePacksSnapshot, NativeImagePackOwner, NativeLaterSnapshot,
     NativeMDirectMutationResult, NativeMDirectSnapshot, NativeRoomImagePacksSnapshot,
-    NativeUserImagePackSnapshot, SynaraLaterItem,
+    NativeRoomNotesSnapshot, NativeUserImagePackSnapshot, RoomNoteMoveDirection, SynaraLaterItem,
+    SynaraRoomNoteItem,
 };
 use crate::app::auth::{
     discover_login_flows, login_flows_response, probe_register_flows, AuthError,
@@ -600,6 +601,35 @@ struct MatrixLaterMarkRemindedRequest {
     item_id: String,
     #[serde(default)]
     reminded_at: Option<f64>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomNotesUpsertRequest {
+    item: SynaraRoomNoteItem,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomNotesItemRequest {
+    room_id: String,
+    item_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomNotesCompleteTodoRequest {
+    room_id: String,
+    item_id: String,
+    completed: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomNotesMoveTodoRequest {
+    room_id: String,
+    item_id: String,
+    direction: RoomNoteMoveDirection,
 }
 
 #[derive(Deserialize)]
@@ -1375,6 +1405,24 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_later_mark_reminded", matrix_later_mark_reminded)
         .expect("built-in matrix_later_mark_reminded must remain in the command census");
+    registry
+        .register("matrix_room_notes_snapshot", matrix_room_notes_snapshot)
+        .expect("built-in matrix_room_notes_snapshot must remain in the command census");
+    registry
+        .register("matrix_room_notes_upsert", matrix_room_notes_upsert)
+        .expect("built-in matrix_room_notes_upsert must remain in the command census");
+    registry
+        .register("matrix_room_notes_delete", matrix_room_notes_delete)
+        .expect("built-in matrix_room_notes_delete must remain in the command census");
+    registry
+        .register(
+            "matrix_room_notes_complete_todo",
+            matrix_room_notes_complete_todo,
+        )
+        .expect("built-in matrix_room_notes_complete_todo must remain in the command census");
+    registry
+        .register("matrix_room_notes_move_todo", matrix_room_notes_move_todo)
+        .expect("built-in matrix_room_notes_move_todo must remain in the command census");
     registry
         .register("matrix_mdirect_snapshot", matrix_mdirect_snapshot)
         .expect("built-in matrix_mdirect_snapshot must remain in the command census");
@@ -2646,6 +2694,104 @@ fn later_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
+fn matrix_room_notes_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-room-notes-snapshot-invalid-payload"));
+        }
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-notes-snapshot-no-session")
+        })?;
+        let snapshot: NativeRoomNotesSnapshot = owner
+            .room_notes_snapshot()
+            .await
+            .map_err(room_notes_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-room-notes-snapshot-serialization-failed"))
+    })
+}
+
+fn matrix_room_notes_upsert(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomNotesUpsertRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-notes-upsert-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-notes-upsert-no-session")
+        })?;
+        let snapshot: NativeRoomNotesSnapshot = owner
+            .room_notes_upsert(payload.item)
+            .await
+            .map_err(room_notes_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-room-notes-upsert-serialization-failed"))
+    })
+}
+
+fn matrix_room_notes_delete(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomNotesItemRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-notes-delete-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-notes-delete-no-session")
+        })?;
+        let snapshot: NativeRoomNotesSnapshot = owner
+            .room_notes_delete(payload.room_id, payload.item_id)
+            .await
+            .map_err(room_notes_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-room-notes-delete-serialization-failed"))
+    })
+}
+
+fn matrix_room_notes_complete_todo(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomNotesCompleteTodoRequest =
+            serde_json::from_value(request.payload)
+                .map_err(|_| core_state_error("p2-room-notes-complete-todo-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-notes-complete-todo-no-session")
+        })?;
+        let snapshot: NativeRoomNotesSnapshot = owner
+            .room_notes_complete_todo(payload.room_id, payload.item_id, payload.completed)
+            .await
+            .map_err(room_notes_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-room-notes-complete-todo-serialization-failed"))
+    })
+}
+
+fn matrix_room_notes_move_todo(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomNotesMoveTodoRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-notes-move-todo-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-notes-move-todo-no-session")
+        })?;
+        let snapshot: NativeRoomNotesSnapshot = owner
+            .room_notes_move_todo(payload.room_id, payload.item_id, payload.direction)
+            .await
+            .map_err(room_notes_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-room-notes-move-todo-serialization-failed"))
+    })
+}
+
+fn room_notes_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-timeline-room-notes-invalid-item" => MatrixIpcErrorCategory::SdkInvariant,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
 fn matrix_mdirect_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         if !request.payload.is_null() {
@@ -3419,6 +3565,11 @@ mod tests {
                 "matrix_reaction_redact",
                 "matrix_register_flows",
                 "matrix_room_join_rule_snapshot",
+                "matrix_room_notes_complete_todo",
+                "matrix_room_notes_delete",
+                "matrix_room_notes_move_todo",
+                "matrix_room_notes_snapshot",
+                "matrix_room_notes_upsert",
                 "matrix_secret_storage_status",
                 "matrix_session_snapshot",
                 "matrix_set_global_image_packs",
@@ -5262,6 +5413,25 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-later-upsert-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_notes_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_notes_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("room notes snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-notes-snapshot-no-session")
         );
     }
 
