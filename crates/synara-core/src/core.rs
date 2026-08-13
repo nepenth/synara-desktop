@@ -550,6 +550,17 @@ struct MatrixTypingSetRequest {
     typing: bool,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_device_rename`.
+///
+/// The renderer sends camel-case `deviceId` and `displayName`; unknown keys
+/// are rejected so this write cannot grow extra identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixDeviceRenameRequest {
+    device_id: String,
+    display_name: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_room_join_rule_snapshot`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -891,6 +902,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_device_snapshot", matrix_device_snapshot)
         .expect("built-in matrix_device_snapshot must remain in the command census");
     registry
+        .register("matrix_device_rename", matrix_device_rename)
+        .expect("built-in matrix_device_rename must remain in the command census");
+    registry
         .register(
             "matrix_room_join_rule_snapshot",
             matrix_room_join_rule_snapshot,
@@ -1052,6 +1066,23 @@ fn matrix_device_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> Co
     })
 }
 
+fn matrix_device_rename(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixDeviceRenameRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-device-rename-invalid-payload"))?;
+        let owner = state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-device-rename-no-session")
+        })?;
+        let snapshot: NativeDeviceSnapshot = owner
+            .rename(&payload.device_id, &payload.display_name)
+            .await
+            .map_err(device_snapshot_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-device-rename-serialization-failed"))
+    })
+}
+
 fn matrix_room_join_rule_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -1208,6 +1239,7 @@ fn join_rule_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError
 
 fn device_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
+        "v-crypto.7-device-rename-empty" => MatrixIpcErrorCategory::SdkInvariant,
         "v-crypto.7-device-owner-user-missing"
         | "v-crypto.7-device-snapshot-current-missing"
         | "v-crypto.7-device-snapshot-user-missing" => MatrixIpcErrorCategory::Forbidden,
@@ -1844,6 +1876,7 @@ mod tests {
             vec![
                 "matrix_cross_signing_status",
                 "matrix_crypto_status",
+                "matrix_device_rename",
                 "matrix_device_snapshot",
                 "matrix_get_global_image_packs",
                 "matrix_get_room_image_packs",
@@ -3138,6 +3171,48 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-device-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_device_rename_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_device_rename".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"deviceId":"DEVICE","displayName":"laptop"}),
+            })
+            .await
+            .expect_err("device rename without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-device-rename-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_device_rename_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_device_rename".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "deviceId":"DEVICE",
+                    "displayName":"laptop",
+                    "token":"no"
+                }),
+            })
+            .await
+            .expect_err("device rename must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-device-rename-invalid-payload")
         );
     }
 

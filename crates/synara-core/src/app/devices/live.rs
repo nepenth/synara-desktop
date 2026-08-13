@@ -82,6 +82,24 @@ impl NativeDeviceOwner {
     pub async fn snapshot(&self) -> Result<NativeDeviceSnapshot, &'static str> {
         snapshot(&self.client, self.session_generation).await
     }
+
+    /// Rename a device, then re-snapshot the live list.
+    pub async fn rename(
+        &self,
+        device_id: &str,
+        display_name: &str,
+    ) -> Result<NativeDeviceSnapshot, &'static str> {
+        let display_name = display_name.trim();
+        if display_name.is_empty() {
+            return Err("v-crypto.7-device-rename-empty");
+        }
+        let device_id = OwnedDeviceId::from(device_id);
+        self.client
+            .rename_device(&device_id, display_name)
+            .await
+            .map_err(|_| "v-crypto.7-device-rename-failed")?;
+        self.snapshot().await
+    }
 }
 
 impl Drop for NativeDeviceOwner {
