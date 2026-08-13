@@ -507,6 +507,20 @@ struct MatrixGetRoomImagePacksRequest {
     room_id: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixSetImagePackContentRequest {
+    content: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixSetRoomImagePackRequest {
+    room_id: String,
+    state_key: String,
+    content: serde_json::Value,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_room_join_rule_snapshot`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -860,6 +874,18 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_get_room_image_packs", matrix_get_room_image_packs)
         .expect("built-in matrix_get_room_image_packs must remain in the command census");
     registry
+        .register("matrix_set_user_image_pack", matrix_set_user_image_pack)
+        .expect("built-in matrix_set_user_image_pack must remain in the command census");
+    registry
+        .register(
+            "matrix_set_global_image_packs",
+            matrix_set_global_image_packs,
+        )
+        .expect("built-in matrix_set_global_image_packs must remain in the command census");
+    registry
+        .register("matrix_set_room_image_pack", matrix_set_room_image_pack)
+        .expect("built-in matrix_set_room_image_pack must remain in the command census");
+    registry
 }
 
 fn matrix_typing_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -1001,6 +1027,64 @@ fn matrix_get_room_image_packs(state: Arc<CoreState>, request: CommandEnvelope) 
         serde_json::to_value(snapshot)
             .map_err(|_| core_state_error("p2-room-image-packs-serialization-failed"))
     })
+}
+
+fn matrix_set_user_image_pack(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSetImagePackContentRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-set-user-image-pack-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-set-user-image-pack-no-session")
+        })?;
+        owner
+            .set_user(payload.content)
+            .await
+            .map_err(image_pack_write_owner_error)?;
+        Ok(serde_json::json!({"status":"ok"}))
+    })
+}
+
+fn matrix_set_global_image_packs(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSetImagePackContentRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-set-global-image-packs-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-set-global-image-packs-no-session")
+        })?;
+        owner
+            .set_global(payload.content)
+            .await
+            .map_err(image_pack_write_owner_error)?;
+        Ok(serde_json::json!({"status":"ok"}))
+    })
+}
+
+fn matrix_set_room_image_pack(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSetRoomImagePackRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-set-room-image-pack-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-set-room-image-pack-no-session")
+        })?;
+        owner
+            .set_room(&payload.room_id, &payload.state_key, payload.content)
+            .await
+            .map_err(image_pack_write_owner_error)?;
+        Ok(serde_json::json!({"status":"ok"}))
+    })
+}
+
+fn image_pack_write_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-send.r-pack-write-invalid-content"
+        | "v-send.r-pack-read-invalid-room"
+        | "v-send.r-pack-write-room-missing" => MatrixIpcErrorCategory::SdkInvariant,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 fn image_pack_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
@@ -1673,6 +1757,9 @@ mod tests {
                 "matrix_room_join_rule_snapshot",
                 "matrix_secret_storage_status",
                 "matrix_session_snapshot",
+                "matrix_set_global_image_packs",
+                "matrix_set_room_image_pack",
+                "matrix_set_user_image_pack",
                 "matrix_sync_status",
                 "matrix_typing_snapshot",
                 "matrix_verification_list",
@@ -2973,6 +3060,25 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-room-image-packs-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_set_user_image_pack_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_set_user_image_pack".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"content":{}}),
+            })
+            .await
+            .expect_err("set user image pack without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-set-user-image-pack-no-session")
         );
     }
 

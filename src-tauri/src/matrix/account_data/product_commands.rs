@@ -42,18 +42,10 @@ pub async fn matrix_get_global_image_packs(
 /// not be used as a fallback.
 #[tauri::command]
 pub async fn matrix_set_user_image_pack(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     content: serde_json::Value,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    let client = {
-        let session = state.session.lock().await;
-        let active = require_session(session.as_ref())?;
-        active.client.clone()
-    };
-    set_user_image_pack(&client, content)
-        .await
-        .map_err(map_pack_write_error)?;
-    Ok(MatrixProfileWriteResult { status: "ok" })
+    crate::bridge::image_pack_writes::set_user_image_pack(core.inner().as_ref(), content).await
 }
 
 /// V-SEND.R-PACK-WRITE — replace the global `im.ponies.emote_rooms`
@@ -62,18 +54,10 @@ pub async fn matrix_set_user_image_pack(
 /// `mx.setAccountData(PoniesEmoteRooms)` must not be used as a fallback.
 #[tauri::command]
 pub async fn matrix_set_global_image_packs(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     content: serde_json::Value,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    let client = {
-        let session = state.session.lock().await;
-        let active = require_session(session.as_ref())?;
-        active.client.clone()
-    };
-    set_global_image_packs(&client, content)
-        .await
-        .map_err(map_pack_write_error)?;
-    Ok(MatrixProfileWriteResult { status: "ok" })
+    crate::bridge::image_pack_writes::set_global_image_packs(core.inner().as_ref(), content).await
 }
 
 /// V-SEND.R-PACK-WRITE — create/update/delete a `im.ponies.room_emotes` state
@@ -82,20 +66,18 @@ pub async fn matrix_set_global_image_packs(
 /// `mx.sendStateEvent(PoniesRoomEmotes)` must not be used as a fallback.
 #[tauri::command]
 pub async fn matrix_set_room_image_pack(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     state_key: String,
     content: serde_json::Value,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    let client = {
-        let session = state.session.lock().await;
-        let active = require_session(session.as_ref())?;
-        active.client.clone()
-    };
-    set_room_image_pack(&client, &room_id, &state_key, content)
-        .await
-        .map_err(map_pack_write_error)?;
-    Ok(MatrixProfileWriteResult { status: "ok" })
+    crate::bridge::image_pack_writes::set_room_image_pack(
+        core.inner().as_ref(),
+        room_id,
+        state_key,
+        content,
+    )
+    .await
 }
 
 #[tauri::command]
