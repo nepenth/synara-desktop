@@ -3,8 +3,8 @@
 //! Uses SDK APIs only under this module:
 //! `client.matrix_auth().login_username(...).initial_device_display_name(...).await`.
 //!
-//! D0.1 composes password login into the production Tauri command in
-//! [`super::product`]. **V-AUTH.2** closed desktop `m.login.token` product login as
+//! The desktop shell composes password login into the production Tauri command.
+//! **V-AUTH.2** closed desktop `m.login.token` product login as
 //! not retained (SSO token-completion UI was removed with V-AUTH.1; no standalone
 //! token-login product surface remains). There is no dual-backend and no one-time
 //! token product login path.
@@ -12,12 +12,12 @@
 //! Access/refresh tokens remain on the SDK `Client` after success. [`LoginResult`]
 //! never carries access/refresh tokens or password — only privacy-safe identity
 //! fields for harness/status. Optional host-side persistence after login is
-//! [`crate::matrix::lifecycle::persist_session_after_login`] (P3.5).
+//! [`crate::app::lifecycle::persist_session_after_login`] (P3.5).
 
 use matrix_sdk::{Client, Error as MatrixSdkError, HttpError};
 
 use super::error::AuthError;
-use synara_core::app::auth::{platform_device_display_name, DevicePlatform};
+use super::{platform_device_display_name, DevicePlatform};
 
 /// How the caller authenticated (privacy-safe discriminator; no secrets).
 ///
@@ -55,7 +55,7 @@ pub struct LoginOptions {
     pub device_display_name: Option<String>,
     /// When true, request a refresh token from the homeserver (SDK `request_refresh_token`).
     /// Persistence of that token uses
-    /// [`crate::matrix::lifecycle::persist_session_after_login`] (P3.5) after success.
+    /// [`crate::app::lifecycle::persist_session_after_login`] (P3.5) after success.
     pub request_refresh_token: bool,
 }
 
@@ -77,7 +77,7 @@ impl LoginOptions {
 /// Log in with Matrix user id (or localpart) + password.
 ///
 /// `client` must be an **unauthenticated** client from P2.3
-/// [`crate::matrix::client_builder::build_unauthenticated_client`].
+/// [`crate::app::client_builder::build_unauthenticated_client`].
 ///
 /// On success the SDK client holds the session (including tokens). The returned
 /// [`LoginResult`] is privacy-safe for harness/status use.
