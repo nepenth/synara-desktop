@@ -20,8 +20,8 @@ integration, or release path. **Never a big-bang move.**
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
 
-**Current bounded status at `dfdfdaf4`
-(#770, after #769):** #713 mechanically moved notifications, polls,
+**Current bounded status at `12f07e8b`
+(#772, after #771):** #713 mechanically moved notifications, polls,
 relations, threads, and unread; #714 moved raw content, receipts, routes, and
 security; #716 moved search, legacy, and media_cache; #717 moved media_export
 and crypto_store; #734 moved the room-directory session harness; #735 moved
@@ -42,7 +42,8 @@ the task-supervisor bridge; #766 moved later/room-notes codecs (Client RMW
 stayed desktop); #768 moved image-pack DTO, type filters, and write guards
 (Client snapshot/set and Tauri subscribe stayed desktop); #770 moved m.direct
 snapshot DTO and string-map helpers (Client load/store and DirectEventContent
-write stayed desktop). These retain thin desktop re-exports and any
+write stayed desktop); #772 moved device presentation DTOs and sort helper
+(Client snapshot, UIAA delete, and Tauri owner stayed desktop). These retain thin desktop re-exports and any
 leftover `live.rs` / `product_commands.rs`. They are P1 extraction
 only: no P2 command registration, UDL, or iOS behavior changed.
 
@@ -126,7 +127,7 @@ zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
 
 > **Bounded evidence note — not P4 acceptance:** At the current feature tip
-> `dfdfdaf424d30f95d045054056eaa37e48b52a8d` (#770, after #769), the
+> `12f07e8bea85f66bfa5ff0c2e9586635da08c4a1` (#772, after #771), the
 > prior #708 work is only the pure iOS room-row unread presentation from closed
 > `Joined`/`Invited` membership, scalar counters, and a marked-unread flag to a
 > `u64` count plus highlight boolean. The prior #710 work is only the pure
