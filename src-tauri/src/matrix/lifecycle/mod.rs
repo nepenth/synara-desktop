@@ -39,7 +39,6 @@ pub use recovery::{
     apply_store_failure, recovery_action_for, surface_store_corrupt, surface_store_unavailable,
     RecoveryAction, StoreFailure, StoreFailureKind,
 };
-pub use synara_core::app::lifecycle::*;
 pub use remote_logout::{
     LocalCleanupPolicy, RemoteLogoutFlow, RemoteLogoutOutcome, RemoteLogoutPhase, RemoteLogoutScope,
 };
@@ -57,6 +56,7 @@ pub use session_restore::{
     has_persisted_session, matrix_session_from_host_secrets, restore_session_from_vault,
     restore_session_onto_client, SessionRestoreOutcome,
 };
+pub use synara_core::app::lifecycle::*;
 pub use wipe::{
     assert_exact_account_root, assert_path_is_wipe_allowed, wipe_account_store, WipeReport,
     WipeTarget, WIPE_TARGET_KIND_ACCOUNT_ROOT,
