@@ -1,17 +1,17 @@
 //! Credential-free V-CRYPTO.2 cross-signing presentation DTOs and projector.
 //!
-//! Live Client crypto I/O and UIAA stay in the desktop shell.
+//! Live Client setup start lives in `live.rs`. Password UIAA stays desktop.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeCrossSigningKeyPublication {
     Missing,
     Published,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeCrossSigningPrivateIdentity {
     Missing,
@@ -19,7 +19,7 @@ pub enum NativeCrossSigningPrivateIdentity {
     Complete,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeOwnIdentityVerification {
     Missing,
@@ -27,7 +27,7 @@ pub enum NativeOwnIdentityVerification {
     Verified,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeCrossSigningReadiness {
     Unavailable,
@@ -37,14 +37,14 @@ pub enum NativeCrossSigningReadiness {
     Ready,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeCrossSigningBootstrap {
     Needed,
     NotNeeded,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeCrossSigningStatus {
     pub session_generation: u64,
@@ -57,7 +57,7 @@ pub struct NativeCrossSigningStatus {
     pub bootstrap: NativeCrossSigningBootstrap,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeCrossSigningSetupOutcome {
     Complete,
@@ -65,7 +65,7 @@ pub enum NativeCrossSigningSetupOutcome {
     AuthenticationRequired,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeCrossSigningSetupResult {
     pub outcome: NativeCrossSigningSetupOutcome,

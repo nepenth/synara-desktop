@@ -1,8 +1,7 @@
 //! P8.4 — Cross-signing / identity state foundation (harness).
 //!
-//! Pure projection of local cross-signing setup and remote identity trust.
-//! **No private keys, public key material, recovery secrets, or tokens.**
-//! No SDK crypto APIs, no dual-backend.
+//! Pure projection plus live status/setup start. **No private keys, recovery
+//! secrets, or tokens.** Password UIAA stays in the desktop shell.
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p8.4-cross-signing.md`
 
@@ -11,11 +10,16 @@
 
 mod error;
 mod identity;
+mod live;
 mod native;
 
 pub use error::CrossSigningError;
 pub use identity::{
     CrossSigningStore, IdentityTrust, LocalCrossSigningKeys, RemoteIdentity, MAX_TRACKED_IDENTITIES,
+};
+pub use live::{
+    complete, project_status, setup, status, supported_authentication,
+    SupportedBootstrapAuthentication,
 };
 pub use native::{
     project_cross_signing_status, NativeCrossSigningBootstrap, NativeCrossSigningKeyPublication,
