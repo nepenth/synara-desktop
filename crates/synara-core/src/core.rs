@@ -24,11 +24,11 @@ use crate::app::presence::{
 use crate::app::room_profile::{MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner};
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::app::timeline::{
-    NativeReactionMutationResult, NativeTimelineCloseRequest, NativeTimelineDirection,
-    NativeTimelineEventReadback, NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition,
-    NativeTimelineOpenReadback, NativeTimelineOpenRequest, NativeTimelineOwner,
-    NativeTimelineReadAction, NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
-    NativeTimelineViewPaginationRequest, TimelineViewSnapshot,
+    NativeReactionMutationResult, NativeTimelineActionReadback, NativeTimelineCloseRequest,
+    NativeTimelineDirection, NativeTimelineEventReadback, NativeTimelineJumpLatestRequest,
+    NativeTimelineOpenPosition, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
+    NativeTimelineOwner, NativeTimelineReadAction, NativeTimelineReadStateReadback,
+    NativeTimelineReadStateRequest, NativeTimelineViewPaginationRequest, TimelineViewSnapshot,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::app::verification::{
@@ -650,6 +650,27 @@ struct MatrixReactionRedactRequest {
     key: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_timeline_edit_text`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixTimelineEditTextRequest {
+    room_id: String,
+    event_id: String,
+    body: String,
+    #[serde(default)]
+    formatted_body: Option<String>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_timeline_redact`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixTimelineRedactRequest {
+    room_id: String,
+    event_id: String,
+    #[serde(default)]
+    reason: Option<String>,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_verification_accept`.
 ///
 /// The renderer sends the camel-case `flowId` key; unknown keys are rejected
@@ -1191,6 +1212,12 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_reaction_redact", matrix_reaction_redact)
         .expect("built-in matrix_reaction_redact must remain in the command census");
     registry
+        .register("matrix_timeline_edit_text", matrix_timeline_edit_text)
+        .expect("built-in matrix_timeline_edit_text must remain in the command census");
+    registry
+        .register("matrix_timeline_redact", matrix_timeline_redact)
+        .expect("built-in matrix_timeline_redact must remain in the command census");
+    registry
 }
 
 fn matrix_typing_set(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -1432,6 +1459,63 @@ fn timeline_reaction_owner_error(diagnostic_id: &'static str) -> MatrixIpcError 
         | "v-crypto.6-invalid-event-id"
         | "v-send.2-reaction-invalid-key"
         | "v-send.2-reaction-redact-annotation-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn matrix_timeline_edit_text(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelineEditTextRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-timeline-edit-text-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-edit-text-no-session")
+        })?;
+        let readback: NativeTimelineActionReadback = owner
+            .edit_text(
+                &payload.room_id,
+                &payload.event_id,
+                &payload.body,
+                payload.formatted_body.as_deref(),
+            )
+            .await
+            .map_err(timeline_action_owner_error)?;
+        serde_json::to_value(readback)
+            .map_err(|_| core_state_error("p2-timeline-edit-text-serialization-failed"))
+    })
+}
+
+fn matrix_timeline_redact(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelineRedactRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-timeline-redact-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-redact-no-session")
+        })?;
+        let readback: NativeTimelineActionReadback = owner
+            .redact_event(
+                &payload.room_id,
+                &payload.event_id,
+                payload.reason.as_deref(),
+            )
+            .await
+            .map_err(timeline_action_owner_error)?;
+        serde_json::to_value(readback)
+            .map_err(|_| core_state_error("p2-timeline-redact-serialization-failed"))
+    })
+}
+
+fn timeline_action_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "d0.4-send-invalid-room-id"
+        | "d0.4-send-formatted-body-too-large"
+        | "v-timeline-edit-invalid-event-id"
+        | "v-timeline-edit-empty-body"
+        | "v-timeline-edit-room-not-found"
+        | "v-timeline-redact-invalid-event-id"
+        | "v-timeline-redact-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -2546,11 +2630,13 @@ mod tests {
                 "matrix_set_user_image_pack",
                 "matrix_sync_status",
                 "matrix_timeline_close",
+                "matrix_timeline_edit_text",
                 "matrix_timeline_event_readback",
                 "matrix_timeline_jump_latest",
                 "matrix_timeline_open",
                 "matrix_timeline_paginate",
                 "matrix_timeline_reaction_toggle",
+                "matrix_timeline_redact",
                 "matrix_timeline_set_read_state",
                 "matrix_typing_set",
                 "matrix_typing_snapshot",
@@ -4672,6 +4758,75 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-reaction-redact-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_edit_text_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_edit_text".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "eventId":"$e",
+                    "body":"updated"
+                }),
+            })
+            .await
+            .expect_err("timeline edit without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-edit-text-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_edit_text_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_edit_text".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "eventId":"$e",
+                    "body":"updated",
+                    "token":"no"
+                }),
+            })
+            .await
+            .expect_err("timeline edit must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-edit-text-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_redact_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_redact".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "eventId":"$e"
+                }),
+            })
+            .await
+            .expect_err("timeline redact without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-redact-no-session")
         );
     }
 

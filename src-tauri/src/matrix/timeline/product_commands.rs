@@ -190,88 +190,31 @@ pub async fn matrix_composer_get_reply_draft(
 
 #[tauri::command]
 pub async fn matrix_timeline_edit_text(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     request: NativeTimelineEditTextRequest,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
-    let room_id = parse_send_room_id(&request.room_id)?;
-    let event_id = parse_required_event_id(&request.event_id, "v-timeline-edit-invalid-event-id")?;
-    let body = request.body.trim();
-    if body.is_empty() {
-        return Err(map_timeline_action_error("v-timeline-edit-empty-body"));
-    }
-    let formatted_body = normalize_formatted_body(body, request.formatted_body.as_deref())?;
-
-    let room = {
-        let mut session = state.session.lock().await;
-        let active = require_send_session_mut(session.as_mut())?;
-        active.client.get_room(&room_id).ok_or_else(|| {
-            MatrixAuthCommandError::new(
-                "NotFound",
-                "The native Matrix room is not available.",
-                "v-timeline-edit-room-not-found",
-            )
-        })?
-    };
-
-    let new_content = match formatted_body {
-        Some(html) => RoomMessageEventContentWithoutRelation::text_html(body.to_owned(), html),
-        None => RoomMessageEventContentWithoutRelation::text_plain(body.to_owned()),
-    };
-    let edit_content = room
-        .make_edit_event(&event_id, EditedContent::RoomMessage(new_content))
-        .await
-        .map_err(|_| map_timeline_action_error("v-timeline-edit-prepare-failed"))?;
-    let response = room
-        .send(edit_content)
-        .await
-        .map_err(|_| map_timeline_action_error("v-timeline-edit-send-failed"))?;
-
-    Ok(NativeTimelineActionReadback {
-        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
-        action: NativeTimelineActionKind::EditText,
-        room_id: room_id.to_string(),
-        event_id: response.response.event_id.to_string(),
-        status: "sent",
-    })
+    crate::bridge::timeline_actions::timeline_edit_text(
+        core.inner().as_ref(),
+        request.room_id,
+        request.event_id,
+        request.body,
+        request.formatted_body,
+    )
+    .await
 }
 
 #[tauri::command]
 pub async fn matrix_timeline_redact(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     request: NativeTimelineRedactRequest,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
-    let room_id = parse_send_room_id(&request.room_id)?;
-    let event_id =
-        parse_required_event_id(&request.event_id, "v-timeline-redact-invalid-event-id")?;
-    let reason = request
-        .reason
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-
-    let room = {
-        let mut session = state.session.lock().await;
-        let active = require_send_session_mut(session.as_mut())?;
-        active.client.get_room(&room_id).ok_or_else(|| {
-            MatrixAuthCommandError::new(
-                "NotFound",
-                "The native Matrix room is not available.",
-                "v-timeline-redact-room-not-found",
-            )
-        })?
-    };
-
-    room.redact(&event_id, reason, None)
-        .await
-        .map_err(|_| map_timeline_action_error("v-timeline-redact-failed"))?;
-
-    Ok(NativeTimelineActionReadback {
-        schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
-        action: NativeTimelineActionKind::Redact,
-        room_id: room_id.to_string(),
-        event_id: event_id.to_string(),
-        status: "redacted",
-    })
+    crate::bridge::timeline_actions::timeline_redact(
+        core.inner().as_ref(),
+        request.room_id,
+        request.event_id,
+        request.reason,
+    )
+    .await
 }
 
 #[tauri::command]
