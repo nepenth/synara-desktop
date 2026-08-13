@@ -4,8 +4,8 @@
 //! policy. Host adapters will call SDK logout APIs later. **No tokens, no
 //! dual-backend, no production Tauri commands.**
 
+pub use super::remote_policy::{LocalCleanupPolicy, RemoteLogoutScope};
 use super::LifecycleError;
-pub use synara_core::app::lifecycle::{LocalCleanupPolicy, RemoteLogoutScope};
 
 /// Phase of a remote logout attempt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

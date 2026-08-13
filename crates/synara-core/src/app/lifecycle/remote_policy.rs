@@ -1,8 +1,7 @@
 //! Remote-logout policy enums shared by the recovery-copy catalog.
 //!
-//! The live coordinator (`RemoteLogoutFlow`) stays in the desktop shell because
-//! it returns `LifecycleError` (desktop store-vault errors). These two policy
-//! enums are pure and must live with `recovery_copy`.
+//! Policy enums live beside the recovery-copy catalog. The coordinator
+//! (`RemoteLogoutFlow`) is extracted into this same Core module.
 
 /// How local cleanup relates to remote logout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -15,8 +15,8 @@ use crate::matrix::supervisor::{
 use crate::matrix::tasks::{follow_supervisor_generation, TaskSupervisor};
 
 use super::session_material::{clear_session_material, SessionMaterialVault};
-use super::wipe::{wipe_account_store, WipeReport, WipeTarget};
 use super::LifecycleError;
+use super::{wipe_account_store, WipeReport, WipeTarget};
 
 /// Privacy-safe logout outcome.
 #[derive(Debug, Clone, PartialEq, Eq)]

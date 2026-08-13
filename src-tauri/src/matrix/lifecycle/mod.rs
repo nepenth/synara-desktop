@@ -25,19 +25,11 @@
 #![allow(unused_imports)]
 
 mod logout;
-mod recovery;
-mod remote_logout;
 mod session_material;
 mod session_persist;
 mod session_restore;
-mod wipe;
 
 pub use logout::{perform_local_wipe, perform_logout, LogoutOutcome, WipeOutcome};
-pub use recovery::{
-    apply_store_failure, recovery_action_for, surface_store_corrupt, surface_store_unavailable,
-    RecoveryAction, StoreFailure, StoreFailureKind,
-};
-pub use remote_logout::{RemoteLogoutFlow, RemoteLogoutOutcome, RemoteLogoutPhase};
 pub use session_material::{
     clear_session_material, load_session_material, persist_session_material,
     rotate_persisted_session_tokens, HostMatrixSessionSecrets, InMemorySessionMaterialVault,
@@ -53,10 +45,6 @@ pub use session_restore::{
     restore_session_onto_client, SessionRestoreOutcome,
 };
 pub use synara_core::app::lifecycle::*;
-pub use wipe::{
-    assert_exact_account_root, assert_path_is_wipe_allowed, wipe_account_store, WipeReport,
-    WipeTarget, WIPE_TARGET_KIND_ACCOUNT_ROOT,
-};
 
 /// Static marker for link / schema smoke (no network, no Client, no wipe).
 pub const MATRIX_LIFECYCLE_MARKER: &str =
