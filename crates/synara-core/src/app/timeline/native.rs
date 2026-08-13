@@ -113,7 +113,7 @@ pub struct NativeTimelineReadStateRequest {
     pub action: NativeTimelineReadAction,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineReadStateReadback {
     pub action: NativeTimelineReadAction,
