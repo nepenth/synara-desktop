@@ -1,8 +1,15 @@
-//! Credential-free V-CRYPTO.7 device presentation DTOs.
+//! Credential-free V-CRYPTO.7 device presentation plus live device-list owner.
 //!
-//! Live Client snapshot, UIAA delete, and Tauri subscribe stay in the desktop shell.
+//! Shells supply the emit sink (desktop Tauri event / later iOS UniFFI).
+//! UIAA delete product commands stay in the desktop shell.
 
 use serde::Serialize;
+
+mod live;
+pub use live::{
+    snapshot, supported_delete_authentication, DeviceListUpdateEmit, NativeDeviceOwner,
+    NativeDeviceUpdateSignal, PendingDeviceDeletion,
+};
 
 /// Tauri event: device list may have changed; UI re-snapshots via matrix_get_* commands.
 /// Signal only — never carries device keys or tokens.
