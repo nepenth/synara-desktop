@@ -1,7 +1,7 @@
 //! Unit tests for P6.3 typing index.
 
 use super::*;
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+use crate::transport::MatrixIpcErrorCategory;
 
 #[test]
 fn marker_stable() {

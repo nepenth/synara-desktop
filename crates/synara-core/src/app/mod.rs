@@ -23,6 +23,7 @@ pub mod security;
 pub mod sync;
 pub mod threads;
 pub mod timeline;
+pub mod typing;
 pub mod unread;
 pub mod user_profile;
 pub mod utd_recovery;
