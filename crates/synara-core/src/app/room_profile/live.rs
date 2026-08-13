@@ -11,12 +11,17 @@ use std::sync::{
 };
 
 use matrix_sdk::{
+    deserialized_responses::RawSyncOrStrippedState,
     event_handler::EventHandlerDropGuard,
-    ruma::{events::room::join_rules::SyncRoomJoinRulesEvent, room::JoinRule},
+    ruma::{
+        events::room::join_rules::{RoomJoinRulesEventContent, SyncRoomJoinRulesEvent},
+        room::JoinRule,
+        OwnedRoomId,
+    },
     Client, Room, RoomState,
 };
 
-use super::NativeRoomJoinRuleUpdate;
+use super::{MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleUpdate};
 
 /// Shell-supplied sink for join-rule updates. Desktop maps this to the
 /// existing Tauri event; iOS can map it to a UniFFI callback later.
@@ -42,6 +47,7 @@ pub fn project_join_rule(rule: &JoinRule) -> Option<&'static str> {
 /// boundary explicit and prevents a late event from the old generation from
 /// reaching the webview during teardown.
 pub struct NativeRoomJoinRuleOwner {
+    client: Client,
     session_generation: u64,
     retired: Arc<AtomicBool>,
     _handler: EventHandlerDropGuard,
@@ -92,6 +98,7 @@ impl NativeRoomJoinRuleOwner {
         });
 
         Ok(Self {
+            client: client.clone(),
             session_generation,
             retired,
             _handler: client.event_handler_drop_guard(handler),
@@ -105,6 +112,65 @@ impl NativeRoomJoinRuleOwner {
     pub fn retire(&self) {
         self.retired.store(true, Ordering::Release);
     }
+
+    pub async fn snapshot(
+        &self,
+        room_id: &str,
+        session_generation: u64,
+    ) -> Result<MatrixRoomJoinRuleSnapshot, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        if session_generation == 0 || session_generation != self.session_generation {
+            return Err("v-send.r-room-profile-join-rule-stale-generation");
+        }
+        let room_id = parse_join_rule_room_id(room_id)?;
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-send.r-room-profile-join-rule-room-not-found")?;
+        if room.state() != RoomState::Joined {
+            return Err("v-send.r-room-profile-join-rule-room-state-unavailable");
+        }
+        let raw = room
+            .get_state_event_static::<RoomJoinRulesEventContent>()
+            .await
+            .map_err(|_| "v-send.r-room-profile-join-rule-read-sdk-failed")?
+            .ok_or("v-send.r-room-profile-join-rule-room-state-unavailable")?;
+        let event = match raw {
+            RawSyncOrStrippedState::Sync(raw) => raw
+                .deserialize()
+                .map_err(|_| "v-send.r-room-profile-join-rule-deserialize-failed")?,
+            RawSyncOrStrippedState::Stripped(_) => {
+                return Err("v-send.r-room-profile-join-rule-room-state-unavailable");
+            }
+        };
+        let original = event
+            .as_original()
+            .ok_or("v-send.r-room-profile-join-rule-room-state-unavailable")?;
+        let join_rule = project_join_rule(&original.content.join_rule)
+            .ok_or("v-send.r-room-profile-join-rule-unsupported")?;
+        Ok(MatrixRoomJoinRuleSnapshot {
+            status: "ok".to_owned(),
+            room_id: room_id.to_string(),
+            session_generation: self.session_generation,
+            join_rule: join_rule.to_owned(),
+        })
+    }
+}
+
+fn parse_join_rule_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
+    if room_id.is_empty()
+        || room_id.len() > 512
+        || room_id.trim() != room_id
+        || room_id.chars().any(char::is_whitespace)
+        || !room_id.starts_with('!')
+    {
+        return Err("v-send.r-room-profile-join-rule-invalid");
+    }
+    room_id
+        .parse()
+        .map_err(|_| "v-send.r-room-profile-join-rule-invalid")
 }
 
 #[cfg(test)]

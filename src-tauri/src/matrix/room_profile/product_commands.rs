@@ -1,10 +1,5 @@
 use super::*;
-use crate::matrix::room_profile::live::project_join_rule;
-use matrix_sdk::{
-    deserialized_responses::RawSyncOrStrippedState,
-    ruma::{events::room::join_rules::RoomJoinRulesEventContent, OwnedRoomId},
-    RoomState,
-};
+use matrix_sdk::ruma::OwnedRoomId;
 
 const DIRECTORY_VISIBILITY_INVALID: &str = "v-send.r-room-profile-directory-visibility-invalid";
 const DIRECTORY_VISIBILITY_REQUIRES_SESSION: &str =
@@ -42,48 +37,16 @@ pub use synara_core::app::room_profile::{
 /// read-only gate owner; the Join Rules writer remains a separate residual.
 #[tauri::command]
 pub async fn matrix_room_join_rule_snapshot(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     session_generation: u64,
 ) -> Result<MatrixRoomJoinRuleSnapshot, MatrixAuthCommandError> {
-    let room_id = parse_room_join_rule_room_id(&room_id)?;
-    let session = state.session.lock().await;
-    let active = require_room_join_rule_session(session.as_ref())?;
-    let live_generation = active.sync.session_generation();
-    require_room_join_rule_generation(session_generation, live_generation)?;
-    let room = active
-        .client
-        .get_room(&room_id)
-        .ok_or_else(|| map_room_join_rule_error(JOIN_RULE_ROOM_NOT_FOUND))?;
-    if room.state() != RoomState::Joined {
-        return Err(map_room_join_rule_error(JOIN_RULE_ROOM_STATE_UNAVAILABLE));
-    }
-
-    let raw = room
-        .get_state_event_static::<RoomJoinRulesEventContent>()
-        .await
-        .map_err(|_| map_room_join_rule_error(JOIN_RULE_READ_SDK_FAILED))?
-        .ok_or_else(|| map_room_join_rule_error(JOIN_RULE_ROOM_STATE_UNAVAILABLE))?;
-    let event = match raw {
-        RawSyncOrStrippedState::Sync(raw) => raw
-            .deserialize()
-            .map_err(|_| map_room_join_rule_error(JOIN_RULE_DESERIALIZE_FAILED))?,
-        RawSyncOrStrippedState::Stripped(_) => {
-            return Err(map_room_join_rule_error(JOIN_RULE_ROOM_STATE_UNAVAILABLE));
-        }
-    };
-    let original = event
-        .as_original()
-        .ok_or_else(|| map_room_join_rule_error(JOIN_RULE_ROOM_STATE_UNAVAILABLE))?;
-    let join_rule = project_join_rule(&original.content.join_rule)
-        .ok_or_else(|| map_room_join_rule_error(JOIN_RULE_UNSUPPORTED))?;
-
-    Ok(MatrixRoomJoinRuleSnapshot {
-        status: "ok",
-        room_id: room_id.to_string(),
-        session_generation: live_generation,
-        join_rule,
-    })
+    crate::bridge::join_rule_snapshot::join_rule_snapshot(
+        core.inner().as_ref(),
+        room_id,
+        session_generation,
+    )
+    .await
 }
 
 /// V-SEND.R-ROOM-PROFILE-DIRECTORY-VISIBILITY — authoritative room-scoped

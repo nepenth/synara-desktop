@@ -2,7 +2,7 @@
 //!
 //! Live subscribe lives in [`super::live`]; shells map updates onto their emit sink.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Tauri event: join rule may have changed; UI re-reads via existing snapshot IPC.
 pub const ROOM_JOIN_RULE_UPDATED_EVENT: &str = "matrix-room-join-rule-updated";
@@ -44,13 +44,13 @@ pub struct MatrixRoomDirectoryVisibilityWriteResult {
     pub requested_visibility: &'static str,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatrixRoomJoinRuleSnapshot {
-    pub status: &'static str,
+    pub status: String,
     pub room_id: String,
     pub session_generation: u64,
-    pub join_rule: &'static str,
+    pub join_rule: String,
 }
 
 #[cfg(test)]

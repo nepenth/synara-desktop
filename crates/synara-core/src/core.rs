@@ -15,6 +15,7 @@ use crate::app::auth::{
 };
 use crate::app::devices::{NativeDeviceOwner, NativeDeviceSnapshot};
 use crate::app::presence::{NativePresenceOwner, NativePresenceSnapshotResult};
+use crate::app::room_profile::{MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner};
 use crate::app::sync::{SyncReadinessSnapshot, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID};
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::app::verification::{NativeVerificationInbox, NativeVerificationOwner};
@@ -495,6 +496,14 @@ struct MatrixPresenceSnapshotRequest {
     user_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_room_join_rule_snapshot`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomJoinRuleSnapshotRequest {
+    room_id: String,
+    session_generation: u64,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_register_flows`.
 ///
 /// This read-only probe accepts exactly the existing camel-case homeserver
@@ -518,6 +527,7 @@ pub struct CoreState {
     presence: Mutex<Option<Arc<NativePresenceOwner>>>,
     verification: Mutex<Option<Arc<NativeVerificationOwner>>>,
     devices: Mutex<Option<Arc<NativeDeviceOwner>>>,
+    join_rules: Mutex<Option<Arc<NativeRoomJoinRuleOwner>>>,
 }
 
 impl CoreState {
@@ -559,6 +569,13 @@ impl CoreState {
             .map(|guard| guard.clone())
             .map_err(|_| core_state_error("p2-core-state-poisoned"))
     }
+
+    fn join_rule_owner(&self) -> Result<Option<Arc<NativeRoomJoinRuleOwner>>, MatrixIpcError> {
+        self.join_rules
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))
+    }
 }
 
 /// Platform-neutral native engine root.
@@ -584,6 +601,7 @@ impl Core {
                 presence: Mutex::new(None),
                 verification: Mutex::new(None),
                 devices: Mutex::new(None),
+                join_rules: Mutex::new(None),
             }),
             registry,
         }
@@ -656,6 +674,13 @@ impl Core {
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *devices = None;
+        drop(devices);
+        let mut join_rules = self
+            .state
+            .join_rules
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *join_rules = None;
         Ok(())
     }
 
@@ -714,6 +739,20 @@ impl Core {
         Ok(())
     }
 
+    /// Install the live join-rule owner created by the shell after login/restore.
+    pub fn attach_join_rules(
+        &self,
+        owner: Arc<NativeRoomJoinRuleOwner>,
+    ) -> Result<(), MatrixIpcError> {
+        let mut join_rules = self
+            .state
+            .join_rules
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *join_rules = Some(owner);
+        Ok(())
+    }
+
     pub fn session_snapshot(&self) -> Result<Option<SessionSnapshot>, MatrixIpcError> {
         self.state.session_snapshot()
     }
@@ -761,6 +800,12 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_device_snapshot", matrix_device_snapshot)
         .expect("built-in matrix_device_snapshot must remain in the command census");
+    registry
+        .register(
+            "matrix_room_join_rule_snapshot",
+            matrix_room_join_rule_snapshot,
+        )
+        .expect("built-in matrix_room_join_rule_snapshot must remain in the command census");
     registry
 }
 
@@ -830,6 +875,38 @@ fn matrix_device_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> Co
         serde_json::to_value(snapshot)
             .map_err(|_| core_state_error("p2-device-snapshot-serialization-failed"))
     })
+}
+
+fn matrix_room_join_rule_snapshot(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomJoinRuleSnapshotRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-join-rule-snapshot-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-join-rule-snapshot-no-session")
+        })?;
+        let snapshot: MatrixRoomJoinRuleSnapshot = owner
+            .snapshot(&payload.room_id, payload.session_generation)
+            .await
+            .map_err(join_rule_snapshot_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-join-rule-snapshot-serialization-failed"))
+    })
+}
+
+fn join_rule_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-send.r-room-profile-join-rule-invalid" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        "v-send.r-room-profile-join-rule-stale-generation" => {
+            MatrixIpcErrorCategory::StaleSessionGeneration
+        }
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 fn device_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
@@ -1473,6 +1550,7 @@ mod tests {
                 "matrix_media_config",
                 "matrix_presence_snapshot",
                 "matrix_register_flows",
+                "matrix_room_join_rule_snapshot",
                 "matrix_secret_storage_status",
                 "matrix_session_snapshot",
                 "matrix_sync_status",
@@ -2676,6 +2754,48 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-device-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_join_rule_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_join_rule_snapshot".into(),
+                session_generation: 1,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org","sessionGeneration":1}),
+            })
+            .await
+            .expect_err("join-rule snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-join-rule-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_join_rule_snapshot_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_join_rule_snapshot".into(),
+                session_generation: 1,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "sessionGeneration":1,
+                    "token":"no"
+                }),
+            })
+            .await
+            .expect_err("join-rule snapshot must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-join-rule-snapshot-invalid-payload")
         );
     }
 
