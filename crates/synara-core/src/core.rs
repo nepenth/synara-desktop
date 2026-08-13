@@ -603,6 +603,16 @@ struct MatrixVerificationConfirmRequest {
     flow_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_verification_dismiss`.
+///
+/// Shares accept's camel-case `flowId` key. Unknown keys are rejected so
+/// this write cannot grow extra identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixVerificationDismissRequest {
+    flow_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_verification_mismatch`.
 ///
 /// Shares accept's camel-case `flowId` key. Unknown keys are rejected so
@@ -963,6 +973,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_verification_confirm", matrix_verification_confirm)
         .expect("built-in matrix_verification_confirm must remain in the command census");
     registry
+        .register("matrix_verification_dismiss", matrix_verification_dismiss)
+        .expect("built-in matrix_verification_dismiss must remain in the command census");
+    registry
         .register("matrix_verification_list", matrix_verification_list)
         .expect("built-in matrix_verification_list must remain in the command census");
     registry
@@ -1140,7 +1153,8 @@ fn verification_accept_owner_error(diagnostic_id: &'static str) -> MatrixIpcErro
         "v-crypto.1-flow-not-found"
         | "v-crypto.1-sas-invalid-state"
         | "v-crypto.1-confirm-before-sas"
-        | "v-crypto.1-sas-unavailable" => MatrixIpcErrorCategory::SdkInvariant,
+        | "v-crypto.1-sas-unavailable"
+        | "v-crypto.1-dismiss-active-flow" => MatrixIpcErrorCategory::SdkInvariant,
         "v-crypto.1-start-requires-session" => MatrixIpcErrorCategory::Forbidden,
         _ => MatrixIpcErrorCategory::Unknown,
     };
@@ -1195,6 +1209,22 @@ fn matrix_verification_confirm(state: Arc<CoreState>, request: CommandEnvelope) 
             .map_err(verification_accept_owner_error)?;
         serde_json::to_value(request)
             .map_err(|_| core_state_error("p2-verification-confirm-serialization-failed"))
+    })
+}
+
+fn matrix_verification_dismiss(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixVerificationDismissRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-verification-dismiss-invalid-payload"))?;
+        let owner = state.verification_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-verification-dismiss-no-session")
+        })?;
+        owner
+            .dismiss(&payload.flow_id)
+            .await
+            .map_err(verification_accept_owner_error)?;
+        Ok(serde_json::Value::Null)
     })
 }
 
@@ -2067,6 +2097,7 @@ mod tests {
                 "matrix_verification_begin_sas",
                 "matrix_verification_cancel",
                 "matrix_verification_confirm",
+                "matrix_verification_dismiss",
                 "matrix_verification_list",
                 "matrix_verification_mismatch",
             ]
@@ -3457,6 +3488,44 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-verification-confirm-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_verification_dismiss_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_verification_dismiss".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"flowId":"flow-1"}),
+            })
+            .await
+            .expect_err("verification dismiss without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-verification-dismiss-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_verification_dismiss_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_verification_dismiss".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"flowId":"flow-1","token":"no"}),
+            })
+            .await
+            .expect_err("verification dismiss must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-verification-dismiss-invalid-payload")
         );
     }
 
