@@ -1,6 +1,8 @@
-//! P4-S8: typed SharedCore consume of `matrix_verification_list` only.
+//! P4-S9-3: typed SharedCore consume of `matrix_room_join_rule_snapshot` only.
 //!
 //! Calls the already-registered Core handler. Does not start SyncService.
+//! There is no join-rule writer on Core. Image packs, room leave/join, and
+//! leftover secret envelopes stay off this slice.
 
 use std::collections::HashMap;
 use std::fs;
@@ -37,7 +39,7 @@ fn temp_root(tag: &str) -> std::path::PathBuf {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("synara-p4-s8-it-{tag}-{nanos}"));
+    let root = std::env::temp_dir().join(format!("synara-p4-s9-3-it-{tag}-{nanos}"));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).unwrap();
     root
@@ -51,51 +53,53 @@ fn test_runtime() -> tokio::runtime::Runtime {
 }
 
 #[test]
-fn verification_list_surface_exposes_only_the_registered_list_command() {
+fn join_rule_surface_exposes_only_the_registered_snapshot() {
     let udl = include_str!("../src/synara_core.udl");
-    assert!(udl.contains("verification_list"));
-    assert!(!udl.contains("matrix_verification_start"));
-    assert!(!udl.contains("matrix_verification_accept"));
-    assert!(!udl.contains("matrix_verification_begin_sas"));
-    assert!(!udl.contains("matrix_verification_confirm"));
-    assert!(!udl.contains("matrix_verification_mismatch"));
-    assert!(!udl.contains("matrix_verification_cancel"));
-    assert!(!udl.contains("matrix_verification_dismiss"));
+    assert!(udl.contains("room_join_rule_snapshot"));
+    assert!(!udl.contains("set_room_join_rule"));
+    assert!(!udl.contains("matrix_room_leave"));
+    assert!(!udl.contains("matrix_set_room_name"));
+    assert!(!udl.contains("image_pack"));
     assert!(!udl.contains("matrix_login_password"));
     let shared_core = udl
         .split("interface SharedCore {")
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(shared_core.contains("verification_list"));
-    assert!(shared_core.contains("typing_snapshot"));
+    assert!(shared_core.contains("room_join_rule_snapshot"));
+    assert!(shared_core.contains("device_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("device_delete_password"));
+    assert!(!shared_core.contains("set_room_join_rule"));
+    assert!(!shared_core.contains("room_leave"));
+    assert!(!shared_core.contains("room_join("));
     assert!(!shared_core.contains("image_pack"));
-    assert!(!shared_core.contains("crypto_status"));
+    assert!(!shared_core.contains("backup_status"));
 }
 
 #[test]
-fn verification_list_without_session_fails_closed_without_echo() {
+fn join_rule_snapshot_without_session_fails_closed_without_echo() {
     let shared = SharedCore::new();
+    let room_id = "!s93join:example.org";
     let error = test_runtime()
-        .block_on(shared.verification_list())
-        .expect_err("no attached verification owner");
+        .block_on(shared.room_join_rule_snapshot(room_id.to_owned(), 1))
+        .expect_err("no attached join-rule owner");
     let text = format!("{error:?}{error}");
-    assert!(text.contains("p2-verification-list-no-session"));
-    assert!(!text.contains("password"));
+    assert!(text.contains("p2-join-rule-snapshot-no-session"));
     assert!(!text.contains("syt_"));
     assert!(!text.contains("token"));
+    assert!(!text.contains(room_id));
+    assert!(!text.contains("@alice"));
 }
 
 #[test]
-fn verification_list_without_started_sync_returns_handler_result_without_echo() {
-    let access = "syt_s8_verification_access";
-    let refresh = "syr_s8_verification_refresh";
+fn join_rule_snapshot_without_started_sync_returns_handler_result_without_echo() {
+    let access = "syt_s9_3_join_access";
+    let refresh = "syr_s9_3_join_refresh";
     let identity = alice();
+    let room_id = "!s93join:example.org";
     let map = Arc::new(Mutex::new(HashMap::new()));
     let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(Arc::clone(&map))));
-    let root = temp_root("verification-list-no-start");
+    let root = temp_root("join-rules-no-start");
     let rt = test_runtime();
     let _enter = rt.enter();
     rt.block_on(shared.persist_planted_session_for_test(
@@ -109,18 +113,26 @@ fn verification_list_without_started_sync_returns_handler_result_without_echo() 
     .expect("planted persist");
     rt.block_on(shared.attach_session_owners())
         .expect("owners attached");
-    let dto = rt
-        .block_on(shared.verification_list())
-        .expect("unstarted sync yields the registered handler result");
-    assert_eq!(dto.session_generation, 1);
-    assert!(dto.requests.is_empty());
-    let text = format!("{dto:?}");
-    assert!(!text.contains(access));
-    assert!(!text.contains(refresh));
-    assert!(!text.contains("password"));
-    assert!(!text.contains("syt_"));
+
+    let error = rt
+        .block_on(shared.room_join_rule_snapshot(room_id.to_owned(), 1))
+        .expect_err("unstarted sync still uses the registered snapshot handler");
+    let text = format!("{error:?}{error}");
     drop(shared);
     drop(_enter);
     drop(rt);
     let _ = fs::remove_dir_all(&root);
+
+    assert!(
+        text.contains("v-send.r-room-profile-join-rule-room-not-found"),
+        "snapshot must return the registered owner diagnostic: {text}"
+    );
+    assert!(
+        !text.contains("p4-s9-3-join-rule-failed"),
+        "snapshot must not hide a wrong envelope behind the generic fallback: {text}"
+    );
+    assert!(!text.contains(access));
+    assert!(!text.contains(refresh));
+    assert!(!text.contains("syt_"));
+    assert!(!text.contains(room_id));
 }

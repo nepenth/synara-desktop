@@ -467,6 +467,26 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreJoinRulesWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let roomId = "!s93join:example.org"
+
+        do {
+            _ = try await SharedCoreJoinRules.roomJoinRuleSnapshot(
+                core: core,
+                roomId: roomId,
+                sessionGeneration: 1
+            )
+            XCTFail("Fail-closed SharedCore must not snapshot a join rule without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-join-rule-snapshot-no-session"))
+            for forbidden in ["syt_", "token", roomId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

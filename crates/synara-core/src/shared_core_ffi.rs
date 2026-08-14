@@ -23,6 +23,9 @@
 //! snapshot/rename/delete-start/delete-cancel Core commands only.
 //! Backup status, room-key transfer status, and cross-signing setup stay off
 //! this slice: they sit next to leftover passphrase/path/password envelopes.
+//! P4-S9-3 adds a typed `room_join_rule_snapshot` wrapper for the
+//! already-registered `matrix_room_join_rule_snapshot` Core command only.
+//! There is no join-rule writer on Core. Image packs stay off.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -51,7 +54,7 @@ use crate::app::presence::{
 use crate::app::room_list::{
     NativeInvite, NativeInviteSnapshot, NativeInviteTriage, NativeRoomListSnapshot,
 };
-use crate::app::room_profile::NativeRoomJoinRuleOwner;
+use crate::app::room_profile::{MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner};
 use crate::app::store::{
     get_or_create_store_key, AccountIdentity, StoreKeyId, StoreKeyMaterial, StoreKeyVault,
     StoreKeyVaultError, STORE_KEY_LEN,
@@ -213,6 +216,12 @@ const DEVICE_NO_SESSION_DESCRIPTION: &str = "No device session is available.";
 const DEVICE_FAILED_CODE: &str = "p4-s9-2-device-failed";
 const DEVICE_FAILED_DESCRIPTION: &str = "The device request could not be completed.";
 const DEVICE_OWNER_DESCRIPTION: &str = "The device request is not available.";
+const JOIN_RULE_SNAPSHOT_COMMAND: &str = "matrix_room_join_rule_snapshot";
+const JOIN_RULE_SNAPSHOT_NO_SESSION_CODE: &str = "p2-join-rule-snapshot-no-session";
+const JOIN_RULE_NO_SESSION_DESCRIPTION: &str = "No join-rule session is available.";
+const JOIN_RULE_FAILED_CODE: &str = "p4-s9-3-join-rule-failed";
+const JOIN_RULE_FAILED_DESCRIPTION: &str = "The join-rule request could not be completed.";
+const JOIN_RULE_OWNER_DESCRIPTION: &str = "The join-rule request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1974,6 +1983,34 @@ impl SharedCore {
         Ok(())
     }
 
+    pub async fn room_join_rule_snapshot(
+        &self,
+        room_id: String,
+        session_generation: u64,
+    ) -> Result<RoomJoinRuleSnapshotDto, JoinRuleCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: JOIN_RULE_SNAPSHOT_COMMAND.to_owned(),
+                session_generation,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId": room_id,
+                    "sessionGeneration": session_generation,
+                }),
+            })
+            .await
+            .map_err(|error| map_join_rule_core_error(error))?;
+        let snapshot: MatrixRoomJoinRuleSnapshot = serde_json::from_value(response.payload)
+            .map_err(|_| join_rule_failed(JOIN_RULE_FAILED_CODE, JOIN_RULE_FAILED_DESCRIPTION))?;
+        Ok(RoomJoinRuleSnapshotDto {
+            status: snapshot.status,
+            room_id: snapshot.room_id,
+            session_generation: snapshot.session_generation,
+            join_rule: snapshot.join_rule,
+        })
+    }
+
     async fn device_null_command(
         &self,
         command: &'static str,
@@ -2070,6 +2107,50 @@ fn map_device_core_error(no_session: &'static str, error: MatrixIpcError) -> Dev
             device_failed(code, DEVICE_OWNER_DESCRIPTION)
         }
         _ => device_failed(DEVICE_FAILED_CODE, DEVICE_FAILED_DESCRIPTION),
+    }
+}
+
+/// Privacy-safe join-rule snapshot. Closed vocabulary only; no allow-list or tokens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomJoinRuleSnapshotDto {
+    pub status: String,
+    pub room_id: String,
+    pub session_generation: u64,
+    pub join_rule: String,
+}
+
+/// Static fail-closed join-rule error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum JoinRuleCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for JoinRuleCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for JoinRuleCommandError {}
+
+fn join_rule_failed(code: &str, description: &'static str) -> JoinRuleCommandError {
+    JoinRuleCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_join_rule_core_error(error: MatrixIpcError) -> JoinRuleCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == JOIN_RULE_SNAPSHOT_NO_SESSION_CODE => {
+            join_rule_failed(code, JOIN_RULE_NO_SESSION_DESCRIPTION)
+        }
+        Some(code) if code.starts_with("v-send.r-room-profile-join-rule-") => {
+            join_rule_failed(code, JOIN_RULE_OWNER_DESCRIPTION)
+        }
+        _ => join_rule_failed(JOIN_RULE_FAILED_CODE, JOIN_RULE_FAILED_DESCRIPTION),
     }
 }
 

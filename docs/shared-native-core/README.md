@@ -125,11 +125,10 @@ evidence. #931 adds credential-free `register_flows`. #933 adds
 constructor-only `SharedCore`. #935 adds the S3a `IosSecretVault`
 callback. S3b restore is accepted. S3c Option A login is accepted.
 S3d attach is accepted. S4–S9 typed consume slices are accepted.
-S9-2 typed NativeDeviceOwner family (snapshot/rename/delete
-start/cancel, backup status, room-key transfer status, and
-cross-signing setup; SyncService not started) is on
-`agent/snc-p4-s9-devices` per playbook §9.5.
-Password never rides a generic UniFFI `command`. Next after S9-2 is S9-3 join rules.
+S9-2 typed devices (snapshot/rename/delete start/cancel only;
+SyncService not started) is stacked at #950. S9-3 typed
+`matrix_room_join_rule_snapshot` is on this branch. Next is image packs.
+Password never rides a generic UniFFI `command`.
 
 | Phase | Merged evidence | Current boundary |
 |---|---|---|

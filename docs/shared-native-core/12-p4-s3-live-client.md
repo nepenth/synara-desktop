@@ -13,8 +13,8 @@ S6 timeline open/close/paginate is accepted at `e2cf7be6`.
 S7 typing/presence is accepted at `9350d368`.
 S8 verification list is accepted at `ca8b01be`.
 S9 verification SAS is accepted at `da5875f0`.
-**S9-2 devices lands on `agent/snc-p4-s9-devices`.**
-Playbook recipe: §9.5. NativeDeviceOwner family only. Next after S9-2 is S9-3 join rules.
+**S9-3 join-rule snapshot lands on `agent/snc-p4-s9-join-rules`.**
+Playbook recipe: §9.5. `matrix_room_join_rule_snapshot` only. Next is image packs.
 
 ## Decision
 
