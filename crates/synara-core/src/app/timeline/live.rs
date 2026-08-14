@@ -467,7 +467,7 @@ impl NativeTimelineOwner {
             action: NativeTimelineActionKind::EditText,
             room_id: room_id.to_string(),
             event_id: response.response.event_id.to_string(),
-            status: "sent",
+            status: "sent".into(),
         })
     }
 
@@ -492,7 +492,7 @@ impl NativeTimelineOwner {
             action: NativeTimelineActionKind::Redact,
             room_id: room_id.to_string(),
             event_id: event_id.to_string(),
-            status: "redacted",
+            status: "redacted".into(),
         })
     }
 
@@ -520,7 +520,7 @@ impl NativeTimelineOwner {
             action: NativeTimelineActionKind::Report,
             room_id: room_id.to_string(),
             event_id: event_id.to_string(),
-            status: "reported",
+            status: "reported".into(),
         })
     }
 
@@ -588,7 +588,8 @@ impl NativeTimelineOwner {
                 "already_pinned"
             } else {
                 "already_unpinned"
-            },
+            }
+            .to_owned(),
         })
     }
 
@@ -622,7 +623,7 @@ impl NativeTimelineOwner {
             action: NativeTimelineActionKind::PollVote,
             room_id: room_id.to_string(),
             event_id: sent_event_id,
-            status: "voted",
+            status: "voted".into(),
         })
     }
 
@@ -657,7 +658,7 @@ impl NativeTimelineOwner {
             action: NativeTimelineActionKind::CallDecline,
             room_id: room_id.to_string(),
             event_id: sent_event_id,
-            status: "declined",
+            status: "declined".into(),
         })
     }
 
@@ -695,7 +696,7 @@ impl NativeTimelineOwner {
             action: NativeTimelineActionKind::ForwardText,
             room_id: target_room_id.to_string(),
             event_id: sent_event_id,
-            status: "sent",
+            status: "sent".into(),
         })
     }
 
@@ -730,7 +731,7 @@ impl NativeTimelineOwner {
             action: NativeTimelineActionKind::ForwardMedia,
             room_id: target_room_id.to_string(),
             event_id: sent_event_id,
-            status: "sent",
+            status: "sent".into(),
         })
     }
 

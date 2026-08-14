@@ -16,7 +16,9 @@ final class SynaraCoreBindingsTests: XCTestCase {
     }
 
     func testSharedCoreAcceptsInMemorySecretStore() {
-        let core = SharedCore(store: InMemoryIosSecretVault())
+        // UniFFI 0.28 Swift emits the named UDL constructor as a static
+        // factory, not a second init(store:).
+        let core = SharedCore.newWithSecretStore(store: InMemoryIosSecretVault())
 
         XCTAssertNotNil(core)
     }
