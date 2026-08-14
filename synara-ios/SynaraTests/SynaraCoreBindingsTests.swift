@@ -1270,6 +1270,56 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreInviteActionsWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let roomId = "!s918SecretRoom:example.org"
+        let senderId = "@s918SecretSender:example.org"
+
+        do {
+            _ = try await SharedCoreInviteActions.invitesAccept(core: core, roomId: roomId)
+            XCTFail("Fail-closed SharedCore must not accept an invite without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-invites-accept-no-session"))
+            for forbidden in ["syt_", "token", roomId, senderId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreInviteActions.invitesDecline(core: core, roomId: roomId)
+            XCTFail("Fail-closed SharedCore must not decline an invite without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-invites-decline-no-session"))
+            for forbidden in ["syt_", "token", roomId, senderId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreInviteActions.invitesReportSpam(core: core, roomId: roomId)
+            XCTFail("Fail-closed SharedCore must not report invite spam without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-invites-report-spam-no-session"))
+            for forbidden in ["syt_", "token", roomId, senderId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreInviteActions.invitesBlockSender(core: core, roomId: roomId)
+            XCTFail("Fail-closed SharedCore must not block an invite sender without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-invites-block-sender-no-session"))
+            for forbidden in ["syt_", "token", roomId, senderId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

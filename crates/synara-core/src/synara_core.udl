@@ -833,6 +833,12 @@ interface SpaceCommandError {
   Failed(string code, string description);
 };
 
+// Static source constants only. Never echo room id, sender id, token, or password.
+[Error]
+interface InviteActionError {
+  Failed(string code, string description);
+};
+
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
 // P4-S3b adds restore_persisted_session. P4-S3c adds dedicated login_with_password.
 // P4-S3d adds attach_session_owners for the desktop owner set.
@@ -879,6 +885,10 @@ interface SpaceCommandError {
 // set/remove and restricted-join reparent. Child set/remove are metadata
 // only (room ids, via, order, suggested). No bytes. Failed errors stay
 // static and must not echo room ids. Invite accept/decline stay off.
+// P4-S9-18 adds typed invite accept/decline/report-spam/block-sender.
+// These return the existing invite snapshot. Failed errors stay static
+// and must not echo room id or sender id. Timeline jump and read-state
+// stay off.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -1122,5 +1132,17 @@ interface SharedCore {
 
   [Async, Throws=SpaceCommandError]
   RestrictedJoinReparentDto restricted_join_reparent(string room_id, string? remove_parent_id, string add_parent_id);
+
+  [Async, Throws=InviteActionError]
+  InviteSnapshotDto invites_accept(string room_id);
+
+  [Async, Throws=InviteActionError]
+  InviteSnapshotDto invites_decline(string room_id);
+
+  [Async, Throws=InviteActionError]
+  InviteSnapshotDto invites_report_spam(string room_id);
+
+  [Async, Throws=InviteActionError]
+  InviteSnapshotDto invites_block_sender(string room_id);
 
 };

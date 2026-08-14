@@ -63,7 +63,7 @@ fn room_leave_join_surface_exposes_only_the_registered_family() {
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
     assert!(!udl.contains("matrix_room_create"));
-    assert!(!udl.contains("matrix_invites_accept"));
+    assert!(!udl.contains("matrix_timeline_jump_latest"));
     let shared_core = udl
         .split("interface SharedCore {")
         .nth(1)
@@ -74,7 +74,7 @@ fn room_leave_join_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("room_directory_search"));
     assert!(shared_core.contains("set_room_name"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("invites_accept"));
+    assert!(!shared_core.contains("jump_latest"));
     assert!(!shared_core.contains("backup_status"));
 }
 
