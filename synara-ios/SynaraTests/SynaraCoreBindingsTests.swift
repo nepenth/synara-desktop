@@ -417,6 +417,89 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreDevicesWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let deviceId = "DEVICE_S9_2_BOB"
+        let displayName = "Bob Phone"
+
+        do {
+            _ = try await SharedCoreDevices.deviceSnapshot(core: core)
+            XCTFail("Fail-closed SharedCore must not snapshot devices without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-device-snapshot-no-session"))
+            for forbidden in ["syt_", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreDevices.deviceRename(core: core, deviceId: deviceId, displayName: displayName)
+            XCTFail("Fail-closed SharedCore must not rename a device without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-device-rename-no-session"))
+            for forbidden in ["syt_", "token", deviceId, displayName] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreDevices.deviceDeleteStart(core: core, deviceIds: [deviceId])
+            XCTFail("Fail-closed SharedCore must not start device delete without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-device-delete-start-no-session"))
+            for forbidden in ["syt_", "token", deviceId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            try await SharedCoreDevices.deviceDeleteCancel(core: core, operationId: 9, sessionGeneration: 1)
+            XCTFail("Fail-closed SharedCore must not cancel device delete without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-device-delete-cancel-no-session"))
+            for forbidden in ["syt_", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreDevices.backupStatus(core: core)
+            XCTFail("Fail-closed SharedCore must not read backup status without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-backup-status-no-session"))
+            for forbidden in ["syt_", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreDevices.roomKeyTransferStatus(core: core)
+            XCTFail("Fail-closed SharedCore must not read room-key transfer status without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-key-transfer-status-no-session"))
+            for forbidden in ["syt_", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreDevices.crossSigningSetup(core: core)
+            XCTFail("Fail-closed SharedCore must not start cross-signing setup without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-cross-signing-setup-no-session"))
+            for forbidden in ["syt_", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

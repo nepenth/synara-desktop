@@ -19,6 +19,10 @@
 //! `matrix_verification_list` Core command only.
 //! P4-S9 adds typed verification SAS wrappers for the seven already-registered
 //! start/accept/begin_sas/confirm/mismatch/cancel/dismiss Core commands only.
+//! P4-S9-2 adds typed device wrappers for the four already-registered
+//! snapshot/rename/delete-start/delete-cancel Core commands only.
+//! Backup status, room-key transfer status, and cross-signing setup stay off
+//! this slice: they sit next to leftover passphrase/path/password envelopes.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -32,7 +36,10 @@ use crate::app::auth::{
     login_with_password as core_login_with_password, DevicePlatform, LoginOptions,
 };
 use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig};
-use crate::app::devices::NativeDeviceOwner;
+use crate::app::devices::{
+    NativeDeviceDeleteAuthentication, NativeDeviceDeleteResult, NativeDeviceOwner,
+    NativeDeviceSnapshot, NativeDeviceTrust,
+};
 use crate::app::lifecycle::{
     persist_session_after_login, restore_session_from_vault, restore_session_onto_client,
     SessionMaterial, SessionMaterialId, SessionMaterialVault,
@@ -193,6 +200,19 @@ const VERIFICATION_SAS_FAILED_CODE: &str = "p4-s9-sas-failed";
 const VERIFICATION_SAS_FAILED_DESCRIPTION: &str =
     "The verification request could not be completed.";
 const VERIFICATION_SAS_OWNER_DESCRIPTION: &str = "The verification request is not available.";
+const DEVICE_COMMAND_GENERATION: u64 = 0;
+const DEVICE_SNAPSHOT_COMMAND: &str = "matrix_device_snapshot";
+const DEVICE_RENAME_COMMAND: &str = "matrix_device_rename";
+const DEVICE_DELETE_START_COMMAND: &str = "matrix_device_delete_start";
+const DEVICE_DELETE_CANCEL_COMMAND: &str = "matrix_device_delete_cancel";
+const DEVICE_SNAPSHOT_NO_SESSION_CODE: &str = "p2-device-snapshot-no-session";
+const DEVICE_RENAME_NO_SESSION_CODE: &str = "p2-device-rename-no-session";
+const DEVICE_DELETE_START_NO_SESSION_CODE: &str = "p2-device-delete-start-no-session";
+const DEVICE_DELETE_CANCEL_NO_SESSION_CODE: &str = "p2-device-delete-cancel-no-session";
+const DEVICE_NO_SESSION_DESCRIPTION: &str = "No device session is available.";
+const DEVICE_FAILED_CODE: &str = "p4-s9-2-device-failed";
+const DEVICE_FAILED_DESCRIPTION: &str = "The device request could not be completed.";
+const DEVICE_OWNER_DESCRIPTION: &str = "The device request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1882,6 +1902,95 @@ impl SharedCore {
             .map_err(|error| map_verification_sas_core_error(no_session, error))?;
         parse_verification_sas_request(response.payload)
     }
+
+    pub async fn device_snapshot(&self) -> Result<DeviceSnapshotDto, DeviceCommandError> {
+        let response = self
+            .device_null_command(DEVICE_SNAPSHOT_COMMAND, DEVICE_SNAPSHOT_NO_SESSION_CODE)
+            .await?;
+        let snapshot: NativeDeviceSnapshot = serde_json::from_value(response)
+            .map_err(|_| device_failed(DEVICE_FAILED_CODE, DEVICE_FAILED_DESCRIPTION))?;
+        Ok(device_snapshot_dto(snapshot))
+    }
+
+    pub async fn device_rename(
+        &self,
+        device_id: String,
+        display_name: String,
+    ) -> Result<DeviceSnapshotDto, DeviceCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: DEVICE_RENAME_COMMAND.to_owned(),
+                session_generation: DEVICE_COMMAND_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({
+                    "deviceId": device_id,
+                    "displayName": display_name,
+                }),
+            })
+            .await
+            .map_err(|error| map_device_core_error(DEVICE_RENAME_NO_SESSION_CODE, error))?;
+        let snapshot: NativeDeviceSnapshot = serde_json::from_value(response.payload)
+            .map_err(|_| device_failed(DEVICE_FAILED_CODE, DEVICE_FAILED_DESCRIPTION))?;
+        Ok(device_snapshot_dto(snapshot))
+    }
+
+    pub async fn device_delete_start(
+        &self,
+        device_ids: Vec<String>,
+    ) -> Result<DeviceDeleteDto, DeviceCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: DEVICE_DELETE_START_COMMAND.to_owned(),
+                session_generation: DEVICE_COMMAND_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "deviceIds": device_ids }),
+            })
+            .await
+            .map_err(|error| map_device_core_error(DEVICE_DELETE_START_NO_SESSION_CODE, error))?;
+        let result: NativeDeviceDeleteResult = serde_json::from_value(response.payload)
+            .map_err(|_| device_failed(DEVICE_FAILED_CODE, DEVICE_FAILED_DESCRIPTION))?;
+        Ok(device_delete_dto(result))
+    }
+
+    pub async fn device_delete_cancel(
+        &self,
+        operation_id: u64,
+        session_generation: u64,
+    ) -> Result<(), DeviceCommandError> {
+        self.core
+            .command(CommandEnvelope {
+                command: DEVICE_DELETE_CANCEL_COMMAND.to_owned(),
+                session_generation: DEVICE_COMMAND_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({
+                    "operationId": operation_id,
+                    "sessionGeneration": session_generation,
+                }),
+            })
+            .await
+            .map_err(|error| map_device_core_error(DEVICE_DELETE_CANCEL_NO_SESSION_CODE, error))?;
+        Ok(())
+    }
+
+    async fn device_null_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+    ) -> Result<serde_json::Value, DeviceCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: DEVICE_COMMAND_GENERATION,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .map_err(|error| map_device_core_error(no_session, error))?;
+        Ok(response.payload)
+    }
 }
 
 fn parse_verification_sas_request(
@@ -1894,6 +2003,128 @@ fn parse_verification_sas_request(
         )
     })?;
     Ok(verification_request_dto_with_sas(request))
+}
+
+/// Privacy-safe device row. Identity/presentation fields only; no keys or tokens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeviceSummaryDto {
+    pub device_id: String,
+    pub display_name: Option<String>,
+    pub last_seen_ip: Option<String>,
+    pub last_seen_ts: Option<u64>,
+    pub trust: String,
+    pub is_current: bool,
+}
+
+/// Privacy-safe device inbox. No tokens or password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeviceSnapshotDto {
+    pub session_generation: u64,
+    pub devices: Vec<DeviceSummaryDto>,
+}
+
+/// Privacy-safe delete challenge. Authentication type only; no password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeviceDeleteChallengeDto {
+    pub operation_id: u64,
+    pub session_generation: u64,
+    pub authentication: String,
+    pub authentication_failed: bool,
+}
+
+/// Privacy-safe delete start result. Complete snapshot or challenge; no password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeviceDeleteDto {
+    pub outcome: String,
+    pub snapshot: Option<DeviceSnapshotDto>,
+    pub challenge: Option<DeviceDeleteChallengeDto>,
+}
+
+/// Static fail-closed device-family error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeviceCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for DeviceCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for DeviceCommandError {}
+
+fn device_failed(code: &str, description: &'static str) -> DeviceCommandError {
+    DeviceCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_device_core_error(no_session: &'static str, error: MatrixIpcError) -> DeviceCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => device_failed(code, DEVICE_NO_SESSION_DESCRIPTION),
+        Some(code)
+            if code.starts_with("v-crypto.7-")
+                || code.starts_with("v-crypto.3-")
+                || code.starts_with("v-crypto.2-")
+                || code.starts_with("v-crypto.5-") =>
+        {
+            device_failed(code, DEVICE_OWNER_DESCRIPTION)
+        }
+        _ => device_failed(DEVICE_FAILED_CODE, DEVICE_FAILED_DESCRIPTION),
+    }
+}
+
+fn device_trust_as_str(trust: NativeDeviceTrust) -> String {
+    match trust {
+        NativeDeviceTrust::Verified => "verified",
+        NativeDeviceTrust::Unverified => "unverified",
+        NativeDeviceTrust::Unsupported => "unsupported",
+    }
+    .to_owned()
+}
+
+fn device_snapshot_dto(snapshot: NativeDeviceSnapshot) -> DeviceSnapshotDto {
+    DeviceSnapshotDto {
+        session_generation: snapshot.session_generation,
+        devices: snapshot
+            .devices
+            .into_iter()
+            .map(|device| DeviceSummaryDto {
+                device_id: device.device_id,
+                display_name: device.display_name,
+                last_seen_ip: device.last_seen_ip,
+                last_seen_ts: device.last_seen_ts,
+                trust: device_trust_as_str(device.trust),
+                is_current: device.is_current,
+            })
+            .collect(),
+    }
+}
+
+fn device_delete_dto(result: NativeDeviceDeleteResult) -> DeviceDeleteDto {
+    match result {
+        NativeDeviceDeleteResult::Complete { snapshot } => DeviceDeleteDto {
+            outcome: "complete".to_owned(),
+            snapshot: Some(device_snapshot_dto(snapshot)),
+            challenge: None,
+        },
+        NativeDeviceDeleteResult::AuthenticationRequired { challenge } => DeviceDeleteDto {
+            outcome: "authentication_required".to_owned(),
+            snapshot: None,
+            challenge: Some(DeviceDeleteChallengeDto {
+                operation_id: challenge.operation_id,
+                session_generation: challenge.session_generation,
+                authentication: match challenge.authentication {
+                    NativeDeviceDeleteAuthentication::Password => "password".to_owned(),
+                },
+                authentication_failed: challenge.authentication_failed,
+            }),
+        },
+    }
 }
 
 /// Claims the restore slot for one in-flight attempt. Drop releases it unless

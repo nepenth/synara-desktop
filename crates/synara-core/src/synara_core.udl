@@ -396,6 +396,44 @@ interface VerificationSasError {
   Failed(string code, string description);
 };
 
+// Privacy-safe device row. Identity/presentation fields only; no keys or tokens.
+dictionary DeviceSummaryDto {
+  string device_id;
+  string? display_name;
+  string? last_seen_ip;
+  u64? last_seen_ts;
+  string trust;
+  boolean is_current;
+};
+
+// Privacy-safe device inbox. No tokens or password.
+dictionary DeviceSnapshotDto {
+  u64 session_generation;
+  sequence<DeviceSummaryDto> devices;
+};
+
+// Privacy-safe delete challenge. Authentication type only; no password secret.
+dictionary DeviceDeleteChallengeDto {
+  u64 operation_id;
+  u64 session_generation;
+  string authentication;
+  boolean authentication_failed;
+};
+
+// Privacy-safe delete start result. Complete snapshot or challenge; no password secret.
+dictionary DeviceDeleteDto {
+  string outcome;
+  DeviceSnapshotDto? snapshot;
+  DeviceDeleteChallengeDto? challenge;
+};
+
+
+// Static source constants only. Never echo user id, device id, token, or password.
+[Error]
+interface DeviceCommandError {
+  Failed(string code, string description);
+};
+
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
 // P4-S3b adds restore_persisted_session. P4-S3c adds dedicated login_with_password.
 // P4-S3d adds attach_session_owners for the desktop owner set.
@@ -406,6 +444,8 @@ interface VerificationSasError {
 // presence_subscribe / presence_unsubscribe only.
 // P4-S8 adds typed verification_list for the registered list command only.
 // P4-S9 adds typed verification SAS start/accept/begin_sas/confirm/mismatch/cancel/dismiss.
+// P4-S9-2 adds typed device snapshot/rename/delete start/cancel only.
+// Backup/room-key/cross-signing stay off: leftover passphrase/path/password envelopes.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -484,4 +524,17 @@ interface SharedCore {
 
   [Async, Throws=VerificationSasError]
   void verification_dismiss(string flow_id);
+
+  [Async, Throws=DeviceCommandError]
+  DeviceSnapshotDto device_snapshot();
+
+  [Async, Throws=DeviceCommandError]
+  DeviceSnapshotDto device_rename(string device_id, string display_name);
+
+  [Async, Throws=DeviceCommandError]
+  DeviceDeleteDto device_delete_start(sequence<string> device_ids);
+
+  [Async, Throws=DeviceCommandError]
+  void device_delete_cancel(u64 operation_id, u64 session_generation);
+
 };
