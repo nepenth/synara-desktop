@@ -40,13 +40,13 @@ pub use shared_core_ffi::{
     RoomDirectoryPageDto, RoomDirectoryProtocolInstanceDto, RoomDirectoryProtocolsDto,
     RoomDirectorySearchDto, RoomDirectoryVisibilityDto, RoomDirectoryVisibilityWriteDto,
     RoomImagePacksSnapshotDto, RoomJoinRuleSnapshotDto, RoomListRoomDto, RoomListSnapshotDto,
-    RoomListSnapshotError, RoomNoteItemDto, RoomNotesCommandError, RoomNotesSnapshotDto,
-    RoomProfileCommandError, RoomProfileWriteDto, SessionAttachDto, SessionAttachError,
-    SessionLoginDto, SessionLoginError, SessionRestoreDto, SessionRestoreError, SharedCore,
-    TimelineError, TimelineOpenDto, TimelineOpenPositionDto, TimelineSnapshotDto,
-    TimelineViewPositionDto, TypingCommandError, TypingRoomDto, TypingSnapshotDto,
-    UserImagePackSnapshotDto, VerificationEmojiDto, VerificationInboxDto, VerificationListError,
-    VerificationRequestDto, VerificationSasDto, VerificationSasError,
+    RoomListSnapshotError, RoomMembershipCommandError, RoomMembershipWriteDto, RoomNoteItemDto,
+    RoomNotesCommandError, RoomNotesSnapshotDto, RoomProfileCommandError, RoomProfileWriteDto,
+    SessionAttachDto, SessionAttachError, SessionLoginDto, SessionLoginError, SessionRestoreDto,
+    SessionRestoreError, SharedCore, TimelineError, TimelineOpenDto, TimelineOpenPositionDto,
+    TimelineSnapshotDto, TimelineViewPositionDto, TypingCommandError, TypingRoomDto,
+    TypingSnapshotDto, UserImagePackSnapshotDto, VerificationEmojiDto, VerificationInboxDto,
+    VerificationListError, VerificationRequestDto, VerificationSasDto, VerificationSasError,
 };
 
 mod core;

@@ -5,7 +5,7 @@
 //! method arguments. Search results stay metadata (room ids, names, aliases,
 //! mxc). Avatar bytes stay off. Failed errors stay static and must not echo
 //! term, server, or room id. Cancel is local and must not require a live
-//! server on a planted session. Room leave/join and leftover secret
+//! server on a planted session. Invite/kick/ban and leftover secret
 //! envelopes stay off. Directory visibility is already S9-10.
 
 use std::collections::HashMap;
@@ -65,8 +65,8 @@ fn directory_search_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("room_directory_cancel"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
-    assert!(!udl.contains("matrix_room_leave"));
-    assert!(!udl.contains("matrix_room_join"));
+    assert!(!udl.contains("matrix_room_invite"));
+    assert!(!udl.contains("matrix_room_kick"));
     let shared_core = udl
         .split("interface SharedCore {")
         .nth(1)
@@ -78,8 +78,8 @@ fn directory_search_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("get_room_directory_visibility"));
     assert!(shared_core.contains("set_room_name"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("room_leave"));
-    assert!(!shared_core.contains("room_join("));
+    assert!(!shared_core.contains("room_invite"));
+    assert!(!shared_core.contains("room_kick"));
     assert!(!shared_core.contains("backup_status"));
 }
 

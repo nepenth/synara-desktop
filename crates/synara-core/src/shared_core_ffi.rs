@@ -51,8 +51,10 @@
 //! `room_directory_cancel` wrappers for those three already-registered Core
 //! commands. Search results stay metadata (room ids, names, aliases, mxc).
 //! Avatar bytes stay off. Failed errors never echo term, server, or room id.
-//! Room leave/join stay off. This still exposes no generic command FFI or
-//! APNs surface.
+//! P4-S9-12 adds typed `room_leave` / `room_join` wrappers for those two
+//! already-registered Core commands. Write ack is status only. Failed errors
+//! never echo room id, alias, or via servers. Invite/kick/ban stay off.
+//! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
 use std::sync::{Arc, Mutex};
@@ -368,6 +370,16 @@ const DIRECTORY_SEARCH_FAILED_DESCRIPTION: &str =
     "The room-directory-search request could not be completed.";
 const DIRECTORY_SEARCH_OWNER_DESCRIPTION: &str =
     "The room-directory-search request is not available.";
+const ROOM_MEMBERSHIP_COMMAND_GENERATION: u64 = 0;
+const ROOM_LEAVE_COMMAND: &str = "matrix_room_leave";
+const ROOM_JOIN_COMMAND: &str = "matrix_room_join";
+const ROOM_LEAVE_NO_SESSION_CODE: &str = "p2-room-leave-no-session";
+const ROOM_JOIN_NO_SESSION_CODE: &str = "p2-room-join-no-session";
+const ROOM_MEMBERSHIP_NO_SESSION_DESCRIPTION: &str = "No room-membership session is available.";
+const ROOM_MEMBERSHIP_FAILED_CODE: &str = "p4-s9-12-room-membership-failed";
+const ROOM_MEMBERSHIP_FAILED_DESCRIPTION: &str =
+    "The room-membership request could not be completed.";
+const ROOM_MEMBERSHIP_OWNER_DESCRIPTION: &str = "The room-membership request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2695,6 +2707,30 @@ impl SharedCore {
         room_directory_search_dto(response.payload)
     }
 
+    pub async fn room_leave(
+        &self,
+        room_id: String,
+    ) -> Result<RoomMembershipWriteDto, RoomMembershipCommandError> {
+        let payload = room_membership_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+        }))?;
+        self.room_membership_command(ROOM_LEAVE_COMMAND, ROOM_LEAVE_NO_SESSION_CODE, payload)
+            .await
+    }
+
+    pub async fn room_join(
+        &self,
+        room_id_or_alias: String,
+        via_servers: Option<Vec<String>>,
+    ) -> Result<RoomMembershipWriteDto, RoomMembershipCommandError> {
+        let payload = room_membership_envelope_payload(serde_json::json!({
+            "roomIdOrAlias": room_id_or_alias,
+            "viaServers": via_servers,
+        }))?;
+        self.room_membership_command(ROOM_JOIN_COMMAND, ROOM_JOIN_NO_SESSION_CODE, payload)
+            .await
+    }
+
     async fn later_null_command(
         &self,
         command: &'static str,
@@ -2787,6 +2823,25 @@ impl SharedCore {
             .await
             .map_err(|error| map_room_profile_core_error(no_session, error))?;
         room_profile_write_dto(response.payload)
+    }
+
+    async fn room_membership_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<RoomMembershipWriteDto, RoomMembershipCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: ROOM_MEMBERSHIP_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_room_membership_core_error(no_session, error))?;
+        room_membership_write_dto(response.payload)
     }
 
     async fn image_pack_null_command(
@@ -4147,6 +4202,102 @@ fn room_directory_search_dto(
         request_id,
         status: status.to_owned(),
         page,
+    })
+}
+
+/// Privacy-safe room leave/join write ack. Status only; no room id, alias, or via servers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomMembershipWriteDto {
+    pub status: String,
+}
+
+/// Static fail-closed room-membership-family error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoomMembershipCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for RoomMembershipCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for RoomMembershipCommandError {}
+
+fn room_membership_failed(code: &str, description: &'static str) -> RoomMembershipCommandError {
+    RoomMembershipCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_room_membership_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> RoomMembershipCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            room_membership_failed(code, ROOM_MEMBERSHIP_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code.starts_with("v-rooms-room-leave-")
+                || code.starts_with("v-rooms-room-join-")
+                || code == "v-send.r-room-profile-join-rule-requires-session" =>
+        {
+            room_membership_failed(code, ROOM_MEMBERSHIP_OWNER_DESCRIPTION)
+        }
+        _ => room_membership_failed(
+            ROOM_MEMBERSHIP_FAILED_CODE,
+            ROOM_MEMBERSHIP_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn room_membership_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, RoomMembershipCommandError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(room_membership_failed(
+            ROOM_MEMBERSHIP_FAILED_CODE,
+            ROOM_MEMBERSHIP_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn closed_room_membership_status(value: &str) -> Option<&'static str> {
+    match value {
+        "ok" => Some("ok"),
+        _ => None,
+    }
+}
+
+fn room_membership_write_dto(
+    payload: serde_json::Value,
+) -> Result<RoomMembershipWriteDto, RoomMembershipCommandError> {
+    if payload.is_null() {
+        return Ok(RoomMembershipWriteDto {
+            status: "ok".to_owned(),
+        });
+    }
+    let status = payload
+        .get("status")
+        .and_then(|value| value.as_str())
+        .and_then(closed_room_membership_status)
+        .ok_or_else(|| {
+            room_membership_failed(
+                ROOM_MEMBERSHIP_FAILED_CODE,
+                ROOM_MEMBERSHIP_FAILED_DESCRIPTION,
+            )
+        })?;
+    Ok(RoomMembershipWriteDto {
+        status: status.to_owned(),
     })
 }
 
