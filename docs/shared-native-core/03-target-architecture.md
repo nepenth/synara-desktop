@@ -27,6 +27,16 @@ synara-ios/                    # iOS shell (slim after P4)
   ...                          # push NSE reuses synara-core store-read API via bindings
 ```
 
+## 3.1a Current vs target (do not confuse them)
+
+**Target** is section 3.2–3.5: both shells are thin adapters over one Core.
+
+**Current (tip `4d739025`):** desktop already calls `Core::command` for one
+hundred eleven names and attaches live owners. iOS has a UniFFI foothold
+only. Product events on desktop use **owner emit callbacks**, not
+`Platform::emit`. `Platform::emit` is the typed IPC envelope stream.
+See [11-implementer-playbook.md](11-implementer-playbook.md) §3 rule 7.
+
 ## 3.2 Adapter model (what each platform talks to)
 
 ```text
@@ -99,11 +109,15 @@ React side never changes.
 
 1. Shell starts → builds `Core` with a `Platform` impl → `Core::open(session)`.
 2. `synara-core` supervisors (sync, room list, timeline, crypto) start; each
-   writes into the shared in-memory projections and emits stream updates via
-   the `Platform::emit` sink.
-3. Desktop: sink posts `ipc/` envelopes over Tauri events → React `watch*`
-   hooks. iOS: sink delivers Swift-callback closures (uniffi callback
-   interface) → Combine publishers → SwiftUI.
+   writes into the shared in-memory projections. **Product** updates
+   (timeline view, presence, devices, join rules, image packs, verification)
+   go through the owner’s shell emit callback (`Arc<dyn Fn(Payload)+Send+Sync>`).
+   Desktop maps that callback to the existing Tauri event name. iOS will map
+   it to a UniFFI callback. **Do not** send those payloads through
+   `Platform::emit`.
+3. `Platform::emit` remains the typed IPC **envelope** stream (not React
+   product events). iOS will implement the same envelope sink later if a
+   stream-envelope path is needed.
 4. UI commands flow the reverse direction through `Core::command` (async over
    the transport protocol).
 

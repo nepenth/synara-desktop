@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `32e2d08b`, the merge commit for #928. |
-| Immediately preceding merges | #927 docs after #926, #928 invite spam/block. |
+| Feature evidence tip | `feature/shared-native-core` is `4d739025`, the docs merge for #929 after #928. |
+| Immediately preceding merges | #928 invite spam/block (`32e2d08b`), #929 docs. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -146,7 +146,7 @@ residency changes are:
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `32e2d08b`/#928 for
+anchor, but it is no longer the feature-tip provenance; use `4d739025`/#929 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -445,6 +445,20 @@ for any of those gates.
   `main` / `release/**` and `workflow_dispatch` still run the full suite.
 
 ## 7. Ordered resume playbook
+
+**Canonical next-slice rules live in
+[11-implementer-playbook.md](11-implementer-playbook.md).** Summary:
+
+1. Finish a mid-slice if the worktree is dirty.
+2. There is **no** remaining 7B desktop route that can land without a
+   secret, file path, or bytes in the Core envelope. Do not invent one.
+3. Next engineering lane is **serial iOS (P4)** in playbook §9, starting
+   at P4-S1 `register_flows` UniFFI when free disk is ≥ 20 Gi.
+4. Then P4-S2 Swift Platform + `Core::new`, then P4-S3 live Client +
+   attach owners, then consume already-registered commands one family
+   per PR. Retire `MatrixRustSDKService` last.
+5. After each product PR: squash-merge to `feature/shared-native-core`
+   only, docs honesty, start the next slice.
 
 ### Immediately safe
 

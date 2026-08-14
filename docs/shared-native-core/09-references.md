@@ -2,10 +2,13 @@
 
 ## In-repo source of truth
 
-- Engine: `src-tauri/src/matrix/` (census in
-  [`02-module-boundary-census.md`](02-module-boundary-census.md))
-- Transport protocol: `src-tauri/src/matrix/ipc/*`
-- DTOs: `src-tauri/src/matrix/dto/*`
+- **Implementer playbook (start here):**
+  [`11-implementer-playbook.md`](11-implementer-playbook.md)
+- Engine: `crates/synara-core/` plus thin `src-tauri/src/matrix/` re-exports
+  (census in [`02-module-boundary-census.md`](02-module-boundary-census.md))
+- Transport protocol: `crates/synara-core/src/transport/` (desktop still
+  re-exports as `crate::matrix::ipc`)
+- DTOs: `crates/synara-core/src/dto/`
 - Platform/OS desktop modules: `src-tauri/src/desktop_*.rs`, `main.rs`, `lib.rs`
 - Dependency pins: `src-tauri/Cargo.toml`
 - iOS SwiftUI app: `synara-ios/Synara/**`, `synara-ios/project.yml`
@@ -39,7 +42,12 @@
 
 ## Glossary
 
-- **synara-core**: the proposed shared Rust application-logic crate.
+- **synara-core**: the shared Rust application-logic crate
+  (`crates/synara-core`). Desktop consumes it in-process. iOS consumes a
+  narrow UniFFI surface today; P4 must widen that until Swift no longer
+  re-implements sync/room-list/timeline/crypto.
+- **End state:** one core, two shells. Not reached. Feature branch only.
+  Not `main`. Not a release.
 - **Shell / platform shell**: the thin platform wrapper (src-tauri / synara-ios).
 - **Platform sink**: the trait via which the engine talks to the OS/UI.
 - **Envelope / stream / wire counter**: `ipc/` protocol concepts (see
