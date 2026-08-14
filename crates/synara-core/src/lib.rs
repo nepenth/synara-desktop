@@ -53,13 +53,13 @@ pub use shared_core_ffi::{
     SessionLoginDto, SessionLoginError, SessionRestoreDto, SessionRestoreError, SharedCore,
     SpaceChildEdgeDto, SpaceChildMutationDto, SpaceChildrenSnapshotDto, SpaceCommandError,
     SpaceHierarchyRoomDto, SpaceHierarchySnapshotDto, SpaceParentEntryDto, SpaceParentsSnapshotDto,
-    TimelineError, TimelineEventItemDto, TimelineEventReadbackDto, TimelineOpenDto,
-    TimelineOpenPositionDto, TimelineReactionDto, TimelineReactionError,
-    TimelineReactionMutationDto, TimelineReactionSenderDto, TimelineReadStateDto,
-    TimelineReadStateError, TimelineSnapshotDto, TimelineViewPositionDto, TypingCommandError,
-    TypingRoomDto, TypingSnapshotDto, UserImagePackSnapshotDto, VerificationEmojiDto,
-    VerificationInboxDto, VerificationListError, VerificationRequestDto, VerificationSasDto,
-    VerificationSasError,
+    TimelineError, TimelineEventItemDto, TimelineEventReadbackDto, TimelineMutateDto,
+    TimelineMutateError, TimelineOpenDto, TimelineOpenPositionDto, TimelineReactionDto,
+    TimelineReactionError, TimelineReactionMutationDto, TimelineReactionSenderDto,
+    TimelineReadStateDto, TimelineReadStateError, TimelineSnapshotDto, TimelineViewPositionDto,
+    TypingCommandError, TypingRoomDto, TypingSnapshotDto, UserImagePackSnapshotDto,
+    VerificationEmojiDto, VerificationInboxDto, VerificationListError, VerificationRequestDto,
+    VerificationSasDto, VerificationSasError,
 };
 
 mod core;
