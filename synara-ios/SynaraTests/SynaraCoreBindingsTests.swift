@@ -151,6 +151,21 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreAttachWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+
+        do {
+            _ = try await SharedCoreSessionAttach.attachSessionOwners(core: core)
+            XCTFail("Fail-closed SharedCore must not attach without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p4-s3d-session-missing"))
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
 
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
