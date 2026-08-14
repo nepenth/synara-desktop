@@ -4,6 +4,7 @@ This is the plan playbook §9.4 requires before guessing at password FFI.
 It does **not** accept P4 or claim iOS is on the shared engine.
 
 Evidence tip when written: `feature/shared-native-core` `ee896416` (#935 S3a).
+S3a landed in #935. **S3b restore lands on this branch** (`agent/snc-p4-s3b-restore`). Next after merge is S3c. Playbook recipe: §9.4b.
 
 ## Decision
 
@@ -15,8 +16,8 @@ S3 is four serial product PRs. Each one merges only to
 
 | Slice | What lands | What must not land |
 |---|---|---|
-| **S3a** (this PR) | Swift `IosSecretVault` callback. `SharedCore` can be constructed with that vault. Rust `IosFailClosedPlatform` uses it instead of `UnavailableSecretVault`. In-memory + Keychain key/value adapters. | Live `Client`, `command`, `attach_*`, password, restore, APNs |
-| **S3b** | Restore an already-persisted session through Core persist/restore using the vault. No password. | Password login, owner attach, `command` families |
+| **S3a** LANDED #935 | Swift `IosSecretVault` callback. `SharedCore` can be constructed with that vault. Rust `IosFailClosedPlatform` uses it instead of `UnavailableSecretVault`. In-memory + Keychain key/value adapters. | Live `Client`, `command`, `attach_*`, password, restore, APNs |
+| **S3b** (this branch) | Restore an already-persisted session through Core persist/restore using the vault. No password. Not `matrix_restore_session`. | Password login, owner attach, `command` families, leftover registration |
 | **S3c** | Dedicated authenticated login FFI **or** keep Swift `MatrixRustSDK` login. Design in that PR body. Password never rides a generic `Core.command` string. | Register, email token, recovery passphrase |
 | **S3d** | After a session exists, attach the same owner set desktop attaches (typing, presence, verification, devices, join-rules, image-packs, sync, timelines). | Retiring `MatrixRustSDKService` |
 

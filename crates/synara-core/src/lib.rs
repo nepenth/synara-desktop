@@ -29,7 +29,9 @@ pub use session_projection_ffi::{
 };
 
 mod shared_core_ffi;
-pub use shared_core_ffi::{IosSecretVaultError, SharedCore};
+pub use shared_core_ffi::{
+    IosSecretVault, IosSecretVaultError, SessionRestoreDto, SessionRestoreError, SharedCore,
+};
 
 mod core;
 pub use core::Core;

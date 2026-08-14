@@ -22,6 +22,8 @@ const required = [
   "synara-ios/SynaraCore/Package.swift",
   "synara-ios/SynaraCore/Sources/SynaraCore/SynaraCore.swift",
   "synara-ios/Synara/Services/MatrixSessionProjectionMirror.swift",
+  "synara-ios/Synara/Services/IosSecretVault.swift",
+  "synara-ios/Synara/Services/SharedCoreSessionRestore.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -51,6 +53,10 @@ const sharedCoreFfi = readFileSync(
 );
 const sessionProjectionAdapter = readFileSync(
   resolve(root, "synara-ios/Synara/Services/MatrixSessionProjectionMirror.swift"),
+  "utf8"
+);
+const sharedCoreRestore = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreSessionRestore.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -101,8 +107,13 @@ const assertions = [
   [sharedCoreFfi, "Core::new", "P4-S2 real Core construction"],
   [sharedCoreFfi, "new_with_secret_store", "P4-S3a vault-backed SharedCore constructor"],
   [sharedCoreFfi, "CallbackSecretVault", "P4-S3a callback SecretVault adapter"],
+  [sharedCoreFfi, "pub trait IosSecretVault", "P4-S3a callback trait defined in Rust"],
+  [sharedCoreFfi, "restore_persisted_session", "P4-S3b vault restore FFI"],
   [udl, "callback interface IosSecretVault", "P4-S3a Swift vault callback"],
   [udl, "interface IosSecretVaultError", "P4-S3a static vault error"],
+  [udl, "restore_persisted_session", "P4-S3b SharedCore restore operation"],
+  [udl, "dictionary SessionRestoreDto", "P4-S3b privacy-safe restore DTO"],
+  [udl, "interface SessionRestoreError", "P4-S3b static restore error"],
   [sessionProjectionAdapter, "openAfterInstalledClient", "post-install projection hook"],
   [sessionProjectionAdapter, "closeBeforeSDKWipe", "pre-wipe projection close hook"],
   [sessionProjectionAdapter, "func coreSessionIdentity() async -> CoreSessionIdentity?", "P4-4 display-only Core identity readback"],
@@ -122,6 +133,10 @@ const assertions = [
   [swiftBindingsTests, "try await core.close()", "Swift generated FFI close execution"],
   [swiftBindingsTests, "testSharedCoreConstructsOverGeneratedRustFFI", "Swift P4-S2 Core construction test"],
   [swiftBindingsTests, "testSharedCoreAcceptsInMemorySecretStore", "Swift P4-S3a vault constructor test"],
+  [swiftBindingsTests, "testSharedCoreRestoreWithoutVaultFailsClosed", "Swift P4-S3b fail-closed restore test"],
+  [swiftBindingsTests, "testSharedCoreRestoreRejectsHostileIdentityWithoutEcho", "Swift P4-S3b hostile-identity restore test"],
+  [sharedCoreRestore, "restorePersistedSession", "P4-S3b product restore helper"],
+  [sharedCoreRestore, "SharedCore(store: vault)", "P4-S3b helper uses vault-backed SharedCore"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -862,7 +877,7 @@ if (projectionOperations.join(",") !== "open,session_snapshot,close") {
   throw new Error(`P4-3 facade must expose only open/session_snapshot/close; found ${projectionOperations.join(", ")}`);
 }
 
-// P4-S3a allows a vault-backed constructor. Still forbid command/session/attach.
+// P4-S3b allows restore_persisted_session. Still forbid command/attach/password.
 const sharedCoreObject = udl.match(/interface SharedCore \{([\s\S]*?)\};/);
 if (!sharedCoreObject) throw new Error("missing SharedCore object");
 const sharedCoreBody = sharedCoreObject[1].replace(/\/\/.*$/gm, "");
@@ -872,9 +887,12 @@ if (!sharedCoreBody.includes("constructor();")) {
 if (!sharedCoreBody.includes("constructor(IosSecretVault store)")) {
   throw new Error("P4-S3a SharedCore must accept IosSecretVault");
 }
+if (!sharedCoreBody.includes("restore_persisted_session")) {
+  throw new Error("P4-S3b SharedCore must expose restore_persisted_session");
+}
 for (const forbidden of ["command", "attach", "login", "password", "open("]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S3a`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S3b`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
