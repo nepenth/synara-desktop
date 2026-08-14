@@ -873,6 +873,59 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreDirectorySearchWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let term = "s911SecretTerm"
+        let server = "s911.secret.example.org"
+
+        do {
+            _ = try await SharedCoreDirectorySearch.roomDirectoryProtocols(core: core)
+            XCTFail("Fail-closed SharedCore must not list directory protocols without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-directory-protocols-no-session"))
+            for forbidden in ["syt_", "token", term, server] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreDirectorySearch.roomDirectorySearch(
+                core: core,
+                sessionGeneration: 1,
+                requestId: 1,
+                serverName: server,
+                term: term,
+                roomType: nil,
+                thirdPartyInstanceId: nil,
+                limit: 20,
+                since: nil
+            )
+            XCTFail("Fail-closed SharedCore must not search the room directory without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-directory-search-no-session"))
+            for forbidden in ["syt_", "token", term, server] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreDirectorySearch.roomDirectoryCancel(
+                core: core,
+                sessionGeneration: 1,
+                requestId: 1
+            )
+            XCTFail("Fail-closed SharedCore must not cancel directory search without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-directory-cancel-no-session"))
+            for forbidden in ["syt_", "token", term, server] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 
