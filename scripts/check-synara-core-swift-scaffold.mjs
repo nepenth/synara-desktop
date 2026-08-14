@@ -99,6 +99,10 @@ const assertions = [
   [sharedCoreFfi, "SharedCore", "P4-S2 shared Core facade"],
   [sharedCoreFfi, "IosFailClosedPlatform", "P4-S2 Rust-owned iOS Platform"],
   [sharedCoreFfi, "Core::new", "P4-S2 real Core construction"],
+  [sharedCoreFfi, "new_with_secret_store", "P4-S3a vault-backed SharedCore constructor"],
+  [sharedCoreFfi, "CallbackSecretVault", "P4-S3a callback SecretVault adapter"],
+  [udl, "callback interface IosSecretVault", "P4-S3a Swift vault callback"],
+  [udl, "interface IosSecretVaultError", "P4-S3a static vault error"],
   [sessionProjectionAdapter, "openAfterInstalledClient", "post-install projection hook"],
   [sessionProjectionAdapter, "closeBeforeSDKWipe", "pre-wipe projection close hook"],
   [sessionProjectionAdapter, "func coreSessionIdentity() async -> CoreSessionIdentity?", "P4-4 display-only Core identity readback"],
@@ -117,6 +121,7 @@ const assertions = [
   [swiftBindingsTests, "try await core.sessionSnapshot()", "Swift generated FFI snapshot execution"],
   [swiftBindingsTests, "try await core.close()", "Swift generated FFI close execution"],
   [swiftBindingsTests, "testSharedCoreConstructsOverGeneratedRustFFI", "Swift P4-S2 Core construction test"],
+  [swiftBindingsTests, "testSharedCoreAcceptsInMemorySecretStore", "Swift P4-S3a vault constructor test"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -857,16 +862,26 @@ if (projectionOperations.join(",") !== "open,session_snapshot,close") {
   throw new Error(`P4-3 facade must expose only open/session_snapshot/close; found ${projectionOperations.join(", ")}`);
 }
 
-// P4-S2 proves only that Swift can construct and retain a real Core. Keep the
-// interface literally construction-only until the P4-S3 live-client design is
-// accepted; in particular, do not expose command, session, or attach methods.
+// P4-S3a allows a vault-backed constructor. Still forbid command/session/attach.
 const sharedCoreObject = udl.match(/interface SharedCore \{([\s\S]*?)\};/);
-if (!sharedCoreObject) throw new Error("missing P4-S2 SharedCore object");
-const sharedCoreMembers = sharedCoreObject[1]
-  .replace(/\/\/.*$/gm, "")
-  .trim();
-if (sharedCoreMembers !== "constructor();") {
-  throw new Error("P4-S2 SharedCore must expose only constructor");
+if (!sharedCoreObject) throw new Error("missing SharedCore object");
+const sharedCoreBody = sharedCoreObject[1].replace(/\/\/.*$/gm, "");
+if (!sharedCoreBody.includes("constructor();")) {
+  throw new Error("SharedCore must keep the fail-closed constructor");
+}
+if (!sharedCoreBody.includes("constructor(IosSecretVault store)")) {
+  throw new Error("P4-S3a SharedCore must accept IosSecretVault");
+}
+for (const forbidden of ["command", "attach", "login", "password", "open("]) {
+  if (sharedCoreBody.includes(forbidden)) {
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S3a`);
+  }
+}
+if (!udl.includes("callback interface IosSecretVault")) {
+  throw new Error("missing IosSecretVault callback");
+}
+if (!udl.includes("interface IosSecretVaultError")) {
+  throw new Error("missing IosSecretVaultError");
 }
 
 // P4-3's private Core dependency must continue satisfying every required

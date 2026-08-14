@@ -15,6 +15,12 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertNotNil(core)
     }
 
+    func testSharedCoreAcceptsInMemorySecretStore() {
+        let core = SharedCore(store: InMemoryIosSecretVault())
+
+        XCTAssertNotNil(core)
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 
