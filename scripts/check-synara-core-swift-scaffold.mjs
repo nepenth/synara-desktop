@@ -29,6 +29,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreRoomList.swift",
   "synara-ios/Synara/Services/SharedCoreInvites.swift",
   "synara-ios/Synara/Services/SharedCoreTimeline.swift",
+  "synara-ios/Synara/Services/SharedCoreTypingPresence.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -82,6 +83,10 @@ const sharedCoreInvites = readFileSync(
 );
 const sharedCoreTimeline = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreTimeline.swift"),
+  "utf8"
+);
+const sharedCoreTypingPresence = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreTypingPresence.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -227,6 +232,24 @@ const assertions = [
   [sharedCoreTimeline, "timelinePaginate", "P4-S6 product timeline-paginate helper"],
   [sharedCoreTimeline, "core: SharedCore", "P4-S6 helper takes an already-constructed SharedCore"],
   [sharedCoreTimeline, "core.timelineOpen", "P4-S6 helper opens on the caller-owned instance"],
+  [sharedCoreFfi, "typing_snapshot", "P4-S7 typed typing-snapshot FFI"],
+  [sharedCoreFfi, "matrix_typing_snapshot", "P4-S7 calls the registered typing snapshot"],
+  [sharedCoreFfi, "matrix_typing_set", "P4-S7 calls the registered typing set"],
+  [sharedCoreFfi, "matrix_presence_snapshot", "P4-S7 calls the registered presence snapshot"],
+  [sharedCoreFfi, "matrix_presence_subscribe", "P4-S7 calls the registered presence subscribe"],
+  [sharedCoreFfi, "matrix_presence_unsubscribe", "P4-S7 calls the registered presence unsubscribe"],
+  [udl, "TypingSnapshotDto typing_snapshot()", "P4-S7 SharedCore typing-snapshot operation"],
+  [udl, "void typing_set(", "P4-S7 SharedCore typing-set operation"],
+  [udl, "PresenceSnapshotDto presence_snapshot(", "P4-S7 SharedCore presence-snapshot operation"],
+  [udl, "PresenceSubscriptionDto presence_subscribe(", "P4-S7 SharedCore presence-subscribe operation"],
+  [udl, "void presence_unsubscribe(", "P4-S7 SharedCore presence-unsubscribe operation"],
+  [udl, "interface TypingCommandError", "P4-S7 static typing error"],
+  [udl, "interface PresenceCommandError", "P4-S7 static presence error"],
+  [swiftBindingsTests, "testSharedCoreTypingPresenceWithoutSessionFailsClosed", "Swift P4-S7 fail-closed typing/presence test"],
+  [sharedCoreTypingPresence, "typingSnapshot", "P4-S7 product typing-snapshot helper"],
+  [sharedCoreTypingPresence, "presenceSubscribe", "P4-S7 product presence-subscribe helper"],
+  [sharedCoreTypingPresence, "core: SharedCore", "P4-S7 helper takes an already-constructed SharedCore"],
+  [sharedCoreTypingPresence, "core.typingSnapshot", "P4-S7 helper reads on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1001,9 +1024,15 @@ if (!sharedCoreBody.includes("timeline_close")) {
 if (!sharedCoreBody.includes("timeline_paginate")) {
   throw new Error("P4-S6 SharedCore must expose timeline_paginate");
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state"]) {
+if (!sharedCoreBody.includes("typing_snapshot") || !sharedCoreBody.includes("typing_set")) {
+  throw new Error("P4-S7 SharedCore must expose typing_snapshot and typing_set");
+}
+if (!sharedCoreBody.includes("presence_snapshot") || !sharedCoreBody.includes("presence_subscribe") || !sharedCoreBody.includes("presence_unsubscribe")) {
+  throw new Error("P4-S7 SharedCore must expose presence_snapshot/subscribe/unsubscribe");
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "verification_list"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S6`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S7`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1030,6 +1059,9 @@ if (sharedCoreInvites.includes("SharedCore(store:")) {
 if (sharedCoreTimeline.includes("SharedCore(store:")) {
   throw new Error("P4-S6 helper must not construct-and-drop SharedCore");
 }
+if (sharedCoreTypingPresence.includes("SharedCore(store:")) {
+  throw new Error("P4-S7 helper must not construct-and-drop SharedCore");
+}
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
 if (!roomListDto) throw new Error("missing RoomListSnapshotDto");
 if (/\bpassword\b/.test(roomListDto[1]) || /\btoken\b/.test(roomListDto[1])) {
@@ -1049,6 +1081,16 @@ const timelineSnapshotDto = udl.match(/dictionary TimelineSnapshotDto \{([\s\S]*
 if (!timelineSnapshotDto) throw new Error("missing TimelineSnapshotDto");
 if (/\bpassword\b/.test(timelineSnapshotDto[1]) || /\btoken\b/.test(timelineSnapshotDto[1])) {
   throw new Error("TimelineSnapshotDto must not carry password or token fields");
+}
+const typingDto = udl.match(/dictionary TypingSnapshotDto \{([\s\S]*?)\};/);
+if (!typingDto) throw new Error("missing TypingSnapshotDto");
+if (/\bpassword\b/.test(typingDto[1]) || /\btoken\b/.test(typingDto[1])) {
+  throw new Error("TypingSnapshotDto must not carry password or token fields");
+}
+const presenceDto = udl.match(/dictionary PresenceSnapshotDto \{([\s\S]*?)\};/);
+if (!presenceDto) throw new Error("missing PresenceSnapshotDto");
+if (/\bpassword\b/.test(presenceDto[1]) || /\btoken\b/.test(presenceDto[1])) {
+  throw new Error("PresenceSnapshotDto must not carry password or token fields");
 }
 const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
 if (!loginDto) throw new Error("missing SessionLoginDto");

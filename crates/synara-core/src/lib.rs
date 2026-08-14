@@ -31,10 +31,11 @@ pub use session_projection_ffi::{
 mod shared_core_ffi;
 pub use shared_core_ffi::{
     InviteDto, InviteSnapshotDto, InviteSnapshotError, IosSecretVault, IosSecretVaultError,
-    RoomListRoomDto, RoomListSnapshotDto, RoomListSnapshotError, SessionAttachDto,
-    SessionAttachError, SessionLoginDto, SessionLoginError, SessionRestoreDto, SessionRestoreError,
-    SharedCore, TimelineError, TimelineOpenDto, TimelineOpenPositionDto, TimelineSnapshotDto,
-    TimelineViewPositionDto,
+    PresenceCommandError, PresenceSnapshotDto, PresenceSubscriptionDto, RoomListRoomDto,
+    RoomListSnapshotDto, RoomListSnapshotError, SessionAttachDto, SessionAttachError,
+    SessionLoginDto, SessionLoginError, SessionRestoreDto, SessionRestoreError, SharedCore,
+    TimelineError, TimelineOpenDto, TimelineOpenPositionDto, TimelineSnapshotDto,
+    TimelineViewPositionDto, TypingCommandError, TypingRoomDto, TypingSnapshotDto,
 };
 
 mod core;

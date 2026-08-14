@@ -9,8 +9,9 @@ S3c login (Option A) is accepted at `fe8ad87b`.
 S3d attach is accepted at `05264b39`.
 S4 room-list snapshot is accepted at `ed6f9f04`.
 S5 invites snapshot is accepted at `120fa85a`.
-**S6 timeline open/close/paginate lands on `agent/snc-p4-s6-timeline`.**
-Playbook recipe: §9.5. Next after S6 is S7 typing/presence.
+S6 timeline open/close/paginate is accepted at `e2cf7be6`.
+**S7 typing/presence lands on `agent/snc-p4-s7-typing-presence`.**
+Playbook recipe: §9.5. Next after S7 is S8 verification list.
 
 ## Decision
 

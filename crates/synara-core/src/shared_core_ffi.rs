@@ -13,6 +13,8 @@
 //! already-registered `matrix_invites_snapshot` Core command only.
 //! P4-S6 adds typed `timeline_open` / `timeline_close` / `timeline_paginate`
 //! wrappers for those three already-registered Core commands only.
+//! P4-S7 adds typed typing/presence wrappers for the five already-registered
+//! Core commands in that family only.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -31,7 +33,10 @@ use crate::app::lifecycle::{
     persist_session_after_login, restore_session_from_vault, restore_session_onto_client,
     SessionMaterial, SessionMaterialId, SessionMaterialVault,
 };
-use crate::app::presence::NativePresenceOwner;
+use crate::app::presence::{
+    NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceState,
+    NativePresenceSubscription,
+};
 use crate::app::room_list::{
     NativeInvite, NativeInviteSnapshot, NativeInviteTriage, NativeRoomListSnapshot,
 };
@@ -46,7 +51,7 @@ use crate::app::timeline::{
     NativeTimelineOwner, NativeTimelineViewportHint, TimelinePageState, TimelineViewPosition,
     TimelineViewSnapshot,
 };
-use crate::app::typing::NativeTypingOwner;
+use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::app::verification::NativeVerificationOwner;
 use crate::core::Core;
 use crate::dto::{SessionLifecycle, SessionSnapshot};
@@ -121,6 +126,39 @@ const TIMELINE_INVALID_ROOM_CODE: &str = "d0.3-timeline-invalid-room-id";
 const TIMELINE_INVALID_ROOM_DESCRIPTION: &str = "The timeline room id is invalid.";
 const TIMELINE_VIEW_NOT_OPEN_CODE: &str = "v-timeline-view-not-open";
 const TIMELINE_VIEW_NOT_OPEN_DESCRIPTION: &str = "The timeline view is not open.";
+const TYPING_PRESENCE_GENERATION: u64 = 0;
+const TYPING_SNAPSHOT_COMMAND: &str = "matrix_typing_snapshot";
+const TYPING_SET_COMMAND: &str = "matrix_typing_set";
+const PRESENCE_SNAPSHOT_COMMAND: &str = "matrix_presence_snapshot";
+const PRESENCE_SUBSCRIBE_COMMAND: &str = "matrix_presence_subscribe";
+const PRESENCE_UNSUBSCRIBE_COMMAND: &str = "matrix_presence_unsubscribe";
+const TYPING_SNAPSHOT_NO_SESSION_CODE: &str = "p2-typing-snapshot-no-session";
+const TYPING_SET_NO_SESSION_CODE: &str = "p2-typing-set-no-session";
+const PRESENCE_SNAPSHOT_NO_SESSION_CODE: &str = "p2-presence-snapshot-no-session";
+const PRESENCE_SUBSCRIBE_NO_SESSION_CODE: &str = "p2-presence-subscribe-no-session";
+const PRESENCE_UNSUBSCRIBE_NO_SESSION_CODE: &str = "p2-presence-unsubscribe-no-session";
+const TYPING_NO_SESSION_DESCRIPTION: &str = "No typing session is available.";
+const PRESENCE_NO_SESSION_DESCRIPTION: &str = "No presence session is available.";
+const TYPING_SNAPSHOT_FAILED_CODE: &str = "p4-s7-typing-snapshot-failed";
+const TYPING_SNAPSHOT_FAILED_DESCRIPTION: &str = "The typing snapshot could not be loaded.";
+const TYPING_SET_FAILED_CODE: &str = "p4-s7-typing-set-failed";
+const TYPING_SET_FAILED_DESCRIPTION: &str = "The typing notice could not be updated.";
+const TYPING_ROOM_MISSING_CODE: &str = "v-rooms.4-typing-room-missing";
+const TYPING_ROOM_MISSING_DESCRIPTION: &str = "The typing room is not available.";
+const TYPING_INVALID_ROOM_CODE: &str = "v-rooms.4-typing-invalid-room";
+const TYPING_INVALID_ROOM_DESCRIPTION: &str = "The typing room id is invalid.";
+const PRESENCE_SNAPSHOT_FAILED_CODE: &str = "p4-s7-presence-snapshot-failed";
+const PRESENCE_SNAPSHOT_FAILED_DESCRIPTION: &str = "The presence snapshot could not be loaded.";
+const PRESENCE_SUBSCRIBE_FAILED_CODE: &str = "p4-s7-presence-subscribe-failed";
+const PRESENCE_SUBSCRIBE_FAILED_DESCRIPTION: &str =
+    "The presence subscription could not be created.";
+const PRESENCE_UNSUBSCRIBE_FAILED_CODE: &str = "p4-s7-presence-unsubscribe-failed";
+const PRESENCE_UNSUBSCRIBE_FAILED_DESCRIPTION: &str =
+    "The presence subscription could not be released.";
+const PRESENCE_INVALID_USER_CODE: &str = "v-presence-invalid-user-id";
+const PRESENCE_INVALID_USER_DESCRIPTION: &str = "The presence user id is invalid.";
+const PRESENCE_INVALID_SUBSCRIPTION_CODE: &str = "v-presence-invalid-subscription-id";
+const PRESENCE_INVALID_SUBSCRIPTION_DESCRIPTION: &str = "The presence subscription id is invalid.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -604,6 +642,209 @@ fn timeline_snapshot_dto(snapshot: TimelineViewSnapshot) -> TimelineSnapshotDto 
         mark_unread: snapshot.capabilities.mark_unread,
         paginate_backward: snapshot.capabilities.paginate_backward,
         paginate_forward: snapshot.capabilities.paginate_forward,
+    }
+}
+
+/// Privacy-safe typing room row. No tokens or password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypingRoomDto {
+    pub room_id: String,
+    pub user_ids: Vec<String>,
+}
+
+/// Privacy-safe typing snapshot. No tokens or password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypingSnapshotDto {
+    pub session_generation: u64,
+    pub rooms: Vec<TypingRoomDto>,
+}
+
+/// Static fail-closed typing error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypingCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for TypingCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for TypingCommandError {}
+
+fn typing_failed(code: &'static str, description: &'static str) -> TypingCommandError {
+    TypingCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_typing_snapshot_core_error(error: MatrixIpcError) -> TypingCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some("p2-typing-snapshot-no-session") => typing_failed(
+            TYPING_SNAPSHOT_NO_SESSION_CODE,
+            TYPING_NO_SESSION_DESCRIPTION,
+        ),
+        _ => typing_failed(
+            TYPING_SNAPSHOT_FAILED_CODE,
+            TYPING_SNAPSHOT_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn map_typing_set_core_error(error: MatrixIpcError) -> TypingCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some("p2-typing-set-no-session") => {
+            typing_failed(TYPING_SET_NO_SESSION_CODE, TYPING_NO_SESSION_DESCRIPTION)
+        }
+        Some("v-rooms.4-typing-invalid-room") => {
+            typing_failed(TYPING_INVALID_ROOM_CODE, TYPING_INVALID_ROOM_DESCRIPTION)
+        }
+        Some("v-rooms.4-typing-room-missing") => {
+            typing_failed(TYPING_ROOM_MISSING_CODE, TYPING_ROOM_MISSING_DESCRIPTION)
+        }
+        Some("v-rooms.4-typing-room-not-joined") => typing_failed(
+            "v-rooms.4-typing-room-not-joined",
+            TYPING_ROOM_MISSING_DESCRIPTION,
+        ),
+        _ => typing_failed(TYPING_SET_FAILED_CODE, TYPING_SET_FAILED_DESCRIPTION),
+    }
+}
+
+/// Privacy-safe presence snapshot. Identity fields only; no tokens or password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PresenceSnapshotDto {
+    pub status: String,
+    pub session_generation: u64,
+    pub user_id: String,
+    pub state: Option<String>,
+    pub currently_active: bool,
+    pub last_active_ts: Option<u64>,
+    pub status_msg: Option<String>,
+}
+
+/// Privacy-safe presence subscription. No tokens or password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PresenceSubscriptionDto {
+    pub subscription_id: String,
+    pub user_id: String,
+    pub session_generation: u64,
+}
+
+/// Static fail-closed presence error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PresenceCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for PresenceCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for PresenceCommandError {}
+
+fn presence_failed(code: &'static str, description: &'static str) -> PresenceCommandError {
+    PresenceCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_presence_snapshot_core_error(error: MatrixIpcError) -> PresenceCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some("p2-presence-snapshot-no-session") => presence_failed(
+            PRESENCE_SNAPSHOT_NO_SESSION_CODE,
+            PRESENCE_NO_SESSION_DESCRIPTION,
+        ),
+        Some("v-presence-invalid-user-id") => presence_failed(
+            PRESENCE_INVALID_USER_CODE,
+            PRESENCE_INVALID_USER_DESCRIPTION,
+        ),
+        _ => presence_failed(
+            PRESENCE_SNAPSHOT_FAILED_CODE,
+            PRESENCE_SNAPSHOT_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn map_presence_subscribe_core_error(error: MatrixIpcError) -> PresenceCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some("p2-presence-subscribe-no-session") => presence_failed(
+            PRESENCE_SUBSCRIBE_NO_SESSION_CODE,
+            PRESENCE_NO_SESSION_DESCRIPTION,
+        ),
+        Some("v-presence-invalid-user-id") => presence_failed(
+            PRESENCE_INVALID_USER_CODE,
+            PRESENCE_INVALID_USER_DESCRIPTION,
+        ),
+        _ => presence_failed(
+            PRESENCE_SUBSCRIBE_FAILED_CODE,
+            PRESENCE_SUBSCRIBE_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn map_presence_unsubscribe_core_error(error: MatrixIpcError) -> PresenceCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some("p2-presence-unsubscribe-no-session") => presence_failed(
+            PRESENCE_UNSUBSCRIBE_NO_SESSION_CODE,
+            PRESENCE_NO_SESSION_DESCRIPTION,
+        ),
+        Some("v-presence-invalid-subscription-id") => presence_failed(
+            PRESENCE_INVALID_SUBSCRIPTION_CODE,
+            PRESENCE_INVALID_SUBSCRIPTION_DESCRIPTION,
+        ),
+        _ => presence_failed(
+            PRESENCE_UNSUBSCRIBE_FAILED_CODE,
+            PRESENCE_UNSUBSCRIBE_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn presence_state_as_str(state: NativePresenceState) -> String {
+    match state {
+        NativePresenceState::Unknown => "unknown",
+        NativePresenceState::Offline => "offline",
+        NativePresenceState::Online => "online",
+        NativePresenceState::Unavailable => "unavailable",
+    }
+    .to_owned()
+}
+
+fn presence_snapshot_dto(result: NativePresenceSnapshotResult) -> PresenceSnapshotDto {
+    match result {
+        NativePresenceSnapshotResult::Ready {
+            session_generation,
+            user_id,
+            snapshot,
+        } => PresenceSnapshotDto {
+            status: "ready".to_owned(),
+            session_generation,
+            user_id,
+            state: Some(presence_state_as_str(snapshot.state)),
+            currently_active: snapshot.currently_active,
+            last_active_ts: snapshot.last_active_ts,
+            status_msg: snapshot.status_msg,
+        },
+        NativePresenceSnapshotResult::Unknown {
+            session_generation,
+            user_id,
+        } => PresenceSnapshotDto {
+            status: "unknown".to_owned(),
+            session_generation,
+            user_id,
+            state: None,
+            currently_active: false,
+            last_active_ts: None,
+            status_msg: None,
+        },
     }
 }
 
@@ -1173,6 +1414,122 @@ impl SharedCore {
                 )
             })?;
         Ok(timeline_snapshot_dto(snapshot))
+    }
+
+    pub async fn typing_snapshot(&self) -> Result<TypingSnapshotDto, TypingCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: TYPING_SNAPSHOT_COMMAND.to_owned(),
+                session_generation: TYPING_PRESENCE_GENERATION,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .map_err(map_typing_snapshot_core_error)?;
+        let snapshot: NativeTypingSnapshot =
+            serde_json::from_value(response.payload).map_err(|_| {
+                typing_failed(
+                    TYPING_SNAPSHOT_FAILED_CODE,
+                    TYPING_SNAPSHOT_FAILED_DESCRIPTION,
+                )
+            })?;
+        Ok(TypingSnapshotDto {
+            session_generation: snapshot.session_generation,
+            rooms: snapshot
+                .rooms
+                .into_iter()
+                .map(|room| TypingRoomDto {
+                    room_id: room.room_id,
+                    user_ids: room.user_ids,
+                })
+                .collect(),
+        })
+    }
+
+    pub async fn typing_set(
+        &self,
+        room_id: String,
+        typing: bool,
+    ) -> Result<(), TypingCommandError> {
+        self.core
+            .command(CommandEnvelope {
+                command: TYPING_SET_COMMAND.to_owned(),
+                session_generation: TYPING_PRESENCE_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "roomId": room_id, "typing": typing }),
+            })
+            .await
+            .map_err(map_typing_set_core_error)?;
+        Ok(())
+    }
+
+    pub async fn presence_snapshot(
+        &self,
+        user_id: String,
+    ) -> Result<PresenceSnapshotDto, PresenceCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: PRESENCE_SNAPSHOT_COMMAND.to_owned(),
+                session_generation: TYPING_PRESENCE_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "userId": user_id }),
+            })
+            .await
+            .map_err(map_presence_snapshot_core_error)?;
+        let result: NativePresenceSnapshotResult = serde_json::from_value(response.payload)
+            .map_err(|_| {
+                presence_failed(
+                    PRESENCE_SNAPSHOT_FAILED_CODE,
+                    PRESENCE_SNAPSHOT_FAILED_DESCRIPTION,
+                )
+            })?;
+        Ok(presence_snapshot_dto(result))
+    }
+
+    pub async fn presence_subscribe(
+        &self,
+        user_id: String,
+    ) -> Result<PresenceSubscriptionDto, PresenceCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: PRESENCE_SUBSCRIBE_COMMAND.to_owned(),
+                session_generation: TYPING_PRESENCE_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "userId": user_id }),
+            })
+            .await
+            .map_err(map_presence_subscribe_core_error)?;
+        let subscription: NativePresenceSubscription = serde_json::from_value(response.payload)
+            .map_err(|_| {
+                presence_failed(
+                    PRESENCE_SUBSCRIBE_FAILED_CODE,
+                    PRESENCE_SUBSCRIBE_FAILED_DESCRIPTION,
+                )
+            })?;
+        Ok(PresenceSubscriptionDto {
+            subscription_id: subscription.subscription_id,
+            user_id: subscription.user_id,
+            session_generation: subscription.session_generation,
+        })
+    }
+
+    pub async fn presence_unsubscribe(
+        &self,
+        subscription_id: String,
+    ) -> Result<(), PresenceCommandError> {
+        self.core
+            .command(CommandEnvelope {
+                command: PRESENCE_UNSUBSCRIBE_COMMAND.to_owned(),
+                session_generation: TYPING_PRESENCE_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "subscriptionId": subscription_id }),
+            })
+            .await
+            .map_err(map_presence_unsubscribe_core_error)?;
+        Ok(())
     }
 }
 

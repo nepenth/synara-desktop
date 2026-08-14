@@ -312,12 +312,56 @@ interface TimelineError {
   Failed(string code, string description);
 };
 
+// Privacy-safe typing room row. No tokens or password.
+dictionary TypingRoomDto {
+  string room_id;
+  sequence<string> user_ids;
+};
+
+// Privacy-safe typing snapshot from the registered Core command.
+dictionary TypingSnapshotDto {
+  u64 session_generation;
+  sequence<TypingRoomDto> rooms;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface TypingCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe presence snapshot. Identity fields only; no tokens or password.
+dictionary PresenceSnapshotDto {
+  string status;
+  u64 session_generation;
+  string user_id;
+  string? state;
+  boolean currently_active;
+  u64? last_active_ts;
+  string? status_msg;
+};
+
+// Privacy-safe presence subscription. No tokens or password.
+dictionary PresenceSubscriptionDto {
+  string subscription_id;
+  string user_id;
+  u64 session_generation;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface PresenceCommandError {
+  Failed(string code, string description);
+};
+
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
 // P4-S3b adds restore_persisted_session. P4-S3c adds dedicated login_with_password.
 // P4-S3d adds attach_session_owners for the desktop owner set.
 // P4-S4 adds typed room_list_snapshot for matrix_room_list_snapshot only.
 // P4-S5 adds typed invites_snapshot for matrix_invites_snapshot only.
 // P4-S6 adds typed timeline_open / timeline_close / timeline_paginate only.
+// P4-S7 adds typed typing_snapshot / typing_set / presence_snapshot /
+// presence_subscribe / presence_unsubscribe only.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -357,4 +401,19 @@ interface SharedCore {
 
   [Async, Throws=TimelineError]
   TimelineSnapshotDto timeline_paginate(string stream_id, string direction);
+
+  [Async, Throws=TypingCommandError]
+  TypingSnapshotDto typing_snapshot();
+
+  [Async, Throws=TypingCommandError]
+  void typing_set(string room_id, boolean typing);
+
+  [Async, Throws=PresenceCommandError]
+  PresenceSnapshotDto presence_snapshot(string user_id);
+
+  [Async, Throws=PresenceCommandError]
+  PresenceSubscriptionDto presence_subscribe(string user_id);
+
+  [Async, Throws=PresenceCommandError]
+  void presence_unsubscribe(string subscription_id);
 };

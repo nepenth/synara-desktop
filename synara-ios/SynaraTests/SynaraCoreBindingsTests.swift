@@ -247,6 +247,78 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreTypingPresenceWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+
+        do {
+            _ = try await SharedCoreTypingPresence.typingSnapshot(core: core)
+            XCTFail("Fail-closed SharedCore must not snapshot typing without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-typing-snapshot-no-session"))
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            try await SharedCoreTypingPresence.typingSet(
+                core: core,
+                roomId: "!r:example.org",
+                typing: true
+            )
+            XCTFail("Fail-closed SharedCore must not set typing without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-typing-set-no-session"))
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreTypingPresence.presenceSnapshot(
+                core: core,
+                userId: "@bob:example.org"
+            )
+            XCTFail("Fail-closed SharedCore must not snapshot presence without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-presence-snapshot-no-session"))
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreTypingPresence.presenceSubscribe(
+                core: core,
+                userId: "@bob:example.org"
+            )
+            XCTFail("Fail-closed SharedCore must not subscribe presence without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-presence-subscribe-no-session"))
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            try await SharedCoreTypingPresence.presenceUnsubscribe(
+                core: core,
+                subscriptionId: "presence-1-0"
+            )
+            XCTFail("Fail-closed SharedCore must not unsubscribe presence without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-presence-unsubscribe-no-session"))
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 
