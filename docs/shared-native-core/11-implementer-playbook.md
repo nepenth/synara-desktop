@@ -136,10 +136,10 @@ Run this checklist in order. Stop at the first yes.
    is stacked. S9-4 image packs is stacked. S9-5 later account-data
    is stacked. S9-6 m.direct is stacked. S9-7 room notes is stacked.
    S9-8 own display-name/avatar is stacked. S9-9 room name/topic/avatar
-   is stacked. S9-10 directory visibility is stacked. S9-11 directory
-   search/protocols/cancel is stacked. S9-12 room leave/join (section 9.5)
-   is on this branch. Next after merge is invite/kick/ban on
-   NativeRoomJoinRuleOwner.
+   is stacked.    S9-10 directory visibility is stacked. S9-11 directory
+   search/protocols/cancel is stacked. S9-12 room leave/join is stacked.
+   S9-13 room invite/kick/ban/unban (section 9.5) is on this branch.
+   Next after merge is power levels on NativeRoomJoinRuleOwner.
    UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
@@ -314,9 +314,12 @@ P4-S9-10 iOS directory visibility     stacked
 P4-S9-11 iOS directory search         stacked
        matrix_room_directory_protocols / matrix_room_directory_search /
        matrix_room_directory_cancel. Results stay metadata. No avatar bytes.
-P4-S9-12 iOS room leave/join          **this branch**
+P4-S9-12 iOS room leave/join          stacked
        matrix_room_leave / matrix_room_join. Write ack is status only.
-       Invite/kick/ban stay off.
+P4-S9-13 iOS room invite/kick/ban     **this branch**
+       matrix_room_invite / matrix_room_kick / matrix_room_ban /
+       matrix_room_unban. Write ack is status only.
+       Power levels, room create, members, and spaces stay off.
 P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        only when grep shows no remaining product callers
 P4-S11 NSE read-only store API        (never boot sync in NSE)
@@ -454,23 +457,25 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 
-S9-11 directory search is stacked at #959. **S9-12 (this branch)** adds
-typed UniFFI wrappers for the two registered room leave/join commands.
+S9-12 room leave/join is stacked at #960. **S9-13 (this branch)** adds
+typed UniFFI wrappers for the four registered room moderation commands.
 
-1. `SharedCore.room_leave` / `room_join` call `Core.command` with the same
-   camelCase payloads desktop uses (`roomId`, `roomIdOrAlias`, `viaServers`).
-   Write ack is status only. Do not re-wrap directory search or visibility.
-2. Do not reimplement leave/join in Swift. Do not wrap invite/kick/ban,
-   power levels, room create, members, spaces, or leftover media.
+1. `SharedCore.room_invite` / `room_kick` / `room_ban` / `room_unban` call
+   `Core.command` with the same camelCase payloads desktop uses
+   (`roomId`, `userId`, `reason`). Write ack is status only. Do not
+   re-wrap leave/join or directory search.
+2. Do not reimplement invite/kick/ban/unban in Swift. Do not wrap power
+   levels, room create, members, spaces, or leftover media.
 3. Do not start `SyncService`. Missing owner fail-closes with the
    registered `p2-*-no-session` codes. Unstarted sync returns the
-   registered handler's real outcome. Planted leave of an unknown room
-   and planted join of an invalid id must not require a live server.
-   Failed errors must not echo room id, alias, or via servers.
+   registered handler's real outcome. Planted moderation of an unknown
+   room must not require a live server. Failed errors must not echo
+   room id, user id, or reason.
 4. Helper + XCTest are the iOS surface this slice. Do not swap
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
-5. One command family per PR. Next is invite/kick/ban on
-   `NativeRoomJoinRuleOwner`. Do not wrap leftover
+5. One command family per PR. Next is power levels on
+   `NativeRoomJoinRuleOwner` (`matrix_room_set_power_level` and the
+   bulk/tag writers). Do not wrap leftover
    password/export/import/bootstrap, `matrix_crypto_status`, or
    `matrix_cross_signing_status`. Do not hit production homeservers.
 

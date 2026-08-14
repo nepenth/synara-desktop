@@ -43,6 +43,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreDirectoryVisibility.swift",
   "synara-ios/Synara/Services/SharedCoreDirectorySearch.swift",
   "synara-ios/Synara/Services/SharedCoreRoomLeaveJoin.swift",
+  "synara-ios/Synara/Services/SharedCoreRoomModeration.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -152,6 +153,10 @@ const sharedCoreDirectorySearch = readFileSync(
 );
 const sharedCoreRoomLeaveJoin = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreRoomLeaveJoin.swift"),
+  "utf8"
+);
+const sharedCoreRoomModeration = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreRoomModeration.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -523,6 +528,24 @@ const assertions = [
   [sharedCoreRoomLeaveJoin, "roomJoin", "P4-S9-12 product room-join helper"],
   [sharedCoreRoomLeaveJoin, "core: SharedCore", "P4-S9-12 helper takes an already-constructed SharedCore"],
   [sharedCoreRoomLeaveJoin, "core.roomLeave", "P4-S9-12 helper leaves on the caller-owned instance"],
+  [sharedCoreFfi, "room_invite", "P4-S9-13 typed room-invite FFI"],
+  [sharedCoreFfi, "matrix_room_invite", "P4-S9-13 calls the registered room-invite command"],
+  [sharedCoreFfi, "matrix_room_kick", "P4-S9-13 calls the registered room-kick command"],
+  [sharedCoreFfi, "matrix_room_ban", "P4-S9-13 calls the registered room-ban command"],
+  [sharedCoreFfi, "matrix_room_unban", "P4-S9-13 calls the registered room-unban command"],
+  [udl, "RoomModerationWriteDto room_invite(", "P4-S9-13 SharedCore room invite"],
+  [udl, "RoomModerationWriteDto room_kick(", "P4-S9-13 SharedCore room kick"],
+  [udl, "RoomModerationWriteDto room_ban(", "P4-S9-13 SharedCore room ban"],
+  [udl, "RoomModerationWriteDto room_unban(", "P4-S9-13 SharedCore room unban"],
+  [udl, "dictionary RoomModerationWriteDto", "P4-S9-13 privacy-safe room-moderation write DTO"],
+  [udl, "interface RoomModerationCommandError", "P4-S9-13 static room-moderation error"],
+  [swiftBindingsTests, "testSharedCoreRoomModerationWithoutSessionFailsClosed", "Swift P4-S9-13 fail-closed room moderation test"],
+  [sharedCoreRoomModeration, "roomInvite", "P4-S9-13 product room-invite helper"],
+  [sharedCoreRoomModeration, "roomKick", "P4-S9-13 product room-kick helper"],
+  [sharedCoreRoomModeration, "roomBan", "P4-S9-13 product room-ban helper"],
+  [sharedCoreRoomModeration, "roomUnban", "P4-S9-13 product room-unban helper"],
+  [sharedCoreRoomModeration, "core: SharedCore", "P4-S9-13 helper takes an already-constructed SharedCore"],
+  [sharedCoreRoomModeration, "core.roomInvite", "P4-S9-13 helper invites on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1364,9 +1387,14 @@ for (const required of ["room_leave", "room_join("]) {
     throw new Error(`P4-S9-12 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "room_invite", "room_kick", "room_ban", "room_unban", "crypto_status", "backup_setup"]) {
+for (const required of ["room_invite", "room_kick", "room_ban", "room_unban"]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-13 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "room_set_power_level", "room_create", "room_members_snapshot", "space_parents_snapshot", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-12`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-13`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1517,6 +1545,17 @@ for (const forbidden of ["roomInvite", "roomKick", "roomBan", "roomUnban", "room
     throw new Error(`P4-S9-12 helper must not wrap ${forbidden}`);
   }
 }
+if (sharedCoreRoomModeration.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-13 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreRoomModeration.includes("SharedCore.newWithSecretStore") || sharedCoreRoomModeration.includes("newWithSecretStore")) {
+  throw new Error("P4-S9-13 helper must not construct SharedCore");
+}
+for (const forbidden of ["setPowerLevel", "roomCreate", "roomMembersSnapshot", "roomLeave", "backupStatus"]) {
+  if (sharedCoreRoomModeration.includes(forbidden)) {
+    throw new Error(`P4-S9-13 helper must not wrap ${forbidden}`);
+  }
+}
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
 if (!roomListDto) throw new Error("missing RoomListSnapshotDto");
 if (/\bpassword\b/.test(roomListDto[1]) || /\btoken\b/.test(roomListDto[1])) {
@@ -1636,6 +1675,11 @@ const roomMembershipWriteDto = udl.match(/dictionary RoomMembershipWriteDto \{([
 if (!roomMembershipWriteDto) throw new Error("missing RoomMembershipWriteDto");
 if (/\bpassword\b/.test(roomMembershipWriteDto[1]) || /\btoken\b/.test(roomMembershipWriteDto[1]) || /\bbytes\b/.test(roomMembershipWriteDto[1]) || /\broom_id\b/.test(roomMembershipWriteDto[1]) || /\balias\b/.test(roomMembershipWriteDto[1]) || /\bvia\b/.test(roomMembershipWriteDto[1])) {
   throw new Error("RoomMembershipWriteDto must not carry password, token, bytes, room_id, alias, or via fields");
+}
+const roomModerationWriteDto = udl.match(/dictionary RoomModerationWriteDto \{([\s\S]*?)\};/);
+if (!roomModerationWriteDto) throw new Error("missing RoomModerationWriteDto");
+if (/\bpassword\b/.test(roomModerationWriteDto[1]) || /\btoken\b/.test(roomModerationWriteDto[1]) || /\bbytes\b/.test(roomModerationWriteDto[1]) || /\broom_id\b/.test(roomModerationWriteDto[1]) || /\buser_id\b/.test(roomModerationWriteDto[1]) || /\breason\b/.test(roomModerationWriteDto[1])) {
+  throw new Error("RoomModerationWriteDto must not carry password, token, bytes, room_id, user_id, or reason fields");
 }
 const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
 if (!loginDto) throw new Error("missing SessionLoginDto");

@@ -959,6 +959,76 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreRoomModerationWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let roomId = "!s913SecretRoom:example.org"
+        let userId = "@s913SecretUser:example.org"
+        let reason = "s913SecretReason"
+
+        do {
+            _ = try await SharedCoreRoomModeration.roomInvite(
+                core: core,
+                roomId: roomId,
+                userId: userId,
+                reason: reason
+            )
+            XCTFail("Fail-closed SharedCore must not invite without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-invite-no-session"))
+            for forbidden in ["syt_", "token", roomId, userId, reason] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreRoomModeration.roomKick(
+                core: core,
+                roomId: roomId,
+                userId: userId,
+                reason: reason
+            )
+            XCTFail("Fail-closed SharedCore must not kick without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-kick-no-session"))
+            for forbidden in ["syt_", "token", roomId, userId, reason] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreRoomModeration.roomBan(
+                core: core,
+                roomId: roomId,
+                userId: userId,
+                reason: reason
+            )
+            XCTFail("Fail-closed SharedCore must not ban without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-ban-no-session"))
+            for forbidden in ["syt_", "token", roomId, userId, reason] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreRoomModeration.roomUnban(
+                core: core,
+                roomId: roomId,
+                userId: userId
+            )
+            XCTFail("Fail-closed SharedCore must not unban without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-unban-no-session"))
+            for forbidden in ["syt_", "token", roomId, userId, reason] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

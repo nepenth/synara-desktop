@@ -462,8 +462,8 @@ for any of those gates.
    secret, file path, or bytes in the Core envelope. Do not invent one.
 3. P4-S3 plan is `12-p4-s3-live-client.md`. S3a landed in #935. S3b
    restore is accepted. S3c login is accepted. S3d attach is accepted.
-   **S9-12** typed room leave/join (playbook §9.5) is on
-   this branch. Next after merge is invite/kick/ban. UniFFI expansion needs free disk ≥ 20 Gi for
+   **S9-13** typed room invite/kick/ban/unban (playbook §9.5) is on
+   this branch. Next after merge is power levels. UniFFI expansion needs free disk ≥ 20 Gi for
    local cargo/bindgen. There is no source-without-bindgen exception.
    If disk is under 20 Gi: stop. Docs-only PRs are still allowed.
 4. After S3, consume already-registered commands one family per PR.
