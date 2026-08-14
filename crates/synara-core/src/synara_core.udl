@@ -453,6 +453,21 @@ interface EditMessageError {
   Failed(string code, string description);
 };
 
+// Privacy-safe poll-respond write ack from the registered Core command.
+// No media bytes. Answers and event id stay out of Failed errors.
+dictionary PollRespondDto {
+  string room_id;
+  string poll_event_id;
+  string event_id;
+  string status;
+};
+
+// Static source constants only. Never echo answers, event id, room id, token, or password.
+[Error]
+interface PollRespondError {
+  Failed(string code, string description);
+};
+
 // Privacy-safe typing room row. No tokens or password.
 dictionary TypingRoomDto {
   string room_id;
@@ -1331,5 +1346,8 @@ interface SharedCore {
 
   [Async, Throws=EditMessageError]
   EditMessageDto edit_message(string room_id, string event_id, string body, string? msg_type, string? formatted_body, sequence<string>? mention_user_ids, boolean? mention_room, string? txn_id);
+
+  [Async, Throws=PollRespondError]
+  PollRespondDto poll_respond(string room_id, string poll_event_id, sequence<string> answer_ids);
 
 };

@@ -3,7 +3,7 @@
 //! Calls the already-registered Core handler. Does not start SyncService.
 //! Metadata / mxc only. No image bytes or file path.
 //! Failed errors stay static and must not echo mxc or room id.
-//! Respond stays off.
+//! Timeline edit/redact/report stay off.
 
 use std::collections::HashMap;
 use std::fs;
@@ -91,7 +91,6 @@ fn send_sticker_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("send_text("));
     assert!(shared_core.contains("composer_set_reply_draft("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("poll_respond"));
     assert!(!shared_core.contains("backup_status"));
 }
 

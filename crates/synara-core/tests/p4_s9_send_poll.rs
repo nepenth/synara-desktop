@@ -2,7 +2,7 @@
 //!
 //! Calls the already-registered Core handler. Does not start SyncService.
 //! No media bytes. Failed errors stay static and must not echo question,
-//! options, or room id. Respond stays off.
+//! options, or room id. Timeline edit/redact/report stay off.
 
 use std::collections::HashMap;
 use std::fs;
@@ -89,7 +89,6 @@ fn send_poll_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("send_text("));
     assert!(shared_core.contains("composer_set_reply_draft("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("poll_respond"));
     assert!(!shared_core.contains("backup_status"));
 }
 

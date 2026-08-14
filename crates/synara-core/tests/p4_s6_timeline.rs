@@ -83,7 +83,6 @@ fn timeline_surface_exposes_only_open_close_paginate() {
     assert!(shared_core.contains("timeline_paginate"));
     assert!(shared_core.contains("invites_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("poll_respond"));
 }
 
 #[test]

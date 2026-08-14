@@ -83,7 +83,6 @@ fn room_members_snapshots_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("room_create("));
     assert!(shared_core.contains("room_set_power_level("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("poll_respond"));
     assert!(!shared_core.contains("backup_status"));
 }
 

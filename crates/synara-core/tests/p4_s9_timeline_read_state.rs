@@ -83,7 +83,6 @@ fn timeline_read_state_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("invites_accept("));
     assert!(shared_core.contains("timeline_open("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("poll_respond"));
     assert!(!shared_core.contains("backup_status"));
 }
 

@@ -106,6 +106,9 @@
 //! P4-S9-25 adds a typed `edit_message` wrapper for the already-registered
 //! `matrix_edit_message` Core command only. No media bytes. Failed errors never
 //! echo body, event id, or room id. Poll respond stays off.
+//! P4-S9-26 adds a typed `poll_respond` wrapper for the already-registered
+//! `matrix_poll_respond` Core command only. No media bytes. Failed errors never
+//! echo answers, event id, or room id. Timeline edit/redact/report stay off.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -581,6 +584,13 @@ const EDIT_MESSAGE_NO_SESSION_DESCRIPTION: &str = "No timeline session is availa
 const EDIT_MESSAGE_FAILED_CODE: &str = "p4-s9-25-edit-message-failed";
 const EDIT_MESSAGE_FAILED_DESCRIPTION: &str = "The edit-message request could not be completed.";
 const EDIT_MESSAGE_OWNER_DESCRIPTION: &str = "The edit-message request is not available.";
+const POLL_RESPOND_GENERATION: u64 = 0;
+const POLL_RESPOND_COMMAND: &str = "matrix_poll_respond";
+const POLL_RESPOND_NO_SESSION_CODE: &str = "p2-poll-respond-no-session";
+const POLL_RESPOND_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
+const POLL_RESPOND_FAILED_CODE: &str = "p4-s9-26-poll-respond-failed";
+const POLL_RESPOND_FAILED_DESCRIPTION: &str = "The poll-respond request could not be completed.";
+const POLL_RESPOND_OWNER_DESCRIPTION: &str = "The poll-respond request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1114,6 +1124,31 @@ impl std::fmt::Display for EditMessageError {
 }
 
 impl std::error::Error for EditMessageError {}
+
+/// Privacy-safe poll-respond write ack from the registered Core command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PollRespondDto {
+    pub room_id: String,
+    pub poll_event_id: String,
+    pub event_id: String,
+    pub status: String,
+}
+
+/// Static fail-closed poll-respond error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PollRespondError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for PollRespondError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for PollRespondError {}
 
 /// Static fail-closed timeline error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3785,6 +3820,20 @@ impl SharedCore {
         .await
     }
 
+    pub async fn poll_respond(
+        &self,
+        room_id: String,
+        poll_event_id: String,
+        answer_ids: Vec<String>,
+    ) -> Result<PollRespondDto, PollRespondError> {
+        self.poll_respond_command(serde_json::json!({
+            "roomId": room_id,
+            "pollEventId": poll_event_id,
+            "answerIds": answer_ids,
+        }))
+        .await
+    }
+
     async fn space_null_command(
         &self,
         command: &'static str,
@@ -3968,6 +4017,28 @@ impl SharedCore {
                 edit_message_failed(EDIT_MESSAGE_FAILED_CODE, EDIT_MESSAGE_FAILED_DESCRIPTION)
             })?;
         Ok(edit_message_dto(result))
+    }
+
+    async fn poll_respond_command(
+        &self,
+        payload: serde_json::Value,
+    ) -> Result<PollRespondDto, PollRespondError> {
+        let payload = poll_respond_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: POLL_RESPOND_COMMAND.to_owned(),
+                session_generation: POLL_RESPOND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_poll_respond_core_error(POLL_RESPOND_NO_SESSION_CODE, error))?;
+        let result: PollRespondResultWire =
+            serde_json::from_value(response.payload).map_err(|_| {
+                poll_respond_failed(POLL_RESPOND_FAILED_CODE, POLL_RESPOND_FAILED_DESCRIPTION)
+            })?;
+        Ok(poll_respond_dto(result))
     }
 
     async fn invite_action_command(
@@ -7105,6 +7176,65 @@ fn edit_message_dto(result: EditMessageResultWire) -> EditMessageDto {
         room_id: result.room_id,
         event_id: result.event_id,
         local_txn_id: result.local_txn_id,
+        status: result.status,
+    }
+}
+
+fn poll_respond_failed(code: &str, description: &'static str) -> PollRespondError {
+    PollRespondError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_poll_respond_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> PollRespondError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            poll_respond_failed(code, POLL_RESPOND_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code.starts_with("p2-poll-respond-")
+                || code.starts_with("v-send.3-poll-")
+                || code.starts_with("d0.4-send-") =>
+        {
+            poll_respond_failed(code, POLL_RESPOND_OWNER_DESCRIPTION)
+        }
+        _ => poll_respond_failed(POLL_RESPOND_FAILED_CODE, POLL_RESPOND_FAILED_DESCRIPTION),
+    }
+}
+
+fn poll_respond_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, PollRespondError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(poll_respond_failed(
+            POLL_RESPOND_FAILED_CODE,
+            POLL_RESPOND_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PollRespondResultWire {
+    room_id: String,
+    poll_event_id: String,
+    event_id: String,
+    status: String,
+}
+
+fn poll_respond_dto(result: PollRespondResultWire) -> PollRespondDto {
+    PollRespondDto {
+        room_id: result.room_id,
+        poll_event_id: result.poll_event_id,
+        event_id: result.event_id,
         status: result.status,
     }
 }
