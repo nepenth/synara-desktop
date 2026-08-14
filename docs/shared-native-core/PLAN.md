@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`32e03091` (#933 SharedCore construction):** P0 is
+`ee896416` (#935 S3a SecretVault):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -137,8 +137,8 @@ acceptance criteria have all passed.
   crypto, sync, and lifecycle ownership, remain `MatrixRustSDKService`-owned.
   #931 exposes credential-free `register_flows` on UniFFI (closed DTO, no
   `params` JSON, no register/password/email-token). #933 adds constructor-only
-  UniFFI `SharedCore` backed by a Rust `IosFailClosedPlatform` (`Core::new`).
-  It does not expose `command`, Keychain, or a live Client. iOS still has no
+  UniFFI `SharedCore`. #935 installs a Swift `IosSecretVault` callback on that
+  constructor. It does not expose `command` or a live Client. iOS still has no
   registration product UI. This does **not** migrate iOS session, room-list,
   timeline, crypto, push/NSE, or `MatrixRustSDK` services, and it does not
   remove the upstream Swift SDK dependency.
