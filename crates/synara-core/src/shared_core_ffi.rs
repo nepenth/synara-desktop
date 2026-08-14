@@ -18,6 +18,8 @@
 //! wrappers for those three already-registered Core commands only.
 //! P4-S7 adds typed typing/presence wrappers for the five already-registered
 //! Core commands in that family only.
+//! P4-S8 adds a typed `verification_list` wrapper for the already-registered
+//! `matrix_verification_list` Core command only.
 //! This still exposes no generic command FFI or APNs surface.
 //! This is not the desktop leftover `matrix_restore_session`.
 
@@ -56,7 +58,10 @@ use crate::app::timeline::{
     TimelineViewSnapshot,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
-use crate::app::verification::NativeVerificationOwner;
+use crate::app::verification::{
+    NativeVerificationDirection, NativeVerificationInbox, NativeVerificationOwner,
+    NativeVerificationPhase, NativeVerificationRequest,
+};
 use crate::core::Core;
 use crate::dto::{SessionLifecycle, SessionSnapshot};
 use crate::platform::{IosFailClosedPlatform, Platform, SecretVault};
@@ -163,6 +168,12 @@ const PRESENCE_INVALID_USER_CODE: &str = "v-presence-invalid-user-id";
 const PRESENCE_INVALID_USER_DESCRIPTION: &str = "The presence user id is invalid.";
 const PRESENCE_INVALID_SUBSCRIPTION_CODE: &str = "v-presence-invalid-subscription-id";
 const PRESENCE_INVALID_SUBSCRIPTION_DESCRIPTION: &str = "The presence subscription id is invalid.";
+const VERIFICATION_LIST_COMMAND: &str = "matrix_verification_list";
+const VERIFICATION_LIST_GENERATION: u64 = 0;
+const VERIFICATION_LIST_NO_SESSION_CODE: &str = "p2-verification-list-no-session";
+const VERIFICATION_LIST_NO_SESSION_DESCRIPTION: &str = "No verification session is available.";
+const VERIFICATION_LIST_FAILED_CODE: &str = "p4-s8-list-failed";
+const VERIFICATION_LIST_FAILED_DESCRIPTION: &str = "The verification inbox could not be loaded.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -853,6 +864,96 @@ fn presence_snapshot_dto(result: NativePresenceSnapshotResult) -> PresenceSnapsh
     }
 }
 
+/// Privacy-safe verification request row. Identity/flow fields only; no tokens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerificationRequestDto {
+    pub flow_id: String,
+    pub other_user_id: String,
+    pub other_device_id: Option<String>,
+    pub direction: String,
+    pub phase: String,
+    pub started_ts: Option<u64>,
+}
+
+/// Privacy-safe verification inbox. No tokens or password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerificationInboxDto {
+    pub session_generation: u64,
+    pub requests: Vec<VerificationRequestDto>,
+}
+
+/// Static fail-closed verification-list error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VerificationListError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for VerificationListError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for VerificationListError {}
+
+fn verification_list_failed(
+    code: &'static str,
+    description: &'static str,
+) -> VerificationListError {
+    VerificationListError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_verification_list_core_error(error: MatrixIpcError) -> VerificationListError {
+    match error.diagnostic_id.as_deref() {
+        Some("p2-verification-list-no-session") => verification_list_failed(
+            VERIFICATION_LIST_NO_SESSION_CODE,
+            VERIFICATION_LIST_NO_SESSION_DESCRIPTION,
+        ),
+        _ => verification_list_failed(
+            VERIFICATION_LIST_FAILED_CODE,
+            VERIFICATION_LIST_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn verification_direction_as_str(direction: NativeVerificationDirection) -> String {
+    match direction {
+        NativeVerificationDirection::Incoming => "incoming",
+        NativeVerificationDirection::Outgoing => "outgoing",
+    }
+    .to_owned()
+}
+
+fn verification_phase_as_str(phase: NativeVerificationPhase) -> String {
+    match phase {
+        NativeVerificationPhase::Requested => "requested",
+        NativeVerificationPhase::Ready => "ready",
+        NativeVerificationPhase::Started => "started",
+        NativeVerificationPhase::SasReady => "sas_ready",
+        NativeVerificationPhase::Confirmed => "confirmed",
+        NativeVerificationPhase::Done => "done",
+        NativeVerificationPhase::Mismatched => "mismatched",
+        NativeVerificationPhase::Cancelled => "cancelled",
+    }
+    .to_owned()
+}
+
+fn verification_request_dto(request: NativeVerificationRequest) -> VerificationRequestDto {
+    VerificationRequestDto {
+        flow_id: request.flow_id,
+        other_user_id: request.other_user_id,
+        other_device_id: request.other_device_id,
+        direction: verification_direction_as_str(request.direction),
+        phase: verification_phase_as_str(request.phase),
+        started_ts: request.started_ts,
+    }
+}
+
 enum RestoredClientSlot {
     Empty,
     InFlight,
@@ -1533,6 +1634,34 @@ impl SharedCore {
             .await
             .map_err(map_presence_unsubscribe_core_error)?;
         Ok(())
+    }
+
+    pub async fn verification_list(&self) -> Result<VerificationInboxDto, VerificationListError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: VERIFICATION_LIST_COMMAND.to_owned(),
+                session_generation: VERIFICATION_LIST_GENERATION,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .map_err(map_verification_list_core_error)?;
+        let inbox: NativeVerificationInbox =
+            serde_json::from_value(response.payload).map_err(|_| {
+                verification_list_failed(
+                    VERIFICATION_LIST_FAILED_CODE,
+                    VERIFICATION_LIST_FAILED_DESCRIPTION,
+                )
+            })?;
+        Ok(VerificationInboxDto {
+            session_generation: inbox.session_generation,
+            requests: inbox
+                .requests
+                .into_iter()
+                .map(verification_request_dto)
+                .collect(),
+        })
     }
 }
 

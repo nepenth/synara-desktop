@@ -58,8 +58,7 @@ fn typing_presence_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("presence_snapshot"));
     assert!(udl.contains("presence_subscribe"));
     assert!(udl.contains("presence_unsubscribe"));
-    assert!(!udl.contains("matrix_verification_list"));
-    assert!(!udl.contains("verification_list"));
+    assert!(!udl.contains("matrix_verification_start"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_timeline_jump_latest"));
     let shared_core = udl
@@ -74,7 +73,8 @@ fn typing_presence_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("presence_unsubscribe"));
     assert!(shared_core.contains("timeline_open"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("verification_list"));
+    assert!(!shared_core.contains("verification_start"));
+    assert!(!shared_core.contains("begin_sas"));
     assert!(!shared_core.contains("jump_latest"));
 }
 

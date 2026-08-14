@@ -36,6 +36,7 @@ pub use shared_core_ffi::{
     SessionLoginDto, SessionLoginError, SessionRestoreDto, SessionRestoreError, SharedCore,
     TimelineError, TimelineOpenDto, TimelineOpenPositionDto, TimelineSnapshotDto,
     TimelineViewPositionDto, TypingCommandError, TypingRoomDto, TypingSnapshotDto,
+    VerificationInboxDto, VerificationListError, VerificationRequestDto,
 };
 
 mod core;

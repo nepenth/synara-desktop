@@ -128,12 +128,11 @@ landed in #938 (`9b4ec54f`). S3d attach landed in #939 (`ad63d56d`).
 S4 typed `room_list_snapshot` landed in #940 (`5a6f3e9b`).
 S5 typed `invites_snapshot` landed in #942 (`17c29afd`). S6 typed
 timeline open/close/paginate landed in #944 (`1a77815a`).
-S7 typed typing/presence (Core `matrix_typing_snapshot` /
-`matrix_typing_set` / `matrix_presence_snapshot` /
-`matrix_presence_subscribe` / `matrix_presence_unsubscribe` only;
-SyncService not started) is on `agent/snc-p4-s7-typing-presence`
+S7 typed typing/presence landed in #945 (`ee884ef3`).
+S8 typed `verification_list` (Core `matrix_verification_list` only;
+SyncService not started) is on `agent/snc-p4-s8-verification-list`
 per [12-p4-s3-live-client.md](12-p4-s3-live-client.md) and playbook §9.5.
-Password never rides a generic UniFFI `command`. Next after S7 is S8.
+Password never rides a generic UniFFI `command`. Next after S8 is S9.
 
 | Phase | Merged evidence | Current boundary |
 |---|---|---|

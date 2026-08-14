@@ -464,8 +464,9 @@ for any of those gates.
    restore landed in #937. S3c login landed in #938. S3d attach landed
    in #939. S4 typed `room_list_snapshot` landed in #940. S5 typed
    `invites_snapshot` landed in #942. S6 typed timeline
-   open/close/paginate landed in #944. **S7** typed typing/presence
-   (playbook §9.5) is on this branch. Next after merge is S8. UniFFI
+   open/close/paginate landed in #944. S7 typed typing/presence
+   landed in #945. **S8** typed `verification_list` (playbook §9.5)
+   is on this branch. Next after merge is S9. UniFFI
    expansion needs free disk ≥ 20 Gi for
    local cargo/bindgen. There is no source-without-bindgen exception.
    If disk is under 20 Gi: stop. Docs-only PRs are still allowed.
