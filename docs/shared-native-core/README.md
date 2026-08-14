@@ -9,6 +9,7 @@ timeline, and crypto are not implemented twice.
 `feature/shared-native-core`. It is not on `main`. It is not a release.
 Never claim 100%. Implementers start at
 [11-implementer-playbook.md](11-implementer-playbook.md).
+P4-S3 plan: [12-p4-s3-live-client.md](12-p4-s3-live-client.md).
 
 | | |
 |---|---|

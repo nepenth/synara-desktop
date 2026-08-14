@@ -147,9 +147,29 @@ interface SessionProjectionCore {
   void close();
 };
 
-// P4-S2: construct and retain a real Core with a Rust-owned, fail-closed iOS
-// Platform. This is deliberately construction-only: no Platform callback,
-// command, session, owner attachment, password, Keychain, or APNs surface.
+// P4-S3a: Swift-owned key/value secret store. Session tokens may live here
+// later. Passwords, recovery secrets, and media bytes must not use this as a
+// generic Core.command channel. Errors are static; keys/values are not echoed.
+[Error]
+interface IosSecretVaultError {
+  Unavailable(string code, string description);
+};
+
+callback interface IosSecretVault {
+  [Throws=IosSecretVaultError]
+  bytes? get(string key);
+
+  [Throws=IosSecretVaultError]
+  void put(string key, bytes value);
+
+  [Throws=IosSecretVaultError]
+  void delete(string key);
+};
+
+// P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
+// Still no command, session, owner attachment, password, or APNs surface.
 interface SharedCore {
   constructor();
+  [Name="new_with_secret_store"]
+  constructor(IosSecretVault store);
 };

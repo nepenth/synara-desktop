@@ -252,8 +252,8 @@ P4-S0  already landed: UniFFI scaffold, login_flows, SessionProjectionCore,
 
 P4-S1  UniFFI register_flows          LANDED #931 (credential-free)
 P4-S2  Swift Platform + Core::new     LANDED #933 (fail-closed; no command)
-P4-S3  iOS live Client via Core       (Keychain vault; password stays Swift)
-       + attach owners after login/restore  ← gate for all later Slices
+P4-S3  iOS live Client via Core       plan: 12-p4-s3-live-client.md
+       S3a vault callback (this lane) → S3b restore → S3c login → S3d attach
 P4-S4  iOS room_list_snapshot         (needs SyncServiceOwner)
 P4-S5  iOS invites_snapshot           (needs join-rule owner)
 P4-S6  iOS timeline open/close/paginate (needs NativeTimelineOwner)
