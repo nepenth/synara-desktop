@@ -164,6 +164,21 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreRoomListWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+
+        do {
+            _ = try await SharedCoreRoomList.roomListSnapshot(core: core)
+            XCTFail("Fail-closed SharedCore must not snapshot rooms without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-list-snapshot-no-session"))
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

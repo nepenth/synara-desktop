@@ -30,7 +30,8 @@ pub use session_projection_ffi::{
 
 mod shared_core_ffi;
 pub use shared_core_ffi::{
-    IosSecretVault, IosSecretVaultError, SessionAttachDto, SessionAttachError, SessionLoginDto,
+    IosSecretVault, IosSecretVaultError, RoomListRoomDto, RoomListSnapshotDto,
+    RoomListSnapshotError, SessionAttachDto, SessionAttachError, SessionLoginDto,
     SessionLoginError, SessionRestoreDto, SessionRestoreError, SharedCore,
 };
 

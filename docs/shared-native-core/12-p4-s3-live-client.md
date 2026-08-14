@@ -6,8 +6,9 @@ It does **not** accept P4 or claim iOS is on the shared engine.
 Evidence tip when written: `feature/shared-native-core` `ee896416` (#935 S3a).
 S3a landed in #935. S3b restore is accepted at `ea05b0ab`.
 S3c login (Option A) is accepted at `fe8ad87b`.
-**S3d attach lands on this branch** (`agent/snc-p4-s3d-attach`).
-Playbook recipe: §9.4d. Next after S3d is S4 (`matrix_room_list_snapshot`).
+S3d attach is accepted at `05264b39`.
+**S4 room-list snapshot lands on `agent/snc-p4-s4-room-list`.**
+Playbook recipe: §9.5. Next after S4 is S5 invites.
 
 ## Decision
 

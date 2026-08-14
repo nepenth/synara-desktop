@@ -26,6 +26,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreSessionRestore.swift",
   "synara-ios/Synara/Services/SharedCoreSessionLogin.swift",
   "synara-ios/Synara/Services/SharedCoreSessionAttach.swift",
+  "synara-ios/Synara/Services/SharedCoreRoomList.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -67,6 +68,10 @@ const sharedCoreLogin = readFileSync(
 );
 const sharedCoreAttach = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreSessionAttach.swift"),
+  "utf8"
+);
+const sharedCoreRoomList = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreRoomList.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -178,6 +183,16 @@ const assertions = [
   [sharedCoreAttach, "attachSessionOwners", "P4-S3d product attach helper"],
   [sharedCoreAttach, "core: SharedCore", "P4-S3d helper takes an already-constructed SharedCore"],
   [sharedCoreAttach, "core.attachSessionOwners", "P4-S3d helper attaches on the caller-owned instance"],
+  [sharedCoreFfi, "room_list_snapshot", "P4-S4 typed room-list FFI"],
+  [sharedCoreFfi, "matrix_room_list_snapshot", "P4-S4 calls the registered Core command"],
+  [sharedCoreFfi, "CommandEnvelope", "P4-S4 uses Core.command internally"],
+  [udl, "RoomListSnapshotDto room_list_snapshot()", "P4-S4 SharedCore room-list operation"],
+  [udl, "dictionary RoomListSnapshotDto", "P4-S4 privacy-safe room-list DTO"],
+  [udl, "interface RoomListSnapshotError", "P4-S4 static room-list error"],
+  [swiftBindingsTests, "testSharedCoreRoomListWithoutSessionFailsClosed", "Swift P4-S4 fail-closed room-list test"],
+  [sharedCoreRoomList, "roomListSnapshot", "P4-S4 product room-list helper"],
+  [sharedCoreRoomList, "core: SharedCore", "P4-S4 helper takes an already-constructed SharedCore"],
+  [sharedCoreRoomList, "core.roomListSnapshot", "P4-S4 helper reads on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -937,9 +952,12 @@ if (!sharedCoreBody.includes("login_with_password")) {
 if (!sharedCoreBody.includes("attach_session_owners")) {
   throw new Error("P4-S3d SharedCore must expose attach_session_owners");
 }
-for (const forbidden of ["command", "open(", "matrix_login_password", "persist_planted", "attach_typing"]) {
+if (!sharedCoreBody.includes("room_list_snapshot")) {
+  throw new Error("P4-S4 SharedCore must expose room_list_snapshot");
+}
+for (const forbidden of ["command(", "open(", "matrix_login_password", "persist_planted", "attach_typing", "invites_snapshot"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S3d`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S4`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -956,6 +974,14 @@ if (sharedCoreLogin.includes("SharedCore(store:")) {
 }
 if (sharedCoreAttach.includes("SharedCore(store:")) {
   throw new Error("P4-S3d helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreRoomList.includes("SharedCore(store:")) {
+  throw new Error("P4-S4 helper must not construct-and-drop SharedCore");
+}
+const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
+if (!roomListDto) throw new Error("missing RoomListSnapshotDto");
+if (/\bpassword\b/.test(roomListDto[1]) || /\btoken\b/.test(roomListDto[1])) {
+  throw new Error("RoomListSnapshotDto must not carry password or token fields");
 }
 const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
 if (!loginDto) throw new Error("missing SessionLoginDto");
