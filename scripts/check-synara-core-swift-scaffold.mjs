@@ -156,6 +156,7 @@ const assertions = [
   [swiftBindingsTests, "try await core.close()", "Swift generated FFI close execution"],
   [swiftBindingsTests, "testSharedCoreConstructsOverGeneratedRustFFI", "Swift P4-S2 Core construction test"],
   [swiftBindingsTests, "testSharedCoreAcceptsInMemorySecretStore", "Swift P4-S3a vault constructor test"],
+  [swiftBindingsTests, "SharedCore.newWithSecretStore(store:", "Swift P4-S3a UniFFI 0.28 named vault factory"],
   [swiftBindingsTests, "testSharedCoreRestoreWithoutVaultFailsClosed", "Swift P4-S3b fail-closed restore test"],
   [swiftBindingsTests, "testSharedCoreRestoreRejectsHostileIdentityWithoutEcho", "Swift P4-S3b hostile-identity restore test"],
   [swiftBindingsTests, "testSharedCoreRestoreHoldsInstanceAcrossCalls", "Swift P4-S3b helper keeps caller-owned SharedCore"],
@@ -933,7 +934,7 @@ if (projectionOperations.join(",") !== "open,session_snapshot,close") {
   throw new Error(`P4-3 facade must expose only open/session_snapshot/close; found ${projectionOperations.join(", ")}`);
 }
 
-// P4-S3d allows restore + login + attach_session_owners. Still forbid command.
+// P4-S4 allows restore + login + attach + room_list_snapshot. Still forbid generic command.
 const sharedCoreObject = udl.match(/interface SharedCore \{([\s\S]*?)\};/);
 if (!sharedCoreObject) throw new Error("missing SharedCore object");
 const sharedCoreBody = sharedCoreObject[1].replace(/\/\/.*$/gm, "");
@@ -954,6 +955,14 @@ if (!sharedCoreBody.includes("attach_session_owners")) {
 }
 if (!sharedCoreBody.includes("room_list_snapshot")) {
   throw new Error("P4-S4 SharedCore must expose room_list_snapshot");
+}
+if (!sharedCoreBody.includes('[Name="new_with_secret_store"]')) {
+  throw new Error("P4-S3a vault constructor must stay a named UniFFI factory");
+}
+if (swiftBindingsTests.includes("SharedCore(store:")) {
+  throw new Error(
+    "UniFFI 0.28 Swift has no SharedCore(store:) init; use SharedCore.newWithSecretStore(store:)"
+  );
 }
 for (const forbidden of ["command(", "open(", "matrix_login_password", "persist_planted", "attach_typing", "invites_snapshot"]) {
   if (sharedCoreBody.includes(forbidden)) {
