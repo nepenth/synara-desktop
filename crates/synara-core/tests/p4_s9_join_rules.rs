@@ -59,7 +59,7 @@ fn join_rule_surface_exposes_only_the_registered_snapshot() {
     assert!(!udl.contains("set_room_join_rule"));
     assert!(!udl.contains("matrix_room_leave"));
     assert!(!udl.contains("matrix_set_room_name"));
-    assert!(!udl.contains("later_snapshot"));
+    assert!(!udl.contains("mdirect_snapshot"));
     assert!(!udl.contains("matrix_login_password"));
     let shared_core = udl
         .split("interface SharedCore {")
@@ -72,7 +72,7 @@ fn join_rule_surface_exposes_only_the_registered_snapshot() {
     assert!(!shared_core.contains("set_room_join_rule"));
     assert!(!shared_core.contains("room_leave"));
     assert!(!shared_core.contains("room_join("));
-    assert!(!shared_core.contains("later_snapshot"));
+    assert!(!shared_core.contains("mdirect_snapshot"));
     assert!(!shared_core.contains("backup_status"));
 }
 

@@ -28,7 +28,10 @@
 //! There is no join-rule writer on Core.
 //! P4-S9-4 adds typed image-pack get/set wrappers for the six
 //! already-registered Core commands. Pack metadata/IDs/URLs/JSON may
-//! cross. Image/media bytes stay off. Later/m.direct stay off.
+//! cross. Image/media bytes stay off.
+//! P4-S9-5 adds typed later snapshot/upsert/complete/snooze/
+//! clear_completed/mark_reminded wrappers for those six already-registered
+//! Core commands. m.direct, room notes, and profile writes stay off.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -38,8 +41,9 @@ use matrix_sdk::Client;
 use zeroize::Zeroizing;
 
 use crate::app::account_data::{
-    NativeGlobalImagePacksSnapshot, NativeImagePack, NativeImagePackOwner,
-    NativeRoomImagePacksSnapshot, NativeUserImagePackSnapshot,
+    NativeGlobalImagePacksSnapshot, NativeImagePack, NativeImagePackOwner, NativeLaterSnapshot,
+    NativeRoomImagePacksSnapshot, NativeUserImagePackSnapshot, SynaraLaterItem,
+    SynaraLaterItemKind,
 };
 use crate::app::auth::{
     login_with_password as core_login_with_password, DevicePlatform, LoginOptions,
@@ -249,6 +253,25 @@ const IMAGE_PACK_FAILED_DESCRIPTION: &str = "The image-pack request could not be
 const IMAGE_PACK_INVALID_JSON_CODE: &str = "p4-s9-4-image-pack-invalid-json";
 const IMAGE_PACK_INVALID_JSON_DESCRIPTION: &str = "The image-pack content is invalid.";
 const IMAGE_PACK_OWNER_DESCRIPTION: &str = "The image-pack request is not available.";
+const LATER_COMMAND_GENERATION: u64 = 0;
+const LATER_SNAPSHOT_COMMAND: &str = "matrix_later_snapshot";
+const LATER_UPSERT_COMMAND: &str = "matrix_later_upsert";
+const LATER_COMPLETE_COMMAND: &str = "matrix_later_complete";
+const LATER_SNOOZE_COMMAND: &str = "matrix_later_snooze";
+const LATER_CLEAR_COMPLETED_COMMAND: &str = "matrix_later_clear_completed";
+const LATER_MARK_REMINDED_COMMAND: &str = "matrix_later_mark_reminded";
+const LATER_SNAPSHOT_NO_SESSION_CODE: &str = "p2-later-snapshot-no-session";
+const LATER_UPSERT_NO_SESSION_CODE: &str = "p2-later-upsert-no-session";
+const LATER_COMPLETE_NO_SESSION_CODE: &str = "p2-later-complete-no-session";
+const LATER_SNOOZE_NO_SESSION_CODE: &str = "p2-later-snooze-no-session";
+const LATER_CLEAR_COMPLETED_NO_SESSION_CODE: &str = "p2-later-clear-completed-no-session";
+const LATER_MARK_REMINDED_NO_SESSION_CODE: &str = "p2-later-mark-reminded-no-session";
+const LATER_NO_SESSION_DESCRIPTION: &str = "No later session is available.";
+const LATER_FAILED_CODE: &str = "p4-s9-5-later-failed";
+const LATER_FAILED_DESCRIPTION: &str = "The later request could not be completed.";
+const LATER_INVALID_ITEM_CODE: &str = "p4-s9-5-later-invalid-item";
+const LATER_INVALID_ITEM_DESCRIPTION: &str = "The later item is invalid.";
+const LATER_OWNER_DESCRIPTION: &str = "The later request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2161,6 +2184,104 @@ impl SharedCore {
         image_pack_write_dto(response.payload)
     }
 
+    pub async fn later_snapshot(&self) -> Result<LaterSnapshotDto, LaterCommandError> {
+        self.later_null_command(LATER_SNAPSHOT_COMMAND, LATER_SNAPSHOT_NO_SESSION_CODE)
+            .await
+    }
+
+    pub async fn later_upsert(
+        &self,
+        item: LaterItemDto,
+    ) -> Result<LaterSnapshotDto, LaterCommandError> {
+        let item = later_item_from_dto(item)?;
+        let payload = later_envelope_payload(serde_json::json!({ "item": item }))?;
+        self.later_command(LATER_UPSERT_COMMAND, LATER_UPSERT_NO_SESSION_CODE, payload)
+            .await
+    }
+
+    pub async fn later_complete(
+        &self,
+        item_id: String,
+        completed_at: Option<f64>,
+    ) -> Result<LaterSnapshotDto, LaterCommandError> {
+        let payload = later_envelope_payload(serde_json::json!({
+            "itemId": item_id,
+            "completedAt": completed_at,
+        }))?;
+        self.later_command(
+            LATER_COMPLETE_COMMAND,
+            LATER_COMPLETE_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+    }
+
+    pub async fn later_snooze(
+        &self,
+        item_id: String,
+        due_ts: f64,
+    ) -> Result<LaterSnapshotDto, LaterCommandError> {
+        let payload = later_envelope_payload(serde_json::json!({
+            "itemId": item_id,
+            "dueTs": due_ts,
+        }))?;
+        self.later_command(LATER_SNOOZE_COMMAND, LATER_SNOOZE_NO_SESSION_CODE, payload)
+            .await
+    }
+
+    pub async fn later_clear_completed(&self) -> Result<LaterSnapshotDto, LaterCommandError> {
+        self.later_null_command(
+            LATER_CLEAR_COMPLETED_COMMAND,
+            LATER_CLEAR_COMPLETED_NO_SESSION_CODE,
+        )
+        .await
+    }
+
+    pub async fn later_mark_reminded(
+        &self,
+        item_id: String,
+        reminded_at: Option<f64>,
+    ) -> Result<LaterSnapshotDto, LaterCommandError> {
+        let payload = later_envelope_payload(serde_json::json!({
+            "itemId": item_id,
+            "remindedAt": reminded_at,
+        }))?;
+        self.later_command(
+            LATER_MARK_REMINDED_COMMAND,
+            LATER_MARK_REMINDED_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+    }
+
+    async fn later_null_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+    ) -> Result<LaterSnapshotDto, LaterCommandError> {
+        self.later_command(command, no_session, serde_json::Value::Null)
+            .await
+    }
+
+    async fn later_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<LaterSnapshotDto, LaterCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: LATER_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_later_core_error(no_session, error))?;
+        later_snapshot_dto(response.payload)
+    }
+
     async fn image_pack_null_command(
         &self,
         command: &'static str,
@@ -2454,6 +2575,136 @@ fn image_pack_write_dto(
         .ok_or_else(|| image_pack_failed(IMAGE_PACK_FAILED_CODE, IMAGE_PACK_FAILED_DESCRIPTION))?;
     Ok(ImagePackWriteDto {
         status: status.to_owned(),
+    })
+}
+
+/// Privacy-safe later item. Room/event ids and timestamps only; no tokens.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LaterItemDto {
+    pub id: String,
+    pub kind: String,
+    pub room_id: String,
+    pub event_id: String,
+    pub created_at: f64,
+    pub due_ts: Option<f64>,
+    pub reminded_at: Option<f64>,
+    pub completed_at: Option<f64>,
+}
+
+/// Privacy-safe later snapshot. No tokens or secret material.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LaterSnapshotDto {
+    pub session_generation: u64,
+    pub version: u32,
+    pub items: Vec<LaterItemDto>,
+}
+
+/// Static fail-closed later-family error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LaterCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for LaterCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for LaterCommandError {}
+
+fn later_failed(code: &str, description: &'static str) -> LaterCommandError {
+    LaterCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_later_core_error(no_session: &'static str, error: MatrixIpcError) -> LaterCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => later_failed(code, LATER_NO_SESSION_DESCRIPTION),
+        Some(code) if code.starts_with("v-timeline-later-") => {
+            later_failed(code, LATER_OWNER_DESCRIPTION)
+        }
+        _ => later_failed(LATER_FAILED_CODE, LATER_FAILED_DESCRIPTION),
+    }
+}
+
+fn later_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, LaterCommandError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(later_failed(LATER_FAILED_CODE, LATER_FAILED_DESCRIPTION));
+    }
+    Ok(payload)
+}
+
+fn later_item_from_dto(item: LaterItemDto) -> Result<SynaraLaterItem, LaterCommandError> {
+    let kind = match item.kind.as_str() {
+        "saved" => SynaraLaterItemKind::Saved,
+        "reminder" => SynaraLaterItemKind::Reminder,
+        _ => {
+            return Err(later_failed(
+                LATER_INVALID_ITEM_CODE,
+                LATER_INVALID_ITEM_DESCRIPTION,
+            ))
+        }
+    };
+    if item.id.is_empty()
+        || item.room_id.is_empty()
+        || item.event_id.is_empty()
+        || !item.created_at.is_finite()
+    {
+        return Err(later_failed(
+            LATER_INVALID_ITEM_CODE,
+            LATER_INVALID_ITEM_DESCRIPTION,
+        ));
+    }
+    Ok(SynaraLaterItem {
+        id: item.id,
+        kind,
+        room_id: item.room_id,
+        event_id: item.event_id,
+        created_at: item.created_at,
+        due_ts: item.due_ts.filter(|value| value.is_finite()),
+        reminded_at: item.reminded_at.filter(|value| value.is_finite()),
+        completed_at: item.completed_at.filter(|value| value.is_finite()),
+    })
+}
+
+fn later_item_dto(item: SynaraLaterItem) -> LaterItemDto {
+    LaterItemDto {
+        id: item.id,
+        kind: match item.kind {
+            SynaraLaterItemKind::Saved => "saved".to_owned(),
+            SynaraLaterItemKind::Reminder => "reminder".to_owned(),
+        },
+        room_id: item.room_id,
+        event_id: item.event_id,
+        created_at: item.created_at,
+        due_ts: item.due_ts,
+        reminded_at: item.reminded_at,
+        completed_at: item.completed_at,
+    }
+}
+
+fn later_snapshot_dto(payload: serde_json::Value) -> Result<LaterSnapshotDto, LaterCommandError> {
+    let snapshot: NativeLaterSnapshot = serde_json::from_value(payload)
+        .map_err(|_| later_failed(LATER_FAILED_CODE, LATER_FAILED_DESCRIPTION))?;
+    Ok(LaterSnapshotDto {
+        session_generation: snapshot.session_generation,
+        version: snapshot.content.version,
+        items: snapshot
+            .content
+            .items
+            .into_values()
+            .map(later_item_dto)
+            .collect(),
     })
 }
 
