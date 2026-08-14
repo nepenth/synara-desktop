@@ -302,25 +302,16 @@ const assertions = [
   [sharedCoreFfi, "matrix_device_rename", "P4-S9-2 calls the registered rename command"],
   [sharedCoreFfi, "matrix_device_delete_start", "P4-S9-2 calls the registered delete-start command"],
   [sharedCoreFfi, "matrix_device_delete_cancel", "P4-S9-2 calls the registered delete-cancel command"],
-  [sharedCoreFfi, "matrix_backup_status", "P4-S9-2 calls the registered backup-status command"],
-  [sharedCoreFfi, "matrix_room_key_transfer_status", "P4-S9-2 calls the registered room-key status command"],
-  [sharedCoreFfi, "matrix_cross_signing_setup", "P4-S9-2 calls the registered cross-signing setup command"],
   [udl, "DeviceSnapshotDto device_snapshot()", "P4-S9-2 SharedCore device-snapshot operation"],
   [udl, "DeviceSnapshotDto device_rename(", "P4-S9-2 SharedCore device-rename operation"],
   [udl, "DeviceDeleteDto device_delete_start(", "P4-S9-2 SharedCore delete-start operation"],
   [udl, "void device_delete_cancel(", "P4-S9-2 SharedCore delete-cancel operation"],
-  [udl, "BackupStatusDto backup_status()", "P4-S9-2 SharedCore backup-status operation"],
-  [udl, "RoomKeyTransferStatusDto room_key_transfer_status()", "P4-S9-2 SharedCore room-key status operation"],
-  [udl, "CrossSigningSetupDto cross_signing_setup()", "P4-S9-2 SharedCore cross-signing setup operation"],
   [udl, "interface DeviceCommandError", "P4-S9-2 static device-family error"],
   [swiftBindingsTests, "testSharedCoreDevicesWithoutSessionFailsClosed", "Swift P4-S9-2 fail-closed device-family test"],
   [sharedCoreDevices, "deviceSnapshot", "P4-S9-2 product device-snapshot helper"],
   [sharedCoreDevices, "deviceRename", "P4-S9-2 product rename helper"],
   [sharedCoreDevices, "deviceDeleteStart", "P4-S9-2 product delete-start helper"],
   [sharedCoreDevices, "deviceDeleteCancel", "P4-S9-2 product delete-cancel helper"],
-  [sharedCoreDevices, "backupStatus", "P4-S9-2 product backup-status helper"],
-  [sharedCoreDevices, "roomKeyTransferStatus", "P4-S9-2 product room-key status helper"],
-  [sharedCoreDevices, "crossSigningSetup", "P4-S9-2 product cross-signing setup helper"],
   [sharedCoreDevices, "core: SharedCore", "P4-S9-2 helper takes an already-constructed SharedCore"],
   [sharedCoreDevices, "core.deviceSnapshot", "P4-S9-2 helper reads on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
@@ -1111,12 +1102,12 @@ for (const required of ["verification_start", "verification_accept", "verificati
     throw new Error(`P4-S9 SharedCore must expose ${required}`);
   }
 }
-for (const required of ["device_snapshot", "device_rename", "device_delete_start", "device_delete_cancel", "backup_status", "room_key_transfer_status", "cross_signing_setup"]) {
+for (const required of ["device_snapshot", "device_rename", "device_delete_start", "device_delete_cancel"]) {
   if (!sharedCoreBody.includes(required)) {
     throw new Error(`P4-S9-2 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "join_rule", "crypto_status", "backup_setup"]) {
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "join_rule", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
     throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-2`);
   }
@@ -1156,6 +1147,11 @@ if (sharedCoreVerificationSas.includes("SharedCore(store:")) {
 }
 if (sharedCoreDevices.includes("SharedCore(store:")) {
   throw new Error("P4-S9-2 helper must not construct-and-drop SharedCore");
+}
+for (const forbidden of ["backupStatus", "roomKeyTransferStatus", "crossSigningSetup"]) {
+  if (sharedCoreDevices.includes(forbidden)) {
+    throw new Error(`P4-S9-2 helper must not wrap leftover-adjacent ${forbidden}`);
+  }
 }
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
 if (!roomListDto) throw new Error("missing RoomListSnapshotDto");

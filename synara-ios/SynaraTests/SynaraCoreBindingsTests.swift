@@ -465,39 +465,6 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 XCTAssertFalse(publicError.contains(forbidden))
             }
         }
-
-        do {
-            _ = try await SharedCoreDevices.backupStatus(core: core)
-            XCTFail("Fail-closed SharedCore must not read backup status without a session")
-        } catch {
-            let publicError = String(reflecting: error)
-            XCTAssertTrue(publicError.contains("p2-backup-status-no-session"))
-            for forbidden in ["syt_", "token"] {
-                XCTAssertFalse(publicError.contains(forbidden))
-            }
-        }
-
-        do {
-            _ = try await SharedCoreDevices.roomKeyTransferStatus(core: core)
-            XCTFail("Fail-closed SharedCore must not read room-key transfer status without a session")
-        } catch {
-            let publicError = String(reflecting: error)
-            XCTAssertTrue(publicError.contains("p2-room-key-transfer-status-no-session"))
-            for forbidden in ["syt_", "token"] {
-                XCTAssertFalse(publicError.contains(forbidden))
-            }
-        }
-
-        do {
-            _ = try await SharedCoreDevices.crossSigningSetup(core: core)
-            XCTFail("Fail-closed SharedCore must not start cross-signing setup without a session")
-        } catch {
-            let publicError = String(reflecting: error)
-            XCTAssertTrue(publicError.contains("p2-cross-signing-setup-no-session"))
-            for forbidden in ["syt_", "token"] {
-                XCTAssertFalse(publicError.contains(forbidden))
-            }
-        }
     }
 
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {

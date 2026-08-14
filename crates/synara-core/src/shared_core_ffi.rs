@@ -2066,12 +2066,7 @@ fn device_failed(code: &str, description: &'static str) -> DeviceCommandError {
 fn map_device_core_error(no_session: &'static str, error: MatrixIpcError) -> DeviceCommandError {
     match error.diagnostic_id.as_deref() {
         Some(code) if code == no_session => device_failed(code, DEVICE_NO_SESSION_DESCRIPTION),
-        Some(code)
-            if code.starts_with("v-crypto.7-")
-                || code.starts_with("v-crypto.3-")
-                || code.starts_with("v-crypto.2-")
-                || code.starts_with("v-crypto.5-") =>
-        {
+        Some(code) if code.starts_with("v-crypto.7-") => {
             device_failed(code, DEVICE_OWNER_DESCRIPTION)
         }
         _ => device_failed(DEVICE_FAILED_CODE, DEVICE_FAILED_DESCRIPTION),
