@@ -463,9 +463,10 @@ for any of those gates.
 3. P4-S3 plan is `12-p4-s3-live-client.md`. S3a landed in #935. S3b
    restore landed in #937. S3c login landed in #938. S3d attach landed
    in #939. S4 typed `room_list_snapshot` landed in #940. S5 typed
-   `invites_snapshot` landed in #942. **S6** typed timeline
-   open/close/paginate (playbook §9.5) is on this branch. Next after
-   merge is S7. UniFFI expansion needs free disk ≥ 20 Gi for
+   `invites_snapshot` landed in #942. S6 typed timeline
+   open/close/paginate landed in #944. **S7** typed typing/presence
+   (playbook §9.5) is on this branch. Next after merge is S8. UniFFI
+   expansion needs free disk ≥ 20 Gi for
    local cargo/bindgen. There is no source-without-bindgen exception.
    If disk is under 20 Gi: stop. Docs-only PRs are still allowed.
 4. After S3, consume already-registered commands one family per PR.
