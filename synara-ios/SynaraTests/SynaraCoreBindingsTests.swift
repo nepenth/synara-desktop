@@ -285,7 +285,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         } catch {
             let publicError = String(reflecting: error)
             XCTAssertTrue(publicError.contains("p2-presence-snapshot-no-session"))
-            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+            for forbidden in ["password", "syt_", "@bob:example.org", "token"] {
                 XCTAssertFalse(publicError.contains(forbidden))
             }
         }
@@ -299,7 +299,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         } catch {
             let publicError = String(reflecting: error)
             XCTAssertTrue(publicError.contains("p2-presence-subscribe-no-session"))
-            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+            for forbidden in ["password", "syt_", "@bob:example.org", "token"] {
                 XCTAssertFalse(publicError.contains(forbidden))
             }
         }

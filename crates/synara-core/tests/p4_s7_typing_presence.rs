@@ -107,7 +107,7 @@ fn typing_presence_without_session_fails_closed_without_echo() {
     assert!(text.contains("p2-presence-unsubscribe-no-session"));
     assert!(!text.contains("password"));
     assert!(!text.contains("syt_"));
-    assert!(!text.contains("@alice"));
+    assert!(!text.contains("@bob"));
 }
 
 #[test]
