@@ -6,8 +6,9 @@ It does **not** accept P4 or claim iOS is on the shared engine.
 Evidence tip when written: `feature/shared-native-core` `ee896416` (#935 S3a).
 S3a landed in #935. S3b restore landed in #937 (`4edfc1f5`).
 S3c login (Option A) landed in #938 (`9b4ec54f`).
-**S3d attach lands on this branch** (`agent/snc-p4-s3d-attach`).
-Playbook recipe: §9.4d. Next after S3d is S4 (`matrix_room_list_snapshot`).
+S3d attach landed in #939 (`ad63d56d`).
+**S4 room-list snapshot lands on `agent/snc-p4-s4-room-list`.**
+Playbook recipe: §9.5. Next after S4 is S5 invites.
 
 ## Decision
 
@@ -25,7 +26,7 @@ S3 is four serial product PRs. Each one merges only to
 | **S3a** LANDED #935 | Swift `IosSecretVault` callback. `SharedCore` can be constructed with that vault. Rust `IosFailClosedPlatform` uses it instead of `UnavailableSecretVault`. In-memory + Keychain key/value adapters. | Live `Client`, `command`, `attach_*`, password, restore, APNs |
 | **S3b** landed #937 | Restore an already-persisted session through Core persist/restore using the vault. No password. Not `matrix_restore_session`. | Password login, owner attach, `command` families, leftover registration |
 | **S3c** landed #938 | Dedicated `SharedCore.login_with_password` FFI. Persist via `persist_session_after_login` so S3b restore can find `matrix-session:{segment}`. Password is a dedicated UniFFI argument only. Dual-engine: login+restore on SharedCore; room list/timeline/crypto stay `MatrixRustSDK` until S3d. | Register, email token, recovery passphrase, `attach_*`, `Core.command`, leftover registration |
-| **S3d** (this branch) | After a session exists, `SharedCore.attach_session_owners` attaches the desktop owner set on the retained Client: typing, presence, verification, devices, join-rules, image-packs, timelines, sync. No-op emit sinks. SyncService is attached but not started (no dual live sync while `MatrixRustSDKService` still owns product room list). | Retiring `MatrixRustSDKService`, `Core.command`, leftover registration |
+| **S3d** landed #939 | After a session exists, `SharedCore.attach_session_owners` attaches the desktop owner set on the retained Client: typing, presence, verification, devices, join-rules, image-packs, timelines, sync. No-op emit sinks. SyncService is attached but not started (no dual live sync while `MatrixRustSDKService` still owns product room list). | Retiring `MatrixRustSDKService`, leftover registration |
 
 ## S3c Option A (chosen)
 

@@ -10,7 +10,9 @@
 //! never registered as `matrix_login_password`. The password is not stored,
 //! not copied into a DTO, never echoed, and is zeroized on drop.
 //! P4-S3d adds `attach_session_owners` for the desktop owner set.
-//! This still exposes no command or APNs surface.
+//! P4-S4 adds a typed `room_list_snapshot` wrapper that calls the
+//! already-registered `matrix_room_list_snapshot` Core command only.
+//! This still exposes no generic command FFI or APNs surface.
 //! This is not the desktop leftover `matrix_restore_session`.
 
 use std::path::{Component, Path};
@@ -30,6 +32,7 @@ use crate::app::lifecycle::{
     SessionMaterial, SessionMaterialId, SessionMaterialVault,
 };
 use crate::app::presence::NativePresenceOwner;
+use crate::app::room_list::NativeRoomListSnapshot;
 use crate::app::room_profile::NativeRoomJoinRuleOwner;
 use crate::app::store::{
     get_or_create_store_key, AccountIdentity, StoreKeyId, StoreKeyMaterial, StoreKeyVault,
@@ -42,7 +45,7 @@ use crate::app::verification::NativeVerificationOwner;
 use crate::core::Core;
 use crate::dto::{SessionLifecycle, SessionSnapshot};
 use crate::platform::{IosFailClosedPlatform, Platform, SecretVault};
-use crate::transport::{MatrixIpcError, MatrixIpcErrorCategory};
+use crate::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
 
 const VAULT_UNAVAILABLE_CODE: &str = "p4-s3b-secret-vault-unavailable";
 const VAULT_UNAVAILABLE_DESCRIPTION: &str = "The secret store is unavailable.";
@@ -78,6 +81,14 @@ const ATTACHED_OWNER_NAMES: &[&str] = &[
     "timelines",
     "sync",
 ];
+const ROOM_LIST_COMMAND: &str = "matrix_room_list_snapshot";
+const ROOM_LIST_READ_ONLY_GENERATION: u64 = 0;
+const ROOM_LIST_NO_SESSION_CODE: &str = "p2-room-list-snapshot-no-session";
+const ROOM_LIST_NO_SESSION_DESCRIPTION: &str = "No room list session is available.";
+const ROOM_LIST_SYNC_NOT_STARTED_CODE: &str = "p4-s4-sync-not-started";
+const ROOM_LIST_SYNC_NOT_STARTED_DESCRIPTION: &str = "The room list is not live.";
+const ROOM_LIST_FAILED_CODE: &str = "p4-s4-snapshot-failed";
+const ROOM_LIST_FAILED_DESCRIPTION: &str = "The room list could not be loaded.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -192,6 +203,73 @@ fn attach_failed(code: &'static str, description: &'static str) -> SessionAttach
     SessionAttachError::Failed {
         code: code.to_owned(),
         description: description.to_owned(),
+    }
+}
+
+/// Privacy-safe room-list snapshot. Tokens and password never appear here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomListSnapshotDto {
+    pub session_generation: u64,
+    pub ordered_room_ids: Vec<String>,
+    pub rooms: Vec<RoomListRoomDto>,
+}
+
+/// One privacy-safe room-list row. No tokens or password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomListRoomDto {
+    pub room_id: String,
+    pub name: Option<String>,
+    pub canonical_alias: Option<String>,
+    pub avatar_url: Option<String>,
+    pub membership: String,
+    pub is_direct: bool,
+    pub is_space: bool,
+    pub is_favorite: bool,
+    pub unread_count: u32,
+    pub highlight_count: u32,
+    pub marked_unread: bool,
+    pub last_activity_ts: Option<u64>,
+}
+
+/// Static fail-closed room-list error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoomListSnapshotError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for RoomListSnapshotError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for RoomListSnapshotError {}
+
+fn room_list_failed(code: &'static str, description: &'static str) -> RoomListSnapshotError {
+    RoomListSnapshotError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_room_list_core_error(error: MatrixIpcError) -> RoomListSnapshotError {
+    match error.diagnostic_id.as_deref() {
+        Some("p2-room-list-snapshot-no-session") => {
+            room_list_failed(ROOM_LIST_NO_SESSION_CODE, ROOM_LIST_NO_SESSION_DESCRIPTION)
+        }
+        Some(
+            "d0.2-room-list-snapshot-timeout"
+            | "d0.2-room-list-stream-ended"
+            | "d0.2-room-list-reset-missing"
+            | "d0.2-room-list-open-failed"
+            | "d0.2-room-list-filter-failed",
+        ) => room_list_failed(
+            ROOM_LIST_SYNC_NOT_STARTED_CODE,
+            ROOM_LIST_SYNC_NOT_STARTED_DESCRIPTION,
+        ),
+        _ => room_list_failed(ROOM_LIST_FAILED_CODE, ROOM_LIST_FAILED_DESCRIPTION),
     }
 }
 
@@ -619,6 +697,49 @@ impl SharedCore {
                 .collect(),
         })
     }
+
+    /// Typed consume of the already-registered `matrix_room_list_snapshot`.
+    ///
+    /// Uses `Core::command` with the same null camelCase payload desktop
+    /// sends. Does not start SyncService (no dual live sync); an unstarted
+    /// owner yields the handler's empty snapshot. Does not expose a generic
+    /// command FFI.
+    pub async fn room_list_snapshot(&self) -> Result<RoomListSnapshotDto, RoomListSnapshotError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: ROOM_LIST_COMMAND.to_owned(),
+                session_generation: ROOM_LIST_READ_ONLY_GENERATION,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .map_err(map_room_list_core_error)?;
+        let snapshot: NativeRoomListSnapshot = serde_json::from_value(response.payload)
+            .map_err(|_| room_list_failed(ROOM_LIST_FAILED_CODE, ROOM_LIST_FAILED_DESCRIPTION))?;
+        Ok(RoomListSnapshotDto {
+            session_generation: snapshot.session_generation,
+            ordered_room_ids: snapshot.ordered_room_ids,
+            rooms: snapshot
+                .rooms
+                .into_iter()
+                .map(|room| RoomListRoomDto {
+                    room_id: room.room_id,
+                    name: room.name,
+                    canonical_alias: room.canonical_alias,
+                    avatar_url: room.avatar_url,
+                    membership: room.membership.as_str().to_owned(),
+                    is_direct: room.is_direct,
+                    is_space: room.is_space,
+                    is_favorite: room.is_favorite,
+                    unread_count: room.unread_count,
+                    highlight_count: room.highlight_count,
+                    marked_unread: room.marked_unread,
+                    last_activity_ts: room.last_activity_ts,
+                })
+                .collect(),
+        })
+    }
 }
 
 /// Claims the restore slot for one in-flight attempt. Drop releases it unless
@@ -751,9 +872,8 @@ fn parse_store_root(store_root: &str) -> Result<&Path, ()> {
 }
 
 fn validate_store_root(store_root: &str) -> Result<&Path, SessionRestoreError> {
-    parse_store_root(store_root).map_err(|_| {
-        restore_failed(STORE_ROOT_INVALID_CODE, STORE_ROOT_INVALID_DESCRIPTION)
-    })
+    parse_store_root(store_root)
+        .map_err(|_| restore_failed(STORE_ROOT_INVALID_CODE, STORE_ROOT_INVALID_DESCRIPTION))
 }
 
 fn store_key_for(
