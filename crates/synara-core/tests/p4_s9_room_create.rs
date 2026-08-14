@@ -88,7 +88,7 @@ fn room_create_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("dictionary RoomCreateDto"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
-    assert!(!udl.contains("matrix_room_members_snapshot"));
+    assert!(!udl.contains("matrix_space_parents_snapshot"));
     let request_dto = udl
         .split("dictionary RoomCreateRequestDto {")
         .nth(1)
@@ -109,11 +109,12 @@ fn room_create_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("room_set_power_level("));
     assert!(shared_core.contains("room_set_power_level_tags("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("room_members_snapshot"));
-    assert!(!shared_core.contains("power_levels_snapshot"));
-    assert!(!shared_core.contains("creators_snapshot"));
-    assert!(!shared_core.contains("power_level_tags_snapshot"));
     assert!(!shared_core.contains("space_parents_snapshot"));
+    assert!(!shared_core.contains("space_hierarchy_snapshot"));
+    assert!(!shared_core.contains("space_children_snapshot"));
+    assert!(!shared_core.contains("space_child_set"));
+    assert!(!shared_core.contains("space_child_remove"));
+    assert!(!shared_core.contains("restricted_join_reparent"));
     assert!(!shared_core.contains("backup_status"));
 }
 
@@ -168,13 +169,7 @@ fn room_create_oversize_payload_fails_closed_without_truncate_or_echo() {
         )))
         .expect_err("oversize room-create payload must fail closed");
     let invited = rt
-        .block_on(shared.room_create(create_request(
-            None,
-            None,
-            None,
-            vec![&invite],
-            None,
-        )))
+        .block_on(shared.room_create(create_request(None, None, None, vec![&invite], None)))
         .expect_err("oversize room-create invite list must fail closed");
     let named_text = format!("{named:?}{named}");
     let invited_text = format!("{invited:?}{invited}");
