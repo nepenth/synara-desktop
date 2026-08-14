@@ -7,7 +7,7 @@ paragraph disagree, this file plus `10-current-handoff.md` win for
 *what done means*.
 
 Evidence tip when this playbook was written: `feature/shared-native-core`
-`32e03091` (#933 SharedCore construction). Re-fetch before you start.
+`ee896416` (#935 S3a SecretVault). Re-fetch before you start.
 Do not treat this SHA as eternal.
 
 ---
@@ -119,7 +119,7 @@ Run this checklist in order. Stop at the first yes.
    inventing one.
 3. **Is free disk ≥ 20 Gi, or can the next P4 slice land as source
    without local cargo/bindgen?** Start the next **P4** slice in
-   section 9. P4-S1/#931 and P4-S2/#933 landed. Next is P4-S3.
+   section 9. S3a/#935 landed. Next is S3b restore (plan §12).
 4. **Otherwise stop.** Update `STATE.md`. Do not open a padding PR.
    Do not route logout, email-token, or media "just to have a merge."
 

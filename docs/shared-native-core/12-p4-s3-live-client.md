@@ -3,7 +3,7 @@
 This is the plan playbook §9.4 requires before guessing at password FFI.
 It does **not** accept P4 or claim iOS is on the shared engine.
 
-Evidence tip when written: `feature/shared-native-core` `4c080c43` (#934).
+Evidence tip when written: `feature/shared-native-core` `ee896416` (#935 S3a).
 
 ## Decision
 

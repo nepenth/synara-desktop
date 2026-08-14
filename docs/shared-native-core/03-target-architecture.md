@@ -31,10 +31,10 @@ synara-ios/                    # iOS shell (slim after P4)
 
 **Target** is section 3.2–3.5: both shells are thin adapters over one Core.
 
-**Current (tip `32e03091`):** desktop already calls `Core::command` for one
+**Current (tip `ee896416`):** desktop already calls `Core::command` for one
 hundred eleven names and attaches live owners. iOS has a UniFFI foothold
-plus credential-free `login_flows` / `register_flows` and constructor-only
-`SharedCore` (fail-closed Platform; no commands). Product events on desktop use **owner emit callbacks**, not
+plus credential-free `login_flows` / `register_flows`, constructor-only
+`SharedCore`, and an optional `IosSecretVault` callback (no commands). Product events on desktop use **owner emit callbacks**, not
 `Platform::emit`. `Platform::emit` is the typed IPC envelope stream.
 See [11-implementer-playbook.md](11-implementer-playbook.md) §3 rule 7.
 
