@@ -33,7 +33,8 @@ pub use shared_core_ffi::{
     InviteDto, InviteSnapshotDto, InviteSnapshotError, IosSecretVault, IosSecretVaultError,
     RoomListRoomDto, RoomListSnapshotDto, RoomListSnapshotError, SessionAttachDto,
     SessionAttachError, SessionLoginDto, SessionLoginError, SessionRestoreDto, SessionRestoreError,
-    SharedCore,
+    SharedCore, TimelineError, TimelineOpenDto, TimelineOpenPositionDto, TimelineSnapshotDto,
+    TimelineViewPositionDto,
 };
 
 mod core;

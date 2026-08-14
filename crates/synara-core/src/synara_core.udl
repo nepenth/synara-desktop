@@ -262,11 +262,62 @@ interface InviteSnapshotError {
   Failed(string code, string description);
 };
 
+// Requested open placement. Closed kind strings only. No tokens or password.
+dictionary TimelineOpenPositionDto {
+  string kind;
+  boolean at_bottom;
+  string? restored_anchor_event_id;
+  string? live_tail_event_id;
+  u64? updated_at_ms;
+  string? event_id;
+};
+
+// Privacy-safe resolved view placement. No tokens or password.
+dictionary TimelineViewPositionDto {
+  string kind;
+  string? event_id;
+};
+
+// Privacy-safe timeline snapshot from the registered Core command.
+dictionary TimelineSnapshotDto {
+  u32 schema_version;
+  u64 session_generation;
+  string room_id;
+  u64 revision;
+  TimelineViewPositionDto position;
+  string pagination_backward;
+  string pagination_forward;
+  string? own_read_event_id;
+  string? unread_anchor_event_id;
+  boolean is_marked_unread;
+  sequence<string> pinned_event_ids;
+  u32 row_count;
+  boolean mark_read;
+  boolean mark_unread;
+  boolean paginate_backward;
+  boolean paginate_forward;
+};
+
+// Privacy-safe timeline open readback. No tokens or password.
+dictionary TimelineOpenDto {
+  u32 schema_version;
+  string stream_id;
+  TimelineViewPositionDto position;
+  TimelineSnapshotDto snapshot;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface TimelineError {
+  Failed(string code, string description);
+};
+
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
 // P4-S3b adds restore_persisted_session. P4-S3c adds dedicated login_with_password.
 // P4-S3d adds attach_session_owners for the desktop owner set.
 // P4-S4 adds typed room_list_snapshot for matrix_room_list_snapshot only.
 // P4-S5 adds typed invites_snapshot for matrix_invites_snapshot only.
+// P4-S6 adds typed timeline_open / timeline_close / timeline_paginate only.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -297,4 +348,13 @@ interface SharedCore {
 
   [Async, Throws=InviteSnapshotError]
   InviteSnapshotDto invites_snapshot();
+
+  [Async, Throws=TimelineError]
+  TimelineOpenDto timeline_open(string room_id, TimelineOpenPositionDto position);
+
+  [Async, Throws=TimelineError]
+  boolean timeline_close(string stream_id);
+
+  [Async, Throws=TimelineError]
+  TimelineSnapshotDto timeline_paginate(string stream_id, string direction);
 };

@@ -129,8 +129,9 @@ Run this checklist in order. Stop at the first yes.
 3. **Is free disk ≥ 20 Gi?** Start the next **P4** slice in section 9.
    S1/#931, S2/#933, and S3a/#935 landed. S3b restore is accepted.
    S3c login is accepted. S3d attach is accepted. S4 room-list snapshot
-   is accepted. S5 invites snapshot (section 9.5) is on this branch.
-   Next after merge is S6. UDL/bindgen/cargo require this disk
+   is accepted. S5 invites snapshot is accepted. S6 timeline
+   open/close/paginate (section 9.5) is on this branch. Next after
+   merge is S7. UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
    allowed. Do not change UDL. Do not hand-edit generated Swift. Do
@@ -275,10 +276,10 @@ P4-S2  Swift Platform + Core::new     LANDED #933 (fail-closed; no command)
 P4-S3  iOS live Client via Core       plan: 12-p4-s3-live-client.md
        S3a LANDED #935 → S3b accepted → S3c accepted → S3d accepted
 P4-S4  iOS room_list_snapshot         accepted ed6f9f04
-P4-S5  iOS invites_snapshot           **this branch**
-       typed SharedCore.invites_snapshot → Core.command
-       matrix_invites_snapshot only. SyncService is not started.
-P4-S6  iOS timeline open/close/paginate (needs NativeTimelineOwner)
+P4-S5  iOS invites_snapshot           accepted 120fa85a
+P4-S6  iOS timeline open/close/paginate **this branch**
+       typed SharedCore.timeline_open/close/paginate → Core.command
+       those three commands only. SyncService is not started.
 P4-S7  iOS typing / presence          (needs those owners)
 P4-S8  iOS verification list          (needs verification owner)
 P4-S9  remaining already-registered Core commands, one owner family per PR
@@ -419,22 +420,25 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 
-S4 is accepted at `ed6f9f04`. **S5 (this branch)** adds the typed
-UniFFI wrapper for `matrix_invites_snapshot` only.
+S5 is accepted at `120fa85a`. **S6 (this branch)** adds typed UniFFI
+wrappers for `matrix_timeline_open`, `matrix_timeline_close`, and
+`matrix_timeline_paginate` only.
 
-1. `SharedCore.invites_snapshot` calls `Core.command` with the same
-   null payload desktop uses (`session_generation` 0).
-2. Do not reimplement snapshot logic in Swift.
+1. `SharedCore.timeline_open` / `timeline_close` / `timeline_paginate`
+   call `Core.command` with the same `session_generation` 0 camelCase
+   payloads desktop uses.
+2. Do not reimplement timeline logic in Swift.
 3. Do not start `SyncService` (S3d attached it; starting would dual-sync
-   against product `MatrixRustSDK`). Missing join-rule owner fail-closes
-   with `p2-invites-snapshot-no-session`. Unstarted sync returns the
-   registered handler's empty privacy-safe snapshot.
+   against product `MatrixRustSDK`). Missing timeline owner fail-closes
+   with `p2-timeline-*-no-session`. Unstarted sync returns the
+   registered handler's real outcome — do not fabricate an empty
+   snapshot.
 4. Helper + XCTest are the iOS surface this slice. Do not swap
-   `AppEnvironment.live()` invites. Do not retire
-   `MatrixRustSDK` invite callers.
-5. One command family per PR. S6 is timeline. Do not wrap
-   accept/decline/report_spam/block_sender. Do not hit production
-   homeservers.
+   `AppEnvironment.live()` timeline. Do not retire
+   `MatrixRustSDKTimelineService`.
+5. One command family per PR. S7 is typing/presence. Do not wrap
+   jump_latest, event_readback, set_read_state, reactions, or send.
+   Do not hit production homeservers.
 
 ### 9.6 When you may delete `MatrixRustSDK`
 

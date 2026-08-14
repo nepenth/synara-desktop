@@ -11,6 +11,8 @@
 //! already-registered `matrix_room_list_snapshot` Core command only.
 //! P4-S5 adds a typed `invites_snapshot` wrapper that calls the
 //! already-registered `matrix_invites_snapshot` Core command only.
+//! P4-S6 adds typed `timeline_open` / `timeline_close` / `timeline_paginate`
+//! wrappers for those three already-registered Core commands only.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -39,7 +41,11 @@ use crate::app::store::{
     StoreKeyVaultError, STORE_KEY_LEN,
 };
 use crate::app::sync::{build_sync_service, SyncServiceConfig};
-use crate::app::timeline::NativeTimelineOwner;
+use crate::app::timeline::{
+    NativeTimelineDirection, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
+    NativeTimelineOwner, NativeTimelineViewportHint, TimelinePageState, TimelineViewPosition,
+    TimelineViewSnapshot,
+};
 use crate::app::typing::NativeTypingOwner;
 use crate::app::verification::NativeVerificationOwner;
 use crate::core::Core;
@@ -95,6 +101,26 @@ const INVITES_NO_SESSION_CODE: &str = "p2-invites-snapshot-no-session";
 const INVITES_NO_SESSION_DESCRIPTION: &str = "No invite session is available.";
 const INVITES_FAILED_CODE: &str = "p4-s5-snapshot-failed";
 const INVITES_FAILED_DESCRIPTION: &str = "The invite inbox could not be loaded.";
+const TIMELINE_READ_ONLY_GENERATION: u64 = 0;
+const TIMELINE_OPEN_COMMAND: &str = "matrix_timeline_open";
+const TIMELINE_CLOSE_COMMAND: &str = "matrix_timeline_close";
+const TIMELINE_PAGINATE_COMMAND: &str = "matrix_timeline_paginate";
+const TIMELINE_OPEN_NO_SESSION_CODE: &str = "p2-timeline-open-no-session";
+const TIMELINE_CLOSE_NO_SESSION_CODE: &str = "p2-timeline-close-no-session";
+const TIMELINE_PAGINATE_NO_SESSION_CODE: &str = "p2-timeline-paginate-no-session";
+const TIMELINE_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
+const TIMELINE_OPEN_FAILED_CODE: &str = "p4-s6-open-failed";
+const TIMELINE_OPEN_FAILED_DESCRIPTION: &str = "The timeline could not be opened.";
+const TIMELINE_CLOSE_FAILED_CODE: &str = "p4-s6-close-failed";
+const TIMELINE_CLOSE_FAILED_DESCRIPTION: &str = "The timeline could not be closed.";
+const TIMELINE_PAGINATE_FAILED_CODE: &str = "p4-s6-paginate-failed";
+const TIMELINE_PAGINATE_FAILED_DESCRIPTION: &str = "The timeline could not be paginated.";
+const TIMELINE_ROOM_NOT_FOUND_CODE: &str = "v-timeline-normal-room-not-found";
+const TIMELINE_ROOM_NOT_FOUND_DESCRIPTION: &str = "The timeline room is not available.";
+const TIMELINE_INVALID_ROOM_CODE: &str = "d0.3-timeline-invalid-room-id";
+const TIMELINE_INVALID_ROOM_DESCRIPTION: &str = "The timeline room id is invalid.";
+const TIMELINE_VIEW_NOT_OPEN_CODE: &str = "v-timeline-view-not-open";
+const TIMELINE_VIEW_NOT_OPEN_DESCRIPTION: &str = "The timeline view is not open.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -358,6 +384,226 @@ fn invite_dto(invite: NativeInvite) -> InviteDto {
             NativeInviteTriage::Public => "public".to_owned(),
             NativeInviteTriage::Spam => "spam".to_owned(),
         },
+    }
+}
+
+/// Requested open placement. Kind is a closed string; no tokens or password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineOpenPositionDto {
+    pub kind: String,
+    pub at_bottom: bool,
+    pub restored_anchor_event_id: Option<String>,
+    pub live_tail_event_id: Option<String>,
+    pub updated_at_ms: Option<u64>,
+    pub event_id: Option<String>,
+}
+
+/// Privacy-safe resolved view placement. No tokens or password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineViewPositionDto {
+    pub kind: String,
+    pub event_id: Option<String>,
+}
+
+/// Privacy-safe timeline snapshot. Identity/stream fields only; no token echo.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineSnapshotDto {
+    pub schema_version: u32,
+    pub session_generation: u64,
+    pub room_id: String,
+    pub revision: u64,
+    pub position: TimelineViewPositionDto,
+    pub pagination_backward: String,
+    pub pagination_forward: String,
+    pub own_read_event_id: Option<String>,
+    pub unread_anchor_event_id: Option<String>,
+    pub is_marked_unread: bool,
+    pub pinned_event_ids: Vec<String>,
+    pub row_count: u32,
+    pub mark_read: bool,
+    pub mark_unread: bool,
+    pub paginate_backward: bool,
+    pub paginate_forward: bool,
+}
+
+/// Privacy-safe timeline open readback. No tokens or password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineOpenDto {
+    pub schema_version: u32,
+    pub stream_id: String,
+    pub position: TimelineViewPositionDto,
+    pub snapshot: TimelineSnapshotDto,
+}
+
+/// Static fail-closed timeline error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TimelineError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for TimelineError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for TimelineError {}
+
+fn timeline_failed(code: &'static str, description: &'static str) -> TimelineError {
+    TimelineError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_timeline_open_core_error(error: MatrixIpcError) -> TimelineError {
+    match error.diagnostic_id.as_deref() {
+        Some("p2-timeline-open-no-session") => timeline_failed(
+            TIMELINE_OPEN_NO_SESSION_CODE,
+            TIMELINE_NO_SESSION_DESCRIPTION,
+        ),
+        Some("v-timeline-normal-room-not-found") => timeline_failed(
+            TIMELINE_ROOM_NOT_FOUND_CODE,
+            TIMELINE_ROOM_NOT_FOUND_DESCRIPTION,
+        ),
+        Some("d0.3-timeline-room-not-found") => timeline_failed(
+            "d0.3-timeline-room-not-found",
+            TIMELINE_ROOM_NOT_FOUND_DESCRIPTION,
+        ),
+        Some("d0.3-timeline-invalid-room-id") => timeline_failed(
+            TIMELINE_INVALID_ROOM_CODE,
+            TIMELINE_INVALID_ROOM_DESCRIPTION,
+        ),
+        Some("v-timeline-view-not-open") => timeline_failed(
+            TIMELINE_VIEW_NOT_OPEN_CODE,
+            TIMELINE_VIEW_NOT_OPEN_DESCRIPTION,
+        ),
+        _ => timeline_failed(TIMELINE_OPEN_FAILED_CODE, TIMELINE_OPEN_FAILED_DESCRIPTION),
+    }
+}
+
+fn map_timeline_close_core_error(error: MatrixIpcError) -> TimelineError {
+    match error.diagnostic_id.as_deref() {
+        Some("p2-timeline-close-no-session") => timeline_failed(
+            TIMELINE_CLOSE_NO_SESSION_CODE,
+            TIMELINE_NO_SESSION_DESCRIPTION,
+        ),
+        _ => timeline_failed(
+            TIMELINE_CLOSE_FAILED_CODE,
+            TIMELINE_CLOSE_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn map_timeline_paginate_core_error(error: MatrixIpcError) -> TimelineError {
+    match error.diagnostic_id.as_deref() {
+        Some("p2-timeline-paginate-no-session") => timeline_failed(
+            TIMELINE_PAGINATE_NO_SESSION_CODE,
+            TIMELINE_NO_SESSION_DESCRIPTION,
+        ),
+        Some("v-timeline-view-not-open") => timeline_failed(
+            TIMELINE_VIEW_NOT_OPEN_CODE,
+            TIMELINE_VIEW_NOT_OPEN_DESCRIPTION,
+        ),
+        _ => timeline_failed(
+            TIMELINE_PAGINATE_FAILED_CODE,
+            TIMELINE_PAGINATE_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn open_position_from_dto(
+    position: TimelineOpenPositionDto,
+) -> Result<NativeTimelineOpenPosition, TimelineError> {
+    match position.kind.as_str() {
+        "live_bottom" => Ok(NativeTimelineOpenPosition::LiveBottom),
+        "unread" => Ok(NativeTimelineOpenPosition::Unread),
+        "focused" => {
+            let event_id = position
+                .event_id
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    timeline_failed(TIMELINE_OPEN_FAILED_CODE, TIMELINE_OPEN_FAILED_DESCRIPTION)
+                })?;
+            Ok(NativeTimelineOpenPosition::Focused { event_id })
+        }
+        "normal" => Ok(NativeTimelineOpenPosition::Normal {
+            viewport: NativeTimelineViewportHint {
+                at_bottom: position.at_bottom,
+                restored_anchor_event_id: position.restored_anchor_event_id,
+                live_tail_event_id: position.live_tail_event_id,
+                updated_at_ms: position.updated_at_ms,
+            },
+        }),
+        _ => Err(timeline_failed(
+            TIMELINE_OPEN_FAILED_CODE,
+            TIMELINE_OPEN_FAILED_DESCRIPTION,
+        )),
+    }
+}
+
+fn paginate_direction(direction: &str) -> Result<NativeTimelineDirection, TimelineError> {
+    match direction {
+        "backwards" => Ok(NativeTimelineDirection::Backwards),
+        "forwards" => Ok(NativeTimelineDirection::Forwards),
+        _ => Err(timeline_failed(
+            TIMELINE_PAGINATE_FAILED_CODE,
+            TIMELINE_PAGINATE_FAILED_DESCRIPTION,
+        )),
+    }
+}
+
+fn page_state_as_str(state: TimelinePageState) -> String {
+    match state {
+        TimelinePageState::Available => "available",
+        TimelinePageState::Exhausted => "exhausted",
+        TimelinePageState::Loading => "loading",
+        TimelinePageState::Unavailable => "unavailable",
+    }
+    .to_owned()
+}
+
+fn view_position_dto(position: TimelineViewPosition) -> TimelineViewPositionDto {
+    match position {
+        TimelineViewPosition::LiveBottom => TimelineViewPositionDto {
+            kind: "live_bottom".to_owned(),
+            event_id: None,
+        },
+        TimelineViewPosition::Unread { anchor_event_id } => TimelineViewPositionDto {
+            kind: "unread".to_owned(),
+            event_id: Some(anchor_event_id),
+        },
+        TimelineViewPosition::Focused { target_event_id } => TimelineViewPositionDto {
+            kind: "focused".to_owned(),
+            event_id: Some(target_event_id),
+        },
+        TimelineViewPosition::Restored { anchor_event_id } => TimelineViewPositionDto {
+            kind: "restored".to_owned(),
+            event_id: anchor_event_id,
+        },
+    }
+}
+
+fn timeline_snapshot_dto(snapshot: TimelineViewSnapshot) -> TimelineSnapshotDto {
+    TimelineSnapshotDto {
+        schema_version: snapshot.schema_version,
+        session_generation: snapshot.session_generation,
+        room_id: snapshot.room_id,
+        revision: snapshot.revision,
+        position: view_position_dto(snapshot.position),
+        pagination_backward: page_state_as_str(snapshot.pagination.backward),
+        pagination_forward: page_state_as_str(snapshot.pagination.forward),
+        own_read_event_id: snapshot.read_state.own_read_event_id,
+        unread_anchor_event_id: snapshot.read_state.unread_anchor_event_id,
+        is_marked_unread: snapshot.read_state.is_marked_unread,
+        pinned_event_ids: snapshot.pinned_event_ids,
+        row_count: u32::try_from(snapshot.rows.len()).unwrap_or(u32::MAX),
+        mark_read: snapshot.capabilities.mark_read,
+        mark_unread: snapshot.capabilities.mark_unread,
+        paginate_backward: snapshot.capabilities.paginate_backward,
+        paginate_forward: snapshot.capabilities.paginate_forward,
     }
 }
 
@@ -848,6 +1094,85 @@ impl SharedCore {
             session_generation: snapshot.session_generation,
             invites: snapshot.invites.into_iter().map(invite_dto).collect(),
         })
+    }
+
+    pub async fn timeline_open(
+        &self,
+        room_id: String,
+        position: TimelineOpenPositionDto,
+    ) -> Result<TimelineOpenDto, TimelineError> {
+        let position = open_position_from_dto(position)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: TIMELINE_OPEN_COMMAND.to_owned(),
+                session_generation: TIMELINE_READ_ONLY_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId": room_id,
+                    "position": position,
+                }),
+            })
+            .await
+            .map_err(map_timeline_open_core_error)?;
+        let readback: NativeTimelineOpenReadback = serde_json::from_value(response.payload)
+            .map_err(|_| {
+                timeline_failed(TIMELINE_OPEN_FAILED_CODE, TIMELINE_OPEN_FAILED_DESCRIPTION)
+            })?;
+        Ok(TimelineOpenDto {
+            schema_version: readback.schema_version,
+            stream_id: readback.stream_id,
+            position: view_position_dto(readback.position),
+            snapshot: timeline_snapshot_dto(readback.snapshot),
+        })
+    }
+
+    pub async fn timeline_close(&self, stream_id: String) -> Result<bool, TimelineError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: TIMELINE_CLOSE_COMMAND.to_owned(),
+                session_generation: TIMELINE_READ_ONLY_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "streamId": stream_id }),
+            })
+            .await
+            .map_err(map_timeline_close_core_error)?;
+        serde_json::from_value(response.payload).map_err(|_| {
+            timeline_failed(
+                TIMELINE_CLOSE_FAILED_CODE,
+                TIMELINE_CLOSE_FAILED_DESCRIPTION,
+            )
+        })
+    }
+
+    pub async fn timeline_paginate(
+        &self,
+        stream_id: String,
+        direction: String,
+    ) -> Result<TimelineSnapshotDto, TimelineError> {
+        let direction = paginate_direction(&direction)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: TIMELINE_PAGINATE_COMMAND.to_owned(),
+                session_generation: TIMELINE_READ_ONLY_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({
+                    "streamId": stream_id,
+                    "direction": direction,
+                }),
+            })
+            .await
+            .map_err(map_timeline_paginate_core_error)?;
+        let snapshot: TimelineViewSnapshot =
+            serde_json::from_value(response.payload).map_err(|_| {
+                timeline_failed(
+                    TIMELINE_PAGINATE_FAILED_CODE,
+                    TIMELINE_PAGINATE_FAILED_DESCRIPTION,
+                )
+            })?;
+        Ok(timeline_snapshot_dto(snapshot))
     }
 }
 
