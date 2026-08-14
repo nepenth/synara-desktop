@@ -1506,6 +1506,35 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreSendStickerWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let roomId = "!s923SecretRoom:example.org"
+        let body = "s923SecretBody"
+        let mxc = "mxc://example.org/s923SecretMxc"
+
+        do {
+            _ = try await SharedCoreSendSticker.sendSticker(
+                core: core,
+                roomId: roomId,
+                body: body,
+                mxc: mxc,
+                width: nil,
+                height: nil,
+                mimetype: nil,
+                size: nil,
+                replyTo: nil,
+                threadRoot: nil
+            )
+            XCTFail("Fail-closed SharedCore must not send a sticker without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-send-sticker-no-session"))
+            for forbidden in ["syt_", "token", roomId, body, mxc] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

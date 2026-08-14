@@ -77,7 +77,6 @@ fn room_moderation_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("room_leave"));
     assert!(shared_core.contains("room_join("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("send_sticker"));
     assert!(!shared_core.contains("send_poll"));
     assert!(!shared_core.contains("edit_message"));
     assert!(!shared_core.contains("poll_respond"));
