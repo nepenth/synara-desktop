@@ -122,6 +122,7 @@ const assertions = [
   [swiftBindingsTests, "try await core.close()", "Swift generated FFI close execution"],
   [swiftBindingsTests, "testSharedCoreConstructsOverGeneratedRustFFI", "Swift P4-S2 Core construction test"],
   [swiftBindingsTests, "testSharedCoreAcceptsInMemorySecretStore", "Swift P4-S3a vault constructor test"],
+  [swiftBindingsTests, "SharedCore.newWithSecretStore(store:", "Swift P4-S3a UniFFI 0.28 named vault factory"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -871,6 +872,14 @@ if (!sharedCoreBody.includes("constructor();")) {
 }
 if (!sharedCoreBody.includes("constructor(IosSecretVault store)")) {
   throw new Error("P4-S3a SharedCore must accept IosSecretVault");
+}
+if (!sharedCoreBody.includes('[Name="new_with_secret_store"]')) {
+  throw new Error("P4-S3a vault constructor must stay a named UniFFI factory");
+}
+if (swiftBindingsTests.includes("SharedCore(store:")) {
+  throw new Error(
+    "UniFFI 0.28 Swift has no SharedCore(store:) init; use SharedCore.newWithSecretStore(store:)"
+  );
 }
 for (const forbidden of ["command", "attach", "login", "password", "open("]) {
   if (sharedCoreBody.includes(forbidden)) {
