@@ -72,7 +72,7 @@ fn timeline_surface_exposes_only_open_close_paginate() {
     assert!(!udl.contains("matrix_timeline_event_readback"));
     assert!(!udl.contains("matrix_timeline_set_read_state"));
     assert!(!udl.contains("matrix_login_password"));
-    assert!(!udl.contains("matrix_verification_list"));
+    assert!(!udl.contains("matrix_verification_start"));
     let shared_core = udl
         .split("interface SharedCore {")
         .nth(1)
