@@ -30,6 +30,7 @@ pub use session_projection_ffi::{
 
 mod shared_core_ffi;
 pub use shared_core_ffi::{
+    ComposerReplyDraftDto, ComposerReplyDraftError, ComposerReplyDraftPreviewDto,
     DeviceCommandError, DeviceDeleteChallengeDto, DeviceDeleteDto, DeviceSnapshotDto,
     DeviceSummaryDto, DirectorySearchCommandError, DirectoryVisibilityCommandError,
     GlobalImagePacksSnapshotDto, ImagePackCommandError, ImagePackDto, ImagePackWriteDto,
