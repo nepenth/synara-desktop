@@ -205,6 +205,10 @@ const sharedCoreSendSticker = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreSendSticker.swift"),
   "utf8"
 );
+const sharedCoreSendPoll = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreSendPoll.swift"),
+  "utf8"
+);
 const swiftBindingsTests = readFileSync(
   resolve(root, "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift"),
   "utf8"
@@ -751,6 +755,15 @@ const assertions = [
   [sharedCoreSendSticker, "core: SharedCore", "P4-S9-23 helper takes an already-constructed SharedCore"],
   [sharedCoreSendSticker, "core.sendSticker", "P4-S9-23 helper writes on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreSendSticker.swift in Sources", "P4-S9-23 helper in Xcode target"],
+  [sharedCoreFfi, "send_poll", "P4-S9-24 typed send-poll FFI"],
+  [sharedCoreFfi, "matrix_send_poll", "P4-S9-24 calls the registered send-poll command"],
+  [udl, "SendPollDto send_poll(", "P4-S9-24 SharedCore send poll"],
+  [udl, "interface SendPollError", "P4-S9-24 static send-poll error"],
+  [swiftBindingsTests, "testSharedCoreSendPollWithoutSessionFailsClosed", "Swift P4-S9-24 fail-closed send-poll test"],
+  [sharedCoreSendPoll, "sendPoll", "P4-S9-24 product send-poll helper"],
+  [sharedCoreSendPoll, "core: SharedCore", "P4-S9-24 helper takes an already-constructed SharedCore"],
+  [sharedCoreSendPoll, "core.sendPoll", "P4-S9-24 helper writes on the caller-owned instance"],
+  [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreSendPoll.swift in Sources", "P4-S9-24 helper in Xcode target"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1647,9 +1660,14 @@ for (const required of ["send_sticker("]) {
     throw new Error(`P4-S9-23 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "send_poll", "edit_message", "poll_respond", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup"]) {
+for (const required of ["send_poll("]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-24 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "edit_message", "poll_respond", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-23`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-24`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1919,6 +1937,17 @@ if (sharedCoreSendSticker.includes("SharedCore.newWithSecretStore") || sharedCor
 for (const forbidden of ["sendText", "sendPoll", "editMessage", "pollRespond", "backupStatus"]) {
   if (sharedCoreSendSticker.includes(forbidden)) {
     throw new Error(`P4-S9-23 helper must not wrap ${forbidden}`);
+  }
+}
+if (sharedCoreSendPoll.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-24 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreSendPoll.includes("SharedCore.newWithSecretStore") || sharedCoreSendPoll.includes("newWithSecretStore")) {
+  throw new Error("P4-S9-24 helper must not construct SharedCore");
+}
+for (const forbidden of ["sendText", "sendSticker", "editMessage", "pollRespond", "backupStatus"]) {
+  if (sharedCoreSendPoll.includes(forbidden)) {
+    throw new Error(`P4-S9-24 helper must not wrap ${forbidden}`);
   }
 }
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);

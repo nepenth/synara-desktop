@@ -100,6 +100,9 @@
 //! `matrix_send_sticker` Core command only. Metadata / mxc only; no image
 //! bytes or file path. Failed errors never echo mxc or room id. Poll, edit,
 //! and respond stay off. `matrix_send_attachment` stays a desktop leftover.
+//! P4-S9-24 adds a typed `send_poll` wrapper for the already-registered
+//! `matrix_send_poll` Core command only. No media bytes. Failed errors never
+//! echo question, options, or room id. Edit and respond stay off.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -561,6 +564,13 @@ const SEND_STICKER_NO_SESSION_DESCRIPTION: &str = "No timeline session is availa
 const SEND_STICKER_FAILED_CODE: &str = "p4-s9-23-send-sticker-failed";
 const SEND_STICKER_FAILED_DESCRIPTION: &str = "The send-sticker request could not be completed.";
 const SEND_STICKER_OWNER_DESCRIPTION: &str = "The send-sticker request is not available.";
+const SEND_POLL_GENERATION: u64 = 0;
+const SEND_POLL_COMMAND: &str = "matrix_send_poll";
+const SEND_POLL_NO_SESSION_CODE: &str = "p2-send-poll-no-session";
+const SEND_POLL_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
+const SEND_POLL_FAILED_CODE: &str = "p4-s9-24-send-poll-failed";
+const SEND_POLL_FAILED_DESCRIPTION: &str = "The send-poll request could not be completed.";
+const SEND_POLL_OWNER_DESCRIPTION: &str = "The send-poll request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1045,6 +1055,30 @@ impl std::fmt::Display for SendStickerError {
 }
 
 impl std::error::Error for SendStickerError {}
+
+/// Privacy-safe send-poll write ack from the registered Core command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SendPollDto {
+    pub room_id: String,
+    pub event_id: String,
+    pub status: String,
+}
+
+/// Static fail-closed send-poll error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SendPollError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for SendPollError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for SendPollError {}
 
 /// Static fail-closed timeline error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3671,6 +3705,26 @@ impl SharedCore {
         .await
     }
 
+    pub async fn send_poll(
+        &self,
+        room_id: String,
+        question: String,
+        answers: Vec<String>,
+        max_selections: u32,
+        thread_root: Option<String>,
+        reply_to: Option<String>,
+    ) -> Result<SendPollDto, SendPollError> {
+        self.send_poll_command(serde_json::json!({
+            "roomId": room_id,
+            "question": question,
+            "answers": answers,
+            "maxSelections": max_selections,
+            "threadRoot": thread_root,
+            "replyTo": reply_to,
+        }))
+        .await
+    }
+
     async fn space_null_command(
         &self,
         command: &'static str,
@@ -3812,6 +3866,26 @@ impl SharedCore {
                 send_sticker_failed(SEND_STICKER_FAILED_CODE, SEND_STICKER_FAILED_DESCRIPTION)
             })?;
         Ok(send_sticker_dto(result))
+    }
+
+    async fn send_poll_command(
+        &self,
+        payload: serde_json::Value,
+    ) -> Result<SendPollDto, SendPollError> {
+        let payload = send_poll_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: SEND_POLL_COMMAND.to_owned(),
+                session_generation: SEND_POLL_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_send_poll_core_error(SEND_POLL_NO_SESSION_CODE, error))?;
+        let result: SendPollResultWire = serde_json::from_value(response.payload)
+            .map_err(|_| send_poll_failed(SEND_POLL_FAILED_CODE, SEND_POLL_FAILED_DESCRIPTION))?;
+        Ok(send_poll_dto(result))
     }
 
     async fn invite_action_command(
@@ -6831,6 +6905,61 @@ struct SendStickerResultWire {
 
 fn send_sticker_dto(result: SendStickerResultWire) -> SendStickerDto {
     SendStickerDto {
+        room_id: result.room_id,
+        event_id: result.event_id,
+        status: result.status,
+    }
+}
+
+fn send_poll_failed(code: &str, description: &'static str) -> SendPollError {
+    SendPollError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_send_poll_core_error(no_session: &'static str, error: MatrixIpcError) -> SendPollError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            send_poll_failed(code, SEND_POLL_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code.starts_with("p2-send-poll-")
+                || code.starts_with("v-send.3-poll-")
+                || code.starts_with("d0.4-send-")
+                || code.starts_with("v-send.5-") =>
+        {
+            send_poll_failed(code, SEND_POLL_OWNER_DESCRIPTION)
+        }
+        _ => send_poll_failed(SEND_POLL_FAILED_CODE, SEND_POLL_FAILED_DESCRIPTION),
+    }
+}
+
+fn send_poll_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, SendPollError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(send_poll_failed(
+            SEND_POLL_FAILED_CODE,
+            SEND_POLL_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SendPollResultWire {
+    room_id: String,
+    event_id: String,
+    status: String,
+}
+
+fn send_poll_dto(result: SendPollResultWire) -> SendPollDto {
+    SendPollDto {
         room_id: result.room_id,
         event_id: result.event_id,
         status: result.status,

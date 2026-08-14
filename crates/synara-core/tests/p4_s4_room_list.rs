@@ -67,7 +67,6 @@ fn room_list_surface_exposes_only_the_registered_snapshot_command() {
         .expect("SharedCore");
     assert!(shared_core.contains("room_list_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("send_poll"));
     assert!(!shared_core.contains("edit_message"));
     assert!(!shared_core.contains("poll_respond"));
 }

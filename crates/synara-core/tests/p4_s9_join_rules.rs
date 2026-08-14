@@ -68,7 +68,6 @@ fn join_rule_surface_exposes_only_the_registered_snapshot() {
     assert!(shared_core.contains("device_snapshot"));
     assert!(!shared_core.contains("command("));
     assert!(!shared_core.contains("set_room_join_rule"));
-    assert!(!shared_core.contains("send_poll"));
     assert!(!shared_core.contains("edit_message"));
     assert!(!shared_core.contains("poll_respond"));
     assert!(!shared_core.contains("backup_status"));

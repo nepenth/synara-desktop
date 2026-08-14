@@ -146,8 +146,9 @@ Run this checklist in order. Stop at the first yes.
    jump-latest is stacked.    S9-20 timeline reactions is stacked.
    S9-21 composer reply draft is stacked.
    S9-22 send text is stacked.
-   S9-23 send sticker (section 9.5) is on this branch.
-   Next after merge is send poll.
+   S9-23 send sticker is stacked.
+   S9-24 send poll (section 9.5) is on this branch.
+   Next after merge is edit message.
    UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
@@ -362,12 +363,15 @@ P4-S9-21 iOS composer reply draft     stacked
 P4-S9-22 iOS send text                stacked
        matrix_send_text only. Write ack is the existing send result.
        No media bytes. Sticker, poll, edit, and respond stay off.
-P4-S9-23 iOS send sticker             **this branch**
+P4-S9-23 iOS send sticker             stacked
        matrix_send_sticker only. Write ack is the existing send result.
        Metadata / mxc only. No image bytes or file path. Core does not
        take a path or raw bytes, so this family is in scope.
        `matrix_send_attachment` stays a desktop leftover.
        Poll, edit, and respond stay off.
+P4-S9-24 iOS send poll                **this branch**
+       matrix_send_poll only. Write ack is the existing send result.
+       No media bytes. Edit and respond stay off.
 P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        only when grep shows no remaining product callers
 P4-S11 NSE read-only store API        (never boot sync in NSE)
@@ -505,30 +509,28 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 
-S9-22 send text is stacked at #970. **S9-23 (this branch)** adds a typed
-UniFFI wrapper for the registered send-sticker command.
+S9-23 send sticker is stacked at #971. **S9-24 (this branch)** adds a typed
+UniFFI wrapper for the registered send-poll command.
 
-1. `SharedCore.send_sticker` calls `Core.command` with the same camelCase
-   payload desktop uses (`{ roomId, body, mxc, width, height, mimetype,
-   size, replyTo, threadRoot }`). It returns the existing send-sticker
-   write ack. Metadata / mxc only. Do not re-wrap S6 open, S9-21
-   composer drafts, or S9-22 send text.
-2. Do not reimplement send in Swift. Do not wrap poll, edit, respond,
+1. `SharedCore.send_poll` calls `Core.command` with the same camelCase
+   payload desktop uses (`{ roomId, question, answers, maxSelections,
+   threadRoot, replyTo }`). It returns the existing send-poll write ack.
+   No media bytes. Do not re-wrap S6 open, S9-22 send text, or S9-23
+   send sticker.
+2. Do not reimplement send in Swift. Do not wrap edit, respond,
    leftover media bytes, a file path, or leftover secret envelopes.
-   Core `send_sticker` does not take a path or raw bytes. If it had,
-   this family would stay a leftover with `matrix_send_attachment`.
 3. Do not start `SyncService`. Missing owner fail-closes with the
-   registered `p2-send-sticker-no-session` code. Unstarted sync returns
+   registered `p2-send-poll-no-session` code. Unstarted sync returns
    the registered handler's real outcome. Planted send must fail on local
-   room/id/mxc validation (`v-send-sticker-room-not-found` /
-   `d0.4-send-invalid-room-id` / `v-send-sticker-invalid-mxc` /
-   `v-send-sticker-invalid-body`) and must not require a live server.
-   Failed errors must not echo mxc or room id. Oversize fail-closes
-   without truncating or echoing the mxc.
+   room/question/answers validation (`v-send.3-poll-room-not-found` /
+   `d0.4-send-invalid-room-id` / `v-send.3-poll-invalid-question` /
+   `v-send.3-poll-invalid-answers`) and must not require a live server.
+   Failed errors must not echo question, options, or room id. Oversize
+   fail-closes without truncating or echoing the question or options.
 4. Helper + XCTest are the iOS surface this slice. Do not swap
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
-5. One command family per PR. Next is send poll (`matrix_send_poll`).
-   Edit and respond stay off. Do not wrap leftover
+5. One command family per PR. Next is edit message (`matrix_edit_message`).
+   Poll respond stays off. Do not wrap leftover
    password/export/import/bootstrap, `matrix_crypto_status`, or
    `matrix_cross_signing_status`. Do not hit production homeservers.
    Do not start S10.
