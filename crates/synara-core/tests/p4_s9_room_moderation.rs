@@ -64,7 +64,6 @@ fn room_moderation_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("room_unban"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
-    assert!(!udl.contains("matrix_room_set_power_level"));
     assert!(!udl.contains("matrix_room_create"));
     let shared_core = udl
         .split("interface SharedCore {")
@@ -78,7 +77,6 @@ fn room_moderation_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("room_leave"));
     assert!(shared_core.contains("room_join("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("room_set_power_level"));
     assert!(!shared_core.contains("room_create"));
     assert!(!shared_core.contains("room_members_snapshot"));
     assert!(!shared_core.contains("space_parents_snapshot"));

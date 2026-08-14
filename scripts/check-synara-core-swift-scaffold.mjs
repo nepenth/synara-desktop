@@ -44,6 +44,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreDirectorySearch.swift",
   "synara-ios/Synara/Services/SharedCoreRoomLeaveJoin.swift",
   "synara-ios/Synara/Services/SharedCoreRoomModeration.swift",
+  "synara-ios/Synara/Services/SharedCoreRoomPowerLevels.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -157,6 +158,10 @@ const sharedCoreRoomLeaveJoin = readFileSync(
 );
 const sharedCoreRoomModeration = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreRoomModeration.swift"),
+  "utf8"
+);
+const sharedCoreRoomPowerLevels = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreRoomPowerLevels.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -546,6 +551,22 @@ const assertions = [
   [sharedCoreRoomModeration, "roomUnban", "P4-S9-13 product room-unban helper"],
   [sharedCoreRoomModeration, "core: SharedCore", "P4-S9-13 helper takes an already-constructed SharedCore"],
   [sharedCoreRoomModeration, "core.roomInvite", "P4-S9-13 helper invites on the caller-owned instance"],
+  [sharedCoreFfi, "room_set_power_level", "P4-S9-14 typed room-set-power-level FFI"],
+  [sharedCoreFfi, "matrix_room_set_power_level", "P4-S9-14 calls the registered set-power-level command"],
+  [sharedCoreFfi, "matrix_room_set_power_levels", "P4-S9-14 calls the registered set-power-levels command"],
+  [sharedCoreFfi, "matrix_room_set_power_level_tags", "P4-S9-14 calls the registered set-power-level-tags command"],
+  [udl, "RoomPowerLevelWriteDto room_set_power_level(", "P4-S9-14 SharedCore set power level"],
+  [udl, "RoomPowerLevelWriteDto room_set_power_levels(", "P4-S9-14 SharedCore set power levels"],
+  [udl, "RoomPowerLevelWriteDto room_set_power_level_tags(", "P4-S9-14 SharedCore set power-level tags"],
+  [udl, "dictionary RoomPowerLevelWriteDto", "P4-S9-14 privacy-safe room-power-level write DTO"],
+  [udl, "interface RoomPowerLevelCommandError", "P4-S9-14 static room-power-level error"],
+  [swiftBindingsTests, "testSharedCoreRoomPowerLevelsWithoutSessionFailsClosed", "Swift P4-S9-14 fail-closed room power-level test"],
+  [sharedCoreRoomPowerLevels, "roomSetPowerLevel", "P4-S9-14 product set-power-level helper"],
+  [sharedCoreRoomPowerLevels, "roomSetPowerLevels", "P4-S9-14 product set-power-levels helper"],
+  [sharedCoreRoomPowerLevels, "roomSetPowerLevelTags", "P4-S9-14 product set-power-level-tags helper"],
+  [sharedCoreRoomPowerLevels, "core: SharedCore", "P4-S9-14 helper takes an already-constructed SharedCore"],
+  [sharedCoreRoomPowerLevels, "core.roomSetPowerLevel", "P4-S9-14 helper writes on the caller-owned instance"],
+  [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreRoomPowerLevels.swift in Sources", "P4-S9-14 helper in Xcode target"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1392,9 +1413,14 @@ for (const required of ["room_invite", "room_kick", "room_ban", "room_unban"]) {
     throw new Error(`P4-S9-13 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "room_set_power_level", "room_create", "room_members_snapshot", "space_parents_snapshot", "crypto_status", "backup_setup"]) {
+for (const required of ["room_set_power_level(", "room_set_power_levels(", "room_set_power_level_tags("]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-14 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "room_create", "room_members_snapshot", "space_parents_snapshot", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-13`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-14`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1556,6 +1582,17 @@ for (const forbidden of ["setPowerLevel", "roomCreate", "roomMembersSnapshot", "
     throw new Error(`P4-S9-13 helper must not wrap ${forbidden}`);
   }
 }
+if (sharedCoreRoomPowerLevels.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-14 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreRoomPowerLevels.includes("SharedCore.newWithSecretStore") || sharedCoreRoomPowerLevels.includes("newWithSecretStore")) {
+  throw new Error("P4-S9-14 helper must not construct SharedCore");
+}
+for (const forbidden of ["roomCreate", "roomMembersSnapshot", "roomInvite", "roomLeave", "backupStatus"]) {
+  if (sharedCoreRoomPowerLevels.includes(forbidden)) {
+    throw new Error(`P4-S9-14 helper must not wrap ${forbidden}`);
+  }
+}
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
 if (!roomListDto) throw new Error("missing RoomListSnapshotDto");
 if (/\bpassword\b/.test(roomListDto[1]) || /\btoken\b/.test(roomListDto[1])) {
@@ -1680,6 +1717,11 @@ const roomModerationWriteDto = udl.match(/dictionary RoomModerationWriteDto \{([
 if (!roomModerationWriteDto) throw new Error("missing RoomModerationWriteDto");
 if (/\bpassword\b/.test(roomModerationWriteDto[1]) || /\btoken\b/.test(roomModerationWriteDto[1]) || /\bbytes\b/.test(roomModerationWriteDto[1]) || /\broom_id\b/.test(roomModerationWriteDto[1]) || /\buser_id\b/.test(roomModerationWriteDto[1]) || /\breason\b/.test(roomModerationWriteDto[1])) {
   throw new Error("RoomModerationWriteDto must not carry password, token, bytes, room_id, user_id, or reason fields");
+}
+const roomPowerLevelWriteDto = udl.match(/dictionary RoomPowerLevelWriteDto \{([\s\S]*?)\};/);
+if (!roomPowerLevelWriteDto) throw new Error("missing RoomPowerLevelWriteDto");
+if (/\bpassword\b/.test(roomPowerLevelWriteDto[1]) || /\btoken\b/.test(roomPowerLevelWriteDto[1]) || /\bbytes\b/.test(roomPowerLevelWriteDto[1]) || /\broom_id\b/.test(roomPowerLevelWriteDto[1]) || /\buser_id\b/.test(roomPowerLevelWriteDto[1]) || /\bpower_level\b/.test(roomPowerLevelWriteDto[1]) || /\bcontent\b/.test(roomPowerLevelWriteDto[1])) {
+  throw new Error("RoomPowerLevelWriteDto must not carry password, token, bytes, room_id, user_id, power_level, or content fields");
 }
 const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
 if (!loginDto) throw new Error("missing SessionLoginDto");
