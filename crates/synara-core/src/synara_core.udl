@@ -232,13 +232,44 @@ interface RoomListSnapshotError {
   Failed(string code, string description);
 };
 
+// Privacy-safe invite row. No tokens or password.
+dictionary InviteDto {
+  string room_id;
+  string room_name;
+  string? avatar_handle_id;
+  string? room_topic;
+  string? room_alias;
+  string sender_id;
+  string sender_name;
+  boolean sender_ignored;
+  u64? invite_ts;
+  string? reason;
+  boolean is_space;
+  boolean is_direct;
+  boolean is_encrypted;
+  string triage;
+};
+
+// Privacy-safe invite snapshot from the registered Core command.
+dictionary InviteSnapshotDto {
+  u64 session_generation;
+  sequence<InviteDto> invites;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface InviteSnapshotError {
+  Failed(string code, string description);
+};
+
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
 // UniFFI 0.28 Swift keeps `SharedCore()` for the primary constructor and
 // emits the named constructor as `SharedCore.newWithSecretStore(store:)`,
 // not a second `init(store:)`. P4-S3b adds restore_persisted_session.
 // P4-S3c adds dedicated login_with_password. P4-S3d adds attach_session_owners
 // for the desktop owner set. P4-S4 adds typed room_list_snapshot for
-// matrix_room_list_snapshot only. Password is a method argument only: not
+// matrix_room_list_snapshot only. P4-S5 adds typed invites_snapshot for
+// matrix_invites_snapshot only. Password is a method argument only: not
 // stored, not in the DTO, never echoed. Still no generic command FFI,
 // leftover registration, or APNs surface.
 interface SharedCore {
@@ -266,4 +297,7 @@ interface SharedCore {
 
   [Async, Throws=RoomListSnapshotError]
   RoomListSnapshotDto room_list_snapshot();
+
+  [Async, Throws=InviteSnapshotError]
+  InviteSnapshotDto invites_snapshot();
 };

@@ -7,8 +7,9 @@ Evidence tip when written: `feature/shared-native-core` `ee896416` (#935 S3a).
 S3a landed in #935. S3b restore landed in #937 (`4edfc1f5`).
 S3c login (Option A) landed in #938 (`9b4ec54f`).
 S3d attach landed in #939 (`ad63d56d`).
-**S4 room-list snapshot lands on `agent/snc-p4-s4-room-list`.**
-Playbook recipe: §9.5. Next after S4 is S5 invites.
+S4 room-list snapshot landed in #940 (`5a6f3e9b`).
+**S5 invites snapshot lands on `agent/snc-p4-s5-invites`.**
+Playbook recipe: §9.5. Next after S5 is S6 timeline.
 
 ## Decision
 

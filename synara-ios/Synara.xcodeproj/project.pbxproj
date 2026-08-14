@@ -82,6 +82,7 @@
 		6C9E0F1A2B3C4D5E6F708192 /* SharedCoreSessionLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B8D4E6A1C3059F7E0A1B3C5 /* SharedCoreSessionLogin.swift */; };
 		7D0F1A2B3C4D5E6F708192A3 /* SharedCoreSessionAttach.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C9E5F7B2D4160A8F1B2C4D6 /* SharedCoreSessionAttach.swift */; };
 		8E1A2B3C4D5E6F708192A4B5 /* SharedCoreRoomList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D0A6E8C3E5271B902C3D5E7 /* SharedCoreRoomList.swift */; };
+		9F2B3C4D5E6F708192A5B6C7 /* SharedCoreInvites.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1B7F9D4F6382C013D4E6F8 /* SharedCoreInvites.swift */; };
 		4D8B1F6A2C9037E5B0D4A7C1 /* IosSecretVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2E9C1D4B6805F3E8A1C0D2 /* IosSecretVault.swift */; };
 		D21F2D94FEAEE8E93F3E2A6A /* RoomReadMarkerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B44B25CB0277A9BAD73943 /* RoomReadMarkerService.swift */; };
 		D46F130EFA2B2D58B79B605D /* AppServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A4D48D89C01C70901919CAB /* AppServices.swift */; };
@@ -228,6 +229,7 @@
 		2B8D4E6A1C3059F7E0A1B3C5 /* SharedCoreSessionLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionLogin.swift; sourceTree = "<group>"; };
 		3C9E5F7B2D4160A8F1B2C4D6 /* SharedCoreSessionAttach.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionAttach.swift; sourceTree = "<group>"; };
 		4D0A6E8C3E5271B902C3D5E7 /* SharedCoreRoomList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomList.swift; sourceTree = "<group>"; };
+		5E1B7F9D4F6382C013D4E6F8 /* SharedCoreInvites.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreInvites.swift; sourceTree = "<group>"; };
 		7A2E9C1D4B6805F3E8A1C0D2 /* IosSecretVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosSecretVault.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -369,6 +371,7 @@
 				2B8D4E6A1C3059F7E0A1B3C5 /* SharedCoreSessionLogin.swift */,
 				3C9E5F7B2D4160A8F1B2C4D6 /* SharedCoreSessionAttach.swift */,
 				4D0A6E8C3E5271B902C3D5E7 /* SharedCoreRoomList.swift */,
+				5E1B7F9D4F6382C013D4E6F8 /* SharedCoreInvites.swift */,
 				B3ECC92EE34CCE4DB57A5D3E /* MediaService.swift */,
 				D0394B6246C8637014BEDC20 /* NotificationPermissionCoordinator.swift */,
 				00D51C4E0E89D32C8D99CC22 /* PerformanceInstrumentation.swift */,
@@ -664,6 +667,7 @@
 				6C9E0F1A2B3C4D5E6F708192 /* SharedCoreSessionLogin.swift in Sources */,
 				7D0F1A2B3C4D5E6F708192A3 /* SharedCoreSessionAttach.swift in Sources */,
 				8E1A2B3C4D5E6F708192A4B5 /* SharedCoreRoomList.swift in Sources */,
+				9F2B3C4D5E6F708192A5B6C7 /* SharedCoreInvites.swift in Sources */,
 				9B792F2B4073B7792ED943D8 /* MediaService.swift in Sources */,
 				27F8472586C8C97BFB42B087 /* NotificationPermissionCoordinator.swift in Sources */,
 				8B42041876057A9091D2F463 /* PerformanceInstrumentation.swift in Sources */,
