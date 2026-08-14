@@ -16,7 +16,10 @@ use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig
 use crate::app::lifecycle::{
     restore_session_from_vault, SessionMaterial, SessionMaterialId, SessionMaterialVault,
 };
-use crate::app::store::{AccountIdentity, StoreKeyMaterial, STORE_KEY_LEN};
+use crate::app::store::{
+    get_or_create_store_key, AccountIdentity, StoreKeyId, StoreKeyMaterial, StoreKeyVault,
+    StoreKeyVaultError, STORE_KEY_LEN,
+};
 use crate::core::Core;
 use crate::dto::{SessionLifecycle, SessionSnapshot};
 use crate::platform::{IosFailClosedPlatform, Platform, SecretVault};
@@ -32,7 +35,6 @@ const MATERIAL_MISSING_CODE: &str = "p4-s3b-session-material-missing";
 const MATERIAL_MISSING_DESCRIPTION: &str = "No restorable session is available.";
 const RESTORE_FAILED_CODE: &str = "p4-s3b-restore-failed";
 const RESTORE_FAILED_DESCRIPTION: &str = "The persisted session could not be restored.";
-const STORE_KEY_PREFIX: &str = "p4-s3b-store-key:";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,11 +91,19 @@ fn restore_failed(code: &'static str, description: &'static str) -> SessionResto
     }
 }
 
+enum RestoredClientSlot {
+    Empty,
+    InFlight,
+    /// Retained for later S3d attach. Read by tests; unused by S3b product code.
+    #[allow(dead_code)]
+    Ready(Client),
+}
+
 /// Retained shared Core for the iOS UniFFI boundary.
 pub struct SharedCore {
     core: Core,
     secret_store: Arc<dyn SecretVault + Send + Sync>,
-    restored_client: Mutex<Option<Client>>,
+    restored_client: Mutex<RestoredClientSlot>,
 }
 
 impl SharedCore {
@@ -104,7 +114,7 @@ impl SharedCore {
         Self {
             core: Core::new(Arc::new(platform)),
             secret_store,
-            restored_client: Mutex::new(None),
+            restored_client: Mutex::new(RestoredClientSlot::Empty),
         }
     }
 
@@ -116,7 +126,7 @@ impl SharedCore {
         Self {
             core: Core::new(Arc::new(platform)),
             secret_store: vault,
-            restored_client: Mutex::new(None),
+            restored_client: Mutex::new(RestoredClientSlot::Empty),
         }
     }
 
@@ -134,6 +144,7 @@ impl SharedCore {
         let identity = AccountIdentity::new(&user_id, &homeserver_url)
             .map_err(|_| restore_failed(IDENTITY_INVALID_CODE, IDENTITY_INVALID_DESCRIPTION))?;
         let root = validate_store_root(&store_root)?;
+        let claim = RestoreClaim::acquire(&self.restored_client)?;
         let vault = SecretStoreSessionVault {
             store: Arc::clone(&self.secret_store),
         };
@@ -148,7 +159,7 @@ impl SharedCore {
             ));
         }
 
-        let store_key = store_key_for(&vault, &identity)?;
+        let store_key = store_key_for(&self.secret_store, &identity)?;
         let config = ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))
             .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
         let client = build_unauthenticated_client(&config)
@@ -179,17 +190,76 @@ impl SharedCore {
             .await
             .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
 
-        let mut guard = self
-            .restored_client
-            .lock()
-            .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
-        *guard = Some(client);
+        if claim.commit(client).is_err() {
+            let _ = self.core.close().await;
+            return Err(restore_failed(
+                RESTORE_FAILED_CODE,
+                RESTORE_FAILED_DESCRIPTION,
+            ));
+        }
 
         Ok(SessionRestoreDto {
             user_id: outcome.meta.user_id,
             device_id: outcome.meta.device_id,
             homeserver_url: outcome.meta.homeserver_url,
         })
+    }
+}
+
+/// Claims the restore slot for one in-flight attempt. Drop releases it unless
+/// [`RestoreClaim::commit`] stores the Client after a successful Core open.
+struct RestoreClaim<'a> {
+    slot: &'a Mutex<RestoredClientSlot>,
+    committed: bool,
+}
+
+impl<'a> RestoreClaim<'a> {
+    fn acquire(slot: &'a Mutex<RestoredClientSlot>) -> Result<Self, SessionRestoreError> {
+        let mut guard = slot
+            .lock()
+            .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
+        match *guard {
+            RestoredClientSlot::Empty => {
+                *guard = RestoredClientSlot::InFlight;
+                Ok(Self {
+                    slot,
+                    committed: false,
+                })
+            }
+            RestoredClientSlot::InFlight | RestoredClientSlot::Ready(_) => Err(restore_failed(
+                RESTORE_FAILED_CODE,
+                RESTORE_FAILED_DESCRIPTION,
+            )),
+        }
+    }
+
+    fn commit(mut self, client: Client) -> Result<(), SessionRestoreError> {
+        let mut guard = self
+            .slot
+            .lock()
+            .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
+        if !matches!(*guard, RestoredClientSlot::InFlight) {
+            return Err(restore_failed(
+                RESTORE_FAILED_CODE,
+                RESTORE_FAILED_DESCRIPTION,
+            ));
+        }
+        *guard = RestoredClientSlot::Ready(client);
+        self.committed = true;
+        Ok(())
+    }
+}
+
+impl Drop for RestoreClaim<'_> {
+    fn drop(&mut self) {
+        if self.committed {
+            return;
+        }
+        if let Ok(mut guard) = self.slot.lock() {
+            if matches!(*guard, RestoredClientSlot::InFlight) {
+                *guard = RestoredClientSlot::Empty;
+            }
+        }
     }
 }
 
@@ -216,35 +286,23 @@ fn validate_store_root(store_root: &str) -> Result<&Path, SessionRestoreError> {
 }
 
 fn store_key_for(
-    vault: &SecretStoreSessionVault,
+    store: &Arc<dyn SecretVault + Send + Sync>,
     identity: &AccountIdentity,
 ) -> Result<StoreKeyMaterial, SessionRestoreError> {
-    let key_name = format!("{STORE_KEY_PREFIX}{}", identity.account_dir_segment());
-    match vault.store.get(&key_name) {
-        Ok(Some(bytes)) if bytes.len() == STORE_KEY_LEN => {
-            let mut key_bytes = [0u8; STORE_KEY_LEN];
-            key_bytes.copy_from_slice(&bytes);
-            Ok(StoreKeyMaterial::from_bytes(key_bytes))
+    let vault = SecretStoreKeyVault {
+        store: Arc::clone(store),
+    };
+    get_or_create_store_key(&vault, &StoreKeyId::from_identity(identity)).map_err(|error| {
+        match error {
+            StoreKeyVaultError::BackendUnavailable { .. } => {
+                restore_failed(VAULT_UNAVAILABLE_CODE, VAULT_UNAVAILABLE_DESCRIPTION)
+            }
+            StoreKeyVaultError::CorruptPayload => {
+                restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION)
+            }
+            _ => restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION),
         }
-        Ok(Some(_)) | Ok(None) => generate_and_store_key(vault, &key_name),
-        Err(_) => Err(restore_failed(
-            VAULT_UNAVAILABLE_CODE,
-            VAULT_UNAVAILABLE_DESCRIPTION,
-        )),
-    }
-}
-
-fn generate_and_store_key(
-    vault: &SecretStoreSessionVault,
-    key_name: &str,
-) -> Result<StoreKeyMaterial, SessionRestoreError> {
-    let key = StoreKeyMaterial::generate()
-        .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
-    vault
-        .store
-        .put(key_name, key.as_bytes().as_slice())
-        .map_err(|_| restore_failed(VAULT_UNAVAILABLE_CODE, VAULT_UNAVAILABLE_DESCRIPTION))?;
-    Ok(key)
+    })
 }
 
 struct CallbackSecretVault {
@@ -315,6 +373,45 @@ impl SessionMaterialVault for SecretStoreSessionVault {
     }
 }
 
+struct SecretStoreKeyVault {
+    store: Arc<dyn SecretVault + Send + Sync>,
+}
+
+impl StoreKeyVault for SecretStoreKeyVault {
+    fn get(&self, id: &StoreKeyId) -> Result<Option<StoreKeyMaterial>, StoreKeyVaultError> {
+        match self.store.get(id.account()) {
+            Ok(None) => Ok(None),
+            Ok(Some(bytes)) if bytes.len() == STORE_KEY_LEN => {
+                let mut key_bytes = [0u8; STORE_KEY_LEN];
+                key_bytes.copy_from_slice(&bytes);
+                Ok(Some(StoreKeyMaterial::from_bytes(key_bytes)))
+            }
+            Ok(Some(_)) => Err(StoreKeyVaultError::CorruptPayload),
+            Err(_) => Err(StoreKeyVaultError::BackendUnavailable {
+                diagnostic_id: "p4-s3b-secret-vault-unavailable",
+            }),
+        }
+    }
+
+    fn set(&self, id: &StoreKeyId, key: &StoreKeyMaterial) -> Result<(), StoreKeyVaultError> {
+        self.store
+            .put(id.account(), key.as_bytes().as_slice())
+            .map_err(|_| StoreKeyVaultError::BackendUnavailable {
+                diagnostic_id: "p4-s3b-secret-vault-unavailable",
+            })
+    }
+
+    fn delete(&self, id: &StoreKeyId) -> Result<bool, StoreKeyVaultError> {
+        let existed = self.store.get(id.account()).ok().flatten().is_some();
+        self.store
+            .delete(id.account())
+            .map_err(|_| StoreKeyVaultError::BackendUnavailable {
+                diagnostic_id: "p4-s3b-secret-vault-unavailable",
+            })?;
+        Ok(existed)
+    }
+}
+
 fn vault_unavailable() -> MatrixIpcError {
     MatrixIpcError::new(MatrixIpcErrorCategory::StoreUnavailable)
         .with_diagnostic("p4-s3-secret-vault-unavailable")
@@ -324,6 +421,7 @@ fn vault_unavailable() -> MatrixIpcError {
 mod tests {
     use super::*;
     use crate::app::lifecycle::persist_session_material;
+    use crate::app::store::StoreKeyId;
     use crate::transport::MatrixIpcErrorCategory;
     use std::collections::HashMap;
     use std::fs;
@@ -429,7 +527,8 @@ mod tests {
             ))
             .expect_err("fail-closed vault cannot restore");
         let text = format!("{error:?}");
-        assert!(text.contains(VAULT_UNAVAILABLE_CODE) || text.contains(MATERIAL_MISSING_CODE));
+        assert!(text.contains(VAULT_UNAVAILABLE_CODE));
+        assert!(!text.contains(MATERIAL_MISSING_CODE));
         assert!(!text.contains("@alice"));
         assert!(!text.contains("matrix.example.org"));
         assert!(!text.contains(root.to_string_lossy().as_ref()));
@@ -475,7 +574,9 @@ mod tests {
             }),
         };
         persist_session_material(&persist_vault, &identity, &material).unwrap();
-        let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(map)));
+        let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(
+            std::sync::Arc::clone(&map),
+        )));
         let root = temp_root("restore");
         let rt = test_runtime();
         let _enter = rt.enter();
@@ -495,10 +596,78 @@ mod tests {
         assert!(!dbg.contains("password"));
         let snapshot = shared.core.session_snapshot().expect("projection");
         assert!(snapshot.is_some());
-        assert!(shared.restored_client.lock().expect("client").is_some());
+        assert!(matches!(
+            *shared.restored_client.lock().expect("client"),
+            RestoredClientSlot::Ready(_)
+        ));
+        let keys: Vec<String> = map.lock().expect("vault").keys().cloned().collect();
+        assert!(keys.iter().any(|key| key.starts_with("store-key:")));
+        assert!(keys.iter().any(|key| key.starts_with("matrix-session:")));
+        assert!(!keys.iter().any(|key| key.contains("p4-s3b-store-key")));
+        let second = rt
+            .block_on(shared.restore_persisted_session(
+                identity.user_id().to_owned(),
+                identity.homeserver_url().to_owned(),
+                root.to_string_lossy().into_owned(),
+            ))
+            .expect_err("second restore");
+        assert!(format!("{second:?}").contains(RESTORE_FAILED_CODE));
+        assert!(matches!(
+            *shared.restored_client.lock().expect("client"),
+            RestoredClientSlot::Ready(_)
+        ));
         drop(shared);
         drop(_enter);
         drop(rt);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn restore_rejects_wrong_length_store_key_without_replacing_it() {
+        let identity = alice();
+        let material = SessionMaterial::from_matrix_tokens(
+            &identity,
+            "DEVICEABC",
+            "syt_s3b_corrupt_key_access",
+            None,
+        )
+        .unwrap();
+        let map = std::sync::Arc::new(Mutex::new(HashMap::new()));
+        let persist_vault = SecretStoreSessionVault {
+            store: Arc::new(CallbackSecretVault {
+                inner: Box::new(MemoryCallbackVault(std::sync::Arc::clone(&map))),
+            }),
+        };
+        persist_session_material(&persist_vault, &identity, &material).unwrap();
+        let store_key_account = StoreKeyId::from_identity(&identity).account().to_owned();
+        map.lock()
+            .expect("vault")
+            .insert(store_key_account.clone(), vec![0u8; 8]);
+        let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(
+            std::sync::Arc::clone(&map),
+        )));
+        let root = temp_root("corrupt-key");
+        let rt = test_runtime();
+        let error = rt
+            .block_on(shared.restore_persisted_session(
+                identity.user_id().to_owned(),
+                identity.homeserver_url().to_owned(),
+                root.to_string_lossy().into_owned(),
+            ))
+            .expect_err("corrupt store key");
+        assert!(format!("{error:?}").contains(RESTORE_FAILED_CODE));
+        let stored = map
+            .lock()
+            .expect("vault")
+            .get(&store_key_account)
+            .cloned()
+            .expect("key remains");
+        assert_eq!(stored.len(), 8);
+        assert!(!map
+            .lock()
+            .expect("vault")
+            .keys()
+            .any(|key| key.contains("p4-s3b-store-key")));
         let _ = fs::remove_dir_all(&root);
     }
 }

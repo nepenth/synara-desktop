@@ -1,8 +1,9 @@
 import Foundation
 import SynaraCore
 
-/// P4-S3b restore entry. Uses the S3a vault and Core persist/restore.
+/// P4-S3b restore entry. Uses an already-constructed S3a `SharedCore`.
 ///
+/// The caller owns the core so UniFFI does not free the retained Client.
 /// This is not `matrix_restore_session`, not password login, and not owner
 /// attach. XCTest construction of `SharedCore` is not iOS-on-engine.
 enum SharedCoreSessionRestore {
@@ -10,10 +11,9 @@ enum SharedCoreSessionRestore {
         userID: String,
         homeserverURL: String,
         storeRoot: URL,
-        vault: IosSecretVault
+        core: SharedCore
     ) async throws -> SessionRestoreDto {
-        let core = SharedCore(store: vault)
-        return try await core.restorePersistedSession(
+        try await core.restorePersistedSession(
             userId: userID,
             homeserverUrl: homeserverURL,
             storeRoot: storeRoot.path

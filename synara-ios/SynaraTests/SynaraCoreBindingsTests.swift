@@ -35,10 +35,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
             XCTFail("Fail-closed SharedCore must not restore")
         } catch {
             let publicError = String(reflecting: error)
-            XCTAssertTrue(
-                publicError.contains("p4-s3b-secret-vault-unavailable")
-                    || publicError.contains("p4-s3b-session-material-missing")
-            )
+            XCTAssertTrue(publicError.contains("p4-s3b-secret-vault-unavailable"))
+            XCTAssertFalse(publicError.contains("p4-s3b-session-material-missing"))
             for forbidden in ["@alice:example.org", "matrix.example.org", "password", storeRoot.path] {
                 XCTAssertFalse(publicError.contains(forbidden))
             }
@@ -56,7 +54,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 userID: "not-a-user",
                 homeserverURL: hostileURL,
                 storeRoot: storeRoot,
-                vault: InMemoryIosSecretVault()
+                core: core
             )
             XCTFail("Hostile identity must fail closed")
         } catch {
@@ -65,6 +63,40 @@ final class SynaraCoreBindingsTests: XCTestCase {
             for forbidden in [hostileURL, "secret", "hunter2", "evil.example", "password"] {
                 XCTAssertFalse(publicError.contains(forbidden))
             }
+        }
+    }
+
+    func testSharedCoreRestoreHoldsInstanceAcrossCalls() async {
+        let vault = InMemoryIosSecretVault()
+        let core = SharedCore(store: vault)
+        let storeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("synara-s3b-hold-core", isDirectory: true)
+
+        do {
+            _ = try await SharedCoreSessionRestore.restorePersistedSession(
+                userID: "@alice:example.org",
+                homeserverURL: "https://matrix.example.org",
+                storeRoot: storeRoot,
+                core: core
+            )
+            XCTFail("Empty vault must not restore")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p4-s3b-session-material-missing"))
+        }
+
+        do {
+            _ = try await SharedCoreSessionRestore.restorePersistedSession(
+                userID: "@alice:example.org",
+                homeserverURL: "https://matrix.example.org",
+                storeRoot: storeRoot,
+                core: core
+            )
+            XCTFail("Second call on the same instance must still run")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p4-s3b-session-material-missing"))
+            XCTAssertFalse(publicError.contains("p4-s3b-secret-vault-unavailable"))
         }
     }
 

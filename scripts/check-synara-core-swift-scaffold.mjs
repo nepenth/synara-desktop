@@ -135,8 +135,10 @@ const assertions = [
   [swiftBindingsTests, "testSharedCoreAcceptsInMemorySecretStore", "Swift P4-S3a vault constructor test"],
   [swiftBindingsTests, "testSharedCoreRestoreWithoutVaultFailsClosed", "Swift P4-S3b fail-closed restore test"],
   [swiftBindingsTests, "testSharedCoreRestoreRejectsHostileIdentityWithoutEcho", "Swift P4-S3b hostile-identity restore test"],
+  [swiftBindingsTests, "testSharedCoreRestoreHoldsInstanceAcrossCalls", "Swift P4-S3b helper keeps caller-owned SharedCore"],
   [sharedCoreRestore, "restorePersistedSession", "P4-S3b product restore helper"],
-  [sharedCoreRestore, "SharedCore(store: vault)", "P4-S3b helper uses vault-backed SharedCore"],
+  [sharedCoreRestore, "core: SharedCore", "P4-S3b helper takes an already-constructed SharedCore"],
+  [sharedCoreRestore, "core.restorePersistedSession", "P4-S3b helper restores on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -900,6 +902,13 @@ if (!udl.includes("callback interface IosSecretVault")) {
 }
 if (!udl.includes("interface IosSecretVaultError")) {
   throw new Error("missing IosSecretVaultError");
+}
+if (sharedCoreRestore.includes("SharedCore(store:")) {
+  throw new Error("P4-S3b helper must not construct-and-drop SharedCore");
+}
+const productionSharedCoreFfi = sharedCoreFfi.split("#[cfg(test)]")[0];
+if (productionSharedCoreFfi.includes("p4-s3b-store-key")) {
+  throw new Error("P4-S3b must use StoreKeyId store-key: accounts, not an invented prefix");
 }
 
 // P4-3's private Core dependency must continue satisfying every required
