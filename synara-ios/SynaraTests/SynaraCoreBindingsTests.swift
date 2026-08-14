@@ -684,6 +684,89 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreRoomNotesWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let body = "secret note body text"
+        let item = RoomNoteItemDto(
+            id: "note-s97",
+            kind: "note",
+            roomId: "!s97notes:example.org",
+            createdAt: 1_700_000_000_000,
+            updatedAt: 1_700_000_000_000,
+            body: body,
+            completedAt: nil,
+            order: nil,
+            eventId: nil,
+            eventTs: nil,
+            sender: nil
+        )
+
+        do {
+            _ = try await SharedCoreRoomNotes.roomNotesSnapshot(core: core)
+            XCTFail("Fail-closed SharedCore must not snapshot room notes without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-notes-snapshot-no-session"))
+            for forbidden in ["syt_", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreRoomNotes.roomNotesUpsert(core: core, item: item)
+            XCTFail("Fail-closed SharedCore must not upsert room notes without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-notes-upsert-no-session"))
+            for forbidden in ["syt_", "token", item.id, item.roomId, body] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreRoomNotes.roomNotesDelete(core: core, roomId: item.roomId, itemId: item.id)
+            XCTFail("Fail-closed SharedCore must not delete room notes without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-notes-delete-no-session"))
+            for forbidden in ["syt_", "token", item.id, item.roomId, body] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreRoomNotes.roomNotesCompleteTodo(
+                core: core,
+                roomId: item.roomId,
+                itemId: item.id,
+                completed: true
+            )
+            XCTFail("Fail-closed SharedCore must not complete room-note todos without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-notes-complete-todo-no-session"))
+            for forbidden in ["syt_", "token", item.id, item.roomId, body] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreRoomNotes.roomNotesMoveTodo(
+                core: core,
+                roomId: item.roomId,
+                itemId: item.id,
+                direction: "up"
+            )
+            XCTFail("Fail-closed SharedCore must not move room-note todos without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-notes-move-todo-no-session"))
+            for forbidden in ["syt_", "token", item.id, item.roomId, body] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

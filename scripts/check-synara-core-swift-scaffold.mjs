@@ -37,6 +37,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreImagePacks.swift",
   "synara-ios/Synara/Services/SharedCoreLater.swift",
   "synara-ios/Synara/Services/SharedCoreMDirect.swift",
+  "synara-ios/Synara/Services/SharedCoreRoomNotes.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -122,6 +123,10 @@ const sharedCoreLater = readFileSync(
 );
 const sharedCoreMDirect = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreMDirect.swift"),
+  "utf8"
+);
+const sharedCoreRoomNotes = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreRoomNotes.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -406,6 +411,27 @@ const assertions = [
   [sharedCoreMDirect, "mdirectRemove", "P4-S9-6 product m.direct remove helper"],
   [sharedCoreMDirect, "core: SharedCore", "P4-S9-6 helper takes an already-constructed SharedCore"],
   [sharedCoreMDirect, "core.mdirectSnapshot", "P4-S9-6 helper reads on the caller-owned instance"],
+  [sharedCoreFfi, "room_notes_snapshot", "P4-S9-7 typed room-notes snapshot FFI"],
+  [sharedCoreFfi, "matrix_room_notes_snapshot", "P4-S9-7 calls the registered room-notes snapshot"],
+  [sharedCoreFfi, "matrix_room_notes_upsert", "P4-S9-7 calls the registered room-notes upsert"],
+  [sharedCoreFfi, "matrix_room_notes_delete", "P4-S9-7 calls the registered room-notes delete"],
+  [sharedCoreFfi, "matrix_room_notes_complete_todo", "P4-S9-7 calls the registered room-notes complete"],
+  [sharedCoreFfi, "matrix_room_notes_move_todo", "P4-S9-7 calls the registered room-notes move"],
+  [udl, "RoomNotesSnapshotDto room_notes_snapshot()", "P4-S9-7 SharedCore room-notes snapshot"],
+  [udl, "RoomNotesSnapshotDto room_notes_upsert(", "P4-S9-7 SharedCore room-notes upsert"],
+  [udl, "RoomNotesSnapshotDto room_notes_delete(", "P4-S9-7 SharedCore room-notes delete"],
+  [udl, "RoomNotesSnapshotDto room_notes_complete_todo(", "P4-S9-7 SharedCore room-notes complete"],
+  [udl, "RoomNotesSnapshotDto room_notes_move_todo(", "P4-S9-7 SharedCore room-notes move"],
+  [udl, "dictionary RoomNoteItemDto", "P4-S9-7 privacy-safe room-note item DTO"],
+  [udl, "interface RoomNotesCommandError", "P4-S9-7 static room-notes error"],
+  [swiftBindingsTests, "testSharedCoreRoomNotesWithoutSessionFailsClosed", "Swift P4-S9-7 fail-closed room-notes test"],
+  [sharedCoreRoomNotes, "roomNotesSnapshot", "P4-S9-7 product room-notes snapshot helper"],
+  [sharedCoreRoomNotes, "roomNotesUpsert", "P4-S9-7 product room-notes upsert helper"],
+  [sharedCoreRoomNotes, "roomNotesDelete", "P4-S9-7 product room-notes delete helper"],
+  [sharedCoreRoomNotes, "roomNotesCompleteTodo", "P4-S9-7 product room-notes complete helper"],
+  [sharedCoreRoomNotes, "roomNotesMoveTodo", "P4-S9-7 product room-notes move helper"],
+  [sharedCoreRoomNotes, "core: SharedCore", "P4-S9-7 helper takes an already-constructed SharedCore"],
+  [sharedCoreRoomNotes, "core.roomNotesSnapshot", "P4-S9-7 helper reads on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1217,9 +1243,14 @@ for (const required of ["mdirect_snapshot", "mdirect_add", "mdirect_remove"]) {
     throw new Error(`P4-S9-6 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "room_notes_snapshot", "crypto_status", "backup_setup"]) {
+for (const required of ["room_notes_snapshot", "room_notes_upsert", "room_notes_delete", "room_notes_complete_todo", "room_notes_move_todo"]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-7 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "set_own_display_name", "set_own_avatar", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-6`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-7`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1304,6 +1335,17 @@ for (const forbidden of ["roomNotesSnapshot", "setOwnDisplayName", "setOwnAvatar
     throw new Error(`P4-S9-6 helper must not wrap ${forbidden}`);
   }
 }
+if (sharedCoreRoomNotes.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-7 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreRoomNotes.includes("SharedCore.newWithSecretStore") || sharedCoreRoomNotes.includes("newWithSecretStore")) {
+  throw new Error("P4-S9-7 helper must not construct SharedCore");
+}
+for (const forbidden of ["setOwnDisplayName", "setOwnAvatar", "mdirectSnapshot", "laterSnapshot"]) {
+  if (sharedCoreRoomNotes.includes(forbidden)) {
+    throw new Error(`P4-S9-7 helper must not wrap ${forbidden}`);
+  }
+}
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
 if (!roomListDto) throw new Error("missing RoomListSnapshotDto");
 if (/\bpassword\b/.test(roomListDto[1]) || /\btoken\b/.test(roomListDto[1])) {
@@ -1378,6 +1420,11 @@ const mdirectSnapshotDto = udl.match(/dictionary MDirectSnapshotDto \{([\s\S]*?)
 if (!mdirectSnapshotDto) throw new Error("missing MDirectSnapshotDto");
 if (/\bpassword\b/.test(mdirectSnapshotDto[1]) || /\btoken\b/.test(mdirectSnapshotDto[1]) || /\bbytes\b/.test(mdirectSnapshotDto[1])) {
   throw new Error("MDirectSnapshotDto must not carry password, token, or bytes fields");
+}
+const roomNoteItemDto = udl.match(/dictionary RoomNoteItemDto \{([\s\S]*?)\};/);
+if (!roomNoteItemDto) throw new Error("missing RoomNoteItemDto");
+if (/\bpassword\b/.test(roomNoteItemDto[1]) || /\btoken\b/.test(roomNoteItemDto[1]) || /\bbytes\b/.test(roomNoteItemDto[1])) {
+  throw new Error("RoomNoteItemDto must not carry password, token, or bytes fields");
 }
 const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
 if (!loginDto) throw new Error("missing SessionLoginDto");
