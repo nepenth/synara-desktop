@@ -147,8 +147,9 @@ Run this checklist in order. Stop at the first yes.
    S9-21 composer reply draft is stacked.
    S9-22 send text is stacked.
    S9-23 send sticker is stacked.
-   S9-24 send poll (section 9.5) is on this branch.
-   Next after merge is edit message.
+   S9-24 send poll is stacked.
+   S9-25 edit message (section 9.5) is on this branch.
+   Next after merge is poll respond.
    UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
@@ -369,9 +370,12 @@ P4-S9-23 iOS send sticker             stacked
        take a path or raw bytes, so this family is in scope.
        `matrix_send_attachment` stays a desktop leftover.
        Poll, edit, and respond stay off.
-P4-S9-24 iOS send poll                **this branch**
+P4-S9-24 iOS send poll                stacked
        matrix_send_poll only. Write ack is the existing send result.
        No media bytes. Edit and respond stay off.
+P4-S9-25 iOS edit message             **this branch**
+       matrix_edit_message only. Write ack is the existing send result.
+       No media bytes. Poll respond stays off.
 P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        only when grep shows no remaining product callers
 P4-S11 NSE read-only store API        (never boot sync in NSE)
@@ -509,28 +513,28 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 
-S9-23 send sticker is stacked at #971. **S9-24 (this branch)** adds a typed
-UniFFI wrapper for the registered send-poll command.
+S9-24 send poll is stacked at #972. **S9-25 (this branch)** adds a typed
+UniFFI wrapper for the registered edit-message command.
 
-1. `SharedCore.send_poll` calls `Core.command` with the same camelCase
-   payload desktop uses (`{ roomId, question, answers, maxSelections,
-   threadRoot, replyTo }`). It returns the existing send-poll write ack.
-   No media bytes. Do not re-wrap S6 open, S9-22 send text, or S9-23
-   send sticker.
-2. Do not reimplement send in Swift. Do not wrap edit, respond,
-   leftover media bytes, a file path, or leftover secret envelopes.
+1. `SharedCore.edit_message` calls `Core.command` with the same camelCase
+   payload desktop uses (`{ roomId, eventId, body, msgType, formattedBody,
+   mentionUserIds, mentionRoom, txnId }`). It returns the existing
+   edit-message write ack. No media bytes. Do not re-wrap S6 open,
+   S9-22 send text, S9-23 send sticker, or S9-24 send poll.
+2. Do not reimplement edit in Swift. Do not wrap respond, leftover media
+   bytes, a file path, or leftover secret envelopes.
 3. Do not start `SyncService`. Missing owner fail-closes with the
-   registered `p2-send-poll-no-session` code. Unstarted sync returns
-   the registered handler's real outcome. Planted send must fail on local
-   room/question/answers validation (`v-send.3-poll-room-not-found` /
-   `d0.4-send-invalid-room-id` / `v-send.3-poll-invalid-question` /
-   `v-send.3-poll-invalid-answers`) and must not require a live server.
-   Failed errors must not echo question, options, or room id. Oversize
-   fail-closes without truncating or echoing the question or options.
+   registered `p2-edit-message-no-session` code. Unstarted sync returns
+   the registered handler's real outcome. Planted edit must fail on local
+   room/event/body validation (`v-send.r-edit-room-not-found` /
+   `d0.4-send-invalid-room-id` / `v-send.r-edit-invalid-event-id` /
+   `v-send.4-invalid-message-type`) and must not require a live server.
+   Failed errors must not echo body, event id, or room id. Oversize
+   fail-closes without truncating or echoing the body or event id.
 4. Helper + XCTest are the iOS surface this slice. Do not swap
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
-5. One command family per PR. Next is edit message (`matrix_edit_message`).
-   Poll respond stays off. Do not wrap leftover
+5. One command family per PR. Next is poll respond (`matrix_poll_respond`).
+   Do not wrap leftover
    password/export/import/bootstrap, `matrix_crypto_status`, or
    `matrix_cross_signing_status`. Do not hit production homeservers.
    Do not start S10.

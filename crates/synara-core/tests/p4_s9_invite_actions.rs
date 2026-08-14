@@ -82,7 +82,6 @@ fn invite_actions_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("invites_snapshot()"));
     assert!(shared_core.contains("space_parents_snapshot("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("edit_message"));
     assert!(!shared_core.contains("poll_respond"));
     assert!(!shared_core.contains("backup_status"));
 }

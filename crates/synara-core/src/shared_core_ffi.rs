@@ -103,6 +103,9 @@
 //! P4-S9-24 adds a typed `send_poll` wrapper for the already-registered
 //! `matrix_send_poll` Core command only. No media bytes. Failed errors never
 //! echo question, options, or room id. Edit and respond stay off.
+//! P4-S9-25 adds a typed `edit_message` wrapper for the already-registered
+//! `matrix_edit_message` Core command only. No media bytes. Failed errors never
+//! echo body, event id, or room id. Poll respond stays off.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -571,6 +574,13 @@ const SEND_POLL_NO_SESSION_DESCRIPTION: &str = "No timeline session is available
 const SEND_POLL_FAILED_CODE: &str = "p4-s9-24-send-poll-failed";
 const SEND_POLL_FAILED_DESCRIPTION: &str = "The send-poll request could not be completed.";
 const SEND_POLL_OWNER_DESCRIPTION: &str = "The send-poll request is not available.";
+const EDIT_MESSAGE_GENERATION: u64 = 0;
+const EDIT_MESSAGE_COMMAND: &str = "matrix_edit_message";
+const EDIT_MESSAGE_NO_SESSION_CODE: &str = "p2-edit-message-no-session";
+const EDIT_MESSAGE_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
+const EDIT_MESSAGE_FAILED_CODE: &str = "p4-s9-25-edit-message-failed";
+const EDIT_MESSAGE_FAILED_DESCRIPTION: &str = "The edit-message request could not be completed.";
+const EDIT_MESSAGE_OWNER_DESCRIPTION: &str = "The edit-message request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1079,6 +1089,31 @@ impl std::fmt::Display for SendPollError {
 }
 
 impl std::error::Error for SendPollError {}
+
+/// Privacy-safe edit-message write ack from the registered Core command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditMessageDto {
+    pub room_id: String,
+    pub event_id: String,
+    pub local_txn_id: String,
+    pub status: String,
+}
+
+/// Static fail-closed edit-message error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EditMessageError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for EditMessageError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for EditMessageError {}
 
 /// Static fail-closed timeline error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3725,6 +3760,31 @@ impl SharedCore {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub async fn edit_message(
+        &self,
+        room_id: String,
+        event_id: String,
+        body: String,
+        msg_type: Option<String>,
+        formatted_body: Option<String>,
+        mention_user_ids: Option<Vec<String>>,
+        mention_room: Option<bool>,
+        txn_id: Option<String>,
+    ) -> Result<EditMessageDto, EditMessageError> {
+        self.edit_message_command(serde_json::json!({
+            "roomId": room_id,
+            "eventId": event_id,
+            "body": body,
+            "msgType": msg_type,
+            "formattedBody": formatted_body,
+            "mentionUserIds": mention_user_ids,
+            "mentionRoom": mention_room,
+            "txnId": txn_id,
+        }))
+        .await
+    }
+
     async fn space_null_command(
         &self,
         command: &'static str,
@@ -3886,6 +3946,28 @@ impl SharedCore {
         let result: SendPollResultWire = serde_json::from_value(response.payload)
             .map_err(|_| send_poll_failed(SEND_POLL_FAILED_CODE, SEND_POLL_FAILED_DESCRIPTION))?;
         Ok(send_poll_dto(result))
+    }
+
+    async fn edit_message_command(
+        &self,
+        payload: serde_json::Value,
+    ) -> Result<EditMessageDto, EditMessageError> {
+        let payload = edit_message_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: EDIT_MESSAGE_COMMAND.to_owned(),
+                session_generation: EDIT_MESSAGE_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_edit_message_core_error(EDIT_MESSAGE_NO_SESSION_CODE, error))?;
+        let result: EditMessageResultWire =
+            serde_json::from_value(response.payload).map_err(|_| {
+                edit_message_failed(EDIT_MESSAGE_FAILED_CODE, EDIT_MESSAGE_FAILED_DESCRIPTION)
+            })?;
+        Ok(edit_message_dto(result))
     }
 
     async fn invite_action_command(
@@ -6962,6 +7044,67 @@ fn send_poll_dto(result: SendPollResultWire) -> SendPollDto {
     SendPollDto {
         room_id: result.room_id,
         event_id: result.event_id,
+        status: result.status,
+    }
+}
+
+fn edit_message_failed(code: &str, description: &'static str) -> EditMessageError {
+    EditMessageError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_edit_message_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> EditMessageError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            edit_message_failed(code, EDIT_MESSAGE_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code.starts_with("p2-edit-message-")
+                || code.starts_with("v-send.r-edit-")
+                || code.starts_with("d0.4-send-")
+                || code.starts_with("v-send.4-")
+                || code.starts_with("p6.1-") =>
+        {
+            edit_message_failed(code, EDIT_MESSAGE_OWNER_DESCRIPTION)
+        }
+        _ => edit_message_failed(EDIT_MESSAGE_FAILED_CODE, EDIT_MESSAGE_FAILED_DESCRIPTION),
+    }
+}
+
+fn edit_message_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, EditMessageError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(edit_message_failed(
+            EDIT_MESSAGE_FAILED_CODE,
+            EDIT_MESSAGE_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EditMessageResultWire {
+    room_id: String,
+    event_id: String,
+    local_txn_id: String,
+    status: String,
+}
+
+fn edit_message_dto(result: EditMessageResultWire) -> EditMessageDto {
+    EditMessageDto {
+        room_id: result.room_id,
+        event_id: result.event_id,
+        local_txn_id: result.local_txn_id,
         status: result.status,
     }
 }
