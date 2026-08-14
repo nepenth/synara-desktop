@@ -96,7 +96,7 @@ pub struct NativeTimelineCallDeclineRequest {
     pub event_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineActionReadback {
     pub schema_version: u32,
@@ -104,16 +104,37 @@ pub struct NativeTimelineActionReadback {
     pub room_id: String,
     /// For edit/forward: the newly sent event id. For redact: the redacted event id.
     pub event_id: String,
-    #[serde(deserialize_with = "deserialize_action_status")]
     pub status: &'static str,
 }
 
-fn deserialize_action_status<'de, D>(deserializer: D) -> Result<&'static str, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let value = String::deserialize(deserializer)?;
-    match value.as_str() {
+impl<'de> Deserialize<'de> for NativeTimelineActionReadback {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct NativeTimelineActionReadbackHelper {
+            schema_version: u32,
+            action: NativeTimelineActionKind,
+            room_id: String,
+            event_id: String,
+            status: String,
+        }
+
+        let helper = NativeTimelineActionReadbackHelper::deserialize(deserializer)?;
+        Ok(Self {
+            schema_version: helper.schema_version,
+            action: helper.action,
+            room_id: helper.room_id,
+            event_id: helper.event_id,
+            status: intern_action_status(&helper.status)?,
+        })
+    }
+}
+
+fn intern_action_status<E: serde::de::Error>(value: &str) -> Result<&'static str, E> {
+    match value {
         "sent" => Ok("sent"),
         "redacted" => Ok("redacted"),
         "reported" => Ok("reported"),
@@ -123,7 +144,7 @@ where
         "already_unpinned" => Ok("already_unpinned"),
         "voted" => Ok("voted"),
         "declined" => Ok("declined"),
-        other => Err(serde::de::Error::unknown_variant(
+        other => Err(E::unknown_variant(
             other,
             &[
                 "sent",
