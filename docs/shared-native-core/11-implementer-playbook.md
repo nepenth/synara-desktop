@@ -131,8 +131,9 @@ Run this checklist in order. Stop at the first yes.
    S3c login is accepted. S3d attach is accepted. S4 room-list snapshot
    is accepted. S5 invites snapshot is accepted. S6 timeline
    open/close/paginate is accepted. S7 typing/presence is accepted.
-   S8 verification list (section 9.5) is on this branch. Next after
-   merge is S9. UDL/bindgen/cargo require this disk
+   S8 verification list is accepted. S9 verification SAS (section 9.5)
+   is on this branch. Next after merge is S9-2 devices. UDL/bindgen/cargo
+   require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
    allowed. Do not change UDL. Do not hand-edit generated Swift. Do
@@ -280,11 +281,12 @@ P4-S4  iOS room_list_snapshot         accepted ed6f9f04
 P4-S5  iOS invites_snapshot           accepted 120fa85a
 P4-S6  iOS timeline open/close/paginate accepted e2cf7be6
 P4-S7  iOS typing / presence          accepted 9350d368
-P4-S8  iOS verification list          **this branch**
-       typed SharedCore.verification_list → Core.command
-       matrix_verification_list only. SyncService is not started.
-P4-S9  remaining already-registered Core commands, one owner family per PR
-       first family: verification SAS start/accept/begin_sas/confirm/mismatch/cancel/dismiss
+P4-S8  iOS verification list          accepted ca8b01be
+P4-S9  iOS verification SAS           **this branch**
+       typed SharedCore start/accept/begin_sas/confirm/mismatch/cancel/dismiss
+       seven registered commands only. SyncService is not started.
+P4-S9-2 iOS devices                   next family after SAS
+       matrix_device_snapshot / rename / delete_start / delete_cancel
 P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        only when grep shows no remaining product callers
 P4-S11 NSE read-only store API        (never boot sync in NSE)
@@ -422,20 +424,22 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 
-S7 is accepted at `9350d368`. **S8 (this branch)** adds the typed
-UniFFI wrapper for `matrix_verification_list` only.
+S8 is accepted at `ca8b01be`. **S9 (this branch)** adds typed UniFFI
+wrappers for the seven verification SAS commands only.
 
-1. `SharedCore.verification_list` calls `Core.command` with the same
-   null payload desktop uses (`session_generation` 0).
-2. Do not reimplement verification logic in Swift.
+1. `SharedCore` SAS methods call `Core.command` with the same
+   `session_generation` 0 camelCase payloads desktop uses.
+2. Do not reimplement SAS logic in Swift. Do not change
+   `verification_list`.
 3. Do not start `SyncService`. Missing owner fail-closes with
-   `p2-verification-list-no-session`. Unstarted sync returns the
+   `p2-verification-*-no-session`. Unstarted sync returns the
    registered handler's real outcome.
 4. Helper + XCTest are the iOS surface this slice. Do not swap
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
-5. One command family per PR. S9 is verification SAS
-   (start/accept/begin_sas/confirm/mismatch/cancel/dismiss). Do not
-   wrap those here. Do not hit production homeservers.
+5. One command family per PR. S9-2 is devices
+   (`matrix_device_snapshot` / rename / delete_start / delete_cancel).
+   Do not wrap those here. Do not wrap `matrix_crypto_status`. Do not
+   hit production homeservers.
 
 ### 9.6 When you may delete `MatrixRustSDK`
 

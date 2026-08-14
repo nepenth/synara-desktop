@@ -70,13 +70,8 @@ fn verification_list_surface_exposes_only_the_registered_list_command() {
     assert!(shared_core.contains("verification_list"));
     assert!(shared_core.contains("typing_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("verification_start"));
-    assert!(!shared_core.contains("begin_sas"));
-    assert!(!shared_core.contains("verification_accept"));
-    assert!(!shared_core.contains("verification_confirm"));
-    assert!(!shared_core.contains("verification_mismatch"));
-    assert!(!shared_core.contains("verification_cancel"));
-    assert!(!shared_core.contains("verification_dismiss"));
+    assert!(!shared_core.contains("device_snapshot"));
+    assert!(!shared_core.contains("crypto_status"));
 }
 
 #[test]

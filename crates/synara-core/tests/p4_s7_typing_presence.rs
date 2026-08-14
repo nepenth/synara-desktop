@@ -73,8 +73,8 @@ fn typing_presence_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("presence_unsubscribe"));
     assert!(shared_core.contains("timeline_open"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("verification_start"));
-    assert!(!shared_core.contains("begin_sas"));
+    assert!(!shared_core.contains("device_snapshot"));
+    assert!(!shared_core.contains("crypto_status"));
     assert!(!shared_core.contains("jump_latest"));
 }
 

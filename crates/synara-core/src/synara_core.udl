@@ -354,7 +354,20 @@ interface PresenceCommandError {
   Failed(string code, string description);
 };
 
+// Privacy-safe SAS emoji. User-visible comparison only; no key material.
+dictionary VerificationEmojiDto {
+  string symbol;
+  string description;
+};
+
+// Privacy-safe SAS comparison. Emoji/decimals only; no tokens or MACs.
+dictionary VerificationSasDto {
+  sequence<VerificationEmojiDto>? emoji;
+  sequence<u16>? decimals;
+};
+
 // Privacy-safe verification request row. Identity/flow fields only; no tokens.
+// S8 list omits SAS. S9 mutation returns may include optional SAS comparison.
 dictionary VerificationRequestDto {
   string flow_id;
   string other_user_id;
@@ -362,6 +375,7 @@ dictionary VerificationRequestDto {
   string direction;
   string phase;
   u64? started_ts;
+  VerificationSasDto? sas;
 };
 
 // Privacy-safe verification inbox from the registered Core command.
@@ -376,6 +390,12 @@ interface VerificationListError {
   Failed(string code, string description);
 };
 
+// Static source constants only. Never echo user id, device id, flow id, token, or password.
+[Error]
+interface VerificationSasError {
+  Failed(string code, string description);
+};
+
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
 // P4-S3b adds restore_persisted_session. P4-S3c adds dedicated login_with_password.
 // P4-S3d adds attach_session_owners for the desktop owner set.
@@ -384,7 +404,8 @@ interface VerificationListError {
 // P4-S6 adds typed timeline_open / timeline_close / timeline_paginate only.
 // P4-S7 adds typed typing_snapshot / typing_set / presence_snapshot /
 // presence_subscribe / presence_unsubscribe only.
-// P4-S8 adds typed verification_list for matrix_verification_list only.
+// P4-S8 adds typed verification_list for the registered list command only.
+// P4-S9 adds typed verification SAS start/accept/begin_sas/confirm/mismatch/cancel/dismiss.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -442,4 +463,25 @@ interface SharedCore {
 
   [Async, Throws=VerificationListError]
   VerificationInboxDto verification_list();
+
+  [Async, Throws=VerificationSasError]
+  VerificationRequestDto verification_start(string? device_id);
+
+  [Async, Throws=VerificationSasError]
+  VerificationRequestDto verification_accept(string flow_id);
+
+  [Async, Throws=VerificationSasError]
+  VerificationRequestDto verification_begin_sas(string flow_id);
+
+  [Async, Throws=VerificationSasError]
+  VerificationRequestDto verification_confirm(string flow_id);
+
+  [Async, Throws=VerificationSasError]
+  VerificationRequestDto verification_mismatch(string flow_id);
+
+  [Async, Throws=VerificationSasError]
+  VerificationRequestDto verification_cancel(string flow_id);
+
+  [Async, Throws=VerificationSasError]
+  void verification_dismiss(string flow_id);
 };

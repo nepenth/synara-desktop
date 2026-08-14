@@ -334,6 +334,89 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreVerificationSasWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let deviceId = "DEVICE_S9_BOB"
+        let flowId = "$FLOW_S9_BOB"
+
+        do {
+            _ = try await SharedCoreVerificationSas.verificationStart(core: core, deviceId: deviceId)
+            XCTFail("Fail-closed SharedCore must not start verification without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-verification-start-no-session"))
+            for forbidden in ["password", "syt_", "token", deviceId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreVerificationSas.verificationAccept(core: core, flowId: flowId)
+            XCTFail("Fail-closed SharedCore must not accept verification without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-verification-accept-no-session"))
+            for forbidden in ["password", "syt_", "token", flowId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreVerificationSas.verificationBeginSas(core: core, flowId: flowId)
+            XCTFail("Fail-closed SharedCore must not begin SAS without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-verification-begin-sas-no-session"))
+            for forbidden in ["password", "syt_", "token", flowId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreVerificationSas.verificationConfirm(core: core, flowId: flowId)
+            XCTFail("Fail-closed SharedCore must not confirm verification without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-verification-confirm-no-session"))
+            for forbidden in ["password", "syt_", "token", flowId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreVerificationSas.verificationMismatch(core: core, flowId: flowId)
+            XCTFail("Fail-closed SharedCore must not mismatch verification without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-verification-mismatch-no-session"))
+            for forbidden in ["password", "syt_", "token", flowId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreVerificationSas.verificationCancel(core: core, flowId: flowId)
+            XCTFail("Fail-closed SharedCore must not cancel verification without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-verification-cancel-no-session"))
+            for forbidden in ["password", "syt_", "token", flowId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            try await SharedCoreVerificationSas.verificationDismiss(core: core, flowId: flowId)
+            XCTFail("Fail-closed SharedCore must not dismiss verification without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-verification-dismiss-no-session"))
+            for forbidden in ["password", "syt_", "token", flowId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

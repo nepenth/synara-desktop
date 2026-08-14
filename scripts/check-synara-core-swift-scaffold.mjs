@@ -31,6 +31,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreTimeline.swift",
   "synara-ios/Synara/Services/SharedCoreTypingPresence.swift",
   "synara-ios/Synara/Services/SharedCoreVerificationList.swift",
+  "synara-ios/Synara/Services/SharedCoreVerificationSas.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -92,6 +93,10 @@ const sharedCoreTypingPresence = readFileSync(
 );
 const sharedCoreVerificationList = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreVerificationList.swift"),
+  "utf8"
+);
+const sharedCoreVerificationSas = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreVerificationSas.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -264,6 +269,29 @@ const assertions = [
   [sharedCoreVerificationList, "verificationList", "P4-S8 product verification-list helper"],
   [sharedCoreVerificationList, "core: SharedCore", "P4-S8 helper takes an already-constructed SharedCore"],
   [sharedCoreVerificationList, "core.verificationList", "P4-S8 helper reads on the caller-owned instance"],
+  [sharedCoreFfi, "verification_start", "P4-S9 typed verification-start FFI"],
+  [sharedCoreFfi, "matrix_verification_start", "P4-S9 calls the registered start command"],
+  [sharedCoreFfi, "matrix_verification_accept", "P4-S9 calls the registered accept command"],
+  [sharedCoreFfi, "matrix_verification_begin_sas", "P4-S9 calls the registered begin_sas command"],
+  [sharedCoreFfi, "matrix_verification_confirm", "P4-S9 calls the registered confirm command"],
+  [sharedCoreFfi, "matrix_verification_mismatch", "P4-S9 calls the registered mismatch command"],
+  [sharedCoreFfi, "matrix_verification_cancel", "P4-S9 calls the registered cancel command"],
+  [sharedCoreFfi, "matrix_verification_dismiss", "P4-S9 calls the registered dismiss command"],
+  [udl, "VerificationRequestDto verification_start(", "P4-S9 SharedCore verification-start operation"],
+  [udl, "VerificationRequestDto verification_accept(", "P4-S9 SharedCore verification-accept operation"],
+  [udl, "VerificationRequestDto verification_begin_sas(", "P4-S9 SharedCore verification-begin-sas operation"],
+  [udl, "VerificationRequestDto verification_confirm(", "P4-S9 SharedCore verification-confirm operation"],
+  [udl, "VerificationRequestDto verification_mismatch(", "P4-S9 SharedCore verification-mismatch operation"],
+  [udl, "VerificationRequestDto verification_cancel(", "P4-S9 SharedCore verification-cancel operation"],
+  [udl, "void verification_dismiss(", "P4-S9 SharedCore verification-dismiss operation"],
+  [udl, "dictionary VerificationSasDto", "P4-S9 privacy-safe SAS DTO"],
+  [udl, "interface VerificationSasError", "P4-S9 static verification-SAS error"],
+  [swiftBindingsTests, "testSharedCoreVerificationSasWithoutSessionFailsClosed", "Swift P4-S9 fail-closed verification-SAS test"],
+  [sharedCoreVerificationSas, "verificationStart", "P4-S9 product verification-start helper"],
+  [sharedCoreVerificationSas, "verificationBeginSas", "P4-S9 product begin-sas helper"],
+  [sharedCoreVerificationSas, "verificationDismiss", "P4-S9 product dismiss helper"],
+  [sharedCoreVerificationSas, "core: SharedCore", "P4-S9 helper takes an already-constructed SharedCore"],
+  [sharedCoreVerificationSas, "core.verificationStart", "P4-S9 helper starts on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1047,9 +1075,14 @@ if (!sharedCoreBody.includes("presence_snapshot") || !sharedCoreBody.includes("p
 if (!sharedCoreBody.includes("verification_list")) {
   throw new Error("P4-S8 SharedCore must expose verification_list");
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "verification_start", "begin_sas", "verification_accept", "verification_confirm", "verification_mismatch", "verification_cancel", "verification_dismiss"]) {
+for (const required of ["verification_start", "verification_accept", "verification_begin_sas", "verification_confirm", "verification_mismatch", "verification_cancel", "verification_dismiss"]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_snapshot", "crypto_status"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S8`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1081,6 +1114,9 @@ if (sharedCoreTypingPresence.includes("SharedCore(store:")) {
 }
 if (sharedCoreVerificationList.includes("SharedCore(store:")) {
   throw new Error("P4-S8 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreVerificationSas.includes("SharedCore(store:")) {
+  throw new Error("P4-S9 helper must not construct-and-drop SharedCore");
 }
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
 if (!roomListDto) throw new Error("missing RoomListSnapshotDto");
@@ -1116,6 +1152,16 @@ const verificationInboxDto = udl.match(/dictionary VerificationInboxDto \{([\s\S
 if (!verificationInboxDto) throw new Error("missing VerificationInboxDto");
 if (/\bpassword\b/.test(verificationInboxDto[1]) || /\btoken\b/.test(verificationInboxDto[1])) {
   throw new Error("VerificationInboxDto must not carry password or token fields");
+}
+const verificationRequestDto = udl.match(/dictionary VerificationRequestDto \{([\s\S]*?)\};/);
+if (!verificationRequestDto) throw new Error("missing VerificationRequestDto");
+if (/\bpassword\b/.test(verificationRequestDto[1]) || /\btoken\b/.test(verificationRequestDto[1])) {
+  throw new Error("VerificationRequestDto must not carry password or token fields");
+}
+const verificationSasDto = udl.match(/dictionary VerificationSasDto \{([\s\S]*?)\};/);
+if (!verificationSasDto) throw new Error("missing VerificationSasDto");
+if (/\bpassword\b/.test(verificationSasDto[1]) || /\btoken\b/.test(verificationSasDto[1])) {
+  throw new Error("VerificationSasDto must not carry password or token fields");
 }
 const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
 if (!loginDto) throw new Error("missing SessionLoginDto");
