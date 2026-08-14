@@ -1,17 +1,20 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`32e2d08b` (#928, after #927):** P0 is
+`4d739025` (#929 docs after #928):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
+**Hand a weaker model [11-implementer-playbook.md](11-implementer-playbook.md).**
 
 ## Goal
 
-One Rust app-logic core (`crates/synara-core`) consumed by both desktop
-(Tauri) and iOS (SwiftUI via UniFFI). This ends the dual implementation of
-sync, room list, timeline, and crypto logic only when the remaining migrations
-and release gates have actually passed.
+One Rust app-logic core (`crates/synara-core`) that both the desktop Tauri
+app (macOS and Linux) and the iOS app consume, so sync, room list, timeline,
+and crypto are not implemented twice.
+
+That end state has **not** been reached. The work lives only on
+`feature/shared-native-core`. It is not on `main`. It is not a release.
 
 ## Decision record
 
@@ -137,6 +140,25 @@ acceptance criteria have all passed.
   dependency.
 - **P5 — not started.** Do not claim iOS shared-engine parity, iOS migration,
   or Apple release readiness from the bounded work above.
+
+## What is left (ordered)
+
+1. **No further 7B desktop route** unless a leftover in the playbook
+   section 6 gains a new owner decision. Presence, device rename, and all
+   five invite commands are already registered. Twenty-one census names
+   stay desktop (secrets, file paths, bytes).
+2. **P4 serial iOS** of surfaces Core already owns, in the playbook
+   section 9 order. First UniFFI expansion needs disk ≥ 20 Gi.
+   iOS still runs `MatrixRustSDKService` / `RoomListService` /
+   `TimelineService`. That is the remaining dual implementation.
+3. **P3 thinning** continues as iOS/desktop leftovers shrink. Desktop is
+   not a thin shell while Keychain, byte commands, and password UIAA live
+   there — and those leftovers are *intended*.
+4. **P1 ledger** stays open until leftover Keychain/Tauri adapters are
+   accepted as the permanent shell, not because more mechanical `git mv`
+   remains.
+5. **P5** after engineering finish, then merge to `main`, then
+   operator/Apple gates. MAC-IOS-006 is not the coding path.
 
 ## Phase acceptance targets
 

@@ -37,8 +37,13 @@ Measured seams and their current homes:
 | `app.emit` for login/readiness status | `status` | `auth/product_commands.rs` (12 refs — mostly auth/session events) |
 | window/tray/badge orchestration | `set_badge`, `status`, dedicated sink | `room_list/live.rs`, `room_ops/product_commands.rs` (badge counts) |
 
-After extraction these become `platform.emit(...)`/`platform.status(...)`
-calls inside `synara-core`; the shells only implement the trait.
+**Correction (landed practice through #816 / #928):** product event
+owners do **not** call `platform.emit`. They take a shell emit callback
+at construct time. Desktop adapters keep the existing Tauri event names
+(`timeline/live.rs`, `presence/live.rs`, `devices/live.rs`,
+`room_profile/live.rs`, image packs, verification). `Platform::emit` is
+reserved for typed IPC envelopes. Expanding `Platform` to carry product
+events requires a new ADR. See the implementer playbook §3 rule 7.
 
 ## 4.3 Desktop implementation (stays in src-tauri)
 

@@ -1,14 +1,20 @@
 # Shared Native Core (synara-core) — Program
 
-A plan to unify the **desktop** (Tauri) and **iOS** (SwiftUI) clients of Synara
-Desktop onto **one transport-agnostic Rust application-logic core** —
-`crates/synara-core` — consumed by both platforms.
+A plan to unify the **desktop** (Tauri, macOS and Linux) and **iOS** (SwiftUI)
+clients onto **one transport-agnostic Rust application-logic core** —
+`crates/synara-core` — consumed by both platforms, so sync, room list,
+timeline, and crypto are not implemented twice.
+
+**That end state has not been reached.** The work lives only on
+`feature/shared-native-core`. It is not on `main`. It is not a release.
+Never claim 100%. Implementers start at
+[11-implementer-playbook.md](11-implementer-playbook.md).
 
 | | |
 |---|---|
 | Owner | Synara engineering |
-| Status | P0 complete; P1 extraction and bounded P2, P3, and P4 slices are merged at the evidence base below. P2–P4 remain in progress; P5 has not started. |
-| Evidence base | `feature/shared-native-core` at `32e2d08b` (#928, after #927; prior bounded P4 evidence remains #708/#710) |
+| Status | P0 complete; P1 extraction and bounded P2, P3, and P4 slices are merged at the evidence base below. P2–P4 remain in progress; P5 has not started. Desktop uses Core for one hundred eleven commands. iOS is a UniFFI foothold only. |
+| Evidence base | `feature/shared-native-core` at `4d739025` (#929 docs after #928; prior bounded P4 evidence remains #708/#710) |
 | Decision | [ADR 0003](../adr/0003-shared-native-rust-core.md) |
 | Program ledger | `docs/shared-native-core/` (this directory) |
 | Related ADRs | [0001](../adr/0001-ios-repository-layout.md), [0002](../adr/0002-ios-architecture.md) |
@@ -113,8 +119,10 @@ Desktop onto **one transport-agnostic Rust application-logic core** —
 ## Current milestone ledger
 
 The following describes merged source reachable from
-`32e2d08b` (#928, after #927). #708 and #710
-remain the prior bounded P4 evidence.
+`4d739025` (#929 docs after #928). #708 and #710
+remain the prior bounded P4 evidence. Next engineering lane is serial
+iOS (P4) per [11-implementer-playbook.md](11-implementer-playbook.md),
+not another speculative desktop secret/bytes route.
 
 | Phase | Merged evidence | Current boundary |
 |---|---|---|
@@ -125,9 +133,10 @@ remain the prior bounded P4 evidence.
 | P4 | #685, #692–#693, #696, #699, #703, #708, #710 | UniFFI scaffold, bounded login discovery/link coverage, a safe session projection mirror, display-only readback, and only the two pure row/recovery policies exist; service migration and Apple release proof do not. |
 | P5 | None | Not started. The release gates below remain required. |
 
-Read [10-current-handoff.md](10-current-handoff.md) for the exact feature/main
-provenance, live PR state, recovery separation, non-authorizations, and ordered
-successor playbook. It does not change the acceptance criteria below.
+Read [11-implementer-playbook.md](11-implementer-playbook.md) before writing
+code. Read [10-current-handoff.md](10-current-handoff.md) for feature/main
+provenance, recovery separation, and non-authorizations. Those files do not
+relax the acceptance criteria below.
 
 ## Ownership, privacy, and release gates
 

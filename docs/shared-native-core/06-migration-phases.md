@@ -20,8 +20,8 @@ integration, or release path. **Never a big-bang move.**
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
 
-**Current bounded status at `32e2d08b`
-(#928, after #927):** #713 mechanically moved notifications, polls,
+**Current bounded status at `4d739025`
+(#929 docs after #928):** #713 mechanically moved notifications, polls,
 relations, threads, and unread; #714 moved raw content, receipts, routes, and
 security; #716 moved search, legacy, and media_cache; #717 moved media_export
 and crypto_store; #734 moved the room-directory session harness; #735 moved
@@ -102,15 +102,16 @@ Acceptance: `scripts/check-matrix-boundaries.mjs` green (no new
 
 ## P2 — Native transport API
 
-Goal: make `Core::command(envelope)` + `Platform::emit` the only entry points
-the shells use.
+Goal: make `Core::command(envelope)` the command entry, owner emit
+callbacks the product-event entry, and `Platform::emit` the IPC
+envelope stream. Do not collapse those three.
 
 - Add `synara-core::Core` with `command`, `open`, `close`, `new(platform)`.
-- Register the 144 handlers by **command name** in a single
-  `transport::registry` (purely mechanical: extract each `#[tauri::command]`
-  body's `(args) -> Result<T, Error>` into an envelope handler).
-- Commit per command-group (auth, session/lifecycle, room_list, timeline,
-  crypto, send/media, misc). Green per slice.
+- Register handlers by **command name** only as the owner capability
+  lands (decision 6). Unregistered census names fail closed.
+- Twenty-one names stay desktop on purpose (playbook §6).
+- Commit per landed capability. Green per slice. As of #928 the
+  registry is one hundred eleven names.
 
 Acceptance: React still calls the same `matrix_*` commands (desktop adapter
 unchanged in behavior); `ipc/contract_tests` extended to cover every registered
@@ -139,15 +140,16 @@ Goal: iOS consumes the same engine; Swift re-implementations retired.
    and run `uniffi-bindgen` → `synara-core/Sources/SynaraCore/*.swift`.
 2. Swift `SynaraCore` package in `synara-ios` (or a workspace package) with
    `Platform` callback impl (`SynaraPlatform`).
-3. Migrate iOS services onto it, in dependency-safe order:
-   - `HomeserverDiscovery`+`AuthService` → `Core::command(auth_*)`
-   - `SessionCoordinator`+`SecureSessionStore` → `Core::open/close` +
-     secret-store sink
-   - `RoomListService` → room_list commands/envelopes + `set_badge`
-   - `TimelineService` → timeline commands/envelopes
-   - `MatrixRustSDKService` (crypto delegates → core crypto supervisors;
-     the SAS verification delegate already mirrors `verification/inbox.rs`)
-   - `PushService`/NSE → read-only store API + notification delivery
+3. Migrate iOS services onto it, in the **serial order in
+   [11-implementer-playbook.md](11-implementer-playbook.md) §9**. Do not
+   call `matrix_room_list_snapshot` (or any attached-owner command) from
+   iOS before P4-S3 has attached owners. Do not delete
+   `MatrixRustSDKService` until grep is clean.
+   - P4-S1 `register_flows` UniFFI (credential-free; disk ≥ 20 Gi)
+   - P4-S2 Swift `Platform` + `Core::new`
+   - P4-S3 iOS live Client via Core + attach owners (password stays Swift)
+   - P4-S4+ consume already-registered commands, one family per PR
+   - Last: retire Swift SDK services, then NSE read-only store API
 4. Remove `matrix-rust-components-swift` from `project.yml` when nothing
    references `MatrixRustSDK` anymore.
 
@@ -157,7 +159,7 @@ zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
 
 > **Bounded evidence note — not P4 acceptance:** At the current feature tip
-> `32e2d08b6a3a408a86d3763bf6cf41ef108f2645` (#928, after #927), the
+> `4d739025` (#929 docs after #928 / `32e2d08b`), the
 > prior #708 work is only the pure iOS room-row unread presentation from closed
 > `Joined`/`Invited` membership, scalar counters, and a marked-unread flag to a
 > `u64` count plus highlight boolean. The prior #710 work is only the pure
