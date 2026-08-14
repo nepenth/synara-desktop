@@ -47,6 +47,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreRoomPowerLevels.swift",
   "synara-ios/Synara/Services/SharedCoreRoomCreate.swift",
   "synara-ios/Synara/Services/SharedCoreRoomMembersSnapshots.swift",
+  "synara-ios/Synara/Services/SharedCoreSpaces.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -172,6 +173,10 @@ const sharedCoreRoomCreate = readFileSync(
 );
 const sharedCoreRoomMembersSnapshots = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreRoomMembersSnapshots.swift"),
+  "utf8"
+);
+const sharedCoreSpaces = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreSpaces.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -610,6 +615,35 @@ const assertions = [
   [sharedCoreRoomMembersSnapshots, "core: SharedCore", "P4-S9-16 helper takes an already-constructed SharedCore"],
   [sharedCoreRoomMembersSnapshots, "core.roomMembersSnapshot", "P4-S9-16 helper reads on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreRoomMembersSnapshots.swift in Sources", "P4-S9-16 helper in Xcode target"],
+  [sharedCoreFfi, "space_parents_snapshot", "P4-S9-17 typed space-parents-snapshot FFI"],
+  [sharedCoreFfi, "matrix_space_parents_snapshot", "P4-S9-17 calls the registered space-parents-snapshot command"],
+  [sharedCoreFfi, "matrix_space_hierarchy_snapshot", "P4-S9-17 calls the registered space-hierarchy-snapshot command"],
+  [sharedCoreFfi, "matrix_space_children_snapshot", "P4-S9-17 calls the registered space-children-snapshot command"],
+  [sharedCoreFfi, "matrix_space_child_set", "P4-S9-17 calls the registered space-child-set command"],
+  [sharedCoreFfi, "matrix_space_child_remove", "P4-S9-17 calls the registered space-child-remove command"],
+  [sharedCoreFfi, "matrix_restricted_join_reparent", "P4-S9-17 calls the registered restricted-join-reparent command"],
+  [udl, "SpaceParentsSnapshotDto space_parents_snapshot(", "P4-S9-17 SharedCore space parents snapshot"],
+  [udl, "SpaceHierarchySnapshotDto space_hierarchy_snapshot(", "P4-S9-17 SharedCore space hierarchy snapshot"],
+  [udl, "SpaceChildrenSnapshotDto space_children_snapshot(", "P4-S9-17 SharedCore space children snapshot"],
+  [udl, "SpaceChildMutationDto space_child_set(", "P4-S9-17 SharedCore space child set"],
+  [udl, "SpaceChildMutationDto space_child_remove(", "P4-S9-17 SharedCore space child remove"],
+  [udl, "RestrictedJoinReparentDto restricted_join_reparent(", "P4-S9-17 SharedCore restricted-join reparent"],
+  [udl, "dictionary SpaceParentsSnapshotDto", "P4-S9-17 privacy-safe space parents snapshot DTO"],
+  [udl, "dictionary SpaceHierarchySnapshotDto", "P4-S9-17 privacy-safe space hierarchy snapshot DTO"],
+  [udl, "dictionary SpaceChildrenSnapshotDto", "P4-S9-17 privacy-safe space children snapshot DTO"],
+  [udl, "dictionary SpaceChildMutationDto", "P4-S9-17 privacy-safe space-child mutation DTO"],
+  [udl, "dictionary RestrictedJoinReparentDto", "P4-S9-17 privacy-safe restricted-join reparent DTO"],
+  [udl, "interface SpaceCommandError", "P4-S9-17 static space error"],
+  [swiftBindingsTests, "testSharedCoreSpacesWithoutSessionFailsClosed", "Swift P4-S9-17 fail-closed spaces test"],
+  [sharedCoreSpaces, "spaceParentsSnapshot", "P4-S9-17 product space-parents-snapshot helper"],
+  [sharedCoreSpaces, "spaceHierarchySnapshot", "P4-S9-17 product space-hierarchy-snapshot helper"],
+  [sharedCoreSpaces, "spaceChildrenSnapshot", "P4-S9-17 product space-children-snapshot helper"],
+  [sharedCoreSpaces, "spaceChildSet", "P4-S9-17 product space-child-set helper"],
+  [sharedCoreSpaces, "spaceChildRemove", "P4-S9-17 product space-child-remove helper"],
+  [sharedCoreSpaces, "restrictedJoinReparent", "P4-S9-17 product restricted-join-reparent helper"],
+  [sharedCoreSpaces, "core: SharedCore", "P4-S9-17 helper takes an already-constructed SharedCore"],
+  [sharedCoreSpaces, "core.spaceParentsSnapshot", "P4-S9-17 helper reads on the caller-owned instance"],
+  [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreSpaces.swift in Sources", "P4-S9-17 helper in Xcode target"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1471,9 +1505,14 @@ for (const required of ["room_members_snapshot(", "room_power_levels_snapshot(",
     throw new Error(`P4-S9-16 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "space_parents_snapshot", "space_hierarchy_snapshot", "space_children_snapshot", "space_child_set", "space_child_remove", "restricted_join_reparent", "crypto_status", "backup_setup"]) {
+for (const required of ["space_parents_snapshot(", "space_hierarchy_snapshot(", "space_children_snapshot(", "space_child_set(", "space_child_remove(", "restricted_join_reparent("]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-17 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-16`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-17`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1668,6 +1707,17 @@ for (const forbidden of ["roomCreate", "roomSetPowerLevel", "spaceParentsSnapsho
     throw new Error(`P4-S9-16 helper must not wrap ${forbidden}`);
   }
 }
+if (sharedCoreSpaces.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-17 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreSpaces.includes("SharedCore.newWithSecretStore") || sharedCoreSpaces.includes("newWithSecretStore")) {
+  throw new Error("P4-S9-17 helper must not construct SharedCore");
+}
+for (const forbidden of ["roomMembersSnapshot", "invitesAccept", "roomCreate", "backupStatus"]) {
+  if (sharedCoreSpaces.includes(forbidden)) {
+    throw new Error(`P4-S9-17 helper must not wrap ${forbidden}`);
+  }
+}
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
 if (!roomListDto) throw new Error("missing RoomListSnapshotDto");
 if (/\bpassword\b/.test(roomListDto[1]) || /\btoken\b/.test(roomListDto[1])) {
@@ -1832,6 +1882,20 @@ const roomPowerLevelTagsSnapshotDto = udl.match(/dictionary RoomPowerLevelTagsSn
 if (!roomPowerLevelTagsSnapshotDto) throw new Error("missing RoomPowerLevelTagsSnapshotDto");
 if (/\bpassword\b/.test(roomPowerLevelTagsSnapshotDto[1]) || /\btoken\b/.test(roomPowerLevelTagsSnapshotDto[1]) || /\bbytes\b/.test(roomPowerLevelTagsSnapshotDto[1]) || /\bpath\b/.test(roomPowerLevelTagsSnapshotDto[1]) || /\bpassphrase\b/.test(roomPowerLevelTagsSnapshotDto[1])) {
   throw new Error("RoomPowerLevelTagsSnapshotDto must not carry password, token, bytes, path, or passphrase fields");
+}
+for (const [name, dto] of [
+  ["SpaceParentsSnapshotDto", udl.match(/dictionary SpaceParentsSnapshotDto \{([\s\S]*?)\};/)],
+  ["SpaceHierarchySnapshotDto", udl.match(/dictionary SpaceHierarchySnapshotDto \{([\s\S]*?)\};/)],
+  ["SpaceChildrenSnapshotDto", udl.match(/dictionary SpaceChildrenSnapshotDto \{([\s\S]*?)\};/)],
+  ["SpaceChildMutationDto", udl.match(/dictionary SpaceChildMutationDto \{([\s\S]*?)\};/)],
+  ["RestrictedJoinReparentDto", udl.match(/dictionary RestrictedJoinReparentDto \{([\s\S]*?)\};/)],
+  ["SpaceHierarchyRoomDto", udl.match(/dictionary SpaceHierarchyRoomDto \{([\s\S]*?)\};/)],
+  ["SpaceChildEdgeDto", udl.match(/dictionary SpaceChildEdgeDto \{([\s\S]*?)\};/)],
+]) {
+  if (!dto) throw new Error(`missing ${name}`);
+  if (/\bpassword\b/.test(dto[1]) || /\btoken\b/.test(dto[1]) || /\bbytes\b/.test(dto[1]) || /\bpath\b/.test(dto[1]) || /\bpassphrase\b/.test(dto[1])) {
+    throw new Error(`${name} must not carry password, token, bytes, path, or passphrase fields`);
+  }
 }
 const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
 if (!loginDto) throw new Error("missing SessionLoginDto");

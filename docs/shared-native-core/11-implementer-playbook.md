@@ -140,8 +140,10 @@ Run this checklist in order. Stop at the first yes.
    search/protocols/cancel is stacked.    S9-12 room leave/join is stacked.
    S9-13 room invite/kick/ban/unban is stacked.
    S9-14 room power levels is stacked.
-   S9-16 members snapshots (section 9.5) is on this branch.
-   Next after merge is spaces on NativeRoomJoinRuleOwner.
+   S9-15 room create is stacked. S9-16 members snapshots is stacked.
+   S9-17 spaces (section 9.5) is on this branch.
+   Next after merge is invite accept/decline/spam/block on
+   NativeRoomJoinRuleOwner.
    UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
@@ -328,10 +330,15 @@ P4-S9-15 iOS room create              stacked
        matrix_room_create only. Typed name/topic/alias/visibility/preset
        plus Core scalar extras. Nested create-content and power-level
        overrides stay off.
-P4-S9-16 iOS members snapshots        **this branch**
+P4-S9-16 iOS members snapshots        stacked
        matrix_room_members_snapshot / matrix_room_power_levels_snapshot /
        matrix_room_creators_snapshot / matrix_room_power_level_tags_snapshot.
-       Reads only. Spaces stay off.
+       Reads only.
+P4-S9-17 iOS spaces                   **this branch**
+       matrix_space_parents_snapshot / matrix_space_hierarchy_snapshot /
+       matrix_space_children_snapshot / matrix_space_child_set /
+       matrix_space_child_remove / matrix_restricted_join_reparent.
+       Child set/remove are metadata only. Invite accept/decline stay off.
 P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        only when grep shows no remaining product callers
 P4-S11 NSE read-only store API        (never boot sync in NSE)
@@ -469,31 +476,31 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 
-S9-15 room create is stacked at #963. **S9-16 (this branch)** adds
-typed UniFFI wrappers for the four registered members-snapshot reads.
+S9-16 members snapshots is stacked at #964. **S9-17 (this branch)** adds
+typed UniFFI wrappers for the six registered space commands.
 
-1. `SharedCore.room_members_snapshot` / `room_power_levels_snapshot` /
-   `room_creators_snapshot` / `room_power_level_tags_snapshot` call
-   `Core.command` with the same camelCase `{ roomId }` payload desktop
-   uses. These are reads. Do not re-wrap power-level writers or room
-   create.
-2. Do not reimplement members snapshots in Swift. Do not wrap spaces
-   (`matrix_space_parents_snapshot` / `matrix_space_hierarchy_snapshot`
-   / `matrix_space_children_snapshot` / `matrix_space_child_set` /
-   `matrix_space_child_remove` / `matrix_restricted_join_reparent`),
-   leftover media, or leftover secret envelopes.
+1. `SharedCore.space_parents_snapshot` / `space_hierarchy_snapshot` /
+   `space_children_snapshot` / `space_child_set` / `space_child_remove`
+   / `restricted_join_reparent` call `Core.command` with the same
+   camelCase payloads desktop uses. Child set/remove are metadata only
+   (room ids, via, order, suggested). Do not re-wrap members snapshots
+   or room create.
+2. Do not reimplement spaces in Swift. Do not wrap invite
+   accept/decline/spam/block, leftover media, or leftover secret
+   envelopes.
 3. Do not start `SyncService`. Missing owner fail-closes with the
-   registered `p2-room-*-snapshot-no-session` codes. Unstarted sync
-   returns the registered handler's real outcome. Planted snapshots
-   must fail on local room lookup and must not require a live server.
-   Failed errors must not echo member user ids.
+   registered `p2-space-*-no-session` / `p2-restricted-join-reparent-no-session`
+   codes. Unstarted sync returns the registered handler's real outcome.
+   Planted parents/children are a local joined-room walk. Planted
+   hierarchy must fail on invalid room id and must not require a live
+   server. Planted child set/remove/reparent must fail on local room
+   lookup. Failed errors must not echo room ids.
 4. Helper + XCTest are the iOS surface this slice. Do not swap
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
-5. One command family per PR. Next is spaces on
-   `NativeRoomJoinRuleOwner` (`matrix_space_parents_snapshot` /
-   `matrix_space_hierarchy_snapshot` / `matrix_space_children_snapshot`
-   / `matrix_space_child_set` / `matrix_space_child_remove` /
-   `matrix_restricted_join_reparent`). Do not wrap leftover
+5. One command family per PR. Next is invite accept/decline/spam/block
+   on `NativeRoomJoinRuleOwner` (`matrix_invites_accept` /
+   `matrix_invites_decline` / `matrix_invites_report_spam` /
+   `matrix_invites_block_sender`). Do not wrap leftover
    password/export/import/bootstrap, `matrix_crypto_status`, or
    `matrix_cross_signing_status`. Do not hit production homeservers.
 

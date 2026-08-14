@@ -766,6 +766,73 @@ interface RoomMembersSnapshotError {
   Failed(string code, string description);
 };
 
+// Privacy-safe space parent row. Child room id plus parent room ids only.
+dictionary SpaceParentEntryDto {
+  string room_id;
+  sequence<string> parent_ids;
+};
+
+// Privacy-safe space parents snapshot. Entries only; no tokens, paths, or bytes.
+dictionary SpaceParentsSnapshotDto {
+  u64 session_generation;
+  sequence<SpaceParentEntryDto> entries;
+};
+
+// Privacy-safe hierarchy room. Metadata only; avatar is an mxc reference.
+dictionary SpaceHierarchyRoomDto {
+  string room_id;
+  string? name;
+  string? canonical_alias;
+  string? topic;
+  string? avatar_url;
+  string? room_type;
+  u64 num_joined_members;
+  string join_rule;
+  boolean world_readable;
+  boolean guest_can_join;
+};
+
+// Privacy-safe space hierarchy snapshot. Room metadata only; no bytes.
+dictionary SpaceHierarchySnapshotDto {
+  u64 session_generation;
+  sequence<SpaceHierarchyRoomDto> rooms;
+};
+
+// Privacy-safe local space-child edge. Room ids, order, suggested, via only.
+dictionary SpaceChildEdgeDto {
+  string parent_id;
+  string child_id;
+  string? order;
+  boolean suggested;
+  sequence<string> via;
+  u64 origin_server_ts;
+};
+
+// Privacy-safe space children snapshot. Edges only; no tokens, paths, or bytes.
+dictionary SpaceChildrenSnapshotDto {
+  u64 session_generation;
+  sequence<SpaceChildEdgeDto> edges;
+};
+
+// Privacy-safe space-child write ack. Room ids and status only.
+dictionary SpaceChildMutationDto {
+  string parent_id;
+  string child_id;
+  string status;
+};
+
+// Privacy-safe restricted-join reparent ack. Room id and status only.
+dictionary RestrictedJoinReparentDto {
+  string room_id;
+  string status;
+};
+
+// Static source constants only. Never echo room id, via, order, token, or password.
+[Error]
+interface SpaceCommandError {
+  Failed(string code, string description);
+};
+
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
 // P4-S3b adds restore_persisted_session. P4-S3c adds dedicated login_with_password.
 // P4-S3d adds attach_session_owners for the desktop owner set.
@@ -807,7 +874,11 @@ interface RoomMembersSnapshotError {
 // stay static and must not echo name, topic, alias, invite, or parent.
 // P4-S9-16 adds typed room_members_snapshot / room_power_levels_snapshot /
 // room_creators_snapshot / room_power_level_tags_snapshot. These are reads.
-// Failed errors stay static and must not echo member user ids. Spaces stay off.
+// Failed errors stay static and must not echo member user ids.
+// P4-S9-17 adds typed space parents/hierarchy/children snapshots plus child
+// set/remove and restricted-join reparent. Child set/remove are metadata
+// only (room ids, via, order, suggested). No bytes. Failed errors stay
+// static and must not echo room ids. Invite accept/decline stay off.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -1033,5 +1104,23 @@ interface SharedCore {
 
   [Async, Throws=RoomMembersSnapshotError]
   RoomPowerLevelTagsSnapshotDto room_power_level_tags_snapshot(string room_id);
+
+  [Async, Throws=SpaceCommandError]
+  SpaceParentsSnapshotDto space_parents_snapshot();
+
+  [Async, Throws=SpaceCommandError]
+  SpaceHierarchySnapshotDto space_hierarchy_snapshot(string room_id);
+
+  [Async, Throws=SpaceCommandError]
+  SpaceChildrenSnapshotDto space_children_snapshot();
+
+  [Async, Throws=SpaceCommandError]
+  SpaceChildMutationDto space_child_set(string parent_id, string child_id, sequence<string> via, string? order, boolean? suggested);
+
+  [Async, Throws=SpaceCommandError]
+  SpaceChildMutationDto space_child_remove(string parent_id, string child_id);
+
+  [Async, Throws=SpaceCommandError]
+  RestrictedJoinReparentDto restricted_join_reparent(string room_id, string? remove_parent_id, string add_parent_id);
 
 };
