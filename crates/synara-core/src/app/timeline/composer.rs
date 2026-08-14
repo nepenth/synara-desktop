@@ -48,20 +48,18 @@ pub struct NativeComposerReplyDraftReadback {
     pub room_id: String,
     /// `set`, `cleared`, or `empty`.
     #[serde(deserialize_with = "deserialize_reply_draft_status")]
-    pub status: &'static str,
+    pub status: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub draft: Option<NativeComposerReplyDraft>,
 }
 
-fn deserialize_reply_draft_status<'de, D>(deserializer: D) -> Result<&'static str, D::Error>
+fn deserialize_reply_draft_status<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
     let value = String::deserialize(deserializer)?;
     match value.as_str() {
-        "set" => Ok("set"),
-        "cleared" => Ok("cleared"),
-        "empty" => Ok("empty"),
+        "set" | "cleared" | "empty" => Ok(value),
         other => Err(serde::de::Error::unknown_variant(
             other,
             &["set", "cleared", "empty"],
@@ -100,7 +98,7 @@ pub fn reply_draft_readback(
     NativeComposerReplyDraftReadback {
         schema_version: NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION,
         room_id,
-        status,
+        status: status.to_owned(),
         draft,
     }
 }

@@ -123,13 +123,14 @@ The following describes merged source reachable from
 `ee896416` (#935). #708 and #710 remain the prior pure-helper P4
 evidence. #931 adds credential-free `register_flows`. #933 adds
 constructor-only `SharedCore`. #935 adds the S3a `IosSecretVault`
-callback. S3b restore is accepted. S3c Option A login is accepted.
-S3d attach is accepted. S4 typed `room_list_snapshot` is accepted.
-S5 typed `invites_snapshot` is accepted. S6 typed timeline
-open/close/paginate (Core `matrix_timeline_open` /
+callback. S3b restore landed in #937 (`4edfc1f5`). S3c Option A
+landed in #938 (`9b4ec54f`). S3d attach landed in #939 (`ad63d56d`).
+S4 typed `room_list_snapshot` landed in #940 (`5a6f3e9b`).
+S5 typed `invites_snapshot` landed in #942 (`17c29afd`). S6 typed
+timeline open/close/paginate (Core `matrix_timeline_open` /
 `matrix_timeline_close` / `matrix_timeline_paginate` only;
 SyncService not started) is on `agent/snc-p4-s6-timeline` per
-playbook §9.5.
+[12-p4-s3-live-client.md](12-p4-s3-live-client.md) and playbook §9.5.
 Password never rides a generic UniFFI `command`. Next after S6 is S7.
 
 | Phase | Merged evidence | Current boundary |
