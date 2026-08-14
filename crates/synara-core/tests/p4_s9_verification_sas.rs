@@ -150,6 +150,12 @@ fn verification_sas_without_started_sync_returns_handler_result_without_echo() {
     rt.block_on(shared.attach_session_owners())
         .expect("owners attached");
 
+    let inbox = rt
+        .block_on(shared.verification_list())
+        .expect("unstarted sync yields the registered list handler");
+    assert_eq!(inbox.session_generation, 1);
+    assert!(inbox.requests.iter().all(|request| request.sas.is_none()));
+
     let start = rt
         .block_on(shared.verification_start(Some(device_id.to_owned())))
         .expect_err("unstarted sync still uses the registered start handler");
@@ -172,22 +178,51 @@ fn verification_sas_without_started_sync_returns_handler_result_without_echo() {
         .block_on(shared.verification_dismiss(flow_id.to_owned()))
         .expect_err("unstarted sync still uses the registered dismiss handler");
     let start_text = format!("{start:?}{start}");
-    let flow_text = format!(
-        "{accept:?}{accept}{begin_sas:?}{begin_sas}{confirm:?}{confirm}{mismatch:?}{mismatch}{cancel:?}{cancel}{dismiss:?}{dismiss}"
+    let accept_text = format!("{accept:?}{accept}");
+    let begin_sas_text = format!("{begin_sas:?}{begin_sas}");
+    let confirm_text = format!("{confirm:?}{confirm}");
+    let mismatch_text = format!("{mismatch:?}{mismatch}");
+    let cancel_text = format!("{cancel:?}{cancel}");
+    let dismiss_text = format!("{dismiss:?}{dismiss}");
+    let text = format!(
+        "{start_text}{accept_text}{begin_sas_text}{confirm_text}{mismatch_text}{cancel_text}{dismiss_text}"
     );
-    let text = format!("{start_text}{flow_text}");
     drop(shared);
     drop(_enter);
     drop(rt);
     let _ = fs::remove_dir_all(&root);
 
     assert!(
-        start_text.contains("v-crypto.1-") || start_text.contains("p4-s9-sas-failed"),
-        "start must return a static mapped handler code: {start_text}"
+        start_text.contains("v-crypto.1-device-request-failed"),
+        "start must return the registered owner diagnostic: {start_text}"
     );
     assert!(
-        flow_text.contains("v-crypto.1-flow-not-found"),
-        "flow commands must return the registered missing-flow diagnostic: {flow_text}"
+        !start_text.contains("p4-s9-sas-failed"),
+        "start must not hide a wrong envelope behind the generic fallback: {start_text}"
+    );
+    assert!(
+        accept_text.contains("v-crypto.1-flow-not-found"),
+        "accept must return the registered missing-flow diagnostic: {accept_text}"
+    );
+    assert!(
+        begin_sas_text.contains("v-crypto.1-flow-not-found"),
+        "begin_sas must return the registered missing-flow diagnostic: {begin_sas_text}"
+    );
+    assert!(
+        confirm_text.contains("v-crypto.1-flow-not-found"),
+        "confirm must return the registered missing-flow diagnostic: {confirm_text}"
+    );
+    assert!(
+        mismatch_text.contains("v-crypto.1-flow-not-found"),
+        "mismatch must return the registered missing-flow diagnostic: {mismatch_text}"
+    );
+    assert!(
+        cancel_text.contains("v-crypto.1-flow-not-found"),
+        "cancel must return the registered missing-flow diagnostic: {cancel_text}"
+    );
+    assert!(
+        dismiss_text.contains("v-crypto.1-flow-not-found"),
+        "dismiss must return the registered missing-flow diagnostic: {dismiss_text}"
     );
     assert!(!text.contains(access));
     assert!(!text.contains(refresh));
