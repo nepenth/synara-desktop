@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `5bbda807`, the merge for #931 (`register_flows` UniFFI). |
-| Immediately preceding merges | #930 plan/playbook (`a8513e0f`), #931 register_flows UniFFI. |
+| Feature evidence tip | `feature/shared-native-core` is `32e03091`, the merge for #933 (`SharedCore` construction). |
+| Immediately preceding merges | #931 register_flows UniFFI (`5bbda807`), #932 docs, #933 SharedCore. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -146,7 +146,7 @@ residency changes are:
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `5bbda807`/#931 for
+anchor, but it is no longer the feature-tip provenance; use `32e03091`/#933 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -368,9 +368,12 @@ The exact bounded iOS evidence is:
   and a real `Date` to `Known`.
 - #931: credential-free `register_flows` on UniFFI. Closed DTO omits desktop
   `params` JSON. No iOS registration product UI. XCTest covers hostile URLs.
+- #933: constructor-only UniFFI `SharedCore` retaining `Core::new` with a
+  Rust `IosFailClosedPlatform`. No `command`, Keychain, APNs, or live Client.
 
-#708 and #710 add no Core command route. #931 adds a UniFFI probe only; it
-does not add a Core command or make Core an SDK or service owner. Actual SDK
+#708 and #710 add no Core command route. #931/#933 add UniFFI probes /
+construction only; they do not add a Core command or make Core an SDK or
+service owner. Actual SDK
 `Room` work, timeline listener/pagination/recovery
 execution, and session, platform credential storage, store, crypto, sync, and
 lifecycle ownership remain in `MatrixRustSDKService`. iOS has not migrated its
@@ -455,12 +458,12 @@ for any of those gates.
 1. Finish a mid-slice if the worktree is dirty.
 2. There is **no** remaining 7B desktop route that can land without a
    secret, file path, or bytes in the Core envelope. Do not invent one.
-3. P4-S1 `register_flows` UniFFI landed in #931. Next engineering lane
-   is **P4-S2** Swift `Platform` + `Core::new` (playbook §9). UniFFI
-   expansion still needs free disk ≥ 20 Gi for local cargo/bindgen.
-4. Then P4-S3 live Client +
-   attach owners, then consume already-registered commands one family
-   per PR. Retire `MatrixRustSDKService` last.
+3. P4-S1 and P4-S2 landed (#931, #933). Next engineering lane is
+   **P4-S3** live Client + attach owners (password stays Swift). If
+   unsure, write the PR plan; do not guess. UniFFI expansion still
+   needs free disk ≥ 20 Gi for local cargo/bindgen.
+4. After S3, consume already-registered commands one family per PR.
+   Retire `MatrixRustSDKService` last.
 5. After each product PR: squash-merge to `feature/shared-native-core`
    only, docs honesty, start the next slice.
 
