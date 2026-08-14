@@ -499,6 +499,21 @@ interface TimelinePinError {
   Failed(string code, string description);
 };
 
+// Privacy-safe timeline poll-vote / call-decline write ack from the registered Core commands.
+dictionary TimelineVoteDeclineDto {
+  u32 schema_version;
+  string action;
+  string room_id;
+  string event_id;
+  string status;
+};
+
+// Static source constants only. Never echo event id, room id, answer, token, or password.
+[Error]
+interface TimelineVoteDeclineError {
+  Failed(string code, string description);
+};
+
 // Privacy-safe typing room row. No tokens or password.
 dictionary TypingRoomDto {
   string room_id;
@@ -1395,5 +1410,11 @@ interface SharedCore {
 
   [Async, Throws=TimelinePinError]
   TimelinePinDto timeline_unpin(string room_id, string event_id);
+
+  [Async, Throws=TimelineVoteDeclineError]
+  TimelineVoteDeclineDto timeline_poll_vote(string room_id, string event_id, sequence<string> answer_ids);
+
+  [Async, Throws=TimelineVoteDeclineError]
+  TimelineVoteDeclineDto timeline_call_decline(string room_id, string event_id);
 
 };

@@ -151,8 +151,9 @@ Run this checklist in order. Stop at the first yes.
    S9-25 edit message is stacked.
    S9-26 poll respond is stacked.
    S9-27 timeline edit/redact/report is stacked.
-   S9-28 timeline pin/unpin (section 9.5) is on this branch.
-   Next after merge is poll vote / call decline.
+   S9-28 timeline pin/unpin is stacked.
+   S9-29 timeline poll vote / call decline (section 9.5) is on this branch.
+   Next after merge is timeline forward.
    UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
@@ -386,10 +387,14 @@ P4-S9-27 iOS timeline edit/redact/report stacked
        matrix_timeline_edit_text / matrix_timeline_redact /
        matrix_timeline_report. Write ack is the existing action readback.
        No media bytes. Pin/unpin stay off.
-P4-S9-28 iOS timeline pin/unpin       **this branch**
+P4-S9-28 iOS timeline pin/unpin       stacked
        matrix_timeline_pin / matrix_timeline_unpin. Write ack is the
        existing action readback. No media bytes. Poll vote / call
        decline stay off.
+P4-S9-29 iOS timeline poll vote / call decline **this branch**
+       matrix_timeline_poll_vote / matrix_timeline_call_decline.
+       Write ack is the existing action readback. No media bytes.
+       Timeline forward stays off.
 P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        only when grep shows no remaining product callers
 P4-S11 NSE read-only store API        (never boot sync in NSE)
@@ -527,31 +532,36 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 
-S9-27 timeline edit/redact/report is stacked at #975. **S9-28 (this branch)**
-adds typed UniFFI wrappers for the registered timeline pin/unpin commands.
+S9-28 timeline pin/unpin is stacked at #976. **S9-29 (this branch)**
+adds typed UniFFI wrappers for the registered timeline poll-vote /
+call-decline commands.
 
-1. `SharedCore.timeline_pin` / `timeline_unpin` call `Core.command` with
-   the same camelCase payloads desktop uses (`{ roomId, eventId }`).
+1. `SharedCore.timeline_poll_vote` / `timeline_call_decline` call
+   `Core.command` with the same camelCase payloads desktop uses
+   (`{ roomId, eventId, answerIds }`, `{ roomId, eventId }`).
    They return the existing action readback. No media bytes. Do not
    re-wrap S6 open, S9-22 send text, S9-25 edit message, S9-26 poll
-   respond, or S9-27 edit/redact/report.
-2. Do not reimplement pin/unpin in Swift. Do not wrap poll vote, call
-   decline, leftover media bytes, a file path, or leftover secret
-   envelopes.
+   respond, S9-27 edit/redact/report, or S9-28 pin/unpin.
+2. Do not reimplement poll vote / call decline in Swift. Do not wrap
+   timeline forward, leftover media bytes, a file path, or leftover
+   secret envelopes.
 3. Do not start `SyncService`. Missing owner fail-closes with the
-   registered `p2-timeline-pin-no-session` /
-   `p2-timeline-unpin-no-session` codes. Unstarted sync returns the
-   registered handler's real outcome. Planted pin/unpin must fail on
-   local room/event validation (`v-timeline-pin-room-not-found` /
-   `v-timeline-unpin-room-not-found` / `d0.4-send-invalid-room-id` /
-   `v-timeline-pin-invalid-event-id` / `v-timeline-unpin-invalid-event-id`)
-   and must not require a live server. Failed errors must not echo event
-   id or room id. Oversize fail-closes without truncating or echoing the
-   event id or room id.
+   registered `p2-timeline-poll-vote-no-session` /
+   `p2-timeline-call-decline-no-session` codes. Unstarted sync returns
+   the registered handler's real outcome. Planted vote/decline must
+   fail on local room/event validation
+   (`v-timeline-poll-vote-room-not-found` /
+   `v-timeline-call-decline-room-not-found` /
+   `d0.4-send-invalid-room-id` /
+   `v-timeline-poll-vote-invalid-event-id` /
+   `v-timeline-call-decline-invalid-event-id`)
+   and must not require a live server. Failed errors must not echo
+   event id, room id, or answer. Oversize fail-closes without
+   truncating or echoing the event id, room id, or answer.
 4. Helper + XCTest are the iOS surface this slice. Do not swap
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
-5. One command family per PR. Next is poll vote / call decline
-   (`matrix_timeline_poll_vote`, `matrix_timeline_call_decline`).
+5. One command family per PR. Next is timeline forward
+   (`matrix_timeline_forward_text`, `matrix_timeline_forward_media`).
    Do not wrap leftover
    password/export/import/bootstrap, `matrix_crypto_status`, or
    `matrix_cross_signing_status`. Do not hit production homeservers.
