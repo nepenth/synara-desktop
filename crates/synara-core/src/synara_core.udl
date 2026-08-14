@@ -192,10 +192,22 @@ interface SessionLoginError {
   Failed(string code, string description);
 };
 
+// Privacy-safe attach outcome. Owner names only. No tokens or password.
+dictionary SessionAttachDto {
+  sequence<string> owners;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface SessionAttachError {
+  Failed(string code, string description);
+};
+
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
 // P4-S3b adds restore_persisted_session. P4-S3c adds dedicated login_with_password.
+// P4-S3d adds attach_session_owners for the desktop owner set.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
-// Still no command, attach, leftover registration, or APNs surface.
+// Still no command, leftover registration, or APNs surface.
 interface SharedCore {
   constructor();
   [Name="new_with_secret_store"]
@@ -215,4 +227,7 @@ interface SharedCore {
     string store_root,
     string password
   );
+
+  [Async, Throws=SessionAttachError]
+  SessionAttachDto attach_session_owners();
 };

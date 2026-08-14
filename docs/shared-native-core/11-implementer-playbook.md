@@ -35,7 +35,7 @@ shared engine. Never claim P5 or MAC-IOS-006 is done.
 | Surface | Today |
 |---|---|
 | Desktop macOS/Linux | Live Matrix `Client` and native owners live in Core. React still invokes `matrix_*`. **111** of those names are registered on `Core::command`. Desktop is a thinner shell, not a thin shell. |
-| iOS | UniFFI scaffold + `login_flows` + `register_flows` + session-projection mirror + Settings readback + two pure helpers (unread row, cold-start recovery) + `SharedCore` constructors + optional `IosSecretVault` + `restore_persisted_session` (vault, no password) + dedicated `login_with_password` FFI (password argument only; not on-engine). Live room list, timeline, crypto, push, and `MatrixRustSDKService` are still Swift. iOS does **not** call the 111 Core commands. XCTest construction of `SharedCore` is not iOS-on-engine. |
+| iOS | UniFFI scaffold + `login_flows` + `register_flows` + session-projection mirror + Settings readback + two pure helpers (unread row, cold-start recovery) + `SharedCore` constructors + optional `IosSecretVault` + `restore_persisted_session` + dedicated `login_with_password` FFI + `attach_session_owners` (owners attached; not on-engine). Live room list, timeline, crypto, push, and `MatrixRustSDKService` are still Swift. iOS does **not** call the 111 Core commands. XCTest construction of `SharedCore` is not iOS-on-engine. |
 | `main` | Diverged. Recovery / MAC-IOS-006 docs live there. Not feature evidence. |
 | Release | Forbidden until engineering finish is accepted and then merged to `main`. |
 
@@ -128,8 +128,8 @@ Run this checklist in order. Stop at the first yes.
    inventing one.
 3. **Is free disk ≥ 20 Gi?** Start the next **P4** slice in section 9.
    S1/#931, S2/#933, and S3a/#935 landed. S3b restore is accepted.
-   S3c login (Option A, section 9.4c and plan §12) is on this branch.
-   Next after merge is S3d attach. UDL/bindgen/cargo require this disk
+   S3c login is accepted. S3d attach (section 9.4d and plan §12) is on
+   this branch. Next after merge is S4. UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
    allowed. Do not change UDL. Do not hand-edit generated Swift. Do
@@ -272,7 +272,7 @@ P4-S0  already landed: UniFFI scaffold, login_flows, SessionProjectionCore,
 P4-S1  UniFFI register_flows          LANDED #931 (credential-free)
 P4-S2  Swift Platform + Core::new     LANDED #933 (fail-closed; no command)
 P4-S3  iOS live Client via Core       plan: 12-p4-s3-live-client.md
-       S3a LANDED #935 → S3b accepted → **S3c Option A login** → S3d attach
+       S3a LANDED #935 → S3b accepted → S3c accepted → **S3d attach**
 P4-S4  iOS room_list_snapshot         (needs SyncServiceOwner)
        S4 — not S3b–S3d — adds the first UniFFI Core.command / typed
        wrapper, for matrix_room_list_snapshot only
@@ -329,8 +329,8 @@ S3 is **not** one PR. Read the matching subsection only.
 |---|---|---|
 | S3a | landed #935 | Vault callback only |
 | **S3b** | **9.4b accepted** | Restore via vault. No password. |
-| **S3c** | **9.4c (this branch, Option A)** | Dedicated `login_with_password` FFI |
-| S3d | 9.4d | Attach owners after a session exists |
+| **S3c** | **9.4c accepted** | Dedicated `login_with_password` FFI |
+| **S3d** | **9.4d (this branch)** | Attach owners after a session exists |
 
 Desktop reference (do not copy Tauri types):
 
@@ -398,16 +398,23 @@ Dual-engine until S3d: login+restore on `SharedCore`; room list,
 timeline, and crypto stay `MatrixRustSDK`. Live product login may stay
 on the Swift auth service for this slice; helper + XCTest are enough.
 
-### 9.4d P4-S3d — attach owners (not S3b)
+### 9.4d P4-S3d — attach owners (this branch)
 
-Do not start this before a session exists from S3b or S3c.
+S3c is accepted at `fe8ad87b`. After a session exists, attach the same
+owner set desktop attaches from
+`src-tauri/src/matrix/auth/product_commands.rs`:
 
-After a session exists, attach the same owner set desktop attaches
-(`attach_typing`, `attach_presence`, `attach_verification`,
-`attach_devices`, `attach_join_rules`, `attach_image_packs`, then
-timelines and sync — see `src-tauri/src/matrix/auth/product_commands.rs`).
+`attach_typing`, `attach_presence`, `attach_verification`,
+`attach_devices`, `attach_join_rules`, `attach_image_packs`,
+`attach_timelines`, `attach_sync`.
+
+`SharedCore.attach_session_owners` builds those owners on the retained
+Client and calls the Core `attach_*` APIs. Emit sinks are no-op
+(`Platform::emit` stays later). SyncService is attached but not started
+so iOS does not run a second live sync while `MatrixRustSDKService`
+still owns product room list / timeline. Second attach fail-closes.
 Missing attach → later commands fail closed. That is correct.
-Do not retire `MatrixRustSDKService` in this slice.
+Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 

@@ -6,7 +6,8 @@
 //! `login_with_password`: a dedicated FFI argument, never `Core.command`,
 //! never registered as `matrix_login_password`. The password is not stored,
 //! not copied into a DTO, never echoed, and is zeroized on drop.
-//! This still exposes no command, attach, or APNs surface.
+//! P4-S3d adds `attach_session_owners` for the desktop owner set.
+//! This still exposes no command or APNs surface.
 
 use std::path::{Component, Path};
 use std::sync::{Arc, Mutex};
@@ -14,18 +15,26 @@ use std::sync::{Arc, Mutex};
 use matrix_sdk::Client;
 use zeroize::Zeroizing;
 
+use crate::app::account_data::NativeImagePackOwner;
 use crate::app::auth::{
     login_with_password as core_login_with_password, DevicePlatform, LoginOptions,
 };
 use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig};
+use crate::app::devices::NativeDeviceOwner;
 use crate::app::lifecycle::{
     persist_session_after_login, restore_session_from_vault, restore_session_onto_client,
     SessionMaterial, SessionMaterialId, SessionMaterialVault,
 };
+use crate::app::presence::NativePresenceOwner;
+use crate::app::room_profile::NativeRoomJoinRuleOwner;
 use crate::app::store::{
     get_or_create_store_key, AccountIdentity, StoreKeyId, StoreKeyMaterial, StoreKeyVault,
     StoreKeyVaultError, STORE_KEY_LEN,
 };
+use crate::app::sync::{build_sync_service, SyncServiceConfig};
+use crate::app::timeline::NativeTimelineOwner;
+use crate::app::typing::NativeTypingOwner;
+use crate::app::verification::NativeVerificationOwner;
 use crate::core::Core;
 use crate::dto::{SessionLifecycle, SessionSnapshot};
 use crate::platform::{IosFailClosedPlatform, Platform, SecretVault};
@@ -49,6 +58,22 @@ const LOGIN_STORE_ROOT_INVALID_CODE: &str = "p4-s3c-store-root-invalid";
 const LOGIN_STORE_ROOT_INVALID_DESCRIPTION: &str = "The session store root is invalid.";
 const LOGIN_FAILED_CODE: &str = "p4-s3c-login-failed";
 const LOGIN_FAILED_DESCRIPTION: &str = "The session could not be authenticated.";
+const ATTACH_SESSION_MISSING_CODE: &str = "p4-s3d-session-missing";
+const ATTACH_SESSION_MISSING_DESCRIPTION: &str = "No retained session is available.";
+const ATTACH_ALREADY_CODE: &str = "p4-s3d-already-attached";
+const ATTACH_ALREADY_DESCRIPTION: &str = "Session owners are already attached.";
+const ATTACH_FAILED_CODE: &str = "p4-s3d-attach-failed";
+const ATTACH_FAILED_DESCRIPTION: &str = "Session owners could not be attached.";
+const ATTACHED_OWNER_NAMES: &[&str] = &[
+    "typing",
+    "presence",
+    "verification",
+    "devices",
+    "join_rules",
+    "image_packs",
+    "timelines",
+    "sync",
+];
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -136,6 +161,35 @@ fn login_failed(code: &'static str, description: &'static str) -> SessionLoginEr
     }
 }
 
+/// Privacy-safe attach outcome. Owner names only; no tokens or password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionAttachDto {
+    pub owners: Vec<String>,
+}
+
+/// Static fail-closed attach error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionAttachError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for SessionAttachError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for SessionAttachError {}
+
+fn attach_failed(code: &'static str, description: &'static str) -> SessionAttachError {
+    SessionAttachError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
 enum RestoredClientSlot {
     Empty,
     InFlight,
@@ -144,11 +198,18 @@ enum RestoredClientSlot {
     Ready(Client),
 }
 
+enum OwnerAttachSlot {
+    Empty,
+    InFlight,
+    Ready,
+}
+
 /// Retained shared Core for the iOS UniFFI boundary.
 pub struct SharedCore {
     core: Core,
     secret_store: Arc<dyn SecretVault + Send + Sync>,
     restored_client: Mutex<RestoredClientSlot>,
+    owner_attach: Mutex<OwnerAttachSlot>,
 }
 
 impl SharedCore {
@@ -160,6 +221,7 @@ impl SharedCore {
             core: Core::new(Arc::new(platform)),
             secret_store,
             restored_client: Mutex::new(RestoredClientSlot::Empty),
+            owner_attach: Mutex::new(OwnerAttachSlot::Empty),
         }
     }
 
@@ -172,6 +234,7 @@ impl SharedCore {
             core: Core::new(Arc::new(platform)),
             secret_store: vault,
             restored_client: Mutex::new(RestoredClientSlot::Empty),
+            owner_attach: Mutex::new(OwnerAttachSlot::Empty),
         }
     }
 
@@ -446,6 +509,113 @@ impl SharedCore {
             homeserver_url,
         })
     }
+
+    /// Attach the desktop owner set on the retained Client. No Core.command.
+    ///
+    /// Builds owners with no-op emit sinks (Platform::emit stays a later
+    /// slice). SyncService is attached but not started so iOS does not run a
+    /// second live sync while MatrixRustSDK still owns product room list.
+    /// Fail-closed if no Client is retained or owners are already attached.
+    pub async fn attach_session_owners(&self) -> Result<SessionAttachDto, SessionAttachError> {
+        let claim = AttachClaim::acquire(&self.owner_attach)?;
+        let client = {
+            let guard = self
+                .restored_client
+                .lock()
+                .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+            match &*guard {
+                RestoredClientSlot::Ready(client) => client.clone(),
+                RestoredClientSlot::Empty | RestoredClientSlot::InFlight => {
+                    return Err(attach_failed(
+                        ATTACH_SESSION_MISSING_CODE,
+                        ATTACH_SESSION_MISSING_DESCRIPTION,
+                    ));
+                }
+            }
+        };
+        let generation = self
+            .core
+            .session_snapshot()
+            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?
+            .ok_or_else(|| {
+                attach_failed(
+                    ATTACH_SESSION_MISSING_CODE,
+                    ATTACH_SESSION_MISSING_DESCRIPTION,
+                )
+            })?
+            .session_generation;
+        if generation == 0 {
+            return Err(attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION));
+        }
+
+        let typing = Arc::new(
+            NativeTypingOwner::start(&client, generation)
+                .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
+        );
+        let presence = Arc::new(
+            NativePresenceOwner::start(&client, Arc::new(|_| {}), generation)
+                .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
+        );
+        let verification = Arc::new(NativeVerificationOwner::new(&client, generation));
+        let devices = Arc::new(
+            NativeDeviceOwner::start(&client, Arc::new(|_| {}), generation)
+                .await
+                .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
+        );
+        let join_rules = Arc::new(
+            NativeRoomJoinRuleOwner::start(&client, Arc::new(|_| {}), generation)
+                .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
+        );
+        let image_packs = Arc::new(
+            NativeImagePackOwner::start(&client, Arc::new(|_| {}), generation)
+                .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
+        );
+        let timelines = Arc::new(NativeTimelineOwner::new(
+            &client,
+            Arc::new(|_| {}),
+            generation,
+        ));
+        let sync = Arc::new(
+            build_sync_service(&client, generation, SyncServiceConfig::default())
+                .await
+                .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
+        );
+
+        self.core
+            .attach_typing(typing)
+            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+        self.core
+            .attach_presence(presence)
+            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+        self.core
+            .attach_verification(verification)
+            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+        self.core
+            .attach_devices(devices)
+            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+        self.core
+            .attach_join_rules(join_rules)
+            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+        self.core
+            .attach_image_packs(image_packs)
+            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+        self.core
+            .attach_timelines(timelines)
+            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+        self.core
+            .attach_sync(sync)
+            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+
+        claim
+            .commit()
+            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+        Ok(SessionAttachDto {
+            owners: ATTACHED_OWNER_NAMES
+                .iter()
+                .map(|name| (*name).to_owned())
+                .collect(),
+        })
+    }
 }
 
 /// Claims the restore slot for one in-flight attempt. Drop releases it unless
@@ -500,6 +670,62 @@ impl Drop for RestoreClaim<'_> {
         if let Ok(mut guard) = self.slot.lock() {
             if matches!(*guard, RestoredClientSlot::InFlight) {
                 *guard = RestoredClientSlot::Empty;
+            }
+        }
+    }
+}
+
+/// Claims the owner-attach slot for one in-flight attempt.
+struct AttachClaim<'a> {
+    slot: &'a Mutex<OwnerAttachSlot>,
+    committed: bool,
+}
+
+impl<'a> AttachClaim<'a> {
+    fn acquire(slot: &'a Mutex<OwnerAttachSlot>) -> Result<Self, SessionAttachError> {
+        let mut guard = slot
+            .lock()
+            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+        match *guard {
+            OwnerAttachSlot::Empty => {
+                *guard = OwnerAttachSlot::InFlight;
+                Ok(Self {
+                    slot,
+                    committed: false,
+                })
+            }
+            OwnerAttachSlot::Ready => Err(attach_failed(
+                ATTACH_ALREADY_CODE,
+                ATTACH_ALREADY_DESCRIPTION,
+            )),
+            OwnerAttachSlot::InFlight => {
+                Err(attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))
+            }
+        }
+    }
+
+    fn commit(mut self) -> Result<(), SessionAttachError> {
+        let mut guard = self
+            .slot
+            .lock()
+            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+        if !matches!(*guard, OwnerAttachSlot::InFlight) {
+            return Err(attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION));
+        }
+        *guard = OwnerAttachSlot::Ready;
+        self.committed = true;
+        Ok(())
+    }
+}
+
+impl Drop for AttachClaim<'_> {
+    fn drop(&mut self) {
+        if self.committed {
+            return;
+        }
+        if let Ok(mut guard) = self.slot.lock() {
+            if matches!(*guard, OwnerAttachSlot::InFlight) {
+                *guard = OwnerAttachSlot::Empty;
             }
         }
     }

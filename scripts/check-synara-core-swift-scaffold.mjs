@@ -25,6 +25,7 @@ const required = [
   "synara-ios/Synara/Services/IosSecretVault.swift",
   "synara-ios/Synara/Services/SharedCoreSessionRestore.swift",
   "synara-ios/Synara/Services/SharedCoreSessionLogin.swift",
+  "synara-ios/Synara/Services/SharedCoreSessionAttach.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -62,6 +63,10 @@ const sharedCoreRestore = readFileSync(
 );
 const sharedCoreLogin = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreSessionLogin.swift"),
+  "utf8"
+);
+const sharedCoreAttach = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreSessionAttach.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -157,6 +162,22 @@ const assertions = [
   [sharedCoreLogin, "loginWithPassword", "P4-S3c product login helper"],
   [sharedCoreLogin, "core: SharedCore", "P4-S3c helper takes an already-constructed SharedCore"],
   [sharedCoreLogin, "core.loginWithPassword", "P4-S3c helper logs in on the caller-owned instance"],
+  [sharedCoreFfi, "attach_session_owners", "P4-S3d attach FFI"],
+  [sharedCoreFfi, "attach_typing", "P4-S3d wires Core attach_typing"],
+  [sharedCoreFfi, "attach_presence", "P4-S3d wires Core attach_presence"],
+  [sharedCoreFfi, "attach_verification", "P4-S3d wires Core attach_verification"],
+  [sharedCoreFfi, "attach_devices", "P4-S3d wires Core attach_devices"],
+  [sharedCoreFfi, "attach_join_rules", "P4-S3d wires Core attach_join_rules"],
+  [sharedCoreFfi, "attach_image_packs", "P4-S3d wires Core attach_image_packs"],
+  [sharedCoreFfi, "attach_timelines", "P4-S3d wires Core attach_timelines"],
+  [sharedCoreFfi, "attach_sync", "P4-S3d wires Core attach_sync"],
+  [udl, "attach_session_owners", "P4-S3d SharedCore attach operation"],
+  [udl, "dictionary SessionAttachDto", "P4-S3d privacy-safe attach DTO"],
+  [udl, "interface SessionAttachError", "P4-S3d static attach error"],
+  [swiftBindingsTests, "testSharedCoreAttachWithoutSessionFailsClosed", "Swift P4-S3d fail-closed attach test"],
+  [sharedCoreAttach, "attachSessionOwners", "P4-S3d product attach helper"],
+  [sharedCoreAttach, "core: SharedCore", "P4-S3d helper takes an already-constructed SharedCore"],
+  [sharedCoreAttach, "core.attachSessionOwners", "P4-S3d helper attaches on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -897,7 +918,7 @@ if (projectionOperations.join(",") !== "open,session_snapshot,close") {
   throw new Error(`P4-3 facade must expose only open/session_snapshot/close; found ${projectionOperations.join(", ")}`);
 }
 
-// P4-S3c allows restore + dedicated login_with_password. Still forbid command/attach.
+// P4-S3d allows restore + login + attach_session_owners. Still forbid command.
 const sharedCoreObject = udl.match(/interface SharedCore \{([\s\S]*?)\};/);
 if (!sharedCoreObject) throw new Error("missing SharedCore object");
 const sharedCoreBody = sharedCoreObject[1].replace(/\/\/.*$/gm, "");
@@ -913,9 +934,12 @@ if (!sharedCoreBody.includes("restore_persisted_session")) {
 if (!sharedCoreBody.includes("login_with_password")) {
   throw new Error("P4-S3c SharedCore must expose dedicated login_with_password");
 }
-for (const forbidden of ["command", "attach", "open(", "matrix_login_password", "persist_planted"]) {
+if (!sharedCoreBody.includes("attach_session_owners")) {
+  throw new Error("P4-S3d SharedCore must expose attach_session_owners");
+}
+for (const forbidden of ["command", "open(", "matrix_login_password", "persist_planted", "attach_typing"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S3c`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S3d`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -930,10 +954,18 @@ if (sharedCoreRestore.includes("SharedCore(store:")) {
 if (sharedCoreLogin.includes("SharedCore(store:")) {
   throw new Error("P4-S3c helper must not construct-and-drop SharedCore");
 }
+if (sharedCoreAttach.includes("SharedCore(store:")) {
+  throw new Error("P4-S3d helper must not construct-and-drop SharedCore");
+}
 const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
 if (!loginDto) throw new Error("missing SessionLoginDto");
 if (/\bpassword\b/.test(loginDto[1])) {
   throw new Error("SessionLoginDto must not carry a password field");
+}
+const attachDto = udl.match(/dictionary SessionAttachDto \{([\s\S]*?)\};/);
+if (!attachDto) throw new Error("missing SessionAttachDto");
+if (/\bpassword\b/.test(attachDto[1]) || /\btoken\b/.test(attachDto[1])) {
+  throw new Error("SessionAttachDto must not carry password or token fields");
 }
 const productionSharedCoreFfi = sharedCoreFfi.split("#[cfg(test)]")[0];
 if (productionSharedCoreFfi.includes("p4-s3b-store-key")) {
