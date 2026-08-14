@@ -18,7 +18,10 @@ pub fn binding_scaffold_version() -> String {
 }
 
 mod ffi;
-pub use ffi::{login_flows, LoginFlowDto, LoginFlowsError};
+pub use ffi::{
+    login_flows, register_flows, LoginFlowDto, LoginFlowsError, RegisterFlowsDto,
+    RegisterFlowsError, RegisterFlowsStatus, RegisterUiaFlowDto,
+};
 
 mod session_projection_ffi;
 pub use session_projection_ffi::{

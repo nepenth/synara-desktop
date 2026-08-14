@@ -9,6 +9,22 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertFalse(version.isEmpty)
     }
 
+    func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
+        let hostileURL = "https://user:secret@example.invalid"
+
+        do {
+            _ = try await SynaraCore.registerFlows(homeserverUrl: hostileURL)
+            XCTFail("Hostile registration-flow URL must fail before a request")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p3.1-invalid-homeserver-url"))
+            XCTAssertTrue(publicError.contains("The homeserver URL is invalid."))
+            for forbidden in [hostileURL, "user:secret", "secret", "example.invalid"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testSessionProjectionFacadeExecutesOpenSnapshotAndCloseOverGeneratedRustFFI() async throws {
         let core = SessionProjectionCore()
         let expected = SessionProjection(
