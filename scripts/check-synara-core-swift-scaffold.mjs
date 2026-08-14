@@ -116,6 +116,8 @@ const assertions = [
   [sharedCoreFfi, "restore_persisted_session", "P4-S3b vault restore FFI"],
   [sharedCoreFfi, "login_with_password", "P4-S3c dedicated password-login FFI"],
   [sharedCoreFfi, "persist_session_after_login", "P4-S3c persists into the S3a vault"],
+  [sharedCoreFfi, "persist_planted_session_for_test", "P4-S3c test hook uses the production persist path"],
+  [sharedCoreFfi, "persist_open_and_retain", "P4-S3c login and test hook share persist+open+retain"],
   [sharedCoreFfi, "Zeroizing::new(password)", "P4-S3c zeroizes the dedicated password argument"],
   [udl, "callback interface IosSecretVault", "P4-S3a Swift vault callback"],
   [udl, "interface IosSecretVaultError", "P4-S3a static vault error"],
@@ -911,7 +913,7 @@ if (!sharedCoreBody.includes("restore_persisted_session")) {
 if (!sharedCoreBody.includes("login_with_password")) {
   throw new Error("P4-S3c SharedCore must expose dedicated login_with_password");
 }
-for (const forbidden of ["command", "attach", "open(", "matrix_login_password"]) {
+for (const forbidden of ["command", "attach", "open(", "matrix_login_password", "persist_planted"]) {
   if (sharedCoreBody.includes(forbidden)) {
     throw new Error(`SharedCore must not expose ${forbidden} in P4-S3c`);
   }

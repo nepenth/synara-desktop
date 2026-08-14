@@ -19,8 +19,8 @@ use crate::app::auth::{
 };
 use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig};
 use crate::app::lifecycle::{
-    persist_session_after_login, restore_session_from_vault, SessionMaterial, SessionMaterialId,
-    SessionMaterialVault,
+    persist_session_after_login, restore_session_from_vault, restore_session_onto_client,
+    SessionMaterial, SessionMaterialId, SessionMaterialVault,
 };
 use crate::app::store::{
     get_or_create_store_key, AccountIdentity, StoreKeyId, StoreKeyMaterial, StoreKeyVault,
@@ -326,14 +326,105 @@ impl SharedCore {
         if live_identity != identity {
             return Err(login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION));
         }
-        persist_session_after_login(&client, &live_identity, &vault)
+        self.persist_open_and_retain(
+            client,
+            &live_identity,
+            &vault,
+            claim,
+            outcome.user_id,
+            outcome.device_id,
+            outcome.homeserver_url,
+        )
+        .await
+    }
+
+    /// Test-only persist+open+retain through the production login path.
+    ///
+    /// Plants a Matrix session on an unauthenticated Client (no homeserver),
+    /// then calls the same `store_key_for` + `persist_session_after_login` +
+    /// `Core::open` + retain sequence `login_with_password` uses. Not on UDL.
+    #[doc(hidden)]
+    pub async fn persist_planted_session_for_test(
+        &self,
+        user_id: String,
+        homeserver_url: String,
+        store_root: String,
+        device_id: String,
+        access_token: String,
+        refresh_token: Option<String>,
+    ) -> Result<SessionLoginDto, SessionLoginError> {
+        let identity = AccountIdentity::new(&user_id, &homeserver_url).map_err(|_| {
+            login_failed(
+                LOGIN_IDENTITY_INVALID_CODE,
+                LOGIN_IDENTITY_INVALID_DESCRIPTION,
+            )
+        })?;
+        let root = parse_store_root(&store_root).map_err(|_| {
+            login_failed(
+                LOGIN_STORE_ROOT_INVALID_CODE,
+                LOGIN_STORE_ROOT_INVALID_DESCRIPTION,
+            )
+        })?;
+        let claim = RestoreClaim::acquire(&self.restored_client)
+            .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        let vault = SecretStoreSessionVault {
+            store: Arc::clone(&self.secret_store),
+        };
+        let store_key =
+            store_key_for(&self.secret_store, &identity).map_err(|error| match error {
+                SessionRestoreError::Failed { code, .. } if code == VAULT_UNAVAILABLE_CODE => {
+                    login_failed(
+                        LOGIN_VAULT_UNAVAILABLE_CODE,
+                        LOGIN_VAULT_UNAVAILABLE_DESCRIPTION,
+                    )
+                }
+                _ => login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION),
+            })?;
+        let config = ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))
+            .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        let client = build_unauthenticated_client(&config)
+            .await
+            .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        let material = SessionMaterial::from_matrix_tokens(
+            &identity,
+            &device_id,
+            &access_token,
+            refresh_token.as_deref(),
+        )
+        .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        restore_session_onto_client(&client, &identity, &material)
+            .await
+            .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        self.persist_open_and_retain(
+            client,
+            &identity,
+            &vault,
+            claim,
+            identity.user_id().to_owned(),
+            device_id,
+            identity.homeserver_url().to_owned(),
+        )
+        .await
+    }
+
+    async fn persist_open_and_retain(
+        &self,
+        client: Client,
+        identity: &AccountIdentity,
+        vault: &SecretStoreSessionVault,
+        claim: RestoreClaim<'_>,
+        user_id: String,
+        device_id: String,
+        homeserver_url: String,
+    ) -> Result<SessionLoginDto, SessionLoginError> {
+        persist_session_after_login(&client, identity, vault)
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
 
         let snapshot = SessionSnapshot {
             session_generation: 1,
-            user_id: outcome.user_id.clone(),
-            device_id: outcome.device_id.clone(),
-            homeserver_url: outcome.homeserver_url.clone(),
+            user_id: user_id.clone(),
+            device_id: device_id.clone(),
+            homeserver_url: homeserver_url.clone(),
             display_name: None,
             avatar_url: None,
             lifecycle: SessionLifecycle::Ready,
@@ -350,9 +441,9 @@ impl SharedCore {
         }
 
         Ok(SessionLoginDto {
-            user_id: outcome.user_id,
-            device_id: outcome.device_id,
-            homeserver_url: outcome.homeserver_url,
+            user_id,
+            device_id,
+            homeserver_url,
         })
     }
 }
