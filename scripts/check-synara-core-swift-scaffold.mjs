@@ -24,6 +24,7 @@ const required = [
   "synara-ios/Synara/Services/MatrixSessionProjectionMirror.swift",
   "synara-ios/Synara/Services/IosSecretVault.swift",
   "synara-ios/Synara/Services/SharedCoreSessionRestore.swift",
+  "synara-ios/Synara/Services/SharedCoreSessionLogin.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -57,6 +58,10 @@ const sessionProjectionAdapter = readFileSync(
 );
 const sharedCoreRestore = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreSessionRestore.swift"),
+  "utf8"
+);
+const sharedCoreLogin = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreSessionLogin.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -109,11 +114,19 @@ const assertions = [
   [sharedCoreFfi, "CallbackSecretVault", "P4-S3a callback SecretVault adapter"],
   [sharedCoreFfi, "pub trait IosSecretVault", "P4-S3a callback trait defined in Rust"],
   [sharedCoreFfi, "restore_persisted_session", "P4-S3b vault restore FFI"],
+  [sharedCoreFfi, "login_with_password", "P4-S3c dedicated password-login FFI"],
+  [sharedCoreFfi, "persist_session_after_login", "P4-S3c persists into the S3a vault"],
+  [sharedCoreFfi, "persist_planted_session_for_test", "P4-S3c test hook uses the production persist path"],
+  [sharedCoreFfi, "persist_open_and_retain", "P4-S3c login and test hook share persist+open+retain"],
+  [sharedCoreFfi, "Zeroizing::new(password)", "P4-S3c zeroizes the dedicated password argument"],
   [udl, "callback interface IosSecretVault", "P4-S3a Swift vault callback"],
   [udl, "interface IosSecretVaultError", "P4-S3a static vault error"],
   [udl, "restore_persisted_session", "P4-S3b SharedCore restore operation"],
   [udl, "dictionary SessionRestoreDto", "P4-S3b privacy-safe restore DTO"],
   [udl, "interface SessionRestoreError", "P4-S3b static restore error"],
+  [udl, "login_with_password", "P4-S3c SharedCore dedicated login operation"],
+  [udl, "dictionary SessionLoginDto", "P4-S3c privacy-safe login DTO"],
+  [udl, "interface SessionLoginError", "P4-S3c static login error"],
   [sessionProjectionAdapter, "openAfterInstalledClient", "post-install projection hook"],
   [sessionProjectionAdapter, "closeBeforeSDKWipe", "pre-wipe projection close hook"],
   [sessionProjectionAdapter, "func coreSessionIdentity() async -> CoreSessionIdentity?", "P4-4 display-only Core identity readback"],
@@ -140,6 +153,11 @@ const assertions = [
   [sharedCoreRestore, "restorePersistedSession", "P4-S3b product restore helper"],
   [sharedCoreRestore, "core: SharedCore", "P4-S3b helper takes an already-constructed SharedCore"],
   [sharedCoreRestore, "core.restorePersistedSession", "P4-S3b helper restores on the caller-owned instance"],
+  [swiftBindingsTests, "testSharedCoreLoginWithoutVaultFailsClosed", "Swift P4-S3c fail-closed login test"],
+  [swiftBindingsTests, "testSharedCoreLoginRejectsHostileIdentityWithoutEchoingPassword", "Swift P4-S3c hostile-identity login test"],
+  [sharedCoreLogin, "loginWithPassword", "P4-S3c product login helper"],
+  [sharedCoreLogin, "core: SharedCore", "P4-S3c helper takes an already-constructed SharedCore"],
+  [sharedCoreLogin, "core.loginWithPassword", "P4-S3c helper logs in on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -880,7 +898,7 @@ if (projectionOperations.join(",") !== "open,session_snapshot,close") {
   throw new Error(`P4-3 facade must expose only open/session_snapshot/close; found ${projectionOperations.join(", ")}`);
 }
 
-// P4-S3b allows restore_persisted_session. Still forbid command/attach/password.
+// P4-S3c allows restore + dedicated login_with_password. Still forbid command/attach.
 const sharedCoreObject = udl.match(/interface SharedCore \{([\s\S]*?)\};/);
 if (!sharedCoreObject) throw new Error("missing SharedCore object");
 const sharedCoreBody = sharedCoreObject[1].replace(/\/\/.*$/gm, "");
@@ -893,6 +911,9 @@ if (!sharedCoreBody.includes("constructor(IosSecretVault store)")) {
 if (!sharedCoreBody.includes("restore_persisted_session")) {
   throw new Error("P4-S3b SharedCore must expose restore_persisted_session");
 }
+if (!sharedCoreBody.includes("login_with_password")) {
+  throw new Error("P4-S3c SharedCore must expose dedicated login_with_password");
+}
 if (!sharedCoreBody.includes('[Name="new_with_secret_store"]')) {
   throw new Error("P4-S3a vault constructor must stay a named UniFFI factory");
 }
@@ -901,9 +922,9 @@ if (swiftBindingsTests.includes("SharedCore(store:")) {
     "UniFFI 0.28 Swift has no SharedCore(store:) init; use SharedCore.newWithSecretStore(store:)"
   );
 }
-for (const forbidden of ["command", "attach", "login", "password", "open("]) {
+for (const forbidden of ["command", "attach", "open(", "matrix_login_password", "persist_planted"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S3b`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S3c`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -914,6 +935,14 @@ if (!udl.includes("interface IosSecretVaultError")) {
 }
 if (sharedCoreRestore.includes("SharedCore(store:")) {
   throw new Error("P4-S3b helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreLogin.includes("SharedCore(store:")) {
+  throw new Error("P4-S3c helper must not construct-and-drop SharedCore");
+}
+const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
+if (!loginDto) throw new Error("missing SessionLoginDto");
+if (/\bpassword\b/.test(loginDto[1])) {
+  throw new Error("SessionLoginDto must not carry a password field");
 }
 const productionSharedCoreFfi = sharedCoreFfi.split("#[cfg(test)]")[0];
 if (productionSharedCoreFfi.includes("p4-s3b-store-key")) {

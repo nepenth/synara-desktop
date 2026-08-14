@@ -35,7 +35,7 @@ shared engine. Never claim P5 or MAC-IOS-006 is done.
 | Surface | Today |
 |---|---|
 | Desktop macOS/Linux | Live Matrix `Client` and native owners live in Core. React still invokes `matrix_*`. **111** of those names are registered on `Core::command`. Desktop is a thinner shell, not a thin shell. |
-| iOS | UniFFI scaffold + `login_flows` + `register_flows` + session-projection mirror + Settings readback + two pure helpers (unread row, cold-start recovery) + `SharedCore` constructors + optional `IosSecretVault` + `restore_persisted_session` (vault, no password). Live room list, timeline, crypto, push, and `MatrixRustSDKService` are still Swift. iOS does **not** call the 111 Core commands. XCTest construction of `SharedCore` is not iOS-on-engine. |
+| iOS | UniFFI scaffold + `login_flows` + `register_flows` + session-projection mirror + Settings readback + two pure helpers (unread row, cold-start recovery) + `SharedCore` constructors + optional `IosSecretVault` + `restore_persisted_session` (vault, no password) + dedicated `login_with_password` FFI (password argument only; not on-engine). Live room list, timeline, crypto, push, and `MatrixRustSDKService` are still Swift. iOS does **not** call the 111 Core commands. XCTest construction of `SharedCore` is not iOS-on-engine. |
 | `main` | Diverged. Recovery / MAC-IOS-006 docs live there. Not feature evidence. |
 | Release | Forbidden until engineering finish is accepted and then merged to `main`. |
 
@@ -127,9 +127,9 @@ Run this checklist in order. Stop at the first yes.
    device rename are already registered. Confirm with section 6 before
    inventing one.
 3. **Is free disk ≥ 20 Gi?** Start the next **P4** slice in section 9.
-   S1/#931, S2/#933, and S3a/#935 landed. S3b restore is on this
-   branch (section 9.4b and plan §12). Next after merge is S3c.
-   UDL/bindgen/cargo require this disk
+   S1/#931, S2/#933, S3a/#935, and S3b/#937 landed. S3c login
+   (Option A, section 9.4c and plan §12) is on this branch.
+   Next after merge is S3d attach. UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
    allowed. Do not change UDL. Do not hand-edit generated Swift. Do
@@ -272,7 +272,7 @@ P4-S0  already landed: UniFFI scaffold, login_flows, SessionProjectionCore,
 P4-S1  UniFFI register_flows          LANDED #931 (credential-free)
 P4-S2  Swift Platform + Core::new     LANDED #933 (fail-closed; no command)
 P4-S3  iOS live Client via Core       plan: 12-p4-s3-live-client.md
-       S3a LANDED #935 → **next S3b restore** → S3c login → S3d attach
+       S3a LANDED #935 → S3b LANDED #937 → **S3c Option A login** → S3d attach
 P4-S4  iOS room_list_snapshot         (needs SyncServiceOwner)
        S4 — not S3b–S3d — adds the first UniFFI Core.command / typed
        wrapper, for matrix_room_list_snapshot only
@@ -328,8 +328,8 @@ S3 is **not** one PR. Read the matching subsection only.
 | Slice | Section | What it is |
 |---|---|---|
 | S3a | landed #935 | Vault callback only |
-| **S3b** | **9.4b (this branch)** | Restore via vault. No password. |
-| S3c | 9.4c | Password login FFI or keep Swift login |
+| **S3b** | **9.4b landed #937** | Restore via vault. No password. |
+| **S3c** | **9.4c (this branch, Option A)** | Dedicated `login_with_password` FFI |
 | S3d | 9.4d | Attach owners after a session exists |
 
 Desktop reference (do not copy Tauri types):
@@ -339,7 +339,7 @@ Desktop reference (do not copy Tauri types):
 - Keyring vault stays a **shell** `SecretVault` impl. iOS equivalent is
   Keychain behind the same trait. The `keyring` crate stays out of Core.
 
-### 9.4b P4-S3b — restore only (the next slice)
+### 9.4b P4-S3b — restore only (landed #937)
 
 Plan: `12-p4-s3-live-client.md`. Use this subsection only.
 
@@ -372,19 +372,31 @@ iOS-on-engine. Do not install password login. Do not attach owners.
 **If disk < 20 Gi:** stop. Docs-only updates to this playbook are
 allowed. Do not change UDL.
 
-### 9.4c P4-S3c — password login (not S3b)
+### 9.4c P4-S3c — password login (Option A chosen)
 
-Do not start this before S3b merges.
+S3b landed in #937 (`4edfc1f5`). This slice proceeds from that tip
+on `feature/shared-native-core`.
 
-Password login on iOS stays in the Swift shell the same way desktop
-keeps `matrix_login_password` desktop: the password never enters a
-UniFFI string if you can avoid it. Prefer: Swift collects the password,
-calls a **narrow** Rust login entry that already exists in Core's auth
-module (`login_with_password`) **from the Swift shell via a dedicated
-authenticated FFI that you design in that slice**, or keep password
-login on `MatrixRustSDK` until S3c is designed as its own ADR-sized
-write-up in the PR body. If unsure, **stop and write the PR plan; do
-not guess.** Password never rides a generic `Core.command` string.
+**Chosen: Option A — dedicated `SharedCore.login_with_password` FFI.**
+
+Why not keep Swift `MatrixRustSDK` login (Option B): Core already owns
+`login_with_password` (decision 3B); desktop already calls it from the
+shell. S3b restore only works if login persists into the same vault +
+`StoreKeyId`. A Swift SDK login would write a different session store
+and leave S3b unrestorable from product login.
+
+**Password on UniFFI:** it may cross as the dedicated method argument
+only. It is not stored, not copied into a DTO, and never echoed in
+errors. Rust zeroizes the argument after the Core call. Password never
+rides generic `Core.command`. Do not register `matrix_login_password`.
+
+**Must not land:** `attach_*` (S3d); `Core.command` (S4); leftover
+registration; retiring `MatrixRustSDKService`; register / email token /
+recovery passphrase.
+
+Dual-engine until S3d: login+restore on `SharedCore`; room list,
+timeline, and crypto stay `MatrixRustSDK`. Live product login may stay
+on the Swift auth service for this slice; helper + XCTest are enough.
 
 ### 9.4d P4-S3d — attach owners (not S3b)
 

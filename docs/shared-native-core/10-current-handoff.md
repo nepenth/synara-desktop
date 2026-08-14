@@ -460,11 +460,12 @@ for any of those gates.
 1. Finish a mid-slice if the worktree is dirty.
 2. There is **no** remaining 7B desktop route that can land without a
    secret, file path, or bytes in the Core envelope. Do not invent one.
-3. P4-S3 plan is `12-p4-s3-live-client.md`. S3a landed in #935. **S3b**
-   restore (no password; playbook §9.4b) is on this branch. Next after
-   merge is S3c. UniFFI expansion needs free disk ≥ 20 Gi for local
-   cargo/bindgen. There is no source-without-bindgen exception. If disk
-   is under 20 Gi: stop. Docs-only PRs are still allowed.
+3. P4-S3 plan is `12-p4-s3-live-client.md`. S3a landed in #935. S3b
+   restore landed in #937. **S3c** Option A login (dedicated
+   `login_with_password` FFI; playbook §9.4c) is on this branch. Next
+   after merge is S3d. UniFFI expansion needs free disk ≥ 20 Gi for
+   local cargo/bindgen. There is no source-without-bindgen exception.
+   If disk is under 20 Gi: stop. Docs-only PRs are still allowed.
 4. After S3, consume already-registered commands one family per PR.
    S4 — not S3b–S3d — adds the first UniFFI command wrapper, for
    `matrix_room_list_snapshot` only. Retire `MatrixRustSDKService` last.

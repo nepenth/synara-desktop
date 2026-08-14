@@ -123,11 +123,11 @@ The following describes merged source reachable from
 `ee896416` (#935). #708 and #710 remain the prior pure-helper P4
 evidence. #931 adds credential-free `register_flows`. #933 adds
 constructor-only `SharedCore`. #935 adds the S3a `IosSecretVault`
-callback. S3b restore (vault, no password) is on
-`agent/snc-p4-s3b-restore` per
-[12-p4-s3-live-client.md](12-p4-s3-live-client.md) and playbook §9.4b.
-S3b is not `matrix_restore_session`. Do not invent a
-desktop secret/bytes route. Next after S3b merges is S3c.
+callback. S3b restore landed in #937 (`4edfc1f5`). S3c Option A
+(`SharedCore.login_with_password`, dedicated FFI only) is on
+`agent/snc-p4-s3c-login` per
+[12-p4-s3-live-client.md](12-p4-s3-live-client.md) and playbook §9.4c.
+Password never rides `Core.command`. Next after S3c is S3d attach.
 
 | Phase | Merged evidence | Current boundary |
 |---|---|---|

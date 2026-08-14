@@ -102,6 +102,56 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreLoginWithoutVaultFailsClosed() async {
+        let core = SharedCore()
+        let storeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("synara-s3c-no-vault", isDirectory: true)
+        let password = "hunter2-s3c-secret"
+
+        do {
+            _ = try await SharedCoreSessionLogin.loginWithPassword(
+                userID: "@alice:example.org",
+                homeserverURL: "https://matrix.example.org",
+                storeRoot: storeRoot,
+                password: password,
+                core: core
+            )
+            XCTFail("Fail-closed SharedCore must not login")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p4-s3c-secret-vault-unavailable"))
+            for forbidden in [password, "hunter2", "@alice:example.org", "password"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
+    func testSharedCoreLoginRejectsHostileIdentityWithoutEchoingPassword() async {
+        let core = SharedCore.newWithSecretStore(store: InMemoryIosSecretVault())
+        let storeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("synara-s3c-hostile", isDirectory: true)
+        let hostileURL = "https://user:secret@evil.example/?password=hunter2"
+        let password = "s3c-password-must-not-leak"
+
+        do {
+            _ = try await SharedCoreSessionLogin.loginWithPassword(
+                userID: "not-a-user",
+                homeserverURL: hostileURL,
+                storeRoot: storeRoot,
+                password: password,
+                core: core
+            )
+            XCTFail("Hostile identity must fail closed")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p4-s3c-identity-invalid"))
+            for forbidden in [password, hostileURL, "secret", "hunter2", "evil.example"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

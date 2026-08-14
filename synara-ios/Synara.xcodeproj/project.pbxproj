@@ -79,6 +79,7 @@
 		CC89EE97042280F04BD29498 /* SynaraApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2E4F1A7ADF247942C6D0059 /* SynaraApp.swift */; };
 		D0F9ECDAFC0C1996B350149B /* MatrixSessionProjectionMirror.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80766F42BBCF758CD7C7F4F /* MatrixSessionProjectionMirror.swift */; };
 		1F6B9D2E4A7083C5B1D7E9A0 /* SharedCoreSessionRestore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3E1A7B94D0526F1E8A0C4D /* SharedCoreSessionRestore.swift */; };
+		6C9E0F1A2B3C4D5E6F708192 /* SharedCoreSessionLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B8D4E6A1C3059F7E0A1B3C5 /* SharedCoreSessionLogin.swift */; };
 		4D8B1F6A2C9037E5B0D4A7C1 /* IosSecretVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2E9C1D4B6805F3E8A1C0D2 /* IosSecretVault.swift */; };
 		D21F2D94FEAEE8E93F3E2A6A /* RoomReadMarkerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B44B25CB0277A9BAD73943 /* RoomReadMarkerService.swift */; };
 		D46F130EFA2B2D58B79B605D /* AppServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A4D48D89C01C70901919CAB /* AppServices.swift */; };
@@ -222,6 +223,7 @@
 		F55BBDF32970A214C2829B1B /* AppRouteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouteTests.swift; sourceTree = "<group>"; };
 		F80766F42BBCF758CD7C7F4F /* MatrixSessionProjectionMirror.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixSessionProjectionMirror.swift; sourceTree = "<group>"; };
 		8C3E1A7B94D0526F1E8A0C4D /* SharedCoreSessionRestore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionRestore.swift; sourceTree = "<group>"; };
+		2B8D4E6A1C3059F7E0A1B3C5 /* SharedCoreSessionLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionLogin.swift; sourceTree = "<group>"; };
 		7A2E9C1D4B6805F3E8A1C0D2 /* IosSecretVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosSecretVault.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -360,6 +362,7 @@
 				F80766F42BBCF758CD7C7F4F /* MatrixSessionProjectionMirror.swift */,
 				7A2E9C1D4B6805F3E8A1C0D2 /* IosSecretVault.swift */,
 				8C3E1A7B94D0526F1E8A0C4D /* SharedCoreSessionRestore.swift */,
+				2B8D4E6A1C3059F7E0A1B3C5 /* SharedCoreSessionLogin.swift */,
 				B3ECC92EE34CCE4DB57A5D3E /* MediaService.swift */,
 				D0394B6246C8637014BEDC20 /* NotificationPermissionCoordinator.swift */,
 				00D51C4E0E89D32C8D99CC22 /* PerformanceInstrumentation.swift */,
@@ -652,6 +655,7 @@
 				D0F9ECDAFC0C1996B350149B /* MatrixSessionProjectionMirror.swift in Sources */,
 				4D8B1F6A2C9037E5B0D4A7C1 /* IosSecretVault.swift in Sources */,
 				1F6B9D2E4A7083C5B1D7E9A0 /* SharedCoreSessionRestore.swift in Sources */,
+				6C9E0F1A2B3C4D5E6F708192 /* SharedCoreSessionLogin.swift in Sources */,
 				9B792F2B4073B7792ED943D8 /* MediaService.swift in Sources */,
 				27F8472586C8C97BFB42B087 /* NotificationPermissionCoordinator.swift in Sources */,
 				8B42041876057A9091D2F463 /* PerformanceInstrumentation.swift in Sources */,
