@@ -10,12 +10,20 @@ use std::sync::Arc;
 use crate::core::Core;
 use crate::platform::{IosFailClosedPlatform, SecretVault};
 use crate::transport::{MatrixIpcError, MatrixIpcErrorCategory};
-use crate::IosSecretVault;
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IosSecretVaultError {
     Unavailable { code: String, description: String },
+}
+
+/// Swift-owned key/value secret store described by the existing UDL callback.
+///
+/// UniFFI UDL mode generates glue only; the trait itself must live in Rust.
+pub trait IosSecretVault: Send + Sync {
+    fn get(&self, key: String) -> Result<Option<Vec<u8>>, IosSecretVaultError>;
+    fn put(&self, key: String, value: Vec<u8>) -> Result<(), IosSecretVaultError>;
+    fn delete(&self, key: String) -> Result<(), IosSecretVaultError>;
 }
 
 impl std::fmt::Display for IosSecretVaultError {

@@ -29,7 +29,7 @@ use tokio::sync::Mutex;
 
 use super::{
     phase_rank, NativeVerificationDirection, NativeVerificationEmoji, NativeVerificationInbox,
-    NativeVerificationPhase, NativeVerificationRequest,
+    NativeVerificationPhase, NativeVerificationRequest, NativeVerificationSas,
 };
 
 #[derive(Clone)]

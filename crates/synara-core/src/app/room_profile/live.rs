@@ -29,10 +29,11 @@ use matrix_sdk::{
 
 use crate::app::members::{
     parse_room_members_room_id, project_room_creators, project_room_member,
-    validate_power_level_tags_snapshot_content, validate_power_levels_snapshot_content,
-    validate_room_power_levels_content, NativePowerLevelWriteResult, NativeRoomCreatorsSnapshot,
-    NativeRoomMembersSnapshot, NativeRoomPowerLevelTagsSnapshot, NativeRoomPowerLevelsSnapshot,
-    ROOM_CREATE_EVENT_TYPE, ROOM_POWER_LEVELS_EVENT_TYPE, ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
+    validate_power_level_tags_content, validate_power_level_tags_snapshot_content,
+    validate_power_levels_snapshot_content, validate_room_power_levels_content,
+    NativePowerLevelWriteResult, NativeRoomCreatorsSnapshot, NativeRoomMembersSnapshot,
+    NativeRoomPowerLevelTagsSnapshot, NativeRoomPowerLevelsSnapshot, ROOM_CREATE_EVENT_TYPE,
+    ROOM_POWER_LEVELS_EVENT_TYPE, ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
 };
 use crate::app::room_ops::{build_room_create_request, MatrixRoomCreateRequest};
 use crate::app::spaces::{
