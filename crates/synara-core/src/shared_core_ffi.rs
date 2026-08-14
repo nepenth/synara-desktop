@@ -872,9 +872,8 @@ fn parse_store_root(store_root: &str) -> Result<&Path, ()> {
 }
 
 fn validate_store_root(store_root: &str) -> Result<&Path, SessionRestoreError> {
-    parse_store_root(store_root).map_err(|_| {
-        restore_failed(STORE_ROOT_INVALID_CODE, STORE_ROOT_INVALID_DESCRIPTION)
-    })
+    parse_store_root(store_root)
+        .map_err(|_| restore_failed(STORE_ROOT_INVALID_CODE, STORE_ROOT_INVALID_DESCRIPTION))
 }
 
 fn store_key_for(
