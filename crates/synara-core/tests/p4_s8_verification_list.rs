@@ -71,7 +71,10 @@ fn verification_list_surface_exposes_only_the_registered_list_command() {
     assert!(shared_core.contains("typing_snapshot"));
     assert!(!shared_core.contains("command("));
     assert!(!shared_core.contains("device_delete_password"));
-    assert!(!shared_core.contains("send_text"));
+    assert!(!shared_core.contains("send_sticker"));
+    assert!(!shared_core.contains("send_poll"));
+    assert!(!shared_core.contains("edit_message"));
+    assert!(!shared_core.contains("poll_respond"));
     assert!(!shared_core.contains("crypto_status"));
 }
 

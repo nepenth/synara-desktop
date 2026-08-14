@@ -107,6 +107,7 @@
 		F58A9394C2D3E67740AB1C21 /* SharedCoreTimelineReadState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF135F3B4858E8D997B8B67 /* SharedCoreTimelineReadState.swift */; };
 		10BD26C7F50619AA73DE4F54 /* SharedCoreTimelineReactions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2146826E7B8B1B0CCAEBE9A /* SharedCoreTimelineReactions.swift */; };
 		21CE37D861720BB84EF7C650 /* SharedCoreComposerReplyDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3257937C8C9D1A0B1E2F304 /* SharedCoreComposerReplyDraft.swift */; };
+		32DF48E972831CC95F08D761 /* SharedCoreSendText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04368048D9DAE2B1C2F30415 /* SharedCoreSendText.swift */; };
 		4D8B1F6A2C9037E5B0D4A7C1 /* IosSecretVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2E9C1D4B6805F3E8A1C0D2 /* IosSecretVault.swift */; };
 		D21F2D94FEAEE8E93F3E2A6A /* RoomReadMarkerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B44B25CB0277A9BAD73943 /* RoomReadMarkerService.swift */; };
 		D46F130EFA2B2D58B79B605D /* AppServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A4D48D89C01C70901919CAB /* AppServices.swift */; };
@@ -278,6 +279,7 @@
 		BEF135F3B4858E8D997B8B67 /* SharedCoreTimelineReadState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineReadState.swift; sourceTree = "<group>"; };
 		E2146826E7B8B1B0CCAEBE9A /* SharedCoreTimelineReactions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineReactions.swift; sourceTree = "<group>"; };
 		F3257937C8C9D1A0B1E2F304 /* SharedCoreComposerReplyDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreComposerReplyDraft.swift; sourceTree = "<group>"; };
+		04368048D9DAE2B1C2F30415 /* SharedCoreSendText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSendText.swift; sourceTree = "<group>"; };
 		7A2E9C1D4B6805F3E8A1C0D2 /* IosSecretVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosSecretVault.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -444,6 +446,7 @@
 				BEF135F3B4858E8D997B8B67 /* SharedCoreTimelineReadState.swift */,
 				E2146826E7B8B1B0CCAEBE9A /* SharedCoreTimelineReactions.swift */,
 				F3257937C8C9D1A0B1E2F304 /* SharedCoreComposerReplyDraft.swift */,
+				04368048D9DAE2B1C2F30415 /* SharedCoreSendText.swift */,
 				B3ECC92EE34CCE4DB57A5D3E /* MediaService.swift */,
 				D0394B6246C8637014BEDC20 /* NotificationPermissionCoordinator.swift */,
 				00D51C4E0E89D32C8D99CC22 /* PerformanceInstrumentation.swift */,
@@ -764,6 +767,7 @@
 				F58A9394C2D3E67740AB1C21 /* SharedCoreTimelineReadState.swift in Sources */,
 				10BD26C7F50619AA73DE4F54 /* SharedCoreTimelineReactions.swift in Sources */,
 				21CE37D861720BB84EF7C650 /* SharedCoreComposerReplyDraft.swift in Sources */,
+				32DF48E972831CC95F08D761 /* SharedCoreSendText.swift in Sources */,
 				9B792F2B4073B7792ED943D8 /* MediaService.swift in Sources */,
 				27F8472586C8C97BFB42B087 /* NotificationPermissionCoordinator.swift in Sources */,
 				8B42041876057A9091D2F463 /* PerformanceInstrumentation.swift in Sources */,

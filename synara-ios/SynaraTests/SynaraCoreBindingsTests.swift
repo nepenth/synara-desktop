@@ -1478,6 +1478,34 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreSendTextWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let roomId = "!s922SecretRoom:example.org"
+        let body = "s922SecretBody"
+
+        do {
+            _ = try await SharedCoreSendText.sendText(
+                core: core,
+                roomId: roomId,
+                body: body,
+                msgType: nil,
+                formattedBody: nil,
+                mentionUserIds: nil,
+                mentionRoom: nil,
+                replyTo: nil,
+                threadRoot: nil,
+                txnId: nil
+            )
+            XCTFail("Fail-closed SharedCore must not send text without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-send-text-no-session"))
+            for forbidden in ["syt_", "token", roomId, body] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

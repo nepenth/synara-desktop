@@ -396,6 +396,20 @@ interface ComposerReplyDraftError {
   Failed(string code, string description);
 };
 
+// Privacy-safe send-text write ack from the registered Core command.
+dictionary SendTextDto {
+  string room_id;
+  string event_id;
+  string local_txn_id;
+  string status;
+};
+
+// Static source constants only. Never echo body, room id, token, or password.
+[Error]
+interface SendTextError {
+  Failed(string code, string description);
+};
+
 // Privacy-safe typing room row. No tokens or password.
 dictionary TypingRoomDto {
   string room_id;
@@ -1262,5 +1276,8 @@ interface SharedCore {
 
   [Async, Throws=ComposerReplyDraftError]
   ComposerReplyDraftDto composer_clear_reply_draft(string room_id);
+
+  [Async, Throws=SendTextError]
+  SendTextDto send_text(string room_id, string body, string? msg_type, string? formatted_body, sequence<string>? mention_user_ids, boolean? mention_room, string? reply_to, string? thread_root, string? txn_id);
 
 };
