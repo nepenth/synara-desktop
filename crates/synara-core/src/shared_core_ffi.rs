@@ -43,9 +43,12 @@
 //! P4-S9-9 adds typed `set_room_name` / `set_room_topic` / `set_room_avatar`
 //! wrappers for those three already-registered Core commands. Room avatar
 //! is an `mxc://` (or empty clear) reference only. Image/media bytes stay
-//! off. Failed errors never echo room id, name, topic, or mxc. Directory
-//! visibility stays off. This still exposes no generic command FFI or
-//! APNs surface.
+//! off. Failed errors never echo room id, name, topic, or mxc.
+//! P4-S9-10 adds typed `get_room_directory_visibility` /
+//! `set_room_directory_visibility` wrappers for those two already-registered
+//! Core commands. Failed errors never echo room id or visibility.
+//! Directory search/protocols/cancel stay off. This still exposes no
+//! generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
 use std::sync::{Arc, Mutex};
@@ -334,6 +337,19 @@ const ROOM_PROFILE_NO_SESSION_DESCRIPTION: &str = "No room-profile session is av
 const ROOM_PROFILE_FAILED_CODE: &str = "p4-s9-9-room-profile-failed";
 const ROOM_PROFILE_FAILED_DESCRIPTION: &str = "The room-profile request could not be completed.";
 const ROOM_PROFILE_OWNER_DESCRIPTION: &str = "The room-profile request is not available.";
+const GET_ROOM_DIRECTORY_VISIBILITY_COMMAND: &str = "matrix_get_room_directory_visibility";
+const SET_ROOM_DIRECTORY_VISIBILITY_COMMAND: &str = "matrix_set_room_directory_visibility";
+const GET_ROOM_DIRECTORY_VISIBILITY_NO_SESSION_CODE: &str =
+    "p2-get-room-directory-visibility-no-session";
+const SET_ROOM_DIRECTORY_VISIBILITY_NO_SESSION_CODE: &str =
+    "p2-set-room-directory-visibility-no-session";
+const DIRECTORY_VISIBILITY_NO_SESSION_DESCRIPTION: &str =
+    "No room-directory-visibility session is available.";
+const DIRECTORY_VISIBILITY_FAILED_CODE: &str = "p4-s9-10-directory-visibility-failed";
+const DIRECTORY_VISIBILITY_FAILED_DESCRIPTION: &str =
+    "The room-directory-visibility request could not be completed.";
+const DIRECTORY_VISIBILITY_OWNER_DESCRIPTION: &str =
+    "The room-directory-visibility request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2527,6 +2543,62 @@ impl SharedCore {
         .await
     }
 
+    pub async fn get_room_directory_visibility(
+        &self,
+        room_id: String,
+        session_generation: u64,
+    ) -> Result<RoomDirectoryVisibilityDto, DirectoryVisibilityCommandError> {
+        let payload = directory_visibility_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "sessionGeneration": session_generation,
+        }))?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: GET_ROOM_DIRECTORY_VISIBILITY_COMMAND.to_owned(),
+                session_generation,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| {
+                map_directory_visibility_core_error(
+                    GET_ROOM_DIRECTORY_VISIBILITY_NO_SESSION_CODE,
+                    error,
+                )
+            })?;
+        room_directory_visibility_dto(response.payload)
+    }
+
+    pub async fn set_room_directory_visibility(
+        &self,
+        room_id: String,
+        session_generation: u64,
+        visibility: String,
+    ) -> Result<RoomDirectoryVisibilityWriteDto, DirectoryVisibilityCommandError> {
+        let payload = directory_visibility_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "sessionGeneration": session_generation,
+            "visibility": visibility,
+        }))?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: SET_ROOM_DIRECTORY_VISIBILITY_COMMAND.to_owned(),
+                session_generation,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| {
+                map_directory_visibility_core_error(
+                    SET_ROOM_DIRECTORY_VISIBILITY_NO_SESSION_CODE,
+                    error,
+                )
+            })?;
+        room_directory_visibility_write_dto(response.payload)
+    }
+
     async fn later_null_command(
         &self,
         command: &'static str,
@@ -3459,6 +3531,187 @@ fn room_profile_write_dto(
         })?;
     Ok(RoomProfileWriteDto {
         status: status.to_owned(),
+    })
+}
+
+/// Privacy-safe directory-visibility read. Visibility is public/private only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomDirectoryVisibilityDto {
+    pub status: String,
+    pub room_id: String,
+    pub session_generation: u64,
+    pub visibility: String,
+}
+
+/// Privacy-safe directory-visibility write ack. Visibility is public/private only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomDirectoryVisibilityWriteDto {
+    pub status: String,
+    pub room_id: String,
+    pub session_generation: u64,
+    pub requested_visibility: String,
+}
+
+/// Static fail-closed directory-visibility-family error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DirectoryVisibilityCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for DirectoryVisibilityCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for DirectoryVisibilityCommandError {}
+
+fn directory_visibility_failed(
+    code: &str,
+    description: &'static str,
+) -> DirectoryVisibilityCommandError {
+    DirectoryVisibilityCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_directory_visibility_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> DirectoryVisibilityCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            directory_visibility_failed(code, DIRECTORY_VISIBILITY_NO_SESSION_DESCRIPTION)
+        }
+        Some(code) if code.starts_with("v-send.r-room-profile-directory-visibility-") => {
+            directory_visibility_failed(code, DIRECTORY_VISIBILITY_OWNER_DESCRIPTION)
+        }
+        _ => directory_visibility_failed(
+            DIRECTORY_VISIBILITY_FAILED_CODE,
+            DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn directory_visibility_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, DirectoryVisibilityCommandError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(directory_visibility_failed(
+            DIRECTORY_VISIBILITY_FAILED_CODE,
+            DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn closed_directory_visibility(value: &str) -> Option<&'static str> {
+    match value {
+        "public" => Some("public"),
+        "private" => Some("private"),
+        _ => None,
+    }
+}
+
+fn room_directory_visibility_dto(
+    payload: serde_json::Value,
+) -> Result<RoomDirectoryVisibilityDto, DirectoryVisibilityCommandError> {
+    let status = payload
+        .get("status")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| {
+            directory_visibility_failed(
+                DIRECTORY_VISIBILITY_FAILED_CODE,
+                DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
+            )
+        })?;
+    let room_id = payload
+        .get("roomId")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| {
+            directory_visibility_failed(
+                DIRECTORY_VISIBILITY_FAILED_CODE,
+                DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
+            )
+        })?;
+    let session_generation = payload
+        .get("sessionGeneration")
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| {
+            directory_visibility_failed(
+                DIRECTORY_VISIBILITY_FAILED_CODE,
+                DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
+            )
+        })?;
+    let visibility = payload
+        .get("visibility")
+        .and_then(|value| value.as_str())
+        .and_then(closed_directory_visibility)
+        .ok_or_else(|| {
+            directory_visibility_failed(
+                DIRECTORY_VISIBILITY_FAILED_CODE,
+                DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
+            )
+        })?;
+    Ok(RoomDirectoryVisibilityDto {
+        status: status.to_owned(),
+        room_id: room_id.to_owned(),
+        session_generation,
+        visibility: visibility.to_owned(),
+    })
+}
+
+fn room_directory_visibility_write_dto(
+    payload: serde_json::Value,
+) -> Result<RoomDirectoryVisibilityWriteDto, DirectoryVisibilityCommandError> {
+    let status = payload
+        .get("status")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| {
+            directory_visibility_failed(
+                DIRECTORY_VISIBILITY_FAILED_CODE,
+                DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
+            )
+        })?;
+    let room_id = payload
+        .get("roomId")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| {
+            directory_visibility_failed(
+                DIRECTORY_VISIBILITY_FAILED_CODE,
+                DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
+            )
+        })?;
+    let session_generation = payload
+        .get("sessionGeneration")
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| {
+            directory_visibility_failed(
+                DIRECTORY_VISIBILITY_FAILED_CODE,
+                DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
+            )
+        })?;
+    let requested_visibility = payload
+        .get("requestedVisibility")
+        .and_then(|value| value.as_str())
+        .and_then(closed_directory_visibility)
+        .ok_or_else(|| {
+            directory_visibility_failed(
+                DIRECTORY_VISIBILITY_FAILED_CODE,
+                DIRECTORY_VISIBILITY_FAILED_DESCRIPTION,
+            )
+        })?;
+    Ok(RoomDirectoryVisibilityWriteDto {
+        status: status.to_owned(),
+        room_id: room_id.to_owned(),
+        session_generation,
+        requested_visibility: requested_visibility.to_owned(),
     })
 }
 

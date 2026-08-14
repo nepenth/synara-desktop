@@ -90,8 +90,9 @@ fn later_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("later_mark_reminded"));
     assert!(shared_core.contains("get_global_image_packs"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("get_room_directory_visibility"));
-    assert!(!shared_core.contains("set_room_directory_visibility"));
+    assert!(!shared_core.contains("room_directory_search"));
+    assert!(!shared_core.contains("room_directory_protocols"));
+    assert!(!shared_core.contains("room_directory_cancel"));
     assert!(!shared_core.contains("backup_status"));
 }
 

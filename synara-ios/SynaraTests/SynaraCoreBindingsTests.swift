@@ -836,6 +836,43 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreDirectoryVisibilityWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let roomId = "!s910SecretRoom:example.org"
+        let visibility = "public"
+
+        do {
+            _ = try await SharedCoreDirectoryVisibility.getRoomDirectoryVisibility(
+                core: core,
+                roomId: roomId,
+                sessionGeneration: 1
+            )
+            XCTFail("Fail-closed SharedCore must not get directory visibility without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-get-room-directory-visibility-no-session"))
+            for forbidden in ["syt_", "token", roomId, visibility] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreDirectoryVisibility.setRoomDirectoryVisibility(
+                core: core,
+                roomId: roomId,
+                sessionGeneration: 1,
+                visibility: visibility
+            )
+            XCTFail("Fail-closed SharedCore must not set directory visibility without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-set-room-directory-visibility-no-session"))
+            for forbidden in ["syt_", "token", roomId, visibility] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

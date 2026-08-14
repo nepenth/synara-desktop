@@ -136,8 +136,9 @@ Run this checklist in order. Stop at the first yes.
    is stacked. S9-4 image packs is stacked. S9-5 later account-data
    is stacked. S9-6 m.direct is stacked. S9-7 room notes is stacked.
    S9-8 own display-name/avatar is stacked. S9-9 room name/topic/avatar
-   (section 9.5) is on this branch. Next after merge is directory
-   visibility on NativeRoomJoinRuleOwner.
+   is stacked. S9-10 directory visibility (section 9.5) is on this
+   branch. Next after merge is directory search/protocols/cancel on
+   NativeRoomJoinRuleOwner.
    UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
@@ -304,9 +305,12 @@ P4-S9-7 iOS room notes                stacked #955
 P4-S9-8 iOS own display-name/avatar   stacked #956
        matrix_set_own_display_name / matrix_set_own_avatar.
        Avatar is mxc:// (or empty clear) only. Image bytes stay off.
-P4-S9-9 iOS room name/topic/avatar    **this branch**
+P4-S9-9 iOS room name/topic/avatar    stacked #957
        matrix_set_room_name / matrix_set_room_topic / matrix_set_room_avatar.
        Room avatar is mxc:// (or empty clear) only. Image bytes stay off.
+P4-S9-10 iOS directory visibility     **this branch**
+       matrix_get_room_directory_visibility / matrix_set_room_directory_visibility.
+       Directory search/protocols/cancel stay off.
 P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        only when grep shows no remaining product callers
 P4-S11 NSE read-only store API        (never boot sync in NSE)
@@ -444,23 +448,24 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 
-S9-8 own-profile is stacked at #956. **S9-9 (this branch)** adds typed
-UniFFI wrappers for the three registered room name/topic/avatar commands.
+S9-9 room-profile is stacked at #957. **S9-10 (this branch)** adds typed
+UniFFI wrappers for the two registered directory-visibility commands.
 
-1. `SharedCore.set_room_name` / `set_room_topic` / `set_room_avatar`
-   call `Core.command` with the same camelCase payloads desktop uses.
-   Room avatar is an `mxc://` (or empty clear) reference. Do not take a
-   path or raw image bytes. Do not re-wrap join-rule snapshot.
-2. Do not reimplement room-profile writes in Swift. Do not wrap
-   directory visibility, leave/join, or leftover media upload.
+1. `SharedCore.get_room_directory_visibility` /
+   `set_room_directory_visibility` call `Core.command` with the same
+   camelCase payloads desktop uses, including `sessionGeneration`.
+   Visibility is `public` / `private` only. Do not re-wrap room
+   name/topic/avatar or join-rule snapshot.
+2. Do not reimplement directory visibility in Swift. Do not wrap
+   directory search/protocols/cancel, leave/join, or leftover media.
 3. Do not start `SyncService`. Missing owner fail-closes with the
    registered `p2-*-no-session` codes. Unstarted sync returns the
    registered handler's real outcome. Failed errors must not echo
-   room id, name, topic, or mxc.
+   room id or visibility.
 4. Helper + XCTest are the iOS surface this slice. Do not swap
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
-5. One command family per PR. Next is directory visibility on
-   `NativeRoomJoinRuleOwner`. Do not wrap leftover
+5. One command family per PR. Next is directory search/protocols/cancel
+   on `NativeRoomJoinRuleOwner`. Do not wrap leftover
    password/export/import/bootstrap, `matrix_crypto_status`, or
    `matrix_cross_signing_status`. Do not hit production homeservers.
 
