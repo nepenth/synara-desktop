@@ -67,10 +67,10 @@ fn timeline_surface_exposes_only_open_close_paginate() {
     assert!(udl.contains("timeline_open"));
     assert!(udl.contains("timeline_close"));
     assert!(udl.contains("timeline_paginate"));
-    assert!(!udl.contains("timeline_reaction_toggle"));
-    assert!(!udl.contains("matrix_timeline_reaction_toggle"));
-    assert!(!udl.contains("matrix_reaction_ensure"));
-    assert!(!udl.contains("matrix_reaction_redact"));
+    assert!(!udl.contains("composer_set_reply_draft"));
+    assert!(!udl.contains("matrix_composer_set_reply_draft"));
+    assert!(!udl.contains("matrix_composer_get_reply_draft"));
+    assert!(!udl.contains("matrix_composer_clear_reply_draft"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_verification_start"));
     let shared_core = udl
@@ -83,9 +83,9 @@ fn timeline_surface_exposes_only_open_close_paginate() {
     assert!(shared_core.contains("timeline_paginate"));
     assert!(shared_core.contains("invites_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("reaction_toggle"));
-    assert!(!shared_core.contains("reaction_ensure"));
-    assert!(!shared_core.contains("reaction_redact"));
+    assert!(!shared_core.contains("composer_set_reply_draft"));
+    assert!(!shared_core.contains("composer_get_reply_draft"));
+    assert!(!shared_core.contains("composer_clear_reply_draft"));
 }
 
 #[test]

@@ -85,6 +85,10 @@
 //! / `timeline_jump_latest` wrappers for those three already-registered
 //! Core commands. Jump returns the existing open readback. Failed errors
 //! never echo event id, room id, or stream id. Timeline reactions stay off.
+//! P4-S9-20 adds typed `reaction_ensure` / `reaction_redact` /
+//! `timeline_reaction_toggle` wrappers for those three already-registered
+//! Core commands. Failed errors never echo room id, event id, reaction
+//! event id, or key. Composer reply draft stays off.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -125,10 +129,12 @@ use crate::app::store::{
 };
 use crate::app::sync::{build_sync_service, SyncServiceConfig};
 use crate::app::timeline::{
-    NativeDecryptionState, NativeTimelineDirection, NativeTimelineEventReadback,
-    NativeTimelineItem, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
-    NativeTimelineOwner, NativeTimelineReadAction, NativeTimelineReadStateReadback,
-    NativeTimelineViewportHint, TimelinePageState, TimelineViewPosition, TimelineViewSnapshot,
+    NativeDecryptionState, NativeReactionMutation, NativeReactionMutationResult,
+    NativeTimelineDirection, NativeTimelineEventReadback, NativeTimelineItem,
+    NativeTimelineOpenPosition, NativeTimelineOpenReadback, NativeTimelineOwner,
+    NativeTimelineReaction, NativeTimelineReactionSender, NativeTimelineReadAction,
+    NativeTimelineReadStateReadback, NativeTimelineViewportHint, TimelinePageState,
+    TimelineViewPosition, TimelineViewSnapshot,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::app::verification::{
@@ -504,6 +510,18 @@ const TIMELINE_READ_STATE_FAILED_DESCRIPTION: &str =
     "The timeline read-state request could not be completed.";
 const TIMELINE_READ_STATE_OWNER_DESCRIPTION: &str =
     "The timeline read-state request is not available.";
+const TIMELINE_REACTION_GENERATION: u64 = 0;
+const REACTION_ENSURE_COMMAND: &str = "matrix_reaction_ensure";
+const REACTION_REDACT_COMMAND: &str = "matrix_reaction_redact";
+const TIMELINE_REACTION_TOGGLE_COMMAND: &str = "matrix_timeline_reaction_toggle";
+const REACTION_ENSURE_NO_SESSION_CODE: &str = "p2-reaction-ensure-no-session";
+const REACTION_REDACT_NO_SESSION_CODE: &str = "p2-reaction-redact-no-session";
+const TIMELINE_REACTION_TOGGLE_NO_SESSION_CODE: &str = "p2-timeline-reaction-toggle-no-session";
+const TIMELINE_REACTION_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
+const TIMELINE_REACTION_FAILED_CODE: &str = "p4-s9-20-timeline-reactions-failed";
+const TIMELINE_REACTION_FAILED_DESCRIPTION: &str =
+    "The timeline reaction request could not be completed.";
+const TIMELINE_REACTION_OWNER_DESCRIPTION: &str = "The timeline reaction request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -862,6 +880,48 @@ impl std::fmt::Display for TimelineReadStateError {
 }
 
 impl std::error::Error for TimelineReadStateError {}
+
+/// Privacy-safe reaction sender. No tokens or password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineReactionSenderDto {
+    pub user_id: String,
+    pub reaction_event_id: Option<String>,
+}
+
+/// Privacy-safe aggregated reaction. No tokens or password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineReactionDto {
+    pub key: String,
+    pub count: u32,
+    pub me: bool,
+    pub senders: Vec<TimelineReactionSenderDto>,
+}
+
+/// Privacy-safe reaction mutation ack from the registered Core command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineReactionMutationDto {
+    pub room_id: String,
+    pub target_event_id: String,
+    pub key: String,
+    pub mutation: String,
+    pub readback: Option<TimelineReactionDto>,
+}
+
+/// Static fail-closed timeline reaction error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TimelineReactionError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for TimelineReactionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for TimelineReactionError {}
 
 /// Static fail-closed timeline error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3332,6 +3392,62 @@ impl SharedCore {
         })
     }
 
+    pub async fn reaction_ensure(
+        &self,
+        room_id: String,
+        event_id: String,
+        key: String,
+    ) -> Result<TimelineReactionMutationDto, TimelineReactionError> {
+        self.timeline_reaction_command(
+            REACTION_ENSURE_COMMAND,
+            REACTION_ENSURE_NO_SESSION_CODE,
+            serde_json::json!({
+                "roomId": room_id,
+                "eventId": event_id,
+                "key": key,
+            }),
+        )
+        .await
+    }
+
+    pub async fn reaction_redact(
+        &self,
+        room_id: String,
+        target_event_id: String,
+        reaction_event_id: String,
+        key: String,
+    ) -> Result<TimelineReactionMutationDto, TimelineReactionError> {
+        self.timeline_reaction_command(
+            REACTION_REDACT_COMMAND,
+            REACTION_REDACT_NO_SESSION_CODE,
+            serde_json::json!({
+                "roomId": room_id,
+                "targetEventId": target_event_id,
+                "reactionEventId": reaction_event_id,
+                "key": key,
+            }),
+        )
+        .await
+    }
+
+    pub async fn timeline_reaction_toggle(
+        &self,
+        room_id: String,
+        event_id: String,
+        key: String,
+    ) -> Result<TimelineReactionMutationDto, TimelineReactionError> {
+        self.timeline_reaction_command(
+            TIMELINE_REACTION_TOGGLE_COMMAND,
+            TIMELINE_REACTION_TOGGLE_NO_SESSION_CODE,
+            serde_json::json!({
+                "roomId": room_id,
+                "eventId": event_id,
+                "key": key,
+            }),
+        )
+        .await
+    }
+
     async fn space_null_command(
         &self,
         command: &'static str,
@@ -3377,6 +3493,33 @@ impl SharedCore {
             .await
             .map_err(|error| map_timeline_read_state_core_error(no_session, error))?;
         Ok(response.payload)
+    }
+
+    async fn timeline_reaction_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<TimelineReactionMutationDto, TimelineReactionError> {
+        let payload = timeline_reaction_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: TIMELINE_REACTION_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_timeline_reaction_core_error(no_session, error))?;
+        let result: NativeReactionMutationResult = serde_json::from_value(response.payload)
+            .map_err(|_| {
+                timeline_reaction_failed(
+                    TIMELINE_REACTION_FAILED_CODE,
+                    TIMELINE_REACTION_FAILED_DESCRIPTION,
+                )
+            })?;
+        Ok(timeline_reaction_mutation_dto(result))
     }
 
     async fn invite_action_command(
@@ -6118,6 +6261,94 @@ fn read_action_as_str(action: NativeTimelineReadAction) -> &'static str {
     match action {
         NativeTimelineReadAction::MarkRead => "mark_read",
         NativeTimelineReadAction::MarkUnread => "mark_unread",
+    }
+}
+
+fn timeline_reaction_failed(code: &str, description: &'static str) -> TimelineReactionError {
+    TimelineReactionError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_timeline_reaction_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> TimelineReactionError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            timeline_reaction_failed(code, TIMELINE_REACTION_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code.starts_with("p2-reaction-ensure-")
+                || code.starts_with("p2-reaction-redact-")
+                || code.starts_with("p2-timeline-reaction-toggle-")
+                || code.starts_with("d0.3-timeline-")
+                || code.starts_with("v-crypto.6-")
+                || code.starts_with("v-send.2-reaction-") =>
+        {
+            timeline_reaction_failed(code, TIMELINE_REACTION_OWNER_DESCRIPTION)
+        }
+        _ => timeline_reaction_failed(
+            TIMELINE_REACTION_FAILED_CODE,
+            TIMELINE_REACTION_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn timeline_reaction_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, TimelineReactionError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(timeline_reaction_failed(
+            TIMELINE_REACTION_FAILED_CODE,
+            TIMELINE_REACTION_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn reaction_mutation_as_str(mutation: NativeReactionMutation) -> &'static str {
+    match mutation {
+        NativeReactionMutation::Added => "added",
+        NativeReactionMutation::Removed => "removed",
+        NativeReactionMutation::AlreadyPresent => "already_present",
+        NativeReactionMutation::Redacted => "redacted",
+    }
+}
+
+fn timeline_reaction_sender_dto(sender: NativeTimelineReactionSender) -> TimelineReactionSenderDto {
+    TimelineReactionSenderDto {
+        user_id: sender.user_id,
+        reaction_event_id: sender.reaction_event_id,
+    }
+}
+
+fn timeline_reaction_dto(reaction: NativeTimelineReaction) -> TimelineReactionDto {
+    TimelineReactionDto {
+        key: reaction.key,
+        count: reaction.count,
+        me: reaction.me,
+        senders: reaction
+            .senders
+            .into_iter()
+            .map(timeline_reaction_sender_dto)
+            .collect(),
+    }
+}
+
+fn timeline_reaction_mutation_dto(
+    result: NativeReactionMutationResult,
+) -> TimelineReactionMutationDto {
+    TimelineReactionMutationDto {
+        room_id: result.room_id,
+        target_event_id: result.target_event_id,
+        key: result.key,
+        mutation: reaction_mutation_as_str(result.mutation).to_owned(),
+        readback: result.readback.map(timeline_reaction_dto),
     }
 }
 

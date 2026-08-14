@@ -143,8 +143,9 @@ Run this checklist in order. Stop at the first yes.
    S9-15 room create is stacked. S9-16 members snapshots is stacked.
    S9-17 spaces is stacked. S9-18 invite accept/decline/spam/block
    is stacked. S9-19 timeline event-readback / set-read-state /
-   jump-latest (section 9.5) is on this branch.
-   Next after merge is timeline reactions.
+   jump-latest is stacked. S9-20 timeline reactions (section 9.5)
+   is on this branch.
+   Next after merge is composer reply draft.
    UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
@@ -344,11 +345,15 @@ P4-S9-18 iOS invite actions           stacked
        matrix_invites_accept / matrix_invites_decline /
        matrix_invites_report_spam / matrix_invites_block_sender.
        Returns the existing invite snapshot. Do not re-wrap S5 snapshot.
-P4-S9-19 iOS timeline read-state      **this branch**
+P4-S9-19 iOS timeline read-state      stacked
        matrix_timeline_event_readback / matrix_timeline_set_read_state /
        matrix_timeline_jump_latest.
        Jump returns the existing open readback. Do not re-wrap S6 open.
-       Reactions stay off.
+P4-S9-20 iOS timeline reactions       **this branch**
+       matrix_reaction_ensure / matrix_reaction_redact /
+       matrix_timeline_reaction_toggle.
+       Write ack is the existing mutation result. Composer reply draft
+       stays off.
 P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        only when grep shows no remaining product callers
 P4-S11 NSE read-only store API        (never boot sync in NSE)
@@ -486,31 +491,31 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 
-S9-18 invite actions is stacked at #966. **S9-19 (this branch)** adds typed
-UniFFI wrappers for the three registered timeline read-state commands.
+S9-19 timeline read-state is stacked at #967. **S9-20 (this branch)** adds typed
+UniFFI wrappers for the three registered timeline reaction commands.
 
-1. `SharedCore.timeline_event_readback` / `timeline_set_read_state` /
-   `timeline_jump_latest` call `Core.command` with the same camelCase
-   payloads desktop uses (`{ roomId, eventId }`, `{ streamId, action }`,
-   `{ streamId }`). Jump returns the existing `TimelineOpenDto`. Do not
-   re-wrap S6 `timeline_open`.
-2. Do not reimplement timeline read-state in Swift. Do not wrap timeline
-   reactions, leftover media, or leftover secret envelopes.
+1. `SharedCore.reaction_ensure` / `reaction_redact` /
+   `timeline_reaction_toggle` call `Core.command` with the same camelCase
+   payloads desktop uses (`{ roomId, eventId, key }`,
+   `{ roomId, targetEventId, reactionEventId, key }`). They return the
+   existing mutation result. Do not re-wrap S6 open or S9-19 read-state.
+2. Do not reimplement reactions in Swift. Do not wrap composer reply
+   draft, leftover media, or leftover secret envelopes.
 3. Do not start `SyncService`. Missing owner fail-closes with the
-   registered `p2-timeline-event-readback-no-session` /
-   `p2-timeline-set-read-state-no-session` /
-   `p2-timeline-jump-latest-no-session` codes. Unstarted sync returns
-   the registered handler's real outcome. Planted event-readback must
-   fail on local room/event lookup (`v-crypto.6-event-room-not-found` /
-   `d0.3-timeline-invalid-room-id` / `v-crypto.6-invalid-event-id`).
-   Planted set-read-state / jump-latest must fail on local stream lookup
-   (`v-timeline-view-not-open`) and must not require a live server.
-   Failed errors must not echo event id, room id, or stream id.
+   registered `p2-reaction-ensure-no-session` /
+   `p2-reaction-redact-no-session` /
+   `p2-timeline-reaction-toggle-no-session` codes. Unstarted sync returns
+   the registered handler's real outcome. Planted reactions must fail on
+   local room/event/key lookup (`d0.3-timeline-room-not-found` /
+   `d0.3-timeline-invalid-room-id` / `v-crypto.6-invalid-event-id` /
+   `v-send.2-reaction-invalid-key`) and must not require a live server.
+   Failed errors must not echo room id, event id, reaction event id, or
+   key.
 4. Helper + XCTest are the iOS surface this slice. Do not swap
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
-5. One command family per PR. Next is timeline reactions
-   (`matrix_reaction_ensure` / `matrix_reaction_redact` /
-   `matrix_timeline_reaction_toggle`).
+5. One command family per PR. Next is composer reply draft
+   (`matrix_composer_set_reply_draft` / `matrix_composer_get_reply_draft` /
+   `matrix_composer_clear_reply_draft`).
    Do not wrap leftover password/export/import/bootstrap,
    `matrix_crypto_status`, or `matrix_cross_signing_status`. Do not hit
    production homeservers. Do not start S10.

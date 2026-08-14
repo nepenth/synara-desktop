@@ -344,6 +344,35 @@ interface TimelineReadStateError {
   Failed(string code, string description);
 };
 
+// Privacy-safe reaction sender. No tokens or password.
+dictionary TimelineReactionSenderDto {
+  string user_id;
+  string? reaction_event_id;
+};
+
+// Privacy-safe aggregated reaction. No tokens or password.
+dictionary TimelineReactionDto {
+  string key;
+  u32 count;
+  boolean me;
+  sequence<TimelineReactionSenderDto> senders;
+};
+
+// Privacy-safe reaction mutation ack from the registered Core command.
+dictionary TimelineReactionMutationDto {
+  string room_id;
+  string target_event_id;
+  string key;
+  string mutation;
+  TimelineReactionDto? readback;
+};
+
+// Static source constants only. Never echo room id, event id, reaction event id, key, token, or password.
+[Error]
+interface TimelineReactionError {
+  Failed(string code, string description);
+};
+
 // Privacy-safe typing room row. No tokens or password.
 dictionary TypingRoomDto {
   string room_id;
@@ -1189,5 +1218,14 @@ interface SharedCore {
 
   [Async, Throws=TimelineReadStateError]
   TimelineOpenDto timeline_jump_latest(string stream_id);
+
+  [Async, Throws=TimelineReactionError]
+  TimelineReactionMutationDto reaction_ensure(string room_id, string event_id, string key);
+
+  [Async, Throws=TimelineReactionError]
+  TimelineReactionMutationDto reaction_redact(string room_id, string target_event_id, string reaction_event_id, string key);
+
+  [Async, Throws=TimelineReactionError]
+  TimelineReactionMutationDto timeline_reaction_toggle(string room_id, string event_id, string key);
 
 };

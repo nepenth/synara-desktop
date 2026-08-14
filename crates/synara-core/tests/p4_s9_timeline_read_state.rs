@@ -4,7 +4,7 @@
 //! Calls the already-registered Core handlers. Does not start SyncService.
 //! Jump returns the existing open readback. Do not re-wrap S6 open.
 //! Failed errors stay static and must not echo event id, room id, or
-//! stream id. Timeline reactions stay off.
+//! stream id. Composer reply draft stays off.
 
 use std::collections::HashMap;
 use std::fs;
@@ -68,9 +68,9 @@ fn timeline_read_state_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("timeline_open("));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
-    assert!(!udl.contains("matrix_timeline_reaction_toggle"));
-    assert!(!udl.contains("matrix_reaction_ensure"));
-    assert!(!udl.contains("matrix_reaction_redact"));
+    assert!(!udl.contains("matrix_composer_set_reply_draft"));
+    assert!(!udl.contains("matrix_composer_get_reply_draft"));
+    assert!(!udl.contains("matrix_composer_clear_reply_draft"));
     let shared_core = udl
         .split("interface SharedCore {")
         .nth(1)
@@ -82,9 +82,9 @@ fn timeline_read_state_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("invites_accept("));
     assert!(shared_core.contains("timeline_open("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("reaction_toggle"));
-    assert!(!shared_core.contains("reaction_ensure"));
-    assert!(!shared_core.contains("reaction_redact"));
+    assert!(!shared_core.contains("composer_set_reply_draft"));
+    assert!(!shared_core.contains("composer_get_reply_draft"));
+    assert!(!shared_core.contains("composer_clear_reply_draft"));
     assert!(!shared_core.contains("send_text"));
     assert!(!shared_core.contains("backup_status"));
 }
