@@ -4,8 +4,8 @@ Legend: ✅ shipping / 🔨 in progress / ⛔ not yet
 
 ## Current bounded evidence (not parity completion)
 
-At `feature/shared-native-core` `4d739025`
-(#929 docs after #928), P2 registers one hundred eleven names—the prior one
+At `feature/shared-native-core` `5bbda807`
+(#931), P2 still registers one hundred eleven names—the prior one
 hundred nine plus `matrix_invites_report_spam` and
 `matrix_invites_block_sender`. Desktop uses that registry. iOS does not.
 The previous one hundred nine remain—

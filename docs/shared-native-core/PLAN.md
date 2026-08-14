@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`4d739025` (#929 docs after #928):** P0 is
+`5bbda807` (#931 register_flows UniFFI):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -135,9 +135,11 @@ acceptance criteria have all passed.
   route or Core SDK/service owner. Actual SDK `Room` and timeline
   listener/pagination/recovery execution, plus session, Keychain, store,
   crypto, sync, and lifecycle ownership, remain `MatrixRustSDKService`-owned.
-  This does **not** migrate iOS session, room-list, timeline, crypto, push/NSE,
-  or `MatrixRustSDK` services, and it does not remove the upstream Swift SDK
-  dependency.
+  #931 exposes credential-free `register_flows` on UniFFI (closed DTO, no
+  `params` JSON, no register/password/email-token). iOS still has no
+  registration product UI. This does **not** migrate iOS session, room-list,
+  timeline, crypto, push/NSE, or `MatrixRustSDK` services, and it does not
+  remove the upstream Swift SDK dependency.
 - **P5 — not started.** Do not claim iOS shared-engine parity, iOS migration,
   or Apple release readiness from the bounded work above.
 

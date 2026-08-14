@@ -7,8 +7,8 @@ paragraph disagree, this file plus `10-current-handoff.md` win for
 *what done means*.
 
 Evidence tip when this playbook was written: `feature/shared-native-core`
-`4d739025` (#929 docs after #928 / `32e2d08b`). Re-fetch before you
-start. Do not treat this SHA as eternal.
+`5bbda807` (#931 `register_flows` UniFFI). Re-fetch before you start.
+Do not treat this SHA as eternal.
 
 ---
 
@@ -117,8 +117,9 @@ Run this checklist in order. Stop at the first yes.
    **As of #928 there are none.** Presence subscribe/unsubscribe and
    device rename are already registered. Confirm with section 6 before
    inventing one.
-3. **Is free disk ≥ 20 Gi?** Start the next **P4** slice in section 9.
-   That is the program's next engineering lane.
+3. **Is free disk ≥ 20 Gi, or can the next P4 slice land as source
+   without local cargo/bindgen?** Start the next **P4** slice in
+   section 9. P4-S1 landed in #931. Next is P4-S2.
 4. **Otherwise stop.** Update `STATE.md`. Do not open a padding PR.
    Do not route logout, email-token, or media "just to have a merge."
 
@@ -249,7 +250,7 @@ a Core surface only after the dependency under it exists.
 P4-S0  already landed: UniFFI scaffold, login_flows, SessionProjectionCore,
        Settings readback, room_unread_presentation, room_activity_recovery_required
 
-P4-S1  UniFFI register_flows          (credential-free; no live Client)
+P4-S1  UniFFI register_flows          LANDED #931 (credential-free)
 P4-S2  Swift Platform + Core::new     (no live Client, no commands yet)
 P4-S3  iOS live Client via Core       (Keychain vault; password stays Swift)
        + attach owners after login/restore  ← gate for all later Slices
