@@ -151,6 +151,7 @@ const assertions = [
   [swiftBindingsTests, "try await core.close()", "Swift generated FFI close execution"],
   [swiftBindingsTests, "testSharedCoreConstructsOverGeneratedRustFFI", "Swift P4-S2 Core construction test"],
   [swiftBindingsTests, "testSharedCoreAcceptsInMemorySecretStore", "Swift P4-S3a vault constructor test"],
+  [swiftBindingsTests, "SharedCore.newWithSecretStore(store:", "Swift P4-S3a UniFFI 0.28 named vault factory"],
   [swiftBindingsTests, "testSharedCoreRestoreWithoutVaultFailsClosed", "Swift P4-S3b fail-closed restore test"],
   [swiftBindingsTests, "testSharedCoreRestoreRejectsHostileIdentityWithoutEcho", "Swift P4-S3b hostile-identity restore test"],
   [swiftBindingsTests, "testSharedCoreRestoreHoldsInstanceAcrossCalls", "Swift P4-S3b helper keeps caller-owned SharedCore"],
@@ -936,6 +937,14 @@ if (!sharedCoreBody.includes("login_with_password")) {
 }
 if (!sharedCoreBody.includes("attach_session_owners")) {
   throw new Error("P4-S3d SharedCore must expose attach_session_owners");
+}
+if (!sharedCoreBody.includes('[Name="new_with_secret_store"]')) {
+  throw new Error("P4-S3a vault constructor must stay a named UniFFI factory");
+}
+if (swiftBindingsTests.includes("SharedCore(store:")) {
+  throw new Error(
+    "UniFFI 0.28 Swift has no SharedCore(store:) init; use SharedCore.newWithSecretStore(store:)"
+  );
 }
 for (const forbidden of ["command", "open(", "matrix_login_password", "persist_planted", "attach_typing"]) {
   if (sharedCoreBody.includes(forbidden)) {

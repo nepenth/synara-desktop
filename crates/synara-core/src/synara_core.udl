@@ -204,10 +204,13 @@ interface SessionAttachError {
 };
 
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
-// P4-S3b adds restore_persisted_session. P4-S3c adds dedicated login_with_password.
-// P4-S3d adds attach_session_owners for the desktop owner set.
-// Password is a method argument only: not stored, not in the DTO, never echoed.
-// Still no command, leftover registration, or APNs surface.
+// UniFFI 0.28 Swift keeps `SharedCore()` for the primary constructor and
+// emits the named constructor as `SharedCore.newWithSecretStore(store:)`,
+// not a second `init(store:)`. P4-S3b adds restore_persisted_session.
+// P4-S3c adds dedicated login_with_password. P4-S3d adds attach_session_owners
+// for the desktop owner set. Password is a method argument only: not stored,
+// not in the DTO, never echoed. Still no command, leftover registration, or
+// APNs surface.
 interface SharedCore {
   constructor();
   [Name="new_with_secret_store"]
