@@ -49,6 +49,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreRoomMembersSnapshots.swift",
   "synara-ios/Synara/Services/SharedCoreSpaces.swift",
   "synara-ios/Synara/Services/SharedCoreInviteActions.swift",
+  "synara-ios/Synara/Services/SharedCoreTimelineReadState.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -182,6 +183,10 @@ const sharedCoreSpaces = readFileSync(
 );
 const sharedCoreInviteActions = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreInviteActions.swift"),
+  "utf8"
+);
+const sharedCoreTimelineReadState = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreTimelineReadState.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -667,6 +672,21 @@ const assertions = [
   [sharedCoreInviteActions, "core: SharedCore", "P4-S9-18 helper takes an already-constructed SharedCore"],
   [sharedCoreInviteActions, "core.invitesAccept", "P4-S9-18 helper writes on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreInviteActions.swift in Sources", "P4-S9-18 helper in Xcode target"],
+  [sharedCoreFfi, "timeline_event_readback", "P4-S9-19 typed event-readback FFI"],
+  [sharedCoreFfi, "matrix_timeline_event_readback", "P4-S9-19 calls the registered event-readback command"],
+  [sharedCoreFfi, "matrix_timeline_set_read_state", "P4-S9-19 calls the registered set-read-state command"],
+  [sharedCoreFfi, "matrix_timeline_jump_latest", "P4-S9-19 calls the registered jump-latest command"],
+  [udl, "TimelineEventReadbackDto timeline_event_readback(", "P4-S9-19 SharedCore event readback"],
+  [udl, "TimelineReadStateDto timeline_set_read_state(", "P4-S9-19 SharedCore set-read-state"],
+  [udl, "TimelineOpenDto timeline_jump_latest(", "P4-S9-19 SharedCore jump-latest"],
+  [udl, "interface TimelineReadStateError", "P4-S9-19 static timeline read-state error"],
+  [swiftBindingsTests, "testSharedCoreTimelineReadStateWithoutSessionFailsClosed", "Swift P4-S9-19 fail-closed timeline read-state test"],
+  [sharedCoreTimelineReadState, "timelineEventReadback", "P4-S9-19 product event-readback helper"],
+  [sharedCoreTimelineReadState, "timelineSetReadState", "P4-S9-19 product set-read-state helper"],
+  [sharedCoreTimelineReadState, "timelineJumpLatest", "P4-S9-19 product jump-latest helper"],
+  [sharedCoreTimelineReadState, "core: SharedCore", "P4-S9-19 helper takes an already-constructed SharedCore"],
+  [sharedCoreTimelineReadState, "core.timelineEventReadback", "P4-S9-19 helper reads on the caller-owned instance"],
+  [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreTimelineReadState.swift in Sources", "P4-S9-19 helper in Xcode target"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1538,9 +1558,14 @@ for (const required of ["invites_accept(", "invites_decline(", "invites_report_s
     throw new Error(`P4-S9-18 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup"]) {
+for (const required of ["timeline_event_readback(", "timeline_set_read_state(", "timeline_jump_latest("]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-19 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "reaction_toggle", "reaction_ensure", "reaction_redact", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-18`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-19`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1757,6 +1782,17 @@ for (const forbidden of ["invitesSnapshot", "jumpLatest", "setReadState", "sendT
     throw new Error(`P4-S9-18 helper must not wrap ${forbidden}`);
   }
 }
+if (sharedCoreTimelineReadState.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-19 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreTimelineReadState.includes("SharedCore.newWithSecretStore") || sharedCoreTimelineReadState.includes("newWithSecretStore")) {
+  throw new Error("P4-S9-19 helper must not construct SharedCore");
+}
+for (const forbidden of ["invitesAccept", "reactionToggle", "reactionEnsure", "sendText", "backupStatus"]) {
+  if (sharedCoreTimelineReadState.includes(forbidden)) {
+    throw new Error(`P4-S9-19 helper must not wrap ${forbidden}`);
+  }
+}
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
 if (!roomListDto) throw new Error("missing RoomListSnapshotDto");
 if (/\bpassword\b/.test(roomListDto[1]) || /\btoken\b/.test(roomListDto[1])) {
@@ -1776,6 +1812,16 @@ const timelineSnapshotDto = udl.match(/dictionary TimelineSnapshotDto \{([\s\S]*
 if (!timelineSnapshotDto) throw new Error("missing TimelineSnapshotDto");
 if (/\bpassword\b/.test(timelineSnapshotDto[1]) || /\btoken\b/.test(timelineSnapshotDto[1])) {
   throw new Error("TimelineSnapshotDto must not carry password or token fields");
+}
+const timelineEventReadbackDto = udl.match(/dictionary TimelineEventReadbackDto \{([\s\S]*?)\};/);
+if (!timelineEventReadbackDto) throw new Error("missing TimelineEventReadbackDto");
+if (/\bpassword\b/.test(timelineEventReadbackDto[1]) || /\btoken\b/.test(timelineEventReadbackDto[1])) {
+  throw new Error("TimelineEventReadbackDto must not carry password or token fields");
+}
+const timelineReadStateDto = udl.match(/dictionary TimelineReadStateDto \{([\s\S]*?)\};/);
+if (!timelineReadStateDto) throw new Error("missing TimelineReadStateDto");
+if (/\bpassword\b/.test(timelineReadStateDto[1]) || /\btoken\b/.test(timelineReadStateDto[1])) {
+  throw new Error("TimelineReadStateDto must not carry password or token fields");
 }
 const typingDto = udl.match(/dictionary TypingSnapshotDto \{([\s\S]*?)\};/);
 if (!typingDto) throw new Error("missing TypingSnapshotDto");

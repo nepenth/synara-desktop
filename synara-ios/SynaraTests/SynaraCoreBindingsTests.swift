@@ -1320,6 +1320,57 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreTimelineReadStateWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let roomId = "!s919SecretRoom:example.org"
+        let eventId = "$s919SecretEvent"
+        let streamId = "s919SecretStream"
+
+        do {
+            _ = try await SharedCoreTimelineReadState.timelineEventReadback(
+                core: core,
+                roomId: roomId,
+                eventId: eventId
+            )
+            XCTFail("Fail-closed SharedCore must not read back a timeline event without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-timeline-event-readback-no-session"))
+            for forbidden in ["syt_", "token", roomId, eventId, streamId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreTimelineReadState.timelineSetReadState(
+                core: core,
+                streamId: streamId,
+                action: "mark_read"
+            )
+            XCTFail("Fail-closed SharedCore must not set timeline read-state without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-timeline-set-read-state-no-session"))
+            for forbidden in ["syt_", "token", roomId, eventId, streamId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreTimelineReadState.timelineJumpLatest(
+                core: core,
+                streamId: streamId
+            )
+            XCTFail("Fail-closed SharedCore must not jump a timeline to latest without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-timeline-jump-latest-no-session"))
+            for forbidden in ["syt_", "token", roomId, eventId, streamId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

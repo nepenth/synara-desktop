@@ -81,6 +81,10 @@
 //! already-registered Core commands. They return the existing invite
 //! snapshot. Failed errors never echo room id or sender id. Timeline jump
 //! and read-state stay off.
+//! P4-S9-19 adds typed `timeline_event_readback` / `timeline_set_read_state`
+//! / `timeline_jump_latest` wrappers for those three already-registered
+//! Core commands. Jump returns the existing open readback. Failed errors
+//! never echo event id, room id, or stream id. Timeline reactions stay off.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -121,9 +125,10 @@ use crate::app::store::{
 };
 use crate::app::sync::{build_sync_service, SyncServiceConfig};
 use crate::app::timeline::{
-    NativeTimelineDirection, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
-    NativeTimelineOwner, NativeTimelineViewportHint, TimelinePageState, TimelineViewPosition,
-    TimelineViewSnapshot,
+    NativeDecryptionState, NativeTimelineDirection, NativeTimelineEventReadback,
+    NativeTimelineItem, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
+    NativeTimelineOwner, NativeTimelineReadAction, NativeTimelineReadStateReadback,
+    NativeTimelineViewportHint, TimelinePageState, TimelineViewPosition, TimelineViewSnapshot,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::app::verification::{
@@ -486,6 +491,19 @@ const INVITE_ACTION_NO_SESSION_DESCRIPTION: &str = "No invite-action session is 
 const INVITE_ACTION_FAILED_CODE: &str = "p4-s9-18-invite-actions-failed";
 const INVITE_ACTION_FAILED_DESCRIPTION: &str = "The invite action could not be completed.";
 const INVITE_ACTION_OWNER_DESCRIPTION: &str = "The invite action is not available.";
+const TIMELINE_READ_STATE_GENERATION: u64 = 0;
+const TIMELINE_EVENT_READBACK_COMMAND: &str = "matrix_timeline_event_readback";
+const TIMELINE_SET_READ_STATE_COMMAND: &str = "matrix_timeline_set_read_state";
+const TIMELINE_JUMP_LATEST_COMMAND: &str = "matrix_timeline_jump_latest";
+const TIMELINE_EVENT_READBACK_NO_SESSION_CODE: &str = "p2-timeline-event-readback-no-session";
+const TIMELINE_SET_READ_STATE_NO_SESSION_CODE: &str = "p2-timeline-set-read-state-no-session";
+const TIMELINE_JUMP_LATEST_NO_SESSION_CODE: &str = "p2-timeline-jump-latest-no-session";
+const TIMELINE_READ_STATE_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
+const TIMELINE_READ_STATE_FAILED_CODE: &str = "p4-s9-19-timeline-read-state-failed";
+const TIMELINE_READ_STATE_FAILED_DESCRIPTION: &str =
+    "The timeline read-state request could not be completed.";
+const TIMELINE_READ_STATE_OWNER_DESCRIPTION: &str =
+    "The timeline read-state request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -799,6 +817,51 @@ pub struct TimelineOpenDto {
     pub position: TimelineViewPositionDto,
     pub snapshot: TimelineSnapshotDto,
 }
+
+/// Privacy-safe single-event item. No tokens or password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineEventItemDto {
+    pub item_id: String,
+    pub event_id: String,
+    pub sender: String,
+    pub event_type: String,
+    pub body: String,
+    pub origin_server_ts: u64,
+    pub decryption_state: Option<String>,
+}
+
+/// Privacy-safe single-event readback from the registered Core command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineEventReadbackDto {
+    pub session_generation: u64,
+    pub room_id: String,
+    pub event_id: String,
+    pub item: TimelineEventItemDto,
+}
+
+/// Privacy-safe read-state write ack. Reuses the S6 snapshot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineReadStateDto {
+    pub action: String,
+    pub receipt_sent: Option<bool>,
+    pub snapshot: TimelineSnapshotDto,
+}
+
+/// Static fail-closed timeline read-state error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TimelineReadStateError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for TimelineReadStateError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for TimelineReadStateError {}
 
 /// Static fail-closed timeline error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3178,6 +3241,97 @@ impl SharedCore {
         .await
     }
 
+    pub async fn timeline_event_readback(
+        &self,
+        room_id: String,
+        event_id: String,
+    ) -> Result<TimelineEventReadbackDto, TimelineReadStateError> {
+        let payload = timeline_read_state_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "eventId": event_id,
+        }))?;
+        let response = self
+            .timeline_read_state_command(
+                TIMELINE_EVENT_READBACK_COMMAND,
+                TIMELINE_EVENT_READBACK_NO_SESSION_CODE,
+                payload,
+            )
+            .await?;
+        let readback: NativeTimelineEventReadback =
+            serde_json::from_value(response).map_err(|_| {
+                timeline_read_state_failed(
+                    TIMELINE_READ_STATE_FAILED_CODE,
+                    TIMELINE_READ_STATE_FAILED_DESCRIPTION,
+                )
+            })?;
+        Ok(TimelineEventReadbackDto {
+            session_generation: readback.session_generation,
+            room_id: readback.room_id,
+            event_id: readback.event_id,
+            item: timeline_event_item_dto(readback.item),
+        })
+    }
+
+    pub async fn timeline_set_read_state(
+        &self,
+        stream_id: String,
+        action: String,
+    ) -> Result<TimelineReadStateDto, TimelineReadStateError> {
+        let action = read_action_from_str(&action)?;
+        let payload = timeline_read_state_envelope_payload(serde_json::json!({
+            "streamId": stream_id,
+            "action": read_action_as_str(action),
+        }))?;
+        let response = self
+            .timeline_read_state_command(
+                TIMELINE_SET_READ_STATE_COMMAND,
+                TIMELINE_SET_READ_STATE_NO_SESSION_CODE,
+                payload,
+            )
+            .await?;
+        let readback: NativeTimelineReadStateReadback =
+            serde_json::from_value(response).map_err(|_| {
+                timeline_read_state_failed(
+                    TIMELINE_READ_STATE_FAILED_CODE,
+                    TIMELINE_READ_STATE_FAILED_DESCRIPTION,
+                )
+            })?;
+        Ok(TimelineReadStateDto {
+            action: read_action_as_str(readback.action).to_owned(),
+            receipt_sent: readback.receipt_sent,
+            snapshot: timeline_snapshot_dto(readback.snapshot),
+        })
+    }
+
+    pub async fn timeline_jump_latest(
+        &self,
+        stream_id: String,
+    ) -> Result<TimelineOpenDto, TimelineReadStateError> {
+        let payload = timeline_read_state_envelope_payload(serde_json::json!({
+            "streamId": stream_id,
+        }))?;
+        let response = self
+            .timeline_read_state_command(
+                TIMELINE_JUMP_LATEST_COMMAND,
+                TIMELINE_JUMP_LATEST_NO_SESSION_CODE,
+                payload,
+            )
+            .await?;
+        let readback: NativeTimelineOpenReadback =
+            serde_json::from_value(response).map_err(|_| {
+                timeline_read_state_failed(
+                    TIMELINE_READ_STATE_FAILED_CODE,
+                    TIMELINE_READ_STATE_FAILED_DESCRIPTION,
+                )
+            })?;
+        Ok(TimelineOpenDto {
+            schema_version: readback.schema_version,
+            stream_id: readback.stream_id,
+            position: view_position_dto(readback.position),
+            snapshot: timeline_snapshot_dto(readback.snapshot),
+        })
+    }
+
     async fn space_null_command(
         &self,
         command: &'static str,
@@ -3203,6 +3357,25 @@ impl SharedCore {
             })
             .await
             .map_err(|error| map_space_core_error(no_session, error))?;
+        Ok(response.payload)
+    }
+
+    async fn timeline_read_state_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, TimelineReadStateError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: TIMELINE_READ_STATE_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_timeline_read_state_core_error(no_session, error))?;
         Ok(response.payload)
     }
 
@@ -5881,6 +6054,86 @@ fn invite_action_snapshot_dto(
         session_generation: snapshot.session_generation,
         invites: snapshot.invites.into_iter().map(invite_dto).collect(),
     })
+}
+
+fn timeline_read_state_failed(code: &str, description: &'static str) -> TimelineReadStateError {
+    TimelineReadStateError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_timeline_read_state_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> TimelineReadStateError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            timeline_read_state_failed(code, TIMELINE_READ_STATE_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code.starts_with("p2-timeline-event-readback-")
+                || code.starts_with("p2-timeline-set-read-state-")
+                || code.starts_with("p2-timeline-jump-latest-")
+                || code.starts_with("d0.3-timeline-")
+                || code.starts_with("v-crypto.6-")
+                || code.starts_with("v-timeline-") =>
+        {
+            timeline_read_state_failed(code, TIMELINE_READ_STATE_OWNER_DESCRIPTION)
+        }
+        _ => timeline_read_state_failed(
+            TIMELINE_READ_STATE_FAILED_CODE,
+            TIMELINE_READ_STATE_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn timeline_read_state_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, TimelineReadStateError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(timeline_read_state_failed(
+            TIMELINE_READ_STATE_FAILED_CODE,
+            TIMELINE_READ_STATE_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn read_action_from_str(action: &str) -> Result<NativeTimelineReadAction, TimelineReadStateError> {
+    match action {
+        "mark_read" => Ok(NativeTimelineReadAction::MarkRead),
+        "mark_unread" => Ok(NativeTimelineReadAction::MarkUnread),
+        _ => Err(timeline_read_state_failed(
+            TIMELINE_READ_STATE_FAILED_CODE,
+            TIMELINE_READ_STATE_FAILED_DESCRIPTION,
+        )),
+    }
+}
+
+fn read_action_as_str(action: NativeTimelineReadAction) -> &'static str {
+    match action {
+        NativeTimelineReadAction::MarkRead => "mark_read",
+        NativeTimelineReadAction::MarkUnread => "mark_unread",
+    }
+}
+
+fn timeline_event_item_dto(item: NativeTimelineItem) -> TimelineEventItemDto {
+    TimelineEventItemDto {
+        item_id: item.item_id,
+        event_id: item.event_id,
+        sender: item.sender,
+        event_type: item.event_type,
+        body: item.body,
+        origin_server_ts: item.origin_server_ts,
+        decryption_state: item.decryption_state.map(|state| match state {
+            NativeDecryptionState::Pending => "pending".to_owned(),
+            NativeDecryptionState::Unavailable => "unavailable".to_owned(),
+        }),
+    }
 }
 
 fn space_envelope_payload(

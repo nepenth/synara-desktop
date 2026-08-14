@@ -56,7 +56,7 @@ fn room_list_surface_exposes_only_the_registered_snapshot_command() {
     assert!(udl.contains("room_list_snapshot"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("attach_typing"));
-    assert!(!udl.contains("matrix_timeline_jump_latest"));
+    assert!(!udl.contains("matrix_timeline_reaction_toggle"));
     let shared_core = udl
         .split("interface SharedCore {")
         .nth(1)
@@ -64,7 +64,7 @@ fn room_list_surface_exposes_only_the_registered_snapshot_command() {
         .expect("SharedCore");
     assert!(shared_core.contains("room_list_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("jump_latest"));
+    assert!(!shared_core.contains("reaction_toggle"));
 }
 
 #[test]
