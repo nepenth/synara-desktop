@@ -684,6 +684,34 @@ interface RoomPowerLevelCommandError {
   Failed(string code, string description);
 };
 
+// Typed room-create request. Core scalar fields only. No path, passphrase, bytes,
+// nested create-content (spaces/room type), or power-level overrides.
+dictionary RoomCreateRequestDto {
+  string? name;
+  string? topic;
+  string? room_alias_name;
+  string? visibility;
+  string? preset;
+  boolean is_direct;
+  boolean encryption;
+  sequence<string> invite;
+  string? room_version;
+  string? join_rule;
+  boolean knock;
+  string? parent_room_id;
+};
+
+// Privacy-safe room-create result. Created room id only; no name, topic, alias, or invite.
+dictionary RoomCreateDto {
+  string room_id;
+};
+
+// Static source constants only. Never echo name, topic, alias, invite, parent, token, or password.
+[Error]
+interface RoomCreateCommandError {
+  Failed(string code, string description);
+};
+
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
 // P4-S3b adds restore_persisted_session. P4-S3c adds dedicated login_with_password.
 // P4-S3d adds attach_session_owners for the desktop owner set.
@@ -718,7 +746,12 @@ interface RoomPowerLevelCommandError {
 // P4-S9-14 adds typed room_set_power_level / room_set_power_levels /
 // room_set_power_level_tags. Write ack is status only. Failed errors stay
 // static and must not echo room id, user id, power level, or content JSON.
-// Room create, members snapshots, and spaces stay off.
+// P4-S9-15 adds typed room_create for matrix_room_create only.
+// Request is name/topic/alias/visibility/preset plus Core scalar extras.
+// Nested create-content, power-level overrides, paths, passphrases, and
+// media bytes stay off. Success returns the created room id. Failed errors
+// stay static and must not echo name, topic, alias, invite, or parent.
+// Members snapshots and spaces stay off.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -929,5 +962,8 @@ interface SharedCore {
 
   [Async, Throws=RoomPowerLevelCommandError]
   RoomPowerLevelWriteDto room_set_power_level_tags(string room_id, string content_json);
+
+  [Async, Throws=RoomCreateCommandError]
+  RoomCreateDto room_create(RoomCreateRequestDto request);
 
 };

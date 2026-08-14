@@ -60,7 +60,13 @@
 //! P4-S9-14 adds typed `room_set_power_level` / `room_set_power_levels` /
 //! `room_set_power_level_tags` wrappers for those three already-registered
 //! Core commands. Write ack is status only. Failed errors never echo room
-//! id, user id, power level, or content JSON. Room create stays off.
+//! id, user id, power level, or content JSON.
+//! P4-S9-15 adds a typed `room_create` wrapper for the already-registered
+//! `matrix_room_create` Core command only. Request is name/topic/alias/
+//! visibility/preset plus Core scalar extras. Nested create-content,
+//! power-level overrides, paths, passphrases, and media bytes stay
+//! off. Success returns the created room id. Failed errors never echo name,
+//! topic, alias, invite, or parent. Members snapshots stay off.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -413,6 +419,13 @@ const ROOM_POWER_LEVEL_FAILED_CODE: &str = "p4-s9-14-room-power-levels-failed";
 const ROOM_POWER_LEVEL_FAILED_DESCRIPTION: &str =
     "The room-power-level request could not be completed.";
 const ROOM_POWER_LEVEL_OWNER_DESCRIPTION: &str = "The room-power-level request is not available.";
+const ROOM_CREATE_COMMAND_GENERATION: u64 = 0;
+const ROOM_CREATE_COMMAND: &str = "matrix_room_create";
+const ROOM_CREATE_NO_SESSION_CODE: &str = "p2-room-create-no-session";
+const ROOM_CREATE_NO_SESSION_DESCRIPTION: &str = "No room-create session is available.";
+const ROOM_CREATE_FAILED_CODE: &str = "p4-s9-15-room-create-failed";
+const ROOM_CREATE_FAILED_DESCRIPTION: &str = "The room-create request could not be completed.";
+const ROOM_CREATE_OWNER_DESCRIPTION: &str = "The room-create request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2877,6 +2890,24 @@ impl SharedCore {
         .await
     }
 
+    pub async fn room_create(
+        &self,
+        request: RoomCreateRequestDto,
+    ) -> Result<RoomCreateDto, RoomCreateCommandError> {
+        let payload = room_create_envelope_payload(room_create_request_payload(request)?)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: ROOM_CREATE_COMMAND.to_owned(),
+                session_generation: ROOM_CREATE_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_room_create_core_error(ROOM_CREATE_NO_SESSION_CODE, error))?;
+        room_create_dto(response.payload)
+    }
+
     async fn later_null_command(
         &self,
         command: &'static str,
@@ -4691,6 +4722,161 @@ fn room_power_level_write_dto(
     Ok(RoomPowerLevelWriteDto {
         status: status.to_owned(),
     })
+}
+
+/// Typed room-create request. Core scalar fields only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomCreateRequestDto {
+    pub name: Option<String>,
+    pub topic: Option<String>,
+    pub room_alias_name: Option<String>,
+    pub visibility: Option<String>,
+    pub preset: Option<String>,
+    pub is_direct: bool,
+    pub encryption: bool,
+    pub invite: Vec<String>,
+    pub room_version: Option<String>,
+    pub join_rule: Option<String>,
+    pub knock: bool,
+    pub parent_room_id: Option<String>,
+}
+
+/// Privacy-safe room-create result. Created room id only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomCreateDto {
+    pub room_id: String,
+}
+
+/// Static fail-closed room-create error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoomCreateCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for RoomCreateCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for RoomCreateCommandError {}
+
+fn room_create_failed(code: &str, description: &'static str) -> RoomCreateCommandError {
+    RoomCreateCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_room_create_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> RoomCreateCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            room_create_failed(code, ROOM_CREATE_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code.starts_with("v-rooms-room-create-")
+                || code == "p2-room-create-invalid-payload"
+                || code == "v-send.r-room-profile-join-rule-requires-session" =>
+        {
+            room_create_failed(code, ROOM_CREATE_OWNER_DESCRIPTION)
+        }
+        _ => room_create_failed(ROOM_CREATE_FAILED_CODE, ROOM_CREATE_FAILED_DESCRIPTION),
+    }
+}
+
+fn closed_room_create_visibility(value: &str) -> Option<&'static str> {
+    match value {
+        "private" => Some("private"),
+        "public" => Some("public"),
+        _ => None,
+    }
+}
+
+fn closed_room_create_preset(value: &str) -> Option<&'static str> {
+    match value {
+        "private_chat" => Some("private_chat"),
+        "public_chat" => Some("public_chat"),
+        "trusted_private_chat" => Some("trusted_private_chat"),
+        _ => None,
+    }
+}
+
+fn closed_created_room_id(value: &str) -> Option<String> {
+    if value.starts_with('!')
+        && !value.is_empty()
+        && value.len() <= 512
+        && value.trim() == value
+        && !value.chars().any(char::is_whitespace)
+    {
+        Some(value.to_owned())
+    } else {
+        None
+    }
+}
+
+fn room_create_request_payload(
+    request: RoomCreateRequestDto,
+) -> Result<serde_json::Value, RoomCreateCommandError> {
+    let visibility = request
+        .visibility
+        .as_deref()
+        .map(|value| {
+            closed_room_create_visibility(value).ok_or_else(|| {
+                room_create_failed(ROOM_CREATE_FAILED_CODE, ROOM_CREATE_FAILED_DESCRIPTION)
+            })
+        })
+        .transpose()?;
+    let preset = request
+        .preset
+        .as_deref()
+        .map(|value| {
+            closed_room_create_preset(value).ok_or_else(|| {
+                room_create_failed(ROOM_CREATE_FAILED_CODE, ROOM_CREATE_FAILED_DESCRIPTION)
+            })
+        })
+        .transpose()?;
+    Ok(serde_json::json!({
+        "name": request.name,
+        "topic": request.topic,
+        "roomAliasName": request.room_alias_name,
+        "visibility": visibility,
+        "preset": preset,
+        "isDirect": request.is_direct,
+        "encryption": request.encryption,
+        "invite": request.invite,
+        "roomVersion": request.room_version,
+        "joinRule": request.join_rule,
+        "knock": request.knock,
+        "parentRoomId": request.parent_room_id,
+    }))
+}
+
+fn room_create_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, RoomCreateCommandError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(room_create_failed(
+            ROOM_CREATE_FAILED_CODE,
+            ROOM_CREATE_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn room_create_dto(payload: serde_json::Value) -> Result<RoomCreateDto, RoomCreateCommandError> {
+    payload
+        .as_str()
+        .and_then(closed_created_room_id)
+        .map(|room_id| RoomCreateDto { room_id })
+        .ok_or_else(|| room_create_failed(ROOM_CREATE_FAILED_CODE, ROOM_CREATE_FAILED_DESCRIPTION))
 }
 
 fn device_trust_as_str(trust: NativeDeviceTrust) -> String {
