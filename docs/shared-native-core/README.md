@@ -124,10 +124,11 @@ The following describes merged source reachable from
 evidence. #931 adds credential-free `register_flows`. #933 adds
 constructor-only `SharedCore`. #935 adds the S3a `IosSecretVault`
 callback. S3b restore is accepted. S3c Option A login is accepted.
-S3d attach is accepted. S4 typed `room_list_snapshot` (Core
-`matrix_room_list_snapshot` only; SyncService not started) is on
-`agent/snc-p4-s4-room-list` per playbook §9.5.
-Password never rides a generic UniFFI `command`. Next after S4 is S5.
+S3d attach is accepted. S4 typed `room_list_snapshot` is accepted.
+S5 typed `invites_snapshot` (Core `matrix_invites_snapshot` only;
+SyncService not started) is on `agent/snc-p4-s5-invites` per
+playbook §9.5.
+Password never rides a generic UniFFI `command`. Next after S5 is S6.
 
 | Phase | Merged evidence | Current boundary |
 |---|---|---|

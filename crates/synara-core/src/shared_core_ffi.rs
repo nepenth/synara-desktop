@@ -9,6 +9,8 @@
 //! P4-S3d adds `attach_session_owners` for the desktop owner set.
 //! P4-S4 adds a typed `room_list_snapshot` wrapper that calls the
 //! already-registered `matrix_room_list_snapshot` Core command only.
+//! P4-S5 adds a typed `invites_snapshot` wrapper that calls the
+//! already-registered `matrix_invites_snapshot` Core command only.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -28,7 +30,9 @@ use crate::app::lifecycle::{
     SessionMaterial, SessionMaterialId, SessionMaterialVault,
 };
 use crate::app::presence::NativePresenceOwner;
-use crate::app::room_list::NativeRoomListSnapshot;
+use crate::app::room_list::{
+    NativeInvite, NativeInviteSnapshot, NativeInviteTriage, NativeRoomListSnapshot,
+};
 use crate::app::room_profile::NativeRoomJoinRuleOwner;
 use crate::app::store::{
     get_or_create_store_key, AccountIdentity, StoreKeyId, StoreKeyMaterial, StoreKeyVault,
@@ -85,6 +89,12 @@ const ROOM_LIST_SYNC_NOT_STARTED_CODE: &str = "p4-s4-sync-not-started";
 const ROOM_LIST_SYNC_NOT_STARTED_DESCRIPTION: &str = "The room list is not live.";
 const ROOM_LIST_FAILED_CODE: &str = "p4-s4-snapshot-failed";
 const ROOM_LIST_FAILED_DESCRIPTION: &str = "The room list could not be loaded.";
+const INVITES_COMMAND: &str = "matrix_invites_snapshot";
+const INVITES_READ_ONLY_GENERATION: u64 = 0;
+const INVITES_NO_SESSION_CODE: &str = "p2-invites-snapshot-no-session";
+const INVITES_NO_SESSION_DESCRIPTION: &str = "No invite session is available.";
+const INVITES_FAILED_CODE: &str = "p4-s5-snapshot-failed";
+const INVITES_FAILED_DESCRIPTION: &str = "The invite inbox could not be loaded.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -265,6 +275,89 @@ fn map_room_list_core_error(error: MatrixIpcError) -> RoomListSnapshotError {
             ROOM_LIST_SYNC_NOT_STARTED_DESCRIPTION,
         ),
         _ => room_list_failed(ROOM_LIST_FAILED_CODE, ROOM_LIST_FAILED_DESCRIPTION),
+    }
+}
+
+/// Privacy-safe invite snapshot. Tokens and password never appear here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InviteSnapshotDto {
+    pub session_generation: u64,
+    pub invites: Vec<InviteDto>,
+}
+
+/// One privacy-safe invite row. No tokens or password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InviteDto {
+    pub room_id: String,
+    pub room_name: String,
+    pub avatar_handle_id: Option<String>,
+    pub room_topic: Option<String>,
+    pub room_alias: Option<String>,
+    pub sender_id: String,
+    pub sender_name: String,
+    pub sender_ignored: bool,
+    pub invite_ts: Option<u64>,
+    pub reason: Option<String>,
+    pub is_space: bool,
+    pub is_direct: bool,
+    pub is_encrypted: bool,
+    pub triage: String,
+}
+
+/// Static fail-closed invite-snapshot error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InviteSnapshotError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for InviteSnapshotError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for InviteSnapshotError {}
+
+fn invites_failed(code: &'static str, description: &'static str) -> InviteSnapshotError {
+    InviteSnapshotError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_invites_core_error(error: MatrixIpcError) -> InviteSnapshotError {
+    match error.diagnostic_id.as_deref() {
+        Some(
+            "p2-invites-snapshot-no-session"
+            | "v-rooms.1-invites-requires-session"
+            | "v-send.r-room-profile-join-rule-requires-session",
+        ) => invites_failed(INVITES_NO_SESSION_CODE, INVITES_NO_SESSION_DESCRIPTION),
+        _ => invites_failed(INVITES_FAILED_CODE, INVITES_FAILED_DESCRIPTION),
+    }
+}
+
+fn invite_dto(invite: NativeInvite) -> InviteDto {
+    InviteDto {
+        room_id: invite.room_id,
+        room_name: invite.room_name,
+        avatar_handle_id: invite.avatar_handle_id,
+        room_topic: invite.room_topic,
+        room_alias: invite.room_alias,
+        sender_id: invite.sender_id,
+        sender_name: invite.sender_name,
+        sender_ignored: invite.sender_ignored,
+        invite_ts: invite.invite_ts,
+        reason: invite.reason,
+        is_space: invite.is_space,
+        is_direct: invite.is_direct,
+        is_encrypted: invite.is_encrypted,
+        triage: match invite.triage {
+            NativeInviteTriage::Known => "known".to_owned(),
+            NativeInviteTriage::Public => "public".to_owned(),
+            NativeInviteTriage::Spam => "spam".to_owned(),
+        },
     }
 }
 
@@ -735,6 +828,25 @@ impl SharedCore {
                     last_activity_ts: room.last_activity_ts,
                 })
                 .collect(),
+        })
+    }
+
+    pub async fn invites_snapshot(&self) -> Result<InviteSnapshotDto, InviteSnapshotError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: INVITES_COMMAND.to_owned(),
+                session_generation: INVITES_READ_ONLY_GENERATION,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .map_err(map_invites_core_error)?;
+        let snapshot: NativeInviteSnapshot = serde_json::from_value(response.payload)
+            .map_err(|_| invites_failed(INVITES_FAILED_CODE, INVITES_FAILED_DESCRIPTION))?;
+        Ok(InviteSnapshotDto {
+            session_generation: snapshot.session_generation,
+            invites: snapshot.invites.into_iter().map(invite_dto).collect(),
         })
     }
 }

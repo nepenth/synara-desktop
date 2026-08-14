@@ -27,6 +27,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreSessionLogin.swift",
   "synara-ios/Synara/Services/SharedCoreSessionAttach.swift",
   "synara-ios/Synara/Services/SharedCoreRoomList.swift",
+  "synara-ios/Synara/Services/SharedCoreInvites.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -72,6 +73,10 @@ const sharedCoreAttach = readFileSync(
 );
 const sharedCoreRoomList = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreRoomList.swift"),
+  "utf8"
+);
+const sharedCoreInvites = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreInvites.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -193,6 +198,15 @@ const assertions = [
   [sharedCoreRoomList, "roomListSnapshot", "P4-S4 product room-list helper"],
   [sharedCoreRoomList, "core: SharedCore", "P4-S4 helper takes an already-constructed SharedCore"],
   [sharedCoreRoomList, "core.roomListSnapshot", "P4-S4 helper reads on the caller-owned instance"],
+  [sharedCoreFfi, "invites_snapshot", "P4-S5 typed invite FFI"],
+  [sharedCoreFfi, "matrix_invites_snapshot", "P4-S5 calls the registered Core command"],
+  [udl, "InviteSnapshotDto invites_snapshot()", "P4-S5 SharedCore invite operation"],
+  [udl, "dictionary InviteSnapshotDto", "P4-S5 privacy-safe invite DTO"],
+  [udl, "interface InviteSnapshotError", "P4-S5 static invite error"],
+  [swiftBindingsTests, "testSharedCoreInvitesWithoutSessionFailsClosed", "Swift P4-S5 fail-closed invite test"],
+  [sharedCoreInvites, "invitesSnapshot", "P4-S5 product invite helper"],
+  [sharedCoreInvites, "core: SharedCore", "P4-S5 helper takes an already-constructed SharedCore"],
+  [sharedCoreInvites, "core.invitesSnapshot", "P4-S5 helper reads on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -955,9 +969,12 @@ if (!sharedCoreBody.includes("attach_session_owners")) {
 if (!sharedCoreBody.includes("room_list_snapshot")) {
   throw new Error("P4-S4 SharedCore must expose room_list_snapshot");
 }
-for (const forbidden of ["command(", "open(", "matrix_login_password", "persist_planted", "attach_typing", "invites_snapshot"]) {
+if (!sharedCoreBody.includes("invites_snapshot")) {
+  throw new Error("P4-S5 SharedCore must expose invites_snapshot");
+}
+for (const forbidden of ["command(", "open(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S4`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S5`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -978,10 +995,18 @@ if (sharedCoreAttach.includes("SharedCore(store:")) {
 if (sharedCoreRoomList.includes("SharedCore(store:")) {
   throw new Error("P4-S4 helper must not construct-and-drop SharedCore");
 }
+if (sharedCoreInvites.includes("SharedCore(store:")) {
+  throw new Error("P4-S5 helper must not construct-and-drop SharedCore");
+}
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
 if (!roomListDto) throw new Error("missing RoomListSnapshotDto");
 if (/\bpassword\b/.test(roomListDto[1]) || /\btoken\b/.test(roomListDto[1])) {
   throw new Error("RoomListSnapshotDto must not carry password or token fields");
+}
+const inviteDto = udl.match(/dictionary InviteSnapshotDto \{([\s\S]*?)\};/);
+if (!inviteDto) throw new Error("missing InviteSnapshotDto");
+if (/\bpassword\b/.test(inviteDto[1]) || /\btoken\b/.test(inviteDto[1])) {
+  throw new Error("InviteSnapshotDto must not carry password or token fields");
 }
 const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
 if (!loginDto) throw new Error("missing SessionLoginDto");

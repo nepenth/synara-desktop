@@ -7,8 +7,9 @@ Evidence tip when written: `feature/shared-native-core` `ee896416` (#935 S3a).
 S3a landed in #935. S3b restore is accepted at `ea05b0ab`.
 S3c login (Option A) is accepted at `fe8ad87b`.
 S3d attach is accepted at `05264b39`.
-**S4 room-list snapshot lands on `agent/snc-p4-s4-room-list`.**
-Playbook recipe: §9.5. Next after S4 is S5 invites.
+S4 room-list snapshot is accepted at `ed6f9f04`.
+**S5 invites snapshot lands on `agent/snc-p4-s5-invites`.**
+Playbook recipe: §9.5. Next after S5 is S6 timeline.
 
 ## Decision
 
@@ -26,7 +27,7 @@ S3 is four serial product PRs. Each one merges only to
 | **S3a** LANDED #935 | Swift `IosSecretVault` callback. `SharedCore` can be constructed with that vault. Rust `IosFailClosedPlatform` uses it instead of `UnavailableSecretVault`. In-memory + Keychain key/value adapters. | Live `Client`, `command`, `attach_*`, password, restore, APNs |
 | **S3b** accepted `ea05b0ab` | Restore an already-persisted session through Core persist/restore using the vault. No password. Not `matrix_restore_session`. | Password login, owner attach, `command` families, leftover registration |
 | **S3c** accepted `fe8ad87b` | Dedicated `SharedCore.login_with_password` FFI. Persist via `persist_session_after_login` so S3b restore can find `matrix-session:{segment}`. Password is a dedicated UniFFI argument only. | Register, email token, recovery passphrase, `attach_*`, `Core.command`, leftover registration |
-| **S3d** (this branch) | After a session exists, `SharedCore.attach_session_owners` attaches the desktop owner set on the retained Client: typing, presence, verification, devices, join-rules, image-packs, timelines, sync. No-op emit sinks. SyncService is attached but not started (no dual live sync while `MatrixRustSDKService` still owns product room list). | Retiring `MatrixRustSDKService`, `Core.command`, leftover registration |
+| **S3d** accepted `05264b39` | After a session exists, `SharedCore.attach_session_owners` attaches the desktop owner set on the retained Client: typing, presence, verification, devices, join-rules, image-packs, timelines, sync. No-op emit sinks. SyncService is attached but not started (no dual live sync while `MatrixRustSDKService` still owns product room list). | Retiring `MatrixRustSDKService`, leftover registration |
 
 ## S3c Option A (chosen)
 
