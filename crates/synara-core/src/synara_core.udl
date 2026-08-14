@@ -746,7 +746,7 @@ interface RoomCreateCommandError {
 // P4-S9-14 adds typed room_set_power_level / room_set_power_levels /
 // room_set_power_level_tags. Write ack is status only. Failed errors stay
 // static and must not echo room id, user id, power level, or content JSON.
-// P4-S9-15 adds typed room_create for matrix_room_create only.
+// P4-S9-15 adds typed room_create for the registered room-create command only.
 // Request is name/topic/alias/visibility/preset plus Core scalar extras.
 // Nested create-content, power-level overrides, paths, passphrases, and
 // media bytes stay off. Success returns the created room id. Failed errors

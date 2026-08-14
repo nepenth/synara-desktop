@@ -153,8 +153,12 @@ fn room_create_oversize_payload_fails_closed_without_truncate_or_echo() {
     let name = "n".repeat(MAX_ENVELOPE_PAYLOAD_JSON_BYTES + 8);
     let topic = "t".repeat(MAX_ENVELOPE_PAYLOAD_JSON_BYTES + 8);
     let alias = "a".repeat(MAX_ENVELOPE_PAYLOAD_JSON_BYTES + 8);
+    let invite = format!(
+        "@{}:example.org",
+        "i".repeat(MAX_ENVELOPE_PAYLOAD_JSON_BYTES + 8)
+    );
     let rt = test_runtime();
-    let error = rt
+    let named = rt
         .block_on(shared.room_create(create_request(
             Some(&name),
             Some(&topic),
@@ -163,11 +167,23 @@ fn room_create_oversize_payload_fails_closed_without_truncate_or_echo() {
             None,
         )))
         .expect_err("oversize room-create payload must fail closed");
-    let text = format!("{error:?}{error}");
-    assert!(text.contains("p4-s9-15-room-create-failed"));
-    assert!(!text.contains(&name));
-    assert!(!text.contains(&topic));
-    assert!(!text.contains(&alias));
+    let invited = rt
+        .block_on(shared.room_create(create_request(
+            None,
+            None,
+            None,
+            vec![&invite],
+            None,
+        )))
+        .expect_err("oversize room-create invite list must fail closed");
+    let named_text = format!("{named:?}{named}");
+    let invited_text = format!("{invited:?}{invited}");
+    assert!(named_text.contains("p4-s9-15-room-create-failed"));
+    assert!(invited_text.contains("p4-s9-15-room-create-failed"));
+    assert!(!named_text.contains(&name));
+    assert!(!named_text.contains(&topic));
+    assert!(!named_text.contains(&alias));
+    assert!(!invited_text.contains(&invite));
 }
 
 #[test]
