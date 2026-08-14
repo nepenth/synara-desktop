@@ -42,6 +42,15 @@ pub enum IosSecretVaultError {
     Unavailable { code: String, description: String },
 }
 
+/// Swift-owned key/value secret store described by the existing UDL callback.
+///
+/// UniFFI UDL mode generates glue only; the trait itself must live in Rust.
+pub trait IosSecretVault: Send + Sync {
+    fn get(&self, key: String) -> Result<Option<Vec<u8>>, IosSecretVaultError>;
+    fn put(&self, key: String, value: Vec<u8>) -> Result<(), IosSecretVaultError>;
+    fn delete(&self, key: String) -> Result<(), IosSecretVaultError>;
+}
+
 impl std::fmt::Display for IosSecretVaultError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -51,14 +60,6 @@ impl std::fmt::Display for IosSecretVaultError {
 }
 
 impl std::error::Error for IosSecretVaultError {}
-
-/// Swift-owned key/value callback. UniFFI UDL scaffolding consumes its
-/// generated trait stub, so the crate must define this surface itself.
-pub trait IosSecretVault: Send + Sync {
-    fn get(&self, key: String) -> Result<Option<Vec<u8>>, IosSecretVaultError>;
-    fn put(&self, key: String, value: Vec<u8>) -> Result<(), IosSecretVaultError>;
-    fn delete(&self, key: String) -> Result<(), IosSecretVaultError>;
-}
 
 /// Privacy-safe restore outcome. Tokens never appear here.
 #[derive(Debug, Clone, PartialEq, Eq)]

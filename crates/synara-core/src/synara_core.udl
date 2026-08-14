@@ -180,8 +180,10 @@ interface SessionRestoreError {
 };
 
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
-// P4-S3b adds restore_persisted_session (vault + Core persist/restore).
-// Still no command, attach, password, or APNs surface.
+// UniFFI 0.28 Swift keeps `SharedCore()` for the primary constructor and
+// emits the named constructor as `SharedCore.newWithSecretStore(store:)`,
+// not a second `init(store:)`. P4-S3b adds restore_persisted_session
+// (vault + Core persist/restore). Still no command, attach, password, or APNs surface.
 interface SharedCore {
   constructor();
   [Name="new_with_secret_store"]
