@@ -11,6 +11,11 @@ namespace synara_core {
   [Async, Throws=LoginFlowsError]
   sequence<LoginFlowDto> login_flows(string homeserver_url);
 
+  // P4-S1: credential-free registration-flow discovery. The closed DTO omits
+  // the desktop-only raw JSON params field from the UniFFI boundary.
+  [Async, Throws=RegisterFlowsError]
+  RegisterFlowsDto register_flows(string homeserver_url);
+
   // P4: pure per-row unread/highlight projection used by the live iOS
   // room-list adapter. This has no state, callback, error, or string input.
   RoomUnreadPresentationDto room_unread_presentation(
@@ -63,6 +68,33 @@ dictionary LoginFlowDto {
 // the UniFFI error boundary.
 [Error]
 interface LoginFlowsError {
+  ProbeFailed(string category, string code, string description);
+};
+
+// One UIAA registration flow. Stages are public Matrix identifiers; raw UIAA
+// params and response JSON never cross the UniFFI boundary.
+dictionary RegisterUiaFlowDto {
+  sequence<string> stages;
+};
+
+enum RegisterFlowsStatus {
+  "FlowRequired",
+  "RegistrationDisabled",
+  "RateLimited",
+  "InvalidRequest"
+};
+
+dictionary RegisterFlowsDto {
+  RegisterFlowsStatus status;
+  string? session;
+  sequence<RegisterUiaFlowDto> flows;
+  sequence<string> completed;
+};
+
+// All fields are fixed, privacy-safe values. No URL, token, HTTP body, raw
+// response detail, or caller input crosses the UniFFI error boundary.
+[Error]
+interface RegisterFlowsError {
   ProbeFailed(string category, string code, string description);
 };
 
