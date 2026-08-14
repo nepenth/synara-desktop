@@ -1,20 +1,26 @@
-//! UniFFI construction and restore facade for the shared Core.
+//! UniFFI construction, restore, and dedicated password-login facade.
 //!
 //! P4-S2 exposed only `SharedCore::new` with a fail-closed vault. P4-S3a adds
 //! `new_with_secret_store` so Swift can install a Keychain-backed
-//! [`SecretVault`]. P4-S3b adds `restore_persisted_session`: load sealed
-//! session material from that vault and restore it onto a Core-built Client.
-//! This still exposes no command, attach, password, or APNs surface.
-//! This is not the desktop leftover `matrix_restore_session`.
+//! [`SecretVault`]. P4-S3b adds `restore_persisted_session`. P4-S3c adds
+//! `login_with_password`: a dedicated FFI argument, never `Core.command`,
+//! never registered as `matrix_login_password`. The password is not stored,
+//! not copied into a DTO, never echoed, and is zeroized on drop.
+//! This still exposes no command, attach, or APNs surface.
 
 use std::path::{Component, Path};
 use std::sync::{Arc, Mutex};
 
 use matrix_sdk::Client;
+use zeroize::Zeroizing;
 
+use crate::app::auth::{
+    login_with_password as core_login_with_password, DevicePlatform, LoginOptions,
+};
 use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig};
 use crate::app::lifecycle::{
-    restore_session_from_vault, SessionMaterial, SessionMaterialId, SessionMaterialVault,
+    persist_session_after_login, restore_session_from_vault, SessionMaterial, SessionMaterialId,
+    SessionMaterialVault,
 };
 use crate::app::store::{
     get_or_create_store_key, AccountIdentity, StoreKeyId, StoreKeyMaterial, StoreKeyVault,
@@ -35,6 +41,14 @@ const MATERIAL_MISSING_CODE: &str = "p4-s3b-session-material-missing";
 const MATERIAL_MISSING_DESCRIPTION: &str = "No restorable session is available.";
 const RESTORE_FAILED_CODE: &str = "p4-s3b-restore-failed";
 const RESTORE_FAILED_DESCRIPTION: &str = "The persisted session could not be restored.";
+const LOGIN_VAULT_UNAVAILABLE_CODE: &str = "p4-s3c-secret-vault-unavailable";
+const LOGIN_VAULT_UNAVAILABLE_DESCRIPTION: &str = "The secret store is unavailable.";
+const LOGIN_IDENTITY_INVALID_CODE: &str = "p4-s3c-identity-invalid";
+const LOGIN_IDENTITY_INVALID_DESCRIPTION: &str = "The session identity is invalid.";
+const LOGIN_STORE_ROOT_INVALID_CODE: &str = "p4-s3c-store-root-invalid";
+const LOGIN_STORE_ROOT_INVALID_DESCRIPTION: &str = "The session store root is invalid.";
+const LOGIN_FAILED_CODE: &str = "p4-s3c-login-failed";
+const LOGIN_FAILED_DESCRIPTION: &str = "The session could not be authenticated.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,6 +100,37 @@ impl std::error::Error for SessionRestoreError {}
 
 fn restore_failed(code: &'static str, description: &'static str) -> SessionRestoreError {
     SessionRestoreError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+/// Privacy-safe login outcome. Tokens and password never appear here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionLoginDto {
+    pub user_id: String,
+    pub device_id: String,
+    pub homeserver_url: String,
+}
+
+/// Static fail-closed login error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionLoginError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for SessionLoginError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for SessionLoginError {}
+
+fn login_failed(code: &'static str, description: &'static str) -> SessionLoginError {
+    SessionLoginError::Failed {
         code: code.to_owned(),
         description: description.to_owned(),
     }
@@ -143,7 +188,8 @@ impl SharedCore {
     ) -> Result<SessionRestoreDto, SessionRestoreError> {
         let identity = AccountIdentity::new(&user_id, &homeserver_url)
             .map_err(|_| restore_failed(IDENTITY_INVALID_CODE, IDENTITY_INVALID_DESCRIPTION))?;
-        let root = validate_store_root(&store_root)?;
+        let root = parse_store_root(&store_root)
+            .map_err(|_| restore_failed(STORE_ROOT_INVALID_CODE, STORE_ROOT_INVALID_DESCRIPTION))?;
         let claim = RestoreClaim::acquire(&self.restored_client)?;
         let vault = SecretStoreSessionVault {
             store: Arc::clone(&self.secret_store),
@@ -202,6 +248,111 @@ impl SharedCore {
             user_id: outcome.meta.user_id,
             device_id: outcome.meta.device_id,
             homeserver_url: outcome.meta.homeserver_url,
+        })
+    }
+
+    /// Password login through Core, persisted into the S3a vault for S3b restore.
+    ///
+    /// `password` is a dedicated FFI argument. It is never stored, never copied
+    /// into the DTO, never echoed, and is zeroized when this frame returns.
+    /// This is not `matrix_login_password` and does not attach owners.
+    pub async fn login_with_password(
+        &self,
+        user_id: String,
+        homeserver_url: String,
+        store_root: String,
+        password: String,
+    ) -> Result<SessionLoginDto, SessionLoginError> {
+        let password = Zeroizing::new(password);
+        self.login_with_password_inner(&user_id, &homeserver_url, &store_root, password.as_str())
+            .await
+    }
+
+    async fn login_with_password_inner(
+        &self,
+        user_id: &str,
+        homeserver_url: &str,
+        store_root: &str,
+        password: &str,
+    ) -> Result<SessionLoginDto, SessionLoginError> {
+        let identity = AccountIdentity::new(user_id, homeserver_url).map_err(|_| {
+            login_failed(
+                LOGIN_IDENTITY_INVALID_CODE,
+                LOGIN_IDENTITY_INVALID_DESCRIPTION,
+            )
+        })?;
+        let root = parse_store_root(store_root).map_err(|_| {
+            login_failed(
+                LOGIN_STORE_ROOT_INVALID_CODE,
+                LOGIN_STORE_ROOT_INVALID_DESCRIPTION,
+            )
+        })?;
+        if password.is_empty() {
+            return Err(login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION));
+        }
+        let claim = RestoreClaim::acquire(&self.restored_client)
+            .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        let vault = SecretStoreSessionVault {
+            store: Arc::clone(&self.secret_store),
+        };
+        let store_key =
+            store_key_for(&self.secret_store, &identity).map_err(|error| match error {
+                SessionRestoreError::Failed { code, .. } if code == VAULT_UNAVAILABLE_CODE => {
+                    login_failed(
+                        LOGIN_VAULT_UNAVAILABLE_CODE,
+                        LOGIN_VAULT_UNAVAILABLE_DESCRIPTION,
+                    )
+                }
+                _ => login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION),
+            })?;
+        let config = ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))
+            .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        let client = build_unauthenticated_client(&config)
+            .await
+            .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        let outcome = core_login_with_password(
+            &client,
+            identity.user_id(),
+            password,
+            &LoginOptions {
+                request_refresh_token: true,
+                device_display_name: Some(DevicePlatform::Ios.device_display_name().to_owned()),
+            },
+        )
+        .await
+        .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        let live_identity = AccountIdentity::new(&outcome.user_id, &outcome.homeserver_url)
+            .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        if live_identity != identity {
+            return Err(login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION));
+        }
+        persist_session_after_login(&client, &live_identity, &vault)
+            .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+
+        let snapshot = SessionSnapshot {
+            session_generation: 1,
+            user_id: outcome.user_id.clone(),
+            device_id: outcome.device_id.clone(),
+            homeserver_url: outcome.homeserver_url.clone(),
+            display_name: None,
+            avatar_url: None,
+            lifecycle: SessionLifecycle::Ready,
+            crypto_ready: false,
+        };
+        self.core
+            .open(snapshot)
+            .await
+            .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+
+        if claim.commit(client).is_err() {
+            let _ = self.core.close().await;
+            return Err(login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION));
+        }
+
+        Ok(SessionLoginDto {
+            user_id: outcome.user_id,
+            device_id: outcome.device_id,
+            homeserver_url: outcome.homeserver_url,
         })
     }
 }
@@ -263,13 +414,10 @@ impl Drop for RestoreClaim<'_> {
     }
 }
 
-fn validate_store_root(store_root: &str) -> Result<&Path, SessionRestoreError> {
+fn parse_store_root(store_root: &str) -> Result<&Path, ()> {
     let trimmed = store_root.trim();
     if trimmed.is_empty() {
-        return Err(restore_failed(
-            STORE_ROOT_INVALID_CODE,
-            STORE_ROOT_INVALID_DESCRIPTION,
-        ));
+        return Err(());
     }
     let path = Path::new(trimmed);
     if !path.is_absolute()
@@ -277,10 +425,7 @@ fn validate_store_root(store_root: &str) -> Result<&Path, SessionRestoreError> {
             .components()
             .any(|component| matches!(component, Component::ParentDir | Component::CurDir))
     {
-        return Err(restore_failed(
-            STORE_ROOT_INVALID_CODE,
-            STORE_ROOT_INVALID_DESCRIPTION,
-        ));
+        return Err(());
     }
     Ok(path)
 }
