@@ -31,15 +31,16 @@ pub use session_projection_ffi::{
 mod shared_core_ffi;
 pub use shared_core_ffi::{
     DeviceCommandError, DeviceDeleteChallengeDto, DeviceDeleteDto, DeviceSnapshotDto,
-    DeviceSummaryDto, InviteDto, InviteSnapshotDto, InviteSnapshotError, IosSecretVault,
+    DeviceSummaryDto, GlobalImagePacksSnapshotDto, ImagePackCommandError, ImagePackDto,
+    ImagePackWriteDto, InviteDto, InviteSnapshotDto, InviteSnapshotError, IosSecretVault,
     IosSecretVaultError, JoinRuleCommandError, PresenceCommandError, PresenceSnapshotDto,
-    PresenceSubscriptionDto, RoomJoinRuleSnapshotDto, RoomListRoomDto, RoomListSnapshotDto,
-    RoomListSnapshotError, SessionAttachDto, SessionAttachError, SessionLoginDto,
-    SessionLoginError, SessionRestoreDto, SessionRestoreError, SharedCore, TimelineError,
-    TimelineOpenDto, TimelineOpenPositionDto, TimelineSnapshotDto, TimelineViewPositionDto,
-    TypingCommandError, TypingRoomDto, TypingSnapshotDto, VerificationEmojiDto,
-    VerificationInboxDto, VerificationListError, VerificationRequestDto, VerificationSasDto,
-    VerificationSasError,
+    PresenceSubscriptionDto, RoomImagePacksSnapshotDto, RoomJoinRuleSnapshotDto, RoomListRoomDto,
+    RoomListSnapshotDto, RoomListSnapshotError, SessionAttachDto, SessionAttachError,
+    SessionLoginDto, SessionLoginError, SessionRestoreDto, SessionRestoreError, SharedCore,
+    TimelineError, TimelineOpenDto, TimelineOpenPositionDto, TimelineSnapshotDto,
+    TimelineViewPositionDto, TypingCommandError, TypingRoomDto, TypingSnapshotDto,
+    UserImagePackSnapshotDto, VerificationEmojiDto, VerificationInboxDto, VerificationListError,
+    VerificationRequestDto, VerificationSasDto, VerificationSasError,
 };
 
 mod core;

@@ -127,7 +127,8 @@ callback. S3b restore is accepted. S3c Option A login is accepted.
 S3d attach is accepted. S4–S9 typed consume slices are accepted.
 S9-2 typed devices (snapshot/rename/delete start/cancel only;
 SyncService not started) is stacked at #950. S9-3 typed
-`matrix_room_join_rule_snapshot` is on this branch. Next is image packs.
+`matrix_room_join_rule_snapshot` is stacked at #951. S9-4 typed
+image-pack get/set is on this branch. Next is later account-data.
 Password never rides a generic UniFFI `command`.
 
 | Phase | Merged evidence | Current boundary |
