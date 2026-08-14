@@ -20,8 +20,8 @@ integration, or release path. **Never a big-bang move.**
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
 
-**Current bounded status at `4d739025`
-(#929 docs after #928):** #713 mechanically moved notifications, polls,
+**Current bounded status at `5bbda807`
+(#931):** #713 mechanically moved notifications, polls,
 relations, threads, and unread; #714 moved raw content, receipts, routes, and
 security; #716 moved search, legacy, and media_cache; #717 moved media_export
 and crypto_store; #734 moved the room-directory session harness; #735 moved
@@ -145,7 +145,7 @@ Goal: iOS consumes the same engine; Swift re-implementations retired.
    call `matrix_room_list_snapshot` (or any attached-owner command) from
    iOS before P4-S3 has attached owners. Do not delete
    `MatrixRustSDKService` until grep is clean.
-   - P4-S1 `register_flows` UniFFI (credential-free; disk ≥ 20 Gi)
+   - P4-S1 `register_flows` UniFFI — landed in #931 (credential-free)
    - P4-S2 Swift `Platform` + `Core::new`
    - P4-S3 iOS live Client via Core + attach owners (password stays Swift)
    - P4-S4+ consume already-registered commands, one family per PR
@@ -159,7 +159,8 @@ zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
 
 > **Bounded evidence note — not P4 acceptance:** At the current feature tip
-> `4d739025` (#929 docs after #928 / `32e2d08b`), the
+> `5bbda807` (#931), UniFFI also exposes credential-free
+> `register_flows`. The
 > prior #708 work is only the pure iOS room-row unread presentation from closed
 > `Joined`/`Invited` membership, scalar counters, and a marked-unread flag to a
 > `u64` count plus highlight boolean. The prior #710 work is only the pure
