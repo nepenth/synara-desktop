@@ -461,7 +461,7 @@ for any of those gates.
 2. There is **no** remaining 7B desktop route that can land without a
    secret, file path, or bytes in the Core envelope. Do not invent one.
 3. P4-S3 plan is `12-p4-s3-live-client.md`. S3a landed in #935. S3b
-   restore is accepted. **S3c** Option A login (dedicated
+   restore landed in #937. **S3c** Option A login (dedicated
    `login_with_password` FFI; playbook §9.4c) is on this branch. Next
    after merge is S3d. UniFFI expansion needs free disk ≥ 20 Gi for
    local cargo/bindgen. There is no source-without-bindgen exception.

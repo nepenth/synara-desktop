@@ -127,8 +127,8 @@ Run this checklist in order. Stop at the first yes.
    device rename are already registered. Confirm with section 6 before
    inventing one.
 3. **Is free disk ≥ 20 Gi?** Start the next **P4** slice in section 9.
-   S1/#931, S2/#933, and S3a/#935 landed. S3b restore is accepted.
-   S3c login (Option A, section 9.4c and plan §12) is on this branch.
+   S1/#931, S2/#933, S3a/#935, and S3b/#937 landed. S3c login
+   (Option A, section 9.4c and plan §12) is on this branch.
    Next after merge is S3d attach. UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
@@ -272,7 +272,7 @@ P4-S0  already landed: UniFFI scaffold, login_flows, SessionProjectionCore,
 P4-S1  UniFFI register_flows          LANDED #931 (credential-free)
 P4-S2  Swift Platform + Core::new     LANDED #933 (fail-closed; no command)
 P4-S3  iOS live Client via Core       plan: 12-p4-s3-live-client.md
-       S3a LANDED #935 → S3b accepted → **S3c Option A login** → S3d attach
+       S3a LANDED #935 → S3b LANDED #937 → **S3c Option A login** → S3d attach
 P4-S4  iOS room_list_snapshot         (needs SyncServiceOwner)
        S4 — not S3b–S3d — adds the first UniFFI Core.command / typed
        wrapper, for matrix_room_list_snapshot only
@@ -328,7 +328,7 @@ S3 is **not** one PR. Read the matching subsection only.
 | Slice | Section | What it is |
 |---|---|---|
 | S3a | landed #935 | Vault callback only |
-| **S3b** | **9.4b accepted** | Restore via vault. No password. |
+| **S3b** | **9.4b landed #937** | Restore via vault. No password. |
 | **S3c** | **9.4c (this branch, Option A)** | Dedicated `login_with_password` FFI |
 | S3d | 9.4d | Attach owners after a session exists |
 
@@ -339,7 +339,7 @@ Desktop reference (do not copy Tauri types):
 - Keyring vault stays a **shell** `SecretVault` impl. iOS equivalent is
   Keychain behind the same trait. The `keyring` crate stays out of Core.
 
-### 9.4b P4-S3b — restore only (the next slice)
+### 9.4b P4-S3b — restore only (landed #937)
 
 Plan: `12-p4-s3-live-client.md`. Use this subsection only.
 
@@ -374,8 +374,8 @@ allowed. Do not change UDL.
 
 ### 9.4c P4-S3c — password login (Option A chosen)
 
-S3b is accepted at `ea05b0ab`. This slice proceeds from that tip.
-Merge order remains S3b, then S3c, onto `feature/shared-native-core`.
+S3b landed in #937 (`4edfc1f5`). This slice proceeds from that tip
+on `feature/shared-native-core`.
 
 **Chosen: Option A — dedicated `SharedCore.login_with_password` FFI.**
 
