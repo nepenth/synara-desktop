@@ -38,6 +38,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreLater.swift",
   "synara-ios/Synara/Services/SharedCoreMDirect.swift",
   "synara-ios/Synara/Services/SharedCoreRoomNotes.swift",
+  "synara-ios/Synara/Services/SharedCoreOwnProfile.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -127,6 +128,10 @@ const sharedCoreMDirect = readFileSync(
 );
 const sharedCoreRoomNotes = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreRoomNotes.swift"),
+  "utf8"
+);
+const sharedCoreOwnProfile = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreOwnProfile.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -432,6 +437,18 @@ const assertions = [
   [sharedCoreRoomNotes, "roomNotesMoveTodo", "P4-S9-7 product room-notes move helper"],
   [sharedCoreRoomNotes, "core: SharedCore", "P4-S9-7 helper takes an already-constructed SharedCore"],
   [sharedCoreRoomNotes, "core.roomNotesSnapshot", "P4-S9-7 helper reads on the caller-owned instance"],
+  [sharedCoreFfi, "set_own_display_name", "P4-S9-8 typed own display-name FFI"],
+  [sharedCoreFfi, "matrix_set_own_display_name", "P4-S9-8 calls the registered display-name command"],
+  [sharedCoreFfi, "matrix_set_own_avatar", "P4-S9-8 calls the registered avatar command"],
+  [udl, "OwnProfileWriteDto set_own_display_name(", "P4-S9-8 SharedCore own display-name"],
+  [udl, "OwnProfileWriteDto set_own_avatar(", "P4-S9-8 SharedCore own avatar"],
+  [udl, "dictionary OwnProfileWriteDto", "P4-S9-8 privacy-safe own-profile write DTO"],
+  [udl, "interface OwnProfileCommandError", "P4-S9-8 static own-profile error"],
+  [swiftBindingsTests, "testSharedCoreOwnProfileWithoutSessionFailsClosed", "Swift P4-S9-8 fail-closed own-profile test"],
+  [sharedCoreOwnProfile, "setOwnDisplayName", "P4-S9-8 product own display-name helper"],
+  [sharedCoreOwnProfile, "setOwnAvatar", "P4-S9-8 product own avatar helper"],
+  [sharedCoreOwnProfile, "core: SharedCore", "P4-S9-8 helper takes an already-constructed SharedCore"],
+  [sharedCoreOwnProfile, "core.setOwnDisplayName", "P4-S9-8 helper writes on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1248,9 +1265,14 @@ for (const required of ["room_notes_snapshot", "room_notes_upsert", "room_notes_
     throw new Error(`P4-S9-7 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "set_own_display_name", "set_own_avatar", "crypto_status", "backup_setup"]) {
+for (const required of ["set_own_display_name", "set_own_avatar"]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-8 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "set_room_name", "set_room_topic", "set_room_avatar", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-7`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-8`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1346,6 +1368,17 @@ for (const forbidden of ["setOwnDisplayName", "setOwnAvatar", "mdirectSnapshot",
     throw new Error(`P4-S9-7 helper must not wrap ${forbidden}`);
   }
 }
+if (sharedCoreOwnProfile.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-8 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreOwnProfile.includes("SharedCore.newWithSecretStore") || sharedCoreOwnProfile.includes("newWithSecretStore")) {
+  throw new Error("P4-S9-8 helper must not construct SharedCore");
+}
+for (const forbidden of ["setRoomName", "setRoomTopic", "setRoomAvatar", "roomNotesSnapshot", "backupStatus"]) {
+  if (sharedCoreOwnProfile.includes(forbidden)) {
+    throw new Error(`P4-S9-8 helper must not wrap ${forbidden}`);
+  }
+}
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
 if (!roomListDto) throw new Error("missing RoomListSnapshotDto");
 if (/\bpassword\b/.test(roomListDto[1]) || /\btoken\b/.test(roomListDto[1])) {
@@ -1425,6 +1458,11 @@ const roomNoteItemDto = udl.match(/dictionary RoomNoteItemDto \{([\s\S]*?)\};/);
 if (!roomNoteItemDto) throw new Error("missing RoomNoteItemDto");
 if (/\bpassword\b/.test(roomNoteItemDto[1]) || /\btoken\b/.test(roomNoteItemDto[1]) || /\bbytes\b/.test(roomNoteItemDto[1])) {
   throw new Error("RoomNoteItemDto must not carry password, token, or bytes fields");
+}
+const ownProfileWriteDto = udl.match(/dictionary OwnProfileWriteDto \{([\s\S]*?)\};/);
+if (!ownProfileWriteDto) throw new Error("missing OwnProfileWriteDto");
+if (/\bpassword\b/.test(ownProfileWriteDto[1]) || /\btoken\b/.test(ownProfileWriteDto[1]) || /\bbytes\b/.test(ownProfileWriteDto[1]) || /\bdisplay_name\b/.test(ownProfileWriteDto[1]) || /\bmxc\b/.test(ownProfileWriteDto[1])) {
+  throw new Error("OwnProfileWriteDto must not carry password, token, bytes, display_name, or mxc fields");
 }
 const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
 if (!loginDto) throw new Error("missing SessionLoginDto");

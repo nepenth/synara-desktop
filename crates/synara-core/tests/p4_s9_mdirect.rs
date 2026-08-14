@@ -2,7 +2,7 @@
 //!
 //! Calls the already-registered Core handlers. Does not start SyncService.
 //! Snapshot DTOs may return user/room ids. Failed errors stay static.
-//! Own display-name/avatar and leftover secret envelopes stay off.
+//! Room name/topic/avatar and leftover secret envelopes stay off.
 
 use std::collections::HashMap;
 use std::fs;
@@ -71,8 +71,8 @@ fn mdirect_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("mdirect_remove"));
     assert!(shared_core.contains("later_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("set_own_display_name"));
-    assert!(!shared_core.contains("set_own_avatar"));
+    assert!(!shared_core.contains("set_room_name"));
+    assert!(!shared_core.contains("set_room_avatar"));
     assert!(!shared_core.contains("backup_status"));
 }
 
