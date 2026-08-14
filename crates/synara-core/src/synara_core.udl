@@ -484,6 +484,21 @@ interface TimelineMutateError {
   Failed(string code, string description);
 };
 
+// Privacy-safe timeline pin/unpin write ack from the registered Core commands.
+dictionary TimelinePinDto {
+  u32 schema_version;
+  string action;
+  string room_id;
+  string event_id;
+  string status;
+};
+
+// Static source constants only. Never echo event id, room id, token, or password.
+[Error]
+interface TimelinePinError {
+  Failed(string code, string description);
+};
+
 // Privacy-safe typing room row. No tokens or password.
 dictionary TypingRoomDto {
   string room_id;
@@ -1374,5 +1389,11 @@ interface SharedCore {
 
   [Async, Throws=TimelineMutateError]
   TimelineMutateDto timeline_report(string room_id, string event_id, string? reason);
+
+  [Async, Throws=TimelinePinError]
+  TimelinePinDto timeline_pin(string room_id, string event_id);
+
+  [Async, Throws=TimelinePinError]
+  TimelinePinDto timeline_unpin(string room_id, string event_id);
 
 };

@@ -113,6 +113,9 @@
 //! `timeline_report` wrappers for the already-registered Core commands.
 //! Failed errors never echo body, event id, room id, or reason. Pin/unpin
 //! stay off.
+//! P4-S9-28 adds typed `timeline_pin` / `timeline_unpin` wrappers for the
+//! already-registered Core commands. Failed errors never echo event id or
+//! room id. Poll vote / call decline stay off.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -607,6 +610,15 @@ const TIMELINE_MUTATE_FAILED_CODE: &str = "p4-s9-27-timeline-mutate-failed";
 const TIMELINE_MUTATE_FAILED_DESCRIPTION: &str =
     "The timeline mutation request could not be completed.";
 const TIMELINE_MUTATE_OWNER_DESCRIPTION: &str = "The timeline mutation request is not available.";
+const TIMELINE_PIN_GENERATION: u64 = 0;
+const TIMELINE_PIN_COMMAND: &str = "matrix_timeline_pin";
+const TIMELINE_UNPIN_COMMAND: &str = "matrix_timeline_unpin";
+const TIMELINE_PIN_NO_SESSION_CODE: &str = "p2-timeline-pin-no-session";
+const TIMELINE_UNPIN_NO_SESSION_CODE: &str = "p2-timeline-unpin-no-session";
+const TIMELINE_PIN_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
+const TIMELINE_PIN_FAILED_CODE: &str = "p4-s9-28-timeline-pin-failed";
+const TIMELINE_PIN_FAILED_DESCRIPTION: &str = "The timeline pin request could not be completed.";
+const TIMELINE_PIN_OWNER_DESCRIPTION: &str = "The timeline pin request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1191,6 +1203,32 @@ impl std::fmt::Display for TimelineMutateError {
 }
 
 impl std::error::Error for TimelineMutateError {}
+
+/// Privacy-safe timeline pin/unpin write ack from the registered Core commands.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelinePinDto {
+    pub schema_version: u32,
+    pub action: String,
+    pub room_id: String,
+    pub event_id: String,
+    pub status: String,
+}
+
+/// Static fail-closed timeline pin/unpin error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TimelinePinError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for TimelinePinError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for TimelinePinError {}
 
 /// Static fail-closed timeline error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3932,6 +3970,38 @@ impl SharedCore {
         .await
     }
 
+    pub async fn timeline_pin(
+        &self,
+        room_id: String,
+        event_id: String,
+    ) -> Result<TimelinePinDto, TimelinePinError> {
+        self.timeline_pin_command(
+            TIMELINE_PIN_COMMAND,
+            TIMELINE_PIN_NO_SESSION_CODE,
+            serde_json::json!({
+                "roomId": room_id,
+                "eventId": event_id,
+            }),
+        )
+        .await
+    }
+
+    pub async fn timeline_unpin(
+        &self,
+        room_id: String,
+        event_id: String,
+    ) -> Result<TimelinePinDto, TimelinePinError> {
+        self.timeline_pin_command(
+            TIMELINE_UNPIN_COMMAND,
+            TIMELINE_UNPIN_NO_SESSION_CODE,
+            serde_json::json!({
+                "roomId": room_id,
+                "eventId": event_id,
+            }),
+        )
+        .await
+    }
+
     async fn space_null_command(
         &self,
         command: &'static str,
@@ -4164,6 +4234,30 @@ impl SharedCore {
                 )
             })?;
         timeline_mutate_dto(result)
+    }
+
+    async fn timeline_pin_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<TimelinePinDto, TimelinePinError> {
+        let payload = timeline_pin_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: TIMELINE_PIN_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_timeline_pin_core_error(no_session, error))?;
+        let result: TimelinePinResultWire =
+            serde_json::from_value(response.payload).map_err(|_| {
+                timeline_pin_failed(TIMELINE_PIN_FAILED_CODE, TIMELINE_PIN_FAILED_DESCRIPTION)
+            })?;
+        timeline_pin_dto(result)
     }
 
     async fn invite_action_command(
@@ -7456,6 +7550,93 @@ fn timeline_mutate_dto(
         )
     })?;
     Ok(TimelineMutateDto {
+        schema_version: result.schema_version,
+        action: action.to_owned(),
+        room_id: result.room_id,
+        event_id: result.event_id,
+        status: status.to_owned(),
+    })
+}
+
+fn timeline_pin_failed(code: &str, description: &'static str) -> TimelinePinError {
+    TimelinePinError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_timeline_pin_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> TimelinePinError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            timeline_pin_failed(code, TIMELINE_PIN_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code.starts_with("p2-timeline-pin-")
+                || code.starts_with("p2-timeline-unpin-")
+                || code.starts_with("v-timeline-pin-")
+                || code.starts_with("v-timeline-unpin-")
+                || code.starts_with("d0.4-send-") =>
+        {
+            timeline_pin_failed(code, TIMELINE_PIN_OWNER_DESCRIPTION)
+        }
+        _ => timeline_pin_failed(TIMELINE_PIN_FAILED_CODE, TIMELINE_PIN_FAILED_DESCRIPTION),
+    }
+}
+
+fn timeline_pin_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, TimelinePinError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(timeline_pin_failed(
+            TIMELINE_PIN_FAILED_CODE,
+            TIMELINE_PIN_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TimelinePinResultWire {
+    schema_version: u32,
+    action: String,
+    room_id: String,
+    event_id: String,
+    status: String,
+}
+
+fn closed_timeline_pin_action(value: &str) -> Option<&'static str> {
+    match value {
+        "pin" => Some("pin"),
+        "unpin" => Some("unpin"),
+        _ => None,
+    }
+}
+
+fn closed_timeline_pin_status(value: &str) -> Option<&'static str> {
+    match value {
+        "pinned" => Some("pinned"),
+        "unpinned" => Some("unpinned"),
+        "already_pinned" => Some("already_pinned"),
+        "already_unpinned" => Some("already_unpinned"),
+        _ => None,
+    }
+}
+
+fn timeline_pin_dto(result: TimelinePinResultWire) -> Result<TimelinePinDto, TimelinePinError> {
+    let action = closed_timeline_pin_action(&result.action).ok_or_else(|| {
+        timeline_pin_failed(TIMELINE_PIN_FAILED_CODE, TIMELINE_PIN_FAILED_DESCRIPTION)
+    })?;
+    let status = closed_timeline_pin_status(&result.status).ok_or_else(|| {
+        timeline_pin_failed(TIMELINE_PIN_FAILED_CODE, TIMELINE_PIN_FAILED_DESCRIPTION)
+    })?;
+    Ok(TimelinePinDto {
         schema_version: result.schema_version,
         action: action.to_owned(),
         room_id: result.room_id,
