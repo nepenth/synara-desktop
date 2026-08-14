@@ -229,6 +229,10 @@ const sharedCoreTimelineVoteDecline = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreTimelineVoteDecline.swift"),
   "utf8"
 );
+const sharedCoreTimelineForward = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreTimelineForward.swift"),
+  "utf8"
+);
 const swiftBindingsTests = readFileSync(
   resolve(root, "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift"),
   "utf8"
@@ -841,6 +845,18 @@ const assertions = [
   [sharedCoreTimelineVoteDecline, "core: SharedCore", "P4-S9-29 helper takes an already-constructed SharedCore"],
   [sharedCoreTimelineVoteDecline, "core.timelinePollVote", "P4-S9-29 helper writes vote on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreTimelineVoteDecline.swift in Sources", "P4-S9-29 helper in Xcode target"],
+  [sharedCoreFfi, "timeline_forward_text", "P4-S9-30 typed timeline-forward-text FFI"],
+  [sharedCoreFfi, "matrix_timeline_forward_text", "P4-S9-30 calls the registered timeline-forward-text command"],
+  [sharedCoreFfi, "matrix_timeline_forward_media", "P4-S9-30 calls the registered timeline-forward-media command"],
+  [udl, "TimelineForwardDto timeline_forward_text(", "P4-S9-30 SharedCore timeline forward text"],
+  [udl, "TimelineForwardDto timeline_forward_media(", "P4-S9-30 SharedCore timeline forward media"],
+  [udl, "interface TimelineForwardError", "P4-S9-30 static timeline-forward error"],
+  [swiftBindingsTests, "testSharedCoreTimelineForwardWithoutSessionFailsClosed", "Swift P4-S9-30 fail-closed timeline-forward test"],
+  [sharedCoreTimelineForward, "timelineForwardText", "P4-S9-30 product timeline-forward-text helper"],
+  [sharedCoreTimelineForward, "timelineForwardMedia", "P4-S9-30 product timeline-forward-media helper"],
+  [sharedCoreTimelineForward, "core: SharedCore", "P4-S9-30 helper takes an already-constructed SharedCore"],
+  [sharedCoreTimelineForward, "core.timelineForwardText", "P4-S9-30 helper writes forward on the caller-owned instance"],
+  [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreTimelineForward.swift in Sources", "P4-S9-30 helper in Xcode target"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1767,9 +1783,14 @@ for (const required of ["timeline_poll_vote(", "timeline_call_decline("]) {
     throw new Error(`P4-S9-29 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "matrix_timeline_edit_text", "matrix_timeline_redact", "matrix_timeline_report", "matrix_timeline_pin", "matrix_timeline_unpin", "matrix_timeline_poll_vote", "matrix_timeline_call_decline", "timeline_forward_text", "timeline_forward_media", "matrix_timeline_forward_text", "matrix_timeline_forward_media", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup"]) {
+for (const required of ["timeline_forward_text(", "timeline_forward_media("]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-30 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "matrix_timeline_edit_text", "matrix_timeline_redact", "matrix_timeline_report", "matrix_timeline_pin", "matrix_timeline_unpin", "matrix_timeline_poll_vote", "matrix_timeline_call_decline", "matrix_timeline_forward_text", "matrix_timeline_forward_media", "matrix_session_snapshot", "matrix_sync_status", "matrix_media_config", "matrix_secret_storage_status", "sync_status", "media_config", "secret_storage_status", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-29`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-30`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -2105,6 +2126,17 @@ if (sharedCoreTimelineVoteDecline.includes("SharedCore.newWithSecretStore") || s
 for (const forbidden of ["sendText", "sendSticker", "sendPoll", "editMessage", "pollRespond", "timelineEditText", "timelineRedact", "timelineReport", "timelinePin", "timelineUnpin", "forwardText", "forwardMedia", "backupStatus"]) {
   if (sharedCoreTimelineVoteDecline.includes(forbidden)) {
     throw new Error(`P4-S9-29 helper must not wrap ${forbidden}`);
+  }
+}
+if (sharedCoreTimelineForward.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-30 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreTimelineForward.includes("SharedCore.newWithSecretStore") || sharedCoreTimelineForward.includes("newWithSecretStore")) {
+  throw new Error("P4-S9-30 helper must not construct SharedCore");
+}
+for (const forbidden of ["sendText", "sendSticker", "sendPoll", "editMessage", "pollRespond", "timelineEditText", "timelineRedact", "timelineReport", "timelinePin", "timelineUnpin", "timelinePollVote", "timelineCallDecline", "sessionSnapshot", "syncStatus", "mediaConfig", "secretStorageStatus", "backupStatus"]) {
+  if (sharedCoreTimelineForward.includes(forbidden)) {
+    throw new Error(`P4-S9-30 helper must not wrap ${forbidden}`);
   }
 }
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);

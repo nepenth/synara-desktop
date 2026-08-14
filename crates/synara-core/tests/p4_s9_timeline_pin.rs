@@ -90,8 +90,10 @@ fn timeline_pin_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("timeline_report("));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
-    assert!(!udl.contains("matrix_timeline_forward_text"));
-    assert!(!udl.contains("matrix_timeline_forward_media"));
+    assert!(!udl.contains("matrix_session_snapshot"));
+    assert!(!udl.contains("matrix_sync_status"));
+    assert!(!udl.contains("matrix_media_config"));
+    assert!(!udl.contains("matrix_secret_storage_status"));
     let shared_core = udl
         .split("interface SharedCore {")
         .nth(1)
@@ -103,8 +105,9 @@ fn timeline_pin_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("timeline_redact("));
     assert!(shared_core.contains("timeline_report("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("timeline_forward_text"));
-    assert!(!shared_core.contains("timeline_forward_media"));
+    assert!(!shared_core.contains("sync_status"));
+    assert!(!shared_core.contains("media_config"));
+    assert!(!shared_core.contains("secret_storage_status"));
     assert!(!shared_core.contains("backup_status"));
 }
 

@@ -119,6 +119,10 @@
 //! P4-S9-29 adds typed `timeline_poll_vote` / `timeline_call_decline`
 //! wrappers for the already-registered Core commands. Failed errors never
 //! echo event id, room id, or answer. Timeline forward stays off.
+//! P4-S9-30 adds typed `timeline_forward_text` / `timeline_forward_media`
+//! wrappers for the already-registered Core commands. Failed errors never
+//! echo event id, source room id, or target room id. Session/status
+//! reads stay off. No media bytes cross the envelope.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -633,6 +637,16 @@ const TIMELINE_VOTE_DECLINE_FAILED_DESCRIPTION: &str =
     "The timeline vote or decline request could not be completed.";
 const TIMELINE_VOTE_DECLINE_OWNER_DESCRIPTION: &str =
     "The timeline vote or decline request is not available.";
+const TIMELINE_FORWARD_GENERATION: u64 = 0;
+const TIMELINE_FORWARD_TEXT_COMMAND: &str = "matrix_timeline_forward_text";
+const TIMELINE_FORWARD_MEDIA_COMMAND: &str = "matrix_timeline_forward_media";
+const TIMELINE_FORWARD_TEXT_NO_SESSION_CODE: &str = "p2-timeline-forward-text-no-session";
+const TIMELINE_FORWARD_MEDIA_NO_SESSION_CODE: &str = "p2-timeline-forward-media-no-session";
+const TIMELINE_FORWARD_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
+const TIMELINE_FORWARD_FAILED_CODE: &str = "p4-s9-30-timeline-forward-failed";
+const TIMELINE_FORWARD_FAILED_DESCRIPTION: &str =
+    "The timeline forward request could not be completed.";
+const TIMELINE_FORWARD_OWNER_DESCRIPTION: &str = "The timeline forward request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1271,6 +1285,32 @@ impl std::fmt::Display for TimelineVoteDeclineError {
 }
 
 impl std::error::Error for TimelineVoteDeclineError {}
+
+/// Privacy-safe timeline forward write ack from the registered Core commands.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineForwardDto {
+    pub schema_version: u32,
+    pub action: String,
+    pub room_id: String,
+    pub event_id: String,
+    pub status: String,
+}
+
+/// Static fail-closed timeline forward error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TimelineForwardError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for TimelineForwardError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for TimelineForwardError {}
 
 /// Static fail-closed timeline error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -4078,6 +4118,44 @@ impl SharedCore {
         .await
     }
 
+    pub async fn timeline_forward_text(
+        &self,
+        source_room_id: String,
+        event_id: String,
+        target_room_id: String,
+        as_quote: bool,
+    ) -> Result<TimelineForwardDto, TimelineForwardError> {
+        self.timeline_forward_command(
+            TIMELINE_FORWARD_TEXT_COMMAND,
+            TIMELINE_FORWARD_TEXT_NO_SESSION_CODE,
+            serde_json::json!({
+                "sourceRoomId": source_room_id,
+                "eventId": event_id,
+                "targetRoomId": target_room_id,
+                "asQuote": as_quote,
+            }),
+        )
+        .await
+    }
+
+    pub async fn timeline_forward_media(
+        &self,
+        source_room_id: String,
+        event_id: String,
+        target_room_id: String,
+    ) -> Result<TimelineForwardDto, TimelineForwardError> {
+        self.timeline_forward_command(
+            TIMELINE_FORWARD_MEDIA_COMMAND,
+            TIMELINE_FORWARD_MEDIA_NO_SESSION_CODE,
+            serde_json::json!({
+                "sourceRoomId": source_room_id,
+                "eventId": event_id,
+                "targetRoomId": target_room_id,
+            }),
+        )
+        .await
+    }
+
     async fn space_null_command(
         &self,
         command: &'static str,
@@ -4361,6 +4439,33 @@ impl SharedCore {
                 )
             })?;
         timeline_vote_decline_dto(result)
+    }
+
+    async fn timeline_forward_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<TimelineForwardDto, TimelineForwardError> {
+        let payload = timeline_forward_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: TIMELINE_FORWARD_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_timeline_forward_core_error(no_session, error))?;
+        let result: TimelineForwardResultWire =
+            serde_json::from_value(response.payload).map_err(|_| {
+                timeline_forward_failed(
+                    TIMELINE_FORWARD_FAILED_CODE,
+                    TIMELINE_FORWARD_FAILED_DESCRIPTION,
+                )
+            })?;
+        timeline_forward_dto(result)
     }
 
     async fn invite_action_command(
@@ -7836,6 +7941,100 @@ fn timeline_vote_decline_dto(
         )
     })?;
     Ok(TimelineVoteDeclineDto {
+        schema_version: result.schema_version,
+        action: action.to_owned(),
+        room_id: result.room_id,
+        event_id: result.event_id,
+        status: status.to_owned(),
+    })
+}
+
+fn timeline_forward_failed(code: &str, description: &'static str) -> TimelineForwardError {
+    TimelineForwardError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_timeline_forward_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> TimelineForwardError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            timeline_forward_failed(code, TIMELINE_FORWARD_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code.starts_with("p2-timeline-forward-text-")
+                || code.starts_with("p2-timeline-forward-media-")
+                || code.starts_with("v-timeline-forward-")
+                || code.starts_with("d0.4-send-") =>
+        {
+            timeline_forward_failed(code, TIMELINE_FORWARD_OWNER_DESCRIPTION)
+        }
+        _ => timeline_forward_failed(
+            TIMELINE_FORWARD_FAILED_CODE,
+            TIMELINE_FORWARD_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn timeline_forward_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, TimelineForwardError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(timeline_forward_failed(
+            TIMELINE_FORWARD_FAILED_CODE,
+            TIMELINE_FORWARD_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TimelineForwardResultWire {
+    schema_version: u32,
+    action: String,
+    room_id: String,
+    event_id: String,
+    status: String,
+}
+
+fn closed_timeline_forward_action(value: &str) -> Option<&'static str> {
+    match value {
+        "forward_text" => Some("forward_text"),
+        "forward_media" => Some("forward_media"),
+        _ => None,
+    }
+}
+
+fn closed_timeline_forward_status(value: &str) -> Option<&'static str> {
+    match value {
+        "sent" => Some("sent"),
+        _ => None,
+    }
+}
+
+fn timeline_forward_dto(
+    result: TimelineForwardResultWire,
+) -> Result<TimelineForwardDto, TimelineForwardError> {
+    let action = closed_timeline_forward_action(&result.action).ok_or_else(|| {
+        timeline_forward_failed(
+            TIMELINE_FORWARD_FAILED_CODE,
+            TIMELINE_FORWARD_FAILED_DESCRIPTION,
+        )
+    })?;
+    let status = closed_timeline_forward_status(&result.status).ok_or_else(|| {
+        timeline_forward_failed(
+            TIMELINE_FORWARD_FAILED_CODE,
+            TIMELINE_FORWARD_FAILED_DESCRIPTION,
+        )
+    })?;
+    Ok(TimelineForwardDto {
         schema_version: result.schema_version,
         action: action.to_owned(),
         room_id: result.room_id,
