@@ -31,7 +31,10 @@
 //! cross. Image/media bytes stay off.
 //! P4-S9-5 adds typed later snapshot/upsert/complete/snooze/
 //! clear_completed/mark_reminded wrappers for those six already-registered
-//! Core commands. m.direct, room notes, and profile writes stay off.
+//! Core commands.
+//! P4-S9-6 adds typed m.direct snapshot/add/remove wrappers for those
+//! three already-registered Core commands. Room notes and profile writes
+//! stay off. Errors never echo user or room ids.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -42,8 +45,8 @@ use zeroize::Zeroizing;
 
 use crate::app::account_data::{
     NativeGlobalImagePacksSnapshot, NativeImagePack, NativeImagePackOwner, NativeLaterSnapshot,
-    NativeRoomImagePacksSnapshot, NativeUserImagePackSnapshot, SynaraLaterItem,
-    SynaraLaterItemKind,
+    NativeMDirectSnapshot, NativeRoomImagePacksSnapshot, NativeUserImagePackSnapshot,
+    SynaraLaterItem, SynaraLaterItemKind,
 };
 use crate::app::auth::{
     login_with_password as core_login_with_password, DevicePlatform, LoginOptions,
@@ -272,6 +275,17 @@ const LATER_FAILED_DESCRIPTION: &str = "The later request could not be completed
 const LATER_INVALID_ITEM_CODE: &str = "p4-s9-5-later-invalid-item";
 const LATER_INVALID_ITEM_DESCRIPTION: &str = "The later item is invalid.";
 const LATER_OWNER_DESCRIPTION: &str = "The later request is not available.";
+const MDIRECT_COMMAND_GENERATION: u64 = 0;
+const MDIRECT_SNAPSHOT_COMMAND: &str = "matrix_mdirect_snapshot";
+const MDIRECT_ADD_COMMAND: &str = "matrix_mdirect_add";
+const MDIRECT_REMOVE_COMMAND: &str = "matrix_mdirect_remove";
+const MDIRECT_SNAPSHOT_NO_SESSION_CODE: &str = "p2-mdirect-snapshot-no-session";
+const MDIRECT_ADD_NO_SESSION_CODE: &str = "p2-mdirect-add-no-session";
+const MDIRECT_REMOVE_NO_SESSION_CODE: &str = "p2-mdirect-remove-no-session";
+const MDIRECT_NO_SESSION_DESCRIPTION: &str = "No m.direct session is available.";
+const MDIRECT_FAILED_CODE: &str = "p4-s9-6-mdirect-failed";
+const MDIRECT_FAILED_DESCRIPTION: &str = "The m.direct request could not be completed.";
+const MDIRECT_OWNER_DESCRIPTION: &str = "The m.direct request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2254,6 +2268,60 @@ impl SharedCore {
         .await
     }
 
+    pub async fn mdirect_snapshot(&self) -> Result<MDirectSnapshotDto, MDirectCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: MDIRECT_SNAPSHOT_COMMAND.to_owned(),
+                session_generation: MDIRECT_COMMAND_GENERATION,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .map_err(|error| map_mdirect_core_error(MDIRECT_SNAPSHOT_NO_SESSION_CODE, error))?;
+        mdirect_snapshot_dto(response.payload)
+    }
+
+    pub async fn mdirect_add(
+        &self,
+        room_id: String,
+        user_id: String,
+    ) -> Result<MDirectMutationDto, MDirectCommandError> {
+        let payload = mdirect_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "userId": user_id,
+        }))?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: MDIRECT_ADD_COMMAND.to_owned(),
+                session_generation: MDIRECT_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_mdirect_core_error(MDIRECT_ADD_NO_SESSION_CODE, error))?;
+        mdirect_mutation_dto(response.payload)
+    }
+
+    pub async fn mdirect_remove(
+        &self,
+        room_id: String,
+    ) -> Result<MDirectMutationDto, MDirectCommandError> {
+        let payload = mdirect_envelope_payload(serde_json::json!({ "roomId": room_id }))?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: MDIRECT_REMOVE_COMMAND.to_owned(),
+                session_generation: MDIRECT_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_mdirect_core_error(MDIRECT_REMOVE_NO_SESSION_CODE, error))?;
+        mdirect_mutation_dto(response.payload)
+    }
+
     async fn later_null_command(
         &self,
         command: &'static str,
@@ -2705,6 +2773,104 @@ fn later_snapshot_dto(payload: serde_json::Value) -> Result<LaterSnapshotDto, La
             .into_values()
             .map(later_item_dto)
             .collect(),
+    })
+}
+
+/// Privacy-safe m.direct snapshot. User/room ids are the product map; no tokens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MDirectSnapshotDto {
+    pub session_generation: u64,
+    pub room_ids: Vec<String>,
+    pub user_ids: Vec<String>,
+}
+
+/// Privacy-safe m.direct write ack. Status and the mutated room id only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MDirectMutationDto {
+    pub room_id: String,
+    pub status: String,
+}
+
+/// Static fail-closed m.direct-family error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MDirectCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for MDirectCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for MDirectCommandError {}
+
+fn mdirect_failed(code: &str, description: &'static str) -> MDirectCommandError {
+    MDirectCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_mdirect_core_error(no_session: &'static str, error: MatrixIpcError) -> MDirectCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => mdirect_failed(code, MDIRECT_NO_SESSION_DESCRIPTION),
+        Some(code) if code.starts_with("v-rooms.5-mdirect-") => {
+            mdirect_failed(code, MDIRECT_OWNER_DESCRIPTION)
+        }
+        _ => mdirect_failed(MDIRECT_FAILED_CODE, MDIRECT_FAILED_DESCRIPTION),
+    }
+}
+
+fn mdirect_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, MDirectCommandError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(mdirect_failed(
+            MDIRECT_FAILED_CODE,
+            MDIRECT_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn mdirect_snapshot_dto(
+    payload: serde_json::Value,
+) -> Result<MDirectSnapshotDto, MDirectCommandError> {
+    let snapshot: NativeMDirectSnapshot = serde_json::from_value(payload)
+        .map_err(|_| mdirect_failed(MDIRECT_FAILED_CODE, MDIRECT_FAILED_DESCRIPTION))?;
+    Ok(MDirectSnapshotDto {
+        session_generation: snapshot.session_generation,
+        room_ids: snapshot.room_ids,
+        user_ids: snapshot.user_ids,
+    })
+}
+
+fn mdirect_mutation_dto(
+    payload: serde_json::Value,
+) -> Result<MDirectMutationDto, MDirectCommandError> {
+    let room_id = payload
+        .get("roomId")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| mdirect_failed(MDIRECT_FAILED_CODE, MDIRECT_FAILED_DESCRIPTION))?;
+    let status = payload
+        .get("status")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| mdirect_failed(MDIRECT_FAILED_CODE, MDIRECT_FAILED_DESCRIPTION))?;
+    if status != "updated" {
+        return Err(mdirect_failed(
+            MDIRECT_FAILED_CODE,
+            MDIRECT_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(MDirectMutationDto {
+        room_id: room_id.to_owned(),
+        status: status.to_owned(),
     })
 }
 
