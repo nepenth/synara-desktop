@@ -22,6 +22,8 @@ const required = [
   "synara-ios/SynaraCore/Package.swift",
   "synara-ios/SynaraCore/Sources/SynaraCore/SynaraCore.swift",
   "synara-ios/Synara/Services/MatrixSessionProjectionMirror.swift",
+  "synara-ios/Synara/Services/IosSecretVault.swift",
+  "synara-ios/Synara/Services/SharedCoreSessionRestore.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -51,6 +53,10 @@ const sharedCoreFfi = readFileSync(
 );
 const sessionProjectionAdapter = readFileSync(
   resolve(root, "synara-ios/Synara/Services/MatrixSessionProjectionMirror.swift"),
+  "utf8"
+);
+const sharedCoreRestore = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreSessionRestore.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -101,8 +107,13 @@ const assertions = [
   [sharedCoreFfi, "Core::new", "P4-S2 real Core construction"],
   [sharedCoreFfi, "new_with_secret_store", "P4-S3a vault-backed SharedCore constructor"],
   [sharedCoreFfi, "CallbackSecretVault", "P4-S3a callback SecretVault adapter"],
+  [sharedCoreFfi, "pub trait IosSecretVault", "P4-S3a callback trait defined in Rust"],
+  [sharedCoreFfi, "restore_persisted_session", "P4-S3b vault restore FFI"],
   [udl, "callback interface IosSecretVault", "P4-S3a Swift vault callback"],
   [udl, "interface IosSecretVaultError", "P4-S3a static vault error"],
+  [udl, "restore_persisted_session", "P4-S3b SharedCore restore operation"],
+  [udl, "dictionary SessionRestoreDto", "P4-S3b privacy-safe restore DTO"],
+  [udl, "interface SessionRestoreError", "P4-S3b static restore error"],
   [sessionProjectionAdapter, "openAfterInstalledClient", "post-install projection hook"],
   [sessionProjectionAdapter, "closeBeforeSDKWipe", "pre-wipe projection close hook"],
   [sessionProjectionAdapter, "func coreSessionIdentity() async -> CoreSessionIdentity?", "P4-4 display-only Core identity readback"],
@@ -123,6 +134,12 @@ const assertions = [
   [swiftBindingsTests, "testSharedCoreConstructsOverGeneratedRustFFI", "Swift P4-S2 Core construction test"],
   [swiftBindingsTests, "testSharedCoreAcceptsInMemorySecretStore", "Swift P4-S3a vault constructor test"],
   [swiftBindingsTests, "SharedCore.newWithSecretStore(store:", "Swift P4-S3a UniFFI 0.28 named vault factory"],
+  [swiftBindingsTests, "testSharedCoreRestoreWithoutVaultFailsClosed", "Swift P4-S3b fail-closed restore test"],
+  [swiftBindingsTests, "testSharedCoreRestoreRejectsHostileIdentityWithoutEcho", "Swift P4-S3b hostile-identity restore test"],
+  [swiftBindingsTests, "testSharedCoreRestoreHoldsInstanceAcrossCalls", "Swift P4-S3b helper keeps caller-owned SharedCore"],
+  [sharedCoreRestore, "restorePersistedSession", "P4-S3b product restore helper"],
+  [sharedCoreRestore, "core: SharedCore", "P4-S3b helper takes an already-constructed SharedCore"],
+  [sharedCoreRestore, "core.restorePersistedSession", "P4-S3b helper restores on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -863,7 +880,7 @@ if (projectionOperations.join(",") !== "open,session_snapshot,close") {
   throw new Error(`P4-3 facade must expose only open/session_snapshot/close; found ${projectionOperations.join(", ")}`);
 }
 
-// P4-S3a allows a vault-backed constructor. Still forbid command/session/attach.
+// P4-S3b allows restore_persisted_session. Still forbid command/attach/password.
 const sharedCoreObject = udl.match(/interface SharedCore \{([\s\S]*?)\};/);
 if (!sharedCoreObject) throw new Error("missing SharedCore object");
 const sharedCoreBody = sharedCoreObject[1].replace(/\/\/.*$/gm, "");
@@ -872,6 +889,9 @@ if (!sharedCoreBody.includes("constructor();")) {
 }
 if (!sharedCoreBody.includes("constructor(IosSecretVault store)")) {
   throw new Error("P4-S3a SharedCore must accept IosSecretVault");
+}
+if (!sharedCoreBody.includes("restore_persisted_session")) {
+  throw new Error("P4-S3b SharedCore must expose restore_persisted_session");
 }
 if (!sharedCoreBody.includes('[Name="new_with_secret_store"]')) {
   throw new Error("P4-S3a vault constructor must stay a named UniFFI factory");
@@ -883,7 +903,7 @@ if (swiftBindingsTests.includes("SharedCore(store:")) {
 }
 for (const forbidden of ["command", "attach", "login", "password", "open("]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S3a`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S3b`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -891,6 +911,13 @@ if (!udl.includes("callback interface IosSecretVault")) {
 }
 if (!udl.includes("interface IosSecretVaultError")) {
   throw new Error("missing IosSecretVaultError");
+}
+if (sharedCoreRestore.includes("SharedCore(store:")) {
+  throw new Error("P4-S3b helper must not construct-and-drop SharedCore");
+}
+const productionSharedCoreFfi = sharedCoreFfi.split("#[cfg(test)]")[0];
+if (productionSharedCoreFfi.includes("p4-s3b-store-key")) {
+  throw new Error("P4-S3b must use StoreKeyId store-key: accounts, not an invented prefix");
 }
 
 // P4-3's private Core dependency must continue satisfying every required

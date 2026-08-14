@@ -6,6 +6,10 @@ paragraph disagree, this file plus `10-current-handoff.md` win for
 *what to do next*; ADR-0003 plus `01-context-and-goals.md` win for
 *what done means*.
 
+Older “144 `Core::command` handlers” sentences in `03-target-architecture.md`
+and `06-migration-phases.md` are stale. Do not register the 21 leftovers in
+section 6 to satisfy them.
+
 Evidence tip when this playbook was written: `feature/shared-native-core`
 `ee896416` (#935 S3a SecretVault). Re-fetch before you start.
 Do not treat this SHA as eternal.
@@ -31,7 +35,7 @@ shared engine. Never claim P5 or MAC-IOS-006 is done.
 | Surface | Today |
 |---|---|
 | Desktop macOS/Linux | Live Matrix `Client` and native owners live in Core. React still invokes `matrix_*`. **111** of those names are registered on `Core::command`. Desktop is a thinner shell, not a thin shell. |
-| iOS | UniFFI scaffold + `login_flows` + session-projection mirror + Settings readback + two pure helpers (unread row, cold-start recovery). Live session, room list, timeline, crypto, push, and `MatrixRustSDKService` are still Swift. iOS does **not** call the 111 Core commands. |
+| iOS | UniFFI scaffold + `login_flows` + `register_flows` + session-projection mirror + Settings readback + two pure helpers (unread row, cold-start recovery) + `SharedCore` constructors + optional `IosSecretVault` + `restore_persisted_session` (vault, no password). Live room list, timeline, crypto, push, and `MatrixRustSDKService` are still Swift. iOS does **not** call the 111 Core commands. XCTest construction of `SharedCore` is not iOS-on-engine. |
 | `main` | Diverged. Recovery / MAC-IOS-006 docs live there. Not feature evidence. |
 | Release | Forbidden until engineering finish is accepted and then merged to `main`. |
 
@@ -67,9 +71,13 @@ and fail-closed.** Those 21 are intended shell leftovers (section 6).
    `cd <worktree> && rustfmt --edition 2021 <files>`.
    Never rustfmt `Cargo.toml`.
 10. UniFFI / bindgen / xcframework work also needs disk ≥ 20 Gi.
+    If disk is under 20 Gi: stop. Docs-only PRs are still allowed.
+    Do not change UDL. Do not hand-edit generated Swift. Do not invent
+    a no-bindgen path.
 11. After each **product** PR: squash-merge to `feature/shared-native-core`
-    only, then a **docs honesty** PR, then start the next slice in the
-    same turn. Do not stop after one merge.
+    only, then a **docs honesty** PR, then **re-run section 5**. If
+    section 5 step 4, stop. Do not start a second product slice to keep
+    a turn busy.
 12. `gh pr create --base feature/shared-native-core`. Merge with
     `gh pr merge N --squash`. Do not pass `--delete-branch` if the
     feature branch is checked out locally (GitHub still merges).
@@ -79,7 +87,8 @@ and fail-closed.** Those 21 are intended shell leftovers (section 6).
     does not.
 
 Worktree for this program: `synara-desktop-snc-image-packs`.
-Orchestrator notes: `/Users/nepenthe/.grok/snc-orchestrator/STATE.md`.
+The owner surface is `origin/feature/shared-native-core`, not the folder
+name. Orchestrator notes: `/Users/nepenthe/.grok/snc-orchestrator/STATE.md`.
 
 ---
 
@@ -117,9 +126,14 @@ Run this checklist in order. Stop at the first yes.
    **As of #928 there are none.** Presence subscribe/unsubscribe and
    device rename are already registered. Confirm with section 6 before
    inventing one.
-3. **Is free disk ≥ 20 Gi, or can the next P4 slice land as source
-   without local cargo/bindgen?** Start the next **P4** slice in
-   section 9. S3a/#935 landed. Next is S3b restore (plan §12).
+3. **Is free disk ≥ 20 Gi?** Start the next **P4** slice in section 9.
+   S1/#931, S2/#933, and S3a/#935 landed. S3b restore is on this
+   branch (section 9.4b and plan §12). Next after merge is S3c.
+   UDL/bindgen/cargo require this disk
+   gate. There is no “land UDL as source without local cargo/bindgen”
+   exception. If disk is under 20 Gi: stop. Docs-only PRs are still
+   allowed. Do not change UDL. Do not hand-edit generated Swift. Do
+   not invent a no-bindgen path.
 4. **Otherwise stop.** Update `STATE.md`. Do not open a padding PR.
    Do not route logout, email-token, or media "just to have a merge."
 
@@ -157,6 +171,11 @@ Source of truth: `crates/synara-core/src/transport/census.rs` minus
 Do not register these unless a **new written owner decision** says the
 secret or bytes may cross the envelope, or a new Platform ADR defines a
 byte channel. A watchdog prompt is not that decision.
+
+**S3b is not `matrix_restore_session`.** That census name stays desktop
+because it does Keyring vault I/O. iOS restore is a new `SharedCore`
+FFI over Core persist/restore plus the S3a vault. Do not register
+`matrix_restore_session` on `Core::command` to “help” S3b.
 
 ---
 
@@ -226,7 +245,7 @@ Use this only when section 5 step 2 is yes.
 11. `gh pr create --base feature/shared-native-core`.
 12. `gh pr merge N --squash` with subject ending `(#N)`.
 13. Docs honesty PR (section 10).
-14. Start the next slice.
+14. Re-run section 5. If step 4, stop.
 
 ### 8.3 Do not
 
@@ -253,8 +272,10 @@ P4-S0  already landed: UniFFI scaffold, login_flows, SessionProjectionCore,
 P4-S1  UniFFI register_flows          LANDED #931 (credential-free)
 P4-S2  Swift Platform + Core::new     LANDED #933 (fail-closed; no command)
 P4-S3  iOS live Client via Core       plan: 12-p4-s3-live-client.md
-       S3a vault callback (this lane) → S3b restore → S3c login → S3d attach
+       S3a LANDED #935 → **next S3b restore** → S3c login → S3d attach
 P4-S4  iOS room_list_snapshot         (needs SyncServiceOwner)
+       S4 — not S3b–S3d — adds the first UniFFI Core.command / typed
+       wrapper, for matrix_room_list_snapshot only
 P4-S5  iOS invites_snapshot           (needs join-rule owner)
 P4-S6  iOS timeline open/close/paginate (needs NativeTimelineOwner)
 P4-S7  iOS typing / presence          (needs those owners)
@@ -270,20 +291,25 @@ permission, file pickers, settings chrome.
 
 ### 9.2 Hard gate for P4-S1 and later that touch UDL
 
-- Free disk **≥ 20 Gi** (`df -h /`).
+- Free disk **≥ 20 Gi** (`df -h /` and the volume that holds the
+  worktree). If either is under 20 Gi: stop. Docs-only PRs are still
+  allowed. Do not change UDL. Do not hand-edit generated Swift. Do
+  not invent a no-bindgen path.
 - Regenerating UniFFI without cargo/bindgen is forbidden. Do not
   hand-edit generated Swift to fake a UDL change.
 - Generated artifacts live under `synara-ios/SynaraCore/`. Follow the
   existing `login_flows` pattern in:
   - `crates/synara-core/src/synara_core.udl`
-  - `crates/synara-core/src/ffi.rs`
+  - `crates/synara-core/src/ffi.rs` (namespace probes: login/register flows)
+  - `crates/synara-core/src/shared_core_ffi.rs` (**S3 `SharedCore` FFI**)
   - `crates/synara-core/src/session_projection_ffi.rs` (projection only)
 - Errors that cross UniFFI must be **static** (category/code/description
   from source constants). Never echo URLs, tokens, or HTTP bodies.
 
-### 9.3 P4-S1 — `register_flows` (first slice when disk lifts)
+### 9.3 P4-S1 — `register_flows` (historical; LANDED #931)
 
-Copy `login_flows` exactly.
+Do not start this slice. Copy of the landed recipe, kept so later
+UniFFI probes can mirror it.
 
 | Item | Value |
 |---|---|
@@ -295,7 +321,16 @@ Copy `login_flows` exactly.
 | Tests | invalid URL fails closed without echoing input (mirror `ffi.rs` login_flows tests) |
 | Commit | `feat(core): expose register_flows on UniFFI` |
 
-### 9.4 P4-S3 — live Client on iOS (do not start before S2)
+### 9.4 P4-S3 — live Client on iOS (four serial PRs; do not start before S2)
+
+S3 is **not** one PR. Read the matching subsection only.
+
+| Slice | Section | What it is |
+|---|---|---|
+| S3a | landed #935 | Vault callback only |
+| **S3b** | **9.4b (this branch)** | Restore via vault. No password. |
+| S3c | 9.4c | Password login FFI or keep Swift login |
+| S3d | 9.4d | Attach owners after a session exists |
 
 Desktop reference (do not copy Tauri types):
 
@@ -304,22 +339,70 @@ Desktop reference (do not copy Tauri types):
 - Keyring vault stays a **shell** `SecretVault` impl. iOS equivalent is
   Keychain behind the same trait. The `keyring` crate stays out of Core.
 
+### 9.4b P4-S3b — restore only (the next slice)
+
+Plan: `12-p4-s3-live-client.md`. Use this subsection only.
+
+**Lands:** restore an already-persisted session through Core
+persist/restore using the S3a vault. No password.
+
+**S3b is not `matrix_restore_session`.** Do not register that desktop
+leftover. Do not put Keyring types in Core.
+
+**Must not land:** password; `attach_*` (that is S3d); `Core.command` /
+command families (S4 adds the first UniFFI command wrapper, for
+`matrix_room_list_snapshot` only); desktop `matrix_restore_session` as
+a Core envelope command; leftover registration; an invented 7B;
+`Platform::emit` for product events; NSE / APNs / booting sync in NSE;
+retiring `MatrixRustSDKService`; merge to `main`.
+
+**UDL:** `SharedCore` is constructor-only until this slice. S3b **adds**
+restore FFI on `SharedCore`. That is a UDL change. Section 9.2 disk
+gate applies. Implement in `crates/synara-core/src/shared_core_ffi.rs`.
+Do not extend `session_projection_ffi.rs`.
+
+**Rust reference (do not copy Tauri/Keyring types):**
+`restore_session_from_vault` / `restore_session_onto_client` in
+`crates/synara-core/src/app/lifecycle/`.
+
+**Swift:** wire the restore path through the S3a vault only as far as
+restore requires. XCTest construction of `SharedCore` is not
+iOS-on-engine. Do not install password login. Do not attach owners.
+
+**If disk < 20 Gi:** stop. Docs-only updates to this playbook are
+allowed. Do not change UDL.
+
+### 9.4c P4-S3c — password login (not S3b)
+
+Do not start this before S3b merges.
+
 Password login on iOS stays in the Swift shell the same way desktop
 keeps `matrix_login_password` desktop: the password never enters a
 UniFFI string if you can avoid it. Prefer: Swift collects the password,
 calls a **narrow** Rust login entry that already exists in Core's auth
 module (`login_with_password`) **from the Swift shell via a dedicated
 authenticated FFI that you design in that slice**, or keep password
-login on `MatrixRustSDK` until S3 is designed as its own ADR-sized
+login on `MatrixRustSDK` until S3c is designed as its own ADR-sized
 write-up in the PR body. If unsure, **stop and write the PR plan; do
-not guess.**
+not guess.** Password never rides a generic `Core.command` string.
 
-After a session exists, attach the same owner set desktop attaches.
+### 9.4d P4-S3d — attach owners (not S3b)
+
+Do not start this before a session exists from S3b or S3c.
+
+After a session exists, attach the same owner set desktop attaches
+(`attach_typing`, `attach_presence`, `attach_verification`,
+`attach_devices`, `attach_join_rules`, `attach_image_packs`, then
+timelines and sync — see `src-tauri/src/matrix/auth/product_commands.rs`).
 Missing attach → later commands fail closed. That is correct.
+Do not retire `MatrixRustSDKService` in this slice.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 
-Only after S3.
+Only after S3 (including S3d attach).
+
+**S4 — not S3b, S3c, or S3d — adds the first UniFFI `Core.command` or
+typed wrapper, for `matrix_room_list_snapshot` only.**
 
 1. iOS calls `Core.command` (or a typed UniFFI wrapper around one
    registered name) with the **same camelCase payload** desktop uses.
@@ -356,11 +439,13 @@ After every product merge:
    - `08-parity-matrix.md`
    - `10-current-handoff.md`
    - this playbook's "Evidence tip" line if the next-slice list changed
+   - `12-p4-s3-live-client.md` slice table if a P4-S3 product PR landed
 3. Write numbers in words in running prose ("one hundred eleven") to
    match existing style. Lists may use digits.
 4. State leftovers honestly. Do not mark P4/P5 accepted.
 5. Commit `docs(core): refresh provenance after #<N>`.
 6. Merge only to `feature/shared-native-core`.
+7. Re-run section 5. If step 4, stop.
 
 ---
 
@@ -372,7 +457,9 @@ After every product merge:
 | `crates/synara-core/src/transport/census.rs` | Full `matrix_*` list (do not add names React does not invoke) |
 | `crates/synara-core/src/app/*/live.rs` | Owner methods |
 | `crates/synara-core/src/synara_core.udl` | UniFFI surface (P4 only) |
-| `crates/synara-core/src/ffi.rs` | UniFFI translation (P4 only) |
+| `crates/synara-core/src/ffi.rs` | UniFFI translation for namespace probes (P4) |
+| `crates/synara-core/src/shared_core_ffi.rs` | `SharedCore` FFI (P4-S3) |
+| `crates/synara-core/src/session_projection_ffi.rs` | Session-projection mirror only |
 | `src-tauri/src/bridge/` | Desktop adapters |
 | `src-tauri/src/matrix/*/product_commands.rs` | Thin Tauri wrappers |
 | `src-tauri/src/matrix/auth/product_commands.rs` | Session install / attach / logout leftovers |

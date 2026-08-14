@@ -166,13 +166,33 @@ callback interface IosSecretVault {
   void delete(string key);
 };
 
+// Privacy-safe restore outcome. Tokens never cross this DTO.
+dictionary SessionRestoreDto {
+  string user_id;
+  string device_id;
+  string homeserver_url;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface SessionRestoreError {
+  Failed(string code, string description);
+};
+
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
 // UniFFI 0.28 Swift keeps `SharedCore()` for the primary constructor and
 // emits the named constructor as `SharedCore.newWithSecretStore(store:)`,
-// not a second `init(store:)`. Still no command, session, owner attachment,
-// password, or APNs surface.
+// not a second `init(store:)`. P4-S3b adds restore_persisted_session
+// (vault + Core persist/restore). Still no command, attach, password, or APNs surface.
 interface SharedCore {
   constructor();
   [Name="new_with_secret_store"]
   constructor(IosSecretVault store);
+
+  [Async, Throws=SessionRestoreError]
+  SessionRestoreDto restore_persisted_session(
+    string user_id,
+    string homeserver_url,
+    string store_root
+  );
 };
