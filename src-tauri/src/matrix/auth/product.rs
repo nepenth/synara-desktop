@@ -173,7 +173,7 @@ pub struct MatrixCryptoStatus {
 pub struct MatrixAuthCommandError {
     pub code: &'static str,
     pub message: &'static str,
-    pub diagnostic_id: &'static str,
+    pub diagnostic_id: String,
 }
 
 pub use synara_core::app::media::{
@@ -213,12 +213,12 @@ impl MatrixAuthCommandError {
     pub(crate) fn new(
         code: &'static str,
         message: &'static str,
-        diagnostic_id: &'static str,
+        diagnostic_id: impl Into<String>,
     ) -> Self {
         Self {
             code,
             message,
-            diagnostic_id,
+            diagnostic_id: diagnostic_id.into(),
         }
     }
 
@@ -497,7 +497,7 @@ fn platform_secret_storage_status(
 fn map_secret_storage_status_error(
     error: MatrixAuthCommandError,
 ) -> PlatformSecretStorageStatusError {
-    match error.diagnostic_id {
+    match error.diagnostic_id.as_str() {
         "v-crypto.4-status-default-key-failed" => {
             PlatformSecretStorageStatusError::DefaultKeyLoadFailed
         }

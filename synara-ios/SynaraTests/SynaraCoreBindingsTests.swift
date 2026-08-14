@@ -16,7 +16,9 @@ final class SynaraCoreBindingsTests: XCTestCase {
     }
 
     func testSharedCoreAcceptsInMemorySecretStore() {
-        let core = SharedCore(store: InMemoryIosSecretVault())
+        // UniFFI 0.28 Swift emits the named UDL constructor as a static
+        // factory, not a second init(store:).
+        let core = SharedCore.newWithSecretStore(store: InMemoryIosSecretVault())
 
         XCTAssertNotNil(core)
     }
@@ -44,7 +46,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
     }
 
     func testSharedCoreRestoreRejectsHostileIdentityWithoutEcho() async {
-        let core = SharedCore(store: InMemoryIosSecretVault())
+        let core = SharedCore.newWithSecretStore(store: InMemoryIosSecretVault())
         let storeRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("synara-s3b-hostile", isDirectory: true)
         let hostileURL = "https://user:secret@evil.example/?password=hunter2"
@@ -68,7 +70,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
 
     func testSharedCoreRestoreHoldsInstanceAcrossCalls() async {
         let vault = InMemoryIosSecretVault()
-        let core = SharedCore(store: vault)
+        let core = SharedCore.newWithSecretStore(store: vault)
         let storeRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("synara-s3b-hold-core", isDirectory: true)
 
@@ -125,7 +127,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
     }
 
     func testSharedCoreLoginRejectsHostileIdentityWithoutEchoingPassword() async {
-        let core = SharedCore(store: InMemoryIosSecretVault())
+        let core = SharedCore.newWithSecretStore(store: InMemoryIosSecretVault())
         let storeRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("synara-s3c-hostile", isDirectory: true)
         let hostileURL = "https://user:secret@evil.example/?password=hunter2"
@@ -193,6 +195,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
             }
         }
     }
+
 
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
