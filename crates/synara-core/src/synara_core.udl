@@ -569,6 +569,17 @@ interface OwnProfileCommandError {
   Failed(string code, string description);
 };
 
+// Privacy-safe room-profile write ack. Status only; no room id, name, topic, mxc, or bytes.
+dictionary RoomProfileWriteDto {
+  string status;
+};
+
+// Static source constants only. Never echo room id, name, topic, mxc, token, or password.
+[Error]
+interface RoomProfileCommandError {
+  Failed(string code, string description);
+};
+
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
 // P4-S3b adds restore_persisted_session. P4-S3c adds dedicated login_with_password.
 // P4-S3d adds attach_session_owners for the desktop owner set.
@@ -589,7 +600,9 @@ interface OwnProfileCommandError {
 // P4-S9-7 adds typed room-notes snapshot/upsert/delete/complete_todo/move_todo.
 // P4-S9-8 adds typed set_own_display_name / set_own_avatar.
 // Avatar is an mxc:// (or empty clear) reference only. Image bytes stay off.
-// Failed errors stay static. Room name/topic/avatar writers stay off.
+// P4-S9-9 adds typed set_room_name / set_room_topic / set_room_avatar.
+// Room avatar is an mxc:// (or empty clear) reference only. Image bytes stay off.
+// Failed errors stay static. Directory visibility writers stay off.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -749,5 +762,14 @@ interface SharedCore {
 
   [Async, Throws=OwnProfileCommandError]
   OwnProfileWriteDto set_own_avatar(string mxc);
+
+  [Async, Throws=RoomProfileCommandError]
+  RoomProfileWriteDto set_room_name(string room_id, string name);
+
+  [Async, Throws=RoomProfileCommandError]
+  RoomProfileWriteDto set_room_topic(string room_id, string topic);
+
+  [Async, Throws=RoomProfileCommandError]
+  RoomProfileWriteDto set_room_avatar(string room_id, string mxc);
 
 };

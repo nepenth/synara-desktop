@@ -39,6 +39,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreMDirect.swift",
   "synara-ios/Synara/Services/SharedCoreRoomNotes.swift",
   "synara-ios/Synara/Services/SharedCoreOwnProfile.swift",
+  "synara-ios/Synara/Services/SharedCoreRoomProfile.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -132,6 +133,10 @@ const sharedCoreRoomNotes = readFileSync(
 );
 const sharedCoreOwnProfile = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreOwnProfile.swift"),
+  "utf8"
+);
+const sharedCoreRoomProfile = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreRoomProfile.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -449,6 +454,21 @@ const assertions = [
   [sharedCoreOwnProfile, "setOwnAvatar", "P4-S9-8 product own avatar helper"],
   [sharedCoreOwnProfile, "core: SharedCore", "P4-S9-8 helper takes an already-constructed SharedCore"],
   [sharedCoreOwnProfile, "core.setOwnDisplayName", "P4-S9-8 helper writes on the caller-owned instance"],
+  [sharedCoreFfi, "set_room_name", "P4-S9-9 typed room-name FFI"],
+  [sharedCoreFfi, "matrix_set_room_name", "P4-S9-9 calls the registered room-name command"],
+  [sharedCoreFfi, "matrix_set_room_topic", "P4-S9-9 calls the registered room-topic command"],
+  [sharedCoreFfi, "matrix_set_room_avatar", "P4-S9-9 calls the registered room-avatar command"],
+  [udl, "RoomProfileWriteDto set_room_name(", "P4-S9-9 SharedCore room name"],
+  [udl, "RoomProfileWriteDto set_room_topic(", "P4-S9-9 SharedCore room topic"],
+  [udl, "RoomProfileWriteDto set_room_avatar(", "P4-S9-9 SharedCore room avatar"],
+  [udl, "dictionary RoomProfileWriteDto", "P4-S9-9 privacy-safe room-profile write DTO"],
+  [udl, "interface RoomProfileCommandError", "P4-S9-9 static room-profile error"],
+  [swiftBindingsTests, "testSharedCoreRoomProfileWithoutSessionFailsClosed", "Swift P4-S9-9 fail-closed room-profile test"],
+  [sharedCoreRoomProfile, "setRoomName", "P4-S9-9 product room-name helper"],
+  [sharedCoreRoomProfile, "setRoomTopic", "P4-S9-9 product room-topic helper"],
+  [sharedCoreRoomProfile, "setRoomAvatar", "P4-S9-9 product room-avatar helper"],
+  [sharedCoreRoomProfile, "core: SharedCore", "P4-S9-9 helper takes an already-constructed SharedCore"],
+  [sharedCoreRoomProfile, "core.setRoomName", "P4-S9-9 helper writes on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1270,9 +1290,14 @@ for (const required of ["set_own_display_name", "set_own_avatar"]) {
     throw new Error(`P4-S9-8 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "set_room_name", "set_room_topic", "set_room_avatar", "crypto_status", "backup_setup"]) {
+for (const required of ["set_room_name", "set_room_topic", "set_room_avatar"]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-9 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "get_room_directory_visibility", "set_room_directory_visibility", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-8`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-9`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1379,6 +1404,17 @@ for (const forbidden of ["setRoomName", "setRoomTopic", "setRoomAvatar", "roomNo
     throw new Error(`P4-S9-8 helper must not wrap ${forbidden}`);
   }
 }
+if (sharedCoreRoomProfile.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-9 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreRoomProfile.includes("SharedCore.newWithSecretStore") || sharedCoreRoomProfile.includes("newWithSecretStore")) {
+  throw new Error("P4-S9-9 helper must not construct SharedCore");
+}
+for (const forbidden of ["getRoomDirectoryVisibility", "setRoomDirectoryVisibility", "roomJoinRuleSnapshot", "setOwnDisplayName", "backupStatus"]) {
+  if (sharedCoreRoomProfile.includes(forbidden)) {
+    throw new Error(`P4-S9-9 helper must not wrap ${forbidden}`);
+  }
+}
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
 if (!roomListDto) throw new Error("missing RoomListSnapshotDto");
 if (/\bpassword\b/.test(roomListDto[1]) || /\btoken\b/.test(roomListDto[1])) {
@@ -1463,6 +1499,11 @@ const ownProfileWriteDto = udl.match(/dictionary OwnProfileWriteDto \{([\s\S]*?)
 if (!ownProfileWriteDto) throw new Error("missing OwnProfileWriteDto");
 if (/\bpassword\b/.test(ownProfileWriteDto[1]) || /\btoken\b/.test(ownProfileWriteDto[1]) || /\bbytes\b/.test(ownProfileWriteDto[1]) || /\bdisplay_name\b/.test(ownProfileWriteDto[1]) || /\bmxc\b/.test(ownProfileWriteDto[1])) {
   throw new Error("OwnProfileWriteDto must not carry password, token, bytes, display_name, or mxc fields");
+}
+const roomProfileWriteDto = udl.match(/dictionary RoomProfileWriteDto \{([\s\S]*?)\};/);
+if (!roomProfileWriteDto) throw new Error("missing RoomProfileWriteDto");
+if (/\bpassword\b/.test(roomProfileWriteDto[1]) || /\btoken\b/.test(roomProfileWriteDto[1]) || /\bbytes\b/.test(roomProfileWriteDto[1]) || /\broom_id\b/.test(roomProfileWriteDto[1]) || /\bname\b/.test(roomProfileWriteDto[1]) || /\btopic\b/.test(roomProfileWriteDto[1]) || /\bmxc\b/.test(roomProfileWriteDto[1])) {
+  throw new Error("RoomProfileWriteDto must not carry password, token, bytes, room_id, name, topic, or mxc fields");
 }
 const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
 if (!loginDto) throw new Error("missing SessionLoginDto");

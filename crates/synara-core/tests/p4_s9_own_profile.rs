@@ -3,7 +3,7 @@
 //! Calls the already-registered Core handlers. Does not start SyncService.
 //! Display name and `mxc://` (or empty clear) may cross as method arguments.
 //! Image/media bytes stay off. Failed errors stay static and must not echo
-//! display name or mxc. Room name/topic/avatar and leftover secret envelopes
+//! display name or mxc. Directory visibility and leftover secret envelopes
 //! stay off.
 
 use std::collections::HashMap;
@@ -72,9 +72,8 @@ fn own_profile_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("set_own_avatar"));
     assert!(shared_core.contains("room_notes_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("set_room_name"));
-    assert!(!shared_core.contains("set_room_topic"));
-    assert!(!shared_core.contains("set_room_avatar"));
+    assert!(!shared_core.contains("get_room_directory_visibility"));
+    assert!(!shared_core.contains("set_room_directory_visibility"));
     assert!(!shared_core.contains("backup_status"));
 }
 

@@ -795,6 +795,47 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreRoomProfileWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let roomId = "!s99SecretRoom:example.org"
+        let name = "S99 Secret Room Name"
+        let topic = "S99 Secret Room Topic"
+        let mxc = "mxc://example.org/s99SecretRoomAvatarId"
+
+        do {
+            _ = try await SharedCoreRoomProfile.setRoomName(core: core, roomId: roomId, name: name)
+            XCTFail("Fail-closed SharedCore must not set room name without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-set-room-name-no-session"))
+            for forbidden in ["syt_", "token", roomId, name] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreRoomProfile.setRoomTopic(core: core, roomId: roomId, topic: topic)
+            XCTFail("Fail-closed SharedCore must not set room topic without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-set-room-topic-no-session"))
+            for forbidden in ["syt_", "token", roomId, topic] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreRoomProfile.setRoomAvatar(core: core, roomId: roomId, mxc: mxc)
+            XCTFail("Fail-closed SharedCore must not set room avatar without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-set-room-avatar-no-session"))
+            for forbidden in ["syt_", "token", roomId, mxc] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 
