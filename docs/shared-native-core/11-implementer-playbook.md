@@ -153,8 +153,11 @@ Run this checklist in order. Stop at the first yes.
    S9-27 timeline edit/redact/report is stacked.
    S9-28 timeline pin/unpin is stacked.
    S9-29 timeline poll vote / call decline is stacked.
-   S9-30 timeline forward (section 9.5) is on this branch.
-   Next after merge is session/status reads.
+   S9-30 timeline forward is stacked.
+   S9-31 session/status reads (section 9.5) is on this branch.
+   Next after merge is section 5 step 4: no eligible slice.
+   Do not wrap backup/crypto/cross-signing/room-key status.
+   Do not start S10.
    UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
@@ -396,10 +399,15 @@ P4-S9-29 iOS timeline poll vote / call decline stacked
        matrix_timeline_poll_vote / matrix_timeline_call_decline.
        Write ack is the existing action readback. No media bytes.
        Timeline forward stays off.
-P4-S9-30 iOS timeline forward **this branch**
+P4-S9-30 iOS timeline forward       stacked
        matrix_timeline_forward_text / matrix_timeline_forward_media.
        Write ack is the existing action readback. No media bytes.
        Session/status reads stay off.
+P4-S9-31 iOS session/status reads **this branch**
+       matrix_session_snapshot / matrix_sync_status /
+       matrix_media_config / matrix_secret_storage_status.
+       Reads only. No leftover secret/bytes envelopes.
+       Backup/crypto/cross-signing/room-key status stay off.
 P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        only when grep shows no remaining product callers
 P4-S11 NSE read-only store API        (never boot sync in NSE)
@@ -537,43 +545,36 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 
-S9-29 timeline poll vote / call decline is stacked at #977. **S9-30
-(this branch)** adds typed UniFFI wrappers for the registered timeline
-forward commands.
+S9-30 timeline forward is stacked at #978. **S9-31 (this branch)**
+adds typed UniFFI wrappers for the registered session/status read
+commands.
 
-1. `SharedCore.timeline_forward_text` / `timeline_forward_media` call
-   `Core.command` with the same camelCase payloads desktop uses
-   (`{ sourceRoomId, eventId, targetRoomId, asQuote }`,
-   `{ sourceRoomId, eventId, targetRoomId }`).
-   They return the existing action readback. No media bytes. Do not
-   re-wrap S6 open, S9-22 send text, S9-25 edit message, S9-26 poll
-   respond, S9-27 edit/redact/report, S9-28 pin/unpin, or S9-29
-   poll vote / call decline.
-2. Do not reimplement timeline forward in Swift. Do not wrap
-   session/status reads, leftover media bytes, a file path, or leftover
-   secret envelopes.
-3. Do not start `SyncService`. Missing owner fail-closes with the
-   registered `p2-timeline-forward-text-no-session` /
-   `p2-timeline-forward-media-no-session` codes. Unstarted sync returns
-   the registered handler's real outcome. Planted forward must
-   fail on local room/event validation
-   (`v-timeline-forward-source-room-not-found` /
-   `v-timeline-forward-media-source-room-not-found` /
-   `d0.4-send-invalid-room-id` /
-   `v-timeline-forward-invalid-event-id` /
-   `v-timeline-forward-media-invalid-event-id`)
-   and must not require a live server. Failed errors must not echo
-   event id, source room id, or target room id. Oversize fail-closes
-   without truncating or echoing the event id or room ids.
+1. `SharedCore.session_snapshot` / `sync_status` / `media_config` /
+   `secret_storage_status` call `Core.command` with the same null
+   payloads desktop uses. They return the existing read DTOs. Do not
+   re-wrap S9-30 timeline forward or leftover status commands.
+2. Do not reimplement these reads in Swift. Do not wrap leftover
+   password/export/import/bootstrap, `matrix_crypto_status`,
+   `matrix_cross_signing_status`, `matrix_backup_status`, or
+   `matrix_room_key_transfer_status`.
+3. Do not start `SyncService`. `session_snapshot` without a session
+   returns the registered `logged_out` readback. The other three fail
+   on the registered iOS platform diagnostics
+   (`p2-sync-status-platform-unavailable`,
+   `p2-media-config-no-session`,
+   `v-crypto.4-secret-storage-requires-session`). Planted
+   `session_snapshot` returns the registered `logged_in` readback.
+   Planted status reads return those same platform diagnostics
+   because `IosFailClosedPlatform` remains the Platform. Must not
+   require a live server. Failed errors must not echo user id,
+   homeserver, device id, or tokens. Oversize fail-closes without
+   truncating or echoing those values.
 4. Helper + XCTest are the iOS surface this slice. Do not swap
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
-5. One command family per PR. Next is session/status reads
-   (`matrix_session_snapshot`, `matrix_sync_status`,
-   `matrix_media_config`, `matrix_secret_storage_status`).
-   Do not wrap leftover
-   password/export/import/bootstrap, `matrix_crypto_status`, or
-   `matrix_cross_signing_status`. Do not hit production homeservers.
-   Do not start S10.
+5. One command family per PR. Next is not eligible (section 5
+   step 4). Do not wrap leftover-adjacent backup/crypto/cross-signing/
+   room-key status. Do not hit production homeservers. Do not start
+   S10.
 
 ### 9.6 When you may delete `MatrixRustSDK`
 

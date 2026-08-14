@@ -123,6 +123,10 @@
 //! wrappers for the already-registered Core commands. Failed errors never
 //! echo event id, source room id, or target room id. Session/status
 //! reads stay off. No media bytes cross the envelope.
+//! P4-S9-31 adds typed `session_snapshot` / `sync_status` / `media_config` /
+//! `secret_storage_status` wrappers for the already-registered Core
+//! commands. Failed errors never echo user id, homeserver, or device id.
+//! Backup/crypto/cross-signing/room-key status stay off.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -647,6 +651,16 @@ const TIMELINE_FORWARD_FAILED_CODE: &str = "p4-s9-30-timeline-forward-failed";
 const TIMELINE_FORWARD_FAILED_DESCRIPTION: &str =
     "The timeline forward request could not be completed.";
 const TIMELINE_FORWARD_OWNER_DESCRIPTION: &str = "The timeline forward request is not available.";
+const SESSION_STATUS_GENERATION: u64 = 0;
+const SESSION_SNAPSHOT_COMMAND: &str = "matrix_session_snapshot";
+const SYNC_STATUS_COMMAND: &str = "matrix_sync_status";
+const MEDIA_CONFIG_COMMAND: &str = "matrix_media_config";
+const SECRET_STORAGE_STATUS_COMMAND: &str = "matrix_secret_storage_status";
+const SESSION_STATUS_FAILED_CODE: &str = "p4-s9-31-session-status-failed";
+const SESSION_STATUS_FAILED_DESCRIPTION: &str =
+    "The session or status request could not be completed.";
+const SESSION_STATUS_OWNER_DESCRIPTION: &str = "The session or status request is not available.";
+const SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID: &str = "p4.1-sync-service-error";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1311,6 +1325,62 @@ impl std::fmt::Display for TimelineForwardError {
 }
 
 impl std::error::Error for TimelineForwardError {}
+
+/// Privacy-safe live session snapshot from the registered Core command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionSnapshotDto {
+    pub status: String,
+    pub user_id: Option<String>,
+    pub device_id: Option<String>,
+    pub homeserver_url: Option<String>,
+    pub session_generation: Option<u64>,
+}
+
+/// Privacy-safe sync readiness from the registered Core command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncStatusDto {
+    pub readiness: String,
+    pub session_generation: u64,
+    pub offline_mode_enabled: bool,
+    pub failure_diagnostic_id: Option<String>,
+    pub sliding_sync_capable: Option<bool>,
+}
+
+/// Privacy-safe media upload-size config from the registered Core command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MediaConfigDto {
+    pub upload_size: u64,
+}
+
+/// Privacy-safe secret-storage status from the registered Core command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SecretStorageStatusDto {
+    pub session_generation: u64,
+    pub state: String,
+    pub exists: bool,
+    pub unlocked: bool,
+    pub default_key_set: bool,
+    pub passphrase_configured: bool,
+    pub bootstrap_ready: bool,
+    pub missing_secrets: Vec<String>,
+    pub action: String,
+}
+
+/// Static fail-closed session/status error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionStatusError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for SessionStatusError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for SessionStatusError {}
 
 /// Static fail-closed timeline error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -4156,6 +4226,32 @@ impl SharedCore {
         .await
     }
 
+    pub async fn session_snapshot(&self) -> Result<SessionSnapshotDto, SessionStatusError> {
+        let payload = self
+            .session_status_command(SESSION_SNAPSHOT_COMMAND)
+            .await?;
+        session_snapshot_dto(payload)
+    }
+
+    pub async fn sync_status(&self) -> Result<SyncStatusDto, SessionStatusError> {
+        let payload = self.session_status_command(SYNC_STATUS_COMMAND).await?;
+        sync_status_dto(payload)
+    }
+
+    pub async fn media_config(&self) -> Result<MediaConfigDto, SessionStatusError> {
+        let payload = self.session_status_command(MEDIA_CONFIG_COMMAND).await?;
+        media_config_dto(payload)
+    }
+
+    pub async fn secret_storage_status(
+        &self,
+    ) -> Result<SecretStorageStatusDto, SessionStatusError> {
+        let payload = self
+            .session_status_command(SECRET_STORAGE_STATUS_COMMAND)
+            .await?;
+        secret_storage_status_dto(payload)
+    }
+
     async fn space_null_command(
         &self,
         command: &'static str,
@@ -4466,6 +4562,24 @@ impl SharedCore {
                 )
             })?;
         timeline_forward_dto(result)
+    }
+
+    async fn session_status_command(
+        &self,
+        command: &'static str,
+    ) -> Result<serde_json::Value, SessionStatusError> {
+        let payload = session_status_envelope_payload(serde_json::Value::Null)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: SESSION_STATUS_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(map_session_status_core_error)?;
+        Ok(response.payload)
     }
 
     async fn invite_action_command(
@@ -8043,6 +8157,306 @@ fn timeline_forward_dto(
     })
 }
 
+fn session_status_failed(code: &str, description: &'static str) -> SessionStatusError {
+    SessionStatusError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_session_status_core_error(error: MatrixIpcError) -> SessionStatusError {
+    match error.diagnostic_id.as_deref() {
+        Some(code)
+            if code.starts_with("p2-session-snapshot-")
+                || code.starts_with("p2-sync-status-")
+                || code.starts_with("p2-media-config-")
+                || code.starts_with("p2-secret-storage-status-")
+                || code.starts_with("v-crypto.4-") =>
+        {
+            session_status_failed(code, SESSION_STATUS_OWNER_DESCRIPTION)
+        }
+        _ => session_status_failed(
+            SESSION_STATUS_FAILED_CODE,
+            SESSION_STATUS_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn session_status_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, SessionStatusError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(session_status_failed(
+            SESSION_STATUS_FAILED_CODE,
+            SESSION_STATUS_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+#[derive(Debug, Deserialize)]
+struct SessionSnapshotResultWire {
+    status: String,
+    user_id: Option<String>,
+    device_id: Option<String>,
+    homeserver_url: Option<String>,
+    #[serde(rename = "sessionGeneration")]
+    session_generation: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncStatusResultWire {
+    readiness: String,
+    session_generation: u64,
+    offline_mode_enabled: bool,
+    failure_diagnostic_id: Option<String>,
+    sliding_sync_capable: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MediaConfigResultWire {
+    #[serde(rename = "m.upload.size")]
+    upload_size: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SecretStorageStatusResultWire {
+    session_generation: u64,
+    state: String,
+    exists: bool,
+    unlocked: bool,
+    default_key_set: bool,
+    passphrase_configured: bool,
+    bootstrap_ready: bool,
+    missing_secrets: Vec<String>,
+    action: String,
+}
+
+fn closed_session_snapshot_status(value: &str) -> Option<&'static str> {
+    match value {
+        "logged_out" => Some("logged_out"),
+        "logged_in" => Some("logged_in"),
+        _ => None,
+    }
+}
+
+fn closed_sync_readiness(value: &str) -> Option<&'static str> {
+    match value {
+        "unconfigured" => Some("unconfigured"),
+        "idle" => Some("idle"),
+        "running" => Some("running"),
+        "offline" => Some("offline"),
+        "terminated" => Some("terminated"),
+        "failed" => Some("failed"),
+        _ => None,
+    }
+}
+
+fn closed_sync_failure_diagnostic(value: Option<&str>) -> Option<Option<&'static str>> {
+    match value {
+        None => Some(None),
+        Some(SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID) => Some(Some(SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID)),
+        Some(_) => None,
+    }
+}
+
+fn closed_secret_storage_state(value: &str) -> Option<&'static str> {
+    match value {
+        "unavailable" => Some("unavailable"),
+        "not_set_up" => Some("not_set_up"),
+        "locked" => Some("locked"),
+        "ready" => Some("ready"),
+        _ => None,
+    }
+}
+
+fn closed_secret_storage_action(value: &str) -> Option<&'static str> {
+    match value {
+        "bootstrap_required" => Some("bootstrap_required"),
+        "unlock_required" => Some("unlock_required"),
+        "none" => Some("none"),
+        _ => None,
+    }
+}
+
+fn closed_missing_secret(value: &str) -> Option<&'static str> {
+    match value {
+        "cross_signing_master" => Some("cross_signing_master"),
+        "cross_signing_self_signing" => Some("cross_signing_self_signing"),
+        "cross_signing_user_signing" => Some("cross_signing_user_signing"),
+        "encryption_backup" => Some("encryption_backup"),
+        _ => None,
+    }
+}
+
+fn session_snapshot_dto(
+    payload: serde_json::Value,
+) -> Result<SessionSnapshotDto, SessionStatusError> {
+    let result: SessionSnapshotResultWire = serde_json::from_value(payload).map_err(|_| {
+        session_status_failed(
+            SESSION_STATUS_FAILED_CODE,
+            SESSION_STATUS_FAILED_DESCRIPTION,
+        )
+    })?;
+    let status = closed_session_snapshot_status(&result.status).ok_or_else(|| {
+        session_status_failed(
+            SESSION_STATUS_FAILED_CODE,
+            SESSION_STATUS_FAILED_DESCRIPTION,
+        )
+    })?;
+    match status {
+        "logged_out" => Ok(SessionSnapshotDto {
+            status: status.to_owned(),
+            user_id: None,
+            device_id: None,
+            homeserver_url: None,
+            session_generation: None,
+        }),
+        "logged_in" => {
+            let user_id = result
+                .user_id
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    session_status_failed(
+                        SESSION_STATUS_FAILED_CODE,
+                        SESSION_STATUS_FAILED_DESCRIPTION,
+                    )
+                })?;
+            let device_id = result
+                .device_id
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    session_status_failed(
+                        SESSION_STATUS_FAILED_CODE,
+                        SESSION_STATUS_FAILED_DESCRIPTION,
+                    )
+                })?;
+            let homeserver_url = result
+                .homeserver_url
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    session_status_failed(
+                        SESSION_STATUS_FAILED_CODE,
+                        SESSION_STATUS_FAILED_DESCRIPTION,
+                    )
+                })?;
+            let session_generation = result.session_generation.ok_or_else(|| {
+                session_status_failed(
+                    SESSION_STATUS_FAILED_CODE,
+                    SESSION_STATUS_FAILED_DESCRIPTION,
+                )
+            })?;
+            Ok(SessionSnapshotDto {
+                status: status.to_owned(),
+                user_id: Some(user_id),
+                device_id: Some(device_id),
+                homeserver_url: Some(homeserver_url),
+                session_generation: Some(session_generation),
+            })
+        }
+        _ => Err(session_status_failed(
+            SESSION_STATUS_FAILED_CODE,
+            SESSION_STATUS_FAILED_DESCRIPTION,
+        )),
+    }
+}
+
+fn sync_status_dto(payload: serde_json::Value) -> Result<SyncStatusDto, SessionStatusError> {
+    let result: SyncStatusResultWire = serde_json::from_value(payload).map_err(|_| {
+        session_status_failed(
+            SESSION_STATUS_FAILED_CODE,
+            SESSION_STATUS_FAILED_DESCRIPTION,
+        )
+    })?;
+    let readiness = closed_sync_readiness(&result.readiness).ok_or_else(|| {
+        session_status_failed(
+            SESSION_STATUS_FAILED_CODE,
+            SESSION_STATUS_FAILED_DESCRIPTION,
+        )
+    })?;
+    let failure_diagnostic_id =
+        closed_sync_failure_diagnostic(result.failure_diagnostic_id.as_deref())
+            .ok_or_else(|| {
+                session_status_failed(
+                    SESSION_STATUS_FAILED_CODE,
+                    SESSION_STATUS_FAILED_DESCRIPTION,
+                )
+            })?
+            .map(str::to_owned);
+    Ok(SyncStatusDto {
+        readiness: readiness.to_owned(),
+        session_generation: result.session_generation,
+        offline_mode_enabled: result.offline_mode_enabled,
+        failure_diagnostic_id,
+        sliding_sync_capable: result.sliding_sync_capable,
+    })
+}
+
+fn media_config_dto(payload: serde_json::Value) -> Result<MediaConfigDto, SessionStatusError> {
+    let result: MediaConfigResultWire = serde_json::from_value(payload).map_err(|_| {
+        session_status_failed(
+            SESSION_STATUS_FAILED_CODE,
+            SESSION_STATUS_FAILED_DESCRIPTION,
+        )
+    })?;
+    Ok(MediaConfigDto {
+        upload_size: result.upload_size,
+    })
+}
+
+fn secret_storage_status_dto(
+    payload: serde_json::Value,
+) -> Result<SecretStorageStatusDto, SessionStatusError> {
+    let result: SecretStorageStatusResultWire = serde_json::from_value(payload).map_err(|_| {
+        session_status_failed(
+            SESSION_STATUS_FAILED_CODE,
+            SESSION_STATUS_FAILED_DESCRIPTION,
+        )
+    })?;
+    let state = closed_secret_storage_state(&result.state).ok_or_else(|| {
+        session_status_failed(
+            SESSION_STATUS_FAILED_CODE,
+            SESSION_STATUS_FAILED_DESCRIPTION,
+        )
+    })?;
+    let action = closed_secret_storage_action(&result.action).ok_or_else(|| {
+        session_status_failed(
+            SESSION_STATUS_FAILED_CODE,
+            SESSION_STATUS_FAILED_DESCRIPTION,
+        )
+    })?;
+    let missing_secrets = result
+        .missing_secrets
+        .iter()
+        .map(|value| {
+            closed_missing_secret(value)
+                .map(str::to_owned)
+                .ok_or_else(|| {
+                    session_status_failed(
+                        SESSION_STATUS_FAILED_CODE,
+                        SESSION_STATUS_FAILED_DESCRIPTION,
+                    )
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(SecretStorageStatusDto {
+        session_generation: result.session_generation,
+        state: state.to_owned(),
+        exists: result.exists,
+        unlocked: result.unlocked,
+        default_key_set: result.default_key_set,
+        passphrase_configured: result.passphrase_configured,
+        bootstrap_ready: result.bootstrap_ready,
+        missing_secrets,
+        action: action.to_owned(),
+    })
+}
+
 fn timeline_event_item_dto(item: NativeTimelineItem) -> TimelineEventItemDto {
     TimelineEventItemDto {
         item_id: item.item_id,
@@ -8629,6 +9043,21 @@ mod tests {
             .enable_all()
             .build()
             .unwrap()
+    }
+
+    #[test]
+    fn session_status_oversize_payload_fails_closed_without_truncate_or_echo() {
+        let marker = "s931OversizeMarker";
+        let payload = serde_json::json!({
+            "pad": format!("{marker}{}", "x".repeat(MAX_ENVELOPE_PAYLOAD_JSON_BYTES + 8))
+        });
+        let error = session_status_envelope_payload(payload)
+            .expect_err("oversize session/status payload must fail closed");
+        let text = format!("{error:?}{error}");
+        assert!(text.contains(SESSION_STATUS_FAILED_CODE));
+        assert!(!text.contains(marker));
+        assert!(!text.contains("syt_"));
+        assert!(!text.contains("@alice"));
     }
 
     #[test]

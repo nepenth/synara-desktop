@@ -1744,6 +1744,57 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreSessionStatusWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let userId = "@alice:example.org"
+        let homeserver = "https://matrix.example.org"
+        let deviceId = "DEVICEABC"
+
+        do {
+            let snapshot = try await SharedCoreSessionStatus.sessionSnapshot(core: core)
+            XCTAssertEqual(snapshot.status, "logged_out")
+            XCTAssertNil(snapshot.userId)
+            XCTAssertNil(snapshot.deviceId)
+            XCTAssertNil(snapshot.homeserverUrl)
+            XCTAssertNil(snapshot.sessionGeneration)
+        } catch {
+            XCTFail("Fail-closed SharedCore must return the registered logged-out session snapshot")
+        }
+
+        do {
+            _ = try await SharedCoreSessionStatus.syncStatus(core: core)
+            XCTFail("Fail-closed SharedCore must not read sync status from the iOS platform")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-sync-status-platform-unavailable"))
+            for forbidden in ["syt_", "token", userId, homeserver, deviceId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreSessionStatus.mediaConfig(core: core)
+            XCTFail("Fail-closed SharedCore must not read media config without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-media-config-no-session"))
+            for forbidden in ["syt_", "token", userId, homeserver, deviceId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreSessionStatus.secretStorageStatus(core: core)
+            XCTFail("Fail-closed SharedCore must not read secret-storage status without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("v-crypto.4-secret-storage-requires-session"))
+            for forbidden in ["syt_", "token", userId, homeserver, deviceId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testSharedCoreTimelineForwardWithoutSessionFailsClosed() async {
         let core = SharedCore()
         let sourceRoomId = "!s930SecretSource:example.org"
