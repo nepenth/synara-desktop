@@ -9,6 +9,12 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertFalse(version.isEmpty)
     }
 
+    func testSharedCoreConstructsOverGeneratedRustFFI() {
+        let core = SharedCore()
+
+        XCTAssertNotNil(core)
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

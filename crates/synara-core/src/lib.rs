@@ -28,6 +28,9 @@ pub use session_projection_ffi::{
     SessionProjection, SessionProjectionCore, SessionProjectionError, SessionProjectionLifecycle,
 };
 
+mod shared_core_ffi;
+pub use shared_core_ffi::SharedCore;
+
 mod core;
 pub use core::Core;
 

@@ -14,6 +14,8 @@ const required = [
   "crates/synara-core/src/synara_core.udl",
   "crates/synara-core/src/ffi.rs",
   "crates/synara-core/src/session_projection_ffi.rs",
+  "crates/synara-core/src/shared_core_ffi.rs",
+  "crates/synara-core/src/platform/ios_fail_closed.rs",
   "crates/synara-core/build.rs",
   "crates/synara-core-bindgen/Cargo.toml",
   "crates/synara-core-bindgen/src/main.rs",
@@ -41,6 +43,10 @@ const lib = readFileSync(resolve(root, "crates/synara-core/src/lib.rs"), "utf8")
 const ffi = readFileSync(resolve(root, "crates/synara-core/src/ffi.rs"), "utf8");
 const sessionProjectionFfi = readFileSync(
   resolve(root, "crates/synara-core/src/session_projection_ffi.rs"),
+  "utf8"
+);
+const sharedCoreFfi = readFileSync(
+  resolve(root, "crates/synara-core/src/shared_core_ffi.rs"),
   "utf8"
 );
 const sessionProjectionAdapter = readFileSync(
@@ -82,12 +88,17 @@ const assertions = [
   [udl, "interface SessionProjectionCore", "P4-3 project-owned session facade"],
   [udl, "SessionProjection? session_snapshot()", "P4-3 projection snapshot operation"],
   [udl, "interface SessionProjectionError", "P4-3 static privacy-safe error"],
+  [udl, "interface SharedCore", "P4-S2 construction-only shared Core facade"],
   [lib, 'uniffi::include_scaffolding!("synara_core")', "Rust FFI scaffolding inclusion"],
   [lib, "SessionProjectionCore", "P4-3 facade export"],
+  [lib, "SharedCore", "P4-S2 shared Core facade export"],
   [sessionProjectionFfi, "Core::with_registry", "P4-3 Core open/close/snapshot delegation"],
   [sessionProjectionFfi, "CommandRegistry::new()", "P4-3 facade has no command registry"],
   [sessionProjectionFfi, "uniffi_projection_facade_executes_core_open_snapshot_and_close", "P4-3 Rust behavioral facade test"],
   [sessionProjectionFfi, "facade_rejects_hostile_values_with_static_privacy_safe_error", "P4-3 Rust hostile-input privacy test"],
+  [sharedCoreFfi, "SharedCore", "P4-S2 shared Core facade"],
+  [sharedCoreFfi, "IosFailClosedPlatform", "P4-S2 Rust-owned iOS Platform"],
+  [sharedCoreFfi, "Core::new", "P4-S2 real Core construction"],
   [sessionProjectionAdapter, "openAfterInstalledClient", "post-install projection hook"],
   [sessionProjectionAdapter, "closeBeforeSDKWipe", "pre-wipe projection close hook"],
   [sessionProjectionAdapter, "func coreSessionIdentity() async -> CoreSessionIdentity?", "P4-4 display-only Core identity readback"],
@@ -105,6 +116,7 @@ const assertions = [
   [swiftBindingsTests, "try await core.open", "Swift generated FFI open execution"],
   [swiftBindingsTests, "try await core.sessionSnapshot()", "Swift generated FFI snapshot execution"],
   [swiftBindingsTests, "try await core.close()", "Swift generated FFI close execution"],
+  [swiftBindingsTests, "testSharedCoreConstructsOverGeneratedRustFFI", "Swift P4-S2 Core construction test"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -843,6 +855,18 @@ const projectionOperations = [
 ].map(([, operation]) => operation);
 if (projectionOperations.join(",") !== "open,session_snapshot,close") {
   throw new Error(`P4-3 facade must expose only open/session_snapshot/close; found ${projectionOperations.join(", ")}`);
+}
+
+// P4-S2 proves only that Swift can construct and retain a real Core. Keep the
+// interface literally construction-only until the P4-S3 live-client design is
+// accepted; in particular, do not expose command, session, or attach methods.
+const sharedCoreObject = udl.match(/interface SharedCore \{([\s\S]*?)\};/);
+if (!sharedCoreObject) throw new Error("missing P4-S2 SharedCore object");
+const sharedCoreMembers = sharedCoreObject[1]
+  .replace(/\/\/.*$/gm, "")
+  .trim();
+if (sharedCoreMembers !== "constructor();") {
+  throw new Error("P4-S2 SharedCore must expose only constructor");
 }
 
 // P4-3's private Core dependency must continue satisfying every required

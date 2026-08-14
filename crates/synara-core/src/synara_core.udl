@@ -146,3 +146,10 @@ interface SessionProjectionCore {
   [Async, Throws=SessionProjectionError]
   void close();
 };
+
+// P4-S2: construct and retain a real Core with a Rust-owned, fail-closed iOS
+// Platform. This is deliberately construction-only: no Platform callback,
+// command, session, owner attachment, password, Keychain, or APNs surface.
+interface SharedCore {
+  constructor();
+};

@@ -16,6 +16,9 @@ use crate::transport::{
     MatrixIpcEnvelope, MatrixIpcError, MatrixIpcErrorCategory, MAX_WIRE_COUNTER,
 };
 
+mod ios_fail_closed;
+pub use ios_fail_closed::IosFailClosedPlatform;
+
 /// Closed failure classification that may cross from a shell into Core.
 ///
 /// This is deliberately not a diagnostic string. Core alone maps this enum to
