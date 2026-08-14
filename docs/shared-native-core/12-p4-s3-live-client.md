@@ -8,8 +8,9 @@ S3a landed in #935. S3b restore landed in #937 (`4edfc1f5`).
 S3c login (Option A) landed in #938 (`9b4ec54f`).
 S3d attach landed in #939 (`ad63d56d`).
 S4 room-list snapshot landed in #940 (`5a6f3e9b`).
-**S5 invites snapshot lands on `agent/snc-p4-s5-invites`.**
-Playbook recipe: §9.5. Next after S5 is S6 timeline.
+S5 invites snapshot landed in #942 (`17c29afd`).
+**S6 timeline open/close/paginate lands on `agent/snc-p4-s6-timeline`.**
+Playbook recipe: §9.5. Next after S6 is S7 typing/presence.
 
 ## Decision
 

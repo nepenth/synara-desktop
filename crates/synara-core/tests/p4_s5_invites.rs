@@ -60,7 +60,7 @@ fn invites_surface_exposes_only_the_registered_snapshot_command() {
     assert!(!udl.contains("matrix_invites_block_sender"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("attach_typing"));
-    assert!(!udl.contains("timeline_open"));
+    assert!(!udl.contains("matrix_timeline_jump_latest"));
     let shared_core = udl
         .split("interface SharedCore {")
         .nth(1)
@@ -70,7 +70,7 @@ fn invites_surface_exposes_only_the_registered_snapshot_command() {
     assert!(shared_core.contains("room_list_snapshot"));
     assert!(!shared_core.contains("command("));
     assert!(!shared_core.contains("invites_accept"));
-    assert!(!shared_core.contains("timeline_"));
+    assert!(!shared_core.contains("jump_latest"));
 }
 
 #[test]

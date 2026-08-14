@@ -196,6 +196,58 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreTimelineWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let position = TimelineOpenPositionDto(
+            kind: "live_bottom",
+            atBottom: false,
+            restoredAnchorEventId: nil,
+            liveTailEventId: nil,
+            updatedAtMs: nil,
+            eventId: nil
+        )
+
+        do {
+            _ = try await SharedCoreTimeline.timelineOpen(
+                core: core,
+                roomId: "!missing:example.org",
+                position: position
+            )
+            XCTFail("Fail-closed SharedCore must not open a timeline without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-timeline-open-no-session"))
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreTimeline.timelineClose(core: core, streamId: "view-1")
+            XCTFail("Fail-closed SharedCore must not close a timeline without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-timeline-close-no-session"))
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreTimeline.timelinePaginate(
+                core: core,
+                streamId: "view-1",
+                direction: "backwards"
+            )
+            XCTFail("Fail-closed SharedCore must not paginate a timeline without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-timeline-paginate-no-session"))
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
 
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"

@@ -28,6 +28,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreSessionAttach.swift",
   "synara-ios/Synara/Services/SharedCoreRoomList.swift",
   "synara-ios/Synara/Services/SharedCoreInvites.swift",
+  "synara-ios/Synara/Services/SharedCoreTimeline.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -77,6 +78,10 @@ const sharedCoreRoomList = readFileSync(
 );
 const sharedCoreInvites = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreInvites.swift"),
+  "utf8"
+);
+const sharedCoreTimeline = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreTimeline.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -208,6 +213,21 @@ const assertions = [
   [sharedCoreInvites, "invitesSnapshot", "P4-S5 product invite helper"],
   [sharedCoreInvites, "core: SharedCore", "P4-S5 helper takes an already-constructed SharedCore"],
   [sharedCoreInvites, "core.invitesSnapshot", "P4-S5 helper reads on the caller-owned instance"],
+  [sharedCoreFfi, "timeline_open", "P4-S6 typed timeline-open FFI"],
+  [sharedCoreFfi, "matrix_timeline_open", "P4-S6 calls the registered open command"],
+  [sharedCoreFfi, "matrix_timeline_close", "P4-S6 calls the registered close command"],
+  [sharedCoreFfi, "matrix_timeline_paginate", "P4-S6 calls the registered paginate command"],
+  [udl, "TimelineOpenDto timeline_open(", "P4-S6 SharedCore timeline-open operation"],
+  [udl, "boolean timeline_close(", "P4-S6 SharedCore timeline-close operation"],
+  [udl, "TimelineSnapshotDto timeline_paginate(", "P4-S6 SharedCore timeline-paginate operation"],
+  [udl, "dictionary TimelineOpenDto", "P4-S6 privacy-safe timeline-open DTO"],
+  [udl, "interface TimelineError", "P4-S6 static timeline error"],
+  [swiftBindingsTests, "testSharedCoreTimelineWithoutSessionFailsClosed", "Swift P4-S6 fail-closed timeline test"],
+  [sharedCoreTimeline, "timelineOpen", "P4-S6 product timeline-open helper"],
+  [sharedCoreTimeline, "timelineClose", "P4-S6 product timeline-close helper"],
+  [sharedCoreTimeline, "timelinePaginate", "P4-S6 product timeline-paginate helper"],
+  [sharedCoreTimeline, "core: SharedCore", "P4-S6 helper takes an already-constructed SharedCore"],
+  [sharedCoreTimeline, "core.timelineOpen", "P4-S6 helper opens on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -973,6 +993,15 @@ if (!sharedCoreBody.includes("room_list_snapshot")) {
 if (!sharedCoreBody.includes("invites_snapshot")) {
   throw new Error("P4-S5 SharedCore must expose invites_snapshot");
 }
+if (!sharedCoreBody.includes("timeline_open")) {
+  throw new Error("P4-S6 SharedCore must expose timeline_open");
+}
+if (!sharedCoreBody.includes("timeline_close")) {
+  throw new Error("P4-S6 SharedCore must expose timeline_close");
+}
+if (!sharedCoreBody.includes("timeline_paginate")) {
+  throw new Error("P4-S6 SharedCore must expose timeline_paginate");
+}
 if (!sharedCoreBody.includes('[Name="new_with_secret_store"]')) {
   throw new Error("P4-S3a vault constructor must stay a named UniFFI factory");
 }
@@ -981,9 +1010,9 @@ if (swiftBindingsTests.includes("SharedCore(store:")) {
     "UniFFI 0.28 Swift has no SharedCore(store:) init; use SharedCore.newWithSecretStore(store:)"
   );
 }
-for (const forbidden of ["command(", "open(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept"]) {
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S5`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S6`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1007,6 +1036,9 @@ if (sharedCoreRoomList.includes("SharedCore(store:")) {
 if (sharedCoreInvites.includes("SharedCore(store:")) {
   throw new Error("P4-S5 helper must not construct-and-drop SharedCore");
 }
+if (sharedCoreTimeline.includes("SharedCore(store:")) {
+  throw new Error("P4-S6 helper must not construct-and-drop SharedCore");
+}
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
 if (!roomListDto) throw new Error("missing RoomListSnapshotDto");
 if (/\bpassword\b/.test(roomListDto[1]) || /\btoken\b/.test(roomListDto[1])) {
@@ -1016,6 +1048,16 @@ const inviteDto = udl.match(/dictionary InviteSnapshotDto \{([\s\S]*?)\};/);
 if (!inviteDto) throw new Error("missing InviteSnapshotDto");
 if (/\bpassword\b/.test(inviteDto[1]) || /\btoken\b/.test(inviteDto[1])) {
   throw new Error("InviteSnapshotDto must not carry password or token fields");
+}
+const timelineOpenDto = udl.match(/dictionary TimelineOpenDto \{([\s\S]*?)\};/);
+if (!timelineOpenDto) throw new Error("missing TimelineOpenDto");
+if (/\bpassword\b/.test(timelineOpenDto[1]) || /\btoken\b/.test(timelineOpenDto[1])) {
+  throw new Error("TimelineOpenDto must not carry password or token fields");
+}
+const timelineSnapshotDto = udl.match(/dictionary TimelineSnapshotDto \{([\s\S]*?)\};/);
+if (!timelineSnapshotDto) throw new Error("missing TimelineSnapshotDto");
+if (/\bpassword\b/.test(timelineSnapshotDto[1]) || /\btoken\b/.test(timelineSnapshotDto[1])) {
+  throw new Error("TimelineSnapshotDto must not carry password or token fields");
 }
 const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
 if (!loginDto) throw new Error("missing SessionLoginDto");
