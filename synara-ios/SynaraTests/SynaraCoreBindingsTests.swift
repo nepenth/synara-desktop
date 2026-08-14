@@ -319,6 +319,21 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreVerificationListWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+
+        do {
+            _ = try await SharedCoreVerificationList.verificationList(core: core)
+            XCTFail("Fail-closed SharedCore must not list verification without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-verification-list-no-session"))
+            for forbidden in ["password", "syt_", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

@@ -30,6 +30,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreInvites.swift",
   "synara-ios/Synara/Services/SharedCoreTimeline.swift",
   "synara-ios/Synara/Services/SharedCoreTypingPresence.swift",
+  "synara-ios/Synara/Services/SharedCoreVerificationList.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -87,6 +88,10 @@ const sharedCoreTimeline = readFileSync(
 );
 const sharedCoreTypingPresence = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreTypingPresence.swift"),
+  "utf8"
+);
+const sharedCoreVerificationList = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreVerificationList.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -250,6 +255,15 @@ const assertions = [
   [sharedCoreTypingPresence, "presenceSubscribe", "P4-S7 product presence-subscribe helper"],
   [sharedCoreTypingPresence, "core: SharedCore", "P4-S7 helper takes an already-constructed SharedCore"],
   [sharedCoreTypingPresence, "core.typingSnapshot", "P4-S7 helper reads on the caller-owned instance"],
+  [sharedCoreFfi, "verification_list", "P4-S8 typed verification-list FFI"],
+  [sharedCoreFfi, "matrix_verification_list", "P4-S8 calls the registered Core command"],
+  [udl, "VerificationInboxDto verification_list()", "P4-S8 SharedCore verification-list operation"],
+  [udl, "dictionary VerificationInboxDto", "P4-S8 privacy-safe verification inbox DTO"],
+  [udl, "interface VerificationListError", "P4-S8 static verification-list error"],
+  [swiftBindingsTests, "testSharedCoreVerificationListWithoutSessionFailsClosed", "Swift P4-S8 fail-closed verification-list test"],
+  [sharedCoreVerificationList, "verificationList", "P4-S8 product verification-list helper"],
+  [sharedCoreVerificationList, "core: SharedCore", "P4-S8 helper takes an already-constructed SharedCore"],
+  [sharedCoreVerificationList, "core.verificationList", "P4-S8 helper reads on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1030,9 +1044,12 @@ if (!sharedCoreBody.includes("typing_snapshot") || !sharedCoreBody.includes("typ
 if (!sharedCoreBody.includes("presence_snapshot") || !sharedCoreBody.includes("presence_subscribe") || !sharedCoreBody.includes("presence_unsubscribe")) {
   throw new Error("P4-S7 SharedCore must expose presence_snapshot/subscribe/unsubscribe");
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "verification_list"]) {
+if (!sharedCoreBody.includes("verification_list")) {
+  throw new Error("P4-S8 SharedCore must expose verification_list");
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "verification_start", "begin_sas", "verification_accept", "verification_confirm", "verification_mismatch", "verification_cancel", "verification_dismiss"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S7`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S8`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1061,6 +1078,9 @@ if (sharedCoreTimeline.includes("SharedCore(store:")) {
 }
 if (sharedCoreTypingPresence.includes("SharedCore(store:")) {
   throw new Error("P4-S7 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreVerificationList.includes("SharedCore(store:")) {
+  throw new Error("P4-S8 helper must not construct-and-drop SharedCore");
 }
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
 if (!roomListDto) throw new Error("missing RoomListSnapshotDto");
@@ -1091,6 +1111,11 @@ const presenceDto = udl.match(/dictionary PresenceSnapshotDto \{([\s\S]*?)\};/);
 if (!presenceDto) throw new Error("missing PresenceSnapshotDto");
 if (/\bpassword\b/.test(presenceDto[1]) || /\btoken\b/.test(presenceDto[1])) {
   throw new Error("PresenceSnapshotDto must not carry password or token fields");
+}
+const verificationInboxDto = udl.match(/dictionary VerificationInboxDto \{([\s\S]*?)\};/);
+if (!verificationInboxDto) throw new Error("missing VerificationInboxDto");
+if (/\bpassword\b/.test(verificationInboxDto[1]) || /\btoken\b/.test(verificationInboxDto[1])) {
+  throw new Error("VerificationInboxDto must not carry password or token fields");
 }
 const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
 if (!loginDto) throw new Error("missing SessionLoginDto");

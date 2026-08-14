@@ -354,6 +354,28 @@ interface PresenceCommandError {
   Failed(string code, string description);
 };
 
+// Privacy-safe verification request row. Identity/flow fields only; no tokens.
+dictionary VerificationRequestDto {
+  string flow_id;
+  string other_user_id;
+  string? other_device_id;
+  string direction;
+  string phase;
+  u64? started_ts;
+};
+
+// Privacy-safe verification inbox from the registered Core command.
+dictionary VerificationInboxDto {
+  u64 session_generation;
+  sequence<VerificationRequestDto> requests;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface VerificationListError {
+  Failed(string code, string description);
+};
+
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
 // P4-S3b adds restore_persisted_session. P4-S3c adds dedicated login_with_password.
 // P4-S3d adds attach_session_owners for the desktop owner set.
@@ -362,6 +384,7 @@ interface PresenceCommandError {
 // P4-S6 adds typed timeline_open / timeline_close / timeline_paginate only.
 // P4-S7 adds typed typing_snapshot / typing_set / presence_snapshot /
 // presence_subscribe / presence_unsubscribe only.
+// P4-S8 adds typed verification_list for matrix_verification_list only.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -416,4 +439,7 @@ interface SharedCore {
 
   [Async, Throws=PresenceCommandError]
   void presence_unsubscribe(string subscription_id);
+
+  [Async, Throws=VerificationListError]
+  VerificationInboxDto verification_list();
 };
