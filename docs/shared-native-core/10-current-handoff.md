@@ -480,9 +480,10 @@ for any of those gates.
    power-level writers landed in #962. S9-15 typed room
    create landed in #963. S9-16 typed members
    snapshots landed in #964. S9-17 typed spaces
-   landed in #965. **S9-18** typed invite
-   accept/decline/spam/block (playbook §9.5) is on this branch. Next after
-   merge is timeline read-state. UniFFI expansion
+   landed in #965. S9-18 typed invite
+   accept/decline/spam/block landed in #966. **S9-19** typed
+   timeline read-state (playbook §9.5) is on this branch. Next after
+   merge is timeline reactions. UniFFI expansion
    needs free disk ≥ 20 Gi for
    local cargo/bindgen. There is no source-without-bindgen exception.
    If disk is under 20 Gi: stop. Docs-only PRs are still allowed.

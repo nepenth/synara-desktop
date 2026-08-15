@@ -67,10 +67,10 @@ fn timeline_surface_exposes_only_open_close_paginate() {
     assert!(udl.contains("timeline_open"));
     assert!(udl.contains("timeline_close"));
     assert!(udl.contains("timeline_paginate"));
-    assert!(!udl.contains("timeline_jump_latest"));
-    assert!(!udl.contains("matrix_timeline_jump_latest"));
-    assert!(!udl.contains("matrix_timeline_event_readback"));
-    assert!(!udl.contains("matrix_timeline_set_read_state"));
+    assert!(!udl.contains("timeline_reaction_toggle"));
+    assert!(!udl.contains("matrix_timeline_reaction_toggle"));
+    assert!(!udl.contains("matrix_reaction_ensure"));
+    assert!(!udl.contains("matrix_reaction_redact"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_verification_start"));
     let shared_core = udl
@@ -83,9 +83,9 @@ fn timeline_surface_exposes_only_open_close_paginate() {
     assert!(shared_core.contains("timeline_paginate"));
     assert!(shared_core.contains("invites_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("jump_latest"));
-    assert!(!shared_core.contains("set_read_state"));
-    assert!(!shared_core.contains("event_readback"));
+    assert!(!shared_core.contains("reaction_toggle"));
+    assert!(!shared_core.contains("reaction_ensure"));
+    assert!(!shared_core.contains("reaction_redact"));
 }
 
 #[test]
