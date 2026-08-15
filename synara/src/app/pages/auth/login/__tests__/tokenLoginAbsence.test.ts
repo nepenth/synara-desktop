@@ -48,7 +48,10 @@ test('V-AUTH.2: desktop product has no TokenLogin surface or loginToken route', 
   assert.match(libRs, /matrix_login_password/);
   assert.doesNotMatch(libRs, /matrix_login_token/);
 
-  const loginRs = readFileSync(path.join(repoRoot, 'src-tauri/src/matrix/auth/login.rs'), 'utf8');
+  const loginRs = readFileSync(
+    path.join(repoRoot, 'crates/synara-core/src/app/auth/login.rs'),
+    'utf8'
+  );
   const loginProd = loginRs.split('#[cfg(test)]')[0] ?? loginRs;
   assert.doesNotMatch(loginProd, /fn login_with_token/);
   assert.doesNotMatch(loginProd, /\.login_token\(/);
