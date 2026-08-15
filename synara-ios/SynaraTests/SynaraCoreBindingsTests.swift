@@ -1181,6 +1181,97 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreSpacesWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let roomId = "!s917SecretRoom:example.org"
+        let parentId = "!s917SecretParent:example.org"
+        let childId = "!s917SecretChild:example.org"
+        let via = "s917.secret.example.org"
+        let order = "s917SecretOrder"
+
+        do {
+            _ = try await SharedCoreSpaces.spaceParentsSnapshot(core: core)
+            XCTFail("Fail-closed SharedCore must not load space parents without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-space-parents-snapshot-no-session"))
+            for forbidden in ["syt_", "token", roomId, parentId, childId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreSpaces.spaceHierarchySnapshot(core: core, roomId: roomId)
+            XCTFail("Fail-closed SharedCore must not load space hierarchy without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-space-hierarchy-snapshot-no-session"))
+            for forbidden in ["syt_", "token", roomId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreSpaces.spaceChildrenSnapshot(core: core)
+            XCTFail("Fail-closed SharedCore must not load space children without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-space-children-snapshot-no-session"))
+            for forbidden in ["syt_", "token", roomId, parentId, childId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreSpaces.spaceChildSet(
+                core: core,
+                parentId: parentId,
+                childId: childId,
+                via: [via],
+                order: order,
+                suggested: true
+            )
+            XCTFail("Fail-closed SharedCore must not set a space child without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-space-child-set-no-session"))
+            for forbidden in ["syt_", "token", parentId, childId, via, order] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreSpaces.spaceChildRemove(
+                core: core,
+                parentId: parentId,
+                childId: childId
+            )
+            XCTFail("Fail-closed SharedCore must not remove a space child without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-space-child-remove-no-session"))
+            for forbidden in ["syt_", "token", parentId, childId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreSpaces.restrictedJoinReparent(
+                core: core,
+                roomId: roomId,
+                removeParentId: parentId,
+                addParentId: childId
+            )
+            XCTFail("Fail-closed SharedCore must not reparent restricted join without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-restricted-join-reparent-no-session"))
+            for forbidden in ["syt_", "token", roomId, parentId, childId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 
