@@ -461,9 +461,22 @@ for any of those gates.
 2. There is **no** remaining 7B desktop route that can land without a
    secret, file path, or bytes in the Core envelope. Do not invent one.
 3. P4-S3 plan is `12-p4-s3-live-client.md`. S3a landed in #935. S3b
-   restore is accepted. S3c login is accepted. S3d attach is accepted.
-   **S9-11** typed directory search/protocols/cancel (playbook §9.5) is on
-   this branch. Next after merge is room leave/join. UniFFI expansion needs free disk ≥ 20 Gi for
+   restore landed in #937. S3c login landed in #938. S3d attach landed
+   in #939. S4 typed `room_list_snapshot` landed in #940. S5 typed
+   `invites_snapshot` landed in #942. S6 typed timeline
+   open/close/paginate landed in #944. S7 typed typing/presence
+   landed in #945. S8 typed `verification_list` landed in #947.
+   S9 typed verification SAS landed in #948. S9-2 typed devices
+   landed in #950. S9-3 typed `matrix_room_join_rule_snapshot`
+   landed in #951. S9-4 typed image-pack get/set landed in #952.
+   S9-5 typed later account-data landed in #953. S9-6 typed m.direct
+   landed in #954. S9-7 typed room notes landed in #955. S9-8 typed
+   own display-name/avatar landed in #956. S9-9 typed room
+   name/topic/avatar landed in #957. S9-10 typed directory
+   visibility landed in #958. **S9-11** typed directory
+   search/protocols/cancel (playbook §9.5) is on this branch. Next after
+   merge is room leave/join. UniFFI expansion
+   needs free disk ≥ 20 Gi for
    local cargo/bindgen. There is no source-without-bindgen exception.
    If disk is under 20 Gi: stop. Docs-only PRs are still allowed.
 4. After S3, consume already-registered commands one family per PR.
