@@ -12,8 +12,10 @@ S5 invites snapshot landed in #942 (`17c29afd`).
 S6 timeline open/close/paginate landed in #944 (`1a77815a`).
 S7 typing/presence landed in #945 (`ee884ef3`).
 S8 verification list landed in #947 (`52874c20`).
-**S9 verification SAS lands on `agent/snc-p4-s9-verification-sas`.**
-Playbook recipe: §9.5. Next after S9 is S9-2 devices.
+S9 verification SAS landed in #948 (`c56a82aa`).
+**S9-2 devices lands on `agent/snc-p4-s9-devices`.**
+Playbook recipe: §9.5. NativeDeviceOwner family only
+(snapshot/rename/delete start/cancel). Next after S9-2 is S9-3 join rules.
 
 ## Decision
 

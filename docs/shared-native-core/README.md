@@ -130,10 +130,11 @@ S5 typed `invites_snapshot` landed in #942 (`17c29afd`). S6 typed
 timeline open/close/paginate landed in #944 (`1a77815a`).
 S7 typed typing/presence landed in #945 (`ee884ef3`).
 S8 typed `verification_list` landed in #947 (`52874c20`).
-S9 typed verification SAS (seven registered commands only;
-SyncService not started) is on `agent/snc-p4-s9-verification-sas`
-per [12-p4-s3-live-client.md](12-p4-s3-live-client.md) and playbook §9.5.
-Password never rides a generic UniFFI `command`. Next after S9 is S9-2.
+S9 typed verification SAS landed in #948 (`c56a82aa`).
+S9-2 typed NativeDeviceOwner family (snapshot/rename/delete
+start/cancel only; SyncService not started) is on
+`agent/snc-p4-s9-devices` per [12-p4-s3-live-client.md](12-p4-s3-live-client.md) and playbook §9.5.
+Password never rides a generic UniFFI `command`. Next after S9-2 is S9-3.
 
 | Phase | Merged evidence | Current boundary |
 |---|---|---|

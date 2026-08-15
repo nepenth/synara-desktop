@@ -32,6 +32,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreTypingPresence.swift",
   "synara-ios/Synara/Services/SharedCoreVerificationList.swift",
   "synara-ios/Synara/Services/SharedCoreVerificationSas.swift",
+  "synara-ios/Synara/Services/SharedCoreDevices.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -97,6 +98,10 @@ const sharedCoreVerificationList = readFileSync(
 );
 const sharedCoreVerificationSas = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreVerificationSas.swift"),
+  "utf8"
+);
+const sharedCoreDevices = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreDevices.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -293,6 +298,23 @@ const assertions = [
   [sharedCoreVerificationSas, "verificationDismiss", "P4-S9 product dismiss helper"],
   [sharedCoreVerificationSas, "core: SharedCore", "P4-S9 helper takes an already-constructed SharedCore"],
   [sharedCoreVerificationSas, "core.verificationStart", "P4-S9 helper starts on the caller-owned instance"],
+  [sharedCoreFfi, "device_snapshot", "P4-S9-2 typed device-snapshot FFI"],
+  [sharedCoreFfi, "matrix_device_snapshot", "P4-S9-2 calls the registered snapshot command"],
+  [sharedCoreFfi, "matrix_device_rename", "P4-S9-2 calls the registered rename command"],
+  [sharedCoreFfi, "matrix_device_delete_start", "P4-S9-2 calls the registered delete-start command"],
+  [sharedCoreFfi, "matrix_device_delete_cancel", "P4-S9-2 calls the registered delete-cancel command"],
+  [udl, "DeviceSnapshotDto device_snapshot()", "P4-S9-2 SharedCore device-snapshot operation"],
+  [udl, "DeviceSnapshotDto device_rename(", "P4-S9-2 SharedCore device-rename operation"],
+  [udl, "DeviceDeleteDto device_delete_start(", "P4-S9-2 SharedCore delete-start operation"],
+  [udl, "void device_delete_cancel(", "P4-S9-2 SharedCore delete-cancel operation"],
+  [udl, "interface DeviceCommandError", "P4-S9-2 static device-family error"],
+  [swiftBindingsTests, "testSharedCoreDevicesWithoutSessionFailsClosed", "Swift P4-S9-2 fail-closed device-family test"],
+  [sharedCoreDevices, "deviceSnapshot", "P4-S9-2 product device-snapshot helper"],
+  [sharedCoreDevices, "deviceRename", "P4-S9-2 product rename helper"],
+  [sharedCoreDevices, "deviceDeleteStart", "P4-S9-2 product delete-start helper"],
+  [sharedCoreDevices, "deviceDeleteCancel", "P4-S9-2 product delete-cancel helper"],
+  [sharedCoreDevices, "core: SharedCore", "P4-S9-2 helper takes an already-constructed SharedCore"],
+  [sharedCoreDevices, "core.deviceSnapshot", "P4-S9-2 helper reads on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1089,9 +1111,14 @@ for (const required of ["verification_start", "verification_accept", "verificati
     throw new Error(`P4-S9 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_snapshot", "crypto_status"]) {
+for (const required of ["device_snapshot", "device_rename", "device_delete_start", "device_delete_cancel"]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-2 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "join_rule", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-2`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1126,6 +1153,14 @@ if (sharedCoreVerificationList.includes("SharedCore(store:")) {
 }
 if (sharedCoreVerificationSas.includes("SharedCore(store:")) {
   throw new Error("P4-S9 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreDevices.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-2 helper must not construct-and-drop SharedCore");
+}
+for (const forbidden of ["backupStatus", "roomKeyTransferStatus", "crossSigningSetup"]) {
+  if (sharedCoreDevices.includes(forbidden)) {
+    throw new Error(`P4-S9-2 helper must not wrap leftover-adjacent ${forbidden}`);
+  }
 }
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
 if (!roomListDto) throw new Error("missing RoomListSnapshotDto");
@@ -1171,6 +1206,16 @@ const verificationSasDto = udl.match(/dictionary VerificationSasDto \{([\s\S]*?)
 if (!verificationSasDto) throw new Error("missing VerificationSasDto");
 if (/\bpassword\b/.test(verificationSasDto[1]) || /\btoken\b/.test(verificationSasDto[1])) {
   throw new Error("VerificationSasDto must not carry password or token fields");
+}
+const deviceSnapshotDto = udl.match(/dictionary DeviceSnapshotDto \{([\s\S]*?)\};/);
+if (!deviceSnapshotDto) throw new Error("missing DeviceSnapshotDto");
+if (/\bpassword\b/.test(deviceSnapshotDto[1]) || /\btoken\b/.test(deviceSnapshotDto[1])) {
+  throw new Error("DeviceSnapshotDto must not carry password or token fields");
+}
+const deviceDeleteDto = udl.match(/dictionary DeviceDeleteDto \{([\s\S]*?)\};/);
+if (!deviceDeleteDto) throw new Error("missing DeviceDeleteDto");
+if (/\bpassword\b/.test(deviceDeleteDto[1]) || /\btoken\b/.test(deviceDeleteDto[1])) {
+  throw new Error("DeviceDeleteDto must not carry password or token fields");
 }
 const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
 if (!loginDto) throw new Error("missing SessionLoginDto");
