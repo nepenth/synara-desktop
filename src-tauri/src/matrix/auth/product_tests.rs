@@ -21,6 +21,7 @@ const PRODUCT_SOURCE: &str = concat!(
     include_str!("../media/product_commands.rs"),
     include_str!("../members/product_commands.rs"),
     include_str!("../presence/product_commands.rs"),
+    include_str!("../room_directory/product_commands.rs"),
     include_str!("../room_list/product_commands.rs"),
     include_str!("../room_ops/product_commands.rs"),
     include_str!("../room_profile/product_commands.rs"),
@@ -87,7 +88,16 @@ fn room_publish_join_rule_snapshot_registers_one_native_read_owner() {
             assert!(schema.contains(command));
         }
     }
-    assert!(product.contains("get_state_event_static::<RoomJoinRulesEventContent>()"));
+    let command = product
+        .split("pub async fn matrix_room_join_rule_snapshot")
+        .nth(1)
+        .expect("join-rule snapshot command")
+        .split("#[tauri::command]")
+        .next()
+        .expect("join-rule snapshot command body");
+    assert!(command.contains("crate::bridge::join_rule_snapshot::join_rule_snapshot"));
+    assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!command.contains("get_state_event_static::<RoomJoinRulesEventContent>()"));
     assert!(product.contains("session_generation"));
     assert!(!product.contains("matrix_set_room_join_rule"));
     assert!(live.contains("matrix-room-join-rule-updated"));
@@ -1327,7 +1337,8 @@ fn room_key_transfer_status_routes_through_core_without_desktop_flow() {
         .expect("room-key transfer status command body");
     assert!(command.contains("crate::bridge::room_key_status::room_key_transfer_status"));
     assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
-    assert!(!command.contains("room_key_transfer"));
+    assert!(!command.contains("live_room_keys"));
+    assert!(!command.contains("active.room_key_transfer"));
     assert!(!command.contains("project_status"));
 }
 
@@ -2053,7 +2064,11 @@ fn room_directory_visibility_commands_keep_the_native_owner_contract() {
         .split("#[tauri::command]")
         .next()
         .expect("directory visibility get command body");
-    assert!(get_command.contains("get_room_visibility()"));
+    assert!(
+        get_command.contains("crate::bridge::directory_visibility::get_room_directory_visibility")
+    );
+    assert!(get_command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!get_command.contains("get_room_visibility()"));
     let set_command = PRODUCT_SOURCE
         .split("pub async fn matrix_set_room_directory_visibility")
         .nth(1)
@@ -2061,11 +2076,13 @@ fn room_directory_visibility_commands_keep_the_native_owner_contract() {
         .split("#[tauri::command]")
         .next()
         .expect("directory visibility set command body");
-    assert!(!set_command.contains("get_room_visibility()"));
-    assert!(set_command.contains("update_room_visibility(native_visibility)"));
     assert!(
-        set_command.contains("user_can_send_state(user_id, StateEventType::RoomCanonicalAlias)")
+        set_command.contains("crate::bridge::directory_visibility::set_room_directory_visibility")
     );
+    assert!(set_command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!set_command.contains("get_room_visibility()"));
+    assert!(!set_command.contains("update_room_visibility(native_visibility)"));
+    assert!(!set_command.contains("user_can_send_state"));
     assert!(!set_command.contains("power_levels_or_default"));
     assert!(!set_command.contains("RoomProfileIndex::set_directory_visibility"));
 }
