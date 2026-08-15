@@ -11,7 +11,7 @@ and `06-migration-phases.md` are stale. Do not register the 21 leftovers in
 section 6 to satisfy them.
 
 Evidence tip when this playbook was written: `feature/shared-native-core`
-`494fef87` (#984 S11 NSE read-only store after #983). Re-fetch before you start.
+`566ddb34` (#986 S10 leftover retirement after #985). Re-fetch before you start.
 Do not treat this SHA as eternal.
 
 ---
@@ -35,7 +35,7 @@ shared engine. Never claim P5 or MAC-IOS-006 is done.
 | Surface | Today |
 |---|---|
 | Desktop macOS/Linux | Live Matrix `Client` and native owners live in Core. React still invokes `matrix_*`. **111** of those names are registered on `Core::command`. Desktop is a thinner shell, not a thin shell. |
-| iOS | UniFFI scaffold + `login_flows` + `register_flows` + session-projection mirror + Settings readback + two pure helpers (unread row, cold-start recovery) + `SharedCore` constructors + optional `IosSecretVault` + `restore_persisted_session` + dedicated `login_with_password` FFI + `attach_session_owners` + typed SharedCore wrappers through S9-31 session/status reads + S11 NSE read-only store helper (helper + XCTest; never starts sync; not on-engine; not a product NSE swap). Live room list, timeline, crypto, push, and `MatrixRustSDKService` are still Swift. Product iOS does **not** call those Core commands. S10 mapped **109** `MatrixRustSDK` hits in **nine** product Swift files and stopped: leftover product paths still require the Swift SDK client (section 9.6). Local Apple generate has been run; generated sources remain gitignored. Checked-in `SynaraCore.swift` remains the bootstrap stub. iOS CI remains skipped (`if: false`). XCTest construction of `SharedCore` is not iOS-on-engine. |
+| iOS | UniFFI scaffold through S9-31 + S11 NSE read-only store helper (never starts sync; not a product NSE swap) + **S10 leftover UniFFI** (#986). `AppEnvironment.live()` constructs one caller-owned `SharedCore` and SharedCore product services. Product `MatrixRustSDK` callers are retired (comments may remain). Leftover wipe/logout are local-only; recover/raw-send/media/pusher/notification/avatar and leftover status reads fail closed without a live homeserver and do not start SyncService. This is not iOS-on-engine and not P4 acceptance. Local Apple generate has been run; generated sources remain gitignored. Checked-in `SynaraCore.swift` remains the bootstrap stub. iOS CI remains skipped (`if: false`) until the operator-approved re-enable. XCTest construction of `SharedCore` is not iOS-on-engine. |
 | `main` | Diverged. Recovery / MAC-IOS-006 docs live there. Not feature evidence. |
 | Release | Forbidden until engineering finish is accepted and then merged to `main`. |
 
@@ -140,17 +140,18 @@ Run this checklist in order. Stop at the first yes.
    #981 refreshes provenance. #982 records local UniFFI generate.
    #983 records the S10 leftover stop. #984 lands S11 NSE
    read-only store (helper + XCTest; never starts sync; not a
-   product NSE swap). Local Apple UniFFI generate has been run;
-   generated sources remain gitignored. Next is section 5 step 4:
-   no eligible product slice. S10 was started and **stopped**.
-   Product Swift still references `MatrixRustSDK` because leftover
-   product paths still need that client (section 9.6). Do not
-   invent leftover UniFFI to force grep to zero. Four-target
-   release bindgen needs headroom well above 20 Gi for the whole
-   run, not just at start. There is no “land UDL as source without
-   local cargo/bindgen” exception. If disk is under 20 Gi: stop.
-   Docs-only PRs are still allowed. Do not change UDL. Do not
-   hand-edit generated Swift. Do not invent a no-bindgen path.
+   product NSE swap). #985 refreshes provenance. #986 lands S10
+   leftover UniFFI and retires product `MatrixRustSDK` callers
+   (operator authorized leftovers to cross UniFFI; leftover I/O
+   that needs a live homeserver stays fail-closed planted). Local
+   Apple UniFFI generate has been run; generated sources remain
+   gitignored. Next operator-approved step is re-enable iOS CI
+   (`ios-tests` still has `if: false`). Do not start P5. Do not
+   merge to `main` until leftover retirement is on this branch,
+   iOS CI is re-enabled, and Quality is fully green including iOS
+   (not skipped). Four-target release bindgen needs headroom well
+   above 20 Gi for the whole run, not just at start. If disk is
+   under 20 Gi: stop. Docs-only PRs are still allowed.
 4. **Otherwise stop.** Update `STATE.md`. Do not open a padding PR.
    Do not route logout, email-token, or media "just to have a merge."
 
@@ -397,8 +398,9 @@ P4-S9-31 iOS session/status reads LANDED #979
        Reads only. No leftover secret/bytes envelopes.
        Backup/crypto/cross-signing/room-key status stay off.
 P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
-       STOPPED: leftover product callers still require MatrixRustSDK
-       (section 9.6). Do not invent leftover UniFFI.
+       LANDED #986 (operator-authorized leftover UniFFI; product
+       callers retired; leftover I/O fail-closed without a live
+       homeserver; SyncService not started)
 P4-S11 NSE read-only store API        LANDED #984
        (never boot sync in NSE; helper + XCTest; not a product NSE swap)
 ```
@@ -541,8 +543,9 @@ adds typed UniFFI wrappers for the registered session/status read
 commands. #980 is CI hygiene after the S9 rematch.
 #981 refreshes provenance. #982 records local UniFFI generate.
 #983 records the S10 leftover stop. #984 lands S11 NSE read-only
-store. Local Apple UniFFI generate has been run;
-generated sources remain gitignored.
+store. #985 refreshes provenance. #986 lands S10 leftover UniFFI
+and retires product `MatrixRustSDK` callers. Local Apple UniFFI
+generate has been run; generated sources remain gitignored.
 
 1. `SharedCore.session_snapshot` / `sync_status` / `media_config` /
    `secret_storage_status` call `Core.command` with the same null
@@ -567,12 +570,9 @@ generated sources remain gitignored.
 4. Helper + XCTest are the iOS surface this slice. Do not swap
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
 5. One command family per PR. S9-31 has landed. S11 NSE read-only
-   store landed in #984. Next is not eligible (section 5 step 4).
-   Do not wrap leftover-adjacent backup/crypto/cross-signing/room-key
-   status. Do not hit production homeservers. S10 was started and
-   stopped at section 9.6. Do not restart it without a new owner
-   decision that leftovers may cross UniFFI, or that leftover
-   product features may fail closed.
+   store landed in #984. S10 leftover retirement landed in #986.
+   Next operator-approved step is re-enable iOS CI. Do not start
+   P5. Do not hit production homeservers.
 
 ### 9.6 When you may delete `MatrixRustSDK`
 
@@ -586,59 +586,40 @@ returns zero product references (tests/docs may still mention it), and
 RoomListService / TimelineService / MatrixRustSDKService have no
 remaining callers. That is a late P4 PR of its own, not a side effect.
 
-**S10 live map recorded in #983 at `1207aece` (after #982).** Count: **109** hits in
-**nine** product Swift files. Helpers already in pbxproj wrap the
-registered SharedCore families (login/restore/attach, room list,
-invites, timeline open/close/paginate, typing/presence, verification,
-devices, join rules, image packs, later, m.direct, room notes, own
-profile, room profile, directory, leave/join, moderation, power
-levels, create, members, spaces, invite actions, read-state,
-reactions, composer draft, send text/sticker/poll, edit, poll
-respond, timeline mutate/pin/vote/forward, session/status reads).
-UniFFI 0.28 constructors stay `SharedCore()` and
-`SharedCore.newWithSecretStore(store:)`. No `SharedCore(store:)`.
+**S10 live map recorded in #983 at `1207aece` (after #982):** one
+hundred nine hits in nine product Swift files. **#986 retires the
+product callers.** After #986, `grep -rn 'MatrixRustSDK'
+synara-ios/Synara --include='*.swift'` is comments only
+(`MatrixSessionProjectionMirror.swift`). The leftover client file is
+deleted. Helpers already in pbxproj wrap the registered SharedCore
+families plus the leftover UniFFI family. UniFFI 0.28 constructors
+stay `SharedCore()` and `SharedCore.newWithSecretStore(store:)`. No
+`SharedCore(store:)`.
 
-Those helpers are not a product swap. `AppEnvironment.live()` still
-constructs `MatrixRustSDK*` services. Swapping login onto SharedCore
-without retiring the Swift SDK client creates two sessions. Swapping
-room list/timeline onto SharedCore without starting SyncService
-yields the registered empty snapshot (S3d attach does not start
-sync; emit sinks are no-op). Starting sync or adding emit sinks is
-not leftover UniFFI, but it is a UDL/behavior change and does not
-remove the leftover callers below.
+`AppEnvironment.live()` now constructs one caller-owned `SharedCore`
+and SharedCore product services. Leftover wipe/logout are local-only.
+Recover, raw send, media bytes, pusher I/O, notification-mode write,
+room-avatar bytes, and leftover status reads fail closed without a
+live homeserver (`p4-s10-leftover-no-session` /
+`p4-s10-leftover-unavailable` / oversize `p4-s10-leftover-oversize`).
+Failed errors stay static. SyncService is still not started. This is
+not iOS-on-engine and not P4 acceptance. The spike under
+`synara-ios/spikes/` may still import `MatrixRustSDK`.
 
-**Leftover-blocked product callers (do not invent UniFFI for these):**
+**Leftover UniFFI landed in #986 (operator-authorized):**
+`backup_status`, `crypto_status`, `cross_signing_status`,
+`room_key_transfer_status`, `wipe_persisted_stores`, `logout`,
+`recover`, `send_raw_room_event`, `set_notification_mode`,
+`media_download`, `media_thumbnail`, `media_upload`,
+`room_avatar_bytes`, `pusher_set`, `pusher_delete`.
 
-| File | Why MatrixRustSDK must stay |
-|---|---|
-| `Services/MatrixRustSDKService.swift` | Live Client, sliding-sync listeners, store wipe, room-avatar **bytes**, notification-mode write, `recover(recoveryKey:)`, crypto/backup status, raw room send used by agent cards. This is the leftover client. |
-| `Services/AppEnvironment.swift` | Wires the leftover client into live auth, room list, timeline, crypto, room management, media, push, agent approvals, and `deletePersistedStores`. |
-| `Services/MediaService.swift` | `MatrixMediaLoader` / `MatrixMediaUploadService` carry attachment/media **bytes** (`matrix_upload_media` / `matrix_media_download` leftovers). |
-| `Services/PushService.swift` | `MatrixPusherService` / `MatrixSparsePushRouteResolver` need the leftover Client for pusher I/O. APNs stays Swift (S11 is NSE, not this). |
-| `Services/AgentActionService.swift` | `sendRawRoomEvent` for agent-approval cards. No registered SharedCore raw-event command. |
-| `Services/EventActionService.swift` | Imports MatrixRustSDK and holds `MatrixRustSDKClientStore`. Edit/redact/react *have* SharedCore helpers, but the live type still needs the leftover Client until S10 can own the session. |
-| `Services/TimelineService.swift` | `MatrixRustSDKLaterService` holds the leftover Client. Later *has* SharedCore helpers; same session-ownership block. |
-| `Services/RoomReadMarkerService.swift` | `MatrixRustSDKClientStore` conformance for latest-event / marked-unread. Read-state *has* SharedCore helpers; same block. |
-| `Services/MatrixSessionProjectionMirror.swift` | Comments only (may remain). Not a caller. |
-
-**Also leftover-adjacent (must not wrap):**
-`CryptoStatusServicing.recover(recoveryKey:)`, session/room crypto
-status that would become `matrix_backup_status` /
-`matrix_crypto_status` / `matrix_cross_signing_*` /
-`matrix_room_key_transfer_status`, Keychain wipe of the Swift SDK
-store, and logout/Keyring.
-
-**Non-leftover gaps that also block a working product swap (do not
-paper over with leftover registration):**
-`SessionLoginDto` is identity-only (no access token, by design).
-Product `AuthenticatedSession` still stores tokens for the leftover
-Client. SharedCore attach does not start SyncService. Product event
-emit sinks are no-op.
-
-Until an owner decision moves a leftover, or leftover product
-features are explicitly allowed to fail closed, **stop**. Do not
-register leftovers. S11 NSE helper landed in #984; that is not
-leftover retirement and not a product NSE swap.
+**Remaining honesty:** `SessionLoginDto` is identity-only (no access
+token, by design). Product `AuthenticatedSession` still stores an
+empty access token after SharedCore login. SharedCore attach does not
+start SyncService. Product event emit sinks are no-op. Desktop
+twenty-one leftovers stay unregistered on `Core::command`. iOS CI
+remains skipped until the operator-approved re-enable. Do not start
+P5.
 
 ---
 

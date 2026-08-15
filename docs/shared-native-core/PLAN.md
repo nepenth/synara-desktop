@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`494fef87` (#984 S11 NSE read-only store after #983):** P0 is
+`566ddb34` (#986 S10 leftover retirement after #985):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -134,7 +134,8 @@ acceptance criteria have all passed.
   `Missing` and a real `Date` to `Known`. Neither slice adds a Core command
   route or Core SDK/service owner. Actual SDK `Room` and timeline
   listener/pagination/recovery execution, plus session, Keychain, store,
-  crypto, sync, and lifecycle ownership, remain `MatrixRustSDKService`-owned.
+  crypto, sync, and lifecycle ownership later moved off the leftover
+  Swift SDK client in #986.
   #931 exposes credential-free `register_flows` on UniFFI (closed DTO, no
   `params` JSON, no register/password/email-token). #933 adds constructor-only
   UniFFI `SharedCore`. #935 installs a Swift `IosSecretVault` callback on that
@@ -145,14 +146,15 @@ acceptance criteria have all passed.
   refreshes desktop source-scan tests. #981 refreshes provenance. #982
   records local UniFFI generate. #983 records the S10 leftover stop
   (not a product retirement). #984 lands the S11 NSE read-only store
-  helper without starting sync; it is not a product NSE swap. Helper +
-  XCTest are the iOS surface. Product room list, timeline, crypto, and
-  push still use `MatrixRustSDK`. Local Apple generate has been run;
+  helper without starting sync; it is not a product NSE swap. #985
+  refreshes provenance. #986 lands S10 leftover UniFFI and retires
+  product `MatrixRustSDK` callers. Leftover I/O that needs a live
+  homeserver stays fail-closed planted. SyncService is not started.
+  This is not iOS-on-engine. Local Apple generate has been run;
   generated sources remain gitignored. Checked-in `SynaraCore.swift`
-  remains the bootstrap stub. iOS CI remains skipped.
-  iOS still has no registration product UI. This does **not** migrate iOS
-  session, room-list, timeline, crypto, push/NSE, or `MatrixRustSDK`
-  services, and it does not remove the upstream Swift SDK dependency.
+  remains the bootstrap stub. iOS CI remains skipped until the
+  operator-approved re-enable. iOS still has no registration product
+  UI. P4 is not accepted.
 - **P5 — not started.** Do not claim iOS shared-engine parity, iOS migration,
   or Apple release readiness from the bounded work above.
 
@@ -163,12 +165,13 @@ acceptance criteria have all passed.
    five invite commands are already registered. Twenty-one census names
    stay desktop (secrets, file paths, bytes).
 2. **P4 serial iOS** of surfaces Core already owns, in the playbook
-   section 9 order. S1–S9-31 and S11 have landed. S10 was started and
-   stopped: leftover product paths still require `MatrixRustSDK`
-   (playbook §9.6). Do not invent leftover UniFFI. Regenerating
-   Swift bindings needs disk ≥ 20 Gi. iOS still runs
-   `MatrixRustSDKService` / `RoomListService` / `TimelineService`.
-   That is the remaining dual implementation.
+   section 9 order. S1–S9-31, S10 leftover retirement (#986), and
+   S11 have landed. Product `MatrixRustSDK` callers are retired.
+   Leftover I/O that needs a live homeserver stays fail-closed.
+   SyncService is not started. Next operator-approved step is
+   re-enable iOS CI. Regenerating Swift bindings needs disk ≥ 20 Gi.
+   Do not start P5. Do not merge to `main` until iOS CI is
+   re-enabled and Quality is fully green including iOS.
 3. **P3 thinning** continues as iOS/desktop leftovers shrink. Desktop is
    not a thin shell while Keychain, byte commands, and password UIAA live
    there — and those leftovers are *intended*.

@@ -20,8 +20,8 @@ integration, or release path. **Never a big-bang move.**
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
 
-**Current bounded status at `494fef87`
-(#984):** #713 mechanically moved notifications, polls,
+**Current bounded status at `566ddb34`
+(#986):** #713 mechanically moved notifications, polls,
 relations, threads, and unread; #714 moved raw content, receipts, routes, and
 security; #716 moved search, legacy, and media_cache; #717 moved media_export
 and crypto_store; #734 moved the room-directory session harness; #735 moved
@@ -157,8 +157,10 @@ Goal: iOS consumes the same engine; Swift re-implementations retired.
    - #982 records local UniFFI generate
    - #983 records S10 leftover stop (not a product retirement)
    - P4-S11 NSE read-only store API — landed in #984 (never starts sync; helper + XCTest; not a product NSE swap)
+   - #985 refreshes provenance
+   - P4-S10 leftover UniFFI + product caller retirement — landed in #986
    - Local Apple UniFFI generate has been run; generated sources remain gitignored
-   - Last: retire Swift SDK services only when grep is clean (S10 stopped on leftover callers; playbook §9.6)
+   - Product `MatrixRustSDK` grep is comments only; leftover I/O fail-closed; SyncService not started; iOS CI still skipped
 4. Remove `matrix-rust-components-swift` from `project.yml` when nothing
    references `MatrixRustSDK` anymore.
 
@@ -168,12 +170,13 @@ zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
 
 > **Bounded evidence note — not P4 acceptance:** At the current feature tip
-> `494fef87` (#984), UniFFI exposes credential-free `login_flows` /
+> `566ddb34` (#986), UniFFI exposes credential-free `login_flows` /
 > `register_flows`, SharedCore constructors, S3 vault/restore/login/attach,
-> typed wrappers through S9-31, and the S11 NSE read-only store helper
-> (never starts sync; not a product NSE swap). Helper + XCTest are the
-> iOS surface. Product room list, timeline, crypto, and push still use
-> `MatrixRustSDK`.
+> typed wrappers through S9-31, the S11 NSE read-only store helper
+> (never starts sync; not a product NSE swap), and S10 leftover UniFFI.
+> Product `MatrixRustSDK` callers are retired. Leftover I/O that needs a
+> live homeserver stays fail-closed planted. SyncService is not started.
+> This is not iOS-on-engine.
 > Local Apple generate has been run; generated sources remain gitignored.
 > Checked-in `SynaraCore.swift` remains the bootstrap stub. iOS CI remains skipped.
 > The prior #708 work is only the pure iOS room-row unread presentation from closed
@@ -181,10 +184,7 @@ by a SwiftUI unit test and a React hook test.
 > `u64` count plus highlight boolean. The prior #710 work is only the pure
 > cold-start decision from a latest-state boolean and `{Missing, Known}` to a
 > boolean; Swift maps `nil`/`.distantPast` to `Missing` and a real `Date` to
-> `Known`. #713/#714/#716/#717 add no Core command route, UDL, or iOS behavior. Neither
-> P4 policy slice adds a Core SDK/service owner. Actual SDK `Room` and timeline
-> listener/pagination/recovery execution, plus session, Keychain, store, crypto,
-> sync, and lifecycle ownership, remain `MatrixRustSDKService`-owned.
+> `Known`. #713/#714/#716/#717 add no Core command route, UDL, or iOS behavior.
 
 ## P5 — Parity + release gates
 
