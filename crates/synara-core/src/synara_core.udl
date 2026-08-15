@@ -424,6 +424,20 @@ interface SendStickerError {
   Failed(string code, string description);
 };
 
+// Privacy-safe send-poll write ack from the registered Core command.
+// No media bytes. Question and options stay out of Failed errors.
+dictionary SendPollDto {
+  string room_id;
+  string event_id;
+  string status;
+};
+
+// Static source constants only. Never echo question, options, room id, token, or password.
+[Error]
+interface SendPollError {
+  Failed(string code, string description);
+};
+
 // Privacy-safe typing room row. No tokens or password.
 dictionary TypingRoomDto {
   string room_id;
@@ -1298,5 +1312,8 @@ interface SharedCore {
 
   [Async, Throws=SendStickerError]
   SendStickerDto send_sticker(string room_id, string body, string mxc, u64? width, u64? height, string? mimetype, u64? size, string? reply_to, string? thread_root);
+
+  [Async, Throws=SendPollError]
+  SendPollDto send_poll(string room_id, string question, sequence<string> answers, u32 max_selections, string? thread_root, string? reply_to);
 
 };

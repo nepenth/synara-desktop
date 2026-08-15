@@ -485,9 +485,10 @@ for any of those gates.
    timeline read-state landed in #967. S9-20 typed
    timeline reactions landed in #968. S9-21 typed
    composer reply draft landed in #969. S9-22 typed
-   send text landed in #970. **S9-23** typed
-   send sticker (playbook §9.5) is on this branch. Next after
-   merge is send poll. UniFFI expansion
+   send text landed in #970. S9-23 typed
+   send sticker landed in #971. **S9-24** typed
+   send poll (playbook §9.5) is on this branch. Next after
+   merge is edit message. UniFFI expansion
    needs free disk ≥ 20 Gi for
    local cargo/bindgen. There is no source-without-bindgen exception.
    If disk is under 20 Gi: stop. Docs-only PRs are still allowed.
