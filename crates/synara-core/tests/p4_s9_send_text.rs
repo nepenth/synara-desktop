@@ -2,7 +2,7 @@
 //!
 //! Calls the already-registered Core handler. Does not start SyncService.
 //! Failed errors stay static and must not echo body or room id.
-//! Edit and respond stay off.
+//! Respond stays off.
 
 use std::collections::HashMap;
 use std::fs;
@@ -88,7 +88,6 @@ fn send_text_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("composer_set_reply_draft("));
     assert!(shared_core.contains("reaction_ensure("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("edit_message"));
     assert!(!shared_core.contains("poll_respond"));
     assert!(!shared_core.contains("backup_status"));
 }
