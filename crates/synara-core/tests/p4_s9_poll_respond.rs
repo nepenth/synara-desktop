@@ -81,9 +81,8 @@ fn poll_respond_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("send_text("));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
-    assert!(!udl.contains("matrix_timeline_edit_text"));
-    assert!(!udl.contains("matrix_timeline_redact"));
-    assert!(!udl.contains("matrix_timeline_report"));
+    assert!(!udl.contains("matrix_timeline_pin"));
+    assert!(!udl.contains("matrix_timeline_unpin"));
     let shared_core = udl
         .split("interface SharedCore {")
         .nth(1)
@@ -96,9 +95,8 @@ fn poll_respond_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("send_text("));
     assert!(shared_core.contains("composer_set_reply_draft("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("timeline_edit_text"));
-    assert!(!shared_core.contains("timeline_redact"));
-    assert!(!shared_core.contains("timeline_report"));
+    assert!(!shared_core.contains("timeline_pin"));
+    assert!(!shared_core.contains("timeline_unpin"));
     assert!(!shared_core.contains("backup_status"));
 }
 

@@ -468,6 +468,22 @@ interface PollRespondError {
   Failed(string code, string description);
 };
 
+// Privacy-safe timeline edit/redact/report write ack from the registered Core commands.
+// Body and reason stay out of Failed errors.
+dictionary TimelineMutateDto {
+  u32 schema_version;
+  string action;
+  string room_id;
+  string event_id;
+  string status;
+};
+
+// Static source constants only. Never echo body, event id, room id, reason, token, or password.
+[Error]
+interface TimelineMutateError {
+  Failed(string code, string description);
+};
+
 // Privacy-safe typing room row. No tokens or password.
 dictionary TypingRoomDto {
   string room_id;
@@ -1351,5 +1367,14 @@ interface SharedCore {
 
   [Async, Throws=PollRespondError]
   PollRespondDto poll_respond(string room_id, string poll_event_id, sequence<string> answer_ids);
+
+  [Async, Throws=TimelineMutateError]
+  TimelineMutateDto timeline_edit_text(string room_id, string event_id, string body, string? formatted_body);
+
+  [Async, Throws=TimelineMutateError]
+  TimelineMutateDto timeline_redact(string room_id, string event_id, string? reason);
+
+  [Async, Throws=TimelineMutateError]
+  TimelineMutateDto timeline_report(string room_id, string event_id, string? reason);
 
 };

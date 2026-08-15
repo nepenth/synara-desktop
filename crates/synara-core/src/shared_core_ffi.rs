@@ -112,6 +112,10 @@
 //! P4-S9-26 adds a typed `poll_respond` wrapper for the already-registered
 //! `matrix_poll_respond` Core command only. No media bytes. Failed errors never
 //! echo answers, event id, or room id. Timeline edit/redact/report stay off.
+//! P4-S9-27 adds typed `timeline_edit_text` / `timeline_redact` /
+//! `timeline_report` wrappers for the already-registered Core commands.
+//! Failed errors never echo body, event id, room id, or reason. Pin/unpin
+//! stay off.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -594,6 +598,18 @@ const POLL_RESPOND_NO_SESSION_DESCRIPTION: &str = "No timeline session is availa
 const POLL_RESPOND_FAILED_CODE: &str = "p4-s9-26-poll-respond-failed";
 const POLL_RESPOND_FAILED_DESCRIPTION: &str = "The poll-respond request could not be completed.";
 const POLL_RESPOND_OWNER_DESCRIPTION: &str = "The poll-respond request is not available.";
+const TIMELINE_MUTATE_GENERATION: u64 = 0;
+const TIMELINE_EDIT_TEXT_COMMAND: &str = "matrix_timeline_edit_text";
+const TIMELINE_REDACT_COMMAND: &str = "matrix_timeline_redact";
+const TIMELINE_REPORT_COMMAND: &str = "matrix_timeline_report";
+const TIMELINE_EDIT_TEXT_NO_SESSION_CODE: &str = "p2-timeline-edit-text-no-session";
+const TIMELINE_REDACT_NO_SESSION_CODE: &str = "p2-timeline-redact-no-session";
+const TIMELINE_REPORT_NO_SESSION_CODE: &str = "p2-timeline-report-no-session";
+const TIMELINE_MUTATE_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
+const TIMELINE_MUTATE_FAILED_CODE: &str = "p4-s9-27-timeline-mutate-failed";
+const TIMELINE_MUTATE_FAILED_DESCRIPTION: &str =
+    "The timeline mutation request could not be completed.";
+const TIMELINE_MUTATE_OWNER_DESCRIPTION: &str = "The timeline mutation request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1153,6 +1169,32 @@ impl std::fmt::Display for PollRespondError {
 }
 
 impl std::error::Error for PollRespondError {}
+
+/// Privacy-safe timeline edit/redact/report write ack from the registered Core commands.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineMutateDto {
+    pub schema_version: u32,
+    pub action: String,
+    pub room_id: String,
+    pub event_id: String,
+    pub status: String,
+}
+
+/// Static fail-closed timeline edit/redact/report error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TimelineMutateError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for TimelineMutateError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for TimelineMutateError {}
 
 /// Static fail-closed timeline error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3836,6 +3878,62 @@ impl SharedCore {
         .await
     }
 
+    pub async fn timeline_edit_text(
+        &self,
+        room_id: String,
+        event_id: String,
+        body: String,
+        formatted_body: Option<String>,
+    ) -> Result<TimelineMutateDto, TimelineMutateError> {
+        self.timeline_mutate_command(
+            TIMELINE_EDIT_TEXT_COMMAND,
+            TIMELINE_EDIT_TEXT_NO_SESSION_CODE,
+            serde_json::json!({
+                "roomId": room_id,
+                "eventId": event_id,
+                "body": body,
+                "formattedBody": formatted_body,
+            }),
+        )
+        .await
+    }
+
+    pub async fn timeline_redact(
+        &self,
+        room_id: String,
+        event_id: String,
+        reason: Option<String>,
+    ) -> Result<TimelineMutateDto, TimelineMutateError> {
+        self.timeline_mutate_command(
+            TIMELINE_REDACT_COMMAND,
+            TIMELINE_REDACT_NO_SESSION_CODE,
+            serde_json::json!({
+                "roomId": room_id,
+                "eventId": event_id,
+                "reason": reason,
+            }),
+        )
+        .await
+    }
+
+    pub async fn timeline_report(
+        &self,
+        room_id: String,
+        event_id: String,
+        reason: Option<String>,
+    ) -> Result<TimelineMutateDto, TimelineMutateError> {
+        self.timeline_mutate_command(
+            TIMELINE_REPORT_COMMAND,
+            TIMELINE_REPORT_NO_SESSION_CODE,
+            serde_json::json!({
+                "roomId": room_id,
+                "eventId": event_id,
+                "reason": reason,
+            }),
+        )
+        .await
+    }
+
     async fn space_null_command(
         &self,
         command: &'static str,
@@ -4041,6 +4139,33 @@ impl SharedCore {
                 poll_respond_failed(POLL_RESPOND_FAILED_CODE, POLL_RESPOND_FAILED_DESCRIPTION)
             })?;
         Ok(poll_respond_dto(result))
+    }
+
+    async fn timeline_mutate_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<TimelineMutateDto, TimelineMutateError> {
+        let payload = timeline_mutate_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: TIMELINE_MUTATE_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_timeline_mutate_core_error(no_session, error))?;
+        let result: TimelineMutateResultWire =
+            serde_json::from_value(response.payload).map_err(|_| {
+                timeline_mutate_failed(
+                    TIMELINE_MUTATE_FAILED_CODE,
+                    TIMELINE_MUTATE_FAILED_DESCRIPTION,
+                )
+            })?;
+        timeline_mutate_dto(result)
     }
 
     async fn invite_action_command(
@@ -7239,6 +7364,106 @@ fn poll_respond_dto(result: PollRespondResultWire) -> PollRespondDto {
         event_id: result.event_id,
         status: result.status,
     }
+}
+
+fn timeline_mutate_failed(code: &str, description: &'static str) -> TimelineMutateError {
+    TimelineMutateError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_timeline_mutate_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> TimelineMutateError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            timeline_mutate_failed(code, TIMELINE_MUTATE_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code.starts_with("p2-timeline-edit-text-")
+                || code.starts_with("p2-timeline-redact-")
+                || code.starts_with("p2-timeline-report-")
+                || code.starts_with("v-timeline-edit-")
+                || code.starts_with("v-timeline-redact-")
+                || code.starts_with("v-timeline-report-")
+                || code.starts_with("d0.4-send-") =>
+        {
+            timeline_mutate_failed(code, TIMELINE_MUTATE_OWNER_DESCRIPTION)
+        }
+        _ => timeline_mutate_failed(
+            TIMELINE_MUTATE_FAILED_CODE,
+            TIMELINE_MUTATE_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn timeline_mutate_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, TimelineMutateError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(timeline_mutate_failed(
+            TIMELINE_MUTATE_FAILED_CODE,
+            TIMELINE_MUTATE_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TimelineMutateResultWire {
+    schema_version: u32,
+    action: String,
+    room_id: String,
+    event_id: String,
+    status: String,
+}
+
+fn closed_timeline_mutate_action(value: &str) -> Option<&'static str> {
+    match value {
+        "edit_text" => Some("edit_text"),
+        "redact" => Some("redact"),
+        "report" => Some("report"),
+        _ => None,
+    }
+}
+
+fn closed_timeline_mutate_status(value: &str) -> Option<&'static str> {
+    match value {
+        "sent" => Some("sent"),
+        "redacted" => Some("redacted"),
+        "reported" => Some("reported"),
+        _ => None,
+    }
+}
+
+fn timeline_mutate_dto(
+    result: TimelineMutateResultWire,
+) -> Result<TimelineMutateDto, TimelineMutateError> {
+    let action = closed_timeline_mutate_action(&result.action).ok_or_else(|| {
+        timeline_mutate_failed(
+            TIMELINE_MUTATE_FAILED_CODE,
+            TIMELINE_MUTATE_FAILED_DESCRIPTION,
+        )
+    })?;
+    let status = closed_timeline_mutate_status(&result.status).ok_or_else(|| {
+        timeline_mutate_failed(
+            TIMELINE_MUTATE_FAILED_CODE,
+            TIMELINE_MUTATE_FAILED_DESCRIPTION,
+        )
+    })?;
+    Ok(TimelineMutateDto {
+        schema_version: result.schema_version,
+        action: action.to_owned(),
+        room_id: result.room_id,
+        event_id: result.event_id,
+        status: status.to_owned(),
+    })
 }
 
 fn timeline_event_item_dto(item: NativeTimelineItem) -> TimelineEventItemDto {

@@ -1615,6 +1615,63 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreTimelineMutateWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let roomId = "!s927SecretRoom:example.org"
+        let eventId = "$s927SecretEvent:example.org"
+        let body = "s927SecretBody"
+        let reason = "s927SecretReason"
+
+        do {
+            _ = try await SharedCoreTimelineMutate.timelineEditText(
+                core: core,
+                roomId: roomId,
+                eventId: eventId,
+                body: body,
+                formattedBody: nil
+            )
+            XCTFail("Fail-closed SharedCore must not edit timeline text without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-timeline-edit-text-no-session"))
+            for forbidden in ["syt_", "token", roomId, eventId, body, reason] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreTimelineMutate.timelineRedact(
+                core: core,
+                roomId: roomId,
+                eventId: eventId,
+                reason: reason
+            )
+            XCTFail("Fail-closed SharedCore must not redact a timeline event without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-timeline-redact-no-session"))
+            for forbidden in ["syt_", "token", roomId, eventId, body, reason] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreTimelineMutate.timelineReport(
+                core: core,
+                roomId: roomId,
+                eventId: eventId,
+                reason: reason
+            )
+            XCTFail("Fail-closed SharedCore must not report a timeline event without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-timeline-report-no-session"))
+            for forbidden in ["syt_", "token", roomId, eventId, body, reason] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 
