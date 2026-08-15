@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `566ddb34`, the merge for #986 (S10 leftover retirement after #985). |
-| Immediately preceding merges | #983 S10 leftover stop (`067b206c`), #984 S11 NSE (`494fef87`), #985 docs (`22dcf90b`). |
+| Feature evidence tip | `feature/shared-native-core` is `162d9dff`, the merge for #988 (iOS CI re-enable after #987). |
+| Immediately preceding merges | #986 S10 leftover retirement (`566ddb34`), #987 docs (`b7f0b6d7`). |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -146,7 +146,7 @@ residency changes are:
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `566ddb34`/#986 for
+anchor, but it is no longer the feature-tip provenance; use `162d9dff`/#988 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -393,6 +393,10 @@ The exact bounded iOS evidence is:
 - #986: S10 leftover UniFFI plus product `MatrixRustSDK` caller
   retirement. Leftover I/O that needs a live homeserver stays
   fail-closed planted. SyncService is not started. Not iOS-on-engine.
+- #987: docs honesty after #986. Not a product slice.
+- #988: re-enables iOS CI (`if: needs.changes.outputs.ios == 'true'`).
+  Quality on #988 was green including iOS (ran, not skipped).
+  Restores Later sort/complete helpers so the simulator job compiles.
 
 #708 and #710 add no Core command route. #931/#933/#935 add UniFFI probes /
 construction / vault only. Later P4 slices add typed wrappers; they do
@@ -406,9 +410,9 @@ and do not start SyncService. This is not iOS-on-engine. Local Apple
 `scripts/generate-synara-core-swift.sh` has been run; generated
 `synara_core.swift` and the XCFramework remain gitignored. Checked-in
 `SynaraCore.swift` remains the bootstrap stub. UniFFI constructors are
-unchanged (`SharedCore()` / `newWithSecretStore`). iOS CI remains skipped (`if: false`)
-until the operator-approved re-enable. Product `MatrixRustSDK`
-callers are retired; comments may remain. P4 is not accepted.
+unchanged (`SharedCore()` / `newWithSecretStore`). iOS CI is
+re-enabled (#988). Product `MatrixRustSDK` callers are retired;
+comments may remain. P4 is not accepted.
 
 ### P5 — not started
 
@@ -528,13 +532,13 @@ for any of those gates.
    read-only store (helper + XCTest; never starts sync; not a
    product NSE swap). #985 refreshes provenance. #986 lands S10
    leftover UniFFI and retires product `MatrixRustSDK` callers.
-   Local Apple UniFFI generate has been run; generated sources
-   remain gitignored. Next operator-approved step is re-enable iOS
-   CI. Do not start P5. Do not merge to `main` until iOS CI is
-   re-enabled and Quality is fully green including iOS. Four-target
-   release bindgen needs headroom well above 20 Gi for the whole
-   run, not just at start. If disk is under 20 Gi: stop. Docs-only
-   PRs are still allowed.
+   #987 refreshes provenance. #988 re-enables iOS CI. Local Apple
+   UniFFI generate has been run; generated sources remain
+   gitignored. Next operator-approved step is merge this branch to
+   `main` only after that PR's Quality is fully green including iOS.
+   Do not start P5. Four-target release bindgen needs headroom well
+   above 20 Gi for the whole run, not just at start. If disk is
+   under 20 Gi: stop. Docs-only PRs are still allowed.
 4. After S3, consume already-registered commands one family per PR.
    S4 — not S3b–S3d — adds the first UniFFI command wrapper, for
    `matrix_room_list_snapshot` only. Retire `MatrixRustSDKService` last.
