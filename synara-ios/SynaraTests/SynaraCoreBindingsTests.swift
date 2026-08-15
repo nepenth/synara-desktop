@@ -1746,6 +1746,46 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreTimelineForwardWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let sourceRoomId = "!s930SecretSource:example.org"
+        let targetRoomId = "!s930SecretTarget:example.org"
+        let eventId = "$s930SecretEvent:example.org"
+
+        do {
+            _ = try await SharedCoreTimelineForward.timelineForwardText(
+                core: core,
+                sourceRoomId: sourceRoomId,
+                eventId: eventId,
+                targetRoomId: targetRoomId,
+                asQuote: false
+            )
+            XCTFail("Fail-closed SharedCore must not forward timeline text without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-timeline-forward-text-no-session"))
+            for forbidden in ["syt_", "token", sourceRoomId, targetRoomId, eventId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreTimelineForward.timelineForwardMedia(
+                core: core,
+                sourceRoomId: sourceRoomId,
+                eventId: eventId,
+                targetRoomId: targetRoomId
+            )
+            XCTFail("Fail-closed SharedCore must not forward timeline media without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-timeline-forward-media-no-session"))
+            for forbidden in ["syt_", "token", sourceRoomId, targetRoomId, eventId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 
