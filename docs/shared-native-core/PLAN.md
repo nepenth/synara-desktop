@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`1207aece` (#982 bindgen hygiene after #981):** P0 is
+`494fef87` (#984 S11 NSE read-only store after #983):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -142,11 +142,14 @@ acceptance criteria have all passed.
   `login_with_password`, and owner attach (SyncService not started).
   S4–S9-31 (#940–#979) add typed SharedCore wrappers for the registered
   command families. #949 exposes the UniFFI 0.28 store constructor. #980
-  refreshes desktop source-scan tests. #981 refreshes provenance. Helper +
-  XCTest are the iOS surface. Product room list, timeline, crypto, and push
-  still use `MatrixRustSDK`. Local Apple generate has been run; generated
-  sources remain gitignored. Checked-in `SynaraCore.swift` remains the
-  bootstrap stub. iOS CI remains skipped.
+  refreshes desktop source-scan tests. #981 refreshes provenance. #982
+  records local UniFFI generate. #983 records the S10 leftover stop
+  (not a product retirement). #984 lands the S11 NSE read-only store
+  helper without starting sync; it is not a product NSE swap. Helper +
+  XCTest are the iOS surface. Product room list, timeline, crypto, and
+  push still use `MatrixRustSDK`. Local Apple generate has been run;
+  generated sources remain gitignored. Checked-in `SynaraCore.swift`
+  remains the bootstrap stub. iOS CI remains skipped.
   iOS still has no registration product UI. This does **not** migrate iOS
   session, room-list, timeline, crypto, push/NSE, or `MatrixRustSDK`
   services, and it does not remove the upstream Swift SDK dependency.
@@ -160,7 +163,7 @@ acceptance criteria have all passed.
    five invite commands are already registered. Twenty-one census names
    stay desktop (secrets, file paths, bytes).
 2. **P4 serial iOS** of surfaces Core already owns, in the playbook
-   section 9 order. S1–S9-31 have landed. S10 was started and
+   section 9 order. S1–S9-31 and S11 have landed. S10 was started and
    stopped: leftover product paths still require `MatrixRustSDK`
    (playbook §9.6). Do not invent leftover UniFFI. Regenerating
    Swift bindings needs disk ≥ 20 Gi. iOS still runs

@@ -11,7 +11,7 @@ and `06-migration-phases.md` are stale. Do not register the 21 leftovers in
 section 6 to satisfy them.
 
 Evidence tip when this playbook was written: `feature/shared-native-core`
-`1207aece` (#982 bindgen hygiene after #981). Re-fetch before you start.
+`494fef87` (#984 S11 NSE read-only store after #983). Re-fetch before you start.
 Do not treat this SHA as eternal.
 
 ---
@@ -35,7 +35,7 @@ shared engine. Never claim P5 or MAC-IOS-006 is done.
 | Surface | Today |
 |---|---|
 | Desktop macOS/Linux | Live Matrix `Client` and native owners live in Core. React still invokes `matrix_*`. **111** of those names are registered on `Core::command`. Desktop is a thinner shell, not a thin shell. |
-| iOS | UniFFI scaffold + `login_flows` + `register_flows` + session-projection mirror + Settings readback + two pure helpers (unread row, cold-start recovery) + `SharedCore` constructors + optional `IosSecretVault` + `restore_persisted_session` + dedicated `login_with_password` FFI + `attach_session_owners` + typed SharedCore wrappers through S9-31 session/status reads (helper + XCTest; not on-engine). Live room list, timeline, crypto, push, and `MatrixRustSDKService` are still Swift. Product iOS does **not** call those Core commands. S10 mapped **109** `MatrixRustSDK` hits in **nine** product Swift files and stopped: leftover product paths still require the Swift SDK client (section 9.6). Local Apple generate has been run; generated sources remain gitignored. Checked-in `SynaraCore.swift` remains the bootstrap stub. iOS CI remains skipped (`if: false`). XCTest construction of `SharedCore` is not iOS-on-engine. |
+| iOS | UniFFI scaffold + `login_flows` + `register_flows` + session-projection mirror + Settings readback + two pure helpers (unread row, cold-start recovery) + `SharedCore` constructors + optional `IosSecretVault` + `restore_persisted_session` + dedicated `login_with_password` FFI + `attach_session_owners` + typed SharedCore wrappers through S9-31 session/status reads + S11 NSE read-only store helper (helper + XCTest; never starts sync; not on-engine; not a product NSE swap). Live room list, timeline, crypto, push, and `MatrixRustSDKService` are still Swift. Product iOS does **not** call those Core commands. S10 mapped **109** `MatrixRustSDK` hits in **nine** product Swift files and stopped: leftover product paths still require the Swift SDK client (section 9.6). Local Apple generate has been run; generated sources remain gitignored. Checked-in `SynaraCore.swift` remains the bootstrap stub. iOS CI remains skipped (`if: false`). XCTest construction of `SharedCore` is not iOS-on-engine. |
 | `main` | Diverged. Recovery / MAC-IOS-006 docs live there. Not feature evidence. |
 | Release | Forbidden until engineering finish is accepted and then merged to `main`. |
 
@@ -138,17 +138,19 @@ Run this checklist in order. Stop at the first yes.
    S9-27/#975, S9-28/#976, S9-29/#977, S9-30/#978, and
    S9-31/#979 landed. #980 is CI hygiene after the S9 rematch.
    #981 refreshes provenance. #982 records local UniFFI generate.
-   Local Apple UniFFI generate has been run; generated sources remain
-   gitignored. Next is section 5 step 4: no eligible product slice.
-   S10 was started and **stopped**. Product Swift still references
-   `MatrixRustSDK` because leftover product paths still need that
-   client (section 9.6). Do not invent leftover UniFFI to force
-   grep to zero. Four-target release bindgen needs headroom well
-   above 20 Gi for the whole run, not just at start. There is no
-   “land UDL as source without local cargo/bindgen” exception. If
-   disk is under 20 Gi: stop. Docs-only PRs are still allowed. Do
-   not change UDL. Do not hand-edit generated Swift. Do not invent
-   a no-bindgen path.
+   #983 records the S10 leftover stop. #984 lands S11 NSE
+   read-only store (helper + XCTest; never starts sync; not a
+   product NSE swap). Local Apple UniFFI generate has been run;
+   generated sources remain gitignored. Next is section 5 step 4:
+   no eligible product slice. S10 was started and **stopped**.
+   Product Swift still references `MatrixRustSDK` because leftover
+   product paths still need that client (section 9.6). Do not
+   invent leftover UniFFI to force grep to zero. Four-target
+   release bindgen needs headroom well above 20 Gi for the whole
+   run, not just at start. There is no “land UDL as source without
+   local cargo/bindgen” exception. If disk is under 20 Gi: stop.
+   Docs-only PRs are still allowed. Do not change UDL. Do not
+   hand-edit generated Swift. Do not invent a no-bindgen path.
 4. **Otherwise stop.** Update `STATE.md`. Do not open a padding PR.
    Do not route logout, email-token, or media "just to have a merge."
 
@@ -397,7 +399,8 @@ P4-S9-31 iOS session/status reads LANDED #979
 P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        STOPPED: leftover product callers still require MatrixRustSDK
        (section 9.6). Do not invent leftover UniFFI.
-P4-S11 NSE read-only store API        (never boot sync in NSE)
+P4-S11 NSE read-only store API        LANDED #984
+       (never boot sync in NSE; helper + XCTest; not a product NSE swap)
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -536,7 +539,9 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 S9-30 timeline forward landed in #978. S9-31 landed in #979 and
 adds typed UniFFI wrappers for the registered session/status read
 commands. #980 is CI hygiene after the S9 rematch.
-#981 refreshes provenance. Local Apple UniFFI generate has been run;
+#981 refreshes provenance. #982 records local UniFFI generate.
+#983 records the S10 leftover stop. #984 lands S11 NSE read-only
+store. Local Apple UniFFI generate has been run;
 generated sources remain gitignored.
 
 1. `SharedCore.session_snapshot` / `sync_status` / `media_config` /
@@ -561,12 +566,13 @@ generated sources remain gitignored.
    truncating or echoing those values.
 4. Helper + XCTest are the iOS surface this slice. Do not swap
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
-5. One command family per PR. S9-31 has landed. Next is not eligible
-   (section 5 step 4). Do not wrap leftover-adjacent backup/crypto/
-   cross-signing/room-key status. Do not hit production homeservers.
-   S10 was started and stopped at section 9.6. Do not restart it
-   without a new owner decision that leftovers may cross UniFFI, or
-   that leftover product features may fail closed.
+5. One command family per PR. S9-31 has landed. S11 NSE read-only
+   store landed in #984. Next is not eligible (section 5 step 4).
+   Do not wrap leftover-adjacent backup/crypto/cross-signing/room-key
+   status. Do not hit production homeservers. S10 was started and
+   stopped at section 9.6. Do not restart it without a new owner
+   decision that leftovers may cross UniFFI, or that leftover
+   product features may fail closed.
 
 ### 9.6 When you may delete `MatrixRustSDK`
 
@@ -580,7 +586,7 @@ returns zero product references (tests/docs may still mention it), and
 RoomListService / TimelineService / MatrixRustSDKService have no
 remaining callers. That is a late P4 PR of its own, not a side effect.
 
-**S10 live map at `1207aece` (after #982).** Count: **109** hits in
+**S10 live map recorded in #983 at `1207aece` (after #982).** Count: **109** hits in
 **nine** product Swift files. Helpers already in pbxproj wrap the
 registered SharedCore families (login/restore/attach, room list,
 invites, timeline open/close/paginate, typing/presence, verification,
@@ -631,7 +637,8 @@ emit sinks are no-op.
 
 Until an owner decision moves a leftover, or leftover product
 features are explicitly allowed to fail closed, **stop**. Do not
-register leftovers. Do not start S11 NSE in an S10 PR.
+register leftovers. S11 NSE helper landed in #984; that is not
+leftover retirement and not a product NSE swap.
 
 ---
 
