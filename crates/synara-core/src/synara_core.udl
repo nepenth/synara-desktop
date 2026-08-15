@@ -651,6 +651,17 @@ interface DirectorySearchCommandError {
   Failed(string code, string description);
 };
 
+// Privacy-safe room leave/join write ack. Status only; no room id, alias, or via servers.
+dictionary RoomMembershipWriteDto {
+  string status;
+};
+
+// Static source constants only. Never echo room id, alias, via server, token, or password.
+[Error]
+interface RoomMembershipCommandError {
+  Failed(string code, string description);
+};
+
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
 // UniFFI 0.28 Swift keeps `SharedCore()` for the primary constructor and
 // emits the named constructor as `SharedCore.newWithSecretStore(store:)`,
@@ -678,7 +689,9 @@ interface DirectorySearchCommandError {
 // P4-S9-10 adds typed get/set room directory visibility.
 // P4-S9-11 adds typed directory protocols/search/cancel.
 // Search results stay metadata (ids/names/aliases/mxc). No avatar bytes.
-// Failed errors stay static. Room leave/join stay off.
+// P4-S9-12 adds typed room_leave / room_join.
+// Write ack is status only. Failed errors stay static and must not echo
+// room id, alias, or via servers. Invite/kick/ban stay off.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -862,5 +875,11 @@ interface SharedCore {
 
   [Async, Throws=DirectorySearchCommandError]
   RoomDirectorySearchDto room_directory_cancel(u64 session_generation, u64 request_id);
+
+  [Async, Throws=RoomMembershipCommandError]
+  RoomMembershipWriteDto room_leave(string room_id);
+
+  [Async, Throws=RoomMembershipCommandError]
+  RoomMembershipWriteDto room_join(string room_id_or_alias, sequence<string>? via_servers);
 
 };

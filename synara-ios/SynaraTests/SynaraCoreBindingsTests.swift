@@ -928,6 +928,39 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreRoomLeaveJoinWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let roomId = "!s912SecretRoom:example.org"
+        let alias = "#s912SecretAlias:example.org"
+        let via = "s912.secret.example.org"
+
+        do {
+            _ = try await SharedCoreRoomLeaveJoin.roomLeave(core: core, roomId: roomId)
+            XCTFail("Fail-closed SharedCore must not leave a room without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-leave-no-session"))
+            for forbidden in ["syt_", "token", roomId, alias, via] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreRoomLeaveJoin.roomJoin(
+                core: core,
+                roomIdOrAlias: alias,
+                viaServers: [via]
+            )
+            XCTFail("Fail-closed SharedCore must not join a room without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-join-no-session"))
+            for forbidden in ["syt_", "token", roomId, alias, via] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

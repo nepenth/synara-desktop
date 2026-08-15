@@ -42,6 +42,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreRoomProfile.swift",
   "synara-ios/Synara/Services/SharedCoreDirectoryVisibility.swift",
   "synara-ios/Synara/Services/SharedCoreDirectorySearch.swift",
+  "synara-ios/Synara/Services/SharedCoreRoomLeaveJoin.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -147,6 +148,10 @@ const sharedCoreDirectoryVisibility = readFileSync(
 );
 const sharedCoreDirectorySearch = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreDirectorySearch.swift"),
+  "utf8"
+);
+const sharedCoreRoomLeaveJoin = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreRoomLeaveJoin.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -507,6 +512,18 @@ const assertions = [
   [sharedCoreDirectorySearch, "roomDirectoryCancel", "P4-S9-11 product directory-cancel helper"],
   [sharedCoreDirectorySearch, "core: SharedCore", "P4-S9-11 helper takes an already-constructed SharedCore"],
   [sharedCoreDirectorySearch, "core.roomDirectorySearch", "P4-S9-11 helper searches on the caller-owned instance"],
+  [sharedCoreFfi, "room_leave", "P4-S9-12 typed room-leave FFI"],
+  [sharedCoreFfi, "matrix_room_leave", "P4-S9-12 calls the registered room-leave command"],
+  [sharedCoreFfi, "matrix_room_join", "P4-S9-12 calls the registered room-join command"],
+  [udl, "RoomMembershipWriteDto room_leave(", "P4-S9-12 SharedCore room leave"],
+  [udl, "RoomMembershipWriteDto room_join(", "P4-S9-12 SharedCore room join"],
+  [udl, "dictionary RoomMembershipWriteDto", "P4-S9-12 privacy-safe room-membership write DTO"],
+  [udl, "interface RoomMembershipCommandError", "P4-S9-12 static room-membership error"],
+  [swiftBindingsTests, "testSharedCoreRoomLeaveJoinWithoutSessionFailsClosed", "Swift P4-S9-12 fail-closed room leave/join test"],
+  [sharedCoreRoomLeaveJoin, "roomLeave", "P4-S9-12 product room-leave helper"],
+  [sharedCoreRoomLeaveJoin, "roomJoin", "P4-S9-12 product room-join helper"],
+  [sharedCoreRoomLeaveJoin, "core: SharedCore", "P4-S9-12 helper takes an already-constructed SharedCore"],
+  [sharedCoreRoomLeaveJoin, "core.roomLeave", "P4-S9-12 helper leaves on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1351,9 +1368,14 @@ for (const required of ["room_directory_protocols", "room_directory_search", "ro
     throw new Error(`P4-S9-11 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "room_leave", "room_join(", "crypto_status", "backup_setup"]) {
+for (const required of ["room_leave", "room_join("]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-12 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "room_invite", "room_kick", "room_ban", "room_unban", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-11`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-12`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1493,6 +1515,17 @@ for (const forbidden of ["roomLeave", "roomJoin(", "setRoomName", "backupStatus"
     throw new Error(`P4-S9-11 helper must not wrap ${forbidden}`);
   }
 }
+if (sharedCoreRoomLeaveJoin.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-12 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreRoomLeaveJoin.includes("SharedCore.newWithSecretStore") || sharedCoreRoomLeaveJoin.includes("newWithSecretStore")) {
+  throw new Error("P4-S9-12 helper must not construct SharedCore");
+}
+for (const forbidden of ["roomInvite", "roomKick", "roomBan", "roomUnban", "roomDirectorySearch", "backupStatus"]) {
+  if (sharedCoreRoomLeaveJoin.includes(forbidden)) {
+    throw new Error(`P4-S9-12 helper must not wrap ${forbidden}`);
+  }
+}
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
 if (!roomListDto) throw new Error("missing RoomListSnapshotDto");
 if (/\bpassword\b/.test(roomListDto[1]) || /\btoken\b/.test(roomListDto[1])) {
@@ -1607,6 +1640,11 @@ const roomDirectoryProtocolsDto = udl.match(/dictionary RoomDirectoryProtocolsDt
 if (!roomDirectoryProtocolsDto) throw new Error("missing RoomDirectoryProtocolsDto");
 if (/\bpassword\b/.test(roomDirectoryProtocolsDto[1]) || /\btoken\b/.test(roomDirectoryProtocolsDto[1]) || /\bbytes\b/.test(roomDirectoryProtocolsDto[1])) {
   throw new Error("RoomDirectoryProtocolsDto must not carry password, token, or bytes fields");
+}
+const roomMembershipWriteDto = udl.match(/dictionary RoomMembershipWriteDto \{([\s\S]*?)\};/);
+if (!roomMembershipWriteDto) throw new Error("missing RoomMembershipWriteDto");
+if (/\bpassword\b/.test(roomMembershipWriteDto[1]) || /\btoken\b/.test(roomMembershipWriteDto[1]) || /\bbytes\b/.test(roomMembershipWriteDto[1]) || /\broom_id\b/.test(roomMembershipWriteDto[1]) || /\balias\b/.test(roomMembershipWriteDto[1]) || /\bvia\b/.test(roomMembershipWriteDto[1])) {
+  throw new Error("RoomMembershipWriteDto must not carry password, token, bytes, room_id, alias, or via fields");
 }
 const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
 if (!loginDto) throw new Error("missing SessionLoginDto");
