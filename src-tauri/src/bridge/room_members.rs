@@ -94,7 +94,7 @@ fn parse_state_snapshot<T>(
         state_key: String,
     }
     let wire: Wire = serde_json::from_value(payload).map_err(|_| members_response_error())?;
-    if wire.event_type != event_type || wire.state_key != "" {
+    if wire.event_type != event_type || !wire.state_key.is_empty() {
         return Err(members_response_error());
     }
     Ok(build(
@@ -118,7 +118,7 @@ fn parse_creators_snapshot(
         creators: Vec<String>,
     }
     let wire: Wire = serde_json::from_value(payload).map_err(|_| members_response_error())?;
-    if wire.event_type != ROOM_CREATE_EVENT_TYPE || wire.state_key != "" {
+    if wire.event_type != ROOM_CREATE_EVENT_TYPE || !wire.state_key.is_empty() {
         return Err(members_response_error());
     }
     Ok(NativeRoomCreatorsSnapshot {
