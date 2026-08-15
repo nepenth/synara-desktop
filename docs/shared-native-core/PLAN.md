@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`ee896416` (#935 S3a SecretVault):** P0 is
+`917cc77d` (#980 CI hygiene after S9-31/#979):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -138,10 +138,16 @@ acceptance criteria have all passed.
   #931 exposes credential-free `register_flows` on UniFFI (closed DTO, no
   `params` JSON, no register/password/email-token). #933 adds constructor-only
   UniFFI `SharedCore`. #935 installs a Swift `IosSecretVault` callback on that
-  constructor. It does not expose `command` or a live Client. iOS still has no
-  registration product UI. This does **not** migrate iOS session, room-list,
-  timeline, crypto, push/NSE, or `MatrixRustSDK` services, and it does not
-  remove the upstream Swift SDK dependency.
+  constructor. S3b–S3d (#937–#939) add restore, dedicated
+  `login_with_password`, and owner attach (SyncService not started).
+  S4–S9-31 (#940–#979) add typed SharedCore wrappers for the registered
+  command families. #949 exposes the UniFFI 0.28 store constructor. #980
+  refreshes desktop source-scan tests. Helper + XCTest are the iOS surface.
+  Product room list, timeline, crypto, and push still use `MatrixRustSDK`.
+  Generated `SynaraCore.swift` is still the stub. iOS CI remains skipped.
+  iOS still has no registration product UI. This does **not** migrate iOS
+  session, room-list, timeline, crypto, push/NSE, or `MatrixRustSDK`
+  services, and it does not remove the upstream Swift SDK dependency.
 - **P5 — not started.** Do not claim iOS shared-engine parity, iOS migration,
   or Apple release readiness from the bounded work above.
 
@@ -152,9 +158,11 @@ acceptance criteria have all passed.
    five invite commands are already registered. Twenty-one census names
    stay desktop (secrets, file paths, bytes).
 2. **P4 serial iOS** of surfaces Core already owns, in the playbook
-   section 9 order. First UniFFI expansion needs disk ≥ 20 Gi.
-   iOS still runs `MatrixRustSDKService` / `RoomListService` /
-   `TimelineService`. That is the remaining dual implementation.
+   section 9 order. S1–S9-31 have landed. S10 is blocked while product
+   Swift still references `MatrixRustSDK`. Regenerating Swift bindings
+   needs disk ≥ 20 Gi. iOS still runs `MatrixRustSDKService` /
+   `RoomListService` / `TimelineService`. That is the remaining dual
+   implementation.
 3. **P3 thinning** continues as iOS/desktop leftovers shrink. Desktop is
    not a thin shell while Keychain, byte commands, and password UIAA live
    there — and those leftovers are *intended*.

@@ -14,8 +14,8 @@ P4-S3 plan: [12-p4-s3-live-client.md](12-p4-s3-live-client.md).
 | | |
 |---|---|
 | Owner | Synara engineering |
-| Status | P0 complete; P1 extraction and bounded P2, P3, and P4 slices are merged at the evidence base below. P2–P4 remain in progress; P5 has not started. Desktop uses Core for one hundred eleven commands. iOS is a UniFFI foothold only. |
-| Evidence base | `feature/shared-native-core` at `ee896416` (#935 S3a SecretVault; prior P4 includes #931/#933) |
+| Status | P0 complete; P1 extraction and bounded P2, P3, and P4 slices are merged at the evidence base below. P2–P4 remain in progress; P5 has not started. Desktop uses Core for one hundred eleven commands. iOS has typed SharedCore wrappers through S9-31; product still uses MatrixRustSDK. |
+| Evidence base | `feature/shared-native-core` at `917cc77d` (#980 CI hygiene after S9-31/#979) |
 | Decision | [ADR 0003](../adr/0003-shared-native-rust-core.md) |
 | Program ledger | `docs/shared-native-core/` (this directory) |
 | Related ADRs | [0001](../adr/0001-ios-repository-layout.md), [0002](../adr/0002-ios-architecture.md) |
@@ -120,7 +120,7 @@ P4-S3 plan: [12-p4-s3-live-client.md](12-p4-s3-live-client.md).
 ## Current milestone ledger
 
 The following describes merged source reachable from
-`ee896416` (#935). #708 and #710 remain the prior pure-helper P4
+`917cc77d` (#980). #708 and #710 remain the prior pure-helper P4
 evidence. #931 adds credential-free `register_flows`. #933 adds
 constructor-only `SharedCore`. #935 adds the S3a `IosSecretVault`
 callback. S3b restore landed in #937 (`4edfc1f5`). S3c Option A
@@ -131,12 +131,14 @@ timeline open/close/paginate landed in #944 (`1a77815a`).
 S7 typed typing/presence landed in #945 (`ee884ef3`).
 S8 typed `verification_list` landed in #947 (`52874c20`).
 S9 typed verification SAS landed in #948 (`c56a82aa`).
-S9-2 typed NativeDeviceOwner family (snapshot/rename/delete
-start/cancel only; SyncService not started) landed in #950 (`1539ed6a`).
-S9-3 typed `matrix_room_join_rule_snapshot` landed in #951 (`2f43e22c`).
-S9-4 typed image-pack get/set landed in #952 (`84c81e14`).
-S9-5 typed later account-data landed in #953 (`cbb82df1`).
-S9-6 typed m.direct is on this branch. Next is room notes.
+S9-2 through S9-31 typed SharedCore wrappers for the remaining
+registered command families landed in #950–#979. #949 exposes the
+UniFFI 0.28 `SharedCore` store constructor. #980 refreshes desktop
+source-scan tests after the S9 rematch. Helper + XCTest are the iOS
+surface. Product room list, timeline, crypto, and push still use
+`MatrixRustSDK`. Generated `SynaraCore.swift` is still the stub;
+bindgen has not run at this tip. iOS CI remains skipped (`if: false`).
+S10 is blocked while product Swift still references `MatrixRustSDK`.
 Password never rides a generic UniFFI `command`.
 
 | Phase | Merged evidence | Current boundary |
@@ -145,7 +147,7 @@ Password never rides a generic UniFFI `command`.
 | P1 | #669, #673–#677, #680–#681, #713–#714, #716–#717, #720–#721, #723–#726, #728–#729, #731–#732, #734–#735, #737–#738, #740–#741, #743–#744, #747–#748, #751, #753, #755, #757–#758, #760, #762, #764, #766, #768, #770, #772, #774, #776, #778, #780–#781, #783–#784, #786, #788, #790, #792, #794, #796, #798, #800–#801, #803, #805, #807–#808, #810, #812, #814, #816 | Extraction slices plus live client/login adapters, emit owners, NativeTimelineRegistry, and NativeVerificationOwner; leftover Keychain/Tauri commands not all moved. |
 | P2 | #683–#689, #694, #698, #701–#702, #706, #818, #820, #822, #824, #826, #828, #830, #832, #834, #836, #838, #840, #842, #844, #846, #848, #850, #852, #854, #856, #858, #860, #862, #864, #866, #868, #870, #872, #874, #876, #878, #880, #882, #884, #886, #888, #890, #892, #894, #896, #898, #900, #902, #904, #906, #908, #910, #912, #914, #916, #918, #920, #922, #924, #926, #928 | One-hundred-eleven-command registry (invite spam/block added); full desktop-invoke parity is not reached. |
 | P3 | #690–#691, #694, #698, #701–#702, #706 | The listed auth and read-only/session bridges use Core; `src-tauri` is not yet a fully thin shell. |
-| P4 | #685, #692–#693, #696, #699, #703, #708, #710, #931, #933, #935 | UniFFI scaffold, login_flows, register_flows, SharedCore, S3a SecretVault (#935); live Client, command consumption, and Apple release proof do not. |
+| P4 | #685, #692–#693, #696, #699, #703, #708, #710, #931, #933, #935, #937–#940, #942, #944–#945, #947–#980 | UniFFI scaffold through S9-31 typed wrappers plus #980 hygiene; product iOS still MatrixRustSDK; bindgen stub remains; Apple release proof does not. |
 | P5 | None | Not started. The release gates below remain required. |
 
 Read [11-implementer-playbook.md](11-implementer-playbook.md) before writing
