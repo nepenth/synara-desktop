@@ -198,7 +198,9 @@ jobs:
             crates/synara-core/src/synara_core.udl \
             crates/synara-core/src/ffi.rs \
             crates/synara-core/src/session_projection_ffi.rs \
+            crates/synara-core/src/shared_core_ffi.rs \
             crates/synara-core-bindgen \
+            .github/workflows/ci.yml \
             scripts/generate-synara-core-swift.sh \
             scripts/check-synara-core-swift-scaffold.mjs \
             synara-ios; then
@@ -495,8 +497,7 @@ jobs:
   ios-tests:
     name: iOS simulator tests
     needs: [changes]
-    # Paused while iterating shared-native-core; remediating iOS CI after the stack lands.
-    if: false
+    if: needs.changes.outputs.ios == 'true'
     runs-on: macos-26
     # Bounded cap allows post-test output/upload.
     # 90m: S3b + UniFFI merge-ups exceed the 60m GitHub default (cancelled at ~61m).

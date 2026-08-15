@@ -1589,6 +1589,22 @@ if (!ciWorkflowRunsScaffoldCheckBeforeIosBuild(ciWorkflow)) {
     "P4-4 CI ios-tests must directly run the named Core Swift scaffold check before synara-ios/scripts/ci-build.sh"
   );
 }
+const iosJobHeader = (() => {
+  const lines = ciWorkflow.split(/\r?\n/);
+  const jobStart = lines.findIndex((line) => /^ {2}ios-tests:\s*$/.test(line));
+  if (jobStart < 0) return "";
+  const header = [];
+  for (let index = jobStart + 1; index < lines.length; index += 1) {
+    if (/^ {4}steps:\s*$/.test(lines[index]) || /^ {2}[A-Za-z0-9_-]+:\s*$/.test(lines[index])) {
+      break;
+    }
+    header.push(lines[index]);
+  }
+  return header.join("\n");
+})();
+if (/(^|\n) {4}if:\s*false\s*(\n|$)/.test(iosJobHeader)) {
+  throw new Error("P4-4 CI ios-tests must not be paused with if: false");
+}
 
 // ci-build.sh retains the same command as runtime defense in depth before its
 // xcodebuild calls. The exact workflow step above, rather than this text
