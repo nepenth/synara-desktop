@@ -573,6 +573,28 @@ interface SessionStatusError {
   Failed(string code, string description);
 };
 
+// P4-S11: NSE read-only store status. Never reports tokens or start SyncService.
+dictionary NseStoreDto {
+  boolean read_only;
+  boolean owners_attached;
+  boolean sync_started;
+};
+
+// Local-store notification preview. Missing events fail closed; this DTO is
+// only returned when a matching event is already in the persisted store.
+dictionary NseEventPreviewDto {
+  string event_type;
+  string? sender_id;
+  string? body;
+  string? message_type;
+};
+
+// Static source constants only. Never echo room id, event id, user id, path, or token.
+[Error]
+interface NseStoreError {
+  Failed(string code, string description);
+};
+
 // Privacy-safe typing room row. No tokens or password.
 dictionary TypingRoomDto {
   string room_id;
@@ -1159,6 +1181,10 @@ interface InviteActionError {
 // P4-S9-21 adds typed composer set/get/clear reply-draft. These return the
 // existing reply-draft readback. Failed errors stay static and must not
 // echo room id or event id. Send text stays off.
+// P4-S11 adds a read-only NSE store API. It opens the persisted store and
+// looks up a local event preview. It never starts SyncService, never
+// attaches owners, and never boots leftover Client sync. Failed errors
+// stay static and must not echo room id, event id, user id, or tokens.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -1495,5 +1521,18 @@ interface SharedCore {
 
   [Async, Throws=SessionStatusError]
   SecretStorageStatusDto secret_storage_status();
+
+  [Async, Throws=NseStoreError]
+  NseStoreDto nse_open_read_only_store(
+    string user_id,
+    string homeserver_url,
+    string store_root
+  );
+
+  [Async, Throws=NseStoreError]
+  NseStoreDto nse_store_status();
+
+  [Async, Throws=NseStoreError]
+  NseEventPreviewDto nse_event_preview(string room_id, string event_id);
 
 };

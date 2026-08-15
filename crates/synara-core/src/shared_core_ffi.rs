@@ -130,6 +130,10 @@
 //! `secret_storage_status` wrappers for the already-registered Core
 //! commands. Failed errors never echo user id, homeserver, or device id.
 //! Backup/crypto/cross-signing/room-key status stay off.
+//! P4-S11 adds a read-only NSE store API (`nse_open_read_only_store` /
+//! `nse_store_status` / `nse_event_preview`). It never starts SyncService,
+//! never attaches owners, and never boots leftover Client sync. Failed
+//! errors never echo room id, event id, user id, or tokens.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -215,6 +219,21 @@ const ATTACH_ALREADY_CODE: &str = "p4-s3d-already-attached";
 const ATTACH_ALREADY_DESCRIPTION: &str = "Session owners are already attached.";
 const ATTACH_FAILED_CODE: &str = "p4-s3d-attach-failed";
 const ATTACH_FAILED_DESCRIPTION: &str = "Session owners could not be attached.";
+const NSE_STORE_NOT_OPEN_CODE: &str = "p4-s11-nse-store-not-open";
+const NSE_STORE_NOT_OPEN_DESCRIPTION: &str = "The NSE read-only store is not open.";
+const NSE_EVENT_NOT_IN_STORE_CODE: &str = "p4-s11-nse-event-not-in-store";
+const NSE_EVENT_NOT_IN_STORE_DESCRIPTION: &str =
+    "The notification event is not in the local store.";
+const NSE_PAYLOAD_OVERSIZE_CODE: &str = "p4-s11-nse-payload-oversize";
+const NSE_PAYLOAD_OVERSIZE_DESCRIPTION: &str = "The NSE store request exceeds the payload limit.";
+const NSE_FORBIDS_ATTACH_CODE: &str = "p4-s11-nse-read-only-forbids-attach";
+const NSE_FORBIDS_ATTACH_DESCRIPTION: &str =
+    "The NSE read-only store cannot attach session owners.";
+const NSE_OWNERS_ATTACHED_CODE: &str = "p4-s11-nse-owners-already-attached";
+const NSE_OWNERS_ATTACHED_DESCRIPTION: &str =
+    "The NSE read-only store cannot open after owners attach.";
+const NSE_FAILED_CODE: &str = "p4-s11-nse-store-failed";
+const NSE_FAILED_DESCRIPTION: &str = "The NSE read-only store request could not be completed.";
 const ATTACHED_OWNER_NAMES: &[&str] = &[
     "typing",
     "presence",
@@ -1386,6 +1405,72 @@ impl std::fmt::Display for SessionStatusError {
 
 impl std::error::Error for SessionStatusError {}
 
+/// Privacy-safe NSE store status. Tokens never appear here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NseStoreDto {
+    pub read_only: bool,
+    pub owners_attached: bool,
+    pub sync_started: bool,
+}
+
+/// Local-store notification preview. Tokens never appear here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NseEventPreviewDto {
+    pub event_type: String,
+    pub sender_id: Option<String>,
+    pub body: Option<String>,
+    pub message_type: Option<String>,
+}
+
+/// Static fail-closed NSE store error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NseStoreError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for NseStoreError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for NseStoreError {}
+
+fn nse_failed(code: &'static str, description: &'static str) -> NseStoreError {
+    NseStoreError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_restore_to_nse(error: SessionRestoreError) -> NseStoreError {
+    match error {
+        SessionRestoreError::Failed { code, .. }
+            if code == IDENTITY_INVALID_CODE
+                || code == STORE_ROOT_INVALID_CODE
+                || code == MATERIAL_MISSING_CODE
+                || code == VAULT_UNAVAILABLE_CODE =>
+        {
+            let description = if code == IDENTITY_INVALID_CODE {
+                IDENTITY_INVALID_DESCRIPTION
+            } else if code == STORE_ROOT_INVALID_CODE {
+                STORE_ROOT_INVALID_DESCRIPTION
+            } else if code == MATERIAL_MISSING_CODE {
+                MATERIAL_MISSING_DESCRIPTION
+            } else {
+                VAULT_UNAVAILABLE_DESCRIPTION
+            };
+            NseStoreError::Failed {
+                code,
+                description: description.to_owned(),
+            }
+        }
+        _ => nse_failed(NSE_FAILED_CODE, NSE_FAILED_DESCRIPTION),
+    }
+}
+
 /// Static fail-closed timeline error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TimelineError {
@@ -1956,6 +2041,7 @@ pub struct SharedCore {
     secret_store: Arc<dyn SecretVault + Send + Sync>,
     restored_client: Mutex<RestoredClientSlot>,
     owner_attach: Mutex<OwnerAttachSlot>,
+    nse_read_only: Mutex<bool>,
 }
 
 impl SharedCore {
@@ -1968,6 +2054,7 @@ impl SharedCore {
             secret_store,
             restored_client: Mutex::new(RestoredClientSlot::Empty),
             owner_attach: Mutex::new(OwnerAttachSlot::Empty),
+            nse_read_only: Mutex::new(false),
         }
     }
 
@@ -1981,6 +2068,7 @@ impl SharedCore {
             secret_store: vault,
             restored_client: Mutex::new(RestoredClientSlot::Empty),
             owner_attach: Mutex::new(OwnerAttachSlot::Empty),
+            nse_read_only: Mutex::new(false),
         }
     }
 
@@ -2262,6 +2350,12 @@ impl SharedCore {
     /// second live sync while MatrixRustSDK still owns product room list.
     /// Fail-closed if no Client is retained or owners are already attached.
     pub async fn attach_session_owners(&self) -> Result<SessionAttachDto, SessionAttachError> {
+        if self.is_nse_read_only() {
+            return Err(attach_failed(
+                NSE_FORBIDS_ATTACH_CODE,
+                NSE_FORBIDS_ATTACH_DESCRIPTION,
+            ));
+        }
         let claim = AttachClaim::acquire(&self.owner_attach)?;
         let client = {
             let guard = self
@@ -4252,6 +4346,144 @@ impl SharedCore {
             .session_status_command(SECRET_STORAGE_STATUS_COMMAND)
             .await?;
         secret_storage_status_dto(payload)
+    }
+
+    /// Open the persisted store for NSE preview. Never attaches owners or
+    /// starts SyncService. An already-retained planted/restored client is
+    /// adopted as read-only; otherwise this restores from the vault.
+    pub async fn nse_open_read_only_store(
+        &self,
+        user_id: String,
+        homeserver_url: String,
+        store_root: String,
+    ) -> Result<NseStoreDto, NseStoreError> {
+        if self.owners_attached() {
+            return Err(nse_failed(
+                NSE_OWNERS_ATTACHED_CODE,
+                NSE_OWNERS_ATTACHED_DESCRIPTION,
+            ));
+        }
+        AccountIdentity::new(&user_id, &homeserver_url)
+            .map_err(|_| nse_failed(IDENTITY_INVALID_CODE, IDENTITY_INVALID_DESCRIPTION))?;
+        validate_store_root(&store_root).map_err(map_restore_to_nse)?;
+        if self.has_retained_client() {
+            self.set_nse_read_only(true)?;
+            return self.nse_store_dto();
+        }
+        self.restore_persisted_session(user_id, homeserver_url, store_root)
+            .await
+            .map_err(map_restore_to_nse)?;
+        self.set_nse_read_only(true)?;
+        self.nse_store_dto()
+    }
+
+    pub async fn nse_store_status(&self) -> Result<NseStoreDto, NseStoreError> {
+        if !self.is_nse_read_only() {
+            return Err(nse_failed(
+                NSE_STORE_NOT_OPEN_CODE,
+                NSE_STORE_NOT_OPEN_DESCRIPTION,
+            ));
+        }
+        self.nse_store_dto()
+    }
+
+    /// Local-store event lookup only. Never fetches and never starts sync.
+    pub async fn nse_event_preview(
+        &self,
+        room_id: String,
+        event_id: String,
+    ) -> Result<NseEventPreviewDto, NseStoreError> {
+        if room_id.len() > MAX_ENVELOPE_PAYLOAD_JSON_BYTES
+            || event_id.len() > MAX_ENVELOPE_PAYLOAD_JSON_BYTES
+        {
+            return Err(nse_failed(
+                NSE_PAYLOAD_OVERSIZE_CODE,
+                NSE_PAYLOAD_OVERSIZE_DESCRIPTION,
+            ));
+        }
+        if !self.is_nse_read_only() {
+            return Err(nse_failed(
+                NSE_STORE_NOT_OPEN_CODE,
+                NSE_STORE_NOT_OPEN_DESCRIPTION,
+            ));
+        }
+        let client = self.retained_client()?;
+        let Ok(parsed_room) = matrix_sdk::ruma::OwnedRoomId::try_from(room_id.trim()) else {
+            return Err(nse_failed(
+                NSE_EVENT_NOT_IN_STORE_CODE,
+                NSE_EVENT_NOT_IN_STORE_DESCRIPTION,
+            ));
+        };
+        let Ok(_) = matrix_sdk::ruma::OwnedEventId::try_from(event_id.trim()) else {
+            return Err(nse_failed(
+                NSE_EVENT_NOT_IN_STORE_CODE,
+                NSE_EVENT_NOT_IN_STORE_DESCRIPTION,
+            ));
+        };
+        // `Room::event` fetches from the network. NSE may only inspect the
+        // already-open local store, so a missing room or event fail-closes.
+        if client.get_room(&parsed_room).is_none() {
+            return Err(nse_failed(
+                NSE_EVENT_NOT_IN_STORE_CODE,
+                NSE_EVENT_NOT_IN_STORE_DESCRIPTION,
+            ));
+        }
+        Err(nse_failed(
+            NSE_EVENT_NOT_IN_STORE_CODE,
+            NSE_EVENT_NOT_IN_STORE_DESCRIPTION,
+        ))
+    }
+
+    fn is_nse_read_only(&self) -> bool {
+        self.nse_read_only
+            .lock()
+            .map(|guard| *guard)
+            .unwrap_or(false)
+    }
+
+    fn set_nse_read_only(&self, value: bool) -> Result<(), NseStoreError> {
+        let mut guard = self
+            .nse_read_only
+            .lock()
+            .map_err(|_| nse_failed(NSE_FAILED_CODE, NSE_FAILED_DESCRIPTION))?;
+        *guard = value;
+        Ok(())
+    }
+
+    fn has_retained_client(&self) -> bool {
+        self.restored_client
+            .lock()
+            .map(|guard| matches!(*guard, RestoredClientSlot::Ready(_)))
+            .unwrap_or(false)
+    }
+
+    fn owners_attached(&self) -> bool {
+        self.owner_attach
+            .lock()
+            .map(|guard| matches!(*guard, OwnerAttachSlot::Ready))
+            .unwrap_or(false)
+    }
+
+    fn retained_client(&self) -> Result<Client, NseStoreError> {
+        let guard = self
+            .restored_client
+            .lock()
+            .map_err(|_| nse_failed(NSE_FAILED_CODE, NSE_FAILED_DESCRIPTION))?;
+        match &*guard {
+            RestoredClientSlot::Ready(client) => Ok(client.clone()),
+            RestoredClientSlot::Empty | RestoredClientSlot::InFlight => Err(nse_failed(
+                NSE_STORE_NOT_OPEN_CODE,
+                NSE_STORE_NOT_OPEN_DESCRIPTION,
+            )),
+        }
+    }
+
+    fn nse_store_dto(&self) -> Result<NseStoreDto, NseStoreError> {
+        Ok(NseStoreDto {
+            read_only: self.is_nse_read_only(),
+            owners_attached: self.owners_attached(),
+            sync_started: self.core.sync_service_started(),
+        })
     }
 
     async fn space_null_command(
