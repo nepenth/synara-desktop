@@ -3,8 +3,9 @@
 //! Calls the already-registered Core handlers. Does not start SyncService.
 //! Room id, user id, power level, and content JSON may cross as method
 //! arguments. Write ack is status only. Failed errors stay static and must
-//! not echo room id, user id, power level, or content. Room create, members
-//! snapshots, and spaces stay off. Invite/kick/ban is already S9-13.
+//! not echo room id, user id, power level, or content. Members snapshots
+//! and spaces stay off. Invite/kick/ban is already S9-13. Room create is
+//! S9-15.
 
 use std::collections::HashMap;
 use std::fs;
@@ -76,7 +77,6 @@ fn room_power_levels_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("room_invite"));
     assert!(shared_core.contains("room_unban"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("room_create"));
     assert!(!shared_core.contains("room_members_snapshot"));
     assert!(!shared_core.contains("power_levels_snapshot"));
     assert!(!shared_core.contains("space_parents_snapshot"));

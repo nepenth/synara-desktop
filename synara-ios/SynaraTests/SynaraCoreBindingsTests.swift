@@ -1085,6 +1085,40 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreRoomCreateWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let name = "s915SecretName"
+        let topic = "s915SecretTopic"
+        let alias = "s915secretalias"
+        let invite = "s915SecretInvite"
+        let parent = "!s915SecretParent:example.org"
+        let request = RoomCreateRequestDto(
+            name: name,
+            topic: topic,
+            roomAliasName: alias,
+            visibility: "private",
+            preset: "private_chat",
+            isDirect: false,
+            encryption: false,
+            invite: [invite],
+            roomVersion: nil,
+            joinRule: nil,
+            knock: false,
+            parentRoomId: parent
+        )
+
+        do {
+            _ = try await SharedCoreRoomCreate.roomCreate(core: core, request: request)
+            XCTFail("Fail-closed SharedCore must not create a room without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-create-no-session"))
+            for forbidden in ["syt_", "token", name, topic, alias, invite, parent] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

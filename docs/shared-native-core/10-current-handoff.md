@@ -476,9 +476,10 @@ for any of those gates.
    visibility landed in #958. S9-11 typed directory
    search/protocols/cancel landed in #959. S9-12 typed room
    leave/join landed in #960. S9-13 typed room
-   invite/kick/ban/unban landed in #961. **S9-14** typed room
-   power-level writers (playbook §9.5) is on this branch. Next after
-   merge is room create. UniFFI expansion
+   invite/kick/ban/unban landed in #961. S9-14 typed room
+   power-level writers landed in #962. **S9-15** typed room
+   create (playbook §9.5) is on this branch. Next after
+   merge is members snapshots. UniFFI expansion
    needs free disk ≥ 20 Gi for
    local cargo/bindgen. There is no source-without-bindgen exception.
    If disk is under 20 Gi: stop. Docs-only PRs are still allowed.
