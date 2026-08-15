@@ -130,9 +130,9 @@ Run this checklist in order. Stop at the first yes.
    S1/#931, S2/#933, S3a/#935, S3b/#937, S3c/#938, S3d/#939,
    S4/#940, S5/#942, S6/#944, S7/#945, S8/#947, S9/#948,
    S9-2/#950, S9-3/#951, S9-4/#952, S9-5/#953, S9-6/#954,
-   S9-7/#955, S9-8/#956, and S9-9/#957 landed. S9-10 directory
-   visibility (section 9.5) is on this branch. Next after merge is
-   directory search/protocols/cancel on NativeRoomJoinRuleOwner.
+   S9-7/#955, S9-8/#956, S9-9/#957, and S9-10/#958 landed. S9-11
+   directory search/protocols/cancel (section 9.5) is on this branch.
+   Next after merge is room leave/join on NativeRoomJoinRuleOwner.
    UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
@@ -302,9 +302,12 @@ P4-S9-8 iOS own display-name/avatar   stacked #956
 P4-S9-9 iOS room name/topic/avatar    stacked #957
        matrix_set_room_name / matrix_set_room_topic / matrix_set_room_avatar.
        Room avatar is mxc:// (or empty clear) only. Image bytes stay off.
-P4-S9-10 iOS directory visibility     **this branch**
+P4-S9-10 iOS directory visibility     stacked
        matrix_get_room_directory_visibility / matrix_set_room_directory_visibility.
-       Directory search/protocols/cancel stay off.
+P4-S9-11 iOS directory search         **this branch**
+       matrix_room_directory_protocols / matrix_room_directory_search /
+       matrix_room_directory_cancel. Results stay metadata. No avatar bytes.
+       Room leave/join stay off.
 P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        only when grep shows no remaining product callers
 P4-S11 NSE read-only store API        (never boot sync in NSE)
@@ -443,24 +446,26 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 
-S9-9 room-profile landed in #957 (`c6893a4c`). **S9-10 (this branch)** adds typed
-UniFFI wrappers for the two registered directory-visibility commands.
+S9-10 directory-visibility landed in #958 (`b142c2ca`). **S9-11 (this branch)** adds
+typed UniFFI wrappers for the three registered directory-search commands.
 
-1. `SharedCore.get_room_directory_visibility` /
-   `set_room_directory_visibility` call `Core.command` with the same
-   camelCase payloads desktop uses, including `sessionGeneration`.
-   Visibility is `public` / `private` only. Do not re-wrap room
-   name/topic/avatar or join-rule snapshot.
-2. Do not reimplement directory visibility in Swift. Do not wrap
-   directory search/protocols/cancel, leave/join, or leftover media.
+1. `SharedCore.room_directory_protocols` / `room_directory_search` /
+   `room_directory_cancel` call `Core.command` with the same camelCase
+   payloads desktop uses, including `sessionGeneration`. Search results
+   stay metadata (room ids, names, aliases, mxc). Avatar bytes stay off.
+   Do not re-wrap directory visibility or room name/topic/avatar.
+2. Do not reimplement directory search in Swift. Do not wrap leave/join,
+   invite/kick/ban, power levels, room create, members, spaces, or leftover
+   media.
 3. Do not start `SyncService`. Missing owner fail-closes with the
    registered `p2-*-no-session` codes. Unstarted sync returns the
-   registered handler's real outcome. Failed errors must not echo
-   room id or visibility.
+   registered handler's real outcome. Cancel is local and must not
+   require a live server on a planted session. Failed errors must not
+   echo term, server, or room id.
 4. Helper + XCTest are the iOS surface this slice. Do not swap
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
-5. One command family per PR. Next is directory search/protocols/cancel
-   on `NativeRoomJoinRuleOwner`. Do not wrap leftover
+5. One command family per PR. Next is room leave/join on
+   `NativeRoomJoinRuleOwner`. Do not wrap leftover
    password/export/import/bootstrap, `matrix_crypto_status`, or
    `matrix_cross_signing_status`. Do not hit production homeservers.
 

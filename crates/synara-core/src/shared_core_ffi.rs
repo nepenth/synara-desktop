@@ -50,8 +50,12 @@
 //! P4-S9-10 adds typed `get_room_directory_visibility` /
 //! `set_room_directory_visibility` wrappers for those two already-registered
 //! Core commands. Failed errors never echo room id or visibility.
-//! Directory search/protocols/cancel stay off. This still exposes no
-//! generic command FFI or APNs surface.
+//! P4-S9-11 adds typed `room_directory_protocols` / `room_directory_search` /
+//! `room_directory_cancel` wrappers for those three already-registered Core
+//! commands. Search results stay metadata (room ids, names, aliases, mxc).
+//! Avatar bytes stay off. Failed errors never echo term, server, or room id.
+//! Room leave/join stay off. This still exposes no generic command FFI or
+//! APNs surface.
 
 use std::path::{Component, Path};
 use std::sync::{Arc, Mutex};
@@ -353,6 +357,20 @@ const DIRECTORY_VISIBILITY_FAILED_DESCRIPTION: &str =
     "The room-directory-visibility request could not be completed.";
 const DIRECTORY_VISIBILITY_OWNER_DESCRIPTION: &str =
     "The room-directory-visibility request is not available.";
+const DIRECTORY_SEARCH_ENVELOPE_GENERATION: u64 = 0;
+const ROOM_DIRECTORY_PROTOCOLS_COMMAND: &str = "matrix_room_directory_protocols";
+const ROOM_DIRECTORY_SEARCH_COMMAND: &str = "matrix_room_directory_search";
+const ROOM_DIRECTORY_CANCEL_COMMAND: &str = "matrix_room_directory_cancel";
+const ROOM_DIRECTORY_PROTOCOLS_NO_SESSION_CODE: &str = "p2-room-directory-protocols-no-session";
+const ROOM_DIRECTORY_SEARCH_NO_SESSION_CODE: &str = "p2-room-directory-search-no-session";
+const ROOM_DIRECTORY_CANCEL_NO_SESSION_CODE: &str = "p2-room-directory-cancel-no-session";
+const DIRECTORY_SEARCH_NO_SESSION_DESCRIPTION: &str =
+    "No room-directory-search session is available.";
+const DIRECTORY_SEARCH_FAILED_CODE: &str = "p4-s9-11-directory-search-failed";
+const DIRECTORY_SEARCH_FAILED_DESCRIPTION: &str =
+    "The room-directory-search request could not be completed.";
+const DIRECTORY_SEARCH_OWNER_DESCRIPTION: &str =
+    "The room-directory-search request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2601,6 +2619,84 @@ impl SharedCore {
         room_directory_visibility_write_dto(response.payload)
     }
 
+    pub async fn room_directory_protocols(
+        &self,
+    ) -> Result<RoomDirectoryProtocolsDto, DirectorySearchCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: ROOM_DIRECTORY_PROTOCOLS_COMMAND.to_owned(),
+                session_generation: DIRECTORY_SEARCH_ENVELOPE_GENERATION,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .map_err(|error| {
+                map_directory_search_core_error(ROOM_DIRECTORY_PROTOCOLS_NO_SESSION_CODE, error)
+            })?;
+        room_directory_protocols_dto(response.payload)
+    }
+
+    pub async fn room_directory_search(
+        &self,
+        session_generation: u64,
+        request_id: u64,
+        server_name: Option<String>,
+        term: Option<String>,
+        room_type: Option<String>,
+        third_party_instance_id: Option<String>,
+        limit: u64,
+        since: Option<String>,
+    ) -> Result<RoomDirectorySearchDto, DirectorySearchCommandError> {
+        let payload = directory_search_envelope_payload(serde_json::json!({
+            "sessionGeneration": session_generation,
+            "requestId": request_id,
+            "serverName": server_name,
+            "term": term,
+            "roomType": room_type,
+            "thirdPartyInstanceId": third_party_instance_id,
+            "limit": limit,
+            "since": since,
+        }))?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: ROOM_DIRECTORY_SEARCH_COMMAND.to_owned(),
+                session_generation: DIRECTORY_SEARCH_ENVELOPE_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| {
+                map_directory_search_core_error(ROOM_DIRECTORY_SEARCH_NO_SESSION_CODE, error)
+            })?;
+        room_directory_search_dto(response.payload)
+    }
+
+    pub async fn room_directory_cancel(
+        &self,
+        session_generation: u64,
+        request_id: u64,
+    ) -> Result<RoomDirectorySearchDto, DirectorySearchCommandError> {
+        let payload = directory_search_envelope_payload(serde_json::json!({
+            "sessionGeneration": session_generation,
+            "requestId": request_id,
+        }))?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: ROOM_DIRECTORY_CANCEL_COMMAND.to_owned(),
+                session_generation: DIRECTORY_SEARCH_ENVELOPE_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| {
+                map_directory_search_core_error(ROOM_DIRECTORY_CANCEL_NO_SESSION_CODE, error)
+            })?;
+        room_directory_search_dto(response.payload)
+    }
+
     async fn later_null_command(
         &self,
         command: &'static str,
@@ -3714,6 +3810,345 @@ fn room_directory_visibility_write_dto(
         room_id: room_id.to_owned(),
         session_generation,
         requested_visibility: requested_visibility.to_owned(),
+    })
+}
+
+/// Privacy-safe third-party directory protocol instance. Ids and description only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomDirectoryProtocolInstanceDto {
+    pub protocol_id: String,
+    pub instance_id: String,
+    pub description: String,
+}
+
+/// Privacy-safe protocol list. No tokens or password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomDirectoryProtocolsDto {
+    pub session_generation: u64,
+    pub instances: Vec<RoomDirectoryProtocolInstanceDto>,
+}
+
+/// Privacy-safe public-directory room hit. Metadata only; avatar_url is mxc, never bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomDirectoryHitDto {
+    pub room_id: String,
+    pub name: Option<String>,
+    pub topic: Option<String>,
+    pub canonical_alias: Option<String>,
+    pub avatar_url: Option<String>,
+    pub member_count: u32,
+    pub world_readable: bool,
+    pub guest_can_join: bool,
+    pub room_type: String,
+}
+
+/// Privacy-safe search page. Room metadata only; no avatar bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomDirectoryPageDto {
+    pub session_generation: u64,
+    pub request_id: u64,
+    pub chunk: Vec<RoomDirectoryHitDto>,
+    pub prev_batch: Option<String>,
+    pub next_batch: Option<String>,
+}
+
+/// Privacy-safe search/cancel result. Status is ready/stale/cancelled.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomDirectorySearchDto {
+    pub session_generation: u64,
+    pub request_id: u64,
+    pub status: String,
+    pub page: Option<RoomDirectoryPageDto>,
+}
+
+/// Static fail-closed directory-search-family error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DirectorySearchCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for DirectorySearchCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for DirectorySearchCommandError {}
+
+fn directory_search_failed(code: &str, description: &'static str) -> DirectorySearchCommandError {
+    DirectorySearchCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_directory_search_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> DirectorySearchCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            directory_search_failed(code, DIRECTORY_SEARCH_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code.starts_with("v-rooms.directory-")
+                || code == "v-send.r-room-profile-join-rule-requires-session" =>
+        {
+            directory_search_failed(code, DIRECTORY_SEARCH_OWNER_DESCRIPTION)
+        }
+        _ => directory_search_failed(
+            DIRECTORY_SEARCH_FAILED_CODE,
+            DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn directory_search_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, DirectorySearchCommandError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(directory_search_failed(
+            DIRECTORY_SEARCH_FAILED_CODE,
+            DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn closed_directory_search_status(value: &str) -> Option<&'static str> {
+    match value {
+        "ready" => Some("ready"),
+        "stale" => Some("stale"),
+        "cancelled" => Some("cancelled"),
+        _ => None,
+    }
+}
+
+fn closed_directory_room_type(value: &str) -> Option<&'static str> {
+    match value {
+        "room" => Some("room"),
+        "space" => Some("space"),
+        _ => None,
+    }
+}
+
+fn json_optional_string(value: Option<&serde_json::Value>) -> Option<String> {
+    value.and_then(|value| value.as_str()).map(str::to_owned)
+}
+
+fn room_directory_protocols_dto(
+    payload: serde_json::Value,
+) -> Result<RoomDirectoryProtocolsDto, DirectorySearchCommandError> {
+    let session_generation = payload
+        .get("sessionGeneration")
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| {
+            directory_search_failed(
+                DIRECTORY_SEARCH_FAILED_CODE,
+                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+            )
+        })?;
+    let instances = payload
+        .get("instances")
+        .and_then(|value| value.as_array())
+        .ok_or_else(|| {
+            directory_search_failed(
+                DIRECTORY_SEARCH_FAILED_CODE,
+                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+            )
+        })?;
+    let mut mapped = Vec::with_capacity(instances.len());
+    for instance in instances {
+        let protocol_id = instance
+            .get("protocolId")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| {
+                directory_search_failed(
+                    DIRECTORY_SEARCH_FAILED_CODE,
+                    DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+                )
+            })?;
+        let instance_id = instance
+            .get("instanceId")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| {
+                directory_search_failed(
+                    DIRECTORY_SEARCH_FAILED_CODE,
+                    DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+                )
+            })?;
+        let description = instance
+            .get("description")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| {
+                directory_search_failed(
+                    DIRECTORY_SEARCH_FAILED_CODE,
+                    DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+                )
+            })?;
+        mapped.push(RoomDirectoryProtocolInstanceDto {
+            protocol_id: protocol_id.to_owned(),
+            instance_id: instance_id.to_owned(),
+            description: description.to_owned(),
+        });
+    }
+    Ok(RoomDirectoryProtocolsDto {
+        session_generation,
+        instances: mapped,
+    })
+}
+
+fn room_directory_hit_dto(
+    payload: &serde_json::Value,
+) -> Result<RoomDirectoryHitDto, DirectorySearchCommandError> {
+    let room_id = payload
+        .get("roomId")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| {
+            directory_search_failed(
+                DIRECTORY_SEARCH_FAILED_CODE,
+                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+            )
+        })?;
+    let member_count = payload
+        .get("memberCount")
+        .and_then(|value| value.as_u64())
+        .and_then(|value| u32::try_from(value).ok())
+        .ok_or_else(|| {
+            directory_search_failed(
+                DIRECTORY_SEARCH_FAILED_CODE,
+                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+            )
+        })?;
+    let world_readable = payload
+        .get("worldReadable")
+        .and_then(|value| value.as_bool())
+        .ok_or_else(|| {
+            directory_search_failed(
+                DIRECTORY_SEARCH_FAILED_CODE,
+                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+            )
+        })?;
+    let guest_can_join = payload
+        .get("guestCanJoin")
+        .and_then(|value| value.as_bool())
+        .ok_or_else(|| {
+            directory_search_failed(
+                DIRECTORY_SEARCH_FAILED_CODE,
+                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+            )
+        })?;
+    let room_type = payload
+        .get("roomType")
+        .and_then(|value| value.as_str())
+        .and_then(closed_directory_room_type)
+        .ok_or_else(|| {
+            directory_search_failed(
+                DIRECTORY_SEARCH_FAILED_CODE,
+                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+            )
+        })?;
+    Ok(RoomDirectoryHitDto {
+        room_id: room_id.to_owned(),
+        name: json_optional_string(payload.get("name")),
+        topic: json_optional_string(payload.get("topic")),
+        canonical_alias: json_optional_string(payload.get("canonicalAlias")),
+        avatar_url: json_optional_string(payload.get("avatarUrl")),
+        member_count,
+        world_readable,
+        guest_can_join,
+        room_type: room_type.to_owned(),
+    })
+}
+
+fn room_directory_page_dto(
+    payload: &serde_json::Value,
+) -> Result<RoomDirectoryPageDto, DirectorySearchCommandError> {
+    let session_generation = payload
+        .get("sessionGeneration")
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| {
+            directory_search_failed(
+                DIRECTORY_SEARCH_FAILED_CODE,
+                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+            )
+        })?;
+    let request_id = payload
+        .get("requestId")
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| {
+            directory_search_failed(
+                DIRECTORY_SEARCH_FAILED_CODE,
+                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+            )
+        })?;
+    let chunk = payload
+        .get("chunk")
+        .and_then(|value| value.as_array())
+        .ok_or_else(|| {
+            directory_search_failed(
+                DIRECTORY_SEARCH_FAILED_CODE,
+                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+            )
+        })?;
+    let mut mapped = Vec::with_capacity(chunk.len());
+    for hit in chunk {
+        mapped.push(room_directory_hit_dto(hit)?);
+    }
+    Ok(RoomDirectoryPageDto {
+        session_generation,
+        request_id,
+        chunk: mapped,
+        prev_batch: json_optional_string(payload.get("prevBatch")),
+        next_batch: json_optional_string(payload.get("nextBatch")),
+    })
+}
+
+fn room_directory_search_dto(
+    payload: serde_json::Value,
+) -> Result<RoomDirectorySearchDto, DirectorySearchCommandError> {
+    let session_generation = payload
+        .get("sessionGeneration")
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| {
+            directory_search_failed(
+                DIRECTORY_SEARCH_FAILED_CODE,
+                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+            )
+        })?;
+    let request_id = payload
+        .get("requestId")
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| {
+            directory_search_failed(
+                DIRECTORY_SEARCH_FAILED_CODE,
+                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+            )
+        })?;
+    let status = payload
+        .get("status")
+        .and_then(|value| value.as_str())
+        .and_then(closed_directory_search_status)
+        .ok_or_else(|| {
+            directory_search_failed(
+                DIRECTORY_SEARCH_FAILED_CODE,
+                DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+            )
+        })?;
+    let page = match payload.get("page") {
+        None | Some(serde_json::Value::Null) => None,
+        Some(page) => Some(room_directory_page_dto(page)?),
+    };
+    Ok(RoomDirectorySearchDto {
+        session_generation,
+        request_id,
+        status: status.to_owned(),
+        page,
     })
 }
 

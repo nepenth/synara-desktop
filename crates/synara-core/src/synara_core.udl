@@ -602,6 +602,55 @@ interface DirectoryVisibilityCommandError {
   Failed(string code, string description);
 };
 
+// Privacy-safe third-party directory protocol instance. Ids and description only.
+dictionary RoomDirectoryProtocolInstanceDto {
+  string protocol_id;
+  string instance_id;
+  string description;
+};
+
+// Privacy-safe protocol list. No tokens or password.
+dictionary RoomDirectoryProtocolsDto {
+  u64 session_generation;
+  sequence<RoomDirectoryProtocolInstanceDto> instances;
+};
+
+// Privacy-safe public-directory room hit. Metadata only; avatar_url is mxc, never bytes.
+dictionary RoomDirectoryHitDto {
+  string room_id;
+  string? name;
+  string? topic;
+  string? canonical_alias;
+  string? avatar_url;
+  u32 member_count;
+  boolean world_readable;
+  boolean guest_can_join;
+  string room_type;
+};
+
+// Privacy-safe search page. Room metadata only; no avatar bytes.
+dictionary RoomDirectoryPageDto {
+  u64 session_generation;
+  u64 request_id;
+  sequence<RoomDirectoryHitDto> chunk;
+  string? prev_batch;
+  string? next_batch;
+};
+
+// Privacy-safe search/cancel result. Status is ready/stale/cancelled.
+dictionary RoomDirectorySearchDto {
+  u64 session_generation;
+  u64 request_id;
+  string status;
+  RoomDirectoryPageDto? page;
+};
+
+// Static source constants only. Never echo term, server, room id, token, or password.
+[Error]
+interface DirectorySearchCommandError {
+  Failed(string code, string description);
+};
+
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
 // UniFFI 0.28 Swift keeps `SharedCore()` for the primary constructor and
 // emits the named constructor as `SharedCore.newWithSecretStore(store:)`,
@@ -627,7 +676,9 @@ interface DirectoryVisibilityCommandError {
 // P4-S9-9 adds typed set_room_name / set_room_topic / set_room_avatar.
 // Room avatar is an mxc:// (or empty clear) reference only. Image bytes stay off.
 // P4-S9-10 adds typed get/set room directory visibility.
-// Failed errors stay static. Directory search/protocols/cancel stay off.
+// P4-S9-11 adds typed directory protocols/search/cancel.
+// Search results stay metadata (ids/names/aliases/mxc). No avatar bytes.
+// Failed errors stay static. Room leave/join stay off.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -802,5 +853,14 @@ interface SharedCore {
 
   [Async, Throws=DirectoryVisibilityCommandError]
   RoomDirectoryVisibilityWriteDto set_room_directory_visibility(string room_id, u64 session_generation, string visibility);
+
+  [Async, Throws=DirectorySearchCommandError]
+  RoomDirectoryProtocolsDto room_directory_protocols();
+
+  [Async, Throws=DirectorySearchCommandError]
+  RoomDirectorySearchDto room_directory_search(u64 session_generation, u64 request_id, string? server_name, string? term, string? room_type, string? third_party_instance_id, u64 limit, string? since);
+
+  [Async, Throws=DirectorySearchCommandError]
+  RoomDirectorySearchDto room_directory_cancel(u64 session_generation, u64 request_id);
 
 };

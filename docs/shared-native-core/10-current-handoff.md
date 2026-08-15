@@ -472,9 +472,10 @@ for any of those gates.
    S9-5 typed later account-data landed in #953. S9-6 typed m.direct
    landed in #954. S9-7 typed room notes landed in #955. S9-8 typed
    own display-name/avatar landed in #956. S9-9 typed room
-   name/topic/avatar landed in #957. **S9-10** typed directory
-   visibility (playbook §9.5) is on this branch. Next after merge is
-   directory search/protocols/cancel. UniFFI expansion
+   name/topic/avatar landed in #957. S9-10 typed directory
+   visibility landed in #958. **S9-11** typed directory
+   search/protocols/cancel (playbook §9.5) is on this branch. Next after
+   merge is room leave/join. UniFFI expansion
    needs free disk ≥ 20 Gi for
    local cargo/bindgen. There is no source-without-bindgen exception.
    If disk is under 20 Gi: stop. Docs-only PRs are still allowed.

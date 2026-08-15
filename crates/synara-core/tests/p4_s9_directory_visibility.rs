@@ -3,8 +3,8 @@
 //! Calls the already-registered Core handlers. Does not start SyncService.
 //! Room id, session generation, and public/private visibility may cross as
 //! method arguments. Failed errors stay static and must not echo room id or
-//! visibility. Directory search/protocols/cancel and leftover secret
-//! envelopes stay off. Room name/topic/avatar is already S9-9.
+//! visibility. Room leave/join and leftover secret envelopes stay off.
+//! Room name/topic/avatar is already S9-9.
 
 use std::collections::HashMap;
 use std::fs;
@@ -62,9 +62,8 @@ fn directory_visibility_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("set_room_directory_visibility"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
-    assert!(!udl.contains("matrix_room_directory_search"));
-    assert!(!udl.contains("matrix_room_directory_protocols"));
-    assert!(!udl.contains("matrix_room_directory_cancel"));
+    assert!(!udl.contains("matrix_room_leave"));
+    assert!(!udl.contains("matrix_room_join"));
     let shared_core = udl
         .split("interface SharedCore {")
         .nth(1)
@@ -75,9 +74,8 @@ fn directory_visibility_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("set_room_name"));
     assert!(shared_core.contains("room_join_rule_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("room_directory_search"));
-    assert!(!shared_core.contains("room_directory_protocols"));
-    assert!(!shared_core.contains("room_directory_cancel"));
+    assert!(!shared_core.contains("room_leave"));
+    assert!(!shared_core.contains("room_join("));
     assert!(!shared_core.contains("backup_status"));
 }
 
