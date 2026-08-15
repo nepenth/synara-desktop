@@ -189,6 +189,10 @@ const sharedCoreTimelineReadState = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreTimelineReadState.swift"),
   "utf8"
 );
+const sharedCoreTimelineReactions = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreTimelineReactions.swift"),
+  "utf8"
+);
 const swiftBindingsTests = readFileSync(
   resolve(root, "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift"),
   "utf8"
@@ -688,6 +692,21 @@ const assertions = [
   [sharedCoreTimelineReadState, "core: SharedCore", "P4-S9-19 helper takes an already-constructed SharedCore"],
   [sharedCoreTimelineReadState, "core.timelineEventReadback", "P4-S9-19 helper reads on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreTimelineReadState.swift in Sources", "P4-S9-19 helper in Xcode target"],
+  [sharedCoreFfi, "reaction_ensure", "P4-S9-20 typed reaction-ensure FFI"],
+  [sharedCoreFfi, "matrix_reaction_ensure", "P4-S9-20 calls the registered reaction-ensure command"],
+  [sharedCoreFfi, "matrix_reaction_redact", "P4-S9-20 calls the registered reaction-redact command"],
+  [sharedCoreFfi, "matrix_timeline_reaction_toggle", "P4-S9-20 calls the registered reaction-toggle command"],
+  [udl, "TimelineReactionMutationDto reaction_ensure(", "P4-S9-20 SharedCore reaction ensure"],
+  [udl, "TimelineReactionMutationDto reaction_redact(", "P4-S9-20 SharedCore reaction redact"],
+  [udl, "TimelineReactionMutationDto timeline_reaction_toggle(", "P4-S9-20 SharedCore reaction toggle"],
+  [udl, "interface TimelineReactionError", "P4-S9-20 static timeline reaction error"],
+  [swiftBindingsTests, "testSharedCoreTimelineReactionsWithoutSessionFailsClosed", "Swift P4-S9-20 fail-closed timeline reaction test"],
+  [sharedCoreTimelineReactions, "reactionEnsure", "P4-S9-20 product reaction-ensure helper"],
+  [sharedCoreTimelineReactions, "reactionRedact", "P4-S9-20 product reaction-redact helper"],
+  [sharedCoreTimelineReactions, "timelineReactionToggle", "P4-S9-20 product reaction-toggle helper"],
+  [sharedCoreTimelineReactions, "core: SharedCore", "P4-S9-20 helper takes an already-constructed SharedCore"],
+  [sharedCoreTimelineReactions, "core.reactionEnsure", "P4-S9-20 helper writes on the caller-owned instance"],
+  [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreTimelineReactions.swift in Sources", "P4-S9-20 helper in Xcode target"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1572,9 +1591,14 @@ for (const required of ["timeline_event_readback(", "timeline_set_read_state(", 
     throw new Error(`P4-S9-19 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "reaction_toggle", "reaction_ensure", "reaction_redact", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup"]) {
+for (const required of ["reaction_ensure(", "reaction_redact(", "timeline_reaction_toggle("]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-20 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "composer_set_reply_draft", "composer_get_reply_draft", "composer_clear_reply_draft", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-19`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-20`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1800,6 +1824,17 @@ if (sharedCoreTimelineReadState.includes("SharedCore.newWithSecretStore") || sha
 for (const forbidden of ["invitesAccept", "reactionToggle", "reactionEnsure", "sendText", "backupStatus"]) {
   if (sharedCoreTimelineReadState.includes(forbidden)) {
     throw new Error(`P4-S9-19 helper must not wrap ${forbidden}`);
+  }
+}
+if (sharedCoreTimelineReactions.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-20 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreTimelineReactions.includes("SharedCore.newWithSecretStore") || sharedCoreTimelineReactions.includes("newWithSecretStore")) {
+  throw new Error("P4-S9-20 helper must not construct SharedCore");
+}
+for (const forbidden of ["timelineEventReadback", "composerSetReplyDraft", "sendText", "backupStatus"]) {
+  if (sharedCoreTimelineReactions.includes(forbidden)) {
+    throw new Error(`P4-S9-20 helper must not wrap ${forbidden}`);
   }
 }
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);

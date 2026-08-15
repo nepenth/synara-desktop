@@ -1373,6 +1373,63 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreTimelineReactionsWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let roomId = "!s920SecretRoom:example.org"
+        let eventId = "$s920SecretEvent"
+        let reactionEventId = "$s920SecretReaction"
+        let key = "s920SecretKey"
+
+        do {
+            _ = try await SharedCoreTimelineReactions.reactionEnsure(
+                core: core,
+                roomId: roomId,
+                eventId: eventId,
+                key: key
+            )
+            XCTFail("Fail-closed SharedCore must not ensure a reaction without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-reaction-ensure-no-session"))
+            for forbidden in ["syt_", "token", roomId, eventId, reactionEventId, key] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreTimelineReactions.reactionRedact(
+                core: core,
+                roomId: roomId,
+                targetEventId: eventId,
+                reactionEventId: reactionEventId,
+                key: key
+            )
+            XCTFail("Fail-closed SharedCore must not redact a reaction without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-reaction-redact-no-session"))
+            for forbidden in ["syt_", "token", roomId, eventId, reactionEventId, key] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreTimelineReactions.timelineReactionToggle(
+                core: core,
+                roomId: roomId,
+                eventId: eventId,
+                key: key
+            )
+            XCTFail("Fail-closed SharedCore must not toggle a reaction without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-timeline-reaction-toggle-no-session"))
+            for forbidden in ["syt_", "token", roomId, eventId, reactionEventId, key] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 
