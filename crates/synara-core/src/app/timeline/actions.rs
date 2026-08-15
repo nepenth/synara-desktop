@@ -105,24 +105,17 @@ pub struct NativeTimelineActionReadback {
     /// For edit/forward: the newly sent event id. For redact: the redacted event id.
     pub event_id: String,
     #[serde(deserialize_with = "deserialize_action_status")]
-    pub status: &'static str,
+    pub status: String,
 }
 
-fn deserialize_action_status<'de, D>(deserializer: D) -> Result<&'static str, D::Error>
+fn deserialize_action_status<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
     let value = String::deserialize(deserializer)?;
     match value.as_str() {
-        "sent" => Ok("sent"),
-        "redacted" => Ok("redacted"),
-        "reported" => Ok("reported"),
-        "pinned" => Ok("pinned"),
-        "unpinned" => Ok("unpinned"),
-        "already_pinned" => Ok("already_pinned"),
-        "already_unpinned" => Ok("already_unpinned"),
-        "voted" => Ok("voted"),
-        "declined" => Ok("declined"),
+        "sent" | "redacted" | "reported" | "pinned" | "unpinned" | "already_pinned"
+        | "already_unpinned" | "voted" | "declined" => Ok(value),
         other => Err(serde::de::Error::unknown_variant(
             other,
             &[
@@ -269,7 +262,7 @@ mod tests {
             action: NativeTimelineActionKind::EditText,
             room_id: "!room:example.org".into(),
             event_id: "$new:example.org".into(),
-            status: "sent",
+            status: "sent".into(),
         };
         let json = serde_json::to_value(readback).unwrap();
         assert_eq!(json["schemaVersion"], 1);
