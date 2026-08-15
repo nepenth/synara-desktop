@@ -225,6 +225,10 @@ const sharedCoreTimelinePin = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreTimelinePin.swift"),
   "utf8"
 );
+const sharedCoreTimelineVoteDecline = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreTimelineVoteDecline.swift"),
+  "utf8"
+);
 const swiftBindingsTests = readFileSync(
   resolve(root, "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift"),
   "utf8"
@@ -826,6 +830,18 @@ const assertions = [
   [sharedCoreTimelinePin, "core: SharedCore", "P4-S9-28 helper takes an already-constructed SharedCore"],
   [sharedCoreTimelinePin, "core.timelinePin", "P4-S9-28 helper writes pin on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreTimelinePin.swift in Sources", "P4-S9-28 helper in Xcode target"],
+  [sharedCoreFfi, "timeline_poll_vote", "P4-S9-29 typed timeline-poll-vote FFI"],
+  [sharedCoreFfi, "matrix_timeline_poll_vote", "P4-S9-29 calls the registered timeline-poll-vote command"],
+  [sharedCoreFfi, "matrix_timeline_call_decline", "P4-S9-29 calls the registered timeline-call-decline command"],
+  [udl, "TimelineVoteDeclineDto timeline_poll_vote(", "P4-S9-29 SharedCore timeline poll vote"],
+  [udl, "TimelineVoteDeclineDto timeline_call_decline(", "P4-S9-29 SharedCore timeline call decline"],
+  [udl, "interface TimelineVoteDeclineError", "P4-S9-29 static timeline-vote-decline error"],
+  [swiftBindingsTests, "testSharedCoreTimelineVoteDeclineWithoutSessionFailsClosed", "Swift P4-S9-29 fail-closed timeline-vote-decline test"],
+  [sharedCoreTimelineVoteDecline, "timelinePollVote", "P4-S9-29 product timeline-poll-vote helper"],
+  [sharedCoreTimelineVoteDecline, "timelineCallDecline", "P4-S9-29 product timeline-call-decline helper"],
+  [sharedCoreTimelineVoteDecline, "core: SharedCore", "P4-S9-29 helper takes an already-constructed SharedCore"],
+  [sharedCoreTimelineVoteDecline, "core.timelinePollVote", "P4-S9-29 helper writes vote on the caller-owned instance"],
+  [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreTimelineVoteDecline.swift in Sources", "P4-S9-29 helper in Xcode target"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1755,9 +1771,14 @@ for (const required of ["timeline_pin(", "timeline_unpin("]) {
     throw new Error(`P4-S9-28 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "matrix_timeline_edit_text", "matrix_timeline_redact", "matrix_timeline_report", "matrix_timeline_pin", "matrix_timeline_unpin", "timeline_poll_vote", "timeline_call_decline", "matrix_timeline_poll_vote", "matrix_timeline_call_decline", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup"]) {
+for (const required of ["timeline_poll_vote(", "timeline_call_decline("]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-29 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "matrix_timeline_edit_text", "matrix_timeline_redact", "matrix_timeline_report", "matrix_timeline_pin", "matrix_timeline_unpin", "matrix_timeline_poll_vote", "matrix_timeline_call_decline", "timeline_forward_text", "timeline_forward_media", "matrix_timeline_forward_text", "matrix_timeline_forward_media", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-28`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-29`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -2082,6 +2103,17 @@ if (sharedCoreTimelinePin.includes("SharedCore.newWithSecretStore") || sharedCor
 for (const forbidden of ["sendText", "sendSticker", "sendPoll", "editMessage", "pollRespond", "timelineEditText", "timelineRedact", "timelineReport", "pollVote", "callDecline", "backupStatus"]) {
   if (sharedCoreTimelinePin.includes(forbidden)) {
     throw new Error(`P4-S9-28 helper must not wrap ${forbidden}`);
+  }
+}
+if (sharedCoreTimelineVoteDecline.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-29 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreTimelineVoteDecline.includes("SharedCore.newWithSecretStore") || sharedCoreTimelineVoteDecline.includes("newWithSecretStore")) {
+  throw new Error("P4-S9-29 helper must not construct SharedCore");
+}
+for (const forbidden of ["sendText", "sendSticker", "sendPoll", "editMessage", "pollRespond", "timelineEditText", "timelineRedact", "timelineReport", "timelinePin", "timelineUnpin", "forwardText", "forwardMedia", "backupStatus"]) {
+  if (sharedCoreTimelineVoteDecline.includes(forbidden)) {
+    throw new Error(`P4-S9-29 helper must not wrap ${forbidden}`);
   }
 }
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);

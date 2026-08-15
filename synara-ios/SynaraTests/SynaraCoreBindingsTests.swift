@@ -1708,6 +1708,44 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreTimelineVoteDeclineWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let roomId = "!s929SecretRoom:example.org"
+        let eventId = "$s929SecretEvent:example.org"
+        let answer = "s929SecretAnswer"
+
+        do {
+            _ = try await SharedCoreTimelineVoteDecline.timelinePollVote(
+                core: core,
+                roomId: roomId,
+                eventId: eventId,
+                answerIds: [answer]
+            )
+            XCTFail("Fail-closed SharedCore must not vote on a timeline poll without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-timeline-poll-vote-no-session"))
+            for forbidden in ["syt_", "token", roomId, eventId, answer] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreTimelineVoteDecline.timelineCallDecline(
+                core: core,
+                roomId: roomId,
+                eventId: eventId
+            )
+            XCTFail("Fail-closed SharedCore must not decline a timeline call without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-timeline-call-decline-no-session"))
+            for forbidden in ["syt_", "token", roomId, eventId, answer] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

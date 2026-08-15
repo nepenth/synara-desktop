@@ -119,6 +119,9 @@
 //! P4-S9-28 adds typed `timeline_pin` / `timeline_unpin` wrappers for the
 //! already-registered Core commands. Failed errors never echo event id or
 //! room id. Poll vote / call decline stay off.
+//! P4-S9-29 adds typed `timeline_poll_vote` / `timeline_call_decline`
+//! wrappers for the already-registered Core commands. Failed errors never
+//! echo event id, room id, or answer. Timeline forward stays off.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -622,6 +625,17 @@ const TIMELINE_PIN_NO_SESSION_DESCRIPTION: &str = "No timeline session is availa
 const TIMELINE_PIN_FAILED_CODE: &str = "p4-s9-28-timeline-pin-failed";
 const TIMELINE_PIN_FAILED_DESCRIPTION: &str = "The timeline pin request could not be completed.";
 const TIMELINE_PIN_OWNER_DESCRIPTION: &str = "The timeline pin request is not available.";
+const TIMELINE_VOTE_DECLINE_GENERATION: u64 = 0;
+const TIMELINE_POLL_VOTE_COMMAND: &str = "matrix_timeline_poll_vote";
+const TIMELINE_CALL_DECLINE_COMMAND: &str = "matrix_timeline_call_decline";
+const TIMELINE_POLL_VOTE_NO_SESSION_CODE: &str = "p2-timeline-poll-vote-no-session";
+const TIMELINE_CALL_DECLINE_NO_SESSION_CODE: &str = "p2-timeline-call-decline-no-session";
+const TIMELINE_VOTE_DECLINE_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
+const TIMELINE_VOTE_DECLINE_FAILED_CODE: &str = "p4-s9-29-timeline-vote-decline-failed";
+const TIMELINE_VOTE_DECLINE_FAILED_DESCRIPTION: &str =
+    "The timeline vote or decline request could not be completed.";
+const TIMELINE_VOTE_DECLINE_OWNER_DESCRIPTION: &str =
+    "The timeline vote or decline request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1233,6 +1247,34 @@ impl std::fmt::Display for TimelinePinError {
 }
 
 impl std::error::Error for TimelinePinError {}
+
+/// Privacy-safe timeline poll-vote / call-decline write ack from the
+/// registered Core commands.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineVoteDeclineDto {
+    pub schema_version: u32,
+    pub action: String,
+    pub room_id: String,
+    pub event_id: String,
+    pub status: String,
+}
+
+/// Static fail-closed timeline poll-vote / call-decline error. Fields are
+/// source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TimelineVoteDeclineError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for TimelineVoteDeclineError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for TimelineVoteDeclineError {}
 
 /// Static fail-closed timeline error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -4004,6 +4046,40 @@ impl SharedCore {
         .await
     }
 
+    pub async fn timeline_poll_vote(
+        &self,
+        room_id: String,
+        event_id: String,
+        answer_ids: Vec<String>,
+    ) -> Result<TimelineVoteDeclineDto, TimelineVoteDeclineError> {
+        self.timeline_vote_decline_command(
+            TIMELINE_POLL_VOTE_COMMAND,
+            TIMELINE_POLL_VOTE_NO_SESSION_CODE,
+            serde_json::json!({
+                "roomId": room_id,
+                "eventId": event_id,
+                "answerIds": answer_ids,
+            }),
+        )
+        .await
+    }
+
+    pub async fn timeline_call_decline(
+        &self,
+        room_id: String,
+        event_id: String,
+    ) -> Result<TimelineVoteDeclineDto, TimelineVoteDeclineError> {
+        self.timeline_vote_decline_command(
+            TIMELINE_CALL_DECLINE_COMMAND,
+            TIMELINE_CALL_DECLINE_NO_SESSION_CODE,
+            serde_json::json!({
+                "roomId": room_id,
+                "eventId": event_id,
+            }),
+        )
+        .await
+    }
+
     async fn space_null_command(
         &self,
         command: &'static str,
@@ -4260,6 +4336,33 @@ impl SharedCore {
                 timeline_pin_failed(TIMELINE_PIN_FAILED_CODE, TIMELINE_PIN_FAILED_DESCRIPTION)
             })?;
         timeline_pin_dto(result)
+    }
+
+    async fn timeline_vote_decline_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<TimelineVoteDeclineDto, TimelineVoteDeclineError> {
+        let payload = timeline_vote_decline_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: TIMELINE_VOTE_DECLINE_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_timeline_vote_decline_core_error(no_session, error))?;
+        let result: TimelineVoteDeclineResultWire = serde_json::from_value(response.payload)
+            .map_err(|_| {
+                timeline_vote_decline_failed(
+                    TIMELINE_VOTE_DECLINE_FAILED_CODE,
+                    TIMELINE_VOTE_DECLINE_FAILED_DESCRIPTION,
+                )
+            })?;
+        timeline_vote_decline_dto(result)
     }
 
     async fn invite_action_command(
@@ -7639,6 +7742,102 @@ fn timeline_pin_dto(result: TimelinePinResultWire) -> Result<TimelinePinDto, Tim
         timeline_pin_failed(TIMELINE_PIN_FAILED_CODE, TIMELINE_PIN_FAILED_DESCRIPTION)
     })?;
     Ok(TimelinePinDto {
+        schema_version: result.schema_version,
+        action: action.to_owned(),
+        room_id: result.room_id,
+        event_id: result.event_id,
+        status: status.to_owned(),
+    })
+}
+
+fn timeline_vote_decline_failed(code: &str, description: &'static str) -> TimelineVoteDeclineError {
+    TimelineVoteDeclineError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_timeline_vote_decline_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> TimelineVoteDeclineError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            timeline_vote_decline_failed(code, TIMELINE_VOTE_DECLINE_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code.starts_with("p2-timeline-poll-vote-")
+                || code.starts_with("p2-timeline-call-decline-")
+                || code.starts_with("v-timeline-poll-vote-")
+                || code.starts_with("v-timeline-call-decline-")
+                || code.starts_with("d0.4-send-") =>
+        {
+            timeline_vote_decline_failed(code, TIMELINE_VOTE_DECLINE_OWNER_DESCRIPTION)
+        }
+        _ => timeline_vote_decline_failed(
+            TIMELINE_VOTE_DECLINE_FAILED_CODE,
+            TIMELINE_VOTE_DECLINE_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn timeline_vote_decline_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, TimelineVoteDeclineError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(timeline_vote_decline_failed(
+            TIMELINE_VOTE_DECLINE_FAILED_CODE,
+            TIMELINE_VOTE_DECLINE_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TimelineVoteDeclineResultWire {
+    schema_version: u32,
+    action: String,
+    room_id: String,
+    event_id: String,
+    status: String,
+}
+
+fn closed_timeline_vote_decline_action(value: &str) -> Option<&'static str> {
+    match value {
+        "poll_vote" => Some("poll_vote"),
+        "call_decline" => Some("call_decline"),
+        _ => None,
+    }
+}
+
+fn closed_timeline_vote_decline_status(value: &str) -> Option<&'static str> {
+    match value {
+        "voted" => Some("voted"),
+        "declined" => Some("declined"),
+        _ => None,
+    }
+}
+
+fn timeline_vote_decline_dto(
+    result: TimelineVoteDeclineResultWire,
+) -> Result<TimelineVoteDeclineDto, TimelineVoteDeclineError> {
+    let action = closed_timeline_vote_decline_action(&result.action).ok_or_else(|| {
+        timeline_vote_decline_failed(
+            TIMELINE_VOTE_DECLINE_FAILED_CODE,
+            TIMELINE_VOTE_DECLINE_FAILED_DESCRIPTION,
+        )
+    })?;
+    let status = closed_timeline_vote_decline_status(&result.status).ok_or_else(|| {
+        timeline_vote_decline_failed(
+            TIMELINE_VOTE_DECLINE_FAILED_CODE,
+            TIMELINE_VOTE_DECLINE_FAILED_DESCRIPTION,
+        )
+    })?;
+    Ok(TimelineVoteDeclineDto {
         schema_version: result.schema_version,
         action: action.to_owned(),
         room_id: result.room_id,
