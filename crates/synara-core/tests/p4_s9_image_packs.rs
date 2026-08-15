@@ -77,8 +77,8 @@ fn image_pack_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("set_room_image_pack"));
     assert!(shared_core.contains("room_join_rule_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("mdirect_snapshot"));
     assert!(!shared_core.contains("room_notes_snapshot"));
+    assert!(!shared_core.contains("room_notes_upsert"));
     assert!(!shared_core.contains("set_own_display_name"));
     assert!(!shared_core.contains("set_own_avatar"));
     assert!(!shared_core.contains("backup_status"));

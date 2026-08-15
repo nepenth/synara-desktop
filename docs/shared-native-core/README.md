@@ -135,7 +135,8 @@ S9-2 typed NativeDeviceOwner family (snapshot/rename/delete
 start/cancel only; SyncService not started) landed in #950 (`1539ed6a`).
 S9-3 typed `matrix_room_join_rule_snapshot` landed in #951 (`2f43e22c`).
 S9-4 typed image-pack get/set landed in #952 (`84c81e14`).
-S9-5 typed later account-data is on this branch. Next is m.direct.
+S9-5 typed later account-data landed in #953 (`cbb82df1`).
+S9-6 typed m.direct is on this branch. Next is room notes.
 Password never rides a generic UniFFI `command`.
 
 | Phase | Merged evidence | Current boundary |

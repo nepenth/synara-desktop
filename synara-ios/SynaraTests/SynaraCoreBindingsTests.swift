@@ -647,6 +647,45 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreMDirectWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let roomId = "!s96dm:example.org"
+        let userId = "@bob:example.org"
+
+        do {
+            _ = try await SharedCoreMDirect.mdirectSnapshot(core: core)
+            XCTFail("Fail-closed SharedCore must not snapshot m.direct without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-mdirect-snapshot-no-session"))
+            for forbidden in ["syt_", "token", roomId, userId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreMDirect.mdirectAdd(core: core, roomId: roomId, userId: userId)
+            XCTFail("Fail-closed SharedCore must not add m.direct without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-mdirect-add-no-session"))
+            for forbidden in ["syt_", "token", roomId, userId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreMDirect.mdirectRemove(core: core, roomId: roomId)
+            XCTFail("Fail-closed SharedCore must not remove m.direct without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-mdirect-remove-no-session"))
+            for forbidden in ["syt_", "token", roomId, userId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 
