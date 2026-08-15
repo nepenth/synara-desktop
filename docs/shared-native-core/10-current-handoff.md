@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `ee896416`, the merge for #935 (S3a SecretVault). |
-| Immediately preceding merges | #933 SharedCore (`32e03091`), #934 docs, #935 S3a SecretVault. |
+| Feature evidence tip | `feature/shared-native-core` is `917cc77d`, the merge for #980 (CI hygiene after S9 rematch). |
+| Immediately preceding merges | #978 S9-30 timeline forward (`c7f1f724`), #979 S9-31 session/status reads (`c69bc704`), #980 CI hygiene. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -146,7 +146,7 @@ residency changes are:
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `ee896416`/#935 for
+anchor, but it is no longer the feature-tip provenance; use `917cc77d`/#980 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -372,13 +372,25 @@ The exact bounded iOS evidence is:
   Rust `IosFailClosedPlatform`. No `command`, Keychain, APNs, or live Client.
 - #935: S3a Swift `IosSecretVault` callback on `SharedCore`. Plan in
   `12-p4-s3-live-client.md`. No live Client, `command`, attach, or password.
+- #937: S3b restore of an already-persisted session through the vault.
+- #938: S3c dedicated `SharedCore.login_with_password` FFI.
+- #939: S3d `attach_session_owners` (SyncService attached, not started).
+- #949: UniFFI 0.28 `SharedCore` store constructor.
+- #940–#979: S4 through S9-31 typed SharedCore wrappers for the
+  registered command families (room list through session/status reads).
+  Helper + XCTest are the iOS surface. Do not treat XCTest construction
+  as iOS-on-engine.
+- #980: desktop source-scan hygiene after the S9 rematch. Not a product
+  slice.
 
 #708 and #710 add no Core command route. #931/#933/#935 add UniFFI probes /
-construction / vault only; they do not add a Core command or make Core an SDK or
-service owner. Actual SDK
+construction / vault only. Later P4 slices add typed wrappers; they do
+not make product iOS a Core SDK or service owner. Actual SDK
 `Room` work, timeline listener/pagination/recovery
 execution, and session, platform credential storage, store, crypto, sync, and
-lifecycle ownership remain in `MatrixRustSDKService`. iOS has not migrated its
+lifecycle ownership remain in `MatrixRustSDKService`. Generated
+`SynaraCore.swift` is still the stub. iOS CI remains skipped (`if: false`).
+iOS has not migrated its
 session, room-list, timeline, crypto, push/NSE, or `MatrixRustSDK` service
 layer, and the direct Swift SDK dependency has not been retired.
 
@@ -493,12 +505,14 @@ for any of those gates.
    timeline edit/redact/report landed in #975. S9-28 typed
    timeline pin/unpin landed in #976. S9-29 typed
    timeline poll vote / call decline landed in #977. S9-30 typed
-   timeline forward landed in #978. **S9-31** typed
-   session/status reads (playbook §9.5) is on this branch. Next after
-   merge is section 5 step 4: no eligible slice. UniFFI expansion
-   needs free disk ≥ 20 Gi for
-   local cargo/bindgen. There is no source-without-bindgen exception.
+   timeline forward landed in #978. S9-31 typed
+   session/status reads landed in #979. #980 is CI hygiene after the
+   S9 rematch. Next is section 5 step 4: no eligible product slice.
+   S10 is blocked while product Swift still references
+   `MatrixRustSDK`. Regenerating Swift bindings needs free disk ≥ 20 Gi
+   for local cargo/bindgen. There is no source-without-bindgen exception.
    If disk is under 20 Gi: stop. Docs-only PRs are still allowed.
+   Keep iOS CI skipped (`if: false`).
 4. After S3, consume already-registered commands one family per PR.
    S4 — not S3b–S3d — adds the first UniFFI command wrapper, for
    `matrix_room_list_snapshot` only. Retire `MatrixRustSDKService` last.
