@@ -938,14 +938,16 @@ interface InviteActionError {
 };
 
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
-// P4-S3b adds restore_persisted_session. P4-S3c adds dedicated login_with_password.
-// P4-S3d adds attach_session_owners for the desktop owner set.
-// P4-S4 adds typed room_list_snapshot for matrix_room_list_snapshot only.
-// P4-S5 adds typed invites_snapshot for matrix_invites_snapshot only.
-// P4-S6 adds typed timeline_open / timeline_close / timeline_paginate only.
-// P4-S7 adds typed typing_snapshot / typing_set / presence_snapshot /
-// presence_subscribe / presence_unsubscribe only.
-// P4-S8 adds typed verification_list for the registered list command only.
+// UniFFI 0.28 Swift keeps `SharedCore()` for the primary constructor and
+// emits the named constructor as `SharedCore.newWithSecretStore(store:)`,
+// not a second `init(store:)`. P4-S3b adds restore_persisted_session.
+// P4-S3c adds dedicated login_with_password. P4-S3d adds attach_session_owners
+// for the desktop owner set. P4-S4 adds typed room_list_snapshot for
+// matrix_room_list_snapshot only. P4-S5 adds typed invites_snapshot for
+// matrix_invites_snapshot only. P4-S6 adds typed timeline_open /
+// timeline_close / timeline_paginate only. P4-S7 adds typed typing_snapshot /
+// typing_set / presence_snapshot / presence_subscribe / presence_unsubscribe
+// only. P4-S8 adds typed verification_list for matrix_verification_list only.
 // P4-S9 adds typed verification SAS start/accept/begin_sas/confirm/mismatch/cancel/dismiss.
 // P4-S9-2 adds typed device snapshot/rename/delete start/cancel only.
 // Backup/room-key/cross-signing stay off: leftover passphrase/path/password envelopes.
