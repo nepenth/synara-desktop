@@ -134,6 +134,12 @@
 //! `nse_store_status` / `nse_event_preview`). It never starts SyncService,
 //! never attaches owners, and never boots leftover Client sync. Failed
 //! errors never echo room id, event id, user id, or tokens.
+//! P4-S10 leftover retirement adds typed leftover status wrappers plus
+//! dedicated leftover FFI for wipe/logout/recover/raw-send/notification/
+//! media/avatar/pusher. Secrets and bytes are dedicated arguments only.
+//! Failed errors stay static and never echo password, recovery key, event,
+//! body, bytes, URL, or token. Oversize fail-closes at 1 MiB with no
+//! truncate. Planted leftover I/O does not hit a live homeserver.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -234,6 +240,21 @@ const NSE_OWNERS_ATTACHED_DESCRIPTION: &str =
     "The NSE read-only store cannot open after owners attach.";
 const NSE_FAILED_CODE: &str = "p4-s11-nse-store-failed";
 const NSE_FAILED_DESCRIPTION: &str = "The NSE read-only store request could not be completed.";
+const LEFTOVER_NO_SESSION_CODE: &str = "p4-s10-leftover-no-session";
+const LEFTOVER_NO_SESSION_DESCRIPTION: &str = "The leftover command requires a session.";
+const LEFTOVER_OVERSIZE_CODE: &str = "p4-s10-leftover-oversize";
+const LEFTOVER_OVERSIZE_DESCRIPTION: &str = "The leftover request exceeds the payload limit.";
+const LEFTOVER_FAILED_CODE: &str = "p4-s10-leftover-failed";
+const LEFTOVER_FAILED_DESCRIPTION: &str = "The leftover command could not be completed.";
+const LEFTOVER_UNAVAILABLE_CODE: &str = "p4-s10-leftover-unavailable";
+const LEFTOVER_UNAVAILABLE_DESCRIPTION: &str = "The leftover command is unavailable.";
+const LEFTOVER_STORE_ROOT_INVALID_CODE: &str = "p4-s10-leftover-store-root-invalid";
+const LEFTOVER_STORE_ROOT_INVALID_DESCRIPTION: &str = "The leftover store root is invalid.";
+const BACKUP_STATUS_COMMAND: &str = "matrix_backup_status";
+const CRYPTO_STATUS_COMMAND: &str = "matrix_crypto_status";
+const CROSS_SIGNING_STATUS_COMMAND: &str = "matrix_cross_signing_status";
+const ROOM_KEY_TRANSFER_STATUS_COMMAND: &str = "matrix_room_key_transfer_status";
+const LEFTOVER_STATUS_GENERATION: u64 = 0;
 const ATTACHED_OWNER_NAMES: &[&str] = &[
     "typing",
     "presence",
@@ -1440,6 +1461,75 @@ impl std::error::Error for NseStoreError {}
 
 fn nse_failed(code: &'static str, description: &'static str) -> NseStoreError {
     NseStoreError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+/// Privacy-safe leftover backup status. No passphrase or recovery secret.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BackupStatusDto {
+    pub session_generation: u64,
+    pub availability: String,
+    pub enabled: bool,
+    pub device_state: String,
+    pub recovery_state: String,
+    pub action: String,
+}
+
+/// Privacy-safe leftover crypto status. No key material.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CryptoStatusDto {
+    pub session_generation: u64,
+    pub encryption_enabled: bool,
+    pub cross_signing_state: String,
+}
+
+/// Privacy-safe leftover cross-signing status. No private keys.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CrossSigningStatusDto {
+    pub session_generation: u64,
+    pub readiness: String,
+}
+
+/// Privacy-safe leftover room-key transfer status. No passphrase or path.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomKeyTransferStatusDto {
+    pub session_generation: u64,
+    pub phase: String,
+    pub keys_processed: u32,
+}
+
+/// Privacy-safe leftover write ack. Status only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LeftoverAckDto {
+    pub status: String,
+}
+
+/// Privacy-safe leftover bytes readback. Callers must not log the payload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LeftoverBytesDto {
+    pub payload: Vec<u8>,
+}
+
+/// Static fail-closed leftover error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LeftoverCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for LeftoverCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for LeftoverCommandError {}
+
+fn leftover_failed(code: &str, description: &'static str) -> LeftoverCommandError {
+    LeftoverCommandError::Failed {
         code: code.to_owned(),
         description: description.to_owned(),
     }
@@ -4432,6 +4522,268 @@ impl SharedCore {
             NSE_EVENT_NOT_IN_STORE_CODE,
             NSE_EVENT_NOT_IN_STORE_DESCRIPTION,
         ))
+    }
+
+    pub async fn backup_status(&self) -> Result<BackupStatusDto, LeftoverCommandError> {
+        let payload = self.leftover_status_command(BACKUP_STATUS_COMMAND).await?;
+        leftover_backup_status_dto(payload)
+    }
+
+    pub async fn crypto_status(&self) -> Result<CryptoStatusDto, LeftoverCommandError> {
+        let payload = self.leftover_status_command(CRYPTO_STATUS_COMMAND).await?;
+        leftover_crypto_status_dto(payload)
+    }
+
+    pub async fn cross_signing_status(
+        &self,
+    ) -> Result<CrossSigningStatusDto, LeftoverCommandError> {
+        let payload = self
+            .leftover_status_command(CROSS_SIGNING_STATUS_COMMAND)
+            .await?;
+        leftover_cross_signing_status_dto(payload)
+    }
+
+    pub async fn room_key_transfer_status(
+        &self,
+    ) -> Result<RoomKeyTransferStatusDto, LeftoverCommandError> {
+        let payload = self
+            .leftover_status_command(ROOM_KEY_TRANSFER_STATUS_COMMAND)
+            .await?;
+        leftover_room_key_transfer_status_dto(payload)
+    }
+
+    pub async fn wipe_persisted_stores(
+        &self,
+        store_root: String,
+    ) -> Result<LeftoverAckDto, LeftoverCommandError> {
+        leftover_reject_oversize(store_root.len())?;
+        let root = parse_store_root(&store_root).map_err(|_| {
+            leftover_failed(
+                LEFTOVER_STORE_ROOT_INVALID_CODE,
+                LEFTOVER_STORE_ROOT_INVALID_DESCRIPTION,
+            )
+        })?;
+        if root.exists() {
+            std::fs::remove_dir_all(root)
+                .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
+        }
+        Ok(LeftoverAckDto {
+            status: "wiped".to_owned(),
+        })
+    }
+
+    pub async fn logout(&self) -> Result<LeftoverAckDto, LeftoverCommandError> {
+        // Keyring/Keychain wipe stays in the shell. This leftover FFI only
+        // drops the retained Client. It does not hit a homeserver.
+        let mut guard = self
+            .restored_client
+            .lock()
+            .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
+        *guard = RestoredClientSlot::Empty;
+        drop(guard);
+        let mut attach = self
+            .owner_attach
+            .lock()
+            .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
+        *attach = OwnerAttachSlot::Empty;
+        Ok(LeftoverAckDto {
+            status: "logged_out".to_owned(),
+        })
+    }
+
+    pub async fn recover(
+        &self,
+        recovery_key: String,
+    ) -> Result<LeftoverAckDto, LeftoverCommandError> {
+        let recovery_key = Zeroizing::new(recovery_key);
+        leftover_reject_oversize(recovery_key.len())?;
+        if recovery_key.is_empty() {
+            return Err(leftover_failed(
+                LEFTOVER_FAILED_CODE,
+                LEFTOVER_FAILED_DESCRIPTION,
+            ));
+        }
+        // Recovery requires live secret-storage I/O. Planted tests stay
+        // fail-closed and never echo the recovery key.
+        Err(leftover_failed(
+            LEFTOVER_UNAVAILABLE_CODE,
+            LEFTOVER_UNAVAILABLE_DESCRIPTION,
+        ))
+    }
+
+    pub async fn send_raw_room_event(
+        &self,
+        room_id: String,
+        event_type: String,
+        content_json: String,
+    ) -> Result<LeftoverAckDto, LeftoverCommandError> {
+        leftover_reject_oversize(room_id.len() + event_type.len() + content_json.len())?;
+        if !self.has_retained_client() {
+            return Err(leftover_failed(
+                LEFTOVER_NO_SESSION_CODE,
+                LEFTOVER_NO_SESSION_DESCRIPTION,
+            ));
+        }
+        Err(leftover_failed(
+            LEFTOVER_UNAVAILABLE_CODE,
+            LEFTOVER_UNAVAILABLE_DESCRIPTION,
+        ))
+    }
+
+    pub async fn set_notification_mode(
+        &self,
+        room_id: String,
+        mode: String,
+    ) -> Result<LeftoverAckDto, LeftoverCommandError> {
+        leftover_reject_oversize(room_id.len() + mode.len())?;
+        if !self.has_retained_client() {
+            return Err(leftover_failed(
+                LEFTOVER_NO_SESSION_CODE,
+                LEFTOVER_NO_SESSION_DESCRIPTION,
+            ));
+        }
+        Err(leftover_failed(
+            LEFTOVER_UNAVAILABLE_CODE,
+            LEFTOVER_UNAVAILABLE_DESCRIPTION,
+        ))
+    }
+
+    pub async fn media_download(
+        &self,
+        mxc: String,
+    ) -> Result<LeftoverBytesDto, LeftoverCommandError> {
+        leftover_reject_oversize(mxc.len())?;
+        if !self.has_retained_client() {
+            return Err(leftover_failed(
+                LEFTOVER_NO_SESSION_CODE,
+                LEFTOVER_NO_SESSION_DESCRIPTION,
+            ));
+        }
+        Err(leftover_failed(
+            LEFTOVER_UNAVAILABLE_CODE,
+            LEFTOVER_UNAVAILABLE_DESCRIPTION,
+        ))
+    }
+
+    pub async fn media_thumbnail(
+        &self,
+        mxc: String,
+        width: u64,
+        height: u64,
+    ) -> Result<LeftoverBytesDto, LeftoverCommandError> {
+        leftover_reject_oversize(mxc.len())?;
+        let _ = (width, height);
+        if !self.has_retained_client() {
+            return Err(leftover_failed(
+                LEFTOVER_NO_SESSION_CODE,
+                LEFTOVER_NO_SESSION_DESCRIPTION,
+            ));
+        }
+        Err(leftover_failed(
+            LEFTOVER_UNAVAILABLE_CODE,
+            LEFTOVER_UNAVAILABLE_DESCRIPTION,
+        ))
+    }
+
+    pub async fn media_upload(
+        &self,
+        payload: Vec<u8>,
+        mime_type: String,
+        filename: String,
+    ) -> Result<LeftoverAckDto, LeftoverCommandError> {
+        leftover_reject_oversize(payload.len() + mime_type.len() + filename.len())?;
+        if !self.has_retained_client() {
+            return Err(leftover_failed(
+                LEFTOVER_NO_SESSION_CODE,
+                LEFTOVER_NO_SESSION_DESCRIPTION,
+            ));
+        }
+        Err(leftover_failed(
+            LEFTOVER_UNAVAILABLE_CODE,
+            LEFTOVER_UNAVAILABLE_DESCRIPTION,
+        ))
+    }
+
+    pub async fn room_avatar_bytes(
+        &self,
+        room_id: String,
+    ) -> Result<LeftoverBytesDto, LeftoverCommandError> {
+        leftover_reject_oversize(room_id.len())?;
+        if !self.has_retained_client() {
+            return Err(leftover_failed(
+                LEFTOVER_NO_SESSION_CODE,
+                LEFTOVER_NO_SESSION_DESCRIPTION,
+            ));
+        }
+        Err(leftover_failed(
+            LEFTOVER_UNAVAILABLE_CODE,
+            LEFTOVER_UNAVAILABLE_DESCRIPTION,
+        ))
+    }
+
+    pub async fn pusher_set(
+        &self,
+        push_key: String,
+        app_id: String,
+        gateway_url: String,
+        app_display_name: String,
+        device_display_name: String,
+        lang: String,
+    ) -> Result<LeftoverAckDto, LeftoverCommandError> {
+        leftover_reject_oversize(
+            push_key.len()
+                + app_id.len()
+                + gateway_url.len()
+                + app_display_name.len()
+                + device_display_name.len()
+                + lang.len(),
+        )?;
+        if !self.has_retained_client() {
+            return Err(leftover_failed(
+                LEFTOVER_NO_SESSION_CODE,
+                LEFTOVER_NO_SESSION_DESCRIPTION,
+            ));
+        }
+        Err(leftover_failed(
+            LEFTOVER_UNAVAILABLE_CODE,
+            LEFTOVER_UNAVAILABLE_DESCRIPTION,
+        ))
+    }
+
+    pub async fn pusher_delete(
+        &self,
+        push_key: String,
+        app_id: String,
+    ) -> Result<LeftoverAckDto, LeftoverCommandError> {
+        leftover_reject_oversize(push_key.len() + app_id.len())?;
+        if !self.has_retained_client() {
+            return Err(leftover_failed(
+                LEFTOVER_NO_SESSION_CODE,
+                LEFTOVER_NO_SESSION_DESCRIPTION,
+            ));
+        }
+        Err(leftover_failed(
+            LEFTOVER_UNAVAILABLE_CODE,
+            LEFTOVER_UNAVAILABLE_DESCRIPTION,
+        ))
+    }
+
+    async fn leftover_status_command(
+        &self,
+        command: &'static str,
+    ) -> Result<serde_json::Value, LeftoverCommandError> {
+        let payload = leftover_status_envelope_payload(serde_json::Value::Null)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: LEFTOVER_STATUS_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(map_leftover_status_core_error)?;
+        Ok(response.payload)
     }
 
     fn is_nse_read_only(&self) -> bool {
@@ -9081,6 +9433,132 @@ impl Drop for AttachClaim<'_> {
     }
 }
 
+fn leftover_reject_oversize(size: usize) -> Result<(), LeftoverCommandError> {
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(leftover_failed(
+            LEFTOVER_OVERSIZE_CODE,
+            LEFTOVER_OVERSIZE_DESCRIPTION,
+        ));
+    }
+    Ok(())
+}
+
+fn leftover_status_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, LeftoverCommandError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    leftover_reject_oversize(size)?;
+    Ok(payload)
+}
+
+fn map_leftover_status_core_error(error: MatrixIpcError) -> LeftoverCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code)
+            if code.starts_with("p2-backup-status-")
+                || code.starts_with("p2-crypto-status-")
+                || code.starts_with("p2-cross-signing-status-")
+                || code.starts_with("p2-room-key-transfer-status-")
+                || code.starts_with("v-crypto.2-") =>
+        {
+            leftover_failed(code, LEFTOVER_NO_SESSION_DESCRIPTION)
+        }
+        _ => leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION),
+    }
+}
+
+fn leftover_backup_status_dto(
+    payload: serde_json::Value,
+) -> Result<BackupStatusDto, LeftoverCommandError> {
+    Ok(BackupStatusDto {
+        session_generation: payload
+            .get("sessionGeneration")
+            .and_then(|value| value.as_u64())
+            .unwrap_or(0),
+        availability: payload
+            .get("availability")
+            .and_then(|value| value.as_str())
+            .unwrap_or("missing")
+            .to_owned(),
+        enabled: payload
+            .get("enabled")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false),
+        device_state: payload
+            .get("deviceState")
+            .and_then(|value| value.as_str())
+            .unwrap_or("unavailable")
+            .to_owned(),
+        recovery_state: payload
+            .get("recoveryState")
+            .and_then(|value| value.as_str())
+            .unwrap_or("unknown")
+            .to_owned(),
+        action: payload
+            .get("action")
+            .and_then(|value| value.as_str())
+            .unwrap_or("none")
+            .to_owned(),
+    })
+}
+
+fn leftover_crypto_status_dto(
+    payload: serde_json::Value,
+) -> Result<CryptoStatusDto, LeftoverCommandError> {
+    Ok(CryptoStatusDto {
+        session_generation: payload
+            .get("sessionGeneration")
+            .and_then(|value| value.as_u64())
+            .unwrap_or(0),
+        encryption_enabled: payload
+            .get("encryptionEnabled")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false),
+        cross_signing_state: payload
+            .get("crossSigningState")
+            .and_then(|value| value.as_str())
+            .unwrap_or("unavailable")
+            .to_owned(),
+    })
+}
+
+fn leftover_cross_signing_status_dto(
+    payload: serde_json::Value,
+) -> Result<CrossSigningStatusDto, LeftoverCommandError> {
+    Ok(CrossSigningStatusDto {
+        session_generation: payload
+            .get("sessionGeneration")
+            .and_then(|value| value.as_u64())
+            .unwrap_or(0),
+        readiness: payload
+            .get("readiness")
+            .and_then(|value| value.as_str())
+            .unwrap_or("unavailable")
+            .to_owned(),
+    })
+}
+
+fn leftover_room_key_transfer_status_dto(
+    payload: serde_json::Value,
+) -> Result<RoomKeyTransferStatusDto, LeftoverCommandError> {
+    Ok(RoomKeyTransferStatusDto {
+        session_generation: payload
+            .get("sessionGeneration")
+            .and_then(|value| value.as_u64())
+            .unwrap_or(0),
+        phase: payload
+            .get("phase")
+            .and_then(|value| value.as_str())
+            .unwrap_or("idle")
+            .to_owned(),
+        keys_processed: payload
+            .get("keysProcessed")
+            .and_then(|value| value.as_u64())
+            .unwrap_or(0) as u32,
+    })
+}
+
 fn parse_store_root(store_root: &str) -> Result<&Path, ()> {
     let trimmed = store_root.trim();
     if trimmed.is_empty() {
@@ -9501,5 +9979,75 @@ mod tests {
             .keys()
             .any(|key| key.contains("p4-s3b-store-key")));
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn leftover_oversize_fails_closed_without_truncate_or_echo() {
+        let marker = "s10OversizeMarker";
+        let error = leftover_reject_oversize(MAX_ENVELOPE_PAYLOAD_JSON_BYTES + 8)
+            .expect_err("oversize leftover payload must fail closed");
+        let text = format!("{error:?}{error}");
+        assert!(text.contains(LEFTOVER_OVERSIZE_CODE));
+        assert!(!text.contains(marker));
+        assert!(!text.contains("syt_"));
+    }
+
+    #[test]
+    fn leftover_commands_without_session_fail_closed_without_echo() {
+        let shared = SharedCore::new();
+        let rt = test_runtime();
+        let recovery_key = "s10-secret-recovery-key";
+        let room_id = "!s10SecretRoom:example.org";
+        let event_body = "s10-secret-event-body";
+        let mxc = "mxc://example.org/s10SecretMedia";
+
+        let recover = rt
+            .block_on(shared.recover(recovery_key.to_owned()))
+            .expect_err("recover must fail closed");
+        let recover_text = format!("{recover:?}{recover}");
+        assert!(recover_text.contains(LEFTOVER_UNAVAILABLE_CODE));
+        assert!(!recover_text.contains(recovery_key));
+
+        let raw = rt
+            .block_on(shared.send_raw_room_event(
+                room_id.to_owned(),
+                "m.room.message".to_owned(),
+                event_body.to_owned(),
+            ))
+            .expect_err("raw send must fail closed");
+        let raw_text = format!("{raw:?}{raw}");
+        assert!(raw_text.contains(LEFTOVER_NO_SESSION_CODE));
+        assert!(!raw_text.contains(room_id));
+        assert!(!raw_text.contains(event_body));
+
+        let media = rt
+            .block_on(shared.media_download(mxc.to_owned()))
+            .expect_err("media download must fail closed");
+        let media_text = format!("{media:?}{media}");
+        assert!(media_text.contains(LEFTOVER_NO_SESSION_CODE));
+        assert!(!media_text.contains(mxc));
+
+        let crypto = rt
+            .block_on(shared.crypto_status())
+            .expect_err("crypto status must fail closed without a platform session");
+        let crypto_text = format!("{crypto:?}{crypto}");
+        assert!(
+            crypto_text.contains("p2-crypto-status-platform-unavailable")
+                || crypto_text.contains(LEFTOVER_FAILED_CODE)
+        );
+        assert!(!crypto_text.contains(room_id));
+    }
+
+    #[test]
+    fn leftover_wipe_removes_only_the_validated_store_root() {
+        let shared = SharedCore::new();
+        let rt = test_runtime();
+        let root = temp_root("s10-wipe");
+        fs::create_dir_all(root.join("data")).unwrap();
+        let ack = rt
+            .block_on(shared.wipe_persisted_stores(root.to_string_lossy().into_owned()))
+            .expect("validated leftover wipe");
+        assert_eq!(ack.status, "wiped");
+        assert!(!root.exists());
     }
 }

@@ -65,7 +65,7 @@ fn device_surface_exposes_only_the_registered_device_family() {
     assert!(!udl.contains("matrix_room_key_transfer_status"));
     assert!(!udl.contains("matrix_cross_signing_setup"));
     assert!(!udl.contains("backup_setup"));
-    assert!(!udl.contains("crypto_status"));
+    assert!(!udl.contains("matrix_crypto_status"));
     assert!(!udl.contains("matrix_login_password"));
     let shared_core = udl
         .split("interface SharedCore {")
@@ -79,10 +79,10 @@ fn device_surface_exposes_only_the_registered_device_family() {
     assert!(shared_core.contains("verification_start"));
     assert!(!shared_core.contains("command("));
     assert!(!shared_core.contains("device_delete_password"));
-    assert!(!shared_core.contains("backup_status"));
+    assert!(!shared_core.contains("matrix_backup_status"));
     assert!(!shared_core.contains("room_key_transfer_status"));
     assert!(!shared_core.contains("cross_signing_setup"));
-    assert!(!shared_core.contains("crypto_status"));
+    assert!(!shared_core.contains("matrix_crypto_status"));
 }
 
 #[test]

@@ -77,7 +77,7 @@ fn directory_search_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("get_room_directory_visibility"));
     assert!(shared_core.contains("set_room_name"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("backup_status"));
+    assert!(!shared_core.contains("matrix_backup_status"));
 }
 
 #[test]

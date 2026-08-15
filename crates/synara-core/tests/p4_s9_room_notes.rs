@@ -92,7 +92,7 @@ fn room_notes_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("room_notes_move_todo"));
     assert!(shared_core.contains("mdirect_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("backup_status"));
+    assert!(!shared_core.contains("matrix_backup_status"));
 }
 
 #[test]

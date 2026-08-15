@@ -41,7 +41,6 @@
 		53A96EF2B937BE57AE02A15C /* PushService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A602AD446A2DD4C7C3A476ED /* PushService.swift */; };
 		56E15BC20C25F32A6D25BA18 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB040EB752E246AD052AC7E7 /* AppEnvironment.swift */; };
 		5B00A849754CCEB409B6544E /* SynaraCoreBindingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54B5B55419769DE9EA2EE1F9 /* SynaraCoreBindingsTests.swift */; };
-		5D6E01D7027F978C2751C1A9 /* MatrixRustSDKService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEE944AA45DCF6DA43357823 /* MatrixRustSDKService.swift */; };
 		6022C473D59F944208C3E79D /* EventActionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8CE546B97B6AE15795C6E76 /* EventActionServiceTests.swift */; };
 		652C81E69C2C1B922B4BE789 /* RoomTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A460B0098799FF6C79F0756E /* RoomTimelineView.swift */; };
 		6565433C651603C659B39B26 /* SynaraNotificationPreviewSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 141CF4920753EE324F1B3AF0 /* SynaraNotificationPreviewSupport.swift */; };
@@ -118,6 +117,9 @@
 		BA57C067F0B99447D865FE9F /* SharedCoreTimelineForward.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CBEF8C07543B294A6B9DE3E /* SharedCoreTimelineForward.swift */; };
 		CB68D17801CA0558E9760FA0 /* SharedCoreSessionStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DC0F9D18654C3A5B7C0EF4F /* SharedCoreSessionStatus.swift */; };
 		DC79E28912DB1669FA8710B1 /* SharedCoreNseStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1D0AE29765D4B6C8D1F160 /* SharedCoreNseStore.swift */; };
+		E15B4E26D1A98F70113D4E5F /* SharedCoreLeftovers.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF2E1BF3A8765C4D9E0A1B2C /* SharedCoreLeftovers.swift */; };
+		F26C5F37E2BA9081224E5F60 /* SharedCoreProductServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF3F2C04B9876D5E0F1B2C3D /* SharedCoreProductServices.swift */; };
+		037D6048F3CB0192335F6071 /* MatrixClientPolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = D04A3D15C0987E6F102C3D4E /* MatrixClientPolicies.swift */; };
 		4D8B1F6A2C9037E5B0D4A7C1 /* IosSecretVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2E9C1D4B6805F3E8A1C0D2 /* IosSecretVault.swift */; };
 		D21F2D94FEAEE8E93F3E2A6A /* RoomReadMarkerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B44B25CB0277A9BAD73943 /* RoomReadMarkerService.swift */; };
 		D46F130EFA2B2D58B79B605D /* AppServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A4D48D89C01C70901919CAB /* AppServices.swift */; };
@@ -245,7 +247,6 @@
 		CAB0B1FDD47555E50BE466B2 /* MediaServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaServiceTests.swift; sourceTree = "<group>"; };
 		CB040EB752E246AD052AC7E7 /* AppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
 		CDD7517A55AC0E513E708AA0 /* SecureSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureSessionStore.swift; sourceTree = "<group>"; };
-		CEE944AA45DCF6DA43357823 /* MatrixRustSDKService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixRustSDKService.swift; sourceTree = "<group>"; };
 		CF389D46848BA1444F7035D0 /* SignedInSessionReadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignedInSessionReadiness.swift; sourceTree = "<group>"; };
 		D0394B6246C8637014BEDC20 /* NotificationPermissionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPermissionCoordinator.swift; sourceTree = "<group>"; };
 		D3219D555ED36F65BF9FE332 /* SynaraTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SynaraTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -300,6 +301,9 @@
 		8CBEF8C07543B294A6B9DE3E /* SharedCoreTimelineForward.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineForward.swift; sourceTree = "<group>"; };
 		9DC0F9D18654C3A5B7C0EF4F /* SharedCoreSessionStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionStatus.swift; sourceTree = "<group>"; };
 		AE1D0AE29765D4B6C8D1F160 /* SharedCoreNseStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreNseStore.swift; sourceTree = "<group>"; };
+		BF2E1BF3A8765C4D9E0A1B2C /* SharedCoreLeftovers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreLeftovers.swift; sourceTree = "<group>"; };
+		CF3F2C04B9876D5E0F1B2C3D /* SharedCoreProductServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreProductServices.swift; sourceTree = "<group>"; };
+		D04A3D15C0987E6F102C3D4E /* MatrixClientPolicies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixClientPolicies.swift; sourceTree = "<group>"; };
 		7A2E9C1D4B6805F3E8A1C0D2 /* IosSecretVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosSecretVault.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -434,7 +438,6 @@
 				A856EC4E030E1E38C04CBE4B /* EventActionService.swift */,
 				B41D9817A0F821E67BCD9C00 /* HomeserverDiscovery.swift */,
 				A5077C08931AFE23ABB6EBFB /* LocalWipeService.swift */,
-				CEE944AA45DCF6DA43357823 /* MatrixRustSDKService.swift */,
 				F80766F42BBCF758CD7C7F4F /* MatrixSessionProjectionMirror.swift */,
 				7A2E9C1D4B6805F3E8A1C0D2 /* IosSecretVault.swift */,
 				8C3E1A7B94D0526F1E8A0C4D /* SharedCoreSessionRestore.swift */,
@@ -477,6 +480,9 @@
 				8CBEF8C07543B294A6B9DE3E /* SharedCoreTimelineForward.swift */,
 				9DC0F9D18654C3A5B7C0EF4F /* SharedCoreSessionStatus.swift */,
 				AE1D0AE29765D4B6C8D1F160 /* SharedCoreNseStore.swift */,
+				BF2E1BF3A8765C4D9E0A1B2C /* SharedCoreLeftovers.swift */,
+				CF3F2C04B9876D5E0F1B2C3D /* SharedCoreProductServices.swift */,
+				D04A3D15C0987E6F102C3D4E /* MatrixClientPolicies.swift */,
 				B3ECC92EE34CCE4DB57A5D3E /* MediaService.swift */,
 				D0394B6246C8637014BEDC20 /* NotificationPermissionCoordinator.swift */,
 				00D51C4E0E89D32C8D99CC22 /* PerformanceInstrumentation.swift */,
@@ -765,7 +771,6 @@
 				EFAE66D8EA286E31E189C876 /* LaterListView.swift in Sources */,
 				0E68BDED62692800912DE41C /* LocalWipeService.swift in Sources */,
 				8C497BFC6D2B9A3048BB2852 /* LoginView.swift in Sources */,
-				5D6E01D7027F978C2751C1A9 /* MatrixRustSDKService.swift in Sources */,
 				D0F9ECDAFC0C1996B350149B /* MatrixSessionProjectionMirror.swift in Sources */,
 				4D8B1F6A2C9037E5B0D4A7C1 /* IosSecretVault.swift in Sources */,
 				1F6B9D2E4A7083C5B1D7E9A0 /* SharedCoreSessionRestore.swift in Sources */,
@@ -808,6 +813,9 @@
 				BA57C067F0B99447D865FE9F /* SharedCoreTimelineForward.swift in Sources */,
 				CB68D17801CA0558E9760FA0 /* SharedCoreSessionStatus.swift in Sources */,
 				DC79E28912DB1669FA8710B1 /* SharedCoreNseStore.swift in Sources */,
+				E15B4E26D1A98F70113D4E5F /* SharedCoreLeftovers.swift in Sources */,
+				F26C5F37E2BA9081224E5F60 /* SharedCoreProductServices.swift in Sources */,
+				037D6048F3CB0192335F6071 /* MatrixClientPolicies.swift in Sources */,
 				9B792F2B4073B7792ED943D8 /* MediaService.swift in Sources */,
 				27F8472586C8C97BFB42B087 /* NotificationPermissionCoordinator.swift in Sources */,
 				8B42041876057A9091D2F463 /* PerformanceInstrumentation.swift in Sources */,

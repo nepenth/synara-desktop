@@ -106,8 +106,8 @@ fn timeline_pin_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("timeline_redact("));
     assert!(shared_core.contains("timeline_report("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("backup_status"));
-    assert!(!shared_core.contains("crypto_status"));
+    assert!(!shared_core.contains("matrix_backup_status"));
+    assert!(!shared_core.contains("matrix_crypto_status"));
     assert!(!shared_core.contains("cross_signing_status"));
     assert!(!shared_core.contains("cross_signing_setup"));
     assert!(!shared_core.contains("room_key_transfer_status"));
