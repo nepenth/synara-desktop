@@ -92,6 +92,7 @@
 		069BA3B4C2D3F62738495A50 /* SharedCoreImagePacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF8B4064B6D0F9A78A4B3C51 /* SharedCoreImagePacks.swift */; };
 		17ACB4C5D3E4F738495A61B2 /* SharedCoreLater.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09C5175C7E10A89B5B4C4D2 /* SharedCoreLater.swift */; };
 		28BDC5D6E4F508495A62C3D4 /* SharedCoreMDirect.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1AD6286D8F21B9AC6C5D5E3 /* SharedCoreMDirect.swift */; };
+		39CED6E7F516195A73D4E5F5 /* SharedCoreRoomNotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2BE7397E9A32C0BD7D6E6F4 /* SharedCoreRoomNotes.swift */; };
 		4D8B1F6A2C9037E5B0D4A7C1 /* IosSecretVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2E9C1D4B6805F3E8A1C0D2 /* IosSecretVault.swift */; };
 		D21F2D94FEAEE8E93F3E2A6A /* RoomReadMarkerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B44B25CB0277A9BAD73943 /* RoomReadMarkerService.swift */; };
 		D46F130EFA2B2D58B79B605D /* AppServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A4D48D89C01C70901919CAB /* AppServices.swift */; };
@@ -248,6 +249,7 @@
 		CF8B4064B6D0F9A78A4B3C51 /* SharedCoreImagePacks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreImagePacks.swift; sourceTree = "<group>"; };
 		D09C5175C7E10A89B5B4C4D2 /* SharedCoreLater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreLater.swift; sourceTree = "<group>"; };
 		E1AD6286D8F21B9AC6C5D5E3 /* SharedCoreMDirect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreMDirect.swift; sourceTree = "<group>"; };
+		F2BE7397E9A32C0BD7D6E6F4 /* SharedCoreRoomNotes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomNotes.swift; sourceTree = "<group>"; };
 		7A2E9C1D4B6805F3E8A1C0D2 /* IosSecretVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosSecretVault.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -399,6 +401,7 @@
 				CF8B4064B6D0F9A78A4B3C51 /* SharedCoreImagePacks.swift */,
 				D09C5175C7E10A89B5B4C4D2 /* SharedCoreLater.swift */,
 				E1AD6286D8F21B9AC6C5D5E3 /* SharedCoreMDirect.swift */,
+				F2BE7397E9A32C0BD7D6E6F4 /* SharedCoreRoomNotes.swift */,
 				B3ECC92EE34CCE4DB57A5D3E /* MediaService.swift */,
 				D0394B6246C8637014BEDC20 /* NotificationPermissionCoordinator.swift */,
 				00D51C4E0E89D32C8D99CC22 /* PerformanceInstrumentation.swift */,
@@ -704,6 +707,7 @@
 				069BA3B4C2D3F62738495A50 /* SharedCoreImagePacks.swift in Sources */,
 				17ACB4C5D3E4F738495A61B2 /* SharedCoreLater.swift in Sources */,
 				28BDC5D6E4F508495A62C3D4 /* SharedCoreMDirect.swift in Sources */,
+				39CED6E7F516195A73D4E5F5 /* SharedCoreRoomNotes.swift in Sources */,
 				9B792F2B4073B7792ED943D8 /* MediaService.swift in Sources */,
 				27F8472586C8C97BFB42B087 /* NotificationPermissionCoordinator.swift in Sources */,
 				8B42041876057A9091D2F463 /* PerformanceInstrumentation.swift in Sources */,

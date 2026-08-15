@@ -469,9 +469,10 @@ for any of those gates.
    S9 typed verification SAS landed in #948. S9-2 typed devices
    landed in #950. S9-3 typed `matrix_room_join_rule_snapshot`
    landed in #951. S9-4 typed image-pack get/set landed in #952.
-   S9-5 typed later account-data landed in #953. **S9-6** typed
-   m.direct (playbook §9.5) is on this branch. Next after merge is
-   room notes. UniFFI expansion needs free disk ≥ 20 Gi for
+   S9-5 typed later account-data landed in #953. S9-6 typed m.direct
+   landed in #954. **S9-7** typed room notes (playbook §9.5) is on
+   this branch. Next after merge is own display-name/avatar. UniFFI
+   expansion needs free disk ≥ 20 Gi for
    local cargo/bindgen. There is no source-without-bindgen exception.
    If disk is under 20 Gi: stop. Docs-only PRs are still allowed.
 4. After S3, consume already-registered commands one family per PR.

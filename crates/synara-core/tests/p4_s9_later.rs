@@ -1,8 +1,8 @@
 //! P4-S9-5: typed SharedCore consume of the six registered later commands.
 //!
 //! Calls the already-registered Core handlers. Does not start SyncService.
-//! Item ids/timestamps may cross. m.direct, room notes, profile writes, and
-//! leftover secret envelopes stay off.
+//! Item ids/timestamps may cross. Own display-name/avatar and leftover
+//! secret envelopes stay off.
 
 use std::collections::HashMap;
 use std::fs;
@@ -90,9 +90,6 @@ fn later_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("later_mark_reminded"));
     assert!(shared_core.contains("get_global_image_packs"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("room_notes_snapshot"));
-    assert!(!shared_core.contains("room_notes_upsert"));
-    assert!(!shared_core.contains("room_notes_delete"));
     assert!(!shared_core.contains("set_own_display_name"));
     assert!(!shared_core.contains("set_own_avatar"));
     assert!(!shared_core.contains("backup_status"));

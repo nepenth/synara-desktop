@@ -36,8 +36,11 @@
 //! clear_completed/mark_reminded wrappers for those six already-registered
 //! Core commands.
 //! P4-S9-6 adds typed m.direct snapshot/add/remove wrappers for those
-//! three already-registered Core commands. Room notes and profile writes
-//! stay off. Errors never echo user or room ids.
+//! three already-registered Core commands.
+//! P4-S9-7 adds typed room-notes snapshot/upsert/delete/complete_todo/
+//! move_todo wrappers for those five already-registered Core commands.
+//! Note body text may cross in snapshot/item DTOs. Failed errors never
+//! echo note body, room id, or item id. Own display-name/avatar stay off.
 //! This still exposes no generic command FFI or APNs surface.
 //! This is not the desktop leftover `matrix_restore_session`.
 
@@ -49,8 +52,9 @@ use zeroize::Zeroizing;
 
 use crate::app::account_data::{
     NativeGlobalImagePacksSnapshot, NativeImagePack, NativeImagePackOwner, NativeLaterSnapshot,
-    NativeMDirectSnapshot, NativeRoomImagePacksSnapshot, NativeUserImagePackSnapshot,
-    SynaraLaterItem, SynaraLaterItemKind,
+    NativeMDirectSnapshot, NativeRoomImagePacksSnapshot, NativeRoomNotesSnapshot,
+    NativeUserImagePackSnapshot, RoomNoteMoveDirection, SynaraLaterItem, SynaraLaterItemKind,
+    SynaraRoomNoteItem, SynaraRoomNoteItemKind,
 };
 use crate::app::auth::{
     login_with_password as core_login_with_password, DevicePlatform, LoginOptions,
@@ -290,6 +294,23 @@ const MDIRECT_NO_SESSION_DESCRIPTION: &str = "No m.direct session is available."
 const MDIRECT_FAILED_CODE: &str = "p4-s9-6-mdirect-failed";
 const MDIRECT_FAILED_DESCRIPTION: &str = "The m.direct request could not be completed.";
 const MDIRECT_OWNER_DESCRIPTION: &str = "The m.direct request is not available.";
+const ROOM_NOTES_COMMAND_GENERATION: u64 = 0;
+const ROOM_NOTES_SNAPSHOT_COMMAND: &str = "matrix_room_notes_snapshot";
+const ROOM_NOTES_UPSERT_COMMAND: &str = "matrix_room_notes_upsert";
+const ROOM_NOTES_DELETE_COMMAND: &str = "matrix_room_notes_delete";
+const ROOM_NOTES_COMPLETE_TODO_COMMAND: &str = "matrix_room_notes_complete_todo";
+const ROOM_NOTES_MOVE_TODO_COMMAND: &str = "matrix_room_notes_move_todo";
+const ROOM_NOTES_SNAPSHOT_NO_SESSION_CODE: &str = "p2-room-notes-snapshot-no-session";
+const ROOM_NOTES_UPSERT_NO_SESSION_CODE: &str = "p2-room-notes-upsert-no-session";
+const ROOM_NOTES_DELETE_NO_SESSION_CODE: &str = "p2-room-notes-delete-no-session";
+const ROOM_NOTES_COMPLETE_TODO_NO_SESSION_CODE: &str = "p2-room-notes-complete-todo-no-session";
+const ROOM_NOTES_MOVE_TODO_NO_SESSION_CODE: &str = "p2-room-notes-move-todo-no-session";
+const ROOM_NOTES_NO_SESSION_DESCRIPTION: &str = "No room-notes session is available.";
+const ROOM_NOTES_FAILED_CODE: &str = "p4-s9-7-room-notes-failed";
+const ROOM_NOTES_FAILED_DESCRIPTION: &str = "The room-notes request could not be completed.";
+const ROOM_NOTES_INVALID_ITEM_CODE: &str = "p4-s9-7-room-notes-invalid-item";
+const ROOM_NOTES_INVALID_ITEM_DESCRIPTION: &str = "The room-notes item is invalid.";
+const ROOM_NOTES_OWNER_DESCRIPTION: &str = "The room-notes request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2324,6 +2345,85 @@ impl SharedCore {
             .map_err(|error| map_mdirect_core_error(MDIRECT_REMOVE_NO_SESSION_CODE, error))?;
         mdirect_mutation_dto(response.payload)
     }
+
+    pub async fn room_notes_snapshot(&self) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
+        self.room_notes_null_command(
+            ROOM_NOTES_SNAPSHOT_COMMAND,
+            ROOM_NOTES_SNAPSHOT_NO_SESSION_CODE,
+        )
+        .await
+    }
+
+    pub async fn room_notes_upsert(
+        &self,
+        item: RoomNoteItemDto,
+    ) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
+        let item = room_note_item_from_dto(item)?;
+        let payload = room_notes_envelope_payload(serde_json::json!({ "item": item }))?;
+        self.room_notes_command(
+            ROOM_NOTES_UPSERT_COMMAND,
+            ROOM_NOTES_UPSERT_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+    }
+
+    pub async fn room_notes_delete(
+        &self,
+        room_id: String,
+        item_id: String,
+    ) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
+        let payload = room_notes_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "itemId": item_id,
+        }))?;
+        self.room_notes_command(
+            ROOM_NOTES_DELETE_COMMAND,
+            ROOM_NOTES_DELETE_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+    }
+
+    pub async fn room_notes_complete_todo(
+        &self,
+        room_id: String,
+        item_id: String,
+        completed: bool,
+    ) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
+        let payload = room_notes_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "itemId": item_id,
+            "completed": completed,
+        }))?;
+        self.room_notes_command(
+            ROOM_NOTES_COMPLETE_TODO_COMMAND,
+            ROOM_NOTES_COMPLETE_TODO_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+    }
+
+    pub async fn room_notes_move_todo(
+        &self,
+        room_id: String,
+        item_id: String,
+        direction: String,
+    ) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
+        let direction = room_note_move_direction_from_dto(&direction)?;
+        let payload = room_notes_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "itemId": item_id,
+            "direction": direction,
+        }))?;
+        self.room_notes_command(
+            ROOM_NOTES_MOVE_TODO_COMMAND,
+            ROOM_NOTES_MOVE_TODO_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+    }
+
     async fn later_null_command(
         &self,
         command: &'static str,
@@ -2351,6 +2451,35 @@ impl SharedCore {
             .map_err(|error| map_later_core_error(no_session, error))?;
         later_snapshot_dto(response.payload)
     }
+
+    async fn room_notes_null_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+    ) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
+        self.room_notes_command(command, no_session, serde_json::Value::Null)
+            .await
+    }
+
+    async fn room_notes_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: ROOM_NOTES_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_room_notes_core_error(no_session, error))?;
+        room_notes_snapshot_dto(response.payload)
+    }
+
     async fn image_pack_null_command(
         &self,
         command: &'static str,
@@ -2874,6 +3003,174 @@ fn mdirect_mutation_dto(
         status: status.to_owned(),
     })
 }
+
+/// Privacy-safe room-note item. Body/ids/timestamps may cross; no tokens.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RoomNoteItemDto {
+    pub id: String,
+    pub kind: String,
+    pub room_id: String,
+    pub created_at: f64,
+    pub updated_at: f64,
+    pub body: Option<String>,
+    pub completed_at: Option<f64>,
+    pub order: Option<f64>,
+    pub event_id: Option<String>,
+    pub event_ts: Option<f64>,
+    pub sender: Option<String>,
+}
+
+/// Privacy-safe room-notes snapshot. Flattened items; no tokens.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RoomNotesSnapshotDto {
+    pub session_generation: u64,
+    pub version: u32,
+    pub items: Vec<RoomNoteItemDto>,
+}
+
+/// Static fail-closed room-notes-family error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoomNotesCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for RoomNotesCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for RoomNotesCommandError {}
+
+fn room_notes_failed(code: &str, description: &'static str) -> RoomNotesCommandError {
+    RoomNotesCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_room_notes_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> RoomNotesCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            room_notes_failed(code, ROOM_NOTES_NO_SESSION_DESCRIPTION)
+        }
+        Some(code) if code.starts_with("v-timeline-room-notes-") => {
+            room_notes_failed(code, ROOM_NOTES_OWNER_DESCRIPTION)
+        }
+        _ => room_notes_failed(ROOM_NOTES_FAILED_CODE, ROOM_NOTES_FAILED_DESCRIPTION),
+    }
+}
+
+fn room_notes_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, RoomNotesCommandError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(room_notes_failed(
+            ROOM_NOTES_FAILED_CODE,
+            ROOM_NOTES_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn room_note_item_from_dto(
+    item: RoomNoteItemDto,
+) -> Result<SynaraRoomNoteItem, RoomNotesCommandError> {
+    let kind = match item.kind.as_str() {
+        "note" => SynaraRoomNoteItemKind::Note,
+        "todo" => SynaraRoomNoteItemKind::Todo,
+        "message" => SynaraRoomNoteItemKind::Message,
+        _ => {
+            return Err(room_notes_failed(
+                ROOM_NOTES_INVALID_ITEM_CODE,
+                ROOM_NOTES_INVALID_ITEM_DESCRIPTION,
+            ))
+        }
+    };
+    if item.id.is_empty()
+        || item.room_id.is_empty()
+        || !item.created_at.is_finite()
+        || !item.updated_at.is_finite()
+    {
+        return Err(room_notes_failed(
+            ROOM_NOTES_INVALID_ITEM_CODE,
+            ROOM_NOTES_INVALID_ITEM_DESCRIPTION,
+        ));
+    }
+    Ok(SynaraRoomNoteItem {
+        id: item.id,
+        kind,
+        room_id: item.room_id,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+        body: item.body.filter(|value| !value.is_empty()),
+        completed_at: item.completed_at.filter(|value| value.is_finite()),
+        order: item.order.filter(|value| value.is_finite()),
+        event_id: item.event_id.filter(|value| !value.is_empty()),
+        event_ts: item.event_ts.filter(|value| value.is_finite()),
+        sender: item.sender.filter(|value| !value.is_empty()),
+    })
+}
+
+fn room_note_move_direction_from_dto(
+    direction: &str,
+) -> Result<RoomNoteMoveDirection, RoomNotesCommandError> {
+    match direction {
+        "up" => Ok(RoomNoteMoveDirection::Up),
+        "down" => Ok(RoomNoteMoveDirection::Down),
+        _ => Err(room_notes_failed(
+            ROOM_NOTES_INVALID_ITEM_CODE,
+            ROOM_NOTES_INVALID_ITEM_DESCRIPTION,
+        )),
+    }
+}
+
+fn room_note_item_dto(item: SynaraRoomNoteItem) -> RoomNoteItemDto {
+    RoomNoteItemDto {
+        id: item.id,
+        kind: match item.kind {
+            SynaraRoomNoteItemKind::Note => "note".to_owned(),
+            SynaraRoomNoteItemKind::Todo => "todo".to_owned(),
+            SynaraRoomNoteItemKind::Message => "message".to_owned(),
+        },
+        room_id: item.room_id,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+        body: item.body,
+        completed_at: item.completed_at,
+        order: item.order,
+        event_id: item.event_id,
+        event_ts: item.event_ts,
+        sender: item.sender,
+    }
+}
+
+fn room_notes_snapshot_dto(
+    payload: serde_json::Value,
+) -> Result<RoomNotesSnapshotDto, RoomNotesCommandError> {
+    let snapshot: NativeRoomNotesSnapshot = serde_json::from_value(payload)
+        .map_err(|_| room_notes_failed(ROOM_NOTES_FAILED_CODE, ROOM_NOTES_FAILED_DESCRIPTION))?;
+    Ok(RoomNotesSnapshotDto {
+        session_generation: snapshot.session_generation,
+        version: snapshot.content.version,
+        items: snapshot
+            .content
+            .rooms
+            .into_values()
+            .flat_map(|room| room.items.into_values())
+            .map(room_note_item_dto)
+            .collect(),
+    })
+}
+
 fn device_trust_as_str(trust: NativeDeviceTrust) -> String {
     match trust {
         NativeDeviceTrust::Verified => "verified",
