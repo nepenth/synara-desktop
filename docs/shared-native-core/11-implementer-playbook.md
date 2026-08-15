@@ -11,7 +11,7 @@ and `06-migration-phases.md` are stale. Do not register the 21 leftovers in
 section 6 to satisfy them.
 
 Evidence tip when this playbook was written: `feature/shared-native-core`
-`566ddb34` (#986 S10 leftover retirement after #985). Re-fetch before you start.
+`162d9dff` (#988 iOS CI re-enable after #987). Re-fetch before you start.
 Do not treat this SHA as eternal.
 
 ---
@@ -35,7 +35,7 @@ shared engine. Never claim P5 or MAC-IOS-006 is done.
 | Surface | Today |
 |---|---|
 | Desktop macOS/Linux | Live Matrix `Client` and native owners live in Core. React still invokes `matrix_*`. **111** of those names are registered on `Core::command`. Desktop is a thinner shell, not a thin shell. |
-| iOS | UniFFI scaffold through S9-31 + S11 NSE read-only store helper (never starts sync; not a product NSE swap) + **S10 leftover UniFFI** (#986). `AppEnvironment.live()` constructs one caller-owned `SharedCore` and SharedCore product services. Product `MatrixRustSDK` callers are retired (comments may remain). Leftover wipe/logout are local-only; recover/raw-send/media/pusher/notification/avatar and leftover status reads fail closed without a live homeserver and do not start SyncService. This is not iOS-on-engine and not P4 acceptance. Local Apple generate has been run; generated sources remain gitignored. Checked-in `SynaraCore.swift` remains the bootstrap stub. iOS CI remains skipped (`if: false`) until the operator-approved re-enable. XCTest construction of `SharedCore` is not iOS-on-engine. |
+| iOS | UniFFI scaffold through S9-31 + S11 NSE read-only store helper (never starts sync; not a product NSE swap) + **S10 leftover UniFFI** (#986). `AppEnvironment.live()` constructs one caller-owned `SharedCore` and SharedCore product services. Product `MatrixRustSDK` callers are retired (comments may remain). Leftover wipe/logout are local-only; recover/raw-send/media/pusher/notification/avatar and leftover status reads fail closed without a live homeserver and do not start SyncService. This is not iOS-on-engine and not P4 acceptance. Local Apple generate has been run; generated sources remain gitignored. Checked-in `SynaraCore.swift` remains the bootstrap stub. iOS CI is re-enabled (#988): `ios-tests` runs when the iOS path filter matches; Quality on #988 was green including iOS (ran, not skipped). XCTest construction of `SharedCore` is not iOS-on-engine. |
 | `main` | Diverged. Recovery / MAC-IOS-006 docs live there. Not feature evidence. |
 | Release | Forbidden until engineering finish is accepted and then merged to `main`. |
 
@@ -48,8 +48,12 @@ and fail-closed.** Those 21 are intended shell leftovers (section 6).
 
 ## 3. Absolute rules (break any one and stop)
 
-1. Merge only to `feature/shared-native-core`.
-2. Never merge `main`. Never touch #39, #705, #672, tags, or releases.
+1. Merge product/docs/CI slices only to `feature/shared-native-core`.
+2. Never merge `main` except the operator-approved integration merge
+   of this branch after leftover retirement and iOS CI re-enable are
+   on the tip and that PR's Quality is fully green including iOS
+   (not skipped). Never touch #39, #705, #672, tags, or releases.
+   Do not squash the entire SNC program unless protection requires it.
 3. Never claim 100%, iOS shared-engine parity, or Apple readiness.
 4. Core may use `matrix_sdk`. Core must not import Tauri. Core must not
    depend on the `keyring` crate.
@@ -143,15 +147,16 @@ Run this checklist in order. Stop at the first yes.
    product NSE swap). #985 refreshes provenance. #986 lands S10
    leftover UniFFI and retires product `MatrixRustSDK` callers
    (operator authorized leftovers to cross UniFFI; leftover I/O
-   that needs a live homeserver stays fail-closed planted). Local
-   Apple UniFFI generate has been run; generated sources remain
-   gitignored. Next operator-approved step is re-enable iOS CI
-   (`ios-tests` still has `if: false`). Do not start P5. Do not
-   merge to `main` until leftover retirement is on this branch,
-   iOS CI is re-enabled, and Quality is fully green including iOS
-   (not skipped). Four-target release bindgen needs headroom well
-   above 20 Gi for the whole run, not just at start. If disk is
-   under 20 Gi: stop. Docs-only PRs are still allowed.
+   that needs a live homeserver stays fail-closed planted). #987
+   refreshes provenance. #988 re-enables iOS CI (removes `if: false`;
+   Quality on #988 green including iOS, not skipped) and restores
+   Later sort/complete helpers. Local Apple UniFFI generate has been
+   run; generated sources remain gitignored. Next operator-approved
+   step is merge this branch to `main` only after that PR's Quality
+   is fully green including iOS (not skipped). Do not start P5.
+   Four-target release bindgen needs headroom well above 20 Gi for
+   the whole run, not just at start. If disk is under 20 Gi: stop.
+   Docs-only PRs are still allowed.
 4. **Otherwise stop.** Update `STATE.md`. Do not open a padding PR.
    Do not route logout, email-token, or media "just to have a merge."
 
@@ -544,8 +549,9 @@ commands. #980 is CI hygiene after the S9 rematch.
 #981 refreshes provenance. #982 records local UniFFI generate.
 #983 records the S10 leftover stop. #984 lands S11 NSE read-only
 store. #985 refreshes provenance. #986 lands S10 leftover UniFFI
-and retires product `MatrixRustSDK` callers. Local Apple UniFFI
-generate has been run; generated sources remain gitignored.
+and retires product `MatrixRustSDK` callers. #987 refreshes
+provenance. #988 re-enables iOS CI. Local Apple UniFFI generate
+has been run; generated sources remain gitignored.
 
 1. `SharedCore.session_snapshot` / `sync_status` / `media_config` /
    `secret_storage_status` call `Core.command` with the same null
@@ -571,8 +577,10 @@ generate has been run; generated sources remain gitignored.
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
 5. One command family per PR. S9-31 has landed. S11 NSE read-only
    store landed in #984. S10 leftover retirement landed in #986.
-   Next operator-approved step is re-enable iOS CI. Do not start
-   P5. Do not hit production homeservers.
+   iOS CI re-enable landed in #988. Next operator-approved step is
+   merge this branch to `main` only after that PR's Quality is
+   fully green including iOS. Do not start P5. Do not hit
+   production homeservers.
 
 ### 9.6 When you may delete `MatrixRustSDK`
 
@@ -618,8 +626,7 @@ token, by design). Product `AuthenticatedSession` still stores an
 empty access token after SharedCore login. SharedCore attach does not
 start SyncService. Product event emit sinks are no-op. Desktop
 twenty-one leftovers stay unregistered on `Core::command`. iOS CI
-remains skipped until the operator-approved re-enable. Do not start
-P5.
+is re-enabled (#988). Do not start P5.
 
 ---
 

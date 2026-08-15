@@ -4,14 +4,15 @@ Legend: ✅ shipping / 🔨 in progress / ⛔ not yet
 
 ## Current bounded evidence (not parity completion)
 
-At `feature/shared-native-core` `566ddb34`
-(#986), P2 still registers one hundred eleven names—the prior one
+At `feature/shared-native-core` `162d9dff`
+(#988), P2 still registers one hundred eleven names—the prior one
 hundred nine plus `matrix_invites_report_spam` and
 `matrix_invites_block_sender`. Desktop uses that registry. iOS has
 typed SharedCore wrappers through S9-31, the S11 NSE read-only
 store helper (never starts sync), and S10 leftover UniFFI. Product
 `MatrixRustSDK` callers are retired; leftover I/O fail-closes
-without a live homeserver. This is not iOS-on-engine.
+without a live homeserver. iOS CI is re-enabled. This is not
+iOS-on-engine.
 The previous one hundred nine remain—
 `matrix_login_flows`, `matrix_register_flows`, `matrix_session_snapshot`,
 `matrix_sync_status`, `matrix_crypto_status`, `matrix_media_config`,

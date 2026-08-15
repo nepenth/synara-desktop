@@ -4,7 +4,7 @@ This is the plan playbook §9.4 requires before guessing at password FFI.
 It does **not** accept P4 or claim iOS is on the shared engine.
 
 Evidence tip when written: `feature/shared-native-core` `ee896416` (#935 S3a).
-Current feature tip: `566ddb34` (#986).
+Current feature tip: `162d9dff` (#988).
 S3a landed in #935. S3b restore landed in #937 (`4edfc1f5`).
 S3c login (Option A) landed in #938 (`9b4ec54f`).
 S3d attach landed in #939 (`ad63d56d`).
@@ -22,9 +22,11 @@ starts sync; not a product NSE swap). #985 refreshes provenance.
 #986 lands S10 leftover UniFFI and retires product `MatrixRustSDK`
 callers. Leftover I/O that needs a live homeserver stays fail-closed
 planted. SyncService is not started. This is not iOS-on-engine.
-Local Apple UniFFI generate has been run; generated sources remain
-gitignored. Playbook recipe: §9.5.
-Next operator-approved step is re-enable iOS CI. Do not start P5.
+#987 refreshes provenance. #988 re-enables iOS CI. Local Apple
+UniFFI generate has been run; generated sources remain gitignored.
+Playbook recipe: §9.5.
+Next operator-approved step is merge this branch to `main` only after
+that PR's Quality is fully green including iOS. Do not start P5.
 
 ## Decision
 

@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`566ddb34` (#986 S10 leftover retirement after #985):** P0 is
+`162d9dff` (#988 iOS CI re-enable after #987):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -150,11 +150,12 @@ acceptance criteria have all passed.
   refreshes provenance. #986 lands S10 leftover UniFFI and retires
   product `MatrixRustSDK` callers. Leftover I/O that needs a live
   homeserver stays fail-closed planted. SyncService is not started.
-  This is not iOS-on-engine. Local Apple generate has been run;
-  generated sources remain gitignored. Checked-in `SynaraCore.swift`
-  remains the bootstrap stub. iOS CI remains skipped until the
-  operator-approved re-enable. iOS still has no registration product
-  UI. P4 is not accepted.
+  This is not iOS-on-engine. #987 refreshes provenance. #988
+  re-enables iOS CI (Quality on #988 green including iOS, not
+  skipped). Local Apple generate has been run; generated sources
+  remain gitignored. Checked-in `SynaraCore.swift` remains the
+  bootstrap stub. iOS still has no registration product UI. P4 is
+  not accepted.
 - **P5 — not started.** Do not claim iOS shared-engine parity, iOS migration,
   or Apple release readiness from the bounded work above.
 
@@ -168,10 +169,10 @@ acceptance criteria have all passed.
    section 9 order. S1–S9-31, S10 leftover retirement (#986), and
    S11 have landed. Product `MatrixRustSDK` callers are retired.
    Leftover I/O that needs a live homeserver stays fail-closed.
-   SyncService is not started. Next operator-approved step is
-   re-enable iOS CI. Regenerating Swift bindings needs disk ≥ 20 Gi.
-   Do not start P5. Do not merge to `main` until iOS CI is
-   re-enabled and Quality is fully green including iOS.
+   SyncService is not started. iOS CI is re-enabled (#988).
+   Regenerating Swift bindings needs disk ≥ 20 Gi. Do not start P5.
+   Next operator-approved step is merge this branch to `main` only
+   after that PR's Quality is fully green including iOS.
 3. **P3 thinning** continues as iOS/desktop leftovers shrink. Desktop is
    not a thin shell while Keychain, byte commands, and password UIAA live
    there — and those leftovers are *intended*.
