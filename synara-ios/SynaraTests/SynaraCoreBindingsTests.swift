@@ -23,25 +23,50 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertNotNil(core)
     }
 
-    func testS10CallerOwnedSharedCoreDoesNotExposeLeftoverCommands() {
-        // S10 owns the SharedCore instance. Leftover password/bytes/status
-        // commands stay off this type. Playbook §9.6 lists the product
-        // MatrixRustSDK callers that still require those leftovers.
+    func testSharedCoreLeftoversWithoutSessionFailClosed() async {
         let core = SharedCore.newWithSecretStore(store: InMemoryIosSecretVault())
+        let recoveryKey = "s10-secret-recovery-key"
+        let roomId = "!s10SecretRoom:example.org"
+        let eventBody = "s10-secret-event-body"
+        let mxc = "mxc://example.org/s10SecretMedia"
 
-        XCTAssertNotNil(core)
-        let leftoverBlockedProductFiles = [
-            "MatrixRustSDKService.swift",
-            "AppEnvironment.swift",
-            "MediaService.swift",
-            "PushService.swift",
-            "AgentActionService.swift",
-            "EventActionService.swift",
-            "TimelineService.swift",
-            "RoomReadMarkerService.swift",
-        ]
-        XCTAssertEqual(leftoverBlockedProductFiles.count, 8)
-        XCTAssertFalse(leftoverBlockedProductFiles.contains("MatrixSessionProjectionMirror.swift"))
+        do {
+            _ = try await SharedCoreLeftovers.recover(core: core, recoveryKey: recoveryKey)
+            XCTFail("Fail-closed SharedCore must not recover without leftover I/O")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p4-s10-leftover-unavailable"))
+            for forbidden in ["syt_", "token", recoveryKey] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreLeftovers.sendRawRoomEvent(
+                core: core,
+                roomId: roomId,
+                eventType: "m.room.message",
+                contentJson: eventBody
+            )
+            XCTFail("Fail-closed SharedCore must not send a leftover raw event without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p4-s10-leftover-no-session"))
+            for forbidden in ["syt_", "token", roomId, eventBody] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreLeftovers.mediaDownload(core: core, mxc: mxc)
+            XCTFail("Fail-closed SharedCore must not download leftover media without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p4-s10-leftover-no-session"))
+            for forbidden in ["syt_", "token", mxc] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
     }
 
     func testSharedCoreRestoreWithoutVaultFailsClosed() async {

@@ -595,6 +595,47 @@ interface NseStoreError {
   Failed(string code, string description);
 };
 
+// P4-S10 leftover retirement. Status fields only; no passphrase, recovery key, or token.
+dictionary BackupStatusDto {
+  u64 session_generation;
+  string availability;
+  boolean enabled;
+  string device_state;
+  string recovery_state;
+  string action;
+};
+
+dictionary CryptoStatusDto {
+  u64 session_generation;
+  boolean encryption_enabled;
+  string cross_signing_state;
+};
+
+dictionary CrossSigningStatusDto {
+  u64 session_generation;
+  string readiness;
+};
+
+dictionary RoomKeyTransferStatusDto {
+  u64 session_generation;
+  string phase;
+  u32 keys_processed;
+};
+
+dictionary LeftoverAckDto {
+  string status;
+};
+
+dictionary LeftoverBytesDto {
+  bytes payload;
+};
+
+// Static source constants only. Never echo password, recovery key, event, body, bytes, URL, or token.
+[Error]
+interface LeftoverCommandError {
+  Failed(string code, string description);
+};
+
 // Privacy-safe typing room row. No tokens or password.
 dictionary TypingRoomDto {
   string room_id;
@@ -1534,5 +1575,50 @@ interface SharedCore {
 
   [Async, Throws=NseStoreError]
   NseEventPreviewDto nse_event_preview(string room_id, string event_id);
+
+  [Async, Throws=LeftoverCommandError]
+  BackupStatusDto backup_status();
+
+  [Async, Throws=LeftoverCommandError]
+  CryptoStatusDto crypto_status();
+
+  [Async, Throws=LeftoverCommandError]
+  CrossSigningStatusDto cross_signing_status();
+
+  [Async, Throws=LeftoverCommandError]
+  RoomKeyTransferStatusDto room_key_transfer_status();
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverAckDto wipe_persisted_stores(string store_root);
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverAckDto logout();
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverAckDto recover(string recovery_key);
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverAckDto send_raw_room_event(string room_id, string event_type, string content_json);
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverAckDto set_notification_mode(string room_id, string mode);
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverBytesDto media_download(string mxc);
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverBytesDto media_thumbnail(string mxc, u64 width, u64 height);
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverAckDto media_upload(bytes payload, string mime_type, string filename);
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverBytesDto room_avatar_bytes(string room_id);
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverAckDto pusher_set(string push_key, string app_id, string gateway_url, string app_display_name, string device_display_name, string lang);
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverAckDto pusher_delete(string push_key, string app_id);
 
 };

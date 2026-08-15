@@ -4,7 +4,7 @@
  * real, reproducible Apple build without pretending a non-Apple host produced
  * an XCFramework or generated Swift output.
  */
-import { accessSync, readFileSync } from "node:fs";
+import { accessSync, readFileSync, readdirSync } from "node:fs";
 import { constants } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -51,6 +51,9 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreInviteActions.swift",
   "synara-ios/Synara/Services/SharedCoreTimelineReadState.swift",
   "synara-ios/Synara/Services/SharedCoreNseStore.swift",
+  "synara-ios/Synara/Services/SharedCoreLeftovers.swift",
+  "synara-ios/Synara/Services/SharedCoreProductServices.swift",
+  "synara-ios/Synara/Services/MatrixClientPolicies.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -242,12 +245,16 @@ const sharedCoreNseStore = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreNseStore.swift"),
   "utf8"
 );
-const swiftBindingsTests = readFileSync(
-  resolve(root, "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift"),
+const sharedCoreLeftovers = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreLeftovers.swift"),
   "utf8"
 );
-const matrixRustSDKService = readFileSync(
-  resolve(root, "synara-ios/Synara/Services/MatrixRustSDKService.swift"),
+const sharedCoreProductServices = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreProductServices.swift"),
+  "utf8"
+);
+const swiftBindingsTests = readFileSync(
+  resolve(root, "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift"),
   "utf8"
 );
 const appServices = readFileSync(resolve(root, "synara-ios/Synara/Services/AppServices.swift"), "utf8");
@@ -314,8 +321,7 @@ const assertions = [
   [sessionProjectionAdapter, "expectedIdentity = nil\n        try? await core.close()", "P4-4 clears expected identity before awaiting Core close"],
   [appServices, "func coreSessionIdentity() async -> CoreSessionIdentity?", "P4-4 Matrix client display-only identity protocol"],
   [appServices, "extension MatrixClientServicing", "P4-4 Matrix client identity default"],
-  [matrixRustSDKService, "await sessionProjectionMirror.coreSessionIdentity()", "P4-4 client store mirror-only identity readback"],
-  [matrixRustSDKService, "await clientStore.coreSessionIdentity()", "P4-4 Matrix client service mirror-only identity readback"],
+  [sharedCoreProductServices, "SharedCoreSessionStatus.sessionSnapshot", "P4-S10 product identity readback uses SharedCore"],
   [settingsView, "await refreshCoreSessionIdentity()", "P4-4 Settings task identity refresh"],
   [settingsView, "SettingsAccountIdentitySelection.matchingCoreIdentity", "P4-4 fail-closed Settings identity selection"],
   [swiftBindingsTests, "testSessionProjectionFacadeExecutesOpenSnapshotAndCloseOverGeneratedRustFFI", "Swift behavioral FFI test"],
@@ -902,23 +908,32 @@ const assertions = [
   [sharedCoreNseStore, "core.nseOpenReadOnlyStore", "P4-S11 helper opens the caller-owned instance"],
   [sharedCoreNseStore, "never starts SyncService", "P4-S11 helper documents no sync start"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreNseStore.swift in Sources", "P4-S11 helper in Xcode target"],
+  [sharedCoreFfi, "backup_status", "P4-S10 leftover backup-status FFI"],
+  [sharedCoreFfi, "crypto_status", "P4-S10 leftover crypto-status FFI"],
+  [sharedCoreFfi, "wipe_persisted_stores", "P4-S10 leftover wipe FFI"],
+  [sharedCoreFfi, "send_raw_room_event", "P4-S10 leftover raw-send FFI"],
+  [sharedCoreFfi, "p4-s10-leftover-no-session", "P4-S10 leftover no-session diagnostic"],
+  [udl, "BackupStatusDto backup_status()", "P4-S10 SharedCore leftover backup status"],
+  [udl, "CryptoStatusDto crypto_status()", "P4-S10 SharedCore leftover crypto status"],
+  [udl, "LeftoverAckDto recover(", "P4-S10 SharedCore leftover recover"],
+  [udl, "LeftoverAckDto send_raw_room_event(", "P4-S10 SharedCore leftover raw send"],
+  [udl, "interface LeftoverCommandError", "P4-S10 static leftover error"],
+  [swiftBindingsTests, "testSharedCoreLeftoversWithoutSessionFailClosed", "Swift P4-S10 fail-closed leftover test"],
+  [sharedCoreLeftovers, "backupStatus", "P4-S10 leftover backup-status helper"],
+  [sharedCoreLeftovers, "recover", "P4-S10 leftover recover helper"],
+  [sharedCoreLeftovers, "sendRawRoomEvent", "P4-S10 leftover raw-send helper"],
+  [sharedCoreLeftovers, "core: SharedCore", "P4-S10 leftover helper takes an already-constructed SharedCore"],
+  [sharedCoreProductServices, "SharedCoreAuthService", "P4-S10 product auth uses SharedCore"],
+  [sharedCoreProductServices, "SharedCoreRoomListService", "P4-S10 product room list uses SharedCore"],
+  [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreLeftovers.swift in Sources", "P4-S10 leftover helper in Xcode target"],
+  [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreProductServices.swift in Sources", "P4-S10 product adapters in Xcode target"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
   [
-    matrixRustSDKService,
-    "self.client = client\n            activeSession = session\n            await sessionProjectionMirror.openAfterInstalledClient",
-    "login mirror only after MatrixRustSDK client install",
-  ],
-  [
-    matrixRustSDKService,
-    "client = newClient\n            activeSession = session\n            await sessionProjectionMirror.openAfterInstalledClient",
-    "restore mirror only after MatrixRustSDK client install",
-  ],
-  [
-    matrixRustSDKService,
-    "await sessionProjectionMirror.closeBeforeSDKWipe()\n        retainClientHandle(client)",
-    "projection close before SDK client release/wipe",
+    sharedCoreProductServices,
+    "SharedCoreAuthService",
+    "live product auth uses caller-owned SharedCore",
   ],
   [ffi, "discover_login_flows", "shared-core login-flow discovery call"],
   [ffi, "HttpLoginFlowTransport::new()", "bounded Core login-flow transport"],
@@ -1846,7 +1861,7 @@ for (const required of ["session_snapshot(", "sync_status(", "media_config(", "s
     throw new Error(`P4-S9-31 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "matrix_timeline_edit_text", "matrix_timeline_redact", "matrix_timeline_report", "matrix_timeline_pin", "matrix_timeline_unpin", "matrix_timeline_poll_vote", "matrix_timeline_call_decline", "matrix_timeline_forward_text", "matrix_timeline_forward_media", "matrix_session_snapshot", "matrix_sync_status", "matrix_media_config", "matrix_secret_storage_status", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup", "cross_signing_status"]) {
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "matrix_timeline_edit_text", "matrix_timeline_redact", "matrix_timeline_report", "matrix_timeline_pin", "matrix_timeline_unpin", "matrix_timeline_poll_vote", "matrix_timeline_call_decline", "matrix_timeline_forward_text", "matrix_timeline_forward_media", "matrix_session_snapshot", "matrix_sync_status", "matrix_media_config", "matrix_secret_storage_status", "device_delete_password", "matrix_backup_status", "matrix_room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "matrix_crypto_status", "backup_setup", "matrix_cross_signing_status"]) {
   if (sharedCoreBody.includes(forbidden)) {
     throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-31`);
   }
@@ -2434,6 +2449,45 @@ if (
 ) {
   throw new Error(
     "P4-3 ProjectionOnlyPlatform must implement Platform::media_config with the exact closed, string-free NoSession future"
+  );
+}
+
+if (sharedCoreLeftovers.includes("SharedCore(store:")) {
+  throw new Error("P4-S10 leftover helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreLeftovers.includes("SharedCore.newWithSecretStore") || sharedCoreLeftovers.includes("newWithSecretStore")) {
+  throw new Error("P4-S10 leftover helper must not construct SharedCore");
+}
+
+const productSwiftRoot = resolve(root, "synara-ios/Synara");
+const leftoverProductHits = [];
+function walkProductSwift(dir) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const next = resolve(dir, entry.name);
+    if (entry.isDirectory()) {
+      walkProductSwift(next);
+      continue;
+    }
+    if (!entry.name.endsWith(".swift")) {
+      continue;
+    }
+    const source = readFileSync(next, "utf8");
+    for (const [index, line] of source.split("\n").entries()) {
+      if (!line.includes("MatrixRustSDK")) {
+        continue;
+      }
+      const trimmed = line.trim();
+      if (trimmed.startsWith("//") || trimmed.startsWith("///") || trimmed.startsWith("*")) {
+        continue;
+      }
+      leftoverProductHits.push(`${next}:${index + 1}:${trimmed}`);
+    }
+  }
+}
+walkProductSwift(productSwiftRoot);
+if (leftoverProductHits.length > 0) {
+  throw new Error(
+    `P4-S10 product Swift still has MatrixRustSDK callers:\n${leftoverProductHits.join("\n")}`
   );
 }
 

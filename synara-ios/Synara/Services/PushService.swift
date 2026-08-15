@@ -222,18 +222,6 @@ final class SynaraAgentApprovalNotificationActionDedupeStore {
     }
 }
 
-struct MatrixSparsePushRouteResolver: SparsePushRouteResolving {
-    let sessionStore: AppSessionStore
-    let clientStore: MatrixRustSDKClientStore
-
-    func resolveRoute(eventID: String) async -> AppRoute? {
-        guard case .signedIn(let session) = sessionStore.currentState else {
-            return nil
-        }
-        return await clientStore.resolvePushRoute(eventID: eventID, session: session)
-    }
-}
-
 protocol MatrixPusherServicing {
     var isGatewayConfigured: Bool { get }
     var configuredGatewayURL: URL? { get }
@@ -243,77 +231,6 @@ protocol MatrixPusherServicing {
 
 struct MatrixPusherRegistrationFailure: Error {
     let statusCode: Int
-}
-
-final class MatrixPusherService: MatrixPusherServicing {
-    private let clientStore: MatrixRustSDKClientStore
-    private let gatewayURL: URL?
-    private let appID: String
-    private let logger: LoggingServicing
-
-    var isGatewayConfigured: Bool {
-        gatewayURL != nil
-    }
-
-    var configuredGatewayURL: URL? {
-        gatewayURL
-    }
-
-    init(
-        clientStore: MatrixRustSDKClientStore,
-        appID: String = "com.whylandcreative.synara",
-        gatewayURL: URL? = nil,
-        logger: LoggingServicing = AppLogger()
-    ) {
-        self.clientStore = clientStore
-        self.appID = appID
-        self.gatewayURL = gatewayURL
-        self.logger = logger
-    }
-
-    func registerPusher(session: AuthenticatedSession, pushKey: String) async throws {
-        guard let gatewayURL else {
-            logger.info("Push gateway URL is not configured; skipping pusher registration", category: .push)
-            return
-        }
-
-        guard gatewayURL.scheme?.lowercased() == "https",
-              gatewayURL.host?.isEmpty == false else {
-            logger.info("Push gateway URL is not configured; skipping pusher registration", category: .push)
-            return
-        }
-
-        try await clientStore.setPusher(
-            pushKey: pushKey,
-            appID: appID,
-            gatewayURL: gatewayURL,
-            appDisplayName: "Synara",
-            deviceDisplayName: session.deviceID,
-            lang: "en-US",
-            session: session
-        )
-        logger.info("Push pusher registered", category: .push)
-    }
-
-    func unregisterPusher(session: AuthenticatedSession, pushKey: String) async throws {
-        guard let gatewayURL else {
-            logger.info("Push gateway URL is not configured; skipping pusher unregister", category: .push)
-            return
-        }
-
-        guard gatewayURL.scheme?.lowercased() == "https",
-              gatewayURL.host?.isEmpty == false else {
-            logger.info("Push gateway URL is not configured; skipping pusher unregister", category: .push)
-            return
-        }
-
-        try await clientStore.deletePusher(
-            pushKey: pushKey,
-            appID: appID,
-            session: session
-        )
-        logger.info("Push pusher unregistered", category: .push)
-    }
 }
 
 @MainActor

@@ -17,7 +17,7 @@ struct CoreSessionIdentity: Equatable, Sendable {
 ///
 /// The generated Rust object only receives the six values in `SessionProjection`.
 /// Failures are deliberately ignored here because this optional mirror must
-/// never alter the existing MatrixRustSDK service/lifecycle selection.
+/// never alter leftover MatrixRustSDK service/lifecycle selection (retired).
 actor MatrixSessionProjectionMirror {
     private let core: SessionProjectionCore
     private var generation: UInt64 = 0
@@ -27,7 +27,7 @@ actor MatrixSessionProjectionMirror {
         self.core = core
     }
 
-    /// Call only after the MatrixRustSDK client has been installed successfully.
+    /// Call only after a leftover MatrixRustSDK client would have been installed.
     /// Individual safe values are accepted instead of `AuthenticatedSession` so
     /// credentials cannot be handed to the UniFFI facade by construction.
     func openAfterInstalledClient(

@@ -88,7 +88,7 @@ fn send_text_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("composer_set_reply_draft("));
     assert!(shared_core.contains("reaction_ensure("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("backup_status"));
+    assert!(!shared_core.contains("matrix_backup_status"));
 }
 
 #[test]

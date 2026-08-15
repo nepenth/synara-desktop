@@ -1,5 +1,4 @@
 import Foundation
-@preconcurrency import MatrixRustSDK
 
 enum EventActionType: Equatable {
     case reply
@@ -107,40 +106,3 @@ struct MockEventActionService: EventActionServicing {
     }
 }
 
-final class MatrixRustSDKEventActionService: EventActionServicing {
-    private let sessionStore: AppSessionStore
-    private let clientStore: MatrixRustSDKClientStore
-
-    init(sessionStore: AppSessionStore, clientStore: MatrixRustSDKClientStore) {
-        self.sessionStore = sessionStore
-        self.clientStore = clientStore
-    }
-
-    func availability(for item: TimelineItem, currentUserID: String) -> EventActionAvailability {
-        MockEventActionService().availability(for: item, currentUserID: currentUserID)
-    }
-
-    func apply(_ action: EventActionType, to item: TimelineItem, currentUserID: String, roomID: String) async throws -> TimelineItem {
-        guard case .signedIn(let session) = sessionStore.currentState else {
-            throw EventActionError.signedOut
-        }
-
-        guard let room = try await clientStore.room(roomID: roomID, session: session) else {
-            throw EventActionError.failed
-        }
-        let timeline = try await room.timeline()
-        let eventID = EventOrTransactionId.eventId(eventId: item.eventID)
-
-        switch action {
-        case .reply, .edit:
-            return item
-        case .redact:
-            try await timeline.redactEvent(eventOrTransactionId: eventID, reason: nil)
-        case .react(let reaction):
-            _ = try await timeline.toggleReaction(itemId: eventID, key: reaction)
-        }
-
-        // The SDK timeline listener owns local echo and remote echo updates.
-        return item
-    }
-}

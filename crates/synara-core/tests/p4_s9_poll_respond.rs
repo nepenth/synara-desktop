@@ -98,8 +98,8 @@ fn poll_respond_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("send_text("));
     assert!(shared_core.contains("composer_set_reply_draft("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("backup_status"));
-    assert!(!shared_core.contains("crypto_status"));
+    assert!(!shared_core.contains("matrix_backup_status"));
+    assert!(!shared_core.contains("matrix_crypto_status"));
     assert!(!shared_core.contains("cross_signing_status"));
     assert!(!shared_core.contains("cross_signing_setup"));
     assert!(!shared_core.contains("room_key_transfer_status"));

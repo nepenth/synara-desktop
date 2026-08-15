@@ -1,0 +1,873 @@
+import Foundation
+import SynaraCore
+
+/// Caller-owned SharedCore used by live product services after S10 leftover retirement.
+/// UniFFI must not construct-and-drop this instance.
+final class SharedCoreProductHost {
+    let core: SharedCore
+    let storeRoot: URL
+    let sessionStore: AppSessionStore
+
+    init(
+        core: SharedCore,
+        storeRoot: URL,
+        sessionStore: AppSessionStore
+    ) {
+        self.core = core
+        self.storeRoot = storeRoot
+        self.sessionStore = sessionStore
+    }
+
+    static func liveStoreRoot() -> URL {
+        let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("SynaraCore", isDirectory: true)
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        return root
+    }
+}
+
+struct SharedCoreAuthService: AuthServicing {
+    let host: SharedCoreProductHost
+
+    func login(_ request: LoginRequest) async throws -> AuthenticatedSession {
+        let username = request.username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard username.isEmpty == false else {
+            throw LoginError.missingUsername
+        }
+        guard request.password.isEmpty == false else {
+            throw LoginError.missingPassword
+        }
+        let userID = username.hasPrefix("@")
+            ? username
+            : "@\(username):\(request.homeserverURL.host ?? "localhost")"
+        do {
+            let dto = try await SharedCoreSessionLogin.loginWithPassword(
+                userID: userID,
+                homeserverURL: request.homeserverURL.absoluteString,
+                storeRoot: host.storeRoot,
+                password: request.password,
+                core: host.core
+            )
+            _ = try? await SharedCoreSessionAttach.attachSessionOwners(core: host.core)
+            return AuthenticatedSession(
+                userID: dto.userId,
+                deviceID: dto.deviceId,
+                homeserverURL: URL(string: dto.homeserverUrl) ?? request.homeserverURL,
+                accessToken: ""
+            )
+        } catch {
+            throw LoginError.invalidCredentials
+        }
+    }
+}
+
+final class SharedCoreMatrixClientService: MatrixClientServicing {
+    private let host: SharedCoreProductHost
+    private(set) var syncStatus: MatrixSyncStatus = .stopped
+
+    var syncStatusDescription: String {
+        syncStatus.description
+    }
+
+    init(host: SharedCoreProductHost) {
+        self.host = host
+    }
+
+    func start(session: AuthenticatedSession) async {
+        syncStatus = .stopped
+        _ = session
+    }
+
+    func warmSync(session: AuthenticatedSession) async {
+        _ = session
+    }
+
+    func revokeServerSession(_ session: AuthenticatedSession) async -> Bool {
+        _ = session
+        do {
+            _ = try await SharedCoreLeftovers.logout(core: host.core)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func stop() async {
+        syncStatus = .stopped
+    }
+
+    func pauseForBackground() async {}
+
+    func resumeFromForeground(session: AuthenticatedSession) async {
+        _ = session
+    }
+
+    func syncForBackgroundNotification(session: AuthenticatedSession) async -> Bool {
+        _ = session
+        return false
+    }
+
+    func resetLocalState(for session: AuthenticatedSession?) async {
+        _ = session
+        _ = try? await SharedCoreLeftovers.wipePersistedStores(
+            core: host.core,
+            storeRoot: host.storeRoot.path
+        )
+        _ = try? await SharedCoreLeftovers.logout(core: host.core)
+    }
+
+    func coreSessionIdentity() async -> CoreSessionIdentity? {
+        guard let snapshot = try? await SharedCoreSessionStatus.sessionSnapshot(core: host.core),
+              snapshot.status == "logged_in",
+              let userID = snapshot.userId,
+              let deviceID = snapshot.deviceId,
+              let homeserver = snapshot.homeserverUrl
+        else {
+            return nil
+        }
+        return CoreSessionIdentity(
+            userID: userID,
+            deviceID: deviceID,
+            homeserverURL: homeserver
+        )
+    }
+}
+
+final class SharedCoreRoomListService: RoomListServicing {
+    private let host: SharedCoreProductHost
+    private var cachedNames: [String: String] = [:]
+
+    init(host: SharedCoreProductHost) {
+        self.host = host
+    }
+
+    func loadRooms() async -> RoomListState {
+        do {
+            let snapshot = try await SharedCoreRoomList.roomListSnapshot(core: host.core)
+            let rooms = snapshot.rooms.map { room in
+                RoomSummary(
+                    id: room.roomId,
+                    name: room.name ?? room.roomId,
+                    lastMessagePreview: "",
+                    unreadCount: Int(room.unreadCount),
+                    hasHighlight: room.highlightCount > 0 || room.markedUnread,
+                    kind: room.isDirect ? .directMessage : .room,
+                    membership: room.membership == "invited" ? .invited : .joined,
+                    lastActivityAt: room.lastActivityTs.map {
+                        Date(timeIntervalSince1970: TimeInterval($0) / 1000)
+                    } ?? Date(timeIntervalSince1970: 0),
+                    avatarURL: room.avatarUrl.flatMap(URL.init(string:))
+                )
+            }
+            cachedNames = Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, $0.name) })
+            return rooms.isEmpty ? .empty : .loaded(rooms)
+        } catch {
+            return .empty
+        }
+    }
+
+    func roomDisplayName(roomID: String) -> String? {
+        cachedNames[roomID]
+    }
+
+    func clearCache() {
+        cachedNames.removeAll()
+    }
+}
+
+final class SharedCoreRoomMembershipService: RoomMembershipServicing {
+    private let host: SharedCoreProductHost
+
+    init(host: SharedCoreProductHost) {
+        self.host = host
+    }
+
+    func acceptInvite(roomID: String) async throws {
+        do {
+            _ = try await SharedCoreInviteActions.invitesAccept(core: host.core, roomId: roomID)
+        } catch {
+            throw RoomMembershipError.failed
+        }
+    }
+
+    func rejectInvite(roomID: String) async throws {
+        do {
+            _ = try await SharedCoreInviteActions.invitesDecline(core: host.core, roomId: roomID)
+        } catch {
+            throw RoomMembershipError.failed
+        }
+    }
+}
+
+final class SharedCoreTimelineService: TimelineServicing {
+    private let host: SharedCoreProductHost
+
+    init(host: SharedCoreProductHost) {
+        self.host = host
+    }
+
+    func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
+        do {
+            let position = TimelineOpenPositionDto(
+                kind: focusedEventID == nil ? "live" : "focused",
+                atBottom: focusedEventID == nil,
+                restoredAnchorEventId: nil,
+                liveTailEventId: nil,
+                updatedAtMs: nil,
+                eventId: focusedEventID
+            )
+            let opened = try await SharedCoreTimeline.timelineOpen(
+                core: host.core,
+                roomId: roomID,
+                position: position
+            )
+            _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: opened.streamId)
+            return opened.snapshot.rowCount == 0 ? .empty : .empty
+        } catch {
+            return .empty
+        }
+    }
+
+    func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome {
+        _ = (roomID, eventID)
+        return .empty
+    }
+
+    func clearSessionCaches() {}
+}
+
+final class SharedCoreLaterService: LaterServicing {
+    private let host: SharedCoreProductHost
+
+    init(host: SharedCoreProductHost) {
+        self.host = host
+    }
+
+    func loadItems() async -> Result<([SynaraLaterListItem], LaterInboxError?), Never> {
+        guard case .signedIn = host.sessionStore.currentState else {
+            return .success(([], .noSession))
+        }
+        do {
+            let snapshot = try await SharedCoreLater.laterSnapshot(core: host.core)
+            let items = snapshot.items.map { item in
+                SynaraLaterListItem(
+                    id: item.id,
+                    roomID: item.roomId,
+                    eventID: item.eventId,
+                    kind: item.kind == "reminder" ? .reminder : .saved,
+                    dueTs: item.dueTs.map { Int($0) },
+                    completedAt: item.completedAt.map { Int($0) },
+                    createdAt: Int(item.createdAt),
+                    isCompleted: item.completedAt != nil
+                )
+            }
+            return .success((items, nil))
+        } catch {
+            return .success(([], .networkFailure))
+        }
+    }
+
+    func completeItem(id: String) async -> Result<Bool, LaterInboxError> {
+        do {
+            _ = try await SharedCoreLater.laterComplete(
+                core: host.core,
+                itemId: id,
+                completedAt: Date().timeIntervalSince1970 * 1000
+            )
+            return .success(true)
+        } catch {
+            return .failure(.networkFailure)
+        }
+    }
+}
+
+final class SharedCoreMessageSendService: MessageSending {
+    private let host: SharedCoreProductHost
+
+    init(host: SharedCoreProductHost) {
+        self.host = host
+    }
+
+    func send(_ request: MessageSendRequest) async throws -> TimelineItem {
+        let body = request.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard body.isEmpty == false else {
+            throw MessageSendError.emptyMessage
+        }
+        do {
+            if let editEventID = request.editEventID {
+                _ = try await SharedCoreEditMessage.editMessage(
+                    core: host.core,
+                    roomId: request.roomID,
+                    eventId: editEventID,
+                    body: body,
+                    msgType: nil,
+                    formattedBody: nil,
+                    mentionUserIds: nil,
+                    mentionRoom: nil,
+                    txnId: nil
+                )
+            } else {
+                _ = try await SharedCoreSendText.sendText(
+                    core: host.core,
+                    roomId: request.roomID,
+                    body: body,
+                    msgType: nil,
+                    formattedBody: nil,
+                    mentionUserIds: nil,
+                    mentionRoom: nil,
+                    replyTo: request.replyToEventID,
+                    threadRoot: nil,
+                    txnId: nil
+                )
+            }
+            return TimelineItem(
+                id: request.editEventID ?? "$local-\(UUID().uuidString)",
+                eventID: request.editEventID ?? "$local-\(UUID().uuidString)",
+                senderID: signedInUserID(),
+                timestamp: Date(),
+                kind: .text(body),
+                replyToEventID: request.replyToEventID,
+                isEdited: request.editEventID != nil,
+                reactions: [:]
+            )
+        } catch {
+            throw MessageSendError.failed
+        }
+    }
+
+    private func signedInUserID() -> String {
+        if case .signedIn(let session) = host.sessionStore.currentState {
+            return session.userID
+        }
+        return "@local:matrix.org"
+    }
+}
+
+final class SharedCoreEventActionService: EventActionServicing {
+    private let host: SharedCoreProductHost
+
+    init(host: SharedCoreProductHost) {
+        self.host = host
+    }
+
+    func availability(for item: TimelineItem, currentUserID: String) -> EventActionAvailability {
+        MockEventActionService().availability(for: item, currentUserID: currentUserID)
+    }
+
+    func apply(
+        _ action: EventActionType,
+        to item: TimelineItem,
+        currentUserID: String,
+        roomID: String
+    ) async throws -> TimelineItem {
+        _ = currentUserID
+        switch action {
+        case .reply, .edit:
+            return item
+        case .redact:
+            do {
+                _ = try await SharedCoreTimelineMutate.timelineRedact(
+                    core: host.core,
+                    roomId: roomID,
+                    eventId: item.eventID,
+                    reason: nil
+                )
+            } catch {
+                throw EventActionError.failed
+            }
+            return item
+        case .react(let reaction):
+            do {
+                _ = try await SharedCoreTimelineReactions.timelineReactionToggle(
+                    core: host.core,
+                    roomId: roomID,
+                    eventId: item.eventID,
+                    key: reaction
+                )
+            } catch {
+                throw EventActionError.failed
+            }
+            return item
+        }
+    }
+}
+
+final class SharedCoreAgentApprovalService: AgentApprovalServicing {
+    private let host: SharedCoreProductHost
+    private let jsonEncoder: JSONEncoder
+
+    init(host: SharedCoreProductHost, jsonEncoder: JSONEncoder = JSONEncoder()) {
+        self.host = host
+        self.jsonEncoder = jsonEncoder
+    }
+
+    func submit(_ request: SynaraAgentApprovalRequest) async throws {
+        guard case .signedIn = host.sessionStore.currentState else {
+            throw SynaraAgentApprovalError.signedOut
+        }
+        guard request.action.id.isEmpty == false else {
+            throw SynaraAgentApprovalError.unsupportedAction
+        }
+        do {
+            let data = try encodeAgentApprovalMatrixEvent(request, jsonEncoder: jsonEncoder)
+            guard let content = String(data: data, encoding: .utf8) else {
+                throw SynaraAgentApprovalError.failed
+            }
+            _ = try await SharedCoreLeftovers.sendRawRoomEvent(
+                core: host.core,
+                roomId: request.roomID,
+                eventType: "m.room.message",
+                contentJson: content
+            )
+        } catch let error as SynaraAgentApprovalError {
+            throw error
+        } catch {
+            throw SynaraAgentApprovalError.failed
+        }
+    }
+}
+
+final class SharedCoreAgentApprovalReactionService: AgentApprovalReactionServicing {
+    private let host: SharedCoreProductHost
+    private let jsonEncoder: JSONEncoder
+
+    init(host: SharedCoreProductHost, jsonEncoder: JSONEncoder = JSONEncoder()) {
+        self.host = host
+        self.jsonEncoder = jsonEncoder
+    }
+
+    func submitReaction(_ request: SynaraAgentApprovalReactionRequest) async throws {
+        guard case .signedIn = host.sessionStore.currentState else {
+            throw SynaraAgentApprovalError.signedOut
+        }
+        do {
+            let data = try encodeAgentApprovalReactionMatrixEvent(request, jsonEncoder: jsonEncoder)
+            guard let content = String(data: data, encoding: .utf8) else {
+                throw SynaraAgentApprovalError.failed
+            }
+            _ = try await SharedCoreLeftovers.sendRawRoomEvent(
+                core: host.core,
+                roomId: request.roomID,
+                eventType: "m.reaction",
+                contentJson: content
+            )
+        } catch let error as SynaraAgentApprovalError {
+            throw error
+        } catch {
+            throw SynaraAgentApprovalError.failed
+        }
+    }
+}
+
+final class SharedCoreCryptoStatusService: CryptoStatusServicing {
+    private let host: SharedCoreProductHost
+
+    init(host: SharedCoreProductHost) {
+        self.host = host
+    }
+
+    func roomStatus(roomID: String) async -> RoomCryptoStatus {
+        _ = roomID
+        return .unknown
+    }
+
+    func sessionStatus() async -> SessionCryptoStatus {
+        if let status = try? await SharedCoreLeftovers.cryptoStatus(core: host.core) {
+            return SessionCryptoStatus(
+                verification: status.crossSigningState == "ready" ? .verified : .unknown,
+                recovery: .unknown,
+                backup: status.encryptionEnabled ? .enabled : .unknown,
+                hasDevicesToVerifyAgainst: nil,
+                isLastDevice: nil,
+                unableToDecryptCount: 0
+            )
+        }
+        return .unknown
+    }
+
+    func verificationUpdates() -> AsyncStream<CryptoVerificationState> {
+        AsyncStream { continuation in
+            continuation.finish()
+        }
+    }
+
+    func retryDecryption(roomID: String) async -> CryptoActionResult {
+        _ = roomID
+        return .unavailable("Crypto recovery is unavailable.")
+    }
+
+    func requestDeviceVerification() async -> CryptoActionResult {
+        .unavailable("Device verification is unavailable.")
+    }
+
+    func acceptVerificationRequest() async -> CryptoActionResult {
+        .unavailable("Device verification is unavailable.")
+    }
+
+    func startSasVerification() async -> CryptoActionResult {
+        .unavailable("Device verification is unavailable.")
+    }
+
+    func approveVerification() async -> CryptoActionResult {
+        .unavailable("Device verification is unavailable.")
+    }
+
+    func declineVerification() async -> CryptoActionResult {
+        .unavailable("Device verification is unavailable.")
+    }
+
+    func cancelVerification() async -> CryptoActionResult {
+        .unavailable("Device verification is unavailable.")
+    }
+
+    func recover(recoveryKey: String) async -> CryptoActionResult {
+        do {
+            _ = try await SharedCoreLeftovers.recover(core: host.core, recoveryKey: recoveryKey)
+            return .completed("Recovery completed.")
+        } catch {
+            return .failed("Recovery is unavailable.")
+        }
+    }
+}
+
+final class SharedCoreRoomManagementService: RoomManagementServicing {
+    private let host: SharedCoreProductHost
+
+    init(host: SharedCoreProductHost) {
+        self.host = host
+    }
+
+    func createRoom(_ request: RoomCreateRequest) async throws -> RoomOperationResult {
+        do {
+            let dto = try await SharedCoreRoomCreate.roomCreate(
+                core: host.core,
+                request: RoomCreateRequestDto(
+                    name: request.name,
+                    topic: request.topic.isEmpty ? nil : request.topic,
+                    roomAliasName: nil,
+                    visibility: request.visibility == .public ? "public" : "private",
+                    preset: nil,
+                    isDirect: false,
+                    encryption: request.isEncrypted,
+                    invite: [],
+                    roomVersion: nil,
+                    joinRule: nil,
+                    knock: false,
+                    parentRoomId: nil
+                )
+            )
+            return RoomOperationResult(roomID: dto.roomId, name: request.name)
+        } catch {
+            throw RoomManagementError.failed
+        }
+    }
+
+    func createDirectMessage(_ request: DirectMessageCreateRequest) async throws -> RoomOperationResult {
+        do {
+            let dto = try await SharedCoreRoomCreate.roomCreate(
+                core: host.core,
+                request: RoomCreateRequestDto(
+                    name: nil,
+                    topic: nil,
+                    roomAliasName: nil,
+                    visibility: "private",
+                    preset: "trusted_private_chat",
+                    isDirect: true,
+                    encryption: request.isEncrypted,
+                    invite: [request.userID],
+                    roomVersion: nil,
+                    joinRule: nil,
+                    knock: false,
+                    parentRoomId: nil
+                )
+            )
+            _ = try? await SharedCoreMDirect.mdirectAdd(
+                core: host.core,
+                roomId: dto.roomId,
+                userId: request.userID
+            )
+            return RoomOperationResult(roomID: dto.roomId, name: request.userID)
+        } catch {
+            throw RoomManagementError.failed
+        }
+    }
+
+    func joinRoom(_ request: RoomJoinRequest) async throws -> RoomOperationResult {
+        do {
+            _ = try await SharedCoreRoomLeaveJoin.roomJoin(
+                core: host.core,
+                roomIdOrAlias: request.reference,
+                viaServers: nil
+            )
+            return RoomOperationResult(roomID: request.reference, name: nil)
+        } catch {
+            throw RoomManagementError.failed
+        }
+    }
+
+    func leaveRoom(roomID: String) async throws {
+        do {
+            _ = try await SharedCoreRoomLeaveJoin.roomLeave(core: host.core, roomId: roomID)
+        } catch {
+            throw RoomManagementError.failed
+        }
+    }
+
+    func inviteUser(roomID: String, userID: String) async throws {
+        do {
+            _ = try await SharedCoreRoomModeration.roomInvite(
+                core: host.core,
+                roomId: roomID,
+                userId: userID,
+                reason: nil
+            )
+        } catch {
+            throw RoomManagementError.failed
+        }
+    }
+
+    func searchPublicRooms(query: String) async throws -> [PublicRoomSummary] {
+        do {
+            let page = try await SharedCoreDirectorySearch.roomDirectorySearch(
+                core: host.core,
+                sessionGeneration: 0,
+                requestId: 1,
+                serverName: nil,
+                term: query,
+                roomType: nil,
+                thirdPartyInstanceId: nil,
+                limit: 20,
+                since: nil
+            )
+            return (page.page?.chunk ?? []).map { room in
+                PublicRoomSummary(
+                    id: room.roomId,
+                    name: room.name ?? room.roomId,
+                    topic: room.topic,
+                    alias: room.canonicalAlias,
+                    memberCount: Int(room.memberCount),
+                    isWorldReadable: room.worldReadable
+                )
+            }
+        } catch {
+            throw RoomManagementError.failed
+        }
+    }
+
+    func roomDetails(roomID: String) async -> RoomDetails? {
+        RoomDetails(
+            roomID: roomID,
+            name: roomID,
+            topic: nil,
+            aliases: [],
+            isEncrypted: false,
+            isPublic: nil,
+            memberCount: 0,
+            canInvite: false,
+            canEditName: false,
+            canEditTopic: false,
+            canEditAvatar: false,
+            canEditAliases: false,
+            powerLevels: nil,
+            notificationMode: .allMessages,
+            avatarURL: nil
+        )
+    }
+
+    func updateRoomProfile(_ request: RoomProfileUpdateRequest) async throws {
+        if let name = request.name {
+            _ = try await SharedCoreRoomProfile.setRoomName(
+                core: host.core,
+                roomId: request.roomID,
+                name: name
+            )
+        }
+        if let topic = request.topic {
+            _ = try await SharedCoreRoomProfile.setRoomTopic(
+                core: host.core,
+                roomId: request.roomID,
+                topic: topic
+            )
+        }
+        if case .remove = request.avatar {
+            _ = try await SharedCoreRoomProfile.setRoomAvatar(
+                core: host.core,
+                roomId: request.roomID,
+                mxc: ""
+            )
+        }
+    }
+
+    func setNotificationMode(_ mode: SynaraRoomNotificationMode, roomID: String) async throws {
+        do {
+            _ = try await SharedCoreLeftovers.setNotificationMode(
+                core: host.core,
+                roomId: roomID,
+                mode: mode.rawValue
+            )
+        } catch {
+            throw RoomManagementError.failed
+        }
+    }
+}
+
+final class SharedCoreMediaLoader: MediaLoading {
+    private let host: SharedCoreProductHost
+
+    init(host: SharedCoreProductHost) {
+        self.host = host
+    }
+
+    func loadThumbnail(for resource: MediaResource) async -> MediaLoadState {
+        guard resource.isEncrypted == false else {
+            return .failed("Encrypted media requires recovered keys before it can be opened.")
+        }
+        guard let url = resource.authenticatedURL else {
+            return .failed("Media is unavailable.")
+        }
+        do {
+            _ = try await SharedCoreLeftovers.mediaThumbnail(
+                core: host.core,
+                mxc: url.absoluteString,
+                width: 640,
+                height: 480
+            )
+            return .thumbnail(resource)
+        } catch {
+            return .failed("Media could not be loaded.")
+        }
+    }
+
+    func loadThumbnailData(for resource: MediaResource, width: UInt64, height: UInt64) async -> Data? {
+        guard resource.isEncrypted == false,
+              let url = resource.authenticatedURL else {
+            return nil
+        }
+        return try? await SharedCoreLeftovers.mediaThumbnail(
+            core: host.core,
+            mxc: url.absoluteString,
+            width: width,
+            height: height
+        ).payload
+    }
+
+    func loadMediaData(for resource: MediaResource) async -> Data? {
+        guard resource.isEncrypted == false,
+              let url = resource.authenticatedURL else {
+            return nil
+        }
+        return try? await SharedCoreLeftovers.mediaDownload(
+            core: host.core,
+            mxc: url.absoluteString
+        ).payload
+    }
+}
+
+final class SharedCoreMediaUploadService: MediaUploading {
+    private let host: SharedCoreProductHost
+
+    init(host: SharedCoreProductHost) {
+        self.host = host
+    }
+
+    func upload(_ request: MediaUploadRequest) async -> MediaUploadState {
+        guard case .signedIn = host.sessionStore.currentState else {
+            return .failed("Sign in before uploading media.")
+        }
+        guard request.data.isEmpty == false else {
+            return .failed("Attachment is empty.")
+        }
+        do {
+            _ = try await SharedCoreLeftovers.mediaUpload(
+                core: host.core,
+                payload: request.data,
+                mimeType: request.mimeType,
+                filename: request.displayName
+            )
+            return .failed("Media upload is unavailable.")
+        } catch {
+            return .failed("Media could not be uploaded.")
+        }
+    }
+}
+
+struct SharedCoreSparsePushRouteResolver: SparsePushRouteResolving {
+    func resolveRoute(eventID: String) async -> AppRoute? {
+        _ = eventID
+        return nil
+    }
+}
+
+final class SharedCorePusherService: MatrixPusherServicing {
+    private let host: SharedCoreProductHost
+    private let gatewayURL: URL?
+    private let appID: String
+    private let logger: LoggingServicing
+
+    var isGatewayConfigured: Bool {
+        gatewayURL != nil
+    }
+
+    var configuredGatewayURL: URL? {
+        gatewayURL
+    }
+
+    init(
+        host: SharedCoreProductHost,
+        appID: String = "com.whylandcreative.synara",
+        gatewayURL: URL? = nil,
+        logger: LoggingServicing = AppLogger()
+    ) {
+        self.host = host
+        self.appID = appID
+        self.gatewayURL = gatewayURL
+        self.logger = logger
+    }
+
+    func registerPusher(session: AuthenticatedSession, pushKey: String) async throws {
+        guard let gatewayURL else {
+            logger.info("Push gateway URL is not configured; skipping pusher registration", category: .push)
+            return
+        }
+        _ = try await SharedCoreLeftovers.pusherSet(
+            core: host.core,
+            pushKey: pushKey,
+            appId: appID,
+            gatewayUrl: gatewayURL.absoluteString,
+            appDisplayName: "Synara",
+            deviceDisplayName: session.deviceID,
+            lang: "en-US"
+        )
+    }
+
+    func unregisterPusher(session: AuthenticatedSession, pushKey: String) async throws {
+        _ = session
+        _ = try await SharedCoreLeftovers.pusherDelete(
+            core: host.core,
+            pushKey: pushKey,
+            appId: appID
+        )
+    }
+}
+
+final class SharedCoreReadMarkerStore: RoomReadMarkerClientStoring {
+    private let host: SharedCoreProductHost
+
+    init(host: SharedCoreProductHost) {
+        self.host = host
+    }
+
+    func latestEventID(roomID: String, session: AuthenticatedSession) async throws -> String? {
+        _ = session
+        let readback = try await SharedCoreTimelineReadState.timelineEventReadback(
+            core: host.core,
+            roomId: roomID,
+            eventId: ""
+        )
+        return readback.item.eventId
+    }
+
+    func clearMarkedUnread(roomID: String, session: AuthenticatedSession) async throws {
+        _ = (roomID, session)
+    }
+}

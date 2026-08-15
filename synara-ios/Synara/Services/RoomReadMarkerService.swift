@@ -18,8 +18,6 @@ protocol RoomReadMarkerClientStoring: AnyObject {
     func clearMarkedUnread(roomID: String, session: AuthenticatedSession) async throws
 }
 
-extension MatrixRustSDKClientStore: RoomReadMarkerClientStoring {}
-
 enum MatrixServerEventIDPolicy {
     static func canAcknowledge(_ eventID: String) -> Bool {
         eventID.hasPrefix("$")

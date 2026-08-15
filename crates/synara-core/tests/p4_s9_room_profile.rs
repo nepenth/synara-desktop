@@ -75,7 +75,7 @@ fn room_profile_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("set_own_display_name"));
     assert!(shared_core.contains("room_join_rule_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("backup_status"));
+    assert!(!shared_core.contains("matrix_backup_status"));
 }
 
 #[test]

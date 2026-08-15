@@ -68,19 +68,19 @@ final class AppEnvironmentTests: XCTestCase {
     }
 
     @MainActor
-    func testLiveEnvironmentUsesMatrixRustSDKServices() {
+    func testLiveEnvironmentUsesSharedCoreServices() {
         let environment = AppEnvironment.live()
 
-        XCTAssertTrue(environment.auth is MatrixRustSDKAuthService)
-        XCTAssertTrue(environment.roomList is MatrixRustSDKRoomListService)
-        XCTAssertTrue(environment.roomMembership is MatrixRustSDKRoomMembershipService)
-        XCTAssertTrue(environment.timeline is MatrixRustSDKTimelineService)
-        XCTAssertTrue(environment.later is MatrixRustSDKLaterService)
-        XCTAssertTrue(environment.messageSender is MatrixRustSDKMessageSendService)
-        XCTAssertTrue(environment.eventActions is MatrixRustSDKEventActionService)
-        XCTAssertTrue(environment.agentApprovals is MatrixRustSDKAgentApprovalService)
-        XCTAssertTrue(environment.crypto is MatrixRustSDKCryptoStatusService)
-        XCTAssertTrue(environment.roomManagement is MatrixRustSDKRoomManagementService)
+        XCTAssertTrue(environment.auth is SharedCoreAuthService)
+        XCTAssertTrue(environment.roomList is SharedCoreRoomListService)
+        XCTAssertTrue(environment.roomMembership is SharedCoreRoomMembershipService)
+        XCTAssertTrue(environment.timeline is SharedCoreTimelineService)
+        XCTAssertTrue(environment.later is SharedCoreLaterService)
+        XCTAssertTrue(environment.messageSender is SharedCoreMessageSendService)
+        XCTAssertTrue(environment.eventActions is SharedCoreEventActionService)
+        XCTAssertTrue(environment.agentApprovals is SharedCoreAgentApprovalService)
+        XCTAssertTrue(environment.crypto is SharedCoreCryptoStatusService)
+        XCTAssertTrue(environment.roomManagement is SharedCoreRoomManagementService)
     }
 
     func testRoomCryptoStatusFlagsRecoveryAttentionForEncryptedProblems() {
