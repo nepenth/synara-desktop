@@ -40,6 +40,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreRoomNotes.swift",
   "synara-ios/Synara/Services/SharedCoreOwnProfile.swift",
   "synara-ios/Synara/Services/SharedCoreRoomProfile.swift",
+  "synara-ios/Synara/Services/SharedCoreDirectoryVisibility.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -137,6 +138,10 @@ const sharedCoreOwnProfile = readFileSync(
 );
 const sharedCoreRoomProfile = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreRoomProfile.swift"),
+  "utf8"
+);
+const sharedCoreDirectoryVisibility = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreDirectoryVisibility.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -470,6 +475,18 @@ const assertions = [
   [sharedCoreRoomProfile, "setRoomAvatar", "P4-S9-9 product room-avatar helper"],
   [sharedCoreRoomProfile, "core: SharedCore", "P4-S9-9 helper takes an already-constructed SharedCore"],
   [sharedCoreRoomProfile, "core.setRoomName", "P4-S9-9 helper writes on the caller-owned instance"],
+  [sharedCoreFfi, "get_room_directory_visibility", "P4-S9-10 typed directory-visibility get FFI"],
+  [sharedCoreFfi, "matrix_get_room_directory_visibility", "P4-S9-10 calls the registered directory-visibility get command"],
+  [sharedCoreFfi, "matrix_set_room_directory_visibility", "P4-S9-10 calls the registered directory-visibility set command"],
+  [udl, "RoomDirectoryVisibilityDto get_room_directory_visibility(", "P4-S9-10 SharedCore directory-visibility get"],
+  [udl, "RoomDirectoryVisibilityWriteDto set_room_directory_visibility(", "P4-S9-10 SharedCore directory-visibility set"],
+  [udl, "dictionary RoomDirectoryVisibilityDto", "P4-S9-10 privacy-safe directory-visibility read DTO"],
+  [udl, "interface DirectoryVisibilityCommandError", "P4-S9-10 static directory-visibility error"],
+  [swiftBindingsTests, "testSharedCoreDirectoryVisibilityWithoutSessionFailsClosed", "Swift P4-S9-10 fail-closed directory-visibility test"],
+  [sharedCoreDirectoryVisibility, "getRoomDirectoryVisibility", "P4-S9-10 product directory-visibility get helper"],
+  [sharedCoreDirectoryVisibility, "setRoomDirectoryVisibility", "P4-S9-10 product directory-visibility set helper"],
+  [sharedCoreDirectoryVisibility, "core: SharedCore", "P4-S9-10 helper takes an already-constructed SharedCore"],
+  [sharedCoreDirectoryVisibility, "core.getRoomDirectoryVisibility", "P4-S9-10 helper reads on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1304,9 +1321,14 @@ for (const required of ["set_room_name", "set_room_topic", "set_room_avatar"]) {
     throw new Error(`P4-S9-9 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "get_room_directory_visibility", "set_room_directory_visibility", "crypto_status", "backup_setup"]) {
+for (const required of ["get_room_directory_visibility", "set_room_directory_visibility"]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-10 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "room_directory_search", "room_directory_protocols", "room_directory_cancel", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-9`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-10`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1424,6 +1446,17 @@ for (const forbidden of ["getRoomDirectoryVisibility", "setRoomDirectoryVisibili
     throw new Error(`P4-S9-9 helper must not wrap ${forbidden}`);
   }
 }
+if (sharedCoreDirectoryVisibility.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-10 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreDirectoryVisibility.includes("SharedCore.newWithSecretStore") || sharedCoreDirectoryVisibility.includes("newWithSecretStore")) {
+  throw new Error("P4-S9-10 helper must not construct SharedCore");
+}
+for (const forbidden of ["roomDirectorySearch", "roomDirectoryProtocols", "roomDirectoryCancel", "setRoomName", "backupStatus"]) {
+  if (sharedCoreDirectoryVisibility.includes(forbidden)) {
+    throw new Error(`P4-S9-10 helper must not wrap ${forbidden}`);
+  }
+}
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
 if (!roomListDto) throw new Error("missing RoomListSnapshotDto");
 if (/\bpassword\b/.test(roomListDto[1]) || /\btoken\b/.test(roomListDto[1])) {
@@ -1513,6 +1546,16 @@ const roomProfileWriteDto = udl.match(/dictionary RoomProfileWriteDto \{([\s\S]*
 if (!roomProfileWriteDto) throw new Error("missing RoomProfileWriteDto");
 if (/\bpassword\b/.test(roomProfileWriteDto[1]) || /\btoken\b/.test(roomProfileWriteDto[1]) || /\bbytes\b/.test(roomProfileWriteDto[1]) || /\broom_id\b/.test(roomProfileWriteDto[1]) || /\bname\b/.test(roomProfileWriteDto[1]) || /\btopic\b/.test(roomProfileWriteDto[1]) || /\bmxc\b/.test(roomProfileWriteDto[1])) {
   throw new Error("RoomProfileWriteDto must not carry password, token, bytes, room_id, name, topic, or mxc fields");
+}
+const roomDirectoryVisibilityDto = udl.match(/dictionary RoomDirectoryVisibilityDto \{([\s\S]*?)\};/);
+if (!roomDirectoryVisibilityDto) throw new Error("missing RoomDirectoryVisibilityDto");
+if (/\bpassword\b/.test(roomDirectoryVisibilityDto[1]) || /\btoken\b/.test(roomDirectoryVisibilityDto[1]) || /\bbytes\b/.test(roomDirectoryVisibilityDto[1]) || /\bmxc\b/.test(roomDirectoryVisibilityDto[1])) {
+  throw new Error("RoomDirectoryVisibilityDto must not carry password, token, bytes, or mxc fields");
+}
+const roomDirectoryVisibilityWriteDto = udl.match(/dictionary RoomDirectoryVisibilityWriteDto \{([\s\S]*?)\};/);
+if (!roomDirectoryVisibilityWriteDto) throw new Error("missing RoomDirectoryVisibilityWriteDto");
+if (/\bpassword\b/.test(roomDirectoryVisibilityWriteDto[1]) || /\btoken\b/.test(roomDirectoryVisibilityWriteDto[1]) || /\bbytes\b/.test(roomDirectoryVisibilityWriteDto[1]) || /\bmxc\b/.test(roomDirectoryVisibilityWriteDto[1])) {
+  throw new Error("RoomDirectoryVisibilityWriteDto must not carry password, token, bytes, or mxc fields");
 }
 const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
 if (!loginDto) throw new Error("missing SessionLoginDto");
