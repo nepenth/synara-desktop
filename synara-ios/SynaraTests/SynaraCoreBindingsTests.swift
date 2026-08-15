@@ -1031,6 +1031,60 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreRoomPowerLevelsWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let roomId = "!s914SecretRoom:example.org"
+        let userId = "@s914SecretUser:example.org"
+        let content = "{\"users\":{\"@s914SecretUser:example.org\":50}}"
+        let tags = "{\"50\":{\"name\":\"s914SecretTag\"}}"
+
+        do {
+            _ = try await SharedCoreRoomPowerLevels.roomSetPowerLevel(
+                core: core,
+                roomId: roomId,
+                userId: userId,
+                powerLevel: 914
+            )
+            XCTFail("Fail-closed SharedCore must not set a power level without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-set-power-level-no-session"))
+            for forbidden in ["syt_", "token", roomId, userId, "914"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreRoomPowerLevels.roomSetPowerLevels(
+                core: core,
+                roomId: roomId,
+                contentJson: content
+            )
+            XCTFail("Fail-closed SharedCore must not set power levels without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-set-power-levels-no-session"))
+            for forbidden in ["syt_", "token", roomId, userId, content] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreRoomPowerLevels.roomSetPowerLevelTags(
+                core: core,
+                roomId: roomId,
+                contentJson: tags
+            )
+            XCTFail("Fail-closed SharedCore must not set power-level tags without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-set-power-level-tags-no-session"))
+            for forbidden in ["syt_", "token", roomId, tags] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

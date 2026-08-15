@@ -79,7 +79,7 @@ fn verification_sas_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("verification_dismiss"));
     assert!(!shared_core.contains("command("));
     assert!(!shared_core.contains("device_delete_password"));
-    assert!(!shared_core.contains("room_set_power_level"));
+    assert!(!shared_core.contains("room_create"));
     assert!(!shared_core.contains("crypto_status"));
 }
 

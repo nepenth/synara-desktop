@@ -65,7 +65,6 @@ fn directory_search_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("room_directory_cancel"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
-    assert!(!udl.contains("matrix_room_set_power_level"));
     assert!(!udl.contains("matrix_room_create"));
     let shared_core = udl
         .split("interface SharedCore {")
@@ -78,7 +77,6 @@ fn directory_search_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("get_room_directory_visibility"));
     assert!(shared_core.contains("set_room_name"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("room_set_power_level"));
     assert!(!shared_core.contains("room_create"));
     assert!(!shared_core.contains("backup_status"));
 }

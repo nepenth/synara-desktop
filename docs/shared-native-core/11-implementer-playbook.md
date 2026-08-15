@@ -131,8 +131,8 @@ Run this checklist in order. Stop at the first yes.
    S4/#940, S5/#942, S6/#944, S7/#945, S8/#947, S9/#948,
    S9-2/#950, S9-3/#951, S9-4/#952, S9-5/#953, S9-6/#954,
    S9-7/#955, S9-8/#956, S9-9/#957, S9-10/#958, S9-11/#959, and
-   S9-12/#960 landed. S9-13 room invite/kick/ban/unban (section 9.5)
-   is on this branch. Next after merge is power levels on
+   S9-12/#960, and S9-13/#961 landed. S9-14 room power levels
+   (section 9.5) is on this branch. Next after merge is room create on
    NativeRoomJoinRuleOwner.
    UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
@@ -310,10 +310,13 @@ P4-S9-11 iOS directory search         stacked #959
        matrix_room_directory_cancel. Results stay metadata. No avatar bytes.
 P4-S9-12 iOS room leave/join          stacked #960
        matrix_room_leave / matrix_room_join. Write ack is status only.
-P4-S9-13 iOS room invite/kick/ban     **this branch**
+P4-S9-13 iOS room invite/kick/ban     stacked #961
        matrix_room_invite / matrix_room_kick / matrix_room_ban /
        matrix_room_unban. Write ack is status only.
-       Power levels, room create, members, and spaces stay off.
+P4-S9-14 iOS room power levels        **this branch**
+       matrix_room_set_power_level / matrix_room_set_power_levels /
+       matrix_room_set_power_level_tags. Write ack is status only.
+       Room create, members snapshots, and spaces stay off.
 P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        only when grep shows no remaining product callers
 P4-S11 NSE read-only store API        (never boot sync in NSE)
@@ -452,26 +455,28 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 
-S9-12 room leave/join landed in #960 (`b3a891c4`). **S9-13 (this branch)** adds
-typed UniFFI wrappers for the four registered room moderation commands.
+S9-13 room invite/kick/ban landed in #961 (`5a20875f`). **S9-14 (this branch)** adds
+typed UniFFI wrappers for the three registered room power-level writers.
 
-1. `SharedCore.room_invite` / `room_kick` / `room_ban` / `room_unban` call
-   `Core.command` with the same camelCase payloads desktop uses
-   (`roomId`, `userId`, `reason`). Write ack is status only. Do not
-   re-wrap leave/join or directory search.
-2. Do not reimplement invite/kick/ban/unban in Swift. Do not wrap power
-   levels, room create, members, spaces, or leftover media.
+1. `SharedCore.room_set_power_level` / `room_set_power_levels` /
+   `room_set_power_level_tags` call `Core.command` with the same
+   camelCase payloads desktop uses (`roomId`, `userId`, `powerLevel`,
+   `content`). Write ack is status only. Do not re-wrap invite/kick/ban
+   or leave/join.
+2. Do not reimplement power-level writes in Swift. Do not wrap room
+   create, members snapshots (`matrix_room_members_snapshot` /
+   `matrix_room_power_levels_snapshot` / `matrix_room_creators_snapshot`
+   / `matrix_room_power_level_tags_snapshot`), spaces, or leftover media.
 3. Do not start `SyncService`. Missing owner fail-closes with the
    registered `p2-*-no-session` codes. Unstarted sync returns the
-   registered handler's real outcome. Planted moderation of an unknown
-   room must not require a live server. Failed errors must not echo
-   room id, user id, or reason.
+   registered handler's real outcome. Planted power-level writes against
+   an unknown room must not require a live server. Failed errors must
+   not echo room id, user id, power level, or content JSON.
 4. Helper + XCTest are the iOS surface this slice. Do not swap
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
-5. One command family per PR. Next is power levels on
-   `NativeRoomJoinRuleOwner` (`matrix_room_set_power_level` and the
-   bulk/tag writers). Do not wrap leftover
-   password/export/import/bootstrap, `matrix_crypto_status`, or
+5. One command family per PR. Next is room create on
+   `NativeRoomJoinRuleOwner` (`matrix_room_create` only). Do not wrap
+   leftover password/export/import/bootstrap, `matrix_crypto_status`, or
    `matrix_cross_signing_status`. Do not hit production homeservers.
 
 ### 9.6 When you may delete `MatrixRustSDK`

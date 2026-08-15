@@ -60,7 +60,10 @@
 //! P4-S9-13 adds typed `room_invite` / `room_kick` / `room_ban` / `room_unban`
 //! wrappers for those four already-registered Core commands. Write ack is
 //! status only. Failed errors never echo room id, user id, or reason.
-//! Power levels and room create stay off.
+//! P4-S9-14 adds typed `room_set_power_level` / `room_set_power_levels` /
+//! `room_set_power_level_tags` wrappers for those three already-registered
+//! Core commands. Write ack is status only. Failed errors never echo room
+//! id, user id, power level, or content JSON. Room create stays off.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -401,6 +404,18 @@ const ROOM_MODERATION_FAILED_CODE: &str = "p4-s9-13-room-moderation-failed";
 const ROOM_MODERATION_FAILED_DESCRIPTION: &str =
     "The room-moderation request could not be completed.";
 const ROOM_MODERATION_OWNER_DESCRIPTION: &str = "The room-moderation request is not available.";
+const ROOM_POWER_LEVEL_COMMAND_GENERATION: u64 = 0;
+const ROOM_SET_POWER_LEVEL_COMMAND: &str = "matrix_room_set_power_level";
+const ROOM_SET_POWER_LEVELS_COMMAND: &str = "matrix_room_set_power_levels";
+const ROOM_SET_POWER_LEVEL_TAGS_COMMAND: &str = "matrix_room_set_power_level_tags";
+const ROOM_SET_POWER_LEVEL_NO_SESSION_CODE: &str = "p2-room-set-power-level-no-session";
+const ROOM_SET_POWER_LEVELS_NO_SESSION_CODE: &str = "p2-room-set-power-levels-no-session";
+const ROOM_SET_POWER_LEVEL_TAGS_NO_SESSION_CODE: &str = "p2-room-set-power-level-tags-no-session";
+const ROOM_POWER_LEVEL_NO_SESSION_DESCRIPTION: &str = "No room-power-level session is available.";
+const ROOM_POWER_LEVEL_FAILED_CODE: &str = "p4-s9-14-room-power-levels-failed";
+const ROOM_POWER_LEVEL_FAILED_DESCRIPTION: &str =
+    "The room-power-level request could not be completed.";
+const ROOM_POWER_LEVEL_OWNER_DESCRIPTION: &str = "The room-power-level request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2809,6 +2824,61 @@ impl SharedCore {
             .await
     }
 
+    pub async fn room_set_power_level(
+        &self,
+        room_id: String,
+        user_id: String,
+        power_level: i64,
+    ) -> Result<RoomPowerLevelWriteDto, RoomPowerLevelCommandError> {
+        let payload = room_power_level_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "userId": user_id,
+            "powerLevel": power_level,
+        }))?;
+        self.room_power_level_command(
+            ROOM_SET_POWER_LEVEL_COMMAND,
+            ROOM_SET_POWER_LEVEL_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+    }
+
+    pub async fn room_set_power_levels(
+        &self,
+        room_id: String,
+        content_json: String,
+    ) -> Result<RoomPowerLevelWriteDto, RoomPowerLevelCommandError> {
+        let content = parse_power_level_content_json(&content_json)?;
+        let payload = room_power_level_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "content": content,
+        }))?;
+        self.room_power_level_command(
+            ROOM_SET_POWER_LEVELS_COMMAND,
+            ROOM_SET_POWER_LEVELS_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+    }
+
+    pub async fn room_set_power_level_tags(
+        &self,
+        room_id: String,
+        content_json: String,
+    ) -> Result<RoomPowerLevelWriteDto, RoomPowerLevelCommandError> {
+        let content = parse_power_level_content_json(&content_json)?;
+        let payload = room_power_level_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "content": content,
+        }))?;
+        self.room_power_level_command(
+            ROOM_SET_POWER_LEVEL_TAGS_COMMAND,
+            ROOM_SET_POWER_LEVEL_TAGS_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+    }
+
     async fn later_null_command(
         &self,
         command: &'static str,
@@ -2939,6 +3009,25 @@ impl SharedCore {
             .await
             .map_err(|error| map_room_moderation_core_error(no_session, error))?;
         room_moderation_write_dto(response.payload)
+    }
+
+    async fn room_power_level_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<RoomPowerLevelWriteDto, RoomPowerLevelCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: ROOM_POWER_LEVEL_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_room_power_level_core_error(no_session, error))?;
+        room_power_level_write_dto(response.payload)
     }
 
     async fn image_pack_null_command(
@@ -4489,6 +4578,119 @@ fn room_moderation_write_dto(
             )
         })?;
     Ok(RoomModerationWriteDto {
+        status: status.to_owned(),
+    })
+}
+
+/// Privacy-safe room power-level write ack. Status only; no room id, user id, power level, or content.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomPowerLevelWriteDto {
+    pub status: String,
+}
+
+/// Static fail-closed room-power-level-family error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoomPowerLevelCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for RoomPowerLevelCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for RoomPowerLevelCommandError {}
+
+fn room_power_level_failed(code: &str, description: &'static str) -> RoomPowerLevelCommandError {
+    RoomPowerLevelCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_room_power_level_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> RoomPowerLevelCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            room_power_level_failed(code, ROOM_POWER_LEVEL_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code.starts_with("v-rooms-members-moderation-")
+                || code.starts_with("v-rooms-power-levels-")
+                || code == "v-send.r-room-profile-join-rule-requires-session" =>
+        {
+            room_power_level_failed(code, ROOM_POWER_LEVEL_OWNER_DESCRIPTION)
+        }
+        _ => room_power_level_failed(
+            ROOM_POWER_LEVEL_FAILED_CODE,
+            ROOM_POWER_LEVEL_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn parse_power_level_content_json(
+    content_json: &str,
+) -> Result<serde_json::Value, RoomPowerLevelCommandError> {
+    if content_json.len() > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(room_power_level_failed(
+            ROOM_POWER_LEVEL_FAILED_CODE,
+            ROOM_POWER_LEVEL_FAILED_DESCRIPTION,
+        ));
+    }
+    serde_json::from_str(content_json).map_err(|_| {
+        room_power_level_failed(
+            ROOM_POWER_LEVEL_FAILED_CODE,
+            ROOM_POWER_LEVEL_FAILED_DESCRIPTION,
+        )
+    })
+}
+
+fn room_power_level_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, RoomPowerLevelCommandError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(room_power_level_failed(
+            ROOM_POWER_LEVEL_FAILED_CODE,
+            ROOM_POWER_LEVEL_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn closed_room_power_level_status(value: &str) -> Option<&'static str> {
+    match value {
+        "ok" => Some("ok"),
+        _ => None,
+    }
+}
+
+fn room_power_level_write_dto(
+    payload: serde_json::Value,
+) -> Result<RoomPowerLevelWriteDto, RoomPowerLevelCommandError> {
+    if payload.is_null() {
+        return Ok(RoomPowerLevelWriteDto {
+            status: "ok".to_owned(),
+        });
+    }
+    let status = payload
+        .get("status")
+        .and_then(|value| value.as_str())
+        .and_then(closed_room_power_level_status)
+        .ok_or_else(|| {
+            room_power_level_failed(
+                ROOM_POWER_LEVEL_FAILED_CODE,
+                ROOM_POWER_LEVEL_FAILED_DESCRIPTION,
+            )
+        })?;
+    Ok(RoomPowerLevelWriteDto {
         status: status.to_owned(),
     })
 }

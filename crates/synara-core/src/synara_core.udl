@@ -673,6 +673,17 @@ interface RoomModerationCommandError {
   Failed(string code, string description);
 };
 
+// Privacy-safe room power-level write ack. Status only; no room id, user id, power level, or content.
+dictionary RoomPowerLevelWriteDto {
+  string status;
+};
+
+// Static source constants only. Never echo room id, user id, power level, content, token, or password.
+[Error]
+interface RoomPowerLevelCommandError {
+  Failed(string code, string description);
+};
+
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
 // UniFFI 0.28 Swift keeps `SharedCore()` for the primary constructor and
 // emits the named constructor as `SharedCore.newWithSecretStore(store:)`,
@@ -705,7 +716,11 @@ interface RoomModerationCommandError {
 // room id, alias, or via servers.
 // P4-S9-13 adds typed room_invite / room_kick / room_ban / room_unban.
 // Write ack is status only. Failed errors stay static and must not echo
-// room id, user id, or reason. Power levels and room create stay off.
+// room id, user id, or reason.
+// P4-S9-14 adds typed room_set_power_level / room_set_power_levels /
+// room_set_power_level_tags. Write ack is status only. Failed errors stay
+// static and must not echo room id, user id, power level, or content JSON.
+// Room create, members snapshots, and spaces stay off.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -907,5 +922,14 @@ interface SharedCore {
 
   [Async, Throws=RoomModerationCommandError]
   RoomModerationWriteDto room_unban(string room_id, string user_id);
+
+  [Async, Throws=RoomPowerLevelCommandError]
+  RoomPowerLevelWriteDto room_set_power_level(string room_id, string user_id, i64 power_level);
+
+  [Async, Throws=RoomPowerLevelCommandError]
+  RoomPowerLevelWriteDto room_set_power_levels(string room_id, string content_json);
+
+  [Async, Throws=RoomPowerLevelCommandError]
+  RoomPowerLevelWriteDto room_set_power_level_tags(string room_id, string content_json);
 
 };
