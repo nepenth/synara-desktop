@@ -42,9 +42,13 @@
 //! P4-S9-8 adds typed `set_own_display_name` / `set_own_avatar` wrappers
 //! for those two already-registered Core commands. Avatar is an `mxc://`
 //! (or empty clear) reference only. Image/media bytes stay off. Failed
-//! errors never echo display name or mxc. Room name/topic/avatar stay off.
-//! This still exposes no generic command FFI or APNs surface.
-//! This is not the desktop leftover `matrix_restore_session`.
+//! errors never echo display name or mxc.
+//! P4-S9-9 adds typed `set_room_name` / `set_room_topic` / `set_room_avatar`
+//! wrappers for those three already-registered Core commands. Room avatar
+//! is an `mxc://` (or empty clear) reference only. Image/media bytes stay
+//! off. Failed errors never echo room id, name, topic, or mxc. Directory
+//! visibility stays off. This still exposes no generic command FFI or
+//! APNs surface.
 
 use std::path::{Component, Path};
 use std::sync::{Arc, Mutex};
@@ -322,6 +326,17 @@ const OWN_PROFILE_NO_SESSION_DESCRIPTION: &str = "No own-profile session is avai
 const OWN_PROFILE_FAILED_CODE: &str = "p4-s9-8-own-profile-failed";
 const OWN_PROFILE_FAILED_DESCRIPTION: &str = "The own-profile request could not be completed.";
 const OWN_PROFILE_OWNER_DESCRIPTION: &str = "The own-profile request is not available.";
+const ROOM_PROFILE_COMMAND_GENERATION: u64 = 0;
+const SET_ROOM_NAME_COMMAND: &str = "matrix_set_room_name";
+const SET_ROOM_TOPIC_COMMAND: &str = "matrix_set_room_topic";
+const SET_ROOM_AVATAR_COMMAND: &str = "matrix_set_room_avatar";
+const SET_ROOM_NAME_NO_SESSION_CODE: &str = "p2-set-room-name-no-session";
+const SET_ROOM_TOPIC_NO_SESSION_CODE: &str = "p2-set-room-topic-no-session";
+const SET_ROOM_AVATAR_NO_SESSION_CODE: &str = "p2-set-room-avatar-no-session";
+const ROOM_PROFILE_NO_SESSION_DESCRIPTION: &str = "No room-profile session is available.";
+const ROOM_PROFILE_FAILED_CODE: &str = "p4-s9-9-room-profile-failed";
+const ROOM_PROFILE_FAILED_DESCRIPTION: &str = "The room-profile request could not be completed.";
+const ROOM_PROFILE_OWNER_DESCRIPTION: &str = "The room-profile request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2463,6 +2478,57 @@ impl SharedCore {
         .await
     }
 
+    pub async fn set_room_name(
+        &self,
+        room_id: String,
+        name: String,
+    ) -> Result<RoomProfileWriteDto, RoomProfileCommandError> {
+        let payload = room_profile_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "name": name,
+        }))?;
+        self.room_profile_command(
+            SET_ROOM_NAME_COMMAND,
+            SET_ROOM_NAME_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+    }
+
+    pub async fn set_room_topic(
+        &self,
+        room_id: String,
+        topic: String,
+    ) -> Result<RoomProfileWriteDto, RoomProfileCommandError> {
+        let payload = room_profile_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "topic": topic,
+        }))?;
+        self.room_profile_command(
+            SET_ROOM_TOPIC_COMMAND,
+            SET_ROOM_TOPIC_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+    }
+
+    pub async fn set_room_avatar(
+        &self,
+        room_id: String,
+        mxc: String,
+    ) -> Result<RoomProfileWriteDto, RoomProfileCommandError> {
+        let payload = room_profile_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "mxc": mxc,
+        }))?;
+        self.room_profile_command(
+            SET_ROOM_AVATAR_COMMAND,
+            SET_ROOM_AVATAR_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+    }
+
     async fn later_null_command(
         &self,
         command: &'static str,
@@ -2536,6 +2602,25 @@ impl SharedCore {
             .await
             .map_err(|error| map_own_profile_core_error(no_session, error))?;
         own_profile_write_dto(response.payload)
+    }
+
+    async fn room_profile_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<RoomProfileWriteDto, RoomProfileCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: ROOM_PROFILE_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_room_profile_core_error(no_session, error))?;
+        room_profile_write_dto(response.payload)
     }
 
     async fn image_pack_null_command(
@@ -3298,6 +3383,83 @@ fn own_profile_write_dto(
             own_profile_failed(OWN_PROFILE_FAILED_CODE, OWN_PROFILE_FAILED_DESCRIPTION)
         })?;
     Ok(OwnProfileWriteDto {
+        status: status.to_owned(),
+    })
+}
+
+/// Privacy-safe room-profile write ack. Status only; no room id, name, topic, or mxc.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomProfileWriteDto {
+    pub status: String,
+}
+
+/// Static fail-closed room-profile-family error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoomProfileCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for RoomProfileCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for RoomProfileCommandError {}
+
+fn room_profile_failed(code: &str, description: &'static str) -> RoomProfileCommandError {
+    RoomProfileCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_room_profile_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> RoomProfileCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            room_profile_failed(code, ROOM_PROFILE_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code.starts_with("v-send.r-room-profile-")
+                || code == "v-send.r-avatar-invalid-mxc"
+                || code == "d0.4-send-invalid-room-id" =>
+        {
+            room_profile_failed(code, ROOM_PROFILE_OWNER_DESCRIPTION)
+        }
+        _ => room_profile_failed(ROOM_PROFILE_FAILED_CODE, ROOM_PROFILE_FAILED_DESCRIPTION),
+    }
+}
+
+fn room_profile_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, RoomProfileCommandError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(room_profile_failed(
+            ROOM_PROFILE_FAILED_CODE,
+            ROOM_PROFILE_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn room_profile_write_dto(
+    payload: serde_json::Value,
+) -> Result<RoomProfileWriteDto, RoomProfileCommandError> {
+    let status = payload
+        .get("status")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| {
+            room_profile_failed(ROOM_PROFILE_FAILED_CODE, ROOM_PROFILE_FAILED_DESCRIPTION)
+        })?;
+    Ok(RoomProfileWriteDto {
         status: status.to_owned(),
     })
 }

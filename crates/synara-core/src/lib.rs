@@ -38,11 +38,12 @@ pub use shared_core_ffi::{
     OwnProfileWriteDto, PresenceCommandError, PresenceSnapshotDto, PresenceSubscriptionDto,
     RoomImagePacksSnapshotDto, RoomJoinRuleSnapshotDto, RoomListRoomDto, RoomListSnapshotDto,
     RoomListSnapshotError, RoomNoteItemDto, RoomNotesCommandError, RoomNotesSnapshotDto,
-    SessionAttachDto, SessionAttachError, SessionLoginDto, SessionLoginError, SessionRestoreDto,
-    SessionRestoreError, SharedCore, TimelineError, TimelineOpenDto, TimelineOpenPositionDto,
-    TimelineSnapshotDto, TimelineViewPositionDto, TypingCommandError, TypingRoomDto,
-    TypingSnapshotDto, UserImagePackSnapshotDto, VerificationEmojiDto, VerificationInboxDto,
-    VerificationListError, VerificationRequestDto, VerificationSasDto, VerificationSasError,
+    RoomProfileCommandError, RoomProfileWriteDto, SessionAttachDto, SessionAttachError,
+    SessionLoginDto, SessionLoginError, SessionRestoreDto, SessionRestoreError, SharedCore,
+    TimelineError, TimelineOpenDto, TimelineOpenPositionDto, TimelineSnapshotDto,
+    TimelineViewPositionDto, TypingCommandError, TypingRoomDto, TypingSnapshotDto,
+    UserImagePackSnapshotDto, VerificationEmojiDto, VerificationInboxDto, VerificationListError,
+    VerificationRequestDto, VerificationSasDto, VerificationSasError,
 };
 
 mod core;
