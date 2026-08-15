@@ -662,6 +662,17 @@ interface RoomMembershipCommandError {
   Failed(string code, string description);
 };
 
+// Privacy-safe room invite/kick/ban/unban write ack. Status only; no room id, user id, or reason.
+dictionary RoomModerationWriteDto {
+  string status;
+};
+
+// Static source constants only. Never echo room id, user id, reason, token, or password.
+[Error]
+interface RoomModerationCommandError {
+  Failed(string code, string description);
+};
+
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
 // UniFFI 0.28 Swift keeps `SharedCore()` for the primary constructor and
 // emits the named constructor as `SharedCore.newWithSecretStore(store:)`,
@@ -691,7 +702,10 @@ interface RoomMembershipCommandError {
 // Search results stay metadata (ids/names/aliases/mxc). No avatar bytes.
 // P4-S9-12 adds typed room_leave / room_join.
 // Write ack is status only. Failed errors stay static and must not echo
-// room id, alias, or via servers. Invite/kick/ban stay off.
+// room id, alias, or via servers.
+// P4-S9-13 adds typed room_invite / room_kick / room_ban / room_unban.
+// Write ack is status only. Failed errors stay static and must not echo
+// room id, user id, or reason. Power levels and room create stay off.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -881,5 +895,17 @@ interface SharedCore {
 
   [Async, Throws=RoomMembershipCommandError]
   RoomMembershipWriteDto room_join(string room_id_or_alias, sequence<string>? via_servers);
+
+  [Async, Throws=RoomModerationCommandError]
+  RoomModerationWriteDto room_invite(string room_id, string user_id, string? reason);
+
+  [Async, Throws=RoomModerationCommandError]
+  RoomModerationWriteDto room_kick(string room_id, string user_id, string? reason);
+
+  [Async, Throws=RoomModerationCommandError]
+  RoomModerationWriteDto room_ban(string room_id, string user_id, string? reason);
+
+  [Async, Throws=RoomModerationCommandError]
+  RoomModerationWriteDto room_unban(string room_id, string user_id);
 
 };

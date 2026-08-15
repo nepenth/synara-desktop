@@ -56,7 +56,11 @@
 //! Avatar bytes stay off. Failed errors never echo term, server, or room id.
 //! P4-S9-12 adds typed `room_leave` / `room_join` wrappers for those two
 //! already-registered Core commands. Write ack is status only. Failed errors
-//! never echo room id, alias, or via servers. Invite/kick/ban stay off.
+//! never echo room id, alias, or via servers.
+//! P4-S9-13 adds typed `room_invite` / `room_kick` / `room_ban` / `room_unban`
+//! wrappers for those four already-registered Core commands. Write ack is
+//! status only. Failed errors never echo room id, user id, or reason.
+//! Power levels and room create stay off.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -383,6 +387,20 @@ const ROOM_MEMBERSHIP_FAILED_CODE: &str = "p4-s9-12-room-membership-failed";
 const ROOM_MEMBERSHIP_FAILED_DESCRIPTION: &str =
     "The room-membership request could not be completed.";
 const ROOM_MEMBERSHIP_OWNER_DESCRIPTION: &str = "The room-membership request is not available.";
+const ROOM_MODERATION_COMMAND_GENERATION: u64 = 0;
+const ROOM_INVITE_COMMAND: &str = "matrix_room_invite";
+const ROOM_KICK_COMMAND: &str = "matrix_room_kick";
+const ROOM_BAN_COMMAND: &str = "matrix_room_ban";
+const ROOM_UNBAN_COMMAND: &str = "matrix_room_unban";
+const ROOM_INVITE_NO_SESSION_CODE: &str = "p2-room-invite-no-session";
+const ROOM_KICK_NO_SESSION_CODE: &str = "p2-room-kick-no-session";
+const ROOM_BAN_NO_SESSION_CODE: &str = "p2-room-ban-no-session";
+const ROOM_UNBAN_NO_SESSION_CODE: &str = "p2-room-unban-no-session";
+const ROOM_MODERATION_NO_SESSION_DESCRIPTION: &str = "No room-moderation session is available.";
+const ROOM_MODERATION_FAILED_CODE: &str = "p4-s9-13-room-moderation-failed";
+const ROOM_MODERATION_FAILED_DESCRIPTION: &str =
+    "The room-moderation request could not be completed.";
+const ROOM_MODERATION_OWNER_DESCRIPTION: &str = "The room-moderation request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2733,6 +2751,64 @@ impl SharedCore {
             .await
     }
 
+    pub async fn room_invite(
+        &self,
+        room_id: String,
+        user_id: String,
+        reason: Option<String>,
+    ) -> Result<RoomModerationWriteDto, RoomModerationCommandError> {
+        let payload = room_moderation_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "userId": user_id,
+            "reason": reason,
+        }))?;
+        self.room_moderation_command(ROOM_INVITE_COMMAND, ROOM_INVITE_NO_SESSION_CODE, payload)
+            .await
+    }
+
+    pub async fn room_kick(
+        &self,
+        room_id: String,
+        user_id: String,
+        reason: Option<String>,
+    ) -> Result<RoomModerationWriteDto, RoomModerationCommandError> {
+        let payload = room_moderation_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "userId": user_id,
+            "reason": reason,
+        }))?;
+        self.room_moderation_command(ROOM_KICK_COMMAND, ROOM_KICK_NO_SESSION_CODE, payload)
+            .await
+    }
+
+    pub async fn room_ban(
+        &self,
+        room_id: String,
+        user_id: String,
+        reason: Option<String>,
+    ) -> Result<RoomModerationWriteDto, RoomModerationCommandError> {
+        let payload = room_moderation_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "userId": user_id,
+            "reason": reason,
+        }))?;
+        self.room_moderation_command(ROOM_BAN_COMMAND, ROOM_BAN_NO_SESSION_CODE, payload)
+            .await
+    }
+
+    pub async fn room_unban(
+        &self,
+        room_id: String,
+        user_id: String,
+    ) -> Result<RoomModerationWriteDto, RoomModerationCommandError> {
+        let payload = room_moderation_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "userId": user_id,
+        }))?;
+        self.room_moderation_command(ROOM_UNBAN_COMMAND, ROOM_UNBAN_NO_SESSION_CODE, payload)
+            .await
+    }
+
     async fn later_null_command(
         &self,
         command: &'static str,
@@ -2844,6 +2920,25 @@ impl SharedCore {
             .await
             .map_err(|error| map_room_membership_core_error(no_session, error))?;
         room_membership_write_dto(response.payload)
+    }
+
+    async fn room_moderation_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<RoomModerationWriteDto, RoomModerationCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: ROOM_MODERATION_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_room_moderation_core_error(no_session, error))?;
+        room_moderation_write_dto(response.payload)
     }
 
     async fn image_pack_null_command(
@@ -4299,6 +4394,101 @@ fn room_membership_write_dto(
             )
         })?;
     Ok(RoomMembershipWriteDto {
+        status: status.to_owned(),
+    })
+}
+
+/// Privacy-safe room invite/kick/ban/unban write ack. Status only; no room id, user id, or reason.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomModerationWriteDto {
+    pub status: String,
+}
+
+/// Static fail-closed room-moderation-family error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoomModerationCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for RoomModerationCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for RoomModerationCommandError {}
+
+fn room_moderation_failed(code: &str, description: &'static str) -> RoomModerationCommandError {
+    RoomModerationCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_room_moderation_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> RoomModerationCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            room_moderation_failed(code, ROOM_MODERATION_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code.starts_with("v-rooms-members-moderation-")
+                || code == "v-send.r-room-profile-join-rule-requires-session" =>
+        {
+            room_moderation_failed(code, ROOM_MODERATION_OWNER_DESCRIPTION)
+        }
+        _ => room_moderation_failed(
+            ROOM_MODERATION_FAILED_CODE,
+            ROOM_MODERATION_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn room_moderation_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, RoomModerationCommandError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(room_moderation_failed(
+            ROOM_MODERATION_FAILED_CODE,
+            ROOM_MODERATION_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn closed_room_moderation_status(value: &str) -> Option<&'static str> {
+    match value {
+        "ok" => Some("ok"),
+        _ => None,
+    }
+}
+
+fn room_moderation_write_dto(
+    payload: serde_json::Value,
+) -> Result<RoomModerationWriteDto, RoomModerationCommandError> {
+    if payload.is_null() {
+        return Ok(RoomModerationWriteDto {
+            status: "ok".to_owned(),
+        });
+    }
+    let status = payload
+        .get("status")
+        .and_then(|value| value.as_str())
+        .and_then(closed_room_moderation_status)
+        .ok_or_else(|| {
+            room_moderation_failed(
+                ROOM_MODERATION_FAILED_CODE,
+                ROOM_MODERATION_FAILED_DESCRIPTION,
+            )
+        })?;
+    Ok(RoomModerationWriteDto {
         status: status.to_owned(),
     })
 }

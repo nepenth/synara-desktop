@@ -71,8 +71,8 @@ fn mdirect_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("mdirect_remove"));
     assert!(shared_core.contains("later_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("room_invite"));
-    assert!(!shared_core.contains("room_kick"));
+    assert!(!shared_core.contains("room_set_power_level"));
+    assert!(!shared_core.contains("room_create"));
     assert!(!shared_core.contains("backup_status"));
 }
 

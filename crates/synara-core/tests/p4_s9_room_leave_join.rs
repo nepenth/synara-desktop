@@ -3,8 +3,8 @@
 //! Calls the already-registered Core handlers. Does not start SyncService.
 //! Room id, alias, and via servers may cross as method arguments. Write ack
 //! is status only. Failed errors stay static and must not echo room id,
-//! alias, or via servers. Invite/kick/ban and leftover secret envelopes stay
-//! off. Directory search is already S9-11.
+//! alias, or via servers. Power levels/room create and leftover secret
+//! envelopes stay off. Directory search is already S9-11.
 
 use std::collections::HashMap;
 use std::fs;
@@ -62,9 +62,9 @@ fn room_leave_join_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("room_join("));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
-    assert!(!udl.contains("matrix_room_invite"));
-    assert!(!udl.contains("matrix_room_kick"));
-    assert!(!udl.contains("matrix_room_ban"));
+    assert!(!udl.contains("matrix_room_set_power_level"));
+    assert!(!udl.contains("matrix_room_create"));
+    assert!(!udl.contains("matrix_room_members_snapshot"));
     let shared_core = udl
         .split("interface SharedCore {")
         .nth(1)
@@ -75,10 +75,10 @@ fn room_leave_join_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("room_directory_search"));
     assert!(shared_core.contains("set_room_name"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("room_invite"));
-    assert!(!shared_core.contains("room_kick"));
-    assert!(!shared_core.contains("room_ban"));
-    assert!(!shared_core.contains("room_unban"));
+    assert!(!shared_core.contains("room_set_power_level"));
+    assert!(!shared_core.contains("room_create"));
+    assert!(!shared_core.contains("room_members_snapshot"));
+    assert!(!shared_core.contains("space_parents_snapshot"));
     assert!(!shared_core.contains("backup_status"));
 }
 
