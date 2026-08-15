@@ -133,7 +133,8 @@ S8 typed `verification_list` landed in #947 (`52874c20`).
 S9 typed verification SAS landed in #948 (`c56a82aa`).
 S9-2 typed NativeDeviceOwner family (snapshot/rename/delete
 start/cancel only; SyncService not started) landed in #950 (`1539ed6a`).
-S9-3 typed `matrix_room_join_rule_snapshot` is on this branch. Next is image packs.
+S9-3 typed `matrix_room_join_rule_snapshot` landed in #951 (`2f43e22c`).
+S9-4 typed image-pack get/set is on this branch. Next is later account-data.
 Password never rides a generic UniFFI `command`.
 
 | Phase | Merged evidence | Current boundary |

@@ -489,6 +489,84 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreImagePacksWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let roomId = "!s94pack:example.org"
+        let stateKey = "s94state"
+        let contentJson = #"{"pack":{"display_name":"S94"},"images":{"smile":{"url":"mxc://example.org/abc"}}}"#
+
+        do {
+            _ = try await SharedCoreImagePacks.getGlobalImagePacks(core: core)
+            XCTFail("Fail-closed SharedCore must not snapshot global image packs without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-global-image-packs-no-session"))
+            for forbidden in ["syt_", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreImagePacks.getUserImagePack(core: core)
+            XCTFail("Fail-closed SharedCore must not snapshot the user image pack without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-user-image-pack-no-session"))
+            for forbidden in ["syt_", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreImagePacks.getRoomImagePacks(core: core, roomId: roomId)
+            XCTFail("Fail-closed SharedCore must not snapshot room image packs without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-image-packs-no-session"))
+            for forbidden in ["syt_", "token", roomId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreImagePacks.setUserImagePack(core: core, contentJson: contentJson)
+            XCTFail("Fail-closed SharedCore must not set the user image pack without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-set-user-image-pack-no-session"))
+            for forbidden in ["syt_", "token", "mxc://", contentJson] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreImagePacks.setGlobalImagePacks(core: core, contentJson: contentJson)
+            XCTFail("Fail-closed SharedCore must not set global image packs without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-set-global-image-packs-no-session"))
+            for forbidden in ["syt_", "token", "mxc://", contentJson] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreImagePacks.setRoomImagePack(
+                core: core,
+                roomId: roomId,
+                stateKey: stateKey,
+                contentJson: contentJson
+            )
+            XCTFail("Fail-closed SharedCore must not set a room image pack without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-set-room-image-pack-no-session"))
+            for forbidden in ["syt_", "token", roomId, stateKey, "mxc://", contentJson] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

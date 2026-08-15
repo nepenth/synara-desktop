@@ -28,7 +28,10 @@
 //! this slice: they sit next to leftover passphrase/path/password envelopes.
 //! P4-S9-3 adds a typed `room_join_rule_snapshot` wrapper for the
 //! already-registered `matrix_room_join_rule_snapshot` Core command only.
-//! There is no join-rule writer on Core. Image packs stay off.
+//! There is no join-rule writer on Core.
+//! P4-S9-4 adds typed image-pack get/set wrappers for the six
+//! already-registered Core commands. Pack metadata/IDs/URLs/JSON may
+//! cross. Image/media bytes stay off. Later/m.direct stay off.
 //! This still exposes no generic command FFI or APNs surface.
 //! This is not the desktop leftover `matrix_restore_session`.
 
@@ -38,7 +41,10 @@ use std::sync::{Arc, Mutex};
 use matrix_sdk::Client;
 use zeroize::Zeroizing;
 
-use crate::app::account_data::NativeImagePackOwner;
+use crate::app::account_data::{
+    NativeGlobalImagePacksSnapshot, NativeImagePack, NativeImagePackOwner,
+    NativeRoomImagePacksSnapshot, NativeUserImagePackSnapshot,
+};
 use crate::app::auth::{
     login_with_password as core_login_with_password, DevicePlatform, LoginOptions,
 };
@@ -78,7 +84,9 @@ use crate::app::verification::{
 use crate::core::Core;
 use crate::dto::{SessionLifecycle, SessionSnapshot};
 use crate::platform::{IosFailClosedPlatform, Platform, SecretVault};
-use crate::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use crate::transport::{
+    CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory, MAX_ENVELOPE_PAYLOAD_JSON_BYTES,
+};
 
 const VAULT_UNAVAILABLE_CODE: &str = "p4-s3b-secret-vault-unavailable";
 const VAULT_UNAVAILABLE_DESCRIPTION: &str = "The secret store is unavailable.";
@@ -226,6 +234,25 @@ const JOIN_RULE_NO_SESSION_DESCRIPTION: &str = "No join-rule session is availabl
 const JOIN_RULE_FAILED_CODE: &str = "p4-s9-3-join-rule-failed";
 const JOIN_RULE_FAILED_DESCRIPTION: &str = "The join-rule request could not be completed.";
 const JOIN_RULE_OWNER_DESCRIPTION: &str = "The join-rule request is not available.";
+const IMAGE_PACK_COMMAND_GENERATION: u64 = 0;
+const GET_GLOBAL_IMAGE_PACKS_COMMAND: &str = "matrix_get_global_image_packs";
+const GET_USER_IMAGE_PACK_COMMAND: &str = "matrix_get_user_image_pack";
+const GET_ROOM_IMAGE_PACKS_COMMAND: &str = "matrix_get_room_image_packs";
+const SET_USER_IMAGE_PACK_COMMAND: &str = "matrix_set_user_image_pack";
+const SET_GLOBAL_IMAGE_PACKS_COMMAND: &str = "matrix_set_global_image_packs";
+const SET_ROOM_IMAGE_PACK_COMMAND: &str = "matrix_set_room_image_pack";
+const GET_GLOBAL_IMAGE_PACKS_NO_SESSION_CODE: &str = "p2-global-image-packs-no-session";
+const GET_USER_IMAGE_PACK_NO_SESSION_CODE: &str = "p2-user-image-pack-no-session";
+const GET_ROOM_IMAGE_PACKS_NO_SESSION_CODE: &str = "p2-room-image-packs-no-session";
+const SET_USER_IMAGE_PACK_NO_SESSION_CODE: &str = "p2-set-user-image-pack-no-session";
+const SET_GLOBAL_IMAGE_PACKS_NO_SESSION_CODE: &str = "p2-set-global-image-packs-no-session";
+const SET_ROOM_IMAGE_PACK_NO_SESSION_CODE: &str = "p2-set-room-image-pack-no-session";
+const IMAGE_PACK_NO_SESSION_DESCRIPTION: &str = "No image-pack session is available.";
+const IMAGE_PACK_FAILED_CODE: &str = "p4-s9-4-image-pack-failed";
+const IMAGE_PACK_FAILED_DESCRIPTION: &str = "The image-pack request could not be completed.";
+const IMAGE_PACK_INVALID_JSON_CODE: &str = "p4-s9-4-image-pack-invalid-json";
+const IMAGE_PACK_INVALID_JSON_DESCRIPTION: &str = "The image-pack content is invalid.";
+const IMAGE_PACK_OWNER_DESCRIPTION: &str = "The image-pack request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2014,6 +2041,167 @@ impl SharedCore {
         })
     }
 
+    pub async fn get_global_image_packs(
+        &self,
+    ) -> Result<GlobalImagePacksSnapshotDto, ImagePackCommandError> {
+        let payload = self
+            .image_pack_null_command(
+                GET_GLOBAL_IMAGE_PACKS_COMMAND,
+                GET_GLOBAL_IMAGE_PACKS_NO_SESSION_CODE,
+            )
+            .await?;
+        let snapshot: NativeGlobalImagePacksSnapshot =
+            serde_json::from_value(payload).map_err(|_| {
+                image_pack_failed(IMAGE_PACK_FAILED_CODE, IMAGE_PACK_FAILED_DESCRIPTION)
+            })?;
+        Ok(GlobalImagePacksSnapshotDto {
+            session_generation: snapshot.session_generation,
+            packs: snapshot
+                .packs
+                .into_iter()
+                .map(image_pack_dto)
+                .collect::<Result<Vec<_>, _>>()?,
+        })
+    }
+
+    pub async fn get_user_image_pack(
+        &self,
+    ) -> Result<UserImagePackSnapshotDto, ImagePackCommandError> {
+        let payload = self
+            .image_pack_null_command(
+                GET_USER_IMAGE_PACK_COMMAND,
+                GET_USER_IMAGE_PACK_NO_SESSION_CODE,
+            )
+            .await?;
+        let snapshot: NativeUserImagePackSnapshot =
+            serde_json::from_value(payload).map_err(|_| {
+                image_pack_failed(IMAGE_PACK_FAILED_CODE, IMAGE_PACK_FAILED_DESCRIPTION)
+            })?;
+        Ok(UserImagePackSnapshotDto {
+            session_generation: snapshot.session_generation,
+            pack: snapshot.pack.map(image_pack_dto).transpose()?,
+        })
+    }
+
+    pub async fn get_room_image_packs(
+        &self,
+        room_id: String,
+    ) -> Result<RoomImagePacksSnapshotDto, ImagePackCommandError> {
+        let payload = self
+            .core
+            .command(CommandEnvelope {
+                command: GET_ROOM_IMAGE_PACKS_COMMAND.to_owned(),
+                session_generation: IMAGE_PACK_COMMAND_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "roomId": room_id }),
+            })
+            .await
+            .map_err(|error| {
+                map_image_pack_core_error(GET_ROOM_IMAGE_PACKS_NO_SESSION_CODE, error)
+            })?;
+        let snapshot: NativeRoomImagePacksSnapshot = serde_json::from_value(payload.payload)
+            .map_err(|_| {
+                image_pack_failed(IMAGE_PACK_FAILED_CODE, IMAGE_PACK_FAILED_DESCRIPTION)
+            })?;
+        Ok(RoomImagePacksSnapshotDto {
+            session_generation: snapshot.session_generation,
+            room_id: snapshot.room_id,
+            packs: snapshot
+                .packs
+                .into_iter()
+                .map(image_pack_dto)
+                .collect::<Result<Vec<_>, _>>()?,
+        })
+    }
+
+    pub async fn set_user_image_pack(
+        &self,
+        content_json: String,
+    ) -> Result<ImagePackWriteDto, ImagePackCommandError> {
+        self.image_pack_set_content(
+            SET_USER_IMAGE_PACK_COMMAND,
+            SET_USER_IMAGE_PACK_NO_SESSION_CODE,
+            content_json,
+        )
+        .await
+    }
+
+    pub async fn set_global_image_packs(
+        &self,
+        content_json: String,
+    ) -> Result<ImagePackWriteDto, ImagePackCommandError> {
+        self.image_pack_set_content(
+            SET_GLOBAL_IMAGE_PACKS_COMMAND,
+            SET_GLOBAL_IMAGE_PACKS_NO_SESSION_CODE,
+            content_json,
+        )
+        .await
+    }
+
+    pub async fn set_room_image_pack(
+        &self,
+        room_id: String,
+        state_key: String,
+        content_json: String,
+    ) -> Result<ImagePackWriteDto, ImagePackCommandError> {
+        let content = parse_image_pack_content_json(&content_json)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: SET_ROOM_IMAGE_PACK_COMMAND.to_owned(),
+                session_generation: IMAGE_PACK_COMMAND_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId": room_id,
+                    "stateKey": state_key,
+                    "content": content,
+                }),
+            })
+            .await
+            .map_err(|error| {
+                map_image_pack_core_error(SET_ROOM_IMAGE_PACK_NO_SESSION_CODE, error)
+            })?;
+        image_pack_write_dto(response.payload)
+    }
+
+    async fn image_pack_null_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+    ) -> Result<serde_json::Value, ImagePackCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: IMAGE_PACK_COMMAND_GENERATION,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .map_err(|error| map_image_pack_core_error(no_session, error))?;
+        Ok(response.payload)
+    }
+
+    async fn image_pack_set_content(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        content_json: String,
+    ) -> Result<ImagePackWriteDto, ImagePackCommandError> {
+        let content = parse_image_pack_content_json(&content_json)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: IMAGE_PACK_COMMAND_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "content": content }),
+            })
+            .await
+            .map_err(|error| map_image_pack_core_error(no_session, error))?;
+        image_pack_write_dto(response.payload)
+    }
+
     async fn device_null_command(
         &self,
         command: &'static str,
@@ -2155,6 +2343,121 @@ fn map_join_rule_core_error(error: MatrixIpcError) -> JoinRuleCommandError {
         }
         _ => join_rule_failed(JOIN_RULE_FAILED_CODE, JOIN_RULE_FAILED_DESCRIPTION),
     }
+}
+
+/// Privacy-safe image-pack row. Metadata/IDs/mxc URLs/JSON only; never image bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImagePackDto {
+    pub id: String,
+    pub room_id: Option<String>,
+    pub state_key: Option<String>,
+    pub content_json: String,
+}
+
+/// Privacy-safe user pack snapshot. No tokens or image bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserImagePackSnapshotDto {
+    pub session_generation: u64,
+    pub pack: Option<ImagePackDto>,
+}
+
+/// Privacy-safe room pack snapshot. No tokens or image bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomImagePacksSnapshotDto {
+    pub session_generation: u64,
+    pub room_id: String,
+    pub packs: Vec<ImagePackDto>,
+}
+
+/// Privacy-safe global pack snapshot. No tokens or image bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GlobalImagePacksSnapshotDto {
+    pub session_generation: u64,
+    pub packs: Vec<ImagePackDto>,
+}
+
+/// Privacy-safe pack write ack. Status only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImagePackWriteDto {
+    pub status: String,
+}
+
+/// Static fail-closed image-pack-family error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImagePackCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for ImagePackCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for ImagePackCommandError {}
+
+fn image_pack_failed(code: &str, description: &'static str) -> ImagePackCommandError {
+    ImagePackCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_image_pack_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> ImagePackCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            image_pack_failed(code, IMAGE_PACK_NO_SESSION_DESCRIPTION)
+        }
+        Some(code) if code.starts_with("v-send.r-pack-") => {
+            image_pack_failed(code, IMAGE_PACK_OWNER_DESCRIPTION)
+        }
+        _ => image_pack_failed(IMAGE_PACK_FAILED_CODE, IMAGE_PACK_FAILED_DESCRIPTION),
+    }
+}
+
+fn parse_image_pack_content_json(
+    content_json: &str,
+) -> Result<serde_json::Value, ImagePackCommandError> {
+    if content_json.len() > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(image_pack_failed(
+            IMAGE_PACK_FAILED_CODE,
+            IMAGE_PACK_FAILED_DESCRIPTION,
+        ));
+    }
+    serde_json::from_str(content_json).map_err(|_| {
+        image_pack_failed(
+            IMAGE_PACK_INVALID_JSON_CODE,
+            IMAGE_PACK_INVALID_JSON_DESCRIPTION,
+        )
+    })
+}
+
+fn image_pack_dto(pack: NativeImagePack) -> Result<ImagePackDto, ImagePackCommandError> {
+    let content_json = serde_json::to_string(&pack.content)
+        .map_err(|_| image_pack_failed(IMAGE_PACK_FAILED_CODE, IMAGE_PACK_FAILED_DESCRIPTION))?;
+    Ok(ImagePackDto {
+        id: pack.id,
+        room_id: pack.room_id,
+        state_key: pack.state_key,
+        content_json,
+    })
+}
+
+fn image_pack_write_dto(
+    payload: serde_json::Value,
+) -> Result<ImagePackWriteDto, ImagePackCommandError> {
+    let status = payload
+        .get("status")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| image_pack_failed(IMAGE_PACK_FAILED_CODE, IMAGE_PACK_FAILED_DESCRIPTION))?;
+    Ok(ImagePackWriteDto {
+        status: status.to_owned(),
+    })
 }
 
 fn device_trust_as_str(trust: NativeDeviceTrust) -> String {

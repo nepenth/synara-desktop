@@ -448,6 +448,44 @@ interface JoinRuleCommandError {
   Failed(string code, string description);
 };
 
+// Privacy-safe image-pack row. Metadata/IDs/mxc URLs/JSON only; never image bytes.
+dictionary ImagePackDto {
+  string id;
+  string? room_id;
+  string? state_key;
+  string content_json;
+};
+
+// Privacy-safe user pack snapshot from the registered Core command.
+dictionary UserImagePackSnapshotDto {
+  u64 session_generation;
+  ImagePackDto? pack;
+};
+
+// Privacy-safe room pack snapshot from the registered Core command.
+dictionary RoomImagePacksSnapshotDto {
+  u64 session_generation;
+  string room_id;
+  sequence<ImagePackDto> packs;
+};
+
+// Privacy-safe global pack snapshot from the registered Core command.
+dictionary GlobalImagePacksSnapshotDto {
+  u64 session_generation;
+  sequence<ImagePackDto> packs;
+};
+
+// Privacy-safe pack write ack. Status only; no content or bytes.
+dictionary ImagePackWriteDto {
+  string status;
+};
+
+// Static source constants only. Never echo room id, pack JSON, token, or password.
+[Error]
+interface ImagePackCommandError {
+  Failed(string code, string description);
+};
+
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
 // UniFFI 0.28 Swift keeps `SharedCore()` for the primary constructor and
 // emits the named constructor as `SharedCore.newWithSecretStore(store:)`,
@@ -462,7 +500,10 @@ interface JoinRuleCommandError {
 // P4-S9 adds typed verification SAS start/accept/begin_sas/confirm/mismatch/cancel/dismiss.
 // P4-S9-2 adds typed device snapshot/rename/delete start/cancel only.
 // Backup/room-key/cross-signing stay off: leftover passphrase/path/password envelopes.
-// P4-S9-3 adds typed room_join_rule_snapshot only. No join-rule writer. Image packs stay off.
+// P4-S9-3 adds typed room_join_rule_snapshot only. No join-rule writer.
+// P4-S9-4 adds typed image-pack get/set for the six registered commands.
+// Pack metadata/IDs/URLs/JSON may cross. Image/media bytes stay off.
+// Later/m.direct/room-notes/profile writes stay off.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -556,5 +597,23 @@ interface SharedCore {
 
   [Async, Throws=JoinRuleCommandError]
   RoomJoinRuleSnapshotDto room_join_rule_snapshot(string room_id, u64 session_generation);
+
+  [Async, Throws=ImagePackCommandError]
+  GlobalImagePacksSnapshotDto get_global_image_packs();
+
+  [Async, Throws=ImagePackCommandError]
+  UserImagePackSnapshotDto get_user_image_pack();
+
+  [Async, Throws=ImagePackCommandError]
+  RoomImagePacksSnapshotDto get_room_image_packs(string room_id);
+
+  [Async, Throws=ImagePackCommandError]
+  ImagePackWriteDto set_user_image_pack(string content_json);
+
+  [Async, Throws=ImagePackCommandError]
+  ImagePackWriteDto set_global_image_packs(string content_json);
+
+  [Async, Throws=ImagePackCommandError]
+  ImagePackWriteDto set_room_image_pack(string room_id, string state_key, string content_json);
 
 };

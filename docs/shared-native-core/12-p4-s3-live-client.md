@@ -14,8 +14,9 @@ S7 typing/presence landed in #945 (`ee884ef3`).
 S8 verification list landed in #947 (`52874c20`).
 S9 verification SAS landed in #948 (`c56a82aa`).
 S9-2 devices landed in #950 (`1539ed6a`).
-**S9-3 join-rule snapshot lands on `agent/snc-p4-s9-join-rules`.**
-Playbook recipe: §9.5. `matrix_room_join_rule_snapshot` only. Next is image packs.
+S9-3 join-rule snapshot landed in #951 (`2f43e22c`).
+**S9-4 image packs land on `agent/snc-p4-s9-image-packs`.**
+Playbook recipe: §9.5. Six registered get/set commands. Next is later account-data.
 
 ## Decision
 

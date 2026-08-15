@@ -34,6 +34,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreVerificationSas.swift",
   "synara-ios/Synara/Services/SharedCoreDevices.swift",
   "synara-ios/Synara/Services/SharedCoreJoinRules.swift",
+  "synara-ios/Synara/Services/SharedCoreImagePacks.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -107,6 +108,10 @@ const sharedCoreDevices = readFileSync(
 );
 const sharedCoreJoinRules = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreJoinRules.swift"),
+  "utf8"
+);
+const sharedCoreImagePacks = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreImagePacks.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -329,6 +334,30 @@ const assertions = [
   [sharedCoreJoinRules, "roomJoinRuleSnapshot", "P4-S9-3 product join-rule snapshot helper"],
   [sharedCoreJoinRules, "core: SharedCore", "P4-S9-3 helper takes an already-constructed SharedCore"],
   [sharedCoreJoinRules, "core.roomJoinRuleSnapshot", "P4-S9-3 helper reads on the caller-owned instance"],
+  [sharedCoreFfi, "get_global_image_packs", "P4-S9-4 typed global image-pack snapshot FFI"],
+  [sharedCoreFfi, "matrix_get_global_image_packs", "P4-S9-4 calls the registered global snapshot"],
+  [sharedCoreFfi, "matrix_get_user_image_pack", "P4-S9-4 calls the registered user snapshot"],
+  [sharedCoreFfi, "matrix_get_room_image_packs", "P4-S9-4 calls the registered room snapshot"],
+  [sharedCoreFfi, "matrix_set_user_image_pack", "P4-S9-4 calls the registered user setter"],
+  [sharedCoreFfi, "matrix_set_global_image_packs", "P4-S9-4 calls the registered global setter"],
+  [sharedCoreFfi, "matrix_set_room_image_pack", "P4-S9-4 calls the registered room setter"],
+  [udl, "GlobalImagePacksSnapshotDto get_global_image_packs()", "P4-S9-4 SharedCore global image-pack snapshot"],
+  [udl, "UserImagePackSnapshotDto get_user_image_pack()", "P4-S9-4 SharedCore user image-pack snapshot"],
+  [udl, "RoomImagePacksSnapshotDto get_room_image_packs(", "P4-S9-4 SharedCore room image-pack snapshot"],
+  [udl, "ImagePackWriteDto set_user_image_pack(", "P4-S9-4 SharedCore user image-pack setter"],
+  [udl, "ImagePackWriteDto set_global_image_packs(", "P4-S9-4 SharedCore global image-pack setter"],
+  [udl, "ImagePackWriteDto set_room_image_pack(", "P4-S9-4 SharedCore room image-pack setter"],
+  [udl, "dictionary ImagePackDto", "P4-S9-4 privacy-safe image-pack DTO"],
+  [udl, "interface ImagePackCommandError", "P4-S9-4 static image-pack error"],
+  [swiftBindingsTests, "testSharedCoreImagePacksWithoutSessionFailsClosed", "Swift P4-S9-4 fail-closed image-pack test"],
+  [sharedCoreImagePacks, "getGlobalImagePacks", "P4-S9-4 product global image-pack helper"],
+  [sharedCoreImagePacks, "getUserImagePack", "P4-S9-4 product user image-pack helper"],
+  [sharedCoreImagePacks, "getRoomImagePacks", "P4-S9-4 product room image-pack helper"],
+  [sharedCoreImagePacks, "setUserImagePack", "P4-S9-4 product user image-pack setter"],
+  [sharedCoreImagePacks, "setGlobalImagePacks", "P4-S9-4 product global image-pack setter"],
+  [sharedCoreImagePacks, "setRoomImagePack", "P4-S9-4 product room image-pack setter"],
+  [sharedCoreImagePacks, "core: SharedCore", "P4-S9-4 helper takes an already-constructed SharedCore"],
+  [sharedCoreImagePacks, "core.getGlobalImagePacks", "P4-S9-4 helper reads on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1069,7 +1098,7 @@ if (projectionOperations.join(",") !== "open,session_snapshot,close") {
   throw new Error(`P4-3 facade must expose only open/session_snapshot/close; found ${projectionOperations.join(", ")}`);
 }
 
-// P4-S9-3 allows restore + login + attach + consume wrappers through join-rule snapshot. Still forbid generic command.
+// P4-S9-4 allows restore + login + attach + consume wrappers through image packs. Still forbid generic command.
 const sharedCoreObject = udl.match(/interface SharedCore \{([\s\S]*?)\};/);
 if (!sharedCoreObject) throw new Error("missing SharedCore object");
 const sharedCoreBody = sharedCoreObject[1].replace(/\/\/.*$/gm, "");
@@ -1133,9 +1162,14 @@ for (const required of ["device_snapshot", "device_rename", "device_delete_start
 if (!sharedCoreBody.includes("room_join_rule_snapshot")) {
   throw new Error("P4-S9-3 SharedCore must expose room_join_rule_snapshot");
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "image_pack", "crypto_status", "backup_setup"]) {
+for (const required of ["get_global_image_packs", "get_user_image_pack", "get_room_image_packs", "set_user_image_pack", "set_global_image_packs", "set_room_image_pack"]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-4 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "later_snapshot", "mdirect_snapshot", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-3`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-4`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1185,6 +1219,17 @@ if (sharedCoreJoinRules.includes("SharedCore(store:")) {
 for (const forbidden of ["setRoomJoinRule", "imagePack", "roomLeave", "roomJoin("]) {
   if (sharedCoreJoinRules.includes(forbidden)) {
     throw new Error(`P4-S9-3 helper must not wrap ${forbidden}`);
+  }
+}
+if (sharedCoreImagePacks.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-4 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreImagePacks.includes("SharedCore.newWithSecretStore") || sharedCoreImagePacks.includes("newWithSecretStore")) {
+  throw new Error("P4-S9-4 helper must not construct SharedCore");
+}
+for (const forbidden of ["laterSnapshot", "mdirectSnapshot", "roomNotesSnapshot", "setOwnDisplayName", "setOwnAvatar"]) {
+  if (sharedCoreImagePacks.includes(forbidden)) {
+    throw new Error(`P4-S9-4 helper must not wrap ${forbidden}`);
   }
 }
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
@@ -1246,6 +1291,11 @@ const joinRuleDto = udl.match(/dictionary RoomJoinRuleSnapshotDto \{([\s\S]*?)\}
 if (!joinRuleDto) throw new Error("missing RoomJoinRuleSnapshotDto");
 if (/\bpassword\b/.test(joinRuleDto[1]) || /\btoken\b/.test(joinRuleDto[1])) {
   throw new Error("RoomJoinRuleSnapshotDto must not carry password or token fields");
+}
+const imagePackDto = udl.match(/dictionary ImagePackDto \{([\s\S]*?)\};/);
+if (!imagePackDto) throw new Error("missing ImagePackDto");
+if (/\bpassword\b/.test(imagePackDto[1]) || /\btoken\b/.test(imagePackDto[1]) || /\bbytes\b/.test(imagePackDto[1])) {
+  throw new Error("ImagePackDto must not carry password, token, or bytes fields");
 }
 const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
 if (!loginDto) throw new Error("missing SessionLoginDto");
