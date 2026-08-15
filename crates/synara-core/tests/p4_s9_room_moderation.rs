@@ -77,7 +77,6 @@ fn room_moderation_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("room_leave"));
     assert!(shared_core.contains("room_join("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("room_members_snapshot"));
     assert!(!shared_core.contains("space_parents_snapshot"));
     assert!(!shared_core.contains("backup_status"));
 }

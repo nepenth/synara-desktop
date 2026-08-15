@@ -69,7 +69,11 @@
 //! visibility/preset plus Core scalar extras. Nested create-content,
 //! power-level overrides, paths, passphrases, and media bytes stay
 //! off. Success returns the created room id. Failed errors never echo name,
-//! topic, alias, invite, or parent. Members snapshots stay off.
+//! topic, alias, invite, or parent.
+//! P4-S9-16 adds typed `room_members_snapshot` / `room_power_levels_snapshot`
+//! / `room_creators_snapshot` / `room_power_level_tags_snapshot` wrappers
+//! for those four already-registered Core commands. These are reads. Failed
+//! errors never echo member user ids. Spaces stay off.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -429,6 +433,22 @@ const ROOM_CREATE_NO_SESSION_DESCRIPTION: &str = "No room-create session is avai
 const ROOM_CREATE_FAILED_CODE: &str = "p4-s9-15-room-create-failed";
 const ROOM_CREATE_FAILED_DESCRIPTION: &str = "The room-create request could not be completed.";
 const ROOM_CREATE_OWNER_DESCRIPTION: &str = "The room-create request is not available.";
+const ROOM_MEMBERS_SNAPSHOT_COMMAND_GENERATION: u64 = 0;
+const ROOM_MEMBERS_SNAPSHOT_COMMAND: &str = "matrix_room_members_snapshot";
+const ROOM_POWER_LEVELS_SNAPSHOT_COMMAND: &str = "matrix_room_power_levels_snapshot";
+const ROOM_CREATORS_SNAPSHOT_COMMAND: &str = "matrix_room_creators_snapshot";
+const ROOM_POWER_LEVEL_TAGS_SNAPSHOT_COMMAND: &str = "matrix_room_power_level_tags_snapshot";
+const ROOM_MEMBERS_SNAPSHOT_NO_SESSION_CODE: &str = "p2-room-members-snapshot-no-session";
+const ROOM_POWER_LEVELS_SNAPSHOT_NO_SESSION_CODE: &str = "p2-room-power-levels-snapshot-no-session";
+const ROOM_CREATORS_SNAPSHOT_NO_SESSION_CODE: &str = "p2-room-creators-snapshot-no-session";
+const ROOM_POWER_LEVEL_TAGS_SNAPSHOT_NO_SESSION_CODE: &str =
+    "p2-room-power-level-tags-snapshot-no-session";
+const ROOM_MEMBERS_SNAPSHOT_NO_SESSION_DESCRIPTION: &str =
+    "No room-members-snapshot session is available.";
+const ROOM_MEMBERS_SNAPSHOT_FAILED_CODE: &str = "p4-s9-16-room-members-snapshots-failed";
+const ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION: &str =
+    "The room-members snapshot could not be loaded.";
+const ROOM_MEMBERS_SNAPSHOT_OWNER_DESCRIPTION: &str = "The room-members snapshot is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2910,6 +2930,84 @@ impl SharedCore {
         room_create_dto(response.payload)
     }
 
+    pub async fn room_members_snapshot(
+        &self,
+        room_id: String,
+    ) -> Result<RoomMembersSnapshotDto, RoomMembersSnapshotError> {
+        let payload = self
+            .room_members_snapshot_command(
+                ROOM_MEMBERS_SNAPSHOT_COMMAND,
+                ROOM_MEMBERS_SNAPSHOT_NO_SESSION_CODE,
+                room_id,
+            )
+            .await?;
+        room_members_snapshot_dto(payload)
+    }
+
+    pub async fn room_power_levels_snapshot(
+        &self,
+        room_id: String,
+    ) -> Result<RoomPowerLevelsSnapshotDto, RoomMembersSnapshotError> {
+        let payload = self
+            .room_members_snapshot_command(
+                ROOM_POWER_LEVELS_SNAPSHOT_COMMAND,
+                ROOM_POWER_LEVELS_SNAPSHOT_NO_SESSION_CODE,
+                room_id,
+            )
+            .await?;
+        room_power_levels_snapshot_dto(payload)
+    }
+
+    pub async fn room_creators_snapshot(
+        &self,
+        room_id: String,
+    ) -> Result<RoomCreatorsSnapshotDto, RoomMembersSnapshotError> {
+        let payload = self
+            .room_members_snapshot_command(
+                ROOM_CREATORS_SNAPSHOT_COMMAND,
+                ROOM_CREATORS_SNAPSHOT_NO_SESSION_CODE,
+                room_id,
+            )
+            .await?;
+        room_creators_snapshot_dto(payload)
+    }
+
+    pub async fn room_power_level_tags_snapshot(
+        &self,
+        room_id: String,
+    ) -> Result<RoomPowerLevelTagsSnapshotDto, RoomMembersSnapshotError> {
+        let payload = self
+            .room_members_snapshot_command(
+                ROOM_POWER_LEVEL_TAGS_SNAPSHOT_COMMAND,
+                ROOM_POWER_LEVEL_TAGS_SNAPSHOT_NO_SESSION_CODE,
+                room_id,
+            )
+            .await?;
+        room_power_level_tags_snapshot_dto(payload)
+    }
+
+    async fn room_members_snapshot_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        room_id: String,
+    ) -> Result<serde_json::Value, RoomMembersSnapshotError> {
+        let payload = room_members_snapshot_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+        }))?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: ROOM_MEMBERS_SNAPSHOT_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_room_members_snapshot_core_error(no_session, error))?;
+        Ok(response.payload)
+    }
+
     async fn later_null_command(
         &self,
         command: &'static str,
@@ -4879,6 +4977,490 @@ fn room_create_dto(payload: serde_json::Value) -> Result<RoomCreateDto, RoomCrea
         .and_then(closed_created_room_id)
         .map(|room_id| RoomCreateDto { room_id })
         .ok_or_else(|| room_create_failed(ROOM_CREATE_FAILED_CODE, ROOM_CREATE_FAILED_DESCRIPTION))
+}
+
+/// Privacy-safe room member row. Ids, display name, mxc, membership, and power only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomMemberDto {
+    pub room_id: String,
+    pub user_id: String,
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+    pub membership: String,
+    pub power_level: i32,
+    pub is_direct_target: Option<bool>,
+}
+
+/// Privacy-safe members snapshot. Member rows only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomMembersSnapshotDto {
+    pub session_generation: u64,
+    pub room_id: String,
+    pub members: Vec<RoomMemberDto>,
+}
+
+/// Privacy-safe power-levels snapshot. Content is JSON text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomPowerLevelsSnapshotDto {
+    pub status: String,
+    pub session_generation: u64,
+    pub room_id: String,
+    pub event_type: String,
+    pub state_key: String,
+    pub content_json: String,
+}
+
+/// Privacy-safe creators snapshot. Creator user ids only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomCreatorsSnapshotDto {
+    pub status: String,
+    pub session_generation: u64,
+    pub room_id: String,
+    pub event_type: String,
+    pub state_key: String,
+    pub creators: Vec<String>,
+}
+
+/// Privacy-safe power-level-tags snapshot. Content is JSON text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomPowerLevelTagsSnapshotDto {
+    pub status: String,
+    pub session_generation: u64,
+    pub room_id: String,
+    pub event_type: String,
+    pub state_key: String,
+    pub content_json: String,
+}
+
+/// Static fail-closed members-snapshot error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoomMembersSnapshotError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for RoomMembersSnapshotError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for RoomMembersSnapshotError {}
+
+fn room_members_snapshot_failed(code: &str, description: &'static str) -> RoomMembersSnapshotError {
+    RoomMembersSnapshotError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_room_members_snapshot_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> RoomMembersSnapshotError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            room_members_snapshot_failed(code, ROOM_MEMBERS_SNAPSHOT_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code.starts_with("v-rooms-members-read-")
+                || code == "v-send.r-room-profile-join-rule-requires-session" =>
+        {
+            room_members_snapshot_failed(code, ROOM_MEMBERS_SNAPSHOT_OWNER_DESCRIPTION)
+        }
+        _ => room_members_snapshot_failed(
+            ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+            ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn closed_room_member_membership(value: &str) -> Option<&'static str> {
+    match value {
+        "invite" => Some("invite"),
+        "join" => Some("join"),
+        "knock" => Some("knock"),
+        "leave" => Some("leave"),
+        "ban" => Some("ban"),
+        _ => None,
+    }
+}
+
+fn closed_members_snapshot_status(value: &str) -> Option<&'static str> {
+    match value {
+        "ok" => Some("ok"),
+        _ => None,
+    }
+}
+
+fn closed_power_levels_event_type(value: &str) -> Option<&'static str> {
+    match value {
+        "m.room.power_levels" => Some("m.room.power_levels"),
+        _ => None,
+    }
+}
+
+fn closed_creators_event_type(value: &str) -> Option<&'static str> {
+    match value {
+        "m.room.create" => Some("m.room.create"),
+        _ => None,
+    }
+}
+
+fn closed_power_level_tags_event_type(value: &str) -> Option<&'static str> {
+    match value {
+        "in.synara.room.power_level_tags" => Some("in.synara.room.power_level_tags"),
+        _ => None,
+    }
+}
+
+fn room_members_snapshot_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, RoomMembersSnapshotError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(room_members_snapshot_failed(
+            ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+            ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn snapshot_content_json(content: &serde_json::Value) -> Result<String, RoomMembersSnapshotError> {
+    let content_json = serde_json::to_string(content).map_err(|_| {
+        room_members_snapshot_failed(
+            ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+            ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+        )
+    })?;
+    if content_json.len() > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(room_members_snapshot_failed(
+            ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+            ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(content_json)
+}
+
+fn room_member_dto(value: &serde_json::Value) -> Result<RoomMemberDto, RoomMembersSnapshotError> {
+    let membership = value
+        .get("membership")
+        .and_then(|item| item.as_str())
+        .and_then(closed_room_member_membership)
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let power_level = value
+        .get("powerLevel")
+        .and_then(|item| item.as_i64())
+        .and_then(|item| i32::try_from(item).ok())
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let room_id = value
+        .get("roomId")
+        .and_then(|item| item.as_str())
+        .filter(|item| !item.is_empty())
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let user_id = value
+        .get("userId")
+        .and_then(|item| item.as_str())
+        .filter(|item| !item.is_empty())
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    Ok(RoomMemberDto {
+        room_id: room_id.to_owned(),
+        user_id: user_id.to_owned(),
+        display_name: value
+            .get("displayName")
+            .and_then(|item| item.as_str())
+            .map(ToOwned::to_owned),
+        avatar_url: value
+            .get("avatarUrl")
+            .and_then(|item| item.as_str())
+            .map(ToOwned::to_owned),
+        membership: membership.to_owned(),
+        power_level,
+        is_direct_target: value.get("isDirectTarget").and_then(|item| item.as_bool()),
+    })
+}
+
+fn room_members_snapshot_dto(
+    payload: serde_json::Value,
+) -> Result<RoomMembersSnapshotDto, RoomMembersSnapshotError> {
+    let session_generation = payload
+        .get("sessionGeneration")
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let room_id = payload
+        .get("roomId")
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let members = payload
+        .get("members")
+        .and_then(|value| value.as_array())
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?
+        .iter()
+        .map(room_member_dto)
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(RoomMembersSnapshotDto {
+        session_generation,
+        room_id: room_id.to_owned(),
+        members,
+    })
+}
+
+fn room_power_levels_snapshot_dto(
+    payload: serde_json::Value,
+) -> Result<RoomPowerLevelsSnapshotDto, RoomMembersSnapshotError> {
+    let status = payload
+        .get("status")
+        .and_then(|value| value.as_str())
+        .and_then(closed_members_snapshot_status)
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let session_generation = payload
+        .get("sessionGeneration")
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let room_id = payload
+        .get("roomId")
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let event_type = payload
+        .get("eventType")
+        .and_then(|value| value.as_str())
+        .and_then(closed_power_levels_event_type)
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let state_key = payload
+        .get("stateKey")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let content = payload.get("content").ok_or_else(|| {
+        room_members_snapshot_failed(
+            ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+            ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+        )
+    })?;
+    Ok(RoomPowerLevelsSnapshotDto {
+        status: status.to_owned(),
+        session_generation,
+        room_id: room_id.to_owned(),
+        event_type: event_type.to_owned(),
+        state_key: state_key.to_owned(),
+        content_json: snapshot_content_json(content)?,
+    })
+}
+
+fn room_creators_snapshot_dto(
+    payload: serde_json::Value,
+) -> Result<RoomCreatorsSnapshotDto, RoomMembersSnapshotError> {
+    let status = payload
+        .get("status")
+        .and_then(|value| value.as_str())
+        .and_then(closed_members_snapshot_status)
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let session_generation = payload
+        .get("sessionGeneration")
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let room_id = payload
+        .get("roomId")
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let event_type = payload
+        .get("eventType")
+        .and_then(|value| value.as_str())
+        .and_then(closed_creators_event_type)
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let state_key = payload
+        .get("stateKey")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let creators = payload
+        .get("creators")
+        .and_then(|value| value.as_array())
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .filter(|item| !item.is_empty())
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| {
+                    room_members_snapshot_failed(
+                        ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                        ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+                    )
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(RoomCreatorsSnapshotDto {
+        status: status.to_owned(),
+        session_generation,
+        room_id: room_id.to_owned(),
+        event_type: event_type.to_owned(),
+        state_key: state_key.to_owned(),
+        creators,
+    })
+}
+
+fn room_power_level_tags_snapshot_dto(
+    payload: serde_json::Value,
+) -> Result<RoomPowerLevelTagsSnapshotDto, RoomMembersSnapshotError> {
+    let status = payload
+        .get("status")
+        .and_then(|value| value.as_str())
+        .and_then(closed_members_snapshot_status)
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let session_generation = payload
+        .get("sessionGeneration")
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let room_id = payload
+        .get("roomId")
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let event_type = payload
+        .get("eventType")
+        .and_then(|value| value.as_str())
+        .and_then(closed_power_level_tags_event_type)
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let state_key = payload
+        .get("stateKey")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| {
+            room_members_snapshot_failed(
+                ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+                ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+            )
+        })?;
+    let content = payload.get("content").ok_or_else(|| {
+        room_members_snapshot_failed(
+            ROOM_MEMBERS_SNAPSHOT_FAILED_CODE,
+            ROOM_MEMBERS_SNAPSHOT_FAILED_DESCRIPTION,
+        )
+    })?;
+    Ok(RoomPowerLevelTagsSnapshotDto {
+        status: status.to_owned(),
+        session_generation,
+        room_id: room_id.to_owned(),
+        event_type: event_type.to_owned(),
+        state_key: state_key.to_owned(),
+        content_json: snapshot_content_json(content)?,
+    })
 }
 
 fn device_trust_as_str(trust: NativeDeviceTrust) -> String {

@@ -43,7 +43,7 @@ pub use shared_core_ffi::{
     RoomImagePacksSnapshotDto, RoomJoinRuleSnapshotDto, RoomListRoomDto, RoomListSnapshotDto,
     RoomListSnapshotError, RoomMembershipCommandError, RoomMembershipWriteDto,
     RoomModerationCommandError, RoomModerationWriteDto, RoomNoteItemDto,
-    RoomNotesCommandError, RoomNotesSnapshotDto, RoomPowerLevelCommandError,
+    RoomNotesCommandError, RoomNotesSnapshotDto, RoomCreatorsSnapshotDto, RoomMemberDto, RoomMembersSnapshotDto, RoomPowerLevelTagsSnapshotDto, RoomPowerLevelsSnapshotDto, RoomPowerLevelCommandError,
     RoomPowerLevelWriteDto,
     RoomProfileCommandError, RoomProfileWriteDto, SessionAttachDto, SessionAttachError,
     SessionLoginDto, SessionLoginError, SessionRestoreDto, SessionRestoreError, SharedCore,

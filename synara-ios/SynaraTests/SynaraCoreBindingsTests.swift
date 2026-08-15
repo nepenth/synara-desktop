@@ -1119,6 +1119,68 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreRoomMembersSnapshotsWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let roomId = "!s916SecretRoom:example.org"
+        let member = "@s916SecretMember:example.org"
+
+        do {
+            _ = try await SharedCoreRoomMembersSnapshots.roomMembersSnapshot(
+                core: core,
+                roomId: roomId
+            )
+            XCTFail("Fail-closed SharedCore must not load members without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-members-snapshot-no-session"))
+            for forbidden in ["syt_", "token", roomId, member] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreRoomMembersSnapshots.roomPowerLevelsSnapshot(
+                core: core,
+                roomId: roomId
+            )
+            XCTFail("Fail-closed SharedCore must not load power levels without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-power-levels-snapshot-no-session"))
+            for forbidden in ["syt_", "token", roomId, member] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreRoomMembersSnapshots.roomCreatorsSnapshot(
+                core: core,
+                roomId: roomId
+            )
+            XCTFail("Fail-closed SharedCore must not load creators without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-creators-snapshot-no-session"))
+            for forbidden in ["syt_", "token", roomId, member] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreRoomMembersSnapshots.roomPowerLevelTagsSnapshot(
+                core: core,
+                roomId: roomId
+            )
+            XCTFail("Fail-closed SharedCore must not load power-level tags without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-power-level-tags-snapshot-no-session"))
+            for forbidden in ["syt_", "token", roomId, member] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 
