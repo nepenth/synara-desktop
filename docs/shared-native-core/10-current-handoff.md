@@ -489,9 +489,10 @@ for any of those gates.
    send sticker landed in #971. S9-24 typed
    send poll landed in #972. S9-25 typed
    edit message landed in #973. S9-26 typed
-   poll respond landed in #974. **S9-27** typed
-   timeline edit/redact/report (playbook §9.5) is on this branch. Next after
-   merge is pin/unpin. UniFFI expansion
+   poll respond landed in #974. S9-27 typed
+   timeline edit/redact/report landed in #975. **S9-28** typed
+   timeline pin/unpin (playbook §9.5) is on this branch. Next after
+   merge is poll vote / call decline. UniFFI expansion
    needs free disk ≥ 20 Gi for
    local cargo/bindgen. There is no source-without-bindgen exception.
    If disk is under 20 Gi: stop. Docs-only PRs are still allowed.

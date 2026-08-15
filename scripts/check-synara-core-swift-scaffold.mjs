@@ -221,6 +221,10 @@ const sharedCoreTimelineMutate = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreTimelineMutate.swift"),
   "utf8"
 );
+const sharedCoreTimelinePin = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreTimelinePin.swift"),
+  "utf8"
+);
 const swiftBindingsTests = readFileSync(
   resolve(root, "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift"),
   "utf8"
@@ -810,6 +814,18 @@ const assertions = [
   [sharedCoreTimelineMutate, "core: SharedCore", "P4-S9-27 helper takes an already-constructed SharedCore"],
   [sharedCoreTimelineMutate, "core.timelineEditText", "P4-S9-27 helper writes edit on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreTimelineMutate.swift in Sources", "P4-S9-27 helper in Xcode target"],
+  [sharedCoreFfi, "timeline_pin", "P4-S9-28 typed timeline-pin FFI"],
+  [sharedCoreFfi, "matrix_timeline_pin", "P4-S9-28 calls the registered timeline-pin command"],
+  [sharedCoreFfi, "matrix_timeline_unpin", "P4-S9-28 calls the registered timeline-unpin command"],
+  [udl, "TimelinePinDto timeline_pin(", "P4-S9-28 SharedCore timeline pin"],
+  [udl, "TimelinePinDto timeline_unpin(", "P4-S9-28 SharedCore timeline unpin"],
+  [udl, "interface TimelinePinError", "P4-S9-28 static timeline-pin error"],
+  [swiftBindingsTests, "testSharedCoreTimelinePinWithoutSessionFailsClosed", "Swift P4-S9-28 fail-closed timeline-pin test"],
+  [sharedCoreTimelinePin, "timelinePin", "P4-S9-28 product timeline-pin helper"],
+  [sharedCoreTimelinePin, "timelineUnpin", "P4-S9-28 product timeline-unpin helper"],
+  [sharedCoreTimelinePin, "core: SharedCore", "P4-S9-28 helper takes an already-constructed SharedCore"],
+  [sharedCoreTimelinePin, "core.timelinePin", "P4-S9-28 helper writes pin on the caller-owned instance"],
+  [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreTimelinePin.swift in Sources", "P4-S9-28 helper in Xcode target"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1734,9 +1750,14 @@ for (const required of ["timeline_edit_text(", "timeline_redact(", "timeline_rep
     throw new Error(`P4-S9-27 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "matrix_timeline_edit_text", "matrix_timeline_redact", "matrix_timeline_report", "timeline_pin", "timeline_unpin", "matrix_timeline_pin", "matrix_timeline_unpin", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup"]) {
+for (const required of ["timeline_pin(", "timeline_unpin("]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-28 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "matrix_timeline_edit_text", "matrix_timeline_redact", "matrix_timeline_report", "matrix_timeline_pin", "matrix_timeline_unpin", "timeline_poll_vote", "timeline_call_decline", "matrix_timeline_poll_vote", "matrix_timeline_call_decline", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-26`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-28`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -2050,6 +2071,17 @@ if (sharedCoreTimelineMutate.includes("SharedCore.newWithSecretStore") || shared
 for (const forbidden of ["sendText", "sendSticker", "sendPoll", "editMessage", "pollRespond", "timelinePin", "timelineUnpin", "backupStatus"]) {
   if (sharedCoreTimelineMutate.includes(forbidden)) {
     throw new Error(`P4-S9-27 helper must not wrap ${forbidden}`);
+  }
+}
+if (sharedCoreTimelinePin.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-28 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreTimelinePin.includes("SharedCore.newWithSecretStore") || sharedCoreTimelinePin.includes("newWithSecretStore")) {
+  throw new Error("P4-S9-28 helper must not construct SharedCore");
+}
+for (const forbidden of ["sendText", "sendSticker", "sendPoll", "editMessage", "pollRespond", "timelineEditText", "timelineRedact", "timelineReport", "pollVote", "callDecline", "backupStatus"]) {
+  if (sharedCoreTimelinePin.includes(forbidden)) {
+    throw new Error(`P4-S9-28 helper must not wrap ${forbidden}`);
   }
 }
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);

@@ -1672,6 +1672,42 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreTimelinePinWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let roomId = "!s928SecretRoom:example.org"
+        let eventId = "$s928SecretEvent:example.org"
+
+        do {
+            _ = try await SharedCoreTimelinePin.timelinePin(
+                core: core,
+                roomId: roomId,
+                eventId: eventId
+            )
+            XCTFail("Fail-closed SharedCore must not pin a timeline event without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-timeline-pin-no-session"))
+            for forbidden in ["syt_", "token", roomId, eventId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreTimelinePin.timelineUnpin(
+                core: core,
+                roomId: roomId,
+                eventId: eventId
+            )
+            XCTFail("Fail-closed SharedCore must not unpin a timeline event without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-timeline-unpin-no-session"))
+            for forbidden in ["syt_", "token", roomId, eventId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 
