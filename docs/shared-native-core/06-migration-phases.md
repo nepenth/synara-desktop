@@ -20,8 +20,8 @@ integration, or release path. **Never a big-bang move.**
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
 
-**Current bounded status at `8d9ba186`
-(#981):** #713 mechanically moved notifications, polls,
+**Current bounded status at `1207aece`
+(#982):** #713 mechanically moved notifications, polls,
 relations, threads, and unread; #714 moved raw content, receipts, routes, and
 security; #716 moved search, legacy, and media_cache; #717 moved media_export
 and crypto_store; #734 moved the room-directory session harness; #735 moved
@@ -155,7 +155,7 @@ Goal: iOS consumes the same engine; Swift re-implementations retired.
    - #980 desktop source-scan hygiene after the S9 rematch
    - #981 docs honesty after #980
    - Local Apple UniFFI generate has been run; generated sources remain gitignored
-   - Last: retire Swift SDK services only when grep is clean (S10 blocked), then NSE read-only store API
+   - Last: retire Swift SDK services only when grep is clean (S10 stopped on leftover callers; playbook §9.6), then NSE read-only store API
 4. Remove `matrix-rust-components-swift` from `project.yml` when nothing
    references `MatrixRustSDK` anymore.
 
@@ -165,7 +165,7 @@ zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
 
 > **Bounded evidence note — not P4 acceptance:** At the current feature tip
-> `8d9ba186` (#981), UniFFI exposes credential-free `login_flows` /
+> `1207aece` (#982), UniFFI exposes credential-free `login_flows` /
 > `register_flows`, SharedCore constructors, S3 vault/restore/login/attach,
 > and typed wrappers through S9-31. Helper + XCTest are the iOS surface.
 > Product room list, timeline, crypto, and push still use `MatrixRustSDK`.

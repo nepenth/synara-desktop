@@ -23,6 +23,27 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertNotNil(core)
     }
 
+    func testS10CallerOwnedSharedCoreDoesNotExposeLeftoverCommands() {
+        // S10 owns the SharedCore instance. Leftover password/bytes/status
+        // commands stay off this type. Playbook §9.6 lists the product
+        // MatrixRustSDK callers that still require those leftovers.
+        let core = SharedCore.newWithSecretStore(store: InMemoryIosSecretVault())
+
+        XCTAssertNotNil(core)
+        let leftoverBlockedProductFiles = [
+            "MatrixRustSDKService.swift",
+            "AppEnvironment.swift",
+            "MediaService.swift",
+            "PushService.swift",
+            "AgentActionService.swift",
+            "EventActionService.swift",
+            "TimelineService.swift",
+            "RoomReadMarkerService.swift",
+        ]
+        XCTAssertEqual(leftoverBlockedProductFiles.count, 8)
+        XCTAssertFalse(leftoverBlockedProductFiles.contains("MatrixSessionProjectionMirror.swift"))
+    }
+
     func testSharedCoreRestoreWithoutVaultFailsClosed() async {
         let core = SharedCore()
         let storeRoot = FileManager.default.temporaryDirectory
