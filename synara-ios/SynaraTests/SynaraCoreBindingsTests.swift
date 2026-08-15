@@ -1430,6 +1430,56 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreComposerReplyDraftWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let roomId = "!s921SecretRoom:example.org"
+        let eventId = "$s921SecretEvent"
+
+        do {
+            _ = try await SharedCoreComposerReplyDraft.composerSetReplyDraft(
+                core: core,
+                roomId: roomId,
+                eventId: eventId,
+                startThread: false
+            )
+            XCTFail("Fail-closed SharedCore must not set a composer reply draft without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-composer-set-reply-draft-no-session"))
+            for forbidden in ["syt_", "token", roomId, eventId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreComposerReplyDraft.composerGetReplyDraft(
+                core: core,
+                roomId: roomId
+            )
+            XCTFail("Fail-closed SharedCore must not get a composer reply draft without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-composer-get-reply-draft-no-session"))
+            for forbidden in ["syt_", "token", roomId, eventId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreComposerReplyDraft.composerClearReplyDraft(
+                core: core,
+                roomId: roomId
+            )
+            XCTFail("Fail-closed SharedCore must not clear a composer reply draft without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-composer-clear-reply-draft-no-session"))
+            for forbidden in ["syt_", "token", roomId, eventId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

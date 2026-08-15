@@ -92,6 +92,10 @@
 //! `timeline_reaction_toggle` wrappers for those three already-registered
 //! Core commands. Failed errors never echo room id, event id, reaction
 //! event id, or key. Composer reply draft stays off.
+//! P4-S9-21 adds typed `composer_set_reply_draft` / `composer_get_reply_draft` /
+//! `composer_clear_reply_draft` wrappers for those three already-registered
+//! Core commands. Failed errors never echo room id or event id. Send text
+//! stays off.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -132,12 +136,12 @@ use crate::app::store::{
 };
 use crate::app::sync::{build_sync_service, SyncServiceConfig};
 use crate::app::timeline::{
-    NativeDecryptionState, NativeReactionMutation, NativeReactionMutationResult,
-    NativeTimelineDirection, NativeTimelineEventReadback, NativeTimelineItem,
-    NativeTimelineOpenPosition, NativeTimelineOpenReadback, NativeTimelineOwner,
-    NativeTimelineReaction, NativeTimelineReactionSender, NativeTimelineReadAction,
-    NativeTimelineReadStateReadback, NativeTimelineViewportHint, TimelinePageState,
-    TimelineViewPosition, TimelineViewSnapshot,
+    NativeComposerReplyDraft, NativeDecryptionState, NativeReactionMutation,
+    NativeReactionMutationResult, NativeTimelineDirection, NativeTimelineEventReadback,
+    NativeTimelineItem, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
+    NativeTimelineOwner, NativeTimelineReaction, NativeTimelineReactionSender,
+    NativeTimelineReadAction, NativeTimelineReadStateReadback, NativeTimelineViewportHint,
+    TimelinePageState, TimelineViewPosition, TimelineViewSnapshot,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::app::verification::{
@@ -151,6 +155,7 @@ use crate::platform::{IosFailClosedPlatform, Platform, SecretVault};
 use crate::transport::{
     CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory, MAX_ENVELOPE_PAYLOAD_JSON_BYTES,
 };
+use serde::Deserialize;
 
 const VAULT_UNAVAILABLE_CODE: &str = "p4-s3b-secret-vault-unavailable";
 const VAULT_UNAVAILABLE_DESCRIPTION: &str = "The secret store is unavailable.";
@@ -525,6 +530,19 @@ const TIMELINE_REACTION_FAILED_CODE: &str = "p4-s9-20-timeline-reactions-failed"
 const TIMELINE_REACTION_FAILED_DESCRIPTION: &str =
     "The timeline reaction request could not be completed.";
 const TIMELINE_REACTION_OWNER_DESCRIPTION: &str = "The timeline reaction request is not available.";
+const COMPOSER_REPLY_DRAFT_GENERATION: u64 = 0;
+const COMPOSER_SET_REPLY_DRAFT_COMMAND: &str = "matrix_composer_set_reply_draft";
+const COMPOSER_GET_REPLY_DRAFT_COMMAND: &str = "matrix_composer_get_reply_draft";
+const COMPOSER_CLEAR_REPLY_DRAFT_COMMAND: &str = "matrix_composer_clear_reply_draft";
+const COMPOSER_SET_REPLY_DRAFT_NO_SESSION_CODE: &str = "p2-composer-set-reply-draft-no-session";
+const COMPOSER_GET_REPLY_DRAFT_NO_SESSION_CODE: &str = "p2-composer-get-reply-draft-no-session";
+const COMPOSER_CLEAR_REPLY_DRAFT_NO_SESSION_CODE: &str = "p2-composer-clear-reply-draft-no-session";
+const COMPOSER_REPLY_DRAFT_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
+const COMPOSER_REPLY_DRAFT_FAILED_CODE: &str = "p4-s9-21-composer-reply-draft-failed";
+const COMPOSER_REPLY_DRAFT_FAILED_DESCRIPTION: &str =
+    "The composer reply-draft request could not be completed.";
+const COMPOSER_REPLY_DRAFT_OWNER_DESCRIPTION: &str =
+    "The composer reply-draft request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -926,6 +944,41 @@ impl std::fmt::Display for TimelineReactionError {
 }
 
 impl std::error::Error for TimelineReactionError {}
+
+/// Privacy-safe composer reply-draft preview. No tokens or password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComposerReplyDraftPreviewDto {
+    pub event_id: String,
+    pub sender_id: String,
+    pub body: String,
+    pub formatted_body: Option<String>,
+    pub thread_root_event_id: Option<String>,
+}
+
+/// Privacy-safe composer reply-draft readback from the registered Core command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComposerReplyDraftDto {
+    pub schema_version: u32,
+    pub room_id: String,
+    pub status: String,
+    pub draft: Option<ComposerReplyDraftPreviewDto>,
+}
+
+/// Static fail-closed composer reply-draft error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ComposerReplyDraftError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for ComposerReplyDraftError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for ComposerReplyDraftError {}
 
 /// Static fail-closed timeline error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3450,6 +3503,52 @@ impl SharedCore {
         .await
     }
 
+    pub async fn composer_set_reply_draft(
+        &self,
+        room_id: String,
+        event_id: String,
+        start_thread: bool,
+    ) -> Result<ComposerReplyDraftDto, ComposerReplyDraftError> {
+        self.composer_reply_draft_command(
+            COMPOSER_SET_REPLY_DRAFT_COMMAND,
+            COMPOSER_SET_REPLY_DRAFT_NO_SESSION_CODE,
+            serde_json::json!({
+                "roomId": room_id,
+                "eventId": event_id,
+                "startThread": start_thread,
+            }),
+        )
+        .await
+    }
+
+    pub async fn composer_get_reply_draft(
+        &self,
+        room_id: String,
+    ) -> Result<ComposerReplyDraftDto, ComposerReplyDraftError> {
+        self.composer_reply_draft_command(
+            COMPOSER_GET_REPLY_DRAFT_COMMAND,
+            COMPOSER_GET_REPLY_DRAFT_NO_SESSION_CODE,
+            serde_json::json!({
+                "roomId": room_id,
+            }),
+        )
+        .await
+    }
+
+    pub async fn composer_clear_reply_draft(
+        &self,
+        room_id: String,
+    ) -> Result<ComposerReplyDraftDto, ComposerReplyDraftError> {
+        self.composer_reply_draft_command(
+            COMPOSER_CLEAR_REPLY_DRAFT_COMMAND,
+            COMPOSER_CLEAR_REPLY_DRAFT_NO_SESSION_CODE,
+            serde_json::json!({
+                "roomId": room_id,
+            }),
+        )
+        .await
+    }
+
     async fn space_null_command(
         &self,
         command: &'static str,
@@ -3522,6 +3621,33 @@ impl SharedCore {
                 )
             })?;
         Ok(timeline_reaction_mutation_dto(result))
+    }
+
+    async fn composer_reply_draft_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<ComposerReplyDraftDto, ComposerReplyDraftError> {
+        let payload = composer_reply_draft_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: COMPOSER_REPLY_DRAFT_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_composer_reply_draft_core_error(no_session, error))?;
+        let readback: ComposerReplyDraftReadbackWire = serde_json::from_value(response.payload)
+            .map_err(|_| {
+                composer_reply_draft_failed(
+                    COMPOSER_REPLY_DRAFT_FAILED_CODE,
+                    COMPOSER_REPLY_DRAFT_FAILED_DESCRIPTION,
+                )
+            })?;
+        Ok(composer_reply_draft_dto(readback))
     }
 
     async fn invite_action_command(
@@ -6351,6 +6477,83 @@ fn timeline_reaction_mutation_dto(
         key: result.key,
         mutation: reaction_mutation_as_str(result.mutation).to_owned(),
         readback: result.readback.map(timeline_reaction_dto),
+    }
+}
+
+fn composer_reply_draft_failed(code: &str, description: &'static str) -> ComposerReplyDraftError {
+    ComposerReplyDraftError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_composer_reply_draft_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> ComposerReplyDraftError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            composer_reply_draft_failed(code, COMPOSER_REPLY_DRAFT_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code.starts_with("p2-composer-set-reply-draft-")
+                || code.starts_with("p2-composer-get-reply-draft-")
+                || code.starts_with("p2-composer-clear-reply-draft-")
+                || code.starts_with("v-timeline-reply-draft-")
+                || code == "d0.4-send-invalid-room-id" =>
+        {
+            composer_reply_draft_failed(code, COMPOSER_REPLY_DRAFT_OWNER_DESCRIPTION)
+        }
+        _ => composer_reply_draft_failed(
+            COMPOSER_REPLY_DRAFT_FAILED_CODE,
+            COMPOSER_REPLY_DRAFT_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn composer_reply_draft_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, ComposerReplyDraftError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(composer_reply_draft_failed(
+            COMPOSER_REPLY_DRAFT_FAILED_CODE,
+            COMPOSER_REPLY_DRAFT_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ComposerReplyDraftReadbackWire {
+    schema_version: u32,
+    room_id: String,
+    status: String,
+    #[serde(default)]
+    draft: Option<NativeComposerReplyDraft>,
+}
+
+fn composer_reply_draft_preview_dto(
+    draft: NativeComposerReplyDraft,
+) -> ComposerReplyDraftPreviewDto {
+    ComposerReplyDraftPreviewDto {
+        event_id: draft.event_id,
+        sender_id: draft.sender_id,
+        body: draft.body,
+        formatted_body: draft.formatted_body,
+        thread_root_event_id: draft.thread_root_event_id,
+    }
+}
+
+fn composer_reply_draft_dto(readback: ComposerReplyDraftReadbackWire) -> ComposerReplyDraftDto {
+    ComposerReplyDraftDto {
+        schema_version: readback.schema_version,
+        room_id: readback.room_id,
+        status: readback.status,
+        draft: readback.draft.map(composer_reply_draft_preview_dto),
     }
 }
 

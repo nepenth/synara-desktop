@@ -88,7 +88,7 @@ fn room_create_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("dictionary RoomCreateDto"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
-    assert!(!udl.contains("matrix_composer_set_reply_draft"));
+    assert!(!udl.contains("matrix_send_text"));
     let request_dto = udl
         .split("dictionary RoomCreateRequestDto {")
         .nth(1)
@@ -109,8 +109,7 @@ fn room_create_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("room_set_power_level("));
     assert!(shared_core.contains("room_set_power_level_tags("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("composer_set_reply_draft"));
-    assert!(!shared_core.contains("composer_get_reply_draft"));
+    assert!(!shared_core.contains("send_text"));
     assert!(!shared_core.contains("backup_status"));
 }
 

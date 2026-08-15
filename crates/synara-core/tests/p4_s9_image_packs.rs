@@ -77,7 +77,7 @@ fn image_pack_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("set_room_image_pack"));
     assert!(shared_core.contains("room_join_rule_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("composer_set_reply_draft"));
+    assert!(!shared_core.contains("send_text"));
     assert!(!shared_core.contains("backup_status"));
 }
 

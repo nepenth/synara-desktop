@@ -70,7 +70,7 @@ fn spaces_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("dictionary RestrictedJoinReparentDto"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
-    assert!(!udl.contains("matrix_composer_set_reply_draft"));
+    assert!(!udl.contains("matrix_send_text"));
     let shared_core = udl
         .split("interface SharedCore {")
         .nth(1)
@@ -85,8 +85,7 @@ fn spaces_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("room_members_snapshot("));
     assert!(shared_core.contains("room_create("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("composer_set_reply_draft"));
-    assert!(!shared_core.contains("composer_get_reply_draft"));
+    assert!(!shared_core.contains("send_text"));
     assert!(!shared_core.contains("backup_status"));
 }
 

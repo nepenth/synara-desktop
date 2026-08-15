@@ -60,7 +60,7 @@ fn typing_presence_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("presence_unsubscribe"));
     assert!(!udl.contains("matrix_verification_start"));
     assert!(!udl.contains("matrix_login_password"));
-    assert!(!udl.contains("matrix_composer_set_reply_draft"));
+    assert!(!udl.contains("matrix_send_text"));
     let shared_core = udl
         .split("interface SharedCore {")
         .nth(1)
@@ -75,7 +75,7 @@ fn typing_presence_surface_exposes_only_the_registered_family() {
     assert!(!shared_core.contains("command("));
     assert!(!shared_core.contains("device_delete_password"));
     assert!(!shared_core.contains("crypto_status"));
-    assert!(!shared_core.contains("composer_set_reply_draft"));
+    assert!(!shared_core.contains("send_text"));
 }
 
 #[test]
