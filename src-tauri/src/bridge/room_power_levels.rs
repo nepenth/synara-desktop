@@ -74,7 +74,7 @@ fn parse_power_level_write_result(
         state_key: String,
     }
     let wire: Wire = serde_json::from_value(payload).map_err(|_| power_level_response_error())?;
-    if wire.event_type != event_type || wire.state_key != "" {
+    if wire.event_type != event_type || !wire.state_key.is_empty() {
         return Err(power_level_response_error());
     }
     Ok(NativePowerLevelWriteResult {

@@ -86,7 +86,7 @@ final class KeychainIosSecretVault: IosSecretVault, @unchecked Sendable {
     }
 
     private static var unavailable: IosSecretVaultError {
-        .unavailable(
+        .Unavailable(
             code: "p4-s3-secret-vault-unavailable",
             description: "The secret store is unavailable."
         )
