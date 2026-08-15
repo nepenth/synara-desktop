@@ -465,8 +465,9 @@ for any of those gates.
    in #939. S4 typed `room_list_snapshot` landed in #940. S5 typed
    `invites_snapshot` landed in #942. S6 typed timeline
    open/close/paginate landed in #944. S7 typed typing/presence
-   landed in #945. **S8** typed `verification_list` (playbook §9.5)
-   is on this branch. Next after merge is S9. UniFFI
+   landed in #945. S8 typed `verification_list` landed in #947.
+   **S9** typed verification SAS (playbook §9.5)
+   is on this branch. Next after merge is S9-2 devices. UniFFI
    expansion needs free disk ≥ 20 Gi for
    local cargo/bindgen. There is no source-without-bindgen exception.
    If disk is under 20 Gi: stop. Docs-only PRs are still allowed.

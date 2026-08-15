@@ -129,10 +129,11 @@ S4 typed `room_list_snapshot` landed in #940 (`5a6f3e9b`).
 S5 typed `invites_snapshot` landed in #942 (`17c29afd`). S6 typed
 timeline open/close/paginate landed in #944 (`1a77815a`).
 S7 typed typing/presence landed in #945 (`ee884ef3`).
-S8 typed `verification_list` (Core `matrix_verification_list` only;
-SyncService not started) is on `agent/snc-p4-s8-verification-list`
+S8 typed `verification_list` landed in #947 (`52874c20`).
+S9 typed verification SAS (seven registered commands only;
+SyncService not started) is on `agent/snc-p4-s9-verification-sas`
 per [12-p4-s3-live-client.md](12-p4-s3-live-client.md) and playbook §9.5.
-Password never rides a generic UniFFI `command`. Next after S8 is S9.
+Password never rides a generic UniFFI `command`. Next after S9 is S9-2.
 
 | Phase | Merged evidence | Current boundary |
 |---|---|---|

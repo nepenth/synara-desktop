@@ -11,8 +11,9 @@ S4 room-list snapshot landed in #940 (`5a6f3e9b`).
 S5 invites snapshot landed in #942 (`17c29afd`).
 S6 timeline open/close/paginate landed in #944 (`1a77815a`).
 S7 typing/presence landed in #945 (`ee884ef3`).
-**S8 verification list lands on `agent/snc-p4-s8-verification-list`.**
-Playbook recipe: §9.5. Next after S8 is S9 verification SAS.
+S8 verification list landed in #947 (`52874c20`).
+**S9 verification SAS lands on `agent/snc-p4-s9-verification-sas`.**
+Playbook recipe: §9.5. Next after S9 is S9-2 devices.
 
 ## Decision
 

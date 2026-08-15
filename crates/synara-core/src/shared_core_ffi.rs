@@ -20,6 +20,8 @@
 //! Core commands in that family only.
 //! P4-S8 adds a typed `verification_list` wrapper for the already-registered
 //! `matrix_verification_list` Core command only.
+//! P4-S9 adds typed verification SAS wrappers for the seven already-registered
+//! start/accept/begin_sas/confirm/mismatch/cancel/dismiss Core commands only.
 //! This still exposes no generic command FFI or APNs surface.
 //! This is not the desktop leftover `matrix_restore_session`.
 
@@ -59,8 +61,9 @@ use crate::app::timeline::{
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::app::verification::{
-    NativeVerificationDirection, NativeVerificationInbox, NativeVerificationOwner,
-    NativeVerificationPhase, NativeVerificationRequest,
+    NativeVerificationDirection, NativeVerificationEmoji, NativeVerificationInbox,
+    NativeVerificationOwner, NativeVerificationPhase, NativeVerificationRequest,
+    NativeVerificationSas,
 };
 use crate::core::Core;
 use crate::dto::{SessionLifecycle, SessionSnapshot};
@@ -174,6 +177,26 @@ const VERIFICATION_LIST_NO_SESSION_CODE: &str = "p2-verification-list-no-session
 const VERIFICATION_LIST_NO_SESSION_DESCRIPTION: &str = "No verification session is available.";
 const VERIFICATION_LIST_FAILED_CODE: &str = "p4-s8-list-failed";
 const VERIFICATION_LIST_FAILED_DESCRIPTION: &str = "The verification inbox could not be loaded.";
+const VERIFICATION_SAS_GENERATION: u64 = 0;
+const VERIFICATION_START_COMMAND: &str = "matrix_verification_start";
+const VERIFICATION_ACCEPT_COMMAND: &str = "matrix_verification_accept";
+const VERIFICATION_BEGIN_SAS_COMMAND: &str = "matrix_verification_begin_sas";
+const VERIFICATION_CONFIRM_COMMAND: &str = "matrix_verification_confirm";
+const VERIFICATION_MISMATCH_COMMAND: &str = "matrix_verification_mismatch";
+const VERIFICATION_CANCEL_COMMAND: &str = "matrix_verification_cancel";
+const VERIFICATION_DISMISS_COMMAND: &str = "matrix_verification_dismiss";
+const VERIFICATION_START_NO_SESSION_CODE: &str = "p2-verification-start-no-session";
+const VERIFICATION_ACCEPT_NO_SESSION_CODE: &str = "p2-verification-accept-no-session";
+const VERIFICATION_BEGIN_SAS_NO_SESSION_CODE: &str = "p2-verification-begin-sas-no-session";
+const VERIFICATION_CONFIRM_NO_SESSION_CODE: &str = "p2-verification-confirm-no-session";
+const VERIFICATION_MISMATCH_NO_SESSION_CODE: &str = "p2-verification-mismatch-no-session";
+const VERIFICATION_CANCEL_NO_SESSION_CODE: &str = "p2-verification-cancel-no-session";
+const VERIFICATION_DISMISS_NO_SESSION_CODE: &str = "p2-verification-dismiss-no-session";
+const VERIFICATION_SAS_NO_SESSION_DESCRIPTION: &str = "No verification session is available.";
+const VERIFICATION_SAS_FAILED_CODE: &str = "p4-s9-sas-failed";
+const VERIFICATION_SAS_FAILED_DESCRIPTION: &str =
+    "The verification request could not be completed.";
+const VERIFICATION_SAS_OWNER_DESCRIPTION: &str = "The verification request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -864,7 +887,22 @@ fn presence_snapshot_dto(result: NativePresenceSnapshotResult) -> PresenceSnapsh
     }
 }
 
+/// Privacy-safe SAS emoji. User-visible comparison only; no key material.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerificationEmojiDto {
+    pub symbol: String,
+    pub description: String,
+}
+
+/// Privacy-safe SAS comparison. Emoji/decimals only; no tokens or MACs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerificationSasDto {
+    pub emoji: Option<Vec<VerificationEmojiDto>>,
+    pub decimals: Option<Vec<u16>>,
+}
+
 /// Privacy-safe verification request row. Identity/flow fields only; no tokens.
+/// S8 list omits SAS. S9 mutation returns may include optional SAS comparison.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerificationRequestDto {
     pub flow_id: String,
@@ -873,6 +911,7 @@ pub struct VerificationRequestDto {
     pub direction: String,
     pub phase: String,
     pub started_ts: Option<u64>,
+    pub sas: Option<VerificationSasDto>,
 }
 
 /// Privacy-safe verification inbox. No tokens or password.
@@ -951,6 +990,76 @@ fn verification_request_dto(request: NativeVerificationRequest) -> VerificationR
         direction: verification_direction_as_str(request.direction),
         phase: verification_phase_as_str(request.phase),
         started_ts: request.started_ts,
+        sas: None,
+    }
+}
+
+fn verification_emoji_dto(emoji: NativeVerificationEmoji) -> VerificationEmojiDto {
+    VerificationEmojiDto {
+        symbol: emoji.symbol,
+        description: emoji.description,
+    }
+}
+
+fn verification_sas_dto(sas: NativeVerificationSas) -> VerificationSasDto {
+    VerificationSasDto {
+        emoji: sas
+            .emoji
+            .map(|emoji| emoji.into_iter().map(verification_emoji_dto).collect()),
+        decimals: sas.decimals.map(|decimals| decimals.to_vec()),
+    }
+}
+
+fn verification_request_dto_with_sas(request: NativeVerificationRequest) -> VerificationRequestDto {
+    VerificationRequestDto {
+        flow_id: request.flow_id,
+        other_user_id: request.other_user_id,
+        other_device_id: request.other_device_id,
+        direction: verification_direction_as_str(request.direction),
+        phase: verification_phase_as_str(request.phase),
+        started_ts: request.started_ts,
+        sas: request.sas.map(verification_sas_dto),
+    }
+}
+
+/// Static fail-closed verification-SAS error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VerificationSasError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for VerificationSasError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for VerificationSasError {}
+
+fn verification_sas_failed(code: &str, description: &'static str) -> VerificationSasError {
+    VerificationSasError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_verification_sas_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> VerificationSasError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            verification_sas_failed(code, VERIFICATION_SAS_NO_SESSION_DESCRIPTION)
+        }
+        Some(code) if code.starts_with("v-crypto.1-") => {
+            verification_sas_failed(code, VERIFICATION_SAS_OWNER_DESCRIPTION)
+        }
+        _ => verification_sas_failed(
+            VERIFICATION_SAS_FAILED_CODE,
+            VERIFICATION_SAS_FAILED_DESCRIPTION,
+        ),
     }
 }
 
@@ -1663,6 +1772,131 @@ impl SharedCore {
                 .collect(),
         })
     }
+
+    pub async fn verification_start(
+        &self,
+        device_id: Option<String>,
+    ) -> Result<VerificationRequestDto, VerificationSasError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: VERIFICATION_START_COMMAND.to_owned(),
+                session_generation: VERIFICATION_SAS_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "deviceId": device_id }),
+            })
+            .await
+            .map_err(|error| {
+                map_verification_sas_core_error(VERIFICATION_START_NO_SESSION_CODE, error)
+            })?;
+        parse_verification_sas_request(response.payload)
+    }
+
+    pub async fn verification_accept(
+        &self,
+        flow_id: String,
+    ) -> Result<VerificationRequestDto, VerificationSasError> {
+        self.verification_flow_command(
+            VERIFICATION_ACCEPT_COMMAND,
+            VERIFICATION_ACCEPT_NO_SESSION_CODE,
+            flow_id,
+        )
+        .await
+    }
+
+    pub async fn verification_begin_sas(
+        &self,
+        flow_id: String,
+    ) -> Result<VerificationRequestDto, VerificationSasError> {
+        self.verification_flow_command(
+            VERIFICATION_BEGIN_SAS_COMMAND,
+            VERIFICATION_BEGIN_SAS_NO_SESSION_CODE,
+            flow_id,
+        )
+        .await
+    }
+
+    pub async fn verification_confirm(
+        &self,
+        flow_id: String,
+    ) -> Result<VerificationRequestDto, VerificationSasError> {
+        self.verification_flow_command(
+            VERIFICATION_CONFIRM_COMMAND,
+            VERIFICATION_CONFIRM_NO_SESSION_CODE,
+            flow_id,
+        )
+        .await
+    }
+
+    pub async fn verification_mismatch(
+        &self,
+        flow_id: String,
+    ) -> Result<VerificationRequestDto, VerificationSasError> {
+        self.verification_flow_command(
+            VERIFICATION_MISMATCH_COMMAND,
+            VERIFICATION_MISMATCH_NO_SESSION_CODE,
+            flow_id,
+        )
+        .await
+    }
+
+    pub async fn verification_cancel(
+        &self,
+        flow_id: String,
+    ) -> Result<VerificationRequestDto, VerificationSasError> {
+        self.verification_flow_command(
+            VERIFICATION_CANCEL_COMMAND,
+            VERIFICATION_CANCEL_NO_SESSION_CODE,
+            flow_id,
+        )
+        .await
+    }
+
+    pub async fn verification_dismiss(&self, flow_id: String) -> Result<(), VerificationSasError> {
+        self.core
+            .command(CommandEnvelope {
+                command: VERIFICATION_DISMISS_COMMAND.to_owned(),
+                session_generation: VERIFICATION_SAS_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "flowId": flow_id }),
+            })
+            .await
+            .map_err(|error| {
+                map_verification_sas_core_error(VERIFICATION_DISMISS_NO_SESSION_CODE, error)
+            })?;
+        Ok(())
+    }
+
+    async fn verification_flow_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        flow_id: String,
+    ) -> Result<VerificationRequestDto, VerificationSasError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: VERIFICATION_SAS_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "flowId": flow_id }),
+            })
+            .await
+            .map_err(|error| map_verification_sas_core_error(no_session, error))?;
+        parse_verification_sas_request(response.payload)
+    }
+}
+
+fn parse_verification_sas_request(
+    payload: serde_json::Value,
+) -> Result<VerificationRequestDto, VerificationSasError> {
+    let request: NativeVerificationRequest = serde_json::from_value(payload).map_err(|_| {
+        verification_sas_failed(
+            VERIFICATION_SAS_FAILED_CODE,
+            VERIFICATION_SAS_FAILED_DESCRIPTION,
+        )
+    })?;
+    Ok(verification_request_dto_with_sas(request))
 }
 
 /// Claims the restore slot for one in-flight attempt. Drop releases it unless
