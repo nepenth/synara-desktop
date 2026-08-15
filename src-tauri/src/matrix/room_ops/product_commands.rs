@@ -144,9 +144,6 @@ pub async fn matrix_room_set_power_level_tags(
     .await
 }
 
-pub(super) const ROOM_POWER_LEVELS_EVENT_TYPE: &str = "m.room.power_levels";
-pub(super) const POWER_LEVEL_TAGS_EVENT_TYPE: &str = "in.synara.room.power_level_tags";
-
 #[tauri::command]
 pub async fn matrix_invites_report_spam(
     core: State<'_, Arc<synara_core::Core>>,
