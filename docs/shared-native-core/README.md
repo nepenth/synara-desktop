@@ -123,12 +123,20 @@ The following describes merged source reachable from
 `ee896416` (#935). #708 and #710 remain the prior pure-helper P4
 evidence. #931 adds credential-free `register_flows`. #933 adds
 constructor-only `SharedCore`. #935 adds the S3a `IosSecretVault`
-callback. S3b restore is accepted. S3c Option A login is accepted.
-S3d attach is accepted. S4–S9 typed consume slices are accepted.
-S9-2 typed devices (snapshot/rename/delete start/cancel only;
-SyncService not started) is stacked at #950. S9-3 typed
-`matrix_room_join_rule_snapshot` is stacked at #951. S9-4 typed
-image-pack get/set is on this branch. Next is later account-data.
+callback. S3b restore landed in #937 (`4edfc1f5`). S3c Option A
+landed in #938 (`9b4ec54f`). S3d attach landed in #939 (`ad63d56d`).
+S4 typed `room_list_snapshot` landed in #940 (`5a6f3e9b`).
+S5 typed `invites_snapshot` landed in #942 (`17c29afd`). S6 typed
+timeline open/close/paginate landed in #944 (`1a77815a`).
+S7 typed typing/presence landed in #945 (`ee884ef3`).
+S8 typed `verification_list` landed in #947 (`52874c20`).
+S9 typed verification SAS landed in #948 (`c56a82aa`).
+S9-2 typed NativeDeviceOwner family (snapshot/rename/delete
+start/cancel only; SyncService not started) landed in #950 (`1539ed6a`).
+S9-3 typed `matrix_room_join_rule_snapshot` landed in #951 (`2f43e22c`).
+S9-4 typed image-pack get/set landed in #952 (`84c81e14`).
+S9-5 typed later account-data landed in #953 (`cbb82df1`).
+S9-6 typed m.direct is on this branch. Next is room notes.
 Password never rides a generic UniFFI `command`.
 
 | Phase | Merged evidence | Current boundary |
