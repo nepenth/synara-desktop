@@ -132,9 +132,9 @@ S7 typed typing/presence landed in #945 (`ee884ef3`).
 S8 typed `verification_list` landed in #947 (`52874c20`).
 S9 typed verification SAS landed in #948 (`c56a82aa`).
 S9-2 typed NativeDeviceOwner family (snapshot/rename/delete
-start/cancel only; SyncService not started) is on
-`agent/snc-p4-s9-devices` per [12-p4-s3-live-client.md](12-p4-s3-live-client.md) and playbook §9.5.
-Password never rides a generic UniFFI `command`. Next after S9-2 is S9-3.
+start/cancel only; SyncService not started) landed in #950 (`1539ed6a`).
+S9-3 typed `matrix_room_join_rule_snapshot` is on this branch. Next is image packs.
+Password never rides a generic UniFFI `command`.
 
 | Phase | Merged evidence | Current boundary |
 |---|---|---|

@@ -434,6 +434,20 @@ interface DeviceCommandError {
   Failed(string code, string description);
 };
 
+// Privacy-safe join-rule snapshot. Closed vocabulary only; no allow-list or tokens.
+dictionary RoomJoinRuleSnapshotDto {
+  string status;
+  string room_id;
+  u64 session_generation;
+  string join_rule;
+};
+
+// Static source constants only. Never echo room id, user id, token, or password.
+[Error]
+interface JoinRuleCommandError {
+  Failed(string code, string description);
+};
+
 // P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
 // UniFFI 0.28 Swift keeps `SharedCore()` for the primary constructor and
 // emits the named constructor as `SharedCore.newWithSecretStore(store:)`,
@@ -448,6 +462,7 @@ interface DeviceCommandError {
 // P4-S9 adds typed verification SAS start/accept/begin_sas/confirm/mismatch/cancel/dismiss.
 // P4-S9-2 adds typed device snapshot/rename/delete start/cancel only.
 // Backup/room-key/cross-signing stay off: leftover passphrase/path/password envelopes.
+// P4-S9-3 adds typed room_join_rule_snapshot only. No join-rule writer. Image packs stay off.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -538,5 +553,8 @@ interface SharedCore {
 
   [Async, Throws=DeviceCommandError]
   void device_delete_cancel(u64 operation_id, u64 session_generation);
+
+  [Async, Throws=JoinRuleCommandError]
+  RoomJoinRuleSnapshotDto room_join_rule_snapshot(string room_id, u64 session_generation);
 
 };

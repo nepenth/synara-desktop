@@ -33,6 +33,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreVerificationList.swift",
   "synara-ios/Synara/Services/SharedCoreVerificationSas.swift",
   "synara-ios/Synara/Services/SharedCoreDevices.swift",
+  "synara-ios/Synara/Services/SharedCoreJoinRules.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -102,6 +103,10 @@ const sharedCoreVerificationSas = readFileSync(
 );
 const sharedCoreDevices = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreDevices.swift"),
+  "utf8"
+);
+const sharedCoreJoinRules = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreJoinRules.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -315,6 +320,15 @@ const assertions = [
   [sharedCoreDevices, "deviceDeleteCancel", "P4-S9-2 product delete-cancel helper"],
   [sharedCoreDevices, "core: SharedCore", "P4-S9-2 helper takes an already-constructed SharedCore"],
   [sharedCoreDevices, "core.deviceSnapshot", "P4-S9-2 helper reads on the caller-owned instance"],
+  [sharedCoreFfi, "room_join_rule_snapshot", "P4-S9-3 typed join-rule snapshot FFI"],
+  [sharedCoreFfi, "matrix_room_join_rule_snapshot", "P4-S9-3 calls the registered join-rule snapshot"],
+  [udl, "RoomJoinRuleSnapshotDto room_join_rule_snapshot(", "P4-S9-3 SharedCore join-rule snapshot operation"],
+  [udl, "dictionary RoomJoinRuleSnapshotDto", "P4-S9-3 privacy-safe join-rule DTO"],
+  [udl, "interface JoinRuleCommandError", "P4-S9-3 static join-rule error"],
+  [swiftBindingsTests, "testSharedCoreJoinRulesWithoutSessionFailsClosed", "Swift P4-S9-3 fail-closed join-rule test"],
+  [sharedCoreJoinRules, "roomJoinRuleSnapshot", "P4-S9-3 product join-rule snapshot helper"],
+  [sharedCoreJoinRules, "core: SharedCore", "P4-S9-3 helper takes an already-constructed SharedCore"],
+  [sharedCoreJoinRules, "core.roomJoinRuleSnapshot", "P4-S9-3 helper reads on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1055,7 +1069,7 @@ if (projectionOperations.join(",") !== "open,session_snapshot,close") {
   throw new Error(`P4-3 facade must expose only open/session_snapshot/close; found ${projectionOperations.join(", ")}`);
 }
 
-// P4-S5 allows restore + login + attach + room_list_snapshot + invites_snapshot. Still forbid generic command.
+// P4-S9-3 allows restore + login + attach + consume wrappers through join-rule snapshot. Still forbid generic command.
 const sharedCoreObject = udl.match(/interface SharedCore \{([\s\S]*?)\};/);
 if (!sharedCoreObject) throw new Error("missing SharedCore object");
 const sharedCoreBody = sharedCoreObject[1].replace(/\/\/.*$/gm, "");
@@ -1116,9 +1130,12 @@ for (const required of ["device_snapshot", "device_rename", "device_delete_start
     throw new Error(`P4-S9-2 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "join_rule", "crypto_status", "backup_setup"]) {
+if (!sharedCoreBody.includes("room_join_rule_snapshot")) {
+  throw new Error("P4-S9-3 SharedCore must expose room_join_rule_snapshot");
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "image_pack", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-2`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-3`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1160,6 +1177,14 @@ if (sharedCoreDevices.includes("SharedCore(store:")) {
 for (const forbidden of ["backupStatus", "roomKeyTransferStatus", "crossSigningSetup"]) {
   if (sharedCoreDevices.includes(forbidden)) {
     throw new Error(`P4-S9-2 helper must not wrap leftover-adjacent ${forbidden}`);
+  }
+}
+if (sharedCoreJoinRules.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-3 helper must not construct-and-drop SharedCore");
+}
+for (const forbidden of ["setRoomJoinRule", "imagePack", "roomLeave", "roomJoin("]) {
+  if (sharedCoreJoinRules.includes(forbidden)) {
+    throw new Error(`P4-S9-3 helper must not wrap ${forbidden}`);
   }
 }
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
@@ -1216,6 +1241,11 @@ const deviceDeleteDto = udl.match(/dictionary DeviceDeleteDto \{([\s\S]*?)\};/);
 if (!deviceDeleteDto) throw new Error("missing DeviceDeleteDto");
 if (/\bpassword\b/.test(deviceDeleteDto[1]) || /\btoken\b/.test(deviceDeleteDto[1])) {
   throw new Error("DeviceDeleteDto must not carry password or token fields");
+}
+const joinRuleDto = udl.match(/dictionary RoomJoinRuleSnapshotDto \{([\s\S]*?)\};/);
+if (!joinRuleDto) throw new Error("missing RoomJoinRuleSnapshotDto");
+if (/\bpassword\b/.test(joinRuleDto[1]) || /\btoken\b/.test(joinRuleDto[1])) {
+  throw new Error("RoomJoinRuleSnapshotDto must not carry password or token fields");
 }
 const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
 if (!loginDto) throw new Error("missing SessionLoginDto");

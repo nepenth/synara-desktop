@@ -128,9 +128,9 @@ Run this checklist in order. Stop at the first yes.
    inventing one.
 3. **Is free disk ≥ 20 Gi?** Start the next **P4** slice in section 9.
    S1/#931, S2/#933, S3a/#935, S3b/#937, S3c/#938, S3d/#939,
-   S4/#940, S5/#942, S6/#944, S7/#945, S8/#947, and S9/#948 landed.
-   S9-2 devices (section 9.5) is on this branch. Next after merge is
-   S9-3 join rules. UDL/bindgen/cargo require this disk
+   S4/#940, S5/#942, S6/#944, S7/#945, S8/#947, S9/#948, and
+   S9-2/#950 landed. S9-3 join-rule snapshot (section 9.5) is on
+   this branch. Next after merge is image packs. UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
    allowed. Do not change UDL. Do not hand-edit generated Swift. Do
@@ -280,10 +280,11 @@ P4-S6  iOS timeline open/close/paginate LANDED #944
 P4-S7  iOS typing / presence          LANDED #945
 P4-S8  iOS verification list          LANDED #947
 P4-S9  iOS verification SAS           LANDED #948
-P4-S9-2 iOS devices                   **this branch**
+P4-S9-2 iOS devices                   LANDED #950
        matrix_device_snapshot / rename / delete_start / delete_cancel
        SyncService is not started. Backup/room-key/cross-signing stay off.
-P4-S9-3 iOS join rules                next family after devices
+P4-S9-3 iOS join rules                **this branch**
+       matrix_room_join_rule_snapshot only. No writer. Image packs stay off.
 P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        only when grep shows no remaining product callers
 P4-S11 NSE read-only store API        (never boot sync in NSE)
@@ -422,21 +423,19 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 
-S9 landed in #948 (`c56a82aa`). **S9-2 (this branch)** adds typed
-UniFFI wrappers for the NativeDeviceOwner family
-(snapshot/rename/delete start/cancel only).
+S9-2 devices landed in #950 (`1539ed6a`). **S9-3 (this branch)** adds a typed
+UniFFI wrapper for `matrix_room_join_rule_snapshot` only.
 
-1. `SharedCore` device methods call `Core.command` with the same
-   `session_generation` 0 camelCase payloads desktop uses.
-2. Do not reimplement device logic in Swift. Do not change SAS or
-   `verification_list`.
+1. `SharedCore.room_join_rule_snapshot` calls `Core.command` with the
+   same camelCase `roomId` / `sessionGeneration` payload desktop uses.
+2. Do not reimplement join-rule logic in Swift. Do not add a writer;
+   Core does not own one. Do not wrap leave/join/directory/members.
 3. Do not start `SyncService`. Missing owner fail-closes with
-   `p2-*-no-session`. Unstarted sync returns the registered
-   handler's real outcome.
+   `p2-join-rule-snapshot-no-session`. Unstarted sync returns the
+   registered handler's real outcome.
 4. Helper + XCTest are the iOS surface this slice. Do not swap
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
-5. One command family per PR. Wrap the seven already-registered
-   `device_owner()` commands. S9-3 is join rules. Do not wrap leftover
+5. One command family per PR. Next is image packs. Do not wrap leftover
    password/export/import/bootstrap, `matrix_crypto_status`, or
    `matrix_cross_signing_status`. Do not hit production homeservers.
 
