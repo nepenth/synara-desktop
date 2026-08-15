@@ -769,6 +769,34 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreOwnProfileWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let displayName = "S98 Secret Display Name"
+        let mxc = "mxc://example.org/s98SecretAvatarId"
+
+        do {
+            _ = try await SharedCoreOwnProfile.setOwnDisplayName(core: core, displayName: displayName)
+            XCTFail("Fail-closed SharedCore must not set own display name without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-set-own-display-name-no-session"))
+            for forbidden in ["syt_", "token", displayName] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreOwnProfile.setOwnAvatar(core: core, mxc: mxc)
+            XCTFail("Fail-closed SharedCore must not set own avatar without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-set-own-avatar-no-session"))
+            for forbidden in ["syt_", "token", mxc] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 

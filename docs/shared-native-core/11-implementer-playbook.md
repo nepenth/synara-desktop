@@ -129,9 +129,10 @@ Run this checklist in order. Stop at the first yes.
 3. **Is free disk ≥ 20 Gi?** Start the next **P4** slice in section 9.
    S1/#931, S2/#933, S3a/#935, S3b/#937, S3c/#938, S3d/#939,
    S4/#940, S5/#942, S6/#944, S7/#945, S8/#947, S9/#948,
-   S9-2/#950, S9-3/#951, S9-4/#952, S9-5/#953, and S9-6/#954 landed.
-   S9-7 room notes (section 9.5) is on this branch. Next after merge
-   is own display-name/avatar.
+   S9-2/#950, S9-3/#951, S9-4/#952, S9-5/#953, S9-6/#954, and
+   S9-7/#955 landed. S9-8 own display-name/avatar (section 9.5) is
+   on this branch. Next after merge is room name/topic/avatar on
+   NativeRoomJoinRuleOwner.
    UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
@@ -291,10 +292,13 @@ P4-S9-4 iOS image packs               LANDED #952
        six registered get/set commands. Metadata/JSON only.
 P4-S9-5 iOS later                     LANDED #953
        six registered later commands.
-P4-S9-6 iOS m.direct                  stacked #954
+P4-S9-6 iOS m.direct                  LANDED #954
        three registered m.direct commands.
-P4-S9-7 iOS room notes                **this branch**
-       five registered room-notes commands. Own display-name/avatar stay off.
+P4-S9-7 iOS room notes                LANDED #955
+       five registered room-notes commands.
+P4-S9-8 iOS own display-name/avatar   **this branch**
+       matrix_set_own_display_name / matrix_set_own_avatar.
+       Avatar is mxc:// (or empty clear) only. Image bytes stay off.
 P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        only when grep shows no remaining product callers
 P4-S11 NSE read-only store API        (never boot sync in NSE)
@@ -433,24 +437,25 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 
-S9-6 m.direct landed in #954 (`7e697182`). **S9-7 (this branch)** adds typed
-UniFFI wrappers for the five registered room-notes commands.
+S9-7 room notes landed in #955 (`1077e131`). **S9-8 (this branch)** adds typed
+UniFFI wrappers for the two registered own display-name/avatar commands.
 
-1. `SharedCore.room_notes_snapshot` / `room_notes_upsert` /
-   `room_notes_delete` / `room_notes_complete_todo` /
-   `room_notes_move_todo` call `Core.command` with the same camelCase
-   payloads desktop uses.
-2. Do not reimplement room-notes logic in Swift. Do not wrap own
-   display-name/avatar.
+1. `SharedCore.set_own_display_name` / `set_own_avatar` call
+   `Core.command` with the same camelCase payloads desktop uses.
+   Avatar is an `mxc://` (or empty clear) reference. Do not take a
+   path or raw image bytes.
+2. Do not reimplement profile writes in Swift. Do not wrap room
+   name/topic/avatar, backup status, or leftover media upload.
 3. Do not start `SyncService`. Missing owner fail-closes with the
    registered `p2-*-no-session` codes. Unstarted sync returns the
    registered handler's real outcome. Failed errors must not echo
-   note body text, room ids, or item ids.
+   display name or mxc.
 4. Helper + XCTest are the iOS surface this slice. Do not swap
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
-5. One command family per PR. Next is own display-name/avatar. Do not
-   wrap leftover password/export/import/bootstrap, `matrix_crypto_status`,
-   or `matrix_cross_signing_status`. Do not hit production homeservers.
+5. One command family per PR. This owner is exhausted. Next is room
+   name/topic/avatar on `NativeRoomJoinRuleOwner`. Do not wrap leftover
+   password/export/import/bootstrap, `matrix_crypto_status`, or
+   `matrix_cross_signing_status`. Do not hit production homeservers.
 
 ### 9.6 When you may delete `MatrixRustSDK`
 

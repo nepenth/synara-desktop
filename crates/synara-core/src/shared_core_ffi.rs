@@ -39,8 +39,10 @@
 //! three already-registered Core commands.
 //! P4-S9-7 adds typed room-notes snapshot/upsert/delete/complete_todo/
 //! move_todo wrappers for those five already-registered Core commands.
-//! Note body text may cross in snapshot/item DTOs. Failed errors never
-//! echo note body, room id, or item id. Own display-name/avatar stay off.
+//! P4-S9-8 adds typed `set_own_display_name` / `set_own_avatar` wrappers
+//! for those two already-registered Core commands. Avatar is an `mxc://`
+//! (or empty clear) reference only. Image/media bytes stay off. Failed
+//! errors never echo display name or mxc. Room name/topic/avatar stay off.
 //! This still exposes no generic command FFI or APNs surface.
 //! This is not the desktop leftover `matrix_restore_session`.
 
@@ -311,6 +313,15 @@ const ROOM_NOTES_FAILED_DESCRIPTION: &str = "The room-notes request could not be
 const ROOM_NOTES_INVALID_ITEM_CODE: &str = "p4-s9-7-room-notes-invalid-item";
 const ROOM_NOTES_INVALID_ITEM_DESCRIPTION: &str = "The room-notes item is invalid.";
 const ROOM_NOTES_OWNER_DESCRIPTION: &str = "The room-notes request is not available.";
+const OWN_PROFILE_COMMAND_GENERATION: u64 = 0;
+const SET_OWN_DISPLAY_NAME_COMMAND: &str = "matrix_set_own_display_name";
+const SET_OWN_AVATAR_COMMAND: &str = "matrix_set_own_avatar";
+const SET_OWN_DISPLAY_NAME_NO_SESSION_CODE: &str = "p2-set-own-display-name-no-session";
+const SET_OWN_AVATAR_NO_SESSION_CODE: &str = "p2-set-own-avatar-no-session";
+const OWN_PROFILE_NO_SESSION_DESCRIPTION: &str = "No own-profile session is available.";
+const OWN_PROFILE_FAILED_CODE: &str = "p4-s9-8-own-profile-failed";
+const OWN_PROFILE_FAILED_DESCRIPTION: &str = "The own-profile request could not be completed.";
+const OWN_PROFILE_OWNER_DESCRIPTION: &str = "The own-profile request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2424,6 +2435,34 @@ impl SharedCore {
         .await
     }
 
+    pub async fn set_own_display_name(
+        &self,
+        display_name: String,
+    ) -> Result<OwnProfileWriteDto, OwnProfileCommandError> {
+        let payload = own_profile_envelope_payload(serde_json::json!({
+            "displayName": display_name,
+        }))?;
+        self.own_profile_command(
+            SET_OWN_DISPLAY_NAME_COMMAND,
+            SET_OWN_DISPLAY_NAME_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+    }
+
+    pub async fn set_own_avatar(
+        &self,
+        mxc: String,
+    ) -> Result<OwnProfileWriteDto, OwnProfileCommandError> {
+        let payload = own_profile_envelope_payload(serde_json::json!({ "mxc": mxc }))?;
+        self.own_profile_command(
+            SET_OWN_AVATAR_COMMAND,
+            SET_OWN_AVATAR_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+    }
+
     async fn later_null_command(
         &self,
         command: &'static str,
@@ -2478,6 +2517,25 @@ impl SharedCore {
             .await
             .map_err(|error| map_room_notes_core_error(no_session, error))?;
         room_notes_snapshot_dto(response.payload)
+    }
+
+    async fn own_profile_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<OwnProfileWriteDto, OwnProfileCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: OWN_PROFILE_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_own_profile_core_error(no_session, error))?;
+        own_profile_write_dto(response.payload)
     }
 
     async fn image_pack_null_command(
@@ -3168,6 +3226,79 @@ fn room_notes_snapshot_dto(
             .flat_map(|room| room.items.into_values())
             .map(room_note_item_dto)
             .collect(),
+    })
+}
+
+/// Privacy-safe own-profile write ack. Status only; no display name or mxc.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnProfileWriteDto {
+    pub status: String,
+}
+
+/// Static fail-closed own-profile-family error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OwnProfileCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for OwnProfileCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for OwnProfileCommandError {}
+
+fn own_profile_failed(code: &str, description: &'static str) -> OwnProfileCommandError {
+    OwnProfileCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_own_profile_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> OwnProfileCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            own_profile_failed(code, OWN_PROFILE_NO_SESSION_DESCRIPTION)
+        }
+        Some(code) if code.starts_with("v-send.r-avatar-") => {
+            own_profile_failed(code, OWN_PROFILE_OWNER_DESCRIPTION)
+        }
+        _ => own_profile_failed(OWN_PROFILE_FAILED_CODE, OWN_PROFILE_FAILED_DESCRIPTION),
+    }
+}
+
+fn own_profile_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, OwnProfileCommandError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(own_profile_failed(
+            OWN_PROFILE_FAILED_CODE,
+            OWN_PROFILE_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn own_profile_write_dto(
+    payload: serde_json::Value,
+) -> Result<OwnProfileWriteDto, OwnProfileCommandError> {
+    let status = payload
+        .get("status")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| {
+            own_profile_failed(OWN_PROFILE_FAILED_CODE, OWN_PROFILE_FAILED_DESCRIPTION)
+        })?;
+    Ok(OwnProfileWriteDto {
+        status: status.to_owned(),
     })
 }
 
