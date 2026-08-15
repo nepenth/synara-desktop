@@ -70,7 +70,10 @@ fn spaces_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("dictionary RestrictedJoinReparentDto"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
-    assert!(!udl.contains("matrix_send_text"));
+    assert!(!udl.contains("matrix_send_sticker"));
+    assert!(!udl.contains("matrix_send_poll"));
+    assert!(!udl.contains("matrix_edit_message"));
+    assert!(!udl.contains("matrix_poll_respond"));
     let shared_core = udl
         .split("interface SharedCore {")
         .nth(1)
@@ -85,7 +88,10 @@ fn spaces_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("room_members_snapshot("));
     assert!(shared_core.contains("room_create("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("send_text"));
+    assert!(!shared_core.contains("send_sticker"));
+    assert!(!shared_core.contains("send_poll"));
+    assert!(!shared_core.contains("edit_message"));
+    assert!(!shared_core.contains("poll_respond"));
     assert!(!shared_core.contains("backup_status"));
 }
 

@@ -71,7 +71,10 @@ fn mdirect_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("mdirect_remove"));
     assert!(shared_core.contains("later_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("send_text"));
+    assert!(!shared_core.contains("send_sticker"));
+    assert!(!shared_core.contains("send_poll"));
+    assert!(!shared_core.contains("edit_message"));
+    assert!(!shared_core.contains("poll_respond"));
     assert!(!shared_core.contains("backup_status"));
 }
 

@@ -82,7 +82,10 @@ fn device_surface_exposes_only_the_registered_device_family() {
     assert!(!shared_core.contains("backup_status"));
     assert!(!shared_core.contains("room_key_transfer_status"));
     assert!(!shared_core.contains("cross_signing_setup"));
-    assert!(!shared_core.contains("send_text"));
+    assert!(!shared_core.contains("send_sticker"));
+    assert!(!shared_core.contains("send_poll"));
+    assert!(!shared_core.contains("edit_message"));
+    assert!(!shared_core.contains("poll_respond"));
     assert!(!shared_core.contains("crypto_status"));
 }
 

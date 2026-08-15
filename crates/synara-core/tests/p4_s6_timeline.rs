@@ -67,8 +67,11 @@ fn timeline_surface_exposes_only_open_close_paginate() {
     assert!(udl.contains("timeline_open"));
     assert!(udl.contains("timeline_close"));
     assert!(udl.contains("timeline_paginate"));
-    assert!(!udl.contains("send_text"));
-    assert!(!udl.contains("matrix_send_text"));
+    assert!(!udl.contains("send_sticker"));
+    assert!(!udl.contains("matrix_send_sticker"));
+    assert!(!udl.contains("matrix_send_poll"));
+    assert!(!udl.contains("matrix_edit_message"));
+    assert!(!udl.contains("matrix_poll_respond"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_verification_start"));
     let shared_core = udl
@@ -81,7 +84,10 @@ fn timeline_surface_exposes_only_open_close_paginate() {
     assert!(shared_core.contains("timeline_paginate"));
     assert!(shared_core.contains("invites_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("send_text"));
+    assert!(!shared_core.contains("send_sticker"));
+    assert!(!shared_core.contains("send_poll"));
+    assert!(!shared_core.contains("edit_message"));
+    assert!(!shared_core.contains("poll_respond"));
 }
 
 #[test]

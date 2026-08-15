@@ -59,7 +59,10 @@ fn invites_surface_exposes_only_the_registered_snapshot_command() {
     assert!(!udl.contains("matrix_invites_block_sender"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("attach_typing"));
-    assert!(!udl.contains("matrix_send_text"));
+    assert!(!udl.contains("matrix_send_sticker"));
+    assert!(!udl.contains("matrix_send_poll"));
+    assert!(!udl.contains("matrix_edit_message"));
+    assert!(!udl.contains("matrix_poll_respond"));
     let shared_core = udl
         .split("interface SharedCore {")
         .nth(1)
@@ -68,7 +71,10 @@ fn invites_surface_exposes_only_the_registered_snapshot_command() {
     assert!(shared_core.contains("invites_snapshot"));
     assert!(shared_core.contains("room_list_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("send_text"));
+    assert!(!shared_core.contains("send_sticker"));
+    assert!(!shared_core.contains("send_poll"));
+    assert!(!shared_core.contains("edit_message"));
+    assert!(!shared_core.contains("poll_respond"));
 }
 
 #[test]

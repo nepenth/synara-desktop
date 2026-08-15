@@ -3,7 +3,7 @@
 //!
 //! Calls the already-registered Core handlers. Does not start SyncService.
 //! Failed errors stay static and must not echo room id or event id.
-//! Send text stays off.
+//! Sticker, poll, edit, and respond stay off.
 
 use std::collections::HashMap;
 use std::fs;
@@ -66,7 +66,10 @@ fn composer_reply_draft_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("reaction_ensure("));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
-    assert!(!udl.contains("matrix_send_text"));
+    assert!(!udl.contains("matrix_send_sticker"));
+    assert!(!udl.contains("matrix_send_poll"));
+    assert!(!udl.contains("matrix_edit_message"));
+    assert!(!udl.contains("matrix_poll_respond"));
     let shared_core = udl
         .split("interface SharedCore {")
         .nth(1)
@@ -78,7 +81,10 @@ fn composer_reply_draft_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("reaction_ensure("));
     assert!(shared_core.contains("timeline_event_readback("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("send_text"));
+    assert!(!shared_core.contains("send_sticker"));
+    assert!(!shared_core.contains("send_poll"));
+    assert!(!shared_core.contains("edit_message"));
+    assert!(!shared_core.contains("poll_respond"));
     assert!(!shared_core.contains("backup_status"));
 }
 

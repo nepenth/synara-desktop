@@ -88,7 +88,10 @@ fn room_create_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("dictionary RoomCreateDto"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
-    assert!(!udl.contains("matrix_send_text"));
+    assert!(!udl.contains("matrix_send_sticker"));
+    assert!(!udl.contains("matrix_send_poll"));
+    assert!(!udl.contains("matrix_edit_message"));
+    assert!(!udl.contains("matrix_poll_respond"));
     let request_dto = udl
         .split("dictionary RoomCreateRequestDto {")
         .nth(1)
@@ -109,7 +112,10 @@ fn room_create_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("room_set_power_level("));
     assert!(shared_core.contains("room_set_power_level_tags("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("send_text"));
+    assert!(!shared_core.contains("send_sticker"));
+    assert!(!shared_core.contains("send_poll"));
+    assert!(!shared_core.contains("edit_message"));
+    assert!(!shared_core.contains("poll_respond"));
     assert!(!shared_core.contains("backup_status"));
 }
 

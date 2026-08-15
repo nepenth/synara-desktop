@@ -96,6 +96,9 @@
 //! `composer_clear_reply_draft` wrappers for those three already-registered
 //! Core commands. Failed errors never echo room id or event id. Send text
 //! stays off.
+//! P4-S9-22 adds a typed `send_text` wrapper for the already-registered
+//! `matrix_send_text` Core command only. No media bytes. Failed errors never
+//! echo body or room id. Sticker, poll, edit, and respond stay off.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -543,6 +546,13 @@ const COMPOSER_REPLY_DRAFT_FAILED_DESCRIPTION: &str =
     "The composer reply-draft request could not be completed.";
 const COMPOSER_REPLY_DRAFT_OWNER_DESCRIPTION: &str =
     "The composer reply-draft request is not available.";
+const SEND_TEXT_GENERATION: u64 = 0;
+const SEND_TEXT_COMMAND: &str = "matrix_send_text";
+const SEND_TEXT_NO_SESSION_CODE: &str = "p2-send-text-no-session";
+const SEND_TEXT_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
+const SEND_TEXT_FAILED_CODE: &str = "p4-s9-22-send-text-failed";
+const SEND_TEXT_FAILED_DESCRIPTION: &str = "The send-text request could not be completed.";
+const SEND_TEXT_OWNER_DESCRIPTION: &str = "The send-text request is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -979,6 +989,31 @@ impl std::fmt::Display for ComposerReplyDraftError {
 }
 
 impl std::error::Error for ComposerReplyDraftError {}
+
+/// Privacy-safe send-text write ack from the registered Core command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SendTextDto {
+    pub room_id: String,
+    pub event_id: String,
+    pub local_txn_id: String,
+    pub status: String,
+}
+
+/// Static fail-closed send-text error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SendTextError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for SendTextError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for SendTextError {}
 
 /// Static fail-closed timeline error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3549,6 +3584,33 @@ impl SharedCore {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub async fn send_text(
+        &self,
+        room_id: String,
+        body: String,
+        msg_type: Option<String>,
+        formatted_body: Option<String>,
+        mention_user_ids: Option<Vec<String>>,
+        mention_room: Option<bool>,
+        reply_to: Option<String>,
+        thread_root: Option<String>,
+        txn_id: Option<String>,
+    ) -> Result<SendTextDto, SendTextError> {
+        self.send_text_command(serde_json::json!({
+            "roomId": room_id,
+            "body": body,
+            "msgType": msg_type,
+            "formattedBody": formatted_body,
+            "mentionUserIds": mention_user_ids,
+            "mentionRoom": mention_room,
+            "replyTo": reply_to,
+            "threadRoot": thread_root,
+            "txnId": txn_id,
+        }))
+        .await
+    }
+
     async fn space_null_command(
         &self,
         command: &'static str,
@@ -3648,6 +3710,26 @@ impl SharedCore {
                 )
             })?;
         Ok(composer_reply_draft_dto(readback))
+    }
+
+    async fn send_text_command(
+        &self,
+        payload: serde_json::Value,
+    ) -> Result<SendTextDto, SendTextError> {
+        let payload = send_text_envelope_payload(payload)?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: SEND_TEXT_COMMAND.to_owned(),
+                session_generation: SEND_TEXT_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_send_text_core_error(SEND_TEXT_NO_SESSION_CODE, error))?;
+        let result: SendTextResultWire = serde_json::from_value(response.payload)
+            .map_err(|_| send_text_failed(SEND_TEXT_FAILED_CODE, SEND_TEXT_FAILED_DESCRIPTION))?;
+        Ok(send_text_dto(result))
     }
 
     async fn invite_action_command(
@@ -6554,6 +6636,64 @@ fn composer_reply_draft_dto(readback: ComposerReplyDraftReadbackWire) -> Compose
         room_id: readback.room_id,
         status: readback.status,
         draft: readback.draft.map(composer_reply_draft_preview_dto),
+    }
+}
+
+fn send_text_failed(code: &str, description: &'static str) -> SendTextError {
+    SendTextError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_send_text_core_error(no_session: &'static str, error: MatrixIpcError) -> SendTextError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            send_text_failed(code, SEND_TEXT_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code.starts_with("p2-send-text-")
+                || code.starts_with("d0.4-send-")
+                || code.starts_with("v-send.4-")
+                || code.starts_with("v-send.5-")
+                || code.starts_with("p6.1-") =>
+        {
+            send_text_failed(code, SEND_TEXT_OWNER_DESCRIPTION)
+        }
+        _ => send_text_failed(SEND_TEXT_FAILED_CODE, SEND_TEXT_FAILED_DESCRIPTION),
+    }
+}
+
+fn send_text_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, SendTextError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(send_text_failed(
+            SEND_TEXT_FAILED_CODE,
+            SEND_TEXT_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SendTextResultWire {
+    room_id: String,
+    event_id: String,
+    local_txn_id: String,
+    status: String,
+}
+
+fn send_text_dto(result: SendTextResultWire) -> SendTextDto {
+    SendTextDto {
+        room_id: result.room_id,
+        event_id: result.event_id,
+        local_txn_id: result.local_txn_id,
+        status: result.status,
     }
 }
 

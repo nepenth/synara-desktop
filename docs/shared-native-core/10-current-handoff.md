@@ -483,9 +483,10 @@ for any of those gates.
    landed in #965. S9-18 typed invite
    accept/decline/spam/block landed in #966. S9-19 typed
    timeline read-state landed in #967. S9-20 typed
-   timeline reactions landed in #968. **S9-21** typed
-   composer reply draft (playbook §9.5) is on this branch. Next after
-   merge is send text. UniFFI expansion
+   timeline reactions landed in #968. S9-21 typed
+   composer reply draft landed in #969. **S9-22** typed
+   send text (playbook §9.5) is on this branch. Next after
+   merge is send sticker. UniFFI expansion
    needs free disk ≥ 20 Gi for
    local cargo/bindgen. There is no source-without-bindgen exception.
    If disk is under 20 Gi: stop. Docs-only PRs are still allowed.
