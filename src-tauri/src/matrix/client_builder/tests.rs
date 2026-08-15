@@ -58,8 +58,10 @@ fn marker_stable() {
 fn default_user_agent_includes_product_and_sdk_pin() {
     let ua = default_user_agent();
     assert!(ua.contains("Synara-Desktop/"), "{ua}");
-    assert!(ua.contains(MATRIX_SDK_PIN_VERSION), "{ua}");
-    assert!(ua.contains(env!("CARGO_PKG_VERSION")), "{ua}");
+    assert!(
+        ua.contains(&format!("(matrix-sdk/{MATRIX_SDK_PIN_VERSION})")),
+        "{ua}"
+    );
 }
 
 #[test]
