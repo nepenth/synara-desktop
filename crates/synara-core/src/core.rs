@@ -51,7 +51,7 @@ use crate::app::spaces::{
     NativeSpaceChildrenSnapshot, NativeSpaceHierarchySnapshot, NativeSpaceParentsSnapshot,
 };
 use crate::app::sync::{
-    SyncReadinessSnapshot, SyncServiceOwner, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID,
+    SyncReadiness, SyncReadinessSnapshot, SyncServiceOwner, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID,
 };
 use crate::app::timeline::{
     NativeComposerReplyDraftReadback, NativeReactionMutationResult, NativeTimelineActionReadback,
@@ -1524,6 +1524,23 @@ impl Core {
 
     pub fn session_snapshot(&self) -> Result<Option<SessionSnapshot>, MatrixIpcError> {
         self.state.session_snapshot()
+    }
+
+    /// Whether a SyncService owner is attached. Does not start sync.
+    pub fn sync_service_attached(&self) -> bool {
+        self.state.sync_owner().ok().flatten().is_some()
+    }
+
+    /// Whether the attached SyncService has been started. Idle/unconfigured
+    /// owners count as not started. Does not start sync.
+    pub fn sync_service_started(&self) -> bool {
+        match self.state.sync_owner() {
+            Ok(Some(owner)) => matches!(
+                owner.observe().readiness,
+                SyncReadiness::Running | SyncReadiness::Offline
+            ),
+            _ => false,
+        }
     }
 
     pub fn registered_commands(&self) -> Vec<String> {

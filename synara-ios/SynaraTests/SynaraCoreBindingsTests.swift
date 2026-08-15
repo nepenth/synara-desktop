@@ -1818,6 +1818,40 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreNseStoreWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let userId = "@alice:example.org"
+        let homeserver = "https://matrix.example.org"
+        let roomId = "!s11SecretRoom:example.org"
+        let eventId = "$s11SecretEvent:example.org"
+
+        do {
+            _ = try await SharedCoreNseStore.storeStatus(core: core)
+            XCTFail("Fail-closed SharedCore must not report NSE store status before open")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p4-s11-nse-store-not-open"))
+            for forbidden in ["syt_", "token", userId, homeserver, roomId, eventId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreNseStore.eventPreview(
+                core: core,
+                roomId: roomId,
+                eventId: eventId
+            )
+            XCTFail("Fail-closed SharedCore must not read an NSE preview before open")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p4-s11-nse-store-not-open"))
+            for forbidden in ["syt_", "token", userId, homeserver, roomId, eventId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testSharedCoreTimelineForwardWithoutSessionFailsClosed() async {
         let core = SharedCore()
         let sourceRoomId = "!s930SecretSource:example.org"
