@@ -31,7 +31,7 @@ synara-ios/                    # iOS shell (slim after P4)
 
 **Target** is section 3.2–3.5: both shells are thin adapters over one Core.
 
-**Current (tip `8d9ba186`):** desktop already calls `Core::command` for one
+**Current (tip `1207aece`):** desktop already calls `Core::command` for one
 hundred eleven names and attaches live owners. iOS has typed SharedCore
 wrappers through S9-31 (helper + XCTest), plus credential-free
 `login_flows` / `register_flows`, `SharedCore` constructors, optional

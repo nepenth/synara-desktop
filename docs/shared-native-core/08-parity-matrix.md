@@ -4,8 +4,8 @@ Legend: ✅ shipping / 🔨 in progress / ⛔ not yet
 
 ## Current bounded evidence (not parity completion)
 
-At `feature/shared-native-core` `8d9ba186`
-(#981), P2 still registers one hundred eleven names—the prior one
+At `feature/shared-native-core` `1207aece`
+(#982), P2 still registers one hundred eleven names—the prior one
 hundred nine plus `matrix_invites_report_spam` and
 `matrix_invites_block_sender`. Desktop uses that registry. iOS has
 typed SharedCore wrappers through S9-31 (helper + XCTest) but product

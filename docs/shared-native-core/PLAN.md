@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`8d9ba186` (#981 docs honesty after #980):** P0 is
+`1207aece` (#982 bindgen hygiene after #981):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -160,11 +160,12 @@ acceptance criteria have all passed.
    five invite commands are already registered. Twenty-one census names
    stay desktop (secrets, file paths, bytes).
 2. **P4 serial iOS** of surfaces Core already owns, in the playbook
-   section 9 order. S1–S9-31 have landed. S10 is blocked while product
-   Swift still references `MatrixRustSDK`. Regenerating Swift bindings
-   needs disk ≥ 20 Gi. iOS still runs `MatrixRustSDKService` /
-   `RoomListService` / `TimelineService`. That is the remaining dual
-   implementation.
+   section 9 order. S1–S9-31 have landed. S10 was started and
+   stopped: leftover product paths still require `MatrixRustSDK`
+   (playbook §9.6). Do not invent leftover UniFFI. Regenerating
+   Swift bindings needs disk ≥ 20 Gi. iOS still runs
+   `MatrixRustSDKService` / `RoomListService` / `TimelineService`.
+   That is the remaining dual implementation.
 3. **P3 thinning** continues as iOS/desktop leftovers shrink. Desktop is
    not a thin shell while Keychain, byte commands, and password UIAA live
    there — and those leftovers are *intended*.
