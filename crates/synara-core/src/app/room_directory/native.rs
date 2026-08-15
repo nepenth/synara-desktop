@@ -8,7 +8,7 @@ use super::session::{DirectoryRoomHit, DirectoryRoomType, MAX_BATCH_CHARS, MAX_T
 
 pub const MAX_PROTOCOL_INSTANCES: usize = 128;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DirectoryRoomTypeFilter {
     Room,
