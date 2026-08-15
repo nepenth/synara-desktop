@@ -131,9 +131,10 @@ Run this checklist in order. Stop at the first yes.
    S4/#940, S5/#942, S6/#944, S7/#945, S8/#947, S9/#948,
    S9-2/#950, S9-3/#951, S9-4/#952, S9-5/#953, S9-6/#954,
    S9-7/#955, S9-8/#956, S9-9/#957, S9-10/#958, S9-11/#959, and
-   S9-12/#960, S9-13/#961, S9-14/#962, and S9-15/#963 landed.
-   S9-17 spaces (section 9.5) is on this branch.
-   Next after merge is invite accept/decline/spam/block on
+   S9-12/#960, S9-13/#961, S9-14/#962, S9-15/#963, S9-16/#964,
+   and S9-17/#965 landed. S9-18 invite accept/decline/spam/block
+   (section 9.5) is on this branch. Next after merge is timeline
+   read-state.
    UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
@@ -324,11 +325,15 @@ P4-S9-16 iOS members snapshots        stacked
        matrix_room_members_snapshot / matrix_room_power_levels_snapshot /
        matrix_room_creators_snapshot / matrix_room_power_level_tags_snapshot.
        Reads only.
-P4-S9-17 iOS spaces                   **this branch**
+P4-S9-17 iOS spaces                   stacked
        matrix_space_parents_snapshot / matrix_space_hierarchy_snapshot /
        matrix_space_children_snapshot / matrix_space_child_set /
        matrix_space_child_remove / matrix_restricted_join_reparent.
        Child set/remove are metadata only. Invite accept/decline stay off.
+P4-S9-18 iOS invite actions           **this branch**
+       matrix_invites_accept / matrix_invites_decline /
+       matrix_invites_report_spam / matrix_invites_block_sender.
+       Returns the existing invite snapshot. Do not re-wrap S5 snapshot.
 P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        only when grep shows no remaining product callers
 P4-S11 NSE read-only store API        (never boot sync in NSE)
@@ -467,33 +472,30 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 
-S9-16 members snapshots is stacked at #964. **S9-17 (this branch)** adds
-typed UniFFI wrappers for the six registered space commands.
+S9-17 spaces is stacked at #965. **S9-18 (this branch)** adds typed
+UniFFI wrappers for the four registered invite-action commands.
 
-1. `SharedCore.space_parents_snapshot` / `space_hierarchy_snapshot` /
-   `space_children_snapshot` / `space_child_set` / `space_child_remove`
-   / `restricted_join_reparent` call `Core.command` with the same
-   camelCase payloads desktop uses. Child set/remove are metadata only
-   (room ids, via, order, suggested). Do not re-wrap members snapshots
-   or room create.
-2. Do not reimplement spaces in Swift. Do not wrap invite
-   accept/decline/spam/block, leftover media, or leftover secret
-   envelopes.
+1. `SharedCore.invites_accept` / `invites_decline` / `invites_report_spam`
+   / `invites_block_sender` call `Core.command` with the same camelCase
+   `{ roomId }` payloads desktop uses. They return the existing
+   `InviteSnapshotDto`. Do not re-wrap S5 `invites_snapshot`.
+2. Do not reimplement invite actions in Swift. Do not wrap timeline
+   jump/read-state, leftover media, or leftover secret envelopes.
 3. Do not start `SyncService`. Missing owner fail-closes with the
-   registered `p2-space-*-no-session` / `p2-restricted-join-reparent-no-session`
-   codes. Unstarted sync returns the registered handler's real outcome.
-   Planted parents/children are a local joined-room walk. Planted
-   hierarchy must fail on invalid room id and must not require a live
-   server. Planted child set/remove/reparent must fail on local room
-   lookup. Failed errors must not echo room ids.
+   registered `p2-invites-accept-no-session` /
+   `p2-invites-decline-no-session` / `p2-invites-report-spam-no-session`
+   / `p2-invites-block-sender-no-session` codes. Unstarted sync returns
+   the registered handler's real outcome. Planted accept/decline/spam/
+   block must fail on local invite lookup (`v-rooms.1-invite-not-found`)
+   and must not require a live server. Failed errors must not echo room
+   id or sender id.
 4. Helper + XCTest are the iOS surface this slice. Do not swap
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
-5. One command family per PR. Next is invite accept/decline/spam/block
-   on `NativeRoomJoinRuleOwner` (`matrix_invites_accept` /
-   `matrix_invites_decline` / `matrix_invites_report_spam` /
-   `matrix_invites_block_sender`). Do not wrap leftover
-   password/export/import/bootstrap, `matrix_crypto_status`, or
-   `matrix_cross_signing_status`. Do not hit production homeservers.
+5. One command family per PR. Next is timeline jump_latest / set_read_state
+   (`matrix_timeline_jump_latest` / `matrix_timeline_set_read_state`).
+   Do not wrap leftover password/export/import/bootstrap,
+   `matrix_crypto_status`, or `matrix_cross_signing_status`. Do not hit
+   production homeservers. Do not start S10.
 
 ### 9.6 When you may delete `MatrixRustSDK`
 

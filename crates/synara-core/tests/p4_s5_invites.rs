@@ -54,7 +54,6 @@ fn test_runtime() -> tokio::runtime::Runtime {
 fn invites_surface_exposes_only_the_registered_snapshot_command() {
     let udl = include_str!("../src/synara_core.udl");
     assert!(udl.contains("invites_snapshot"));
-    assert!(!udl.contains("matrix_invites_accept"));
     assert!(!udl.contains("matrix_invites_decline"));
     assert!(!udl.contains("matrix_invites_report_spam"));
     assert!(!udl.contains("matrix_invites_block_sender"));
@@ -69,7 +68,6 @@ fn invites_surface_exposes_only_the_registered_snapshot_command() {
     assert!(shared_core.contains("invites_snapshot"));
     assert!(shared_core.contains("room_list_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("invites_accept"));
     assert!(!shared_core.contains("jump_latest"));
 }
 

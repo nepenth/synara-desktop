@@ -79,6 +79,11 @@
 //! already-registered Core commands. Child set/remove are metadata only
 //! (room ids, via, order, suggested). No bytes. Failed errors never echo
 //! room ids. Invite accept/decline stay off.
+//! P4-S9-18 adds typed `invites_accept` / `invites_decline` /
+//! `invites_report_spam` / `invites_block_sender` wrappers for those four
+//! already-registered Core commands. They return the existing invite
+//! snapshot. Failed errors never echo room id or sender id. Timeline jump
+//! and read-state stay off.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -471,6 +476,19 @@ const SPACE_NO_SESSION_DESCRIPTION: &str = "No space session is available.";
 const SPACE_FAILED_CODE: &str = "p4-s9-17-spaces-failed";
 const SPACE_FAILED_DESCRIPTION: &str = "The space request could not be completed.";
 const SPACE_OWNER_DESCRIPTION: &str = "The space request is not available.";
+const INVITE_ACTION_GENERATION: u64 = 0;
+const INVITES_ACCEPT_COMMAND: &str = "matrix_invites_accept";
+const INVITES_DECLINE_COMMAND: &str = "matrix_invites_decline";
+const INVITES_REPORT_SPAM_COMMAND: &str = "matrix_invites_report_spam";
+const INVITES_BLOCK_SENDER_COMMAND: &str = "matrix_invites_block_sender";
+const INVITES_ACCEPT_NO_SESSION_CODE: &str = "p2-invites-accept-no-session";
+const INVITES_DECLINE_NO_SESSION_CODE: &str = "p2-invites-decline-no-session";
+const INVITES_REPORT_SPAM_NO_SESSION_CODE: &str = "p2-invites-report-spam-no-session";
+const INVITES_BLOCK_SENDER_NO_SESSION_CODE: &str = "p2-invites-block-sender-no-session";
+const INVITE_ACTION_NO_SESSION_DESCRIPTION: &str = "No invite-action session is available.";
+const INVITE_ACTION_FAILED_CODE: &str = "p4-s9-18-invite-actions-failed";
+const INVITE_ACTION_FAILED_DESCRIPTION: &str = "The invite action could not be completed.";
+const INVITE_ACTION_OWNER_DESCRIPTION: &str = "The invite action is not available.";
 
 /// Static fail-closed vault error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3114,6 +3132,54 @@ impl SharedCore {
         restricted_join_reparent_dto(response)
     }
 
+    pub async fn invites_accept(
+        &self,
+        room_id: String,
+    ) -> Result<InviteSnapshotDto, InviteActionError> {
+        self.invite_action_command(
+            INVITES_ACCEPT_COMMAND,
+            INVITES_ACCEPT_NO_SESSION_CODE,
+            room_id,
+        )
+        .await
+    }
+
+    pub async fn invites_decline(
+        &self,
+        room_id: String,
+    ) -> Result<InviteSnapshotDto, InviteActionError> {
+        self.invite_action_command(
+            INVITES_DECLINE_COMMAND,
+            INVITES_DECLINE_NO_SESSION_CODE,
+            room_id,
+        )
+        .await
+    }
+
+    pub async fn invites_report_spam(
+        &self,
+        room_id: String,
+    ) -> Result<InviteSnapshotDto, InviteActionError> {
+        self.invite_action_command(
+            INVITES_REPORT_SPAM_COMMAND,
+            INVITES_REPORT_SPAM_NO_SESSION_CODE,
+            room_id,
+        )
+        .await
+    }
+
+    pub async fn invites_block_sender(
+        &self,
+        room_id: String,
+    ) -> Result<InviteSnapshotDto, InviteActionError> {
+        self.invite_action_command(
+            INVITES_BLOCK_SENDER_COMMAND,
+            INVITES_BLOCK_SENDER_NO_SESSION_CODE,
+            room_id,
+        )
+        .await
+    }
+
     async fn space_null_command(
         &self,
         command: &'static str,
@@ -3140,6 +3206,28 @@ impl SharedCore {
             .await
             .map_err(|error| map_space_core_error(no_session, error))?;
         Ok(response.payload)
+    }
+
+    async fn invite_action_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        room_id: String,
+    ) -> Result<InviteSnapshotDto, InviteActionError> {
+        let payload = invite_action_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+        }))?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: INVITE_ACTION_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_invite_action_core_error(no_session, error))?;
+        invite_action_snapshot_dto(response.payload)
     }
 
     async fn room_members_snapshot_command(
@@ -5726,6 +5814,75 @@ fn map_space_core_error(no_session: &'static str, error: MatrixIpcError) -> Spac
         }
         _ => space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION),
     }
+}
+
+/// Static fail-closed invite-action error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InviteActionError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for InviteActionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for InviteActionError {}
+
+fn invite_action_failed(code: &str, description: &'static str) -> InviteActionError {
+    InviteActionError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_invite_action_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> InviteActionError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            invite_action_failed(code, INVITE_ACTION_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code.starts_with("v-rooms.1-invite")
+                || code.starts_with("p2-invites-")
+                || code == "v-send.r-room-profile-join-rule-requires-session" =>
+        {
+            invite_action_failed(code, INVITE_ACTION_OWNER_DESCRIPTION)
+        }
+        _ => invite_action_failed(INVITE_ACTION_FAILED_CODE, INVITE_ACTION_FAILED_DESCRIPTION),
+    }
+}
+
+fn invite_action_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, InviteActionError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(invite_action_failed(
+            INVITE_ACTION_FAILED_CODE,
+            INVITE_ACTION_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn invite_action_snapshot_dto(
+    payload: serde_json::Value,
+) -> Result<InviteSnapshotDto, InviteActionError> {
+    let snapshot: NativeInviteSnapshot = serde_json::from_value(payload).map_err(|_| {
+        invite_action_failed(INVITE_ACTION_FAILED_CODE, INVITE_ACTION_FAILED_DESCRIPTION)
+    })?;
+    Ok(InviteSnapshotDto {
+        session_generation: snapshot.session_generation,
+        invites: snapshot.invites.into_iter().map(invite_dto).collect(),
+    })
 }
 
 fn space_envelope_payload(

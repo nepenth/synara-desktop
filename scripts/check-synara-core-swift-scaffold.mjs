@@ -48,6 +48,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreRoomCreate.swift",
   "synara-ios/Synara/Services/SharedCoreRoomMembersSnapshots.swift",
   "synara-ios/Synara/Services/SharedCoreSpaces.swift",
+  "synara-ios/Synara/Services/SharedCoreInviteActions.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -177,6 +178,10 @@ const sharedCoreRoomMembersSnapshots = readFileSync(
 );
 const sharedCoreSpaces = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreSpaces.swift"),
+  "utf8"
+);
+const sharedCoreInviteActions = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreInviteActions.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -645,6 +650,24 @@ const assertions = [
   [sharedCoreSpaces, "core: SharedCore", "P4-S9-17 helper takes an already-constructed SharedCore"],
   [sharedCoreSpaces, "core.spaceParentsSnapshot", "P4-S9-17 helper reads on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreSpaces.swift in Sources", "P4-S9-17 helper in Xcode target"],
+  [sharedCoreFfi, "invites_accept", "P4-S9-18 typed invites-accept FFI"],
+  [sharedCoreFfi, "matrix_invites_accept", "P4-S9-18 calls the registered invites-accept command"],
+  [sharedCoreFfi, "matrix_invites_decline", "P4-S9-18 calls the registered invites-decline command"],
+  [sharedCoreFfi, "matrix_invites_report_spam", "P4-S9-18 calls the registered invites-report-spam command"],
+  [sharedCoreFfi, "matrix_invites_block_sender", "P4-S9-18 calls the registered invites-block-sender command"],
+  [udl, "InviteSnapshotDto invites_accept(", "P4-S9-18 SharedCore invite accept"],
+  [udl, "InviteSnapshotDto invites_decline(", "P4-S9-18 SharedCore invite decline"],
+  [udl, "InviteSnapshotDto invites_report_spam(", "P4-S9-18 SharedCore invite report-spam"],
+  [udl, "InviteSnapshotDto invites_block_sender(", "P4-S9-18 SharedCore invite block-sender"],
+  [udl, "interface InviteActionError", "P4-S9-18 static invite-action error"],
+  [swiftBindingsTests, "testSharedCoreInviteActionsWithoutSessionFailsClosed", "Swift P4-S9-18 fail-closed invite-action test"],
+  [sharedCoreInviteActions, "invitesAccept", "P4-S9-18 product invite-accept helper"],
+  [sharedCoreInviteActions, "invitesDecline", "P4-S9-18 product invite-decline helper"],
+  [sharedCoreInviteActions, "invitesReportSpam", "P4-S9-18 product invite-report-spam helper"],
+  [sharedCoreInviteActions, "invitesBlockSender", "P4-S9-18 product invite-block-sender helper"],
+  [sharedCoreInviteActions, "core: SharedCore", "P4-S9-18 helper takes an already-constructed SharedCore"],
+  [sharedCoreInviteActions, "core.invitesAccept", "P4-S9-18 helper writes on the caller-owned instance"],
+  [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreInviteActions.swift in Sources", "P4-S9-18 helper in Xcode target"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1519,9 +1542,14 @@ for (const required of ["space_parents_snapshot(", "space_hierarchy_snapshot(", 
     throw new Error(`P4-S9-17 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup"]) {
+for (const required of ["invites_accept(", "invites_decline(", "invites_report_spam(", "invites_block_sender("]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-18 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-17`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-18`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1725,6 +1753,17 @@ if (sharedCoreSpaces.includes("SharedCore.newWithSecretStore") || sharedCoreSpac
 for (const forbidden of ["roomMembersSnapshot", "invitesAccept", "roomCreate", "backupStatus"]) {
   if (sharedCoreSpaces.includes(forbidden)) {
     throw new Error(`P4-S9-17 helper must not wrap ${forbidden}`);
+  }
+}
+if (sharedCoreInviteActions.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-18 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreInviteActions.includes("SharedCore.newWithSecretStore") || sharedCoreInviteActions.includes("newWithSecretStore")) {
+  throw new Error("P4-S9-18 helper must not construct SharedCore");
+}
+for (const forbidden of ["invitesSnapshot", "jumpLatest", "setReadState", "sendText", "backupStatus"]) {
+  if (sharedCoreInviteActions.includes(forbidden)) {
+    throw new Error(`P4-S9-18 helper must not wrap ${forbidden}`);
   }
 }
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);

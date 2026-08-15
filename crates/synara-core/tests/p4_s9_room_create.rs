@@ -88,7 +88,7 @@ fn room_create_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("dictionary RoomCreateDto"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
-    assert!(!udl.contains("matrix_invites_accept"));
+    assert!(!udl.contains("matrix_timeline_jump_latest"));
     let request_dto = udl
         .split("dictionary RoomCreateRequestDto {")
         .nth(1)
@@ -109,10 +109,8 @@ fn room_create_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("room_set_power_level("));
     assert!(shared_core.contains("room_set_power_level_tags("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("invites_accept"));
-    assert!(!shared_core.contains("invites_decline"));
-    assert!(!shared_core.contains("invites_report_spam"));
-    assert!(!shared_core.contains("invites_block_sender"));
+    assert!(!shared_core.contains("jump_latest"));
+    assert!(!shared_core.contains("set_read_state"));
     assert!(!shared_core.contains("backup_status"));
 }
 
