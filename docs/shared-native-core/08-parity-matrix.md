@@ -4,11 +4,12 @@ Legend: ✅ shipping / 🔨 in progress / ⛔ not yet
 
 ## Current bounded evidence (not parity completion)
 
-At `feature/shared-native-core` `1207aece`
-(#982), P2 still registers one hundred eleven names—the prior one
+At `feature/shared-native-core` `494fef87`
+(#984), P2 still registers one hundred eleven names—the prior one
 hundred nine plus `matrix_invites_report_spam` and
 `matrix_invites_block_sender`. Desktop uses that registry. iOS has
-typed SharedCore wrappers through S9-31 (helper + XCTest) but product
+typed SharedCore wrappers through S9-31 plus the S11 NSE read-only
+store helper (helper + XCTest; never starts sync) but product
 paths still use `MatrixRustSDK`.
 The previous one hundred nine remain—
 `matrix_login_flows`, `matrix_register_flows`, `matrix_session_snapshot`,
