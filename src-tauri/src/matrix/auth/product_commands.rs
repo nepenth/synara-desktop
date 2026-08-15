@@ -40,6 +40,9 @@ pub async fn matrix_login_password(
             "d0.1-session-already-active",
         ));
     }
+    // A new ordinary login invalidates any abandoned process-local recovery
+    // capability. It never invokes recovery or changes on-disk/key material.
+    state.clear_store_recovery().await;
 
     let homeserver_url = normalize_homeserver_url(&homeserver_url)
         .map_err(map_auth_error)?
@@ -47,7 +50,17 @@ pub async fn matrix_login_password(
     let requested_identity = AccountIdentity::new(&user, &homeserver_url)
         .map_err(|_| MatrixAuthCommandError::invalid_input("d0.1-invalid-user-identity"))?;
     let app_data_root = app_data_root(&app)?;
-    let client = build_client(&app_data_root, requested_identity.clone()).await?;
+    let client = match build_client(&app_data_root, requested_identity.clone()).await {
+        Ok(client) => client,
+        Err(error) => {
+            // The UI can only request archive-and-rebuild after one of these
+            // fail-closed diagnostics. Normal login never calls the reset API.
+            if is_recoverable_store_login_diagnostic(&error.diagnostic_id) {
+                state.arm_store_recovery(requested_identity.clone()).await;
+            }
+            return Err(error);
+        }
+    };
 
     let result = login_with_password(
         &client,
@@ -127,6 +140,9 @@ pub async fn matrix_login_password(
         crate::matrix::timeline::timeline_view_emit(app.clone()),
         session_generation,
     ));
+    // A successfully installed session supersedes every pending/awaiting
+    // recovery capability, including one prepared by an earlier failed login.
+    state.clear_store_recovery().await;
     *session = Some(ManagedMatrixSession {
         client,
         identity: identity.clone(),
@@ -178,6 +194,83 @@ pub async fn matrix_login_password(
         .attach_sync(sync)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-sync-attach-failed"))?;
     Ok(identity)
+}
+
+/// Opaque process-local confirmation returned only after a failed native
+/// store login. It contains no account identity, filesystem path, credential,
+/// Matrix token, or encryption key.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixStoreRecoveryChallenge {
+    pub confirmation_id: String,
+}
+
+/// Fixed success result for archive-and-rebuild store recovery. Store paths,
+/// archive names, counters, and key material deliberately remain host-only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixStoreRecoveryResult {
+    pub status: &'static str,
+}
+
+/// Begin the explicit local-store recovery confirmation.
+///
+/// This has no filesystem or Keychain side effects. It is available only after
+/// a failed normal login arms a matching host-local target, and returns a
+/// CSPRNG-backed one-use confirmation capability rather than a guessable bool.
+#[tauri::command]
+pub async fn matrix_store_recovery_prepare(
+    state: State<'_, MatrixAuthState>,
+) -> Result<MatrixStoreRecoveryChallenge, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    if session.is_some() {
+        return Err(MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "A native Matrix session is already logged in.",
+            "d0.1-session-already-active",
+        ));
+    }
+    drop(session);
+
+    let confirmation_id = state.prepare_store_recovery_confirmation().await?;
+    Ok(MatrixStoreRecoveryChallenge { confirmation_id })
+}
+
+/// Explicitly archive the failed account's local state/crypto/cache/media
+/// directories and rebuild an empty current layout.
+///
+/// This command is deliberately separate from normal login and requires both
+/// an opaque CSPRNG confirmation capability and the exact typed `ARCHIVE`
+/// acknowledgement. It never deletes/rotates Keychain material, sends network
+/// requests, or returns raw paths, SDK errors, account identity, credentials,
+/// tokens, or encryption keys.
+#[tauri::command]
+pub async fn matrix_store_recovery_confirm(
+    app: AppHandle,
+    state: State<'_, MatrixAuthState>,
+    confirmation_id: String,
+    confirmation_text: String,
+) -> Result<MatrixStoreRecoveryResult, MatrixAuthCommandError> {
+    // Keep the session gate while consuming the confirmation and touching the
+    // local layout so a concurrent normal login cannot open the same store.
+    let session = state.session.lock().await;
+    if session.is_some() {
+        return Err(MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "A native Matrix session is already logged in.",
+            "d0.1-session-already-active",
+        ));
+    }
+    let identity = state
+        .take_confirmed_store_recovery(&confirmation_id, &confirmation_text)
+        .await?;
+    let app_data_root = app_data_root(&app)?;
+    archive_and_rebuild_store(&app_data_root, &identity)?;
+    drop(session);
+
+    Ok(MatrixStoreRecoveryResult {
+        status: "archived_and_rebuilt",
+    })
 }
 
 /// V-AUTH.4a — request a password-reset email token (unauthenticated CS API).
@@ -468,6 +561,9 @@ pub(super) async fn install_session_from_register_secrets(
         crate::matrix::timeline::timeline_view_emit(app.clone()),
         session_generation,
     ));
+    // Registration completed and is about to install a session, so no old
+    // failed-login recovery capability may remain consumable.
+    state.clear_store_recovery().await;
     *session = Some(ManagedMatrixSession {
         client,
         identity: identity.clone(),
@@ -528,6 +624,9 @@ pub async fn matrix_logout(
     core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<MatrixSessionSnapshot, MatrixAuthCommandError> {
     let mut session = state.session.lock().await;
+    // Logout is also a security boundary when no session is installed: an old
+    // Pending/AwaitingConfirmation recovery capability must never outlive it.
+    state.clear_store_recovery().await;
     let Some(active) = session.as_ref() else {
         // A repeated logout must also clear any stale Core projection left by
         // a prior partial lifecycle failure. Release the desktop mutex first.
@@ -639,6 +738,9 @@ pub async fn matrix_restore_session(
         crate::matrix::timeline::timeline_view_emit(app.clone()),
         session_generation,
     ));
+    // Restoring persisted material installs a new live session and therefore
+    // revokes any stale recovery capability from an earlier failed login.
+    state.clear_store_recovery().await;
     *session = Some(ManagedMatrixSession {
         client,
         identity: identity.clone(),
@@ -807,20 +909,110 @@ pub(super) fn map_room_join_rule_owner_error(
     )
 }
 
+pub(super) fn snapshot(session: Option<&ManagedMatrixSession>) -> MatrixSessionSnapshot {
+    match session {
+        None => MatrixSessionSnapshot::LoggedOut,
+        Some(active) => MatrixSessionSnapshot::LoggedIn {
+            user_id: active.identity.user_id.clone(),
+            device_id: active.identity.device_id.clone(),
+            homeserver_url: active.identity.homeserver_url.clone(),
+            session_generation: active.sync.session_generation(),
+        },
+    }
+}
+
+/// The only normal-login failures that may arm the explicit archive action.
+/// Other local failures (locked keychain, generic store open, I/O) remain
+/// fail-closed and retry/support-only rather than being treated as corruption.
+fn is_recoverable_store_login_diagnostic(diagnostic_id: &str) -> bool {
+    matches!(
+        diagnostic_id,
+        "p3.2-login-store-reset-required" | "p3.2-login-store-migration-required"
+    )
+}
+
+/// Archive-and-rebuild uses the existing non-destructive reset primitive. It
+/// intentionally does not consult, create, replace, or delete Keychain keys:
+/// #695's fresh-store-only generation policy remains untouched.
+fn archive_and_rebuild_store(
+    app_data_root: &Path,
+    identity: &AccountIdentity,
+) -> Result<(), MatrixAuthCommandError> {
+    let paths = StorePaths::derive(app_data_root, identity).map_err(|_| {
+        MatrixAuthCommandError::new(
+            "Unknown",
+            "Local Matrix store recovery could not be completed.",
+            "p3.2-login-store-recovery-failed",
+        )
+    })?;
+    reset_store_for_recovery(&paths).map(|_| ()).map_err(|_| {
+        MatrixAuthCommandError::new(
+            "Unknown",
+            "Local Matrix store recovery could not be completed.",
+            "p3.2-login-store-recovery-failed",
+        )
+    })
+}
+
+fn map_store_migration_error(error: StoreMigrationError) -> MatrixAuthCommandError {
+    MatrixAuthCommandError::unavailable(error.diagnostic_id())
+}
+
+fn map_store_key_vault_error(error: StoreKeyVaultError) -> MatrixAuthCommandError {
+    let diagnostic_id = match error {
+        StoreKeyVaultError::BackendUnavailable { .. } => "p3.2-login-store-locked",
+        StoreKeyVaultError::MissingKeyForExistingStore | StoreKeyVaultError::CorruptPayload => {
+            "p3.2-login-store-reset-required"
+        }
+        StoreKeyVaultError::NotFound | StoreKeyVaultError::Encoding => {
+            "p3.2-login-store-open-failed"
+        }
+    };
+    MatrixAuthCommandError::unavailable(diagnostic_id)
+}
+
+fn map_store_client_build_error(error: ClientBuilderError) -> MatrixAuthCommandError {
+    let diagnostic_id = match error.to_factory_error().category {
+        crate::matrix::ipc::MatrixIpcErrorCategory::StoreLocked => "p3.2-login-store-locked",
+        crate::matrix::ipc::MatrixIpcErrorCategory::StoreUnavailable
+        | crate::matrix::ipc::MatrixIpcErrorCategory::StoreCorrupt => {
+            "p3.2-login-store-open-failed"
+        }
+        _ => "p3.2-login-store-open-failed",
+    };
+    MatrixAuthCommandError::unavailable(diagnostic_id)
+}
+
 pub(super) async fn build_client(
     app_data_root: &Path,
     identity: AccountIdentity,
 ) -> Result<Client, MatrixAuthCommandError> {
-    let store_key = get_or_create_store_key(
-        &KeyringStoreKeyVault::new(),
-        &StoreKeyId::from_identity(&identity),
-    )
-    .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-store-key-unavailable"))?;
+    // Probe before migration creates the account layout or revision manifest.
+    // Once an account root already exists, a Keychain miss must fail closed:
+    // generating a replacement key could make encrypted SQLite data
+    // unrecoverable. The probe is read-only and surfaces only a static error.
+    let store_paths = StorePaths::derive(app_data_root, &identity)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed"))?;
+    let key_creation_policy = store_paths
+        .key_creation_policy()
+        .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed"))?;
+
+    // Revision-aware Keychain/Secret-Service lookup copies a valid legacy key
+    // forward before creation. Only a genuinely fresh account root may receive
+    // a newly generated key; unavailable or corrupt Keychain data never does.
+    let store_key =
+        get_or_migrate_store_key(&KeyringStoreKeyVault::new(), &identity, key_creation_policy)
+            .map_err(map_store_key_vault_error)?;
+
+    // Run deterministic revision migrations before the SDK opens encrypted
+    // SQLite. A corrupt/ahead/missing migration chain is a reset *decision*,
+    // never an automatic wipe; only the static safe diagnostic crosses IPC.
+    migrate_store_to_current(&store_paths).map_err(map_store_migration_error)?;
     let config = ClientBuildConfig::product_default(app_data_root, identity, Some(store_key))
-        .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-client-config-failed"))?;
+        .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed"))?;
     build_unauthenticated_client(&config)
         .await
-        .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-client-build-failed"))
+        .map_err(map_store_client_build_error)
 }
 
 /// Ephemeral unauthenticated client for password-reset (no product session, no keyring key).
@@ -1052,6 +1244,8 @@ pub(super) fn map_login_flows_auth_error(error: AuthError) -> MatrixAuthCommandE
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+
     use matrix_sdk::authentication::matrix::MatrixSession;
     use matrix_sdk::ruma::UserId;
     use matrix_sdk::{SessionMeta, SessionTokens};
@@ -1076,6 +1270,386 @@ mod tests {
                 refresh_token: refresh.map(str::to_owned),
             },
         })
+    }
+
+    #[tokio::test]
+    async fn store_recovery_requires_exact_typed_confirmation_and_one_use_csprng_id() {
+        let state = MatrixAuthState::new();
+        let identity = AccountIdentity::new("@alice:example.org", "https://matrix.example.org")
+            .expect("test identity");
+        state.arm_store_recovery(identity.clone()).await;
+
+        let confirmation_id = state
+            .prepare_store_recovery_confirmation()
+            .await
+            .expect("failed login may prepare recovery confirmation");
+        assert_eq!(
+            confirmation_id.len(),
+            STORE_RECOVERY_CONFIRMATION_ID_BYTES * 2
+        );
+        assert!(is_store_recovery_confirmation_id(&confirmation_id));
+        assert!(confirmation_id.bytes().all(|byte| byte.is_ascii_hexdigit()));
+
+        for malformed_or_wrong_text in ["", "archive", "ARCHIVE ", "ARCHIVE\0"] {
+            let wrong = state
+                .take_confirmed_store_recovery(&confirmation_id, malformed_or_wrong_text)
+                .await
+                .expect_err("wrong typed acknowledgement must not authorize archive");
+            assert_eq!(
+                wrong.diagnostic_id,
+                "p3.2-login-store-recovery-confirmation-required"
+            );
+        }
+        let wrong_id = state
+            .take_confirmed_store_recovery(
+                &"0".repeat(STORE_RECOVERY_CONFIRMATION_ID_BYTES * 2),
+                STORE_RECOVERY_TYPED_CONFIRMATION_TEXT,
+            )
+            .await
+            .expect_err("a guessable/fixed confirmation must not archive a store");
+        assert_eq!(
+            wrong_id.diagnostic_id,
+            "p3.2-login-store-recovery-confirmation-required"
+        );
+        assert_eq!(
+            state
+                .take_confirmed_store_recovery(
+                    &confirmation_id,
+                    STORE_RECOVERY_TYPED_CONFIRMATION_TEXT,
+                )
+                .await
+                .expect("both exact confirmations must resolve the native target"),
+            identity
+        );
+        let replay = state
+            .take_confirmed_store_recovery(&confirmation_id, STORE_RECOVERY_TYPED_CONFIRMATION_TEXT)
+            .await
+            .expect_err("confirmation capability must not replay");
+        assert_eq!(
+            replay.diagnostic_id,
+            "p3.2-login-store-recovery-confirmation-required"
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_typed_recovery_confirmation_leaves_store_unarchived() {
+        let root = std::env::temp_dir().join(format!(
+            "synara-store-recovery-typed-confirmation-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("temporary root");
+        let identity = AccountIdentity::new("@alice:example.org", "https://matrix.example.org")
+            .expect("test identity");
+        let paths = StorePaths::derive(&root, &identity).expect("store paths");
+        paths.ensure_dirs().expect("initial layout");
+        let state_file = paths.state_dir().join("state.sqlite");
+        fs::write(&state_file, b"must-not-archive").expect("state fixture");
+
+        let state = MatrixAuthState::new();
+        state.arm_store_recovery(identity).await;
+        let confirmation_id = state
+            .prepare_store_recovery_confirmation()
+            .await
+            .expect("failed login may prepare recovery confirmation");
+        let error = state
+            .take_confirmed_store_recovery(&confirmation_id, "ARCHIVE ")
+            .await
+            .expect_err("wrong typed acknowledgement must fail before archive");
+        assert_eq!(
+            error.diagnostic_id,
+            "p3.2-login-store-recovery-confirmation-required"
+        );
+        assert_eq!(
+            fs::read(&state_file).expect("live state remains"),
+            b"must-not-archive"
+        );
+        assert!(
+            !paths
+                .account_root()
+                .join(crate::matrix::store::STORE_RECOVERY_ARCHIVE_SEGMENT)
+                .exists(),
+            "a rejected typed acknowledgement must not create an archive"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn store_recovery_revocation_invalidates_pending_and_awaiting_capabilities() {
+        let state = MatrixAuthState::new();
+        let identity = AccountIdentity::new("@alice:example.org", "https://matrix.example.org")
+            .expect("test identity");
+
+        state.arm_store_recovery(identity.clone()).await;
+        state.clear_store_recovery().await;
+        let pending = state
+            .prepare_store_recovery_confirmation()
+            .await
+            .expect_err("a session transition must revoke pending recovery");
+        assert_eq!(
+            pending.diagnostic_id,
+            "p3.2-login-store-recovery-not-pending"
+        );
+
+        state.arm_store_recovery(identity).await;
+        let confirmation_id = state
+            .prepare_store_recovery_confirmation()
+            .await
+            .expect("recovery may be prepared before a session transition");
+        state.clear_store_recovery().await;
+        let awaiting = state
+            .take_confirmed_store_recovery(&confirmation_id, STORE_RECOVERY_TYPED_CONFIRMATION_TEXT)
+            .await
+            .expect_err("an old recovery confirmation must not survive a session transition");
+        assert_eq!(
+            awaiting.diagnostic_id,
+            "p3.2-login-store-recovery-confirmation-required"
+        );
+    }
+
+    #[test]
+    fn archive_and_rebuild_store_moves_all_local_components_without_key_operations() {
+        let root = std::env::temp_dir().join(format!(
+            "synara-store-recovery-command-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("temporary root");
+        let identity = AccountIdentity::new("@alice:example.org", "https://matrix.example.org")
+            .expect("test identity");
+        let paths = StorePaths::derive(&root, &identity).expect("store paths");
+        paths.ensure_dirs().expect("initial layout");
+        fs::write(paths.state_dir().join("state.sqlite"), b"state").expect("state fixture");
+        fs::write(paths.crypto_dir().join("crypto.sqlite"), b"crypto").expect("crypto fixture");
+        fs::write(paths.cache_dir().join("cache.sqlite"), b"cache").expect("cache fixture");
+        fs::write(paths.media_dir().join("media.bin"), b"media").expect("media fixture");
+
+        archive_and_rebuild_store(&root, &identity).expect("archive-and-rebuild should succeed");
+
+        for directory in [
+            paths.state_dir(),
+            paths.crypto_dir(),
+            paths.cache_dir(),
+            paths.media_dir(),
+        ] {
+            assert!(directory.is_dir(), "current layout is rebuilt");
+            assert_eq!(
+                fs::read_dir(directory)
+                    .expect("rebuilt directory is readable")
+                    .count(),
+                0,
+                "rebuild has no copied live files"
+            );
+        }
+        let archive = paths
+            .account_root()
+            .join(crate::matrix::store::STORE_RECOVERY_ARCHIVE_SEGMENT);
+        let archived = fs::read_dir(&archive)
+            .expect("recovery archive exists")
+            .next()
+            .expect("one archive is created")
+            .expect("archive entry")
+            .path();
+        for name in ["state", "crypto", "cache", "media"] {
+            assert!(
+                archived.join(name).is_dir(),
+                "{name} is archived, not deleted"
+            );
+        }
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn store_recovery_ipc_is_explicit_registered_and_privacy_limited() {
+        let commands = include_str!("product_commands.rs");
+        let production = commands
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production command source");
+        let lib = include_str!("../../lib.rs");
+        let build = include_str!("../../../build.rs");
+        let capability = include_str!("../../../capabilities/main.json");
+        let schemas = [
+            include_str!("../../../gen/schemas/desktop-schema.json"),
+            include_str!("../../../gen/schemas/linux-schema.json"),
+            include_str!("../../../gen/schemas/macOS-schema.json"),
+        ];
+        for command in [
+            "matrix_store_recovery_prepare",
+            "matrix_store_recovery_confirm",
+        ] {
+            let permission = command.replace('_', "-");
+            assert!(production.contains(&format!("pub async fn {command}")));
+            assert!(lib.contains(command));
+            assert!(build.contains(&format!("\"{command}\"")));
+            assert!(capability.contains(&format!("allow-{permission}")));
+            assert!(include_str!(
+                "../../../permissions/autogenerated/matrix_store_recovery_prepare.toml"
+            )
+            .contains("matrix_store_recovery_prepare"));
+            assert!(include_str!(
+                "../../../permissions/autogenerated/matrix_store_recovery_confirm.toml"
+            )
+            .contains("matrix_store_recovery_confirm"));
+            for schema in schemas {
+                assert!(schema.contains(command));
+            }
+        }
+
+        let login = production
+            .split("pub async fn matrix_login_password")
+            .nth(1)
+            .and_then(|rest| rest.split("pub async fn ").next())
+            .expect("normal login command body");
+        assert!(login.contains("arm_store_recovery"));
+        assert!(
+            !login.contains("reset_store_for_recovery"),
+            "normal login must only arm recovery; it must never archive/reset automatically"
+        );
+        let recovery = production
+            .split("pub async fn matrix_store_recovery_confirm")
+            .nth(1)
+            .and_then(|rest| rest.split("pub async fn ").next())
+            .expect("explicit confirmation command body");
+        assert!(recovery.contains("confirmation_text: String"));
+        assert!(recovery
+            .contains("take_confirmed_store_recovery(&confirmation_id, &confirmation_text)"));
+        assert!(recovery.contains("take_confirmed_store_recovery"));
+        assert!(recovery.contains("archive_and_rebuild_store"));
+        assert!(
+            recovery.find("take_confirmed_store_recovery")
+                < recovery.find("archive_and_rebuild_store"),
+            "the host must validate both confirmations before filesystem recovery"
+        );
+        assert_eq!(STORE_RECOVERY_TYPED_CONFIRMATION_TEXT, "ARCHIVE");
+        let archive = production
+            .split("fn archive_and_rebuild_store")
+            .nth(1)
+            .and_then(|rest| rest.split("fn map_store_migration_error").next())
+            .expect("archive helper body");
+        for forbidden in [
+            "get_or_migrate_store_key",
+            "get_or_create_store_key",
+            ".delete(",
+        ] {
+            assert!(
+                !archive.contains(forbidden),
+                "explicit recovery must not change #695 key-generation policy ({forbidden})"
+            );
+        }
+        // Examine executable source only: adjacent API documentation may
+        // legitimately mention a password-reset command without making it a
+        // recovery IPC input or operation.
+        let recovery_implementation = recovery
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("///"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        for forbidden in ["password", "access_token", "refresh_token", "StoreKey"] {
+            assert!(
+                !recovery_implementation.contains(forbidden),
+                "recovery IPC must not expose or operate on {forbidden}"
+            );
+        }
+        let challenge = serde_json::to_string(&MatrixStoreRecoveryChallenge {
+            confirmation_id: "a".repeat(STORE_RECOVERY_CONFIRMATION_ID_BYTES * 2),
+        })
+        .expect("recovery challenge serializes");
+        let result = serde_json::to_string(&MatrixStoreRecoveryResult {
+            status: "archived_and_rebuilt",
+        })
+        .expect("recovery result serializes");
+        for wire in [challenge, result] {
+            for forbidden in [
+                "accessToken",
+                "refreshToken",
+                "password",
+                "userId",
+                "homeserver",
+                "path",
+                "key",
+            ] {
+                assert!(
+                    !wire
+                        .to_ascii_lowercase()
+                        .contains(&forbidden.to_ascii_lowercase()),
+                    "recovery IPC result must not expose {forbidden}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn session_install_and_every_logout_path_revoke_store_recovery() {
+        let production = include_str!("product_commands.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production command source");
+        let password_install = production
+            .split("pub async fn matrix_login_password")
+            .nth(1)
+            .and_then(|rest| rest.split("pub async fn ").next())
+            .expect("password login body");
+        let register_install = production
+            .split("pub(super) async fn install_session_from_register_secrets")
+            .nth(1)
+            .and_then(|rest| rest.split("#[tauri::command]").next())
+            .expect("register install body");
+        let restore_install = production
+            .split("pub async fn matrix_restore_session")
+            .nth(1)
+            .and_then(|rest| rest.split("/// Build the hybrid desktop").next())
+            .expect("restore session body");
+        for (label, install) in [
+            ("password", password_install),
+            ("register", register_install),
+            ("restore", restore_install),
+        ] {
+            assert!(
+                install.contains("state.clear_store_recovery().await"),
+                "{label} session installation must revoke stale recovery"
+            );
+        }
+
+        let logout = production
+            .split("pub async fn matrix_logout")
+            .nth(1)
+            .and_then(|rest| rest.split("pub async fn ").next())
+            .expect("logout body");
+        let revocation = logout
+            .find("state.clear_store_recovery().await")
+            .expect("logout must revoke recovery even when already logged out");
+        let logged_out = logout
+            .find("let Some(active) = session.as_ref() else")
+            .expect("logout's logged-out branch");
+        assert!(
+            revocation < logged_out,
+            "recovery must be revoked before the already-logged-out return"
+        );
+    }
+
+    #[test]
+    fn store_recovery_diagnostics_are_fixed_allowlisted_ids() {
+        assert!(is_recoverable_store_login_diagnostic(
+            "p3.2-login-store-reset-required"
+        ));
+        assert!(is_recoverable_store_login_diagnostic(
+            "p3.2-login-store-migration-required"
+        ));
+        assert!(!is_recoverable_store_login_diagnostic(
+            "p3.2-login-store-open-failed"
+        ));
+        let failed = archive_and_rebuild_store(
+            std::path::Path::new("relative-root-is-refused"),
+            &AccountIdentity::new("@alice:example.org", "https://matrix.example.org")
+                .expect("test identity"),
+        )
+        .expect_err("relative roots fail closed");
+        assert_eq!(failed.diagnostic_id, "p3.2-login-store-recovery-failed");
+        assert!(
+            !failed.message.contains("relative-root-is-refused"),
+            "raw paths never reach a recovery command result"
+        );
     }
 
     #[test]
@@ -1135,5 +1709,51 @@ mod tests {
         // Fail-closed messages never echo token material.
         assert!(!error.message.contains("syt-oauth"));
         assert!(!error.message.contains("refresh"));
+    }
+
+    #[test]
+    fn store_recovery_maps_only_static_login_diagnostics() {
+        let reset = map_store_migration_error(StoreMigrationError::CorruptManifest);
+        assert_eq!(reset.diagnostic_id, "p3.2-login-store-reset-required");
+        let migration = map_store_migration_error(StoreMigrationError::RevisionAhead {
+            observed: 2,
+            known: 1,
+        });
+        assert_eq!(
+            migration.diagnostic_id,
+            "p3.2-login-store-migration-required"
+        );
+        let failed =
+            map_store_migration_error(StoreMigrationError::StepFailed { step_id: "r2-test" });
+        assert_eq!(failed.diagnostic_id, "p3.2-login-store-migration-failed");
+
+        let locked = map_store_key_vault_error(StoreKeyVaultError::BackendUnavailable {
+            diagnostic_id: "r0.4-keyring-platform-failure",
+        });
+        assert_eq!(locked.diagnostic_id, "p3.2-login-store-locked");
+        let corrupt = map_store_key_vault_error(StoreKeyVaultError::CorruptPayload);
+        assert_eq!(corrupt.diagnostic_id, "p3.2-login-store-reset-required");
+        let missing_existing =
+            map_store_key_vault_error(StoreKeyVaultError::MissingKeyForExistingStore);
+        assert_eq!(
+            missing_existing.diagnostic_id,
+            "p3.2-login-store-reset-required"
+        );
+    }
+
+    #[test]
+    fn sdk_store_build_errors_preserve_locked_vs_open_failed_boundary() {
+        let locked = map_store_client_build_error(ClientBuilderError::SdkBuild {
+            category: crate::matrix::ipc::MatrixIpcErrorCategory::StoreLocked,
+            diagnostic_id: "p2.3-sdk-build-store-locked",
+            message: "store is locked".into(),
+        });
+        assert_eq!(locked.diagnostic_id, "p3.2-login-store-locked");
+        let unavailable = map_store_client_build_error(ClientBuilderError::SdkBuild {
+            category: crate::matrix::ipc::MatrixIpcErrorCategory::StoreUnavailable,
+            diagnostic_id: "p2.3-sdk-build-store",
+            message: "store initialization failed".into(),
+        });
+        assert_eq!(unavailable.diagnostic_id, "p3.2-login-store-open-failed");
     }
 }

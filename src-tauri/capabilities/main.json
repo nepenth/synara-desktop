@@ -67,6 +67,8 @@
     "allow-desktop-enable-spellcheck",
     "allow-desktop-agent-action",
     "allow-matrix-login-password",
+    "allow-matrix-store-recovery-prepare",
+    "allow-matrix-store-recovery-confirm",
     "allow-matrix-login-flows",
     "allow-matrix-password-reset-request-email-token",
     "allow-matrix-password-reset-complete",

@@ -34,6 +34,8 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "desktop_clear_diagnostics",
     "desktop_agent_action",
     "matrix_login_flows",
+    "matrix_store_recovery_prepare",
+    "matrix_store_recovery_confirm",
     "matrix_password_reset_request_email_token",
     "matrix_password_reset_complete",
     "matrix_register_flows",

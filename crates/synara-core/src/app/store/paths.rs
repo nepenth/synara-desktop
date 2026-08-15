@@ -91,6 +91,18 @@ pub struct StoreLayout {
     pub confined_under_matrix_root: bool,
 }
 
+/// Whether a new Keychain store key may be created for this account layout.
+///
+/// This is deliberately conservative: once the account root exists, key
+/// creation is forbidden until an existing current or known legacy key has
+/// been found. That protects encrypted SQLite data as well as interrupted
+/// prior opens whose exact on-disk SDK file set cannot be safely inferred.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StoreKeyCreationPolicy {
+    AllowForFreshStore,
+    ForbidForExistingStore,
+}
+
 impl StorePaths {
     /// Derive paths for `identity` under absolute `app_data_root` without creating dirs.
     pub fn derive(
@@ -158,6 +170,33 @@ impl StorePaths {
 
     pub fn media_dir(&self) -> &Path {
         &self.media_dir
+    }
+
+    /// Determine whether a missing Keychain key may be generated.
+    ///
+    /// Call this before any operation that can create the account layout or
+    /// revision manifest. A pre-existing account root is protected even when
+    /// it is empty: treating it as fresh could replace the key for an
+    /// interrupted or legacy encrypted store. This probe never creates,
+    /// modifies, archives, or removes any filesystem entry.
+    pub fn key_creation_policy(&self) -> Result<StoreKeyCreationPolicy, StorePathError> {
+        let matrix_root = self
+            .account_root
+            .parent()
+            .ok_or(StorePathError::PathEscapesRoot)?;
+        if let Some(app_root) = matrix_root.parent() {
+            refuse_if_symlink(app_root)?;
+        }
+        refuse_if_symlink(matrix_root)?;
+        refuse_if_symlink(&self.account_root)?;
+
+        match fs::symlink_metadata(&self.account_root) {
+            Ok(_) => Ok(StoreKeyCreationPolicy::ForbidForExistingStore),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                Ok(StoreKeyCreationPolicy::AllowForFreshStore)
+            }
+            Err(error) => Err(StorePathError::Io(error)),
+        }
     }
 
     /// Create the directory tree with least-privilege permissions where supported.
