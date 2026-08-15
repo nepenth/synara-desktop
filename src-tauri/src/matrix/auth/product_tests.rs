@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use super::*;
 use super::{
     account_data::*, auth_commands::*, backup::*, cross_signing::*, devices::*, media::*,
@@ -2201,7 +2203,7 @@ fn power_level_write_result_serializes_exact_wire_shape() {
     let result = NativePowerLevelWriteResult {
         status: "ok",
         room_id: "!room:example.org".to_owned(),
-        event_type: ROOM_POWER_LEVELS_EVENT_TYPE,
+        event_type: crate::matrix::members::ROOM_POWER_LEVELS_EVENT_TYPE,
         state_key: "",
         session_generation: 7,
         content: serde_json::json!({
