@@ -127,13 +127,10 @@ Run this checklist in order. Stop at the first yes.
    device rename are already registered. Confirm with section 6 before
    inventing one.
 3. **Is free disk ≥ 20 Gi?** Start the next **P4** slice in section 9.
-   S1/#931, S2/#933, and S3a/#935 landed. S3b restore is accepted.
-   S3c login is accepted. S3d attach is accepted. S4 room-list snapshot
-   is accepted. S5 invites snapshot is accepted. S6 timeline
-   open/close/paginate is accepted. S7 typing/presence is accepted.
-   S8 verification list is accepted. S9 verification SAS (section 9.5)
-   is on this branch. Next after merge is S9-2 devices. UDL/bindgen/cargo
-   require this disk
+   S1/#931, S2/#933, S3a/#935, S3b/#937, S3c/#938, S3d/#939,
+   S4/#940, S5/#942, S6/#944, S7/#945, and S8/#947 landed. S9 verification
+   SAS (section 9.5) is on this branch. Next after merge is S9-2 devices.
+   UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
    allowed. Do not change UDL. Do not hand-edit generated Swift. Do
@@ -276,12 +273,12 @@ P4-S0  already landed: UniFFI scaffold, login_flows, SessionProjectionCore,
 P4-S1  UniFFI register_flows          LANDED #931 (credential-free)
 P4-S2  Swift Platform + Core::new     LANDED #933 (fail-closed; no command)
 P4-S3  iOS live Client via Core       plan: 12-p4-s3-live-client.md
-       S3a LANDED #935 → S3b accepted → S3c accepted → S3d accepted
-P4-S4  iOS room_list_snapshot         accepted ed6f9f04
-P4-S5  iOS invites_snapshot           accepted 120fa85a
-P4-S6  iOS timeline open/close/paginate accepted e2cf7be6
-P4-S7  iOS typing / presence          accepted 9350d368
-P4-S8  iOS verification list          accepted ca8b01be
+       S3a LANDED #935 → S3b LANDED #937 → S3c LANDED #938 → S3d LANDED #939
+P4-S4  iOS room_list_snapshot         LANDED #940
+P4-S5  iOS invites_snapshot           LANDED #942
+P4-S6  iOS timeline open/close/paginate LANDED #944
+P4-S7  iOS typing / presence          LANDED #945
+P4-S8  iOS verification list          LANDED #947
 P4-S9  iOS verification SAS           **this branch**
        typed SharedCore start/accept/begin_sas/confirm/mismatch/cancel/dismiss
        seven registered commands only. SyncService is not started.
@@ -334,9 +331,9 @@ S3 is **not** one PR. Read the matching subsection only.
 | Slice | Section | What it is |
 |---|---|---|
 | S3a | landed #935 | Vault callback only |
-| **S3b** | **9.4b accepted** | Restore via vault. No password. |
-| **S3c** | **9.4c accepted** | Dedicated `login_with_password` FFI |
-| **S3d** | **9.4d accepted** | Attach owners after a session exists |
+| **S3b** | **9.4b landed #937** | Restore via vault. No password. |
+| **S3c** | **9.4c landed #938** | Dedicated `login_with_password` FFI |
+| **S3d** | **9.4d landed #939** | Attach owners after a session exists |
 
 Desktop reference (do not copy Tauri types):
 
@@ -345,7 +342,7 @@ Desktop reference (do not copy Tauri types):
 - Keyring vault stays a **shell** `SecretVault` impl. iOS equivalent is
   Keychain behind the same trait. The `keyring` crate stays out of Core.
 
-### 9.4b P4-S3b — restore only (the next slice)
+### 9.4b P4-S3b — restore only (landed #937)
 
 Plan: `12-p4-s3-live-client.md`. Use this subsection only.
 
@@ -380,8 +377,8 @@ allowed. Do not change UDL.
 
 ### 9.4c P4-S3c — password login (Option A chosen)
 
-S3b is accepted at `ea05b0ab`. This slice proceeds from that tip.
-Merge order remains S3b, then S3c, onto `feature/shared-native-core`.
+S3b landed in #937 (`4edfc1f5`). S3c landed in #938 (`9b4ec54f`).
+This slice proceeds from that tip on `feature/shared-native-core`.
 
 **Chosen: Option A — dedicated `SharedCore.login_with_password` FFI.**
 
@@ -404,9 +401,10 @@ Dual-engine until S3d: login+restore on `SharedCore`; room list,
 timeline, and crypto stay `MatrixRustSDK`. Live product login may stay
 on the Swift auth service for this slice; helper + XCTest are enough.
 
-### 9.4d P4-S3d — attach owners (accepted)
+### 9.4d P4-S3d — attach owners (landed #939)
 
-S3c is accepted at `fe8ad87b`. After a session exists, attach the same
+S3c landed in #938 (`9b4ec54f`). S3d landed in #939 (`ad63d56d`).
+After a session exists, attach the same
 owner set desktop attaches from
 `src-tauri/src/matrix/auth/product_commands.rs`:
 
@@ -424,7 +422,7 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 
-S8 is accepted at `ca8b01be`. **S9 (this branch)** adds typed UniFFI
+S8 landed in #947 (`52874c20`). **S9 (this branch)** adds typed UniFFI
 wrappers for the seven verification SAS commands only.
 
 1. `SharedCore` SAS methods call `Core.command` with the same
