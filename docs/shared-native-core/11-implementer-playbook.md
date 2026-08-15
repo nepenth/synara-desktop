@@ -11,7 +11,7 @@ and `06-migration-phases.md` are stale. Do not register the 21 leftovers in
 section 6 to satisfy them.
 
 Evidence tip when this playbook was written: `feature/shared-native-core`
-`917cc77d` (#980 CI hygiene after S9-31/#979). Re-fetch before you start.
+`8d9ba186` (#981 docs honesty after #980). Re-fetch before you start.
 Do not treat this SHA as eternal.
 
 ---
@@ -35,7 +35,7 @@ shared engine. Never claim P5 or MAC-IOS-006 is done.
 | Surface | Today |
 |---|---|
 | Desktop macOS/Linux | Live Matrix `Client` and native owners live in Core. React still invokes `matrix_*`. **111** of those names are registered on `Core::command`. Desktop is a thinner shell, not a thin shell. |
-| iOS | UniFFI scaffold + `login_flows` + `register_flows` + session-projection mirror + Settings readback + two pure helpers (unread row, cold-start recovery) + `SharedCore` constructors + optional `IosSecretVault` + `restore_persisted_session` + dedicated `login_with_password` FFI + `attach_session_owners` + typed SharedCore wrappers through S9-31 session/status reads (helper + XCTest; not on-engine). Live room list, timeline, crypto, push, and `MatrixRustSDKService` are still Swift. Product iOS does **not** call those Core commands. Generated `SynaraCore.swift` is still the stub. iOS CI remains skipped (`if: false`). XCTest construction of `SharedCore` is not iOS-on-engine. |
+| iOS | UniFFI scaffold + `login_flows` + `register_flows` + session-projection mirror + Settings readback + two pure helpers (unread row, cold-start recovery) + `SharedCore` constructors + optional `IosSecretVault` + `restore_persisted_session` + dedicated `login_with_password` FFI + `attach_session_owners` + typed SharedCore wrappers through S9-31 session/status reads (helper + XCTest; not on-engine). Live room list, timeline, crypto, push, and `MatrixRustSDKService` are still Swift. Product iOS does **not** call those Core commands. Local Apple generate has been run; generated sources remain gitignored. Checked-in `SynaraCore.swift` remains the bootstrap stub. iOS CI remains skipped (`if: false`). XCTest construction of `SharedCore` is not iOS-on-engine. |
 | `main` | Diverged. Recovery / MAC-IOS-006 docs live there. Not feature evidence. |
 | Release | Forbidden until engineering finish is accepted and then merged to `main`. |
 
@@ -70,7 +70,8 @@ and fail-closed.** Those 21 are intended shell leftovers (section 6).
    is **≥ 20 Gi**. rustfmt from the worktree is always allowed:
    `cd <worktree> && rustfmt --edition 2021 <files>`.
    Never rustfmt `Cargo.toml`.
-10. UniFFI / bindgen / xcframework work also needs disk ≥ 20 Gi.
+10. UniFFI / bindgen / xcframework work needs headroom well above
+    20 Gi for a four-target release generate, not just at start.
     If disk is under 20 Gi: stop. Docs-only PRs are still allowed.
     Do not change UDL. Do not hand-edit generated Swift. Do not invent
     a no-bindgen path.
@@ -136,10 +137,13 @@ Run this checklist in order. Stop at the first yes.
    S9-22/#970, S9-23/#971, S9-24/#972, S9-25/#973, S9-26/#974,
    S9-27/#975, S9-28/#976, S9-29/#977, S9-30/#978, and
    S9-31/#979 landed. #980 is CI hygiene after the S9 rematch.
-   Next is section 5 step 4: no eligible product slice. S10 is
+   #981 refreshes provenance. Local Apple UniFFI generate has been
+   run; generated sources remain gitignored. Next is section 5
+   step 4: no eligible product slice. S10 is
    blocked while product Swift still references `MatrixRustSDK`.
-   UDL/bindgen/cargo require this disk
-   gate. There is no “land UDL as source without local cargo/bindgen”
+   Four-target release bindgen needs headroom well above 20 Gi for
+   the whole run, not just at start. There is no “land UDL as source
+   without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
    allowed. Do not change UDL. Do not hand-edit generated Swift. Do
    not invent a no-bindgen path.
@@ -529,6 +533,8 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 S9-30 timeline forward landed in #978. S9-31 landed in #979 and
 adds typed UniFFI wrappers for the registered session/status read
 commands. #980 is CI hygiene after the S9 rematch.
+#981 refreshes provenance. Local Apple UniFFI generate has been run;
+generated sources remain gitignored.
 
 1. `SharedCore.session_snapshot` / `sync_status` / `media_config` /
    `secret_storage_status` call `Core.command` with the same null

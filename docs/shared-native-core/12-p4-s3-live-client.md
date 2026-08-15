@@ -4,7 +4,7 @@ This is the plan playbook §9.4 requires before guessing at password FFI.
 It does **not** accept P4 or claim iOS is on the shared engine.
 
 Evidence tip when written: `feature/shared-native-core` `ee896416` (#935 S3a).
-Current feature tip: `917cc77d` (#980).
+Current feature tip: `8d9ba186` (#981).
 S3a landed in #935. S3b restore landed in #937 (`4edfc1f5`).
 S3c login (Option A) landed in #938 (`9b4ec54f`).
 S3d attach landed in #939 (`ad63d56d`).
@@ -15,7 +15,9 @@ S7 typing/presence landed in #945 (`ee884ef3`).
 S8 verification list landed in #947 (`52874c20`).
 S9 verification SAS landed in #948 (`c56a82aa`).
 S9-2 through S9-31 typed SharedCore wrappers landed in #950–#979.
-#980 is CI hygiene after the S9 rematch. Playbook recipe: §9.5.
+#980 is CI hygiene after the S9 rematch. #981 refreshes provenance.
+Local Apple UniFFI generate has been run; generated sources remain
+gitignored. Playbook recipe: §9.5.
 S10 is blocked while product Swift still references `MatrixRustSDK`.
 
 ## Decision

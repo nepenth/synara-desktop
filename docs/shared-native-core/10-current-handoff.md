@@ -10,8 +10,8 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `917cc77d`, the merge for #980 (CI hygiene after S9 rematch). |
-| Immediately preceding merges | #978 S9-30 timeline forward (`c7f1f724`), #979 S9-31 session/status reads (`c69bc704`), #980 CI hygiene. |
+| Feature evidence tip | `feature/shared-native-core` is `8d9ba186`, the merge for #981 (docs honesty after #980). |
+| Immediately preceding merges | #979 S9-31 session/status reads (`c69bc704`), #980 CI hygiene (`917cc77d`), #981 docs honesty. |
 | Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
 | Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
 
@@ -146,7 +146,7 @@ residency changes are:
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `917cc77d`/#980 for
+anchor, but it is no longer the feature-tip provenance; use `8d9ba186`/#981 for
 current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -382,14 +382,18 @@ The exact bounded iOS evidence is:
   as iOS-on-engine.
 - #980: desktop source-scan hygiene after the S9 rematch. Not a product
   slice.
+- #981: docs honesty after #980. Not a product slice.
 
 #708 and #710 add no Core command route. #931/#933/#935 add UniFFI probes /
 construction / vault only. Later P4 slices add typed wrappers; they do
 not make product iOS a Core SDK or service owner. Actual SDK
 `Room` work, timeline listener/pagination/recovery
 execution, and session, platform credential storage, store, crypto, sync, and
-lifecycle ownership remain in `MatrixRustSDKService`. Generated
-`SynaraCore.swift` is still the stub. iOS CI remains skipped (`if: false`).
+lifecycle ownership remain in `MatrixRustSDKService`. Local Apple
+`scripts/generate-synara-core-swift.sh` has been run; generated
+`synara_core.swift` and the XCFramework remain gitignored. Checked-in
+`SynaraCore.swift` remains the bootstrap stub. UniFFI constructors are
+unchanged (`SharedCore()` / `newWithSecretStore`). iOS CI remains skipped (`if: false`).
 iOS has not migrated its
 session, room-list, timeline, crypto, push/NSE, or `MatrixRustSDK` service
 layer, and the direct Swift SDK dependency has not been retired.
@@ -507,10 +511,13 @@ for any of those gates.
    timeline poll vote / call decline landed in #977. S9-30 typed
    timeline forward landed in #978. S9-31 typed
    session/status reads landed in #979. #980 is CI hygiene after the
-   S9 rematch. Next is section 5 step 4: no eligible product slice.
+   S9 rematch. #981 refreshes provenance. Local Apple UniFFI generate
+   has been run; generated sources remain gitignored. Next is
+   section 5 step 4: no eligible product slice.
    S10 is blocked while product Swift still references
-   `MatrixRustSDK`. Regenerating Swift bindings needs free disk ≥ 20 Gi
-   for local cargo/bindgen. There is no source-without-bindgen exception.
+   `MatrixRustSDK`. Four-target release bindgen needs headroom well
+   above 20 Gi for the whole run, not just at start. There is no
+   source-without-bindgen exception.
    If disk is under 20 Gi: stop. Docs-only PRs are still allowed.
    Keep iOS CI skipped (`if: false`).
 4. After S3, consume already-registered commands one family per PR.
