@@ -201,6 +201,10 @@ const sharedCoreSendText = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreSendText.swift"),
   "utf8"
 );
+const sharedCoreSendSticker = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreSendSticker.swift"),
+  "utf8"
+);
 const swiftBindingsTests = readFileSync(
   resolve(root, "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift"),
   "utf8"
@@ -739,6 +743,15 @@ const assertions = [
   [sharedCoreSendText, "core: SharedCore", "P4-S9-22 helper takes an already-constructed SharedCore"],
   [sharedCoreSendText, "core.sendText", "P4-S9-22 helper writes on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreSendText.swift in Sources", "P4-S9-22 helper in Xcode target"],
+  [sharedCoreFfi, "send_sticker", "P4-S9-23 typed send-sticker FFI"],
+  [sharedCoreFfi, "matrix_send_sticker", "P4-S9-23 calls the registered send-sticker command"],
+  [udl, "SendStickerDto send_sticker(", "P4-S9-23 SharedCore send sticker"],
+  [udl, "interface SendStickerError", "P4-S9-23 static send-sticker error"],
+  [swiftBindingsTests, "testSharedCoreSendStickerWithoutSessionFailsClosed", "Swift P4-S9-23 fail-closed send-sticker test"],
+  [sharedCoreSendSticker, "sendSticker", "P4-S9-23 product send-sticker helper"],
+  [sharedCoreSendSticker, "core: SharedCore", "P4-S9-23 helper takes an already-constructed SharedCore"],
+  [sharedCoreSendSticker, "core.sendSticker", "P4-S9-23 helper writes on the caller-owned instance"],
+  [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreSendSticker.swift in Sources", "P4-S9-23 helper in Xcode target"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1638,9 +1651,14 @@ for (const required of ["send_text("]) {
     throw new Error(`P4-S9-22 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "send_sticker", "send_poll", "edit_message", "poll_respond", "matrix_send_sticker", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup"]) {
+for (const required of ["send_sticker("]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-23 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "send_poll", "edit_message", "poll_respond", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-22`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-23`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1899,6 +1917,17 @@ if (sharedCoreSendText.includes("SharedCore.newWithSecretStore") || sharedCoreSe
 for (const forbidden of ["composerSetReplyDraft", "sendSticker", "sendPoll", "editMessage", "pollRespond", "backupStatus"]) {
   if (sharedCoreSendText.includes(forbidden)) {
     throw new Error(`P4-S9-22 helper must not wrap ${forbidden}`);
+  }
+}
+if (sharedCoreSendSticker.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-23 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreSendSticker.includes("SharedCore.newWithSecretStore") || sharedCoreSendSticker.includes("newWithSecretStore")) {
+  throw new Error("P4-S9-23 helper must not construct SharedCore");
+}
+for (const forbidden of ["sendText", "sendPoll", "editMessage", "pollRespond", "backupStatus"]) {
+  if (sharedCoreSendSticker.includes(forbidden)) {
+    throw new Error(`P4-S9-23 helper must not wrap ${forbidden}`);
   }
 }
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);

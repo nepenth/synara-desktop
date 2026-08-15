@@ -132,9 +132,10 @@ Run this checklist in order. Stop at the first yes.
    S9-2/#950, S9-3/#951, S9-4/#952, S9-5/#953, S9-6/#954,
    S9-7/#955, S9-8/#956, S9-9/#957, S9-10/#958, S9-11/#959, and
    S9-12/#960, S9-13/#961, S9-14/#962, S9-15/#963, S9-16/#964,
-   S9-17/#965, S9-18/#966, S9-19/#967, S9-20/#968, and S9-21/#969
-   landed. S9-22 send text (section 9.5) is on this branch.
-   Next after merge is send sticker.
+   S9-17/#965, S9-18/#966, S9-19/#967, S9-20/#968, S9-21/#969,
+   and S9-22/#970 landed. S9-23 send sticker (section 9.5) is on
+   this branch.
+   Next after merge is send poll.
    UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
@@ -346,9 +347,15 @@ P4-S9-21 iOS composer reply draft     stacked
        matrix_composer_set_reply_draft / matrix_composer_get_reply_draft /
        matrix_composer_clear_reply_draft.
        Returns the existing reply-draft readback.
-P4-S9-22 iOS send text                **this branch**
+P4-S9-22 iOS send text                stacked
        matrix_send_text only. Write ack is the existing send result.
        No media bytes. Sticker, poll, edit, and respond stay off.
+P4-S9-23 iOS send sticker             **this branch**
+       matrix_send_sticker only. Write ack is the existing send result.
+       Metadata / mxc only. No image bytes or file path. Core does not
+       take a path or raw bytes, so this family is in scope.
+       `matrix_send_attachment` stays a desktop leftover.
+       Poll, edit, and respond stay off.
 P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        only when grep shows no remaining product callers
 P4-S11 NSE read-only store API        (never boot sync in NSE)
@@ -487,28 +494,30 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 
-S9-21 composer reply draft is stacked at #969. **S9-22 (this branch)** adds a typed
-UniFFI wrapper for the registered send-text command.
+S9-22 send text is stacked at #970. **S9-23 (this branch)** adds a typed
+UniFFI wrapper for the registered send-sticker command.
 
-1. `SharedCore.send_text` calls `Core.command` with the same camelCase
-   payload desktop uses (`{ roomId, body, msgType, formattedBody,
-   mentionUserIds, mentionRoom, replyTo, threadRoot, txnId }`).
-   It returns the existing send-text write ack. Do not re-wrap S6 open,
-   S9-20 reactions, or S9-21 composer drafts.
-2. Do not reimplement send in Swift. Do not wrap sticker, poll, edit,
-   respond, leftover media, or leftover secret envelopes.
+1. `SharedCore.send_sticker` calls `Core.command` with the same camelCase
+   payload desktop uses (`{ roomId, body, mxc, width, height, mimetype,
+   size, replyTo, threadRoot }`). It returns the existing send-sticker
+   write ack. Metadata / mxc only. Do not re-wrap S6 open, S9-21
+   composer drafts, or S9-22 send text.
+2. Do not reimplement send in Swift. Do not wrap poll, edit, respond,
+   leftover media bytes, a file path, or leftover secret envelopes.
+   Core `send_sticker` does not take a path or raw bytes. If it had,
+   this family would stay a leftover with `matrix_send_attachment`.
 3. Do not start `SyncService`. Missing owner fail-closes with the
-   registered `p2-send-text-no-session` code. Unstarted sync returns
+   registered `p2-send-sticker-no-session` code. Unstarted sync returns
    the registered handler's real outcome. Planted send must fail on local
-   room/id validation (`d0.4-send-room-not-found` /
-   `d0.4-send-invalid-room-id` / `d0.4-send-invalid-reply-event-id` /
-   `v-send.4-invalid-message-type`) and must not require a live server.
-   Failed errors must not echo body or room id. Oversize fail-closes
-   without truncating or echoing the body.
+   room/id/mxc validation (`v-send-sticker-room-not-found` /
+   `d0.4-send-invalid-room-id` / `v-send-sticker-invalid-mxc` /
+   `v-send-sticker-invalid-body`) and must not require a live server.
+   Failed errors must not echo mxc or room id. Oversize fail-closes
+   without truncating or echoing the mxc.
 4. Helper + XCTest are the iOS surface this slice. Do not swap
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
-5. One command family per PR. Next is send sticker (`matrix_send_sticker`).
-   Poll, edit, and respond stay off. Do not wrap leftover
+5. One command family per PR. Next is send poll (`matrix_send_poll`).
+   Edit and respond stay off. Do not wrap leftover
    password/export/import/bootstrap, `matrix_crypto_status`, or
    `matrix_cross_signing_status`. Do not hit production homeservers.
    Do not start S10.

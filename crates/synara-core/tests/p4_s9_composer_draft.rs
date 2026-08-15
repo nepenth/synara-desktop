@@ -3,7 +3,7 @@
 //!
 //! Calls the already-registered Core handlers. Does not start SyncService.
 //! Failed errors stay static and must not echo room id or event id.
-//! Sticker, poll, edit, and respond stay off.
+//! Poll, edit, and respond stay off.
 
 use std::collections::HashMap;
 use std::fs;
@@ -81,7 +81,6 @@ fn composer_reply_draft_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("reaction_ensure("));
     assert!(shared_core.contains("timeline_event_readback("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("send_sticker"));
     assert!(!shared_core.contains("send_poll"));
     assert!(!shared_core.contains("edit_message"));
     assert!(!shared_core.contains("poll_respond"));

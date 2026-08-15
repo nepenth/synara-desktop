@@ -1,7 +1,8 @@
-//! P4-S9-22: typed SharedCore consume of the registered send-text command.
+//! P4-S9-23: typed SharedCore consume of the registered send-sticker command.
 //!
 //! Calls the already-registered Core handler. Does not start SyncService.
-//! Failed errors stay static and must not echo body or room id.
+//! Metadata / mxc only. No image bytes or file path.
+//! Failed errors stay static and must not echo mxc or room id.
 //! Poll, edit, and respond stay off.
 
 use std::collections::HashMap;
@@ -11,7 +12,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use synara_core::app::store::AccountIdentity;
 use synara_core::transport::MAX_ENVELOPE_PAYLOAD_JSON_BYTES;
-use synara_core::{IosSecretVault, IosSecretVaultError, SendTextDto, SendTextError, SharedCore};
+use synara_core::{
+    IosSecretVault, IosSecretVaultError, SendStickerDto, SendStickerError, SharedCore,
+};
 
 struct MemoryCallbackVault(Arc<Mutex<HashMap<String, Vec<u8>>>>);
 
@@ -40,7 +43,7 @@ fn temp_root(tag: &str) -> std::path::PathBuf {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("synara-p4-s9-22-it-{tag}-{nanos}"));
+    let root = std::env::temp_dir().join(format!("synara-p4-s9-23-it-{tag}-{nanos}"));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).unwrap();
     root
@@ -58,24 +61,24 @@ fn send_plain(
     shared: &SharedCore,
     room_id: String,
     body: String,
-) -> Result<SendTextDto, SendTextError> {
-    rt.block_on(shared.send_text(room_id, body, None, None, None, None, None, None, None))
+    mxc: String,
+) -> Result<SendStickerDto, SendStickerError> {
+    rt.block_on(shared.send_sticker(room_id, body, mxc, None, None, None, None, None, None))
 }
 
-fn error_text(error: &SendTextError) -> String {
+fn error_text(error: &SendStickerError) -> String {
     format!("{error:?}{error}")
 }
 
 #[test]
-fn send_text_surface_exposes_only_the_registered_family() {
+fn send_sticker_surface_exposes_only_the_registered_family() {
     let udl = include_str!("../src/synara_core.udl");
+    assert!(udl.contains("send_sticker("));
+    assert!(udl.contains("dictionary SendStickerDto"));
+    assert!(udl.contains("interface SendStickerError"));
     assert!(udl.contains("send_text("));
-    assert!(udl.contains("dictionary SendTextDto"));
-    assert!(udl.contains("interface SendTextError"));
-    assert!(udl.contains("composer_set_reply_draft("));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
-    assert!(!udl.contains("matrix_send_sticker"));
     assert!(!udl.contains("matrix_send_poll"));
     assert!(!udl.contains("matrix_edit_message"));
     assert!(!udl.contains("matrix_poll_respond"));
@@ -84,9 +87,9 @@ fn send_text_surface_exposes_only_the_registered_family() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
+    assert!(shared_core.contains("send_sticker("));
     assert!(shared_core.contains("send_text("));
     assert!(shared_core.contains("composer_set_reply_draft("));
-    assert!(shared_core.contains("reaction_ensure("));
     assert!(!shared_core.contains("command("));
     assert!(!shared_core.contains("send_poll"));
     assert!(!shared_core.contains("edit_message"));
@@ -95,50 +98,70 @@ fn send_text_surface_exposes_only_the_registered_family() {
 }
 
 #[test]
-fn send_text_without_session_fails_closed_without_echo() {
+fn send_sticker_without_session_fails_closed_without_echo() {
     let shared = SharedCore::new();
     let rt = test_runtime();
-    let room_id = "!s922SecretRoom:example.org";
-    let body = "s922SecretBody";
-    let error = send_plain(&rt, &shared, room_id.to_owned(), body.to_owned())
-        .expect_err("no attached send-text owner");
+    let room_id = "!s923SecretRoom:example.org";
+    let body = "s923SecretBody";
+    let mxc = "mxc://example.org/s923SecretMxc";
+    let error = send_plain(
+        &rt,
+        &shared,
+        room_id.to_owned(),
+        body.to_owned(),
+        mxc.to_owned(),
+    )
+    .expect_err("no attached send-sticker owner");
     let text = error_text(&error);
-    assert!(text.contains("p2-send-text-no-session"));
+    assert!(text.contains("p2-send-sticker-no-session"));
     assert!(!text.contains("syt_"));
     assert!(!text.contains("token"));
     assert!(!text.contains(room_id));
     assert!(!text.contains(body));
+    assert!(!text.contains(mxc));
     assert!(!text.contains("@alice"));
 }
 
 #[test]
-fn send_text_oversize_payload_fails_closed_without_truncate_or_echo() {
+fn send_sticker_oversize_payload_fails_closed_without_truncate_or_echo() {
     let shared = SharedCore::new();
     let rt = test_runtime();
-    let room_id = "!s922OversizeRoom:example.org";
-    let body = "s".repeat(MAX_ENVELOPE_PAYLOAD_JSON_BYTES + 8);
-    let error = send_plain(&rt, &shared, room_id.to_owned(), body.clone())
-        .expect_err("oversize send-text payload must fail closed");
+    let room_id = "!s923OversizeRoom:example.org";
+    let body = "s923OversizeBody";
+    let mxc = format!(
+        "mxc://example.org/{}",
+        "m".repeat(MAX_ENVELOPE_PAYLOAD_JSON_BYTES + 8)
+    );
+    let error = send_plain(
+        &rt,
+        &shared,
+        room_id.to_owned(),
+        body.to_owned(),
+        mxc.clone(),
+    )
+    .expect_err("oversize send-sticker payload must fail closed");
     let text = error_text(&error);
-    assert!(text.contains("p4-s9-22-send-text-failed"));
+    assert!(text.contains("p4-s9-23-send-sticker-failed"));
     assert!(!text.contains(room_id));
-    assert!(!text.contains(&body));
-    assert!(!text.contains("s922SecretBody"));
+    assert!(!text.contains(body));
+    assert!(!text.contains(&mxc));
+    assert!(!text.contains("s923SecretMxc"));
 }
 
 #[test]
-fn send_text_without_started_sync_returns_handler_result_without_echo() {
-    let access = "syt_s9_22_send_text_access";
-    let refresh = "syr_s9_22_send_text_refresh";
+fn send_sticker_without_started_sync_returns_handler_result_without_echo() {
+    let access = "syt_s9_23_send_sticker_access";
+    let refresh = "syr_s9_23_send_sticker_refresh";
     let identity = alice();
-    let room_id = "!s922SecretRoom:example.org";
-    let body = "s922SecretBody";
-    let invalid_room = "s922-not-a-room-id";
-    let invalid_reply = "s922-not-an-event-id";
-    let invalid_msg_type = "m.s922-not-a-type";
+    let room_id = "!s923SecretRoom:example.org";
+    let body = "s923SecretBody";
+    let mxc = "mxc://example.org/s923SecretMxc";
+    let invalid_room = "s923-not-a-room-id";
+    let invalid_mxc = "s923-not-an-mxc";
+    let invalid_body = "";
     let map = Arc::new(Mutex::new(HashMap::new()));
     let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(Arc::clone(&map))));
-    let root = temp_root("send-text-no-start");
+    let root = temp_root("send-sticker-no-start");
     let rt = test_runtime();
     let _enter = rt.enter();
     rt.block_on(shared.persist_planted_session_for_test(
@@ -153,30 +176,34 @@ fn send_text_without_started_sync_returns_handler_result_without_echo() {
     rt.block_on(shared.attach_session_owners())
         .expect("owners attached");
 
-    let missing_room = send_plain(&rt, &shared, room_id.to_owned(), body.to_owned());
-    let invalid_room_send = send_plain(&rt, &shared, invalid_room.to_owned(), body.to_owned());
-    let invalid_reply_send = rt.block_on(shared.send_text(
+    let missing_room = send_plain(
+        &rt,
+        &shared,
         room_id.to_owned(),
         body.to_owned(),
-        None,
-        None,
-        None,
-        None,
-        Some(invalid_reply.to_owned()),
-        None,
-        None,
-    ));
-    let invalid_type_send = rt.block_on(shared.send_text(
+        mxc.to_owned(),
+    );
+    let invalid_room_send = send_plain(
+        &rt,
+        &shared,
+        invalid_room.to_owned(),
+        body.to_owned(),
+        mxc.to_owned(),
+    );
+    let invalid_mxc_send = send_plain(
+        &rt,
+        &shared,
         room_id.to_owned(),
         body.to_owned(),
-        Some(invalid_msg_type.to_owned()),
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    ));
+        invalid_mxc.to_owned(),
+    );
+    let invalid_body_send = send_plain(
+        &rt,
+        &shared,
+        room_id.to_owned(),
+        invalid_body.to_owned(),
+        mxc.to_owned(),
+    );
     drop(shared);
     drop(_enter);
     drop(rt);
@@ -192,19 +219,19 @@ fn send_text_without_started_sync_returns_handler_result_without_echo() {
         .err()
         .map(error_text)
         .expect("planted send must fail on invalid room id without a live server");
-    let invalid_reply_text = invalid_reply_send
+    let invalid_mxc_text = invalid_mxc_send
         .as_ref()
         .err()
         .map(error_text)
-        .expect("planted send must fail on invalid reply id without a live server");
-    let invalid_type_text = invalid_type_send
+        .expect("planted send must fail on invalid mxc without a live server");
+    let invalid_body_text = invalid_body_send
         .as_ref()
         .err()
         .map(error_text)
-        .expect("planted send must fail on invalid message type without a live server");
+        .expect("planted send must fail on invalid body without a live server");
 
     assert!(
-        missing_room_text.contains("d0.4-send-room-not-found"),
+        missing_room_text.contains("v-send-sticker-room-not-found"),
         "send must return the registered room-not-found diagnostic: {missing_room_text}"
     );
     assert!(
@@ -212,32 +239,32 @@ fn send_text_without_started_sync_returns_handler_result_without_echo() {
         "send must return the registered invalid-room diagnostic: {invalid_room_text}"
     );
     assert!(
-        invalid_reply_text.contains("d0.4-send-invalid-reply-event-id"),
-        "send must return the registered invalid-reply diagnostic: {invalid_reply_text}"
+        invalid_mxc_text.contains("v-send-sticker-invalid-mxc"),
+        "send must return the registered invalid-mxc diagnostic: {invalid_mxc_text}"
     );
     assert!(
-        invalid_type_text.contains("v-send.4-invalid-message-type"),
-        "send must return the registered invalid-type diagnostic: {invalid_type_text}"
+        invalid_body_text.contains("v-send-sticker-invalid-body"),
+        "send must return the registered invalid-body diagnostic: {invalid_body_text}"
     );
     for (label, text) in [
         ("missing_room", &missing_room_text),
         ("invalid_room", &invalid_room_text),
-        ("invalid_reply", &invalid_reply_text),
-        ("invalid_type", &invalid_type_text),
+        ("invalid_mxc", &invalid_mxc_text),
+        ("invalid_body", &invalid_body_text),
     ] {
         assert!(
-            !text.contains("p4-s9-22-send-text-failed"),
+            !text.contains("p4-s9-23-send-sticker-failed"),
             "{label} must not hide a wrong envelope behind the generic fallback: {text}"
         );
     }
     let text =
-        format!("{missing_room_text}{invalid_room_text}{invalid_reply_text}{invalid_type_text}");
+        format!("{missing_room_text}{invalid_room_text}{invalid_mxc_text}{invalid_body_text}");
     assert!(!text.contains(access));
     assert!(!text.contains(refresh));
     assert!(!text.contains("syt_"));
     assert!(!text.contains(room_id));
     assert!(!text.contains(body));
+    assert!(!text.contains(mxc));
     assert!(!text.contains(invalid_room));
-    assert!(!text.contains(invalid_reply));
-    assert!(!text.contains(invalid_msg_type));
+    assert!(!text.contains(invalid_mxc));
 }

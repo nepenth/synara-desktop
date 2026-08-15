@@ -410,6 +410,20 @@ interface SendTextError {
   Failed(string code, string description);
 };
 
+// Privacy-safe send-sticker write ack from the registered Core command.
+// Metadata / mxc only. No image bytes or file path.
+dictionary SendStickerDto {
+  string room_id;
+  string event_id;
+  string status;
+};
+
+// Static source constants only. Never echo mxc, room id, token, or password.
+[Error]
+interface SendStickerError {
+  Failed(string code, string description);
+};
+
 // Privacy-safe typing room row. No tokens or password.
 dictionary TypingRoomDto {
   string room_id;
@@ -1281,5 +1295,8 @@ interface SharedCore {
 
   [Async, Throws=SendTextError]
   SendTextDto send_text(string room_id, string body, string? msg_type, string? formatted_body, sequence<string>? mention_user_ids, boolean? mention_room, string? reply_to, string? thread_root, string? txn_id);
+
+  [Async, Throws=SendStickerError]
+  SendStickerDto send_sticker(string room_id, string body, string mxc, u64? width, u64? height, string? mimetype, u64? size, string? reply_to, string? thread_root);
 
 };
