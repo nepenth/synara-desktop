@@ -11,6 +11,7 @@ use crate::matrix::auth::product::MatrixAuthCommandError;
 
 const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
+#[allow(clippy::too_many_arguments)] // Stable directory-search IPC fields are intentionally explicit.
 pub(crate) async fn room_directory_search(
     core: &Core,
     session_generation: u64,

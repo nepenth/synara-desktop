@@ -877,7 +877,7 @@ mod actions_pure {
             action: NativeTimelineActionKind::EditText,
             room_id: "!room:example.org".into(),
             event_id: "$new:example.org".into(),
-            status: "sent",
+            status: "sent".into(),
         };
         let json = serde_json::to_value(readback).unwrap();
         assert_eq!(json["schemaVersion"], 1);
