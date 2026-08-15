@@ -529,6 +529,50 @@ interface TimelineForwardError {
   Failed(string code, string description);
 };
 
+// Privacy-safe live session snapshot from the registered Core command.
+// logged_out leaves the identity fields empty. Never carries a token or password.
+dictionary SessionSnapshotDto {
+  string status;
+  string? user_id;
+  string? device_id;
+  string? homeserver_url;
+  u64? session_generation;
+};
+
+// Privacy-safe sync readiness from the registered Core command.
+dictionary SyncStatusDto {
+  string readiness;
+  u64 session_generation;
+  boolean offline_mode_enabled;
+  string? failure_diagnostic_id;
+  boolean? sliding_sync_capable;
+};
+
+// Privacy-safe media upload-size config from the registered Core command.
+dictionary MediaConfigDto {
+  u64 upload_size;
+};
+
+// Privacy-safe secret-storage status from the registered Core command.
+// missing_secrets uses the closed public labels only. No passphrase or secret.
+dictionary SecretStorageStatusDto {
+  u64 session_generation;
+  string state;
+  boolean exists;
+  boolean unlocked;
+  boolean default_key_set;
+  boolean passphrase_configured;
+  boolean bootstrap_ready;
+  sequence<string> missing_secrets;
+  string action;
+};
+
+// Static source constants only. Never echo user id, homeserver, device id, token, or password.
+[Error]
+interface SessionStatusError {
+  Failed(string code, string description);
+};
+
 // Privacy-safe typing room row. No tokens or password.
 dictionary TypingRoomDto {
   string room_id;
@@ -1439,5 +1483,17 @@ interface SharedCore {
 
   [Async, Throws=TimelineForwardError]
   TimelineForwardDto timeline_forward_media(string source_room_id, string event_id, string target_room_id);
+
+  [Async, Throws=SessionStatusError]
+  SessionSnapshotDto session_snapshot();
+
+  [Async, Throws=SessionStatusError]
+  SyncStatusDto sync_status();
+
+  [Async, Throws=SessionStatusError]
+  MediaConfigDto media_config();
+
+  [Async, Throws=SessionStatusError]
+  SecretStorageStatusDto secret_storage_status();
 
 };

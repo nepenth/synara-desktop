@@ -81,10 +81,11 @@ fn poll_respond_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("send_text("));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
-    assert!(!udl.contains("matrix_session_snapshot"));
-    assert!(!udl.contains("matrix_sync_status"));
-    assert!(!udl.contains("matrix_media_config"));
-    assert!(!udl.contains("matrix_secret_storage_status"));
+    assert!(!udl.contains("matrix_backup_status"));
+    assert!(!udl.contains("matrix_crypto_status"));
+    assert!(!udl.contains("matrix_cross_signing_status"));
+    assert!(!udl.contains("matrix_cross_signing_setup"));
+    assert!(!udl.contains("matrix_room_key_transfer_status"));
     let shared_core = udl
         .split("interface SharedCore {")
         .nth(1)
@@ -97,10 +98,11 @@ fn poll_respond_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("send_text("));
     assert!(shared_core.contains("composer_set_reply_draft("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("sync_status"));
-    assert!(!shared_core.contains("media_config"));
-    assert!(!shared_core.contains("secret_storage_status"));
     assert!(!shared_core.contains("backup_status"));
+    assert!(!shared_core.contains("crypto_status"));
+    assert!(!shared_core.contains("cross_signing_status"));
+    assert!(!shared_core.contains("cross_signing_setup"));
+    assert!(!shared_core.contains("room_key_transfer_status"));
 }
 
 #[test]

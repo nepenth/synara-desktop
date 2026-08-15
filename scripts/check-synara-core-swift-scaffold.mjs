@@ -233,6 +233,10 @@ const sharedCoreTimelineForward = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreTimelineForward.swift"),
   "utf8"
 );
+const sharedCoreSessionStatus = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreSessionStatus.swift"),
+  "utf8"
+);
 const swiftBindingsTests = readFileSync(
   resolve(root, "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift"),
   "utf8"
@@ -858,6 +862,24 @@ const assertions = [
   [sharedCoreTimelineForward, "core: SharedCore", "P4-S9-30 helper takes an already-constructed SharedCore"],
   [sharedCoreTimelineForward, "core.timelineForwardText", "P4-S9-30 helper writes forward on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreTimelineForward.swift in Sources", "P4-S9-30 helper in Xcode target"],
+  [sharedCoreFfi, "session_snapshot", "P4-S9-31 typed session-snapshot FFI"],
+  [sharedCoreFfi, "matrix_session_snapshot", "P4-S9-31 calls the registered session-snapshot command"],
+  [sharedCoreFfi, "matrix_sync_status", "P4-S9-31 calls the registered sync-status command"],
+  [sharedCoreFfi, "matrix_media_config", "P4-S9-31 calls the registered media-config command"],
+  [sharedCoreFfi, "matrix_secret_storage_status", "P4-S9-31 calls the registered secret-storage-status command"],
+  [udl, "SessionSnapshotDto session_snapshot()", "P4-S9-31 SharedCore session snapshot"],
+  [udl, "SyncStatusDto sync_status()", "P4-S9-31 SharedCore sync status"],
+  [udl, "MediaConfigDto media_config()", "P4-S9-31 SharedCore media config"],
+  [udl, "SecretStorageStatusDto secret_storage_status()", "P4-S9-31 SharedCore secret-storage status"],
+  [udl, "interface SessionStatusError", "P4-S9-31 static session-status error"],
+  [swiftBindingsTests, "testSharedCoreSessionStatusWithoutSessionFailsClosed", "Swift P4-S9-31 fail-closed session-status test"],
+  [sharedCoreSessionStatus, "sessionSnapshot", "P4-S9-31 product session-snapshot helper"],
+  [sharedCoreSessionStatus, "syncStatus", "P4-S9-31 product sync-status helper"],
+  [sharedCoreSessionStatus, "mediaConfig", "P4-S9-31 product media-config helper"],
+  [sharedCoreSessionStatus, "secretStorageStatus", "P4-S9-31 product secret-storage-status helper"],
+  [sharedCoreSessionStatus, "core: SharedCore", "P4-S9-31 helper takes an already-constructed SharedCore"],
+  [sharedCoreSessionStatus, "core.sessionSnapshot", "P4-S9-31 helper reads session on the caller-owned instance"],
+  [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreSessionStatus.swift in Sources", "P4-S9-31 helper in Xcode target"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1797,9 +1819,14 @@ for (const required of ["timeline_forward_text(", "timeline_forward_media("]) {
     throw new Error(`P4-S9-30 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "matrix_timeline_edit_text", "matrix_timeline_redact", "matrix_timeline_report", "matrix_timeline_pin", "matrix_timeline_unpin", "matrix_timeline_poll_vote", "matrix_timeline_call_decline", "matrix_timeline_forward_text", "matrix_timeline_forward_media", "matrix_session_snapshot", "matrix_sync_status", "matrix_media_config", "matrix_secret_storage_status", "sync_status", "media_config", "secret_storage_status", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup"]) {
+for (const required of ["session_snapshot(", "sync_status(", "media_config(", "secret_storage_status("]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-31 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "matrix_timeline_edit_text", "matrix_timeline_redact", "matrix_timeline_report", "matrix_timeline_pin", "matrix_timeline_unpin", "matrix_timeline_poll_vote", "matrix_timeline_call_decline", "matrix_timeline_forward_text", "matrix_timeline_forward_media", "matrix_session_snapshot", "matrix_sync_status", "matrix_media_config", "matrix_secret_storage_status", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "crypto_status", "backup_setup", "cross_signing_status"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-30`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-31`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -2146,6 +2173,17 @@ if (sharedCoreTimelineForward.includes("SharedCore.newWithSecretStore") || share
 for (const forbidden of ["sendText", "sendSticker", "sendPoll", "editMessage", "pollRespond", "timelineEditText", "timelineRedact", "timelineReport", "timelinePin", "timelineUnpin", "timelinePollVote", "timelineCallDecline", "sessionSnapshot", "syncStatus", "mediaConfig", "secretStorageStatus", "backupStatus"]) {
   if (sharedCoreTimelineForward.includes(forbidden)) {
     throw new Error(`P4-S9-30 helper must not wrap ${forbidden}`);
+  }
+}
+if (sharedCoreSessionStatus.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-31 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreSessionStatus.includes("SharedCore.newWithSecretStore") || sharedCoreSessionStatus.includes("newWithSecretStore")) {
+  throw new Error("P4-S9-31 helper must not construct SharedCore");
+}
+for (const forbidden of ["sendText", "sendSticker", "sendPoll", "editMessage", "pollRespond", "timelineEditText", "timelineRedact", "timelineReport", "timelinePin", "timelineUnpin", "timelinePollVote", "timelineCallDecline", "forwardText", "forwardMedia", "backupStatus", "cryptoStatus", "crossSigningStatus", "crossSigningSetup", "roomKeyTransferStatus"]) {
+  if (sharedCoreSessionStatus.includes(forbidden)) {
+    throw new Error(`P4-S9-31 helper must not wrap ${forbidden}`);
   }
 }
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
