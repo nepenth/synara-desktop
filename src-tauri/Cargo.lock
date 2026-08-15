@@ -6038,6 +6038,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.3.4",
  "matrix-sdk",
+ "matrix-sdk-crypto",
  "matrix-sdk-ui",
  "reqwest",
  "serde",
@@ -6046,6 +6047,7 @@ dependencies = [
  "tokio",
  "uniffi",
  "url",
+ "zeroize",
 ]
 
 [[package]]
