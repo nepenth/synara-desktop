@@ -14,8 +14,8 @@ P4-S3 plan: [12-p4-s3-live-client.md](12-p4-s3-live-client.md).
 | | |
 |---|---|
 | Owner | Synara engineering |
-| Status | P0 complete; P1 extraction and bounded P2, P3, and P4 slices are merged at the evidence base below. P2–P4 remain in progress; P5 has not started. Desktop uses Core for one hundred eleven commands. iOS has typed SharedCore wrappers through S9-31 plus the S11 NSE read-only store helper; product still uses MatrixRustSDK. |
-| Evidence base | `feature/shared-native-core` at `494fef87` (#984 S11 NSE read-only store after #983) |
+| Status | P0 complete; P1 extraction and bounded P2, P3, and P4 slices are merged at the evidence base below. P2–P4 remain in progress; P5 has not started. Desktop uses Core for one hundred eleven commands. iOS has typed SharedCore wrappers through S9-31, the S11 NSE helper, and S10 leftover UniFFI; product `MatrixRustSDK` callers are retired. This is not iOS-on-engine. |
+| Evidence base | `feature/shared-native-core` at `566ddb34` (#986 S10 leftover retirement after #985) |
 | Decision | [ADR 0003](../adr/0003-shared-native-rust-core.md) |
 | Program ledger | `docs/shared-native-core/` (this directory) |
 | Related ADRs | [0001](../adr/0001-ios-repository-layout.md), [0002](../adr/0002-ios-architecture.md) |
@@ -120,7 +120,7 @@ P4-S3 plan: [12-p4-s3-live-client.md](12-p4-s3-live-client.md).
 ## Current milestone ledger
 
 The following describes merged source reachable from
-`494fef87` (#984). #708 and #710 remain the prior pure-helper P4
+`566ddb34` (#986). #708 and #710 remain the prior pure-helper P4
 evidence. #931 adds credential-free `register_flows`. #933 adds
 constructor-only `SharedCore`. #935 adds the S3a `IosSecretVault`
 callback. S3b restore landed in #937 (`4edfc1f5`). S3c Option A
@@ -138,16 +138,17 @@ source-scan tests after the S9 rematch. #981 refreshes provenance.
 #982 records local UniFFI generate. #983 records the S10 leftover
 stop (not a product retirement). #984 lands the S11 NSE read-only
 store helper without starting sync; it is not a product NSE swap.
-Helper + XCTest are the iOS surface. Product room list, timeline,
-crypto, and push still use `MatrixRustSDK`. Local Apple
+#985 refreshes provenance. #986 lands S10 leftover UniFFI and
+retires product `MatrixRustSDK` callers. Leftover I/O that needs a
+live homeserver stays fail-closed planted. SyncService is not
+started. This is not iOS-on-engine. Local Apple
 `scripts/generate-synara-core-swift.sh` has been run at this tip;
 generated `synara_core.swift` and the XCFramework remain gitignored
 and are not committed. Checked-in `SynaraCore.swift` remains the
 bootstrap stub. UniFFI constructors are unchanged (`SharedCore()` /
-`newWithSecretStore`). iOS CI remains skipped (`if: false`).
-S10 was started and stopped: leftover product paths still require
-`MatrixRustSDK` (playbook §9.6). Do not invent leftover UniFFI.
-Password never rides a generic UniFFI `command`.
+`newWithSecretStore`). iOS CI remains skipped (`if: false`) until
+the operator-approved re-enable. Password never rides a generic
+UniFFI `command`.
 
 | Phase | Merged evidence | Current boundary |
 |---|---|---|
@@ -155,7 +156,7 @@ Password never rides a generic UniFFI `command`.
 | P1 | #669, #673–#677, #680–#681, #713–#714, #716–#717, #720–#721, #723–#726, #728–#729, #731–#732, #734–#735, #737–#738, #740–#741, #743–#744, #747–#748, #751, #753, #755, #757–#758, #760, #762, #764, #766, #768, #770, #772, #774, #776, #778, #780–#781, #783–#784, #786, #788, #790, #792, #794, #796, #798, #800–#801, #803, #805, #807–#808, #810, #812, #814, #816 | Extraction slices plus live client/login adapters, emit owners, NativeTimelineRegistry, and NativeVerificationOwner; leftover Keychain/Tauri commands not all moved. |
 | P2 | #683–#689, #694, #698, #701–#702, #706, #818, #820, #822, #824, #826, #828, #830, #832, #834, #836, #838, #840, #842, #844, #846, #848, #850, #852, #854, #856, #858, #860, #862, #864, #866, #868, #870, #872, #874, #876, #878, #880, #882, #884, #886, #888, #890, #892, #894, #896, #898, #900, #902, #904, #906, #908, #910, #912, #914, #916, #918, #920, #922, #924, #926, #928 | One-hundred-eleven-command registry (invite spam/block added); full desktop-invoke parity is not reached. |
 | P3 | #690–#691, #694, #698, #701–#702, #706 | The listed auth and read-only/session bridges use Core; `src-tauri` is not yet a fully thin shell. |
-| P4 | #685, #692–#693, #696, #699, #703, #708, #710, #931, #933, #935, #937–#940, #942, #944–#945, #947–#984 | UniFFI scaffold through S9-31 typed wrappers plus #980–#982 hygiene, #983 S10 leftover stop, and #984 S11 NSE read-only store (helper + XCTest; never starts sync; not a product NSE swap); S10 mapped and stopped on leftover callers; local UniFFI generate has been run; generated sources remain uncommitted; product iOS still MatrixRustSDK; Apple release proof does not. |
+| P4 | #685, #692–#693, #696, #699, #703, #708, #710, #931, #933, #935, #937–#940, #942, #944–#945, #947–#986 | UniFFI scaffold through S9-31 typed wrappers plus #980–#982 hygiene, #983 S10 leftover stop, #984 S11 NSE helper, #985 provenance, and #986 S10 leftover UniFFI (product `MatrixRustSDK` callers retired; leftover I/O fail-closed; SyncService not started; not iOS-on-engine); local UniFFI generate has been run; generated sources remain uncommitted; iOS CI still skipped; Apple release proof does not. |
 | P5 | None | Not started. The release gates below remain required. |
 
 Read [11-implementer-playbook.md](11-implementer-playbook.md) before writing
@@ -172,8 +173,10 @@ relax the acceptance criteria below.
   diagnostic. iOS continues to own SwiftUI, Keychain, APNs, app lifecycle, and
   NSE behavior; the current UniFFI package is not a service replacement. The
   actual SDK `Room` and timeline listener/pagination/recovery execution, and
-  session, Keychain, store, crypto, sync, and lifecycle ownership, remain
-  `MatrixRustSDKService`-owned.
+  session, Keychain, store, crypto, sync, and lifecycle ownership no
+  longer go through a product `MatrixRustSDKService`; they go through
+  caller-owned SharedCore leftover/product adapters that fail closed
+  without a live homeserver and do not start SyncService.
 - **Privacy boundaries are intentional.** Core session open/close is an
   in-memory projection, not platform persistence. The sync and crypto seams
   reject dynamic shell diagnostics and SDK-bearing values; Core serializes the
