@@ -111,7 +111,7 @@ test('V-AUTH.3b: UIA stage UI consumers are register/reset only (not login)', ()
 });
 
 test('V-AUTH.3b: native login maps UIAA to fail-closed InteractiveAuthRequired (no stage IPC)', () => {
-  const loginRs = read(path.join(repoRoot, 'src-tauri/src/matrix/auth/login.rs'));
+  const loginRs = read(path.join(repoRoot, 'crates/synara-core/src/app/auth/login.rs'));
   const loginProd = loginRs.split('#[cfg(test)]')[0] ?? loginRs;
   assert.match(loginProd, /InteractiveAuthRequired/);
   assert.match(loginProd, /p3\.2-login-uiaa-required/);

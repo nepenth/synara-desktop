@@ -4,17 +4,18 @@ This is the plan playbook §9.4 requires before guessing at password FFI.
 It does **not** accept P4 or claim iOS is on the shared engine.
 
 Evidence tip when written: `feature/shared-native-core` `ee896416` (#935 S3a).
-S3a landed in #935. S3b restore is accepted at `ea05b0ab`.
-S3c login (Option A) is accepted at `fe8ad87b`.
-S3d attach is accepted at `05264b39`.
-S4 room-list snapshot is accepted at `ed6f9f04`.
-S5 invites snapshot is accepted at `120fa85a`.
-S6 timeline open/close/paginate is accepted at `e2cf7be6`.
-S7 typing/presence is accepted at `9350d368`.
-S8 verification list is accepted at `ca8b01be`.
-S9 verification SAS is accepted at `da5875f0`.
+S3a landed in #935. S3b restore landed in #937 (`4edfc1f5`).
+S3c login (Option A) landed in #938 (`9b4ec54f`).
+S3d attach landed in #939 (`ad63d56d`).
+S4 room-list snapshot landed in #940 (`5a6f3e9b`).
+S5 invites snapshot landed in #942 (`17c29afd`).
+S6 timeline open/close/paginate landed in #944 (`1a77815a`).
+S7 typing/presence landed in #945 (`ee884ef3`).
+S8 verification list landed in #947 (`52874c20`).
+S9 verification SAS landed in #948 (`c56a82aa`).
 **S9-2 devices lands on `agent/snc-p4-s9-devices`.**
-Playbook recipe: §9.5. NativeDeviceOwner family only. Next after S9-2 is S9-3 join rules.
+Playbook recipe: §9.5. NativeDeviceOwner family only
+(snapshot/rename/delete start/cancel). Next after S9-2 is S9-3 join rules.
 
 ## Decision
 
@@ -30,9 +31,9 @@ S3 is four serial product PRs. Each one merges only to
 | Slice | What lands | What must not land |
 |---|---|---|
 | **S3a** LANDED #935 | Swift `IosSecretVault` callback. `SharedCore` can be constructed with that vault. Rust `IosFailClosedPlatform` uses it instead of `UnavailableSecretVault`. In-memory + Keychain key/value adapters. | Live `Client`, `command`, `attach_*`, password, restore, APNs |
-| **S3b** accepted `ea05b0ab` | Restore an already-persisted session through Core persist/restore using the vault. No password. Not `matrix_restore_session`. | Password login, owner attach, `command` families, leftover registration |
-| **S3c** accepted `fe8ad87b` | Dedicated `SharedCore.login_with_password` FFI. Persist via `persist_session_after_login` so S3b restore can find `matrix-session:{segment}`. Password is a dedicated UniFFI argument only. | Register, email token, recovery passphrase, `attach_*`, `Core.command`, leftover registration |
-| **S3d** accepted `05264b39` | After a session exists, `SharedCore.attach_session_owners` attaches the desktop owner set on the retained Client: typing, presence, verification, devices, join-rules, image-packs, timelines, sync. No-op emit sinks. SyncService is attached but not started (no dual live sync while `MatrixRustSDKService` still owns product room list). | Retiring `MatrixRustSDKService`, leftover registration |
+| **S3b** landed #937 | Restore an already-persisted session through Core persist/restore using the vault. No password. Not `matrix_restore_session`. | Password login, owner attach, `command` families, leftover registration |
+| **S3c** landed #938 | Dedicated `SharedCore.login_with_password` FFI. Persist via `persist_session_after_login` so S3b restore can find `matrix-session:{segment}`. Password is a dedicated UniFFI argument only. Dual-engine: login+restore on SharedCore; room list/timeline/crypto stay `MatrixRustSDK` until S3d. | Register, email token, recovery passphrase, `attach_*`, `Core.command`, leftover registration |
+| **S3d** landed #939 | After a session exists, `SharedCore.attach_session_owners` attaches the desktop owner set on the retained Client: typing, presence, verification, devices, join-rules, image-packs, timelines, sync. No-op emit sinks. SyncService is attached but not started (no dual live sync while `MatrixRustSDKService` still owns product room list). | Retiring `MatrixRustSDKService`, leftover registration |
 
 ## S3c Option A (chosen)
 
