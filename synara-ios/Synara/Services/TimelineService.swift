@@ -389,6 +389,82 @@ enum SynaraLaterAccountDataCodec {
     }
 }
 
+extension SynaraLaterContent {
+    func completingItem(id: String, at completedAt: Int) throws -> SynaraLaterContent {
+        guard let item = items[id] else {
+            return self
+        }
+
+        let completedItem = try SynaraLaterItem(
+            id: item.id,
+            kind: item.kind,
+            roomId: item.roomId,
+            eventId: item.eventId,
+            createdAt: item.createdAt,
+            dueTs: item.dueTs,
+            remindedAt: item.remindedAt,
+            completedAt: completedAt
+        )
+
+        var updatedItems = items
+        updatedItems[id] = completedItem
+        return try SynaraLaterContent(version: version, items: updatedItems)
+    }
+}
+
+extension SynaraLaterListItem {
+    static func sorted(items: SynaraLaterContent, now: Int) -> [SynaraLaterListItem] {
+        return items.items.values
+            .map {
+                SynaraLaterListItem(
+                    id: $0.id,
+                    roomID: $0.roomId,
+                    eventID: $0.eventId,
+                    kind: $0.kind,
+                    dueTs: $0.dueTs,
+                    completedAt: $0.completedAt,
+                    createdAt: $0.createdAt,
+                    isCompleted: $0.completedAt != nil
+                )
+            }
+            .sorted { left, right in
+                if left.completedAt != nil, right.completedAt == nil {
+                    return false
+                }
+
+                if left.completedAt == nil, right.completedAt != nil {
+                    return true
+                }
+
+                let leftDue = left.dueTs ?? Int.max
+                let rightDue = right.dueTs ?? Int.max
+                let leftDueSoon = leftDue <= now
+                let rightDueSoon = rightDue <= now
+
+                if leftDueSoon != rightDueSoon {
+                    return leftDueSoon
+                }
+
+                if leftDue != rightDue {
+                    return leftDue < rightDue
+                }
+
+                return left.createdAt > right.createdAt
+            }
+    }
+
+    static let empty = SynaraLaterListItem(
+        id: "",
+        roomID: "",
+        eventID: "",
+        kind: .saved,
+        dueTs: nil,
+        completedAt: nil,
+        createdAt: 0,
+        isCompleted: false
+    )
+}
+
 final class MockLaterService: LaterServicing {
     private var items: [SynaraLaterListItem]
     private let now: () -> Int
