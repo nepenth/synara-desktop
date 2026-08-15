@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `feature/shared-native-core`
-`917cc77d` (#980 CI hygiene after S9-31/#979):** P0 is
+`8d9ba186` (#981 docs honesty after #980):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -142,9 +142,11 @@ acceptance criteria have all passed.
   `login_with_password`, and owner attach (SyncService not started).
   S4–S9-31 (#940–#979) add typed SharedCore wrappers for the registered
   command families. #949 exposes the UniFFI 0.28 store constructor. #980
-  refreshes desktop source-scan tests. Helper + XCTest are the iOS surface.
-  Product room list, timeline, crypto, and push still use `MatrixRustSDK`.
-  Generated `SynaraCore.swift` is still the stub. iOS CI remains skipped.
+  refreshes desktop source-scan tests. #981 refreshes provenance. Helper +
+  XCTest are the iOS surface. Product room list, timeline, crypto, and push
+  still use `MatrixRustSDK`. Local Apple generate has been run; generated
+  sources remain gitignored. Checked-in `SynaraCore.swift` remains the
+  bootstrap stub. iOS CI remains skipped.
   iOS still has no registration product UI. This does **not** migrate iOS
   session, room-list, timeline, crypto, push/NSE, or `MatrixRustSDK`
   services, and it does not remove the upstream Swift SDK dependency.
