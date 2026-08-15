@@ -129,8 +129,8 @@ Run this checklist in order. Stop at the first yes.
 3. **Is free disk ≥ 20 Gi?** Start the next **P4** slice in section 9.
    S1/#931, S2/#933, S3a/#935, S3b/#937, S3c/#938, S3d/#939,
    S4/#940, S5/#942, S6/#944, S7/#945, S8/#947, S9/#948,
-   S9-2/#950, and S9-3/#951 landed. S9-4 image packs (section 9.5)
-   is on this branch. Next after merge is later account-data.
+   S9-2/#950, S9-3/#951, and S9-4/#952 landed. S9-5 later
+   account-data (section 9.5) is on this branch. Next after merge is m.direct.
    UDL/bindgen/cargo require this disk
    gate. There is no “land UDL as source without local cargo/bindgen”
    exception. If disk is under 20 Gi: stop. Docs-only PRs are still
@@ -286,8 +286,10 @@ P4-S9-2 iOS devices                   LANDED #950
        SyncService is not started. Backup/room-key/cross-signing stay off.
 P4-S9-3 iOS join rules                LANDED #951
        matrix_room_join_rule_snapshot only. No writer.
-P4-S9-4 iOS image packs               **this branch**
-       six registered get/set commands. Metadata/JSON only. Later stays off.
+P4-S9-4 iOS image packs               LANDED #952
+       six registered get/set commands. Metadata/JSON only.
+P4-S9-5 iOS later                     **this branch**
+       six registered later commands. m.direct stays off.
 P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        only when grep shows no remaining product callers
 P4-S11 NSE read-only store API        (never boot sync in NSE)
@@ -426,23 +428,21 @@ Do not retire `MatrixRustSDKService`. Do not add `Core.command`.
 
 ### 9.5 P4-S4+ — consume an already-registered command
 
-S9-3 join-rule snapshot landed in #951 (`2f43e22c`). **S9-4 (this branch)** adds
-typed UniFFI wrappers for the six registered image-pack commands.
+S9-4 image packs landed in #952 (`84c81e14`). **S9-5 (this branch)** adds typed
+UniFFI wrappers for the six registered later account-data commands.
 
-1. `SharedCore.get_global_image_packs` / `get_user_image_pack` /
-   `get_room_image_packs` / `set_user_image_pack` /
-   `set_global_image_packs` / `set_room_image_pack` call `Core.command`
-   with the same camelCase payloads desktop uses. Pack `content` is
-   JSON metadata (mxc URLs), never image bytes.
-2. Do not reimplement pack logic in Swift. Do not wrap later, m.direct,
-   room notes, or own display-name/avatar.
+1. `SharedCore.later_snapshot` / `later_upsert` / `later_complete` /
+   `later_snooze` / `later_clear_completed` / `later_mark_reminded` call
+   `Core.command` with the same camelCase payloads desktop uses.
+2. Do not reimplement later logic in Swift. Do not wrap m.direct, room
+   notes, or own display-name/avatar.
 3. Do not start `SyncService`. Missing owner fail-closes with the
    registered `p2-*-no-session` codes. Unstarted sync returns the
    registered handler's real outcome.
 4. Helper + XCTest are the iOS surface this slice. Do not swap
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
-5. One command family per PR. Next is later account-data. Do not wrap
-   leftover password/export/import/bootstrap, `matrix_crypto_status`, or
+5. One command family per PR. Next is m.direct. Do not wrap leftover
+   password/export/import/bootstrap, `matrix_crypto_status`, or
    `matrix_cross_signing_status`. Do not hit production homeservers.
 
 ### 9.6 When you may delete `MatrixRustSDK`

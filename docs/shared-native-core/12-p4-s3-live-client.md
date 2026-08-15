@@ -15,8 +15,9 @@ S8 verification list landed in #947 (`52874c20`).
 S9 verification SAS landed in #948 (`c56a82aa`).
 S9-2 devices landed in #950 (`1539ed6a`).
 S9-3 join-rule snapshot landed in #951 (`2f43e22c`).
-**S9-4 image packs land on `agent/snc-p4-s9-image-packs`.**
-Playbook recipe: §9.5. Six registered get/set commands. Next is later account-data.
+S9-4 image packs landed in #952 (`84c81e14`).
+**S9-5 later account-data lands on `agent/snc-p4-s9-later`.**
+Playbook recipe: §9.5. Six registered later commands. Next is m.direct.
 
 ## Decision
 

@@ -35,6 +35,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreDevices.swift",
   "synara-ios/Synara/Services/SharedCoreJoinRules.swift",
   "synara-ios/Synara/Services/SharedCoreImagePacks.swift",
+  "synara-ios/Synara/Services/SharedCoreLater.swift",
   "synara-ios/SynaraTests/SynaraCoreBindingsTests.swift",
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
@@ -112,6 +113,10 @@ const sharedCoreJoinRules = readFileSync(
 );
 const sharedCoreImagePacks = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreImagePacks.swift"),
+  "utf8"
+);
+const sharedCoreLater = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreLater.swift"),
   "utf8"
 );
 const swiftBindingsTests = readFileSync(
@@ -358,6 +363,30 @@ const assertions = [
   [sharedCoreImagePacks, "setRoomImagePack", "P4-S9-4 product room image-pack setter"],
   [sharedCoreImagePacks, "core: SharedCore", "P4-S9-4 helper takes an already-constructed SharedCore"],
   [sharedCoreImagePacks, "core.getGlobalImagePacks", "P4-S9-4 helper reads on the caller-owned instance"],
+  [sharedCoreFfi, "later_snapshot", "P4-S9-5 typed later snapshot FFI"],
+  [sharedCoreFfi, "matrix_later_snapshot", "P4-S9-5 calls the registered later snapshot"],
+  [sharedCoreFfi, "matrix_later_upsert", "P4-S9-5 calls the registered later upsert"],
+  [sharedCoreFfi, "matrix_later_complete", "P4-S9-5 calls the registered later complete"],
+  [sharedCoreFfi, "matrix_later_snooze", "P4-S9-5 calls the registered later snooze"],
+  [sharedCoreFfi, "matrix_later_clear_completed", "P4-S9-5 calls the registered later clear"],
+  [sharedCoreFfi, "matrix_later_mark_reminded", "P4-S9-5 calls the registered later mark-reminded"],
+  [udl, "LaterSnapshotDto later_snapshot()", "P4-S9-5 SharedCore later snapshot"],
+  [udl, "LaterSnapshotDto later_upsert(", "P4-S9-5 SharedCore later upsert"],
+  [udl, "LaterSnapshotDto later_complete(", "P4-S9-5 SharedCore later complete"],
+  [udl, "LaterSnapshotDto later_snooze(", "P4-S9-5 SharedCore later snooze"],
+  [udl, "LaterSnapshotDto later_clear_completed()", "P4-S9-5 SharedCore later clear"],
+  [udl, "LaterSnapshotDto later_mark_reminded(", "P4-S9-5 SharedCore later mark-reminded"],
+  [udl, "dictionary LaterItemDto", "P4-S9-5 privacy-safe later item DTO"],
+  [udl, "interface LaterCommandError", "P4-S9-5 static later error"],
+  [swiftBindingsTests, "testSharedCoreLaterWithoutSessionFailsClosed", "Swift P4-S9-5 fail-closed later test"],
+  [sharedCoreLater, "laterSnapshot", "P4-S9-5 product later snapshot helper"],
+  [sharedCoreLater, "laterUpsert", "P4-S9-5 product later upsert helper"],
+  [sharedCoreLater, "laterComplete", "P4-S9-5 product later complete helper"],
+  [sharedCoreLater, "laterSnooze", "P4-S9-5 product later snooze helper"],
+  [sharedCoreLater, "laterClearCompleted", "P4-S9-5 product later clear helper"],
+  [sharedCoreLater, "laterMarkReminded", "P4-S9-5 product later mark-reminded helper"],
+  [sharedCoreLater, "core: SharedCore", "P4-S9-5 helper takes an already-constructed SharedCore"],
+  [sharedCoreLater, "core.laterSnapshot", "P4-S9-5 helper reads on the caller-owned instance"],
   [swiftBindingsTests, "testProductionMirrorReadsReadyCoreIdentityThenClearsOnClose", "P4-4 production mirror readback test"],
   [swiftBindingsTests, "testMirrorFailsClosedForMismatchedNonReadyAndMissingCoreSnapshots", "P4-4 mirror mismatch/nil fallback test"],
   [swiftBindingsTests, "testMirrorDoesNotPublishAnIdentityWhenCoreOpenFails", "P4-4 failed Core open fallback test"],
@@ -1098,7 +1127,7 @@ if (projectionOperations.join(",") !== "open,session_snapshot,close") {
   throw new Error(`P4-3 facade must expose only open/session_snapshot/close; found ${projectionOperations.join(", ")}`);
 }
 
-// P4-S9-4 allows restore + login + attach + consume wrappers through image packs. Still forbid generic command.
+// P4-S9-5 allows restore + login + attach + consume wrappers through later. Still forbid generic command.
 const sharedCoreObject = udl.match(/interface SharedCore \{([\s\S]*?)\};/);
 if (!sharedCoreObject) throw new Error("missing SharedCore object");
 const sharedCoreBody = sharedCoreObject[1].replace(/\/\/.*$/gm, "");
@@ -1167,9 +1196,14 @@ for (const required of ["get_global_image_packs", "get_user_image_pack", "get_ro
     throw new Error(`P4-S9-4 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "later_snapshot", "mdirect_snapshot", "crypto_status", "backup_setup"]) {
+for (const required of ["later_snapshot", "later_upsert", "later_complete", "later_snooze", "later_clear_completed", "later_mark_reminded"]) {
+  if (!sharedCoreBody.includes(required)) {
+    throw new Error(`P4-S9-5 SharedCore must expose ${required}`);
+  }
+}
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "invites_accept", "jump_latest", "set_read_state", "device_delete_password", "backup_status", "room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "mdirect_snapshot", "crypto_status", "backup_setup"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-4`);
+    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-5`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -1230,6 +1264,17 @@ if (sharedCoreImagePacks.includes("SharedCore.newWithSecretStore") || sharedCore
 for (const forbidden of ["laterSnapshot", "mdirectSnapshot", "roomNotesSnapshot", "setOwnDisplayName", "setOwnAvatar"]) {
   if (sharedCoreImagePacks.includes(forbidden)) {
     throw new Error(`P4-S9-4 helper must not wrap ${forbidden}`);
+  }
+}
+if (sharedCoreLater.includes("SharedCore(store:")) {
+  throw new Error("P4-S9-5 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreLater.includes("SharedCore.newWithSecretStore") || sharedCoreLater.includes("newWithSecretStore")) {
+  throw new Error("P4-S9-5 helper must not construct SharedCore");
+}
+for (const forbidden of ["mdirectSnapshot", "roomNotesSnapshot", "setOwnDisplayName", "setOwnAvatar"]) {
+  if (sharedCoreLater.includes(forbidden)) {
+    throw new Error(`P4-S9-5 helper must not wrap ${forbidden}`);
   }
 }
 const roomListDto = udl.match(/dictionary RoomListSnapshotDto \{([\s\S]*?)\};/);
@@ -1296,6 +1341,11 @@ const imagePackDto = udl.match(/dictionary ImagePackDto \{([\s\S]*?)\};/);
 if (!imagePackDto) throw new Error("missing ImagePackDto");
 if (/\bpassword\b/.test(imagePackDto[1]) || /\btoken\b/.test(imagePackDto[1]) || /\bbytes\b/.test(imagePackDto[1])) {
   throw new Error("ImagePackDto must not carry password, token, or bytes fields");
+}
+const laterItemDto = udl.match(/dictionary LaterItemDto \{([\s\S]*?)\};/);
+if (!laterItemDto) throw new Error("missing LaterItemDto");
+if (/\bpassword\b/.test(laterItemDto[1]) || /\btoken\b/.test(laterItemDto[1]) || /\bbytes\b/.test(laterItemDto[1])) {
+  throw new Error("LaterItemDto must not carry password, token, or bytes fields");
 }
 const loginDto = udl.match(/dictionary SessionLoginDto \{([\s\S]*?)\};/);
 if (!loginDto) throw new Error("missing SessionLoginDto");

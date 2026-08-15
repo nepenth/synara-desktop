@@ -567,6 +567,86 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreLaterWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        let item = LaterItemDto(
+            id: "later-s95",
+            kind: "saved",
+            roomId: "!s95later:example.org",
+            eventId: "$s95event",
+            createdAt: 1_700_000_000_000,
+            dueTs: nil,
+            remindedAt: nil,
+            completedAt: nil
+        )
+
+        do {
+            _ = try await SharedCoreLater.laterSnapshot(core: core)
+            XCTFail("Fail-closed SharedCore must not snapshot later without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-later-snapshot-no-session"))
+            for forbidden in ["syt_", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreLater.laterUpsert(core: core, item: item)
+            XCTFail("Fail-closed SharedCore must not upsert later without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-later-upsert-no-session"))
+            for forbidden in ["syt_", "token", item.id, item.roomId, item.eventId] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreLater.laterComplete(core: core, itemId: item.id, completedAt: 1_700_000_100_000)
+            XCTFail("Fail-closed SharedCore must not complete later without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-later-complete-no-session"))
+            for forbidden in ["syt_", "token", item.id] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreLater.laterSnooze(core: core, itemId: item.id, dueTs: 1_700_000_200_000)
+            XCTFail("Fail-closed SharedCore must not snooze later without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-later-snooze-no-session"))
+            for forbidden in ["syt_", "token", item.id] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreLater.laterClearCompleted(core: core)
+            XCTFail("Fail-closed SharedCore must not clear completed later without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-later-clear-completed-no-session"))
+            for forbidden in ["syt_", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreLater.laterMarkReminded(core: core, itemId: item.id, remindedAt: 1_700_000_300_000)
+            XCTFail("Fail-closed SharedCore must not mark later reminded without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-later-mark-reminded-no-session"))
+            for forbidden in ["syt_", "token", item.id] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {
         let hostileURL = "https://user:secret@example.invalid"
 
