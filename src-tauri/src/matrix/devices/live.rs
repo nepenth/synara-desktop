@@ -8,10 +8,8 @@ use std::sync::Arc;
 use matrix_sdk::Client;
 use tauri::{AppHandle, Emitter};
 
-pub use synara_core::app::devices::{
-    snapshot, supported_delete_authentication, NativeDeviceDeleteAuthentication,
-    NativeDeviceDeleteChallenge, NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot,
-    NativeDeviceUpdateSignal, PendingDeviceDeletion, DEVICE_LIST_UPDATED_EVENT,
+use synara_core::app::devices::{
+    NativeDeviceOwner, NativeDeviceUpdateSignal, DEVICE_LIST_UPDATED_EVENT,
 };
 
 /// Start the Core owner and emit device-list wakeups on the existing Tauri event.
