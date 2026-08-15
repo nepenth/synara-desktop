@@ -2,7 +2,10 @@
 //!
 //! P4-S2 exposed only `SharedCore::new` with a fail-closed vault. P4-S3a adds
 //! `new_with_secret_store` so Swift can install a Keychain-backed
-//! [`SecretVault`]. P4-S3b adds `restore_persisted_session`. P4-S3c adds
+//! [`SecretVault`]. UniFFI 0.28 Swift keeps `SharedCore()` for the primary
+//! constructor and emits the named constructor as
+//! `SharedCore.newWithSecretStore(store:)`, not a second `init(store:)`.
+//! P4-S3b adds `restore_persisted_session`. P4-S3c adds
 //! `login_with_password`: a dedicated FFI argument, never `Core.command`,
 //! never registered as `matrix_login_password`. The password is not stored,
 //! not copied into a DTO, never echoed, and is zeroized on drop.
@@ -33,6 +36,7 @@
 //! clear_completed/mark_reminded wrappers for those six already-registered
 //! Core commands. m.direct, room notes, and profile writes stay off.
 //! This still exposes no generic command FFI or APNs surface.
+//! This is not the desktop leftover `matrix_restore_session`.
 
 use std::path::{Component, Path};
 use std::sync::{Arc, Mutex};
@@ -279,6 +283,15 @@ pub enum IosSecretVaultError {
     Unavailable { code: String, description: String },
 }
 
+/// Swift-owned key/value secret store described by the existing UDL callback.
+///
+/// UniFFI UDL mode generates glue only; the trait itself must live in Rust.
+pub trait IosSecretVault: Send + Sync {
+    fn get(&self, key: String) -> Result<Option<Vec<u8>>, IosSecretVaultError>;
+    fn put(&self, key: String, value: Vec<u8>) -> Result<(), IosSecretVaultError>;
+    fn delete(&self, key: String) -> Result<(), IosSecretVaultError>;
+}
+
 impl std::fmt::Display for IosSecretVaultError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -288,14 +301,6 @@ impl std::fmt::Display for IosSecretVaultError {
 }
 
 impl std::error::Error for IosSecretVaultError {}
-
-/// Swift-owned key/value callback. UniFFI UDL scaffolding consumes its
-/// generated trait stub, so the crate must define this surface itself.
-pub trait IosSecretVault: Send + Sync {
-    fn get(&self, key: String) -> Result<Option<Vec<u8>>, IosSecretVaultError>;
-    fn put(&self, key: String, value: Vec<u8>) -> Result<(), IosSecretVaultError>;
-    fn delete(&self, key: String) -> Result<(), IosSecretVaultError>;
-}
 
 /// Privacy-safe restore outcome. Tokens never appear here.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1140,8 +1145,7 @@ fn map_verification_sas_core_error(
 enum RestoredClientSlot {
     Empty,
     InFlight,
-    /// Retained for later S3d attach. Read by tests; unused by S3b product code.
-    #[allow(dead_code)]
+    /// Retained for S3d attach after restore or login.
     Ready(Client),
 }
 
@@ -1198,8 +1202,7 @@ impl SharedCore {
     ) -> Result<SessionRestoreDto, SessionRestoreError> {
         let identity = AccountIdentity::new(&user_id, &homeserver_url)
             .map_err(|_| restore_failed(IDENTITY_INVALID_CODE, IDENTITY_INVALID_DESCRIPTION))?;
-        let root = parse_store_root(&store_root)
-            .map_err(|_| restore_failed(STORE_ROOT_INVALID_CODE, STORE_ROOT_INVALID_DESCRIPTION))?;
+        let root = validate_store_root(&store_root)?;
         let claim = RestoreClaim::acquire(&self.restored_client)?;
         let vault = SecretStoreSessionVault {
             store: Arc::clone(&self.secret_store),
@@ -2281,7 +2284,6 @@ impl SharedCore {
             .map_err(|error| map_later_core_error(no_session, error))?;
         later_snapshot_dto(response.payload)
     }
-
     async fn image_pack_null_command(
         &self,
         command: &'static str,
@@ -2707,7 +2709,6 @@ fn later_snapshot_dto(payload: serde_json::Value) -> Result<LaterSnapshotDto, La
             .collect(),
     })
 }
-
 fn device_trust_as_str(trust: NativeDeviceTrust) -> String {
     match trust {
         NativeDeviceTrust::Verified => "verified",
@@ -2886,6 +2887,10 @@ fn parse_store_root(store_root: &str) -> Result<&Path, ()> {
     Ok(path)
 }
 
+fn validate_store_root(store_root: &str) -> Result<&Path, SessionRestoreError> {
+    parse_store_root(store_root)
+        .map_err(|_| restore_failed(STORE_ROOT_INVALID_CODE, STORE_ROOT_INVALID_DESCRIPTION))
+}
 fn store_key_for(
     store: &Arc<dyn SecretVault + Send + Sync>,
     identity: &AccountIdentity,

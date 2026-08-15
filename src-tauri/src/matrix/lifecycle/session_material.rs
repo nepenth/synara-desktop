@@ -4,10 +4,7 @@
 //! helpers live in `synara-core`. This shell file keeps only the live Keychain
 //! / Secret Service adapter.
 
-use synara_core::app::lifecycle::{
-    LifecycleError, SessionMaterial, SessionMaterialId, SessionMaterialVault,
-    SESSION_MATERIAL_SERVICE,
-};
+use synara_core::app::lifecycle::LifecycleError;
 
 pub use synara_core::app::lifecycle::{
     clear_session_material, load_session_material, persist_session_material,
