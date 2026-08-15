@@ -130,7 +130,7 @@ pub async fn matrix_login_password(
     *session = Some(ManagedMatrixSession {
         client,
         identity: identity.clone(),
-        sync,
+        sync: sync.clone(),
         invite_avatars: join_rules.invite_avatars(),
         timelines: timelines.clone(),
         sends: SendQueue::new(session_generation),
@@ -463,16 +463,17 @@ pub(super) async fn install_session_from_register_secrets(
         return Err(error);
     }
 
+    let timelines = Arc::new(NativeTimelineOwner::new(
+        &client,
+        crate::matrix::timeline::timeline_view_emit(app.clone()),
+        session_generation,
+    ));
     *session = Some(ManagedMatrixSession {
         client,
         identity: identity.clone(),
-        sync,
+        sync: sync.clone(),
         invite_avatars: join_rules.invite_avatars(),
-        timelines: Arc::new(NativeTimelineOwner::new(
-            &client,
-            crate::matrix::timeline::timeline_view_emit(app.clone()),
-            session_generation,
-        )),
+        timelines,
         sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
         verification: verification.clone(),
@@ -641,7 +642,7 @@ pub async fn matrix_restore_session(
     *session = Some(ManagedMatrixSession {
         client,
         identity: identity.clone(),
-        sync,
+        sync: sync.clone(),
         invite_avatars: join_rules.invite_avatars(),
         timelines: timelines.clone(),
         sends: SendQueue::new(session_generation),
