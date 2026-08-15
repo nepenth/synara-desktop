@@ -49,7 +49,7 @@ pub use shared_core_ffi::{
     RoomPowerLevelsSnapshotDto, RoomPowerLevelCommandError,
     RoomPowerLevelWriteDto,
     RoomProfileCommandError, RoomProfileWriteDto, SessionAttachDto, SessionAttachError,
-    SessionLoginDto, SessionLoginError, SessionRestoreDto, SessionRestoreError, InviteActionError, TimelineEventItemDto, TimelineEventReadbackDto, TimelineReadStateDto, TimelineReadStateError, TimelineReactionDto, TimelineReactionError, TimelineReactionMutationDto, TimelineReactionSenderDto, ComposerReplyDraftDto, ComposerReplyDraftError, ComposerReplyDraftPreviewDto, SendTextDto, SendTextError, SendStickerDto, SendStickerError, SendPollDto, SendPollError, EditMessageDto, EditMessageError, SharedCore,
+    SessionLoginDto, SessionLoginError, SessionRestoreDto, SessionRestoreError, InviteActionError, TimelineEventItemDto, TimelineEventReadbackDto, TimelineReadStateDto, TimelineReadStateError, TimelineReactionDto, TimelineReactionError, TimelineReactionMutationDto, TimelineReactionSenderDto, ComposerReplyDraftDto, ComposerReplyDraftError, ComposerReplyDraftPreviewDto, SendTextDto, SendTextError, SendStickerDto, SendStickerError, SendPollDto, SendPollError, EditMessageDto, EditMessageError, PollRespondDto, PollRespondError, SharedCore,
     SpaceChildEdgeDto, SpaceChildMutationDto, SpaceChildrenSnapshotDto, SpaceCommandError,
     SpaceHierarchyRoomDto, SpaceHierarchySnapshotDto, SpaceParentEntryDto, SpaceParentsSnapshotDto,
     TimelineError, TimelineOpenDto, TimelineOpenPositionDto, TimelineSnapshotDto,

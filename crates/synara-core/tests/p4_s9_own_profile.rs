@@ -72,7 +72,6 @@ fn own_profile_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("set_own_avatar"));
     assert!(shared_core.contains("room_notes_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("poll_respond"));
     assert!(!shared_core.contains("backup_status"));
 }
 

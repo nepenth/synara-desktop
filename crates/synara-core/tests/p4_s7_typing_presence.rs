@@ -78,7 +78,6 @@ fn typing_presence_surface_exposes_only_the_registered_family() {
     assert!(!shared_core.contains("command("));
     assert!(!shared_core.contains("device_delete_password"));
     assert!(!shared_core.contains("crypto_status"));
-    assert!(!shared_core.contains("poll_respond"));
 }
 
 #[test]
