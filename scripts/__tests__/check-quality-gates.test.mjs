@@ -216,10 +216,17 @@ ${iosBuildStep}
     needs: [quality-gate]
   ios-testflight-upload:
     needs: [quality-gate]
+    timeout-minutes: 90
     outputs:
       marketing_version: \${{ steps.upload_ios.outputs.marketing_version }}
       build_number: \${{ steps.upload_ios.outputs.build_number }}
     steps:
+      - name: Install Rust 1.93 and Apple targets
+        uses: dtolnay/rust-toolchain@fixture
+        with:
+          toolchain: 1.93
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,aarch64-apple-darwin
+      - run: scripts/generate-synara-core-swift.sh
       - id: upload_ios
         run: synara-ios/scripts/upload-testflight-internal.sh
         env:
@@ -552,6 +559,36 @@ test("rejects manual release dispatch and dispatch-input TestFlight control", ()
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /tag-only/i);
   assert.match(result.errors.join("\n"), /repository variable/i);
+});
+
+test("rejects TestFlight upload that archives without UniFFI generate", () => {
+  for (const [workflow, pattern] of [
+    [
+      releaseWorkflow.replace(
+        "      - run: scripts/generate-synara-core-swift.sh\n",
+        ""
+      ),
+      /generate SynaraCore/i,
+    ],
+    [
+      releaseWorkflow.replace(
+        "          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,aarch64-apple-darwin",
+        "          targets: aarch64-apple-darwin"
+      ),
+      /Rust 1\.93/i,
+    ],
+    [
+      releaseWorkflow.replace(
+        "    timeout-minutes: 90\n    outputs:",
+        "    timeout-minutes: 45\n    outputs:"
+      ),
+      /upload timeout-minutes/i,
+    ],
+  ]) {
+    const result = inspect({ releaseWorkflow: workflow });
+    assert.equal(result.ok, false);
+    assert.match(result.errors.join("\n"), pattern);
+  }
 });
 
 test("rejects a TestFlight release that does not verify Apple processing", () => {
