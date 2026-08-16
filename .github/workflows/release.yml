@@ -565,7 +565,8 @@ jobs:
     if: startsWith(github.ref_name, 'v')
     needs: [quality-gate]
     runs-on: macos-26
-    timeout-minutes: 45
+    # Match exact-tag iOS: UniFFI generate + archive exceed 45m.
+    timeout-minutes: 90
     outputs:
       marketing_version: ${{ steps.upload_ios.outputs.marketing_version }}
       build_number: ${{ steps.upload_ios.outputs.build_number }}
@@ -587,6 +588,15 @@ jobs:
 
       - name: Check shared version metadata
         run: npm run check:versions
+
+      - name: Install Rust 1.93 and Apple targets
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+        with:
+          toolchain: 1.93
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,aarch64-apple-darwin
+
+      - name: Generate SynaraCore Swift bindings and XCFramework
+        run: scripts/generate-synara-core-swift.sh
 
       - name: Validate TestFlight release configuration
         shell: bash

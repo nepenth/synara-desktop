@@ -175,6 +175,42 @@ function hasIosTestBuildStep(jobLines) {
   });
 }
 
+const REQUIRED_APPLE_RUST_TARGETS = [
+  "aarch64-apple-ios",
+  "aarch64-apple-ios-sim",
+  "x86_64-apple-ios",
+  "aarch64-apple-darwin",
+];
+
+function hasAppleRustToolchainStep(jobLines) {
+  return parseSteps(jobLines ?? []).some((step) => {
+    const uses = getScalar(step, "uses", 8) ?? "";
+    if (!uses.startsWith("dtolnay/rust-toolchain@")) return false;
+    if (getNestedScalar(step, "with", "toolchain", 8) !== "1.93") return false;
+    const targets = (getNestedScalar(step, "with", "targets", 8) ?? "")
+      .split(",")
+      .map((target) => target.trim())
+      .filter(Boolean);
+    return REQUIRED_APPLE_RUST_TARGETS.every((target) =>
+      targets.includes(target)
+    );
+  });
+}
+
+function hasSynaraCoreGenerateStep(jobLines) {
+  return parseSteps(jobLines ?? []).some((step) => {
+    const runLines = executableLines(getStepRun(step));
+    return (
+      hasUnconditionalCommand(
+        runLines,
+        "scripts/generate-synara-core-swift.sh"
+      ) &&
+      getScalar(step, "if", 8) === undefined &&
+      getScalar(step, "continue-on-error", 8) === undefined
+    );
+  });
+}
+
 function hasRequiredCommandStep(jobLines, command, workingDirectory) {
   return parseSteps(jobLines ?? []).some((step) => {
     const runLines = executableLines(getStepRun(step));
@@ -606,6 +642,40 @@ export function inspectQualityGates({
     );
   }
 
+  const uploadTimeout = Number(
+    getScalar(testflightUpload, "timeout-minutes", 4)
+  );
+  if (
+    !Number.isInteger(uploadTimeout) ||
+    uploadTimeout < 90 ||
+    uploadTimeout > 120
+  ) {
+    errors.push(
+      "TestFlight upload timeout-minutes must be between 90 and 120 so UniFFI generate plus archive can finish."
+    );
+  }
+
+  if (!hasAppleRustToolchainStep(testflightUpload)) {
+    errors.push(
+      "TestFlight upload must install Rust 1.93 with aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-ios, and aarch64-apple-darwin before archive."
+    );
+  }
+
+  const generateStepIndex = testflightUploadSteps.findIndex((step) =>
+    hasUnconditionalCommand(
+      executableLines(getStepRun(step)),
+      "scripts/generate-synara-core-swift.sh"
+    )
+  );
+  if (
+    generateStepIndex < 0 ||
+    !hasSynaraCoreGenerateStep(testflightUpload)
+  ) {
+    errors.push(
+      "TestFlight upload must generate SynaraCore with scripts/generate-synara-core-swift.sh before xcodebuild archive."
+    );
+  }
+
   const uploadStepIndex = testflightUploadSteps.findIndex((step) =>
     hasUnconditionalCommand(
       executableLines(getStepRun(step)),
@@ -623,6 +693,16 @@ export function inspectQualityGates({
   ) {
     errors.push(
       "TestFlight upload must be an unconditional upload_ios step that preserves distribution diagnostics."
+    );
+  }
+
+  if (
+    generateStepIndex >= 0 &&
+    uploadStepIndex >= 0 &&
+    generateStepIndex >= uploadStepIndex
+  ) {
+    errors.push(
+      "TestFlight upload must generate SynaraCore with scripts/generate-synara-core-swift.sh before xcodebuild archive."
     );
   }
 
