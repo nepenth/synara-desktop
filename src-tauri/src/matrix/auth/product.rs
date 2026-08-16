@@ -70,7 +70,9 @@ use crate::matrix::account_data::{
 use crate::matrix::backup::live::{
     self as live_backup, NativeBackupOperationResult, NativeBackupStatus,
 };
-use crate::matrix::client_builder::{build_unauthenticated_client, ClientBuildConfig};
+use crate::matrix::client_builder::{
+    build_unauthenticated_client, ClientBuildConfig, ClientBuilderError,
+};
 use crate::matrix::cross_signing::live::{NativeCrossSigningSetupResult, NativeCrossSigningStatus};
 use crate::matrix::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot};
 use crate::matrix::lifecycle::{
@@ -103,7 +105,8 @@ use crate::matrix::spaces::{
     NativeSpaceChildrenSnapshot, NativeSpaceHierarchySnapshot, NativeSpaceParentsSnapshot,
 };
 use crate::matrix::store::{
-    get_or_create_store_key, AccountIdentity, KeyringStoreKeyVault, StoreKeyId, StoreKeyMaterial,
+    get_or_migrate_store_key, migrate_store_to_current, reset_store_for_recovery, AccountIdentity,
+    KeyringStoreKeyVault, StoreKeyMaterial, StoreKeyVaultError, StoreMigrationError, StorePaths,
 };
 use crate::matrix::sync::{
     build_sync_service, unconfigured_snapshot, SyncReadinessSnapshot, SyncServiceConfig,
@@ -258,9 +261,26 @@ struct ManagedMatrixSession {
     next_room_key_import_selection_id: u64,
 }
 
+/// A locally held recovery target is armed only by a failed native login.
+/// It never crosses IPC; the renderer receives only an opaque, one-use
+/// confirmation capability after the user opens the recovery confirmation.
+#[derive(Default)]
+enum StoreRecoveryState {
+    #[default]
+    Idle,
+    Pending {
+        identity: AccountIdentity,
+    },
+    AwaitingConfirmation {
+        identity: AccountIdentity,
+        confirmation_id: String,
+    },
+}
+
 #[derive(Default)]
 pub struct MatrixAuthState {
     session: Mutex<Option<ManagedMatrixSession>>,
+    store_recovery: Mutex<StoreRecoveryState>,
     next_session_generation: AtomicU64,
 }
 
@@ -415,6 +435,76 @@ impl MatrixAuthState {
         PlatformMediaConfig::new(upload_size)
     }
 
+    /// A normal login supersedes any abandoned recovery affordance. This only
+    /// clears a process-local capability; it does not touch files or Keychain.
+    pub(super) async fn clear_store_recovery(&self) {
+        *self.store_recovery.lock().await = StoreRecoveryState::Idle;
+    }
+
+    /// Remember an account only after an allowlisted failed store-open path.
+    /// The identity remains in the host and is never returned by recovery IPC.
+    pub(super) async fn arm_store_recovery(&self, identity: AccountIdentity) {
+        *self.store_recovery.lock().await = StoreRecoveryState::Pending { identity };
+    }
+
+    pub(super) async fn prepare_store_recovery_confirmation(
+        &self,
+    ) -> Result<String, MatrixAuthCommandError> {
+        let mut recovery = self.store_recovery.lock().await;
+        let identity = match std::mem::replace(&mut *recovery, StoreRecoveryState::Idle) {
+            StoreRecoveryState::Pending { identity } => identity,
+            StoreRecoveryState::Idle | StoreRecoveryState::AwaitingConfirmation { .. } => {
+                return Err(MatrixAuthCommandError::new(
+                    "InvalidRequest",
+                    "Local Matrix store recovery must be requested from a failed login.",
+                    "p3.2-login-store-recovery-not-pending",
+                ));
+            }
+        };
+        let confirmation_id = new_store_recovery_confirmation_id()?;
+        *recovery = StoreRecoveryState::AwaitingConfirmation {
+            identity,
+            confirmation_id: confirmation_id.clone(),
+        };
+        Ok(confirmation_id)
+    }
+
+    /// Consume the CSPRNG confirmation capability before filesystem work so it
+    /// cannot be replayed after either success or failure. The fixed typed
+    /// acknowledgement is a second independent host-side requirement; neither
+    /// a renderer button state nor a valid opaque ID alone can authorize an
+    /// archive. Wrong input leaves a pending capability untouched so the user
+    /// can correct a transport/UI error without rearming recovery from a new
+    /// login failure.
+    pub(super) async fn take_confirmed_store_recovery(
+        &self,
+        confirmation_id: &str,
+        confirmation_text: &str,
+    ) -> Result<AccountIdentity, MatrixAuthCommandError> {
+        if confirmation_text != STORE_RECOVERY_TYPED_CONFIRMATION_TEXT
+            || !is_store_recovery_confirmation_id(confirmation_id)
+        {
+            return Err(store_recovery_confirmation_error());
+        }
+        let mut recovery = self.store_recovery.lock().await;
+        let valid = matches!(
+            &*recovery,
+            StoreRecoveryState::AwaitingConfirmation {
+                confirmation_id: expected,
+                ..
+            } if expected == confirmation_id
+        );
+        if !valid {
+            return Err(store_recovery_confirmation_error());
+        }
+        match std::mem::replace(&mut *recovery, StoreRecoveryState::Idle) {
+            StoreRecoveryState::AwaitingConfirmation { identity, .. } => Ok(identity),
+            StoreRecoveryState::Idle | StoreRecoveryState::Pending { .. } => {
+                Err(store_recovery_confirmation_error())
+            }
+        }
+    }
+
     /// Resolve an opaque V-ROOMS invite-avatar capability for the native URI
     /// protocol. The handle is valid only for the live session generation and
     /// never reveals its MXC source to the webview or command IPC.
@@ -543,6 +633,47 @@ fn cross_signing_private_state(
     } else {
         PlatformCrossSigningPrivateState::Missing
     }
+}
+
+const STORE_RECOVERY_CONFIRMATION_ID_BYTES: usize = 32;
+/// Exact acknowledgement that the host requires in addition to the opaque
+/// CSPRNG confirmation capability. This is intentionally validated only in
+/// the native process; renderer-side button state is not an authorization
+/// boundary.
+pub(super) const STORE_RECOVERY_TYPED_CONFIRMATION_TEXT: &str = "ARCHIVE";
+
+/// Produce an opaque, CSPRNG-backed, one-use confirmation capability. It is
+/// neither a Matrix credential nor a store key, and it is never logged.
+fn new_store_recovery_confirmation_id() -> Result<String, MatrixAuthCommandError> {
+    let mut bytes = [0_u8; STORE_RECOVERY_CONFIRMATION_ID_BYTES];
+    getrandom::fill(&mut bytes).map_err(|_| {
+        MatrixAuthCommandError::new(
+            "Unknown",
+            "Local Matrix store recovery confirmation is unavailable.",
+            "p3.2-login-store-recovery-confirmation-unavailable",
+        )
+    })?;
+    let mut id = String::with_capacity(STORE_RECOVERY_CONFIRMATION_ID_BYTES * 2);
+    for byte in bytes {
+        use std::fmt::Write as _;
+        let _ = write!(id, "{byte:02x}");
+    }
+    Ok(id)
+}
+
+fn is_store_recovery_confirmation_id(value: &str) -> bool {
+    value.len() == STORE_RECOVERY_CONFIRMATION_ID_BYTES * 2
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn store_recovery_confirmation_error() -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "InvalidRequest",
+        "Local Matrix store recovery confirmation is invalid or has expired.",
+        "p3.2-login-store-recovery-confirmation-required",
+    )
 }
 
 // Shared fail-closed session guards used by the domain command modules.

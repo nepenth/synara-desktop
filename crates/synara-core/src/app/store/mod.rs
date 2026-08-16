@@ -20,11 +20,15 @@ mod vault;
 
 pub use identity::{AccountIdentity, AccountIdentityError};
 pub use key_material::{
-    StoreKeyGenError, StoreKeyId, StoreKeyMaterial, STORE_KEY_LEN, STORE_KEY_SERVICE,
+    StoreKeyGenError, StoreKeyId, StoreKeyMaterial, STORE_KEY_LEN, STORE_KEY_REVISION,
+    STORE_KEY_SERVICE, STORE_KEY_SERVICE_V1,
 };
-pub use paths::{StoreLayout, StorePathError, StorePaths, MATRIX_STORE_ROOT_SEGMENT};
+pub use paths::{
+    StoreKeyCreationPolicy, StoreLayout, StorePathError, StorePaths, MATRIX_STORE_ROOT_SEGMENT,
+};
 pub use vault::{
-    get_or_create_store_key, InMemoryStoreKeyVault, StoreKeyVault, StoreKeyVaultError,
+    get_or_create_store_key, get_or_migrate_store_key, InMemoryStoreKeyVault, StoreKeyVault,
+    StoreKeyVaultError,
 };
 
 /// Static marker for link / schema smoke (no network, no Client, no secrets).

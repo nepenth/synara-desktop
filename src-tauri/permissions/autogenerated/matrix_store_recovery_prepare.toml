@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-store-recovery-prepare"
+description = "Enables the matrix_store_recovery_prepare command without any pre-configured scope."
+commands.allow = ["matrix_store_recovery_prepare"]
+
+[[permission]]
+identifier = "deny-matrix-store-recovery-prepare"
+description = "Denies the matrix_store_recovery_prepare command without any pre-configured scope."
+commands.deny = ["matrix_store_recovery_prepare"]

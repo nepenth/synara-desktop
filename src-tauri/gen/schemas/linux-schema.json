@@ -987,6 +987,18 @@
           "markdownDescription": "Enables the matrix_space_parents_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_store_recovery_confirm command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-store-recovery-confirm",
+          "markdownDescription": "Enables the matrix_store_recovery_confirm command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_store_recovery_prepare command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-store-recovery-prepare",
+          "markdownDescription": "Enables the matrix_store_recovery_prepare command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_sync_status command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-sync-status",
@@ -1963,6 +1975,18 @@
           "type": "string",
           "const": "deny-matrix-space-parents-snapshot",
           "markdownDescription": "Denies the matrix_space_parents_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_store_recovery_confirm command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-store-recovery-confirm",
+          "markdownDescription": "Denies the matrix_store_recovery_confirm command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_store_recovery_prepare command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-store-recovery-prepare",
+          "markdownDescription": "Denies the matrix_store_recovery_prepare command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_sync_status command without any pre-configured scope.",

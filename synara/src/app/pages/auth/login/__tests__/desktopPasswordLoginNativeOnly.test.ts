@@ -6,6 +6,10 @@ import { clearDesktopDiagnostics } from '../../../../utils/desktopDiagnostics';
 import {
   LoginError,
   PasswordLoginError,
+  StoreRecoveryError,
+  STORE_RECOVERY_CONFIRMATION_TEXT,
+  archiveAndRebuildNativeStore,
+  canOfferNativeStoreRecovery,
   loginPassword,
   type PasswordLoginInvoke,
 } from '../loginUtil';
@@ -35,6 +39,104 @@ test('desktop password login: no js createClient / loginRequest / matrix-js-sdk 
 
   const libRs = readFileSync(path.join(repoRoot, 'src-tauri/src/lib.rs'), 'utf8');
   assert.match(libRs, /matrix_login_password/);
+});
+
+test('store recovery is explicit, bound to a non-guessable native confirmation, and has no credential args', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const confirmationId = 'a'.repeat(64);
+  const invoke: PasswordLoginInvoke = async (command, args) => {
+    calls.push({ command, args });
+    if (command === 'matrix_store_recovery_prepare') {
+      return { available: true, value: { confirmationId } };
+    }
+    if (command === 'matrix_store_recovery_confirm') {
+      return { available: true, value: { status: 'archived_and_rebuilt' } };
+    }
+    throw new Error(`unexpected command: ${command}`);
+  };
+
+  // The helper is never called by password login; this invocation represents
+  // the UI's separate typed acknowledgement + Archive and Rebuild click.
+  await archiveAndRebuildNativeStore(STORE_RECOVERY_CONFIRMATION_TEXT, { invoke });
+
+  assert.deepEqual(
+    calls.map(({ command }) => command),
+    ['matrix_store_recovery_prepare', 'matrix_store_recovery_confirm']
+  );
+  assert.deepEqual(calls[0]?.args, undefined);
+  assert.deepEqual(calls[1]?.args, {
+    confirmationId,
+    confirmationText: STORE_RECOVERY_CONFIRMATION_TEXT,
+  });
+  const sent = JSON.stringify(calls);
+  for (const forbidden of ['password', 'accessToken', 'refreshToken', 'homeserverUrl', 'user']) {
+    assert.doesNotMatch(sent, new RegExp(forbidden, 'i'));
+  }
+});
+
+test('store recovery refuses a non-exact typed acknowledgement before native prepare', async () => {
+  let calls = 0;
+  const invoke: PasswordLoginInvoke = async () => {
+    calls += 1;
+    return { available: true, value: {} };
+  };
+
+  await assert.rejects(
+    () => archiveAndRebuildNativeStore('ARCHIVE ', { invoke }),
+    (err: unknown) => {
+      assert.ok(err instanceof StoreRecoveryError);
+      assert.equal(err.diagnosticId, 'p3.2-login-store-recovery-confirmation-required');
+      return true;
+    }
+  );
+  assert.equal(calls, 0, 'wrong text must not even prepare an archive capability');
+});
+
+test('store recovery fails closed on malformed confirmation or raw native error text', async () => {
+  const malformed: PasswordLoginInvoke = async () => ({
+    available: true,
+    value: { confirmationId: 'guessable' },
+  });
+  await assert.rejects(
+    () => archiveAndRebuildNativeStore(STORE_RECOVERY_CONFIRMATION_TEXT, { invoke: malformed }),
+    (err: unknown) => {
+      assert.ok(err instanceof StoreRecoveryError);
+      assert.equal(err.diagnosticId, 'p3.2-login-store-recovery-unavailable');
+      assert.doesNotMatch(err.message, /guessable/i);
+      return true;
+    }
+  );
+
+  const rawError: PasswordLoginInvoke = async () => {
+    throw {
+      diagnosticId: 'https://private.example/store?token=secret',
+      message: 'SDK /Users/alice/Library path password=hunter2 token=secret',
+    };
+  };
+  await assert.rejects(
+    () => archiveAndRebuildNativeStore(STORE_RECOVERY_CONFIRMATION_TEXT, { invoke: rawError }),
+    (err: unknown) => {
+      assert.ok(err instanceof StoreRecoveryError);
+      assert.equal(err.diagnosticId, 'p3.2-login-store-recovery-failed');
+      assert.doesNotMatch(err.message, /alice|hunter2|private\.example|token/i);
+      return true;
+    }
+  );
+});
+
+test('recovery UI is only offered for the two native store diagnostics and requires typed confirmation', () => {
+  assert.equal(canOfferNativeStoreRecovery('p3.2-login-store-reset-required'), true);
+  assert.equal(canOfferNativeStoreRecovery('p3.2-login-store-migration-required'), true);
+  assert.equal(canOfferNativeStoreRecovery('p3.2-login-store-open-failed'), false);
+  assert.equal(canOfferNativeStoreRecovery(undefined), false);
+
+  const form = readFileSync(path.join(loginDir, 'PasswordLoginForm.tsx'), 'utf8');
+  assert.match(form, /Review Local Store Recovery/);
+  assert.match(form, /Type \{STORE_RECOVERY_CONFIRMATION_TEXT\} to enable this action/);
+  assert.match(form, /storeRecoveryConfirmation !== STORE_RECOVERY_CONFIRMATION_TEXT/);
+  assert.match(form, /archiveAndRebuildNativeStore\(storeRecoveryConfirmation\)/);
+  assert.match(form, /onClick=\{\(\) => void confirmStoreRecovery\(\)\}/);
+  assert.doesNotMatch(form, /useEffect\([\s\S]*archiveAndRebuildNativeStore/);
 });
 
 test('loginPassword invokes matrix_login_password on desktop and returns native identity', async () => {
@@ -253,6 +355,40 @@ test('loginPassword drops unlisted and unsafe native diagnostic values', async (
       (err: unknown) => {
         assert.ok(err instanceof PasswordLoginError);
         assert.equal(err.diagnosticId, undefined);
+        return true;
+      }
+    );
+  }
+});
+
+test('loginPassword preserves refined store/olm static diagnostic ids', async () => {
+  for (const diagnosticId of [
+    'p3.2-login-store-locked',
+    'p3.2-login-store-migration-failed',
+    'p3.2-login-store-migration-required',
+    'p3.2-login-store-open-failed',
+    'p3.2-login-store-reset-required',
+    'p3.2-login-olm-unavailable',
+    'p3.2-login-crypto-store', // legacy umbrella id remains accepted
+  ]) {
+    const invoke: PasswordLoginInvoke = async () => {
+      throw { code: 'Unknown', diagnosticId };
+    };
+
+    await assert.rejects(
+      () =>
+        loginPassword(
+          'https://matrix.example.org',
+          {
+            type: 'm.login.password',
+            identifier: { type: 'm.id.user', user: '@alice:example.org' },
+            password: 's3cret',
+          },
+          { isDesktop: () => true, invoke }
+        ),
+      (err: unknown) => {
+        assert.ok(err instanceof PasswordLoginError);
+        assert.equal(err.diagnosticId, diagnosticId);
         return true;
       }
     );
