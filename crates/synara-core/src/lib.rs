@@ -5,6 +5,10 @@
 //! behavior identical (P1 slices: dto, transport/ipc, task, then the app/
 //! domain chunks).
 
+// Linux release `tauri build` overflows rustc's default query-depth limit
+// while laying out Core command futures (`core.rs` timeline-open and peers).
+#![recursion_limit = "256"]
+
 // Generated from `src/synara_core.udl` by build.rs. Keep this at crate root:
 // P4-3 adds only a safe Core session-projection mirror to the credential-free
 // P4-2 login-flow surface.
