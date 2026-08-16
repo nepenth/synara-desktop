@@ -1,9 +1,14 @@
 # 06 — Migration Phases (P1–P5)
 
 Methodology mirrors the js→rust burn-down: small additive slices, each a
-squashed PR onto `feature/matrix-rust-sdk-full-replacement` with green desktop
-CI (Quality + Desktop package + full matrix at tip), worktree isolation,
-provenance anchor maintained. **Never a big-bang move.**
+squashed PR onto `feature/shared-native-core` with a provenance anchor and the
+path-scoped CI required by the workflow plus its aggregate Quality gate.
+On PRs that target the development feature branch, mechanical `src/app/`
+harness moves run fmt/clippy/check (clippy compiles tests) and skip
+`cargo test` plus Synapse live proofs unless send/timeline product commands
+or `live_synapse_proof` change. Desktop package and full Synapse evidence
+run only when selected or explicitly required by the relevant protected,
+integration, or release path. **Never a big-bang move.**
 
 ## P0 — ADR + plan + census (done)
 
@@ -14,6 +19,63 @@ provenance anchor maintained. **Never a big-bang move.**
 
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
+
+**Current bounded status at `162d9dff`
+(#988):** #713 mechanically moved notifications, polls,
+relations, threads, and unread; #714 moved raw content, receipts, routes, and
+security; #716 moved search, legacy, and media_cache; #717 moved media_export
+and crypto_store; #734 moved the room-directory session harness; #735 moved
+the verification inbox harness; #737 moved the account-data index harness;
+#738 moved the send-queue harness; #740 moved the room-keys transfer harness;
+#741 moved the supervisor actor harness; #744 moved the diagnostics health
+harness; #743 moved the store identity/paths harness; #748 moved the
+client-builder error/features harness; #747 moved the lifecycle recovery-copy
+harness; #751 moved the auth device-name harness; #753 moved the store
+vault trait / key material and auth discovery/UIA/client_config (Keyring I/O
+and live login stayed desktop); #755 moved the lifecycle error domain
+(logout/session vault I/O/SDK restore stayed desktop); #757 moved lifecycle
+recovery/remote-logout/wipe; #758 moved client-builder config (SDK open stayed
+desktop); #760 moved the session-material vault trait / sealed envelope
+(Keyring I/O stayed desktop); #762 moved the well-known HTTP discovery
+transport (live login stayed desktop); #764 moved logout orchestration and
+the task-supervisor bridge; #766 moved later/room-notes codecs (Client RMW
+stayed desktop); #768 moved image-pack DTO, type filters, and write guards
+(Client snapshot/set and Tauri subscribe stayed desktop); #770 moved m.direct
+snapshot DTO and string-map helpers (Client load/store and DirectEventContent
+write stayed desktop); #772 moved device presentation DTOs and sort helper
+(Client snapshot, UIAA delete, and Tauri owner stayed desktop); #774 moved
+secret-storage presentation DTOs and projector (Client recovery I/O stayed
+desktop); #776 moved backup presentation DTOs and projector (Client
+backup/recovery I/O stayed desktop); #778 moved presence DTOs and subscription
+registry (Client stream and Tauri owner stayed desktop); #780 moved typing
+presentation snapshot DTO (Client m.typing owner stayed desktop); #781 moved
+verification presentation DTOs and phase rank (Client request/SAS owner stayed
+desktop); #783 moved room-directory DTOs and search normalize (ruma request/Client
+fetch stayed desktop); #784 moved space presentation DTOs and cycle guard (live
+Client I/O later moved in #908); #786 moved cross-signing presentation DTOs
+and projector (Client crypto I/O and UIAA stayed desktop); #788 moved room-key
+transfer presentation DTOs and projector (Client/file I/O stayed desktop); #790 moved
+members presentation snapshots and write result (Client member/power-level I/O stayed
+desktop); #792 moved room join-rule presentation DTO (SDK mapping and Tauri owner stayed
+desktop); #794 moved timeline presentation DTOs (NativeTimelineRegistry and Client/Tauri
+streams stayed desktop); #796 moved send/profile-write/room-create/room-profile IPC
+DTOs (Client I/O stayed desktop); #798 moved media upload/download/config IPC DTOs
+(Client media I/O stayed desktop); #800 moved live `Client::builder` plus session
+persist/restore (Keyring vault and `SdkClientHandle` stayed desktop); #801 moved
+live password login / register / password-reset (Tauri product commands stayed
+desktop); #803 moved live `NativeTypingOwner` / `set_typing_notice` (Tauri
+typing commands stayed desktop); #805 moved live `NativeRoomJoinRuleOwner`
+behind a shell emit sink (Tauri event adapter stayed desktop); #807 moved live
+`NativeDeviceOwner` behind a shell emit sink (Tauri wakeup adapter stayed
+desktop); #808 moved live `NativePresenceOwner` behind a shell emit sink
+(Tauri event adapter stayed desktop); #810 moved live `NativeImagePackOwner`
+plus snapshot/set behind a shell emit sink (Tauri adapter stayed desktop);
+#812 extracted the timeline `ViewDeltaEmitter` behind a shell emit sink
+; #814 moved live `NativeTimelineRegistry` into Core (desktop keeps the
+AppHandle adapter); #816 moved live `NativeVerificationOwner` into Core
+(desktop maps diagnostic ids onto Tauri errors). These retain thin desktop re-exports and any
+leftover `live.rs` / `product_commands.rs`. They are P1 extraction
+only: no P2 command registration, UDL, or iOS behavior changed.
 
 Slicing (each slice = one PR):
 1. Workspace scaffolding: root `Cargo.toml` workspace; `crates/synara-core`
@@ -40,15 +102,16 @@ Acceptance: `scripts/check-matrix-boundaries.mjs` green (no new
 
 ## P2 — Native transport API
 
-Goal: make `Core::command(envelope)` + `Platform::emit` the only entry points
-the shells use.
+Goal: make `Core::command(envelope)` the command entry, owner emit
+callbacks the product-event entry, and `Platform::emit` the IPC
+envelope stream. Do not collapse those three.
 
 - Add `synara-core::Core` with `command`, `open`, `close`, `new(platform)`.
-- Register the 144 handlers by **command name** in a single
-  `transport::registry` (purely mechanical: extract each `#[tauri::command]`
-  body's `(args) -> Result<T, Error>` into an envelope handler).
-- Commit per command-group (auth, session/lifecycle, room_list, timeline,
-  crypto, send/media, misc). Green per slice.
+- Register handlers by **command name** only as the owner capability
+  lands (decision 6). Unregistered census names fail closed.
+- Twenty-one names stay desktop on purpose (playbook §6).
+- Commit per landed capability. Green per slice. As of #928 the
+  registry is one hundred eleven names.
 
 Acceptance: React still calls the same `matrix_*` commands (desktop adapter
 unchanged in behavior); `ipc/contract_tests` extended to cover every registered
@@ -77,15 +140,29 @@ Goal: iOS consumes the same engine; Swift re-implementations retired.
    and run `uniffi-bindgen` → `synara-core/Sources/SynaraCore/*.swift`.
 2. Swift `SynaraCore` package in `synara-ios` (or a workspace package) with
    `Platform` callback impl (`SynaraPlatform`).
-3. Migrate iOS services onto it, in dependency-safe order:
-   - `HomeserverDiscovery`+`AuthService` → `Core::command(auth_*)`
-   - `SessionCoordinator`+`SecureSessionStore` → `Core::open/close` +
-     secret-store sink
-   - `RoomListService` → room_list commands/envelopes + `set_badge`
-   - `TimelineService` → timeline commands/envelopes
-   - `MatrixRustSDKService` (crypto delegates → core crypto supervisors;
-     the SAS verification delegate already mirrors `verification/inbox.rs`)
-   - `PushService`/NSE → read-only store API + notification delivery
+3. Migrate iOS services onto it, in the **serial order in
+   [11-implementer-playbook.md](11-implementer-playbook.md) §9**. Do not
+   call `matrix_room_list_snapshot` (or any attached-owner command) from
+   iOS before P4-S3 has attached owners. Do not delete
+   `MatrixRustSDKService` until grep is clean.
+   - P4-S1 `register_flows` UniFFI — landed in #931 (credential-free)
+   - P4-S2 Swift `Platform` + `Core::new` — landed in #933
+   - P4-S3a SecretVault callback — landed in #935 (no live Client)
+   - P4-S3b restore — landed in #937
+   - P4-S3c `login_with_password` — landed in #938
+   - P4-S3d attach owners — landed in #939 (SyncService not started)
+   - P4-S4 through S9-31 typed SharedCore wrappers — landed in #940–#979
+   - #980 desktop source-scan hygiene after the S9 rematch
+   - #981 docs honesty after #980
+   - #982 records local UniFFI generate
+   - #983 records S10 leftover stop (not a product retirement)
+   - P4-S11 NSE read-only store API — landed in #984 (never starts sync; helper + XCTest; not a product NSE swap)
+   - #985 refreshes provenance
+   - P4-S10 leftover UniFFI + product caller retirement — landed in #986
+   - #987 refreshes provenance
+   - #988 re-enables iOS CI (Quality green including iOS, not skipped)
+   - Local Apple UniFFI generate has been run; generated sources remain gitignored
+   - Product `MatrixRustSDK` grep is comments only; leftover I/O fail-closed; SyncService not started; iOS CI re-enabled
 4. Remove `matrix-rust-components-swift` from `project.yml` when nothing
    references `MatrixRustSDK` anymore.
 
@@ -93,6 +170,23 @@ Acceptance: `ci.yml` `ios-tests` + `ios-skeleton.yml` green against the shared
 core; `grep -rn 'MatrixRustSDK' synara-ios/Synara --include='*.swift'` returns
 zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
+
+> **Bounded evidence note — not P4 acceptance:** At the current feature tip
+> `162d9dff` (#988), UniFFI exposes credential-free `login_flows` /
+> `register_flows`, SharedCore constructors, S3 vault/restore/login/attach,
+> typed wrappers through S9-31, the S11 NSE read-only store helper
+> (never starts sync; not a product NSE swap), and S10 leftover UniFFI.
+> Product `MatrixRustSDK` callers are retired. Leftover I/O that needs a
+> live homeserver stays fail-closed planted. SyncService is not started.
+> This is not iOS-on-engine.
+> Local Apple generate has been run; generated sources remain gitignored.
+> Checked-in `SynaraCore.swift` remains the bootstrap stub. iOS CI is re-enabled.
+> The prior #708 work is only the pure iOS room-row unread presentation from closed
+> `Joined`/`Invited` membership, scalar counters, and a marked-unread flag to a
+> `u64` count plus highlight boolean. The prior #710 work is only the pure
+> cold-start decision from a latest-state boolean and `{Missing, Known}` to a
+> boolean; Swift maps `nil`/`.distantPast` to `Missing` and a real `Date` to
+> `Known`. #713/#714/#716/#717 add no Core command route, UDL, or iOS behavior.
 
 ## P5 — Parity + release gates
 

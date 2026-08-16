@@ -1,0 +1,10 @@
+[package]
+name = "synara-core-bindgen"
+version = "0.1.0"
+description = "Project-owned, lockfile-pinned UniFFI generator for synara-core"
+license = "AGPL-3.0-only"
+edition = "2021"
+publish = false
+
+[dependencies]
+uniffi = { version = "=0.28.3", features = ["cli"] }

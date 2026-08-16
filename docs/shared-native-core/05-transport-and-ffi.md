@@ -9,19 +9,27 @@ transport API of `synara-core`**, carried differently on each platform:
 | Carrier | Desktop | iOS |
 |---|---|---|
 | Command path | `#[tauri::command]` fns → `Core::command(envelope)` | Swift async methods over **uniffi** → same `Core::command(envelope)` |
-| Event path | `app.emit` via the `Platform::emit` sink | uniffi **callback interface** `Platform` (Swift class implementing the sink) |
+| Product events | owner emit callback → desktop `app.emit(existing_name)` | future UniFFI callback on the same owner (not `Platform::emit`) |
+| IPC envelope stream | `Platform::emit` (typed envelopes only) | uniffi **callback interface** `Platform` when that stream is migrated |
 | Ordering | existing wire counter | same counter enforced by the iOS adapter |
 
 ## 5.2 Command surface
 
 - Keep the **exact command names** the React layer already uses
-  (`matrix_*` names, e.g. `matrix_sync_status`,
-  `matrix_room_list_snapshot`, `matrix_timeline_snapshot`, `matrix_send_*`,
-  `matrix_secret_storage_*`...). The 144 command fn bodies are relocated into
-  `synara-core` as envelope handlers; the desktop registrar stays as a thin
-  passthrough. **Frontend API compatibility is a hard invariant.**
-- A command registry (`transport::Command` → handler) mirrors
-  `src-tauri`'s `invoke_handler()` list, so adding a command touches one place.
+  (`matrix_*`). **Frontend API compatibility is a hard invariant.**
+- The census in `crates/synara-core/src/transport/census.rs` is the full
+  React/Tauri list. As of #928, **111** names are registered on
+  `Core::command`. The other census names fail closed. Twenty-one of
+  those leftovers are **intended shell** (passwords, `client_secret`,
+  Keyring logout/restore, passphrases, file paths, attachment/media
+  bytes). Do not register them without a new owner decision.
+- A command registry (`transport::Command` → handler) grows **only as
+  capabilities land** (owner decision 6). It is not a race to 144.
+
+P4 UniFFI still exposes only the scaffold, `login_flows`, session
+projection, and two pure helpers. Serial expansion is
+[11-implementer-playbook.md](11-implementer-playbook.md) §9. Disk must
+be ≥ 20 Gi before bindgen.
 
 ## 5.3 uniffi bindings (iOS, P4)
 

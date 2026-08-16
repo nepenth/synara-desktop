@@ -60,9 +60,27 @@ Consequences:
 - Application lifecycle and settings/config UI.
 - Re-writing either frontend to match the other.
 
+## End state vs today
+
+**End state:** one Rust core (`crates/synara-core`) that both the desktop
+Tauri app (macOS and Linux) and the iOS app consume, so sync, room list,
+timeline, and crypto are not implemented twice.
+
+**Today:** that end state has not been reached. Desktop already drives
+most product Matrix I/O through Core (`Core::command`, 111 registered
+names). iOS still re-implements the live engine in Swift. The branch is
+`feature/shared-native-core` only — not `main`, not a release.
+
+How to implement the remaining gap without confusion:
+[11-implementer-playbook.md](11-implementer-playbook.md).
+
 ## Success criteria
 
-- `cargo test` for `synara-core` passes with the full existing matrix suite.
+These are **program-done** checks. None of them is currently true as a
+set. Do not tick them from a single PR.
+
+- `cargo test` for `synara-core` passes with the full existing matrix suite
+  (when disk policy allows cargo).
 - Desktop build/test/package CI green at tip throughout P1–P3.
 - iOS simulator build+tests (ci.yml `ios-tests`, `ios-skeleton.yml`) green
   against the shared core in P4+.
@@ -71,3 +89,5 @@ Consequences:
   adapter layer).
 - A single feature toggle/bugfix authored once in `synara-core` lands on both
   platforms (demonstrated by at least one post-P4 change).
+- Work has been merged from `feature/shared-native-core` to `main` only
+  after engineering finish is accepted. Release is a later, separate gate.

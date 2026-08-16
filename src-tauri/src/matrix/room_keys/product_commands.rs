@@ -2,18 +2,9 @@ use super::*;
 
 #[tauri::command]
 pub async fn matrix_room_key_transfer_status(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeRoomKeyTransferStatus, MatrixAuthCommandError> {
-    let (flow, generation) = {
-        let session = state.session.lock().await;
-        let active = require_room_key_session(session.as_ref())?;
-        (
-            Arc::clone(&active.room_key_transfer),
-            active.sync.session_generation(),
-        )
-    };
-    let flow = flow.lock().await;
-    Ok(live_room_keys::project_status(generation, &flow))
+    crate::bridge::room_key_status::room_key_transfer_status(core.inner().as_ref()).await
 }
 
 #[tauri::command]

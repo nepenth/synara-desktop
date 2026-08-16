@@ -44,7 +44,21 @@ directory.
 
 ## Local Build
 
-Generate the Xcode project:
+The app imports the repository-local `SynaraCore` package. On a clean checkout,
+generate its Swift bindings and XCFramework **before** opening or building the
+app (requires Xcode and Rust 1.93 with the Apple targets):
+
+```sh
+cd ..
+scripts/generate-synara-core-swift.sh
+cd synara-ios
+```
+
+`ci-build.sh` runs this generation automatically in iOS CI. Generated Swift,
+headers, XCFrameworks, and build artifacts remain ignored and must not be
+committed.
+
+Generate the Xcode project after SynaraCore generation:
 
 ```sh
 xcodegen generate

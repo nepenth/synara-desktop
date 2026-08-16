@@ -2,11 +2,9 @@ use super::*;
 
 #[tauri::command]
 pub async fn matrix_secret_storage_status(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeSecretStorageStatus, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_secret_storage_session(session.as_ref())?;
-    live_secret_storage::status(&active.client, active.sync.session_generation()).await
+    crate::bridge::secret_storage_status::secret_storage_status(core.inner().as_ref()).await
 }
 
 #[tauri::command]

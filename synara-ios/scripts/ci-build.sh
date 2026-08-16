@@ -33,6 +33,50 @@ fi
 
 cd "$(dirname "$0")/.."
 
+repo_root="$(cd .. && pwd)"
+checker="$repo_root/scripts/check-synara-core-swift-scaffold.mjs"
+if [[ ! -f "$checker" ]]; then
+  echo "SynaraCore Swift scaffold checker is required at $checker" >&2
+  exit 127
+fi
+node "$checker"
+
+generator="$repo_root/scripts/generate-synara-core-swift.sh"
+if [[ ! -x "$generator" ]]; then
+  echo "SynaraCore generator is required at $generator" >&2
+  exit 127
+fi
+
+# The local SynaraCore package contains generated Swift and a generated binary
+# XCFramework. Produce both before XcodeGen resolves the local package so a
+# clean checkout cannot compile declarations without their Rust implementation.
+"$generator"
+
+required_synara_core_artifacts=(
+  "SynaraCore/Sources/SynaraCore/Generated/synara_core.swift"
+  "SynaraCore/Artifacts/SynaraCore.xcframework/Info.plist"
+)
+for artifact in "${required_synara_core_artifacts[@]}"; do
+  if [[ ! -f "$artifact" ]]; then
+    echo "SynaraCore generation did not produce required artifact: $artifact" >&2
+    exit 1
+  fi
+done
+for generated_ffi_file in synara_coreFFI.h module.modulemap; do
+  if ! find "SynaraCore/Artifacts/SynaraCore.xcframework" \
+    -path "*/Headers/$generated_ffi_file" -print -quit | grep -q .; then
+    echo "SynaraCore XCFramework is missing generated FFI file: $generated_ffi_file" >&2
+    exit 1
+  fi
+done
+
+# This catches a malformed local binary target before XcodeGen. xcodebuild
+# below still validates the actual unsigned simulator app and test bundles.
+(
+  cd SynaraCore
+  swift build
+)
+
 mkdir -p \
   "$DERIVED_DATA_PATH" \
   "$PACKAGE_CACHE_PATH" \

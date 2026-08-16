@@ -1,0 +1,63 @@
+[package]
+name = "synara-core"
+version = "0.1.0"
+description = "Transport-agnostic shared native core for Synara (desktop + iOS)"
+license = "AGPL-3.0-only"
+edition = "2021"
+
+# P4-1: Apple shells link the same project-owned library; no prebuilt Matrix
+# wrapper is used for this binding surface.
+[lib]
+crate-type = ["lib", "staticlib", "cdylib"]
+
+[dependencies]
+# P1.4 domain DTOs (moved from src-tauri/matrix/dto, SNC-P1-2) derive serde.
+serde = { version = "1.0.193", features = ["derive"] }
+# P1.3 transport protocol (moved from src-tauri/matrix/ipc, SNC-P1-3): stream_body
+# validates JSON bodies at the envelope boundary; tests share the fixtures too.
+serde_json = "1.0.109"
+# URL parser for fail-closed homeserver base validation.
+url = "2"
+# Credential-free login-flow discovery transport (moved from desktop auth).
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2"] }
+# SNC-P1-4: task registry (moved from src-tauri/matrix/tasks) supervises async
+# work — tokio spawn/JoinHandle at runtime and the test macro for its unit tests.
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time", "net", "io-util"] }
+# SNC-P1-5a + live client open: sync and Client::builder live in this crate.
+# Pins match src-tauri (=0.18.0, default-features=false). sqlite + bundled-sqlite
+# are required here because build_unauthenticated_client opens the product store.
+# markdown/qrcode remain desktop-only extras via src-tauri feature unification.
+# e2e-encryption still arrives via matrix-sdk-ui.
+matrix-sdk = { version = "=0.18.0", default-features = false, features = [
+  "sqlite",
+  "bundled-sqlite",
+] }
+matrix-sdk-ui = { version = "=0.18.0", default-features = false }
+# Live NativeTimelineRegistry maps UTD causes from the crypto crate.
+# Pin matches src-tauri (`=0.18.0`, default-features=false).
+matrix-sdk-crypto = { version = "=0.18.0", default-features = false }
+# SNC-P1-5b: room_list (moved from src-tauri/matrix/room_list) — live.rs streams
+# room-list vector diffs (eyeball-im) asynchronously (futures-util). Pins are
+# EXACTLY what src-tauri uses (eyeball-im 0.8, futures-util 0.3).
+eyeball-im = "0.8"
+futures-util = "0.3"
+# SNC-P1-5b: invite_avatars.rs mints opaque random bearer handles for
+# invite-card avatar media sources (getrandom::fill). Pin matches src-tauri
+# (getrandom 0.3, default features).
+getrandom = "0.3"
+# P4-1 binding metadata/runtime. The version is pinned so the UDL scaffolding,
+# generated Swift, and Apple libraries are produced by one reproducible toolchain.
+uniffi = { version = "=0.28.3" }
+# Store identity fingerprints directory names (moved from desktop store/identity.rs).
+# Pin matches src-tauri (`sha2 = "0.10"`).
+sha2 = "0.10"
+# Host-only register token buffers (moved with live register orchestration).
+# Pin matches src-tauri (`zeroize = "1"`).
+zeroize = "1"
+
+[build-dependencies]
+uniffi = { version = "=0.28.3", features = ["build"] }
+
+[dev-dependencies]
+# dto/tests.rs fixture + serde round-trip tests.
+serde_json = "1.0.109"

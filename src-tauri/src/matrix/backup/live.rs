@@ -8,81 +8,38 @@ use matrix_sdk::{
         backups::BackupState,
         recovery::{RecoveryError, RecoveryState},
     },
-    ruma::api::{client::backup::get_latest_backup_info, error::ErrorKind},
     Client,
 };
-use serde::Serialize;
 use zeroize::Zeroize;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NativeBackupAvailability {
-    Missing,
-    Available,
+pub use synara_core::app::backup::{
+    project_backup_status, NativeBackupAction, NativeBackupAvailability, NativeBackupDeviceState,
+    NativeBackupEnginePhase, NativeBackupOperationOutcome, NativeBackupOperationResult,
+    NativeBackupRecoveryPhase, NativeBackupRecoveryState, NativeBackupStatus,
+    ServerBackupProjection,
+};
+
+fn backup_engine_phase(state: BackupState) -> NativeBackupEnginePhase {
+    match state {
+        BackupState::Creating => NativeBackupEnginePhase::Creating,
+        BackupState::Enabling => NativeBackupEnginePhase::Enabling,
+        BackupState::Resuming => NativeBackupEnginePhase::Resuming,
+        BackupState::Downloading => NativeBackupEnginePhase::Downloading,
+        BackupState::Disabling => NativeBackupEnginePhase::Disabling,
+        BackupState::Enabled => NativeBackupEnginePhase::Enabled,
+        BackupState::Unknown => NativeBackupEnginePhase::Unknown,
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NativeBackupDeviceState {
-    Unavailable,
-    Disconnected,
-    Connecting,
-    Downloading,
-    Uploading,
-    Ready,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NativeBackupRecoveryState {
-    Unknown,
-    NotSetUp,
-    Incomplete,
-    Ready,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NativeBackupAction {
-    SetupRequired,
-    RestoreRequired,
-    RepairRequired,
-    None,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NativeBackupStatus {
-    pub session_generation: u64,
-    pub availability: NativeBackupAvailability,
-    pub enabled: bool,
-    pub version: Option<String>,
-    pub key_count: Option<u64>,
-    pub device_state: NativeBackupDeviceState,
-    pub recovery_state: NativeBackupRecoveryState,
-    pub action: NativeBackupAction,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NativeBackupOperationOutcome {
-    Complete,
-    AlreadyConfigured,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NativeBackupOperationResult {
-    pub outcome: NativeBackupOperationOutcome,
-    pub status: NativeBackupStatus,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ServerBackupProjection {
-    pub version: String,
-    pub key_count: u64,
+fn backup_recovery_phase(state: RecoveryState) -> NativeBackupRecoveryPhase {
+    match state {
+        RecoveryState::Unknown => NativeBackupRecoveryPhase::Unknown,
+        RecoveryState::Disabled => NativeBackupRecoveryPhase::Disabled,
+        RecoveryState::Incomplete => NativeBackupRecoveryPhase::Incomplete,
+        RecoveryState::Enabled => NativeBackupRecoveryPhase::Enabled,
+    }
 }
 
 pub fn project_status(
@@ -92,76 +49,28 @@ pub fn project_status(
     backup_state: BackupState,
     recovery_state: RecoveryState,
 ) -> NativeBackupStatus {
-    let availability = if server.is_some() {
-        NativeBackupAvailability::Available
-    } else {
-        NativeBackupAvailability::Missing
-    };
-    let device_state = match backup_state {
-        BackupState::Creating | BackupState::Enabling | BackupState::Resuming => {
-            NativeBackupDeviceState::Connecting
-        }
-        BackupState::Downloading => NativeBackupDeviceState::Downloading,
-        BackupState::Disabling => NativeBackupDeviceState::Unavailable,
-        BackupState::Enabled if enabled => NativeBackupDeviceState::Ready,
-        BackupState::Enabled => NativeBackupDeviceState::Uploading,
-        BackupState::Unknown if server.is_some() => NativeBackupDeviceState::Disconnected,
-        BackupState::Unknown => NativeBackupDeviceState::Unavailable,
-    };
-    let recovery_state = match recovery_state {
-        RecoveryState::Unknown => NativeBackupRecoveryState::Unknown,
-        RecoveryState::Disabled => NativeBackupRecoveryState::NotSetUp,
-        RecoveryState::Incomplete => NativeBackupRecoveryState::Incomplete,
-        RecoveryState::Enabled => NativeBackupRecoveryState::Ready,
-    };
-    let action = match (availability, enabled, recovery_state) {
-        (NativeBackupAvailability::Missing, _, NativeBackupRecoveryState::NotSetUp) => {
-            NativeBackupAction::SetupRequired
-        }
-        (NativeBackupAvailability::Missing, _, NativeBackupRecoveryState::Incomplete) => {
-            NativeBackupAction::RepairRequired
-        }
-        (NativeBackupAvailability::Missing, _, _) => NativeBackupAction::SetupRequired,
-        (NativeBackupAvailability::Available, false, NativeBackupRecoveryState::Incomplete) => {
-            NativeBackupAction::RepairRequired
-        }
-        (NativeBackupAvailability::Available, false, _) => NativeBackupAction::RestoreRequired,
-        (NativeBackupAvailability::Available, true, NativeBackupRecoveryState::Incomplete) => {
-            NativeBackupAction::RepairRequired
-        }
-        (NativeBackupAvailability::Available, true, _) => NativeBackupAction::None,
-    };
-    let (version, key_count) = match server {
-        Some(server) => (Some(server.version), Some(server.key_count)),
-        None => (None, None),
-    };
-
-    NativeBackupStatus {
+    project_backup_status(
         session_generation,
-        availability,
+        server,
         enabled,
-        version,
-        key_count,
-        device_state,
-        recovery_state,
-        action,
-    }
+        backup_engine_phase(backup_state),
+        backup_recovery_phase(recovery_state),
+    )
 }
 
 pub async fn status(
     client: &Client,
     session_generation: u64,
 ) -> Result<NativeBackupStatus, MatrixAuthCommandError> {
-    let backups = client.encryption().backups();
-    let server = fetch_server_backup(client).await?;
-    let enabled = backups.are_enabled().await;
-    Ok(project_status(
-        session_generation,
-        server,
-        enabled,
-        backups.state(),
-        client.encryption().recovery().state(),
-    ))
+    synara_core::app::backup::status(client, session_generation)
+        .await
+        .map_err(|diagnostic_id| {
+            backup_error(
+                "Unknown",
+                "Encryption backup status is unavailable.",
+                diagnostic_id,
+            )
+        })
 }
 
 pub async fn setup(
@@ -254,26 +163,6 @@ async fn operation_complete(
         outcome: NativeBackupOperationOutcome::Complete,
         status,
     })
-}
-
-async fn fetch_server_backup(
-    client: &Client,
-) -> Result<Option<ServerBackupProjection>, MatrixAuthCommandError> {
-    match client
-        .send(get_latest_backup_info::v3::Request::new())
-        .await
-    {
-        Ok(response) => Ok(Some(ServerBackupProjection {
-            version: response.version,
-            key_count: u64::from(response.count),
-        })),
-        Err(error) if error.client_api_error_kind() == Some(&ErrorKind::NotFound) => Ok(None),
-        Err(_) => Err(backup_error(
-            "Unknown",
-            "Encryption backup status is unavailable.",
-            "v-crypto.3-status-query-failed",
-        )),
-    }
 }
 
 fn map_recovery_setup_error(error: RecoveryError) -> MatrixAuthCommandError {

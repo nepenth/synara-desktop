@@ -2,56 +2,18 @@ use super::*;
 
 #[tauri::command]
 pub async fn matrix_invites_accept(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
 ) -> Result<NativeInviteSnapshot, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
-    let active = require_session_mut(session.as_mut())?;
-    let invite = native_invite_target(active, &room_id).await?;
-    let room = native_invite_room(active, &invite)?;
-    room.join()
-        .await
-        .map_err(|_| map_invite_error("v-rooms.1-invite-accept-failed"))?;
-    if invite.is_direct {
-        let sender_id = OwnedUserId::try_from(invite.sender_id.as_str())
-            .map_err(|_| map_invite_error("v-rooms.1-invite-invalid-sender"))?;
-        active
-            .client
-            .account()
-            .mark_as_dm(room.room_id(), &[sender_id])
-            .await
-            .map_err(|_| map_invite_error("v-rooms.1-invite-direct-mark-failed"))?;
-    }
-    active.invite_avatars.revoke_room(&invite.room_id);
-    snapshot_invites(
-        &active.client,
-        active.sync.session_generation(),
-        &mut active.invite_avatars,
-    )
-    .await
-    .map_err(map_invite_error)
+    crate::bridge::invites_snapshot::invites_accept(core.inner().as_ref(), room_id).await
 }
 
 #[tauri::command]
 pub async fn matrix_invites_decline(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
 ) -> Result<NativeInviteSnapshot, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
-    let active = require_session_mut(session.as_mut())?;
-    let invite = native_invite_target(active, &room_id).await?;
-    native_invite_room(active, &invite)?
-        .leave()
-        .await
-        .map_err(|_| map_invite_error("v-rooms.1-invite-decline-failed"))?;
-    active.invite_avatars.revoke_room(&invite.room_id);
-    snapshot_invites(
-        &active.client,
-        active.sync.session_generation(),
-        &mut active.invite_avatars,
-    )
-    .await
-    .map_err(map_invite_error)
+    crate::bridge::invites_snapshot::invites_decline(core.inner().as_ref(), room_id).await
 }
 
 /// V-ROOMS room creation: create the room through the live native Matrix SDK.
@@ -59,18 +21,10 @@ pub async fn matrix_invites_decline(
 /// native Matrix session owns room lifecycle mutations.
 #[tauri::command]
 pub async fn matrix_room_create(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     request: MatrixRoomCreateRequest,
 ) -> Result<String, MatrixAuthCommandError> {
-    let request = build_room_create_request(request)?;
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    let room = active
-        .client
-        .create_room(request)
-        .await
-        .map_err(|_| map_room_create_error("v-rooms-room-create-failed"))?;
-    Ok(room.room_id().to_string())
+    crate::bridge::room_create::room_create(core.inner().as_ref(), request).await
 }
 
 /// V-ROOMS room membership: leave the selected room through the native SDK.
@@ -78,21 +32,10 @@ pub async fn matrix_room_create(
 /// Matrix session owns the room lifecycle.
 #[tauri::command]
 pub async fn matrix_room_leave(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
 ) -> Result<(), MatrixAuthCommandError> {
-    let room_id = parse_room_leave_id(&room_id)?;
-    let room = {
-        let session = state.session.lock().await;
-        let active = require_session(session.as_ref())?;
-        active
-            .client
-            .get_room(&room_id)
-            .ok_or_else(|| map_room_leave_error("v-rooms-room-leave-room-not-found"))?
-    };
-    room.leave()
-        .await
-        .map_err(|_| map_room_leave_error("v-rooms-room-leave-failed"))
+    crate::bridge::room_leave_join::room_leave(core.inner().as_ref(), room_id).await
 }
 
 /// V-ROOMS room membership: join a room or room alias through the native SDK.
@@ -100,131 +43,74 @@ pub async fn matrix_room_leave(
 /// Matrix session owns the room lifecycle.
 #[tauri::command]
 pub async fn matrix_room_join(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id_or_alias: String,
     via_servers: Option<Vec<String>>,
 ) -> Result<(), MatrixAuthCommandError> {
-    let target = parse_room_join_target(&room_id_or_alias)?;
-    let via_servers = parse_room_join_via_servers(via_servers.as_deref())?;
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    active
-        .client
-        .join_room_by_id_or_alias(&target, &via_servers)
+    crate::bridge::room_leave_join::room_join(core.inner().as_ref(), room_id_or_alias, via_servers)
         .await
-        .map(|_| ())
-        .map_err(|_| map_room_join_error("v-rooms-room-join-failed"))
 }
 
 /// V-ROOMS members moderation: invite a user through the live native Matrix SDK.
 /// Fail-closed: desktop moderation must not use the JS SDK membership methods.
 #[tauri::command]
 pub async fn matrix_room_invite(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     user_id: String,
     reason: Option<String>,
 ) -> Result<(), MatrixAuthCommandError> {
-    let room_id = parse_room_moderation_room_id(&room_id)?;
-    let user_id = parse_room_moderation_user_id(&user_id)?;
-    // matrix-sdk 0.18's invite_user_by_id API does not expose a reason field.
-    let _reason = normalize_moderation_reason(reason);
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    let room = active
-        .client
-        .get_room(&room_id)
-        .ok_or_else(|| map_room_moderation_error("v-rooms-members-moderation-room-not-found"))?;
-    room.invite_user_by_id(&user_id)
+    crate::bridge::room_moderation::room_invite(core.inner().as_ref(), room_id, user_id, reason)
         .await
-        .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-invite-failed"))
 }
 
 /// V-ROOMS members moderation: kick a user through the live native Matrix SDK.
 #[tauri::command]
 pub async fn matrix_room_kick(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     user_id: String,
     reason: Option<String>,
 ) -> Result<(), MatrixAuthCommandError> {
-    let room_id = parse_room_moderation_room_id(&room_id)?;
-    let user_id = parse_room_moderation_user_id(&user_id)?;
-    let reason = normalize_moderation_reason(reason);
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    let room = active
-        .client
-        .get_room(&room_id)
-        .ok_or_else(|| map_room_moderation_error("v-rooms-members-moderation-room-not-found"))?;
-    room.kick_user(&user_id, reason.as_deref())
-        .await
-        .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-kick-failed"))
+    crate::bridge::room_moderation::room_kick(core.inner().as_ref(), room_id, user_id, reason).await
 }
 
 /// V-ROOMS members moderation: ban a user through the live native Matrix SDK.
 #[tauri::command]
 pub async fn matrix_room_ban(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     user_id: String,
     reason: Option<String>,
 ) -> Result<(), MatrixAuthCommandError> {
-    let room_id = parse_room_moderation_room_id(&room_id)?;
-    let user_id = parse_room_moderation_user_id(&user_id)?;
-    let reason = normalize_moderation_reason(reason);
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    let room = active
-        .client
-        .get_room(&room_id)
-        .ok_or_else(|| map_room_moderation_error("v-rooms-members-moderation-room-not-found"))?;
-    room.ban_user(&user_id, reason.as_deref())
-        .await
-        .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-ban-failed"))
+    crate::bridge::room_moderation::room_ban(core.inner().as_ref(), room_id, user_id, reason).await
 }
 
 /// V-ROOMS members moderation: unban a user through the live native Matrix SDK.
 #[tauri::command]
 pub async fn matrix_room_unban(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     user_id: String,
 ) -> Result<(), MatrixAuthCommandError> {
-    let room_id = parse_room_moderation_room_id(&room_id)?;
-    let user_id = parse_room_moderation_user_id(&user_id)?;
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    let room = active
-        .client
-        .get_room(&room_id)
-        .ok_or_else(|| map_room_moderation_error("v-rooms-members-moderation-room-not-found"))?;
-    room.unban_user(&user_id, None)
-        .await
-        .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-unban-failed"))
+    crate::bridge::room_moderation::room_unban(core.inner().as_ref(), room_id, user_id).await
 }
 
 /// V-ROOMS members moderation: set one user's power level through the live SDK.
 #[tauri::command]
 pub async fn matrix_room_set_power_level(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     user_id: String,
     power_level: i64,
 ) -> Result<(), MatrixAuthCommandError> {
-    let room_id = parse_room_moderation_room_id(&room_id)?;
-    let user_id = parse_room_moderation_user_id(&user_id)?;
-    let power_level = parse_room_moderation_power_level(power_level)?;
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    let room = active
-        .client
-        .get_room(&room_id)
-        .ok_or_else(|| map_room_moderation_error("v-rooms-members-moderation-room-not-found"))?;
-    room.update_power_levels(vec![(&user_id, power_level)])
-        .await
-        .map(|_| ())
-        .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-power-level-failed"))
+    crate::bridge::room_moderation::room_set_power_level(
+        core.inner().as_ref(),
+        room_id,
+        user_id,
+        power_level,
+    )
+    .await
 }
 
 /// V-ROOMS.R-POWERS-BULK — replace the complete `m.room.power_levels` state
@@ -232,18 +118,12 @@ pub async fn matrix_room_set_power_level(
 /// not implemented as repeated `matrix_room_set_power_level` calls.
 #[tauri::command]
 pub async fn matrix_room_set_power_levels(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     content: serde_json::Value,
 ) -> Result<NativePowerLevelWriteResult, MatrixAuthCommandError> {
-    set_room_power_level_state(
-        state,
-        room_id,
-        content,
-        ROOM_POWER_LEVELS_EVENT_TYPE,
-        validate_room_power_levels_content,
-    )
-    .await
+    crate::bridge::room_power_levels::room_set_power_levels(core.inner().as_ref(), room_id, content)
+        .await
 }
 
 /// V-ROOMS.R-POWERS-BULK — replace the complete
@@ -252,147 +132,32 @@ pub async fn matrix_room_set_power_levels(
 /// of all custom tags.
 #[tauri::command]
 pub async fn matrix_room_set_power_level_tags(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     content: serde_json::Value,
 ) -> Result<NativePowerLevelWriteResult, MatrixAuthCommandError> {
-    set_room_power_level_state(
-        state,
+    crate::bridge::room_power_levels::room_set_power_level_tags(
+        core.inner().as_ref(),
         room_id,
         content,
-        POWER_LEVEL_TAGS_EVENT_TYPE,
-        validate_power_level_tags_content,
     )
     .await
-}
-
-pub(super) const ROOM_POWER_LEVELS_EVENT_TYPE: &str = "m.room.power_levels";
-pub(super) const POWER_LEVEL_TAGS_EVENT_TYPE: &str = "in.synara.room.power_level_tags";
-
-pub(super) async fn set_room_power_level_state(
-    state: State<'_, MatrixAuthState>,
-    room_id: String,
-    content: serde_json::Value,
-    event_type: &'static str,
-    validate_content: fn(&serde_json::Value) -> Result<(), MatrixAuthCommandError>,
-) -> Result<NativePowerLevelWriteResult, MatrixAuthCommandError> {
-    let room_id = parse_power_level_room_id(&room_id)?;
-    validate_content(&content)?;
-    let state_event_type = StateEventType::from(event_type);
-
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    let session_generation = active.sync.session_generation();
-    let room = active
-        .client
-        .get_room(&room_id)
-        .ok_or_else(|| map_power_level_write_error("v-rooms-power-levels-room-not-found"))?;
-
-    room.send_state_event_raw(event_type, "", content.clone())
-        .await
-        .map_err(|_| map_power_level_write_error("v-rooms-power-levels-send-failed"))?;
-
-    // The PUT response only acknowledges an event ID. Read the accepted state
-    // back from the homeserver before reporting success; the request body is
-    // never returned as an optimistic echo.
-    let readback = active
-        .client
-        .send(get_state_event_for_key::v3::Request::new(
-            room_id.clone(),
-            state_event_type,
-            String::new(),
-        ))
-        .await
-        .map_err(|_| map_power_level_write_error("v-rooms-power-levels-readback-failed"))?
-        .into_content()
-        .deserialize_as_unchecked::<serde_json::Value>()
-        .map_err(|_| map_power_level_write_error("v-rooms-power-levels-readback-malformed"))?;
-
-    if active.sync.session_generation() != session_generation {
-        return Err(map_power_level_write_error(
-            "v-rooms-power-levels-stale-session-generation",
-        ));
-    }
-    if readback != content {
-        return Err(map_power_level_write_error(
-            "v-rooms-power-levels-readback-mismatch",
-        ));
-    }
-
-    Ok(NativePowerLevelWriteResult {
-        status: "ok",
-        room_id: room_id.to_string(),
-        event_type,
-        state_key: "",
-        session_generation,
-        content: readback,
-    })
 }
 
 #[tauri::command]
 pub async fn matrix_invites_report_spam(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
 ) -> Result<NativeInviteSnapshot, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
-    let active = require_session_mut(session.as_mut())?;
-    let invite = native_invite_target(active, &room_id).await?;
-    native_invite_room(active, &invite)?
-        .report_room("Spam Invite".to_owned())
-        .await
-        .map_err(|_| map_invite_error("v-rooms.1-invite-report-failed"))?;
-    active.invite_avatars.revoke_room(&invite.room_id);
-    snapshot_invites(
-        &active.client,
-        active.sync.session_generation(),
-        &mut active.invite_avatars,
-    )
-    .await
-    .map_err(map_invite_error)
+    crate::bridge::invites_snapshot::invites_report_spam(core.inner().as_ref(), room_id).await
 }
 
 #[tauri::command]
 pub async fn matrix_invites_block_sender(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
 ) -> Result<NativeInviteSnapshot, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
-    let active = require_session_mut(session.as_mut())?;
-    let invite = native_invite_target(active, &room_id).await?;
-    let sender_id = OwnedUserId::try_from(invite.sender_id.as_str())
-        .map_err(|_| map_invite_error("v-rooms.1-invite-invalid-sender"))?;
-    active
-        .client
-        .account()
-        .ignore_user(&sender_id)
-        .await
-        .map_err(|_| map_invite_error("v-rooms.1-invite-block-failed"))?;
-    active.invite_avatars.revoke_room(&invite.room_id);
-    snapshot_invites(
-        &active.client,
-        active.sync.session_generation(),
-        &mut active.invite_avatars,
-    )
-    .await
-    .map_err(map_invite_error)
-}
-
-pub(super) fn map_invite_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
-    let (code, message) = match diagnostic_id {
-        "v-rooms.1-invite-invalid-room" | "v-rooms.1-invite-invalid-sender" => (
-            "InvalidRequest",
-            "The native Matrix invite request is invalid.",
-        ),
-        "v-rooms.1-invite-not-found" | "v-rooms.1-invite-member-missing" => (
-            "NotFound",
-            "The native Matrix invitation is no longer available.",
-        ),
-        _ => (
-            "Unknown",
-            "The native Matrix invite operation could not be completed.",
-        ),
-    };
-    MatrixAuthCommandError::new(code, message, diagnostic_id)
+    crate::bridge::invites_snapshot::invites_block_sender(core.inner().as_ref(), room_id).await
 }
 
 pub(super) fn map_room_leave_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
@@ -462,213 +227,18 @@ pub(super) fn map_power_level_write_error(diagnostic_id: &'static str) -> Matrix
     MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
 
-pub(super) fn parse_power_level_room_id(
-    room_id: &str,
-) -> Result<OwnedRoomId, MatrixAuthCommandError> {
-    if room_id.is_empty() || room_id.trim() != room_id {
-        return Err(map_power_level_write_error(
-            "v-rooms-power-levels-invalid-room",
-        ));
-    }
-    room_id
-        .parse()
-        .map_err(|_| map_power_level_write_error("v-rooms-power-levels-invalid-room"))
-}
-
-pub(super) fn validate_power_level_payload_size(
-    content: &serde_json::Value,
-) -> Result<(), MatrixAuthCommandError> {
-    let byte_len = serde_json::to_vec(content)
-        .map_err(|_| map_power_level_write_error("v-rooms-power-levels-invalid-content"))?
-        .len();
-    if byte_len > MAX_POWER_LEVEL_CONTENT_JSON_BYTES {
-        return Err(map_power_level_write_error(
-            "v-rooms-power-levels-content-too-large",
-        ));
-    }
-    Ok(())
-}
-
-pub(super) fn validate_matrix_power_level(
-    value: &serde_json::Value,
-) -> Result<(), MatrixAuthCommandError> {
-    let valid = value
-        .as_i64()
-        .is_some_and(|value| value.unsigned_abs() <= MAX_WIRE_COUNTER)
-        || value
-            .as_u64()
-            .is_some_and(|value| value <= MAX_WIRE_COUNTER);
-    if valid {
-        Ok(())
-    } else {
-        Err(map_power_level_write_error(
-            "v-rooms-power-levels-invalid-power",
-        ))
-    }
-}
-
-pub(super) fn validate_power_level_map(
-    value: &serde_json::Value,
-) -> Result<(), MatrixAuthCommandError> {
-    let Some(map) = value.as_object() else {
-        return Err(map_power_level_write_error(
-            "v-rooms-power-levels-invalid-power-map",
-        ));
-    };
-    for value in map.values() {
-        validate_matrix_power_level(value)?;
-    }
-    Ok(())
-}
-
 pub(super) fn validate_room_power_levels_content(
     content: &serde_json::Value,
 ) -> Result<(), MatrixAuthCommandError> {
-    validate_power_level_payload_size(content)?;
-    let Some(content) = content.as_object() else {
-        return Err(map_power_level_write_error(
-            "v-rooms-power-levels-invalid-content",
-        ));
-    };
-
-    const POWER_LEVEL_FIELDS: &[&str] = &[
-        "ban",
-        "events_default",
-        "historical",
-        "invite",
-        "kick",
-        "redact",
-        "state_default",
-        "users_default",
-    ];
-    for field in POWER_LEVEL_FIELDS {
-        if let Some(value) = content.get(*field) {
-            validate_matrix_power_level(value)?;
-        }
-    }
-    for field in ["events", "notifications", "users"] {
-        if let Some(value) = content.get(field) {
-            validate_power_level_map(value)?;
-        }
-    }
-    Ok(())
-}
-
-pub(super) fn validate_bounded_text(
-    value: &serde_json::Value,
-    diagnostic_id: &'static str,
-    required: bool,
-) -> Result<(), MatrixAuthCommandError> {
-    let Some(value) = value.as_str() else {
-        return Err(map_power_level_write_error(diagnostic_id));
-    };
-    if value.len() > MAX_POWER_LEVEL_TEXT_BYTES || (required && value.is_empty()) {
-        return Err(map_power_level_write_error(diagnostic_id));
-    }
-    Ok(())
-}
-
-pub(super) fn validate_power_level_tag_icon(
-    value: &serde_json::Value,
-) -> Result<(), MatrixAuthCommandError> {
-    let Some(icon) = value.as_object() else {
-        return Err(map_power_level_write_error(
-            "v-rooms-power-levels-invalid-icon",
-        ));
-    };
-    for field in icon.keys() {
-        if field != "key" && field != "info" {
-            return Err(map_power_level_write_error(
-                "v-rooms-power-levels-invalid-icon-field",
-            ));
-        }
-    }
-    if let Some(key) = icon.get("key") {
-        validate_bounded_text(key, "v-rooms-power-levels-invalid-icon", false)?;
-    }
-    if let Some(info) = icon.get("info") {
-        let Some(info) = info.as_object() else {
-            return Err(map_power_level_write_error(
-                "v-rooms-power-levels-invalid-icon-info",
-            ));
-        };
-        for (field, value) in info {
-            match field.as_str() {
-                "w" | "h" | "size" => {
-                    let valid = value
-                        .as_u64()
-                        .is_some_and(|value| value <= MAX_WIRE_COUNTER);
-                    if !valid {
-                        return Err(map_power_level_write_error(
-                            "v-rooms-power-levels-invalid-icon-info",
-                        ));
-                    }
-                }
-                "mimetype" | "xyz.amorgan.blurhash" => {
-                    validate_bounded_text(value, "v-rooms-power-levels-invalid-icon-info", false)?;
-                }
-                _ => {
-                    return Err(map_power_level_write_error(
-                        "v-rooms-power-levels-invalid-icon-field",
-                    ));
-                }
-            }
-        }
-    }
-    Ok(())
+    synara_core::app::members::validate_room_power_levels_content(content)
+        .map_err(map_power_level_write_error)
 }
 
 pub(super) fn validate_power_level_tags_content(
     content: &serde_json::Value,
 ) -> Result<(), MatrixAuthCommandError> {
-    validate_power_level_payload_size(content)?;
-    let Some(tags) = content.as_object() else {
-        return Err(map_power_level_write_error(
-            "v-rooms-power-levels-invalid-content",
-        ));
-    };
-    for (power, value) in tags {
-        let parsed_power = power
-            .parse::<i64>()
-            .ok()
-            .filter(|value| value.unsigned_abs() <= MAX_WIRE_COUNTER);
-        if parsed_power.map(|value| value.to_string()).as_deref() != Some(power.as_str()) {
-            return Err(map_power_level_write_error(
-                "v-rooms-power-levels-invalid-tag-key",
-            ));
-        }
-
-        let Some(tag) = value.as_object() else {
-            return Err(map_power_level_write_error(
-                "v-rooms-power-levels-invalid-tag",
-            ));
-        };
-        let Some(name) = tag.get("name") else {
-            return Err(map_power_level_write_error(
-                "v-rooms-power-levels-invalid-tag-name",
-            ));
-        };
-        if name.as_str().is_none_or(|name| name.trim().is_empty()) {
-            return Err(map_power_level_write_error(
-                "v-rooms-power-levels-invalid-tag-name",
-            ));
-        }
-        validate_bounded_text(name, "v-rooms-power-levels-invalid-tag-name", true)?;
-        for field in tag.keys() {
-            if field != "name" && field != "color" && field != "icon" {
-                return Err(map_power_level_write_error(
-                    "v-rooms-power-levels-invalid-tag",
-                ));
-            }
-        }
-        if let Some(color) = tag.get("color") {
-            validate_bounded_text(color, "v-rooms-power-levels-invalid-tag-color", false)?;
-        }
-        if let Some(icon) = tag.get("icon") {
-            validate_power_level_tag_icon(icon)?;
-        }
-    }
-    Ok(())
+    synara_core::app::members::validate_power_level_tags_content(content)
+        .map_err(map_power_level_write_error)
 }
 
 pub(super) fn map_room_create_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
@@ -695,285 +265,7 @@ pub(super) fn map_room_create_error(diagnostic_id: &'static str) -> MatrixAuthCo
 pub(super) fn build_room_create_request(
     input: MatrixRoomCreateRequest,
 ) -> Result<create_room::v3::Request, MatrixAuthCommandError> {
-    let MatrixRoomCreateRequest {
-        name,
-        topic,
-        room_version,
-        room_alias_name,
-        is_direct,
-        invite,
-        visibility,
-        preset,
-        creation_content,
-        encryption,
-        join_rule,
-        knock,
-        parent_room_id,
-        power_level_content_override,
-    } = input;
-
-    let name = name
-        .map(|value| {
-            let value = value.trim();
-            if value.is_empty() || value.chars().count() > 255 {
-                return Err(map_room_create_error("v-rooms-room-create-invalid-name"));
-            }
-            Ok(value.to_owned())
-        })
-        .transpose()?;
-    let topic = topic
-        .map(|value| {
-            let value = value.trim();
-            if value.chars().count() > 2_048 {
-                return Err(map_room_create_error("v-rooms-room-create-invalid-topic"));
-            }
-            if value.is_empty() {
-                Ok(None)
-            } else {
-                Ok(Some(value.to_owned()))
-            }
-        })
-        .transpose()?
-        .flatten();
-    let room_version = room_version
-        .map(|value| {
-            value
-                .trim()
-                .parse::<RoomVersionId>()
-                .map_err(|_| map_room_create_error("v-rooms-room-create-invalid-room-version"))
-        })
-        .transpose()?;
-    let room_alias_name = room_alias_name
-        .map(|value| {
-            let value = value.trim();
-            if value.is_empty() || value.chars().count() > 255 {
-                return Err(map_room_create_error("v-rooms-room-create-invalid-alias"));
-            }
-            Ok(value.to_owned())
-        })
-        .transpose()?;
-    let invite = invite
-        .into_iter()
-        .map(|value| {
-            value
-                .trim()
-                .parse::<OwnedUserId>()
-                .map_err(|_| map_room_create_error("v-rooms-room-create-invalid-invite"))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let parent_room_id = parent_room_id
-        .map(|value| {
-            value
-                .trim()
-                .parse::<OwnedRoomId>()
-                .map_err(|_| map_room_create_error("v-rooms-room-create-invalid-parent"))
-        })
-        .transpose()?;
-
-    let room_type = creation_content
-        .as_ref()
-        .and_then(|content| content.room_type.as_deref())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_owned);
-    if creation_content
-        .as_ref()
-        .and_then(|content| content.room_type.as_deref())
-        .is_some_and(|value| value.trim().is_empty())
-    {
-        return Err(map_room_create_error(
-            "v-rooms-room-create-invalid-creation-content",
-        ));
-    }
-
-    let creation_content = creation_content
-        .map(build_room_create_creation_content)
-        .transpose()?;
-    let power_level_content_override = power_level_content_override
-        .map(build_room_create_power_levels)
-        .transpose()?;
-
-    let mut initial_state = Vec::new();
-    if encryption {
-        initial_state.push(raw_room_create_state(
-            "m.room.encryption",
-            "",
-            serde_json::json!({ "algorithm": "m.megolm.v1.aes-sha2" }),
-        )?);
-    }
-    if room_type.as_deref() == Some("org.matrix.msc3417.call") {
-        initial_state.push(raw_room_create_state(
-            "org.matrix.msc3401.call",
-            "",
-            serde_json::json!({}),
-        )?);
-    }
-    if let Some(join_rules) =
-        build_room_create_join_rules(join_rule.as_deref(), knock, parent_room_id.as_ref())?
-    {
-        initial_state.push(join_rules);
-    }
-
-    let mut request = create_room::v3::Request::new();
-    request.name = name;
-    request.topic = topic;
-    request.room_version = room_version;
-    request.room_alias_name = room_alias_name;
-    request.is_direct = is_direct;
-    request.invite = invite;
-    request.visibility = match visibility {
-        Some(MatrixRoomCreateVisibility::Public) => Visibility::Public,
-        Some(MatrixRoomCreateVisibility::Private) | None => Visibility::Private,
-    };
-    request.preset = preset.map(|preset| match preset {
-        MatrixRoomCreatePreset::Private => RoomPreset::PrivateChat,
-        MatrixRoomCreatePreset::Public => RoomPreset::PublicChat,
-        MatrixRoomCreatePreset::TrustedPrivate => RoomPreset::TrustedPrivateChat,
-    });
-    request.creation_content = creation_content;
-    request.initial_state = initial_state;
-    request.power_level_content_override = power_level_content_override;
-    Ok(request)
-}
-
-pub(super) fn build_room_create_creation_content(
-    content: MatrixRoomCreateContent,
-) -> Result<Raw<create_room::v3::CreationContent>, MatrixAuthCommandError> {
-    let mut value = serde_json::Map::new();
-    if let Some(room_type) = content.room_type {
-        value.insert("type".to_owned(), serde_json::Value::String(room_type));
-    }
-    if let Some(federate) = content.federate {
-        value.insert("m.federate".to_owned(), serde_json::json!(federate));
-    }
-    if let Some(additional_creators) = content.additional_creators {
-        let additional_creators = additional_creators
-            .into_iter()
-            .map(|value| {
-                value.trim().parse::<OwnedUserId>().map_err(|_| {
-                    map_room_create_error("v-rooms-room-create-invalid-additional-creator")
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        value.insert(
-            "additional_creators".to_owned(),
-            serde_json::to_value(additional_creators).expect("user IDs serialize"),
-        );
-    }
-    raw_room_create(
-        serde_json::Value::Object(value),
-        "v-rooms-room-create-invalid-creation-content",
-    )
-}
-
-pub(super) fn build_room_create_power_levels(
-    power_levels: MatrixRoomCreatePowerLevels,
-) -> Result<Raw<create_room::RoomPowerLevelsContentOverride>, MatrixAuthCommandError> {
-    if power_levels.events_default.is_none() && power_levels.events.is_empty() {
-        return Err(map_room_create_error(
-            "v-rooms-room-create-invalid-power-level",
-        ));
-    }
-    let mut value = serde_json::Map::new();
-    if let Some(events_default) = power_levels.events_default {
-        value.insert(
-            "events_default".to_owned(),
-            serde_json::json!(events_default),
-        );
-    }
-    if !power_levels.events.is_empty() {
-        value.insert(
-            "events".to_owned(),
-            serde_json::to_value(power_levels.events).expect("power level map serializes"),
-        );
-    }
-    raw_room_create(
-        serde_json::Value::Object(value),
-        "v-rooms-room-create-invalid-power-level",
-    )
-}
-
-pub(super) fn build_room_create_join_rules(
-    join_rule: Option<&str>,
-    knock: bool,
-    parent_room_id: Option<&OwnedRoomId>,
-) -> Result<Option<Raw<AnyInitialStateEvent>>, MatrixAuthCommandError> {
-    let Some(join_rule) = join_rule else {
-        if knock {
-            return Err(map_room_create_error(
-                "v-rooms-room-create-invalid-join-rule",
-            ));
-        }
-        return Ok(None);
-    };
-
-    let join_rule = join_rule.trim();
-    let join_rule = match join_rule {
-        "invite" | "knock" => {
-            if join_rule == "knock" || knock {
-                "knock"
-            } else {
-                "invite"
-            }
-        }
-        "restricted" | "knock_restricted" => {
-            if join_rule == "knock_restricted" || knock {
-                "knock_restricted"
-            } else {
-                "restricted"
-            }
-        }
-        "public" if !knock => "public",
-        _ => {
-            return Err(map_room_create_error(
-                "v-rooms-room-create-invalid-join-rule",
-            ));
-        }
-    };
-
-    let restricted = matches!(join_rule, "restricted" | "knock_restricted");
-    if restricted && parent_room_id.is_none() {
-        return Err(map_room_create_error(
-            "v-rooms-room-create-missing-restricted-parent",
-        ));
-    }
-
-    let mut content = serde_json::json!({ "join_rule": join_rule });
-    if restricted {
-        content["allow"] = serde_json::json!([{
-            "type": "m.room_membership",
-            "room_id": parent_room_id.expect("restricted parent checked").to_string(),
-        }]);
-    }
-    Ok(Some(raw_room_create_state(
-        "m.room.join_rules",
-        "",
-        content,
-    )?))
-}
-
-pub(super) fn raw_room_create_state(
-    event_type: &str,
-    state_key: &str,
-    content: serde_json::Value,
-) -> Result<Raw<AnyInitialStateEvent>, MatrixAuthCommandError> {
-    raw_room_create(
-        serde_json::json!({
-            "type": event_type,
-            "state_key": state_key,
-            "content": content,
-        }),
-        "v-rooms-room-create-invalid-creation-content",
-    )
-}
-
-pub(super) fn raw_room_create<T>(
-    value: serde_json::Value,
-    diagnostic_id: &'static str,
-) -> Result<Raw<T>, MatrixAuthCommandError> {
-    serde_json::value::to_raw_value(&value)
-        .map(Raw::<T>::from_json)
-        .map_err(|_| map_room_create_error(diagnostic_id))
+    synara_core::app::room_ops::build_room_create_request(input).map_err(map_room_create_error)
 }
 
 pub(super) fn parse_room_leave_id(room_id: &str) -> Result<OwnedRoomId, MatrixAuthCommandError> {
@@ -984,44 +276,7 @@ pub(super) fn parse_room_leave_id(room_id: &str) -> Result<OwnedRoomId, MatrixAu
 }
 
 pub(super) fn parse_room_members_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
-    room_id
-        .trim()
-        .parse()
-        .map_err(|_| "v-rooms-members-read-invalid-room")
-}
-
-pub(super) fn project_room_member(
-    room_id: &OwnedRoomId,
-    member: &matrix_sdk::room::RoomMember,
-    is_two_party_direct: bool,
-    current_user: Option<&matrix_sdk::ruma::UserId>,
-) -> Result<ProductRoomMember, &'static str> {
-    let membership = match member.membership() {
-        MembershipState::Ban => ProductMembership::Ban,
-        MembershipState::Invite => ProductMembership::Invite,
-        MembershipState::Join => ProductMembership::Join,
-        MembershipState::Knock => ProductMembership::Knock,
-        MembershipState::Leave => ProductMembership::Leave,
-        _ => return Err("v-rooms-members-read-unsupported-membership"),
-    };
-    let power_level = match member.power_level() {
-        UserPowerLevel::Infinite => i32::MAX,
-        UserPowerLevel::Int(value) => {
-            i32::try_from(value).map_err(|_| "v-rooms-members-read-power-level-invalid")?
-        }
-        _ => return Err("v-rooms-members-read-power-level-invalid"),
-    };
-
-    Ok(ProductRoomMember {
-        room_id: room_id.to_string(),
-        user_id: member.user_id().to_string(),
-        display_name: member.display_name().map(ToOwned::to_owned),
-        avatar_url: member.avatar_url().map(ToString::to_string),
-        membership,
-        power_level,
-        is_direct_target: is_two_party_direct
-            .then(|| current_user.is_some_and(|current_user| current_user != member.user_id())),
-    })
+    synara_core::app::members::parse_room_members_room_id(room_id)
 }
 
 pub(super) fn parse_room_moderation_room_id(
@@ -1089,38 +344,4 @@ pub(super) fn parse_room_join_via_servers(
                 .map_err(|_| map_room_join_error("v-rooms-room-join-invalid-via-server"))
         })
         .collect()
-}
-
-pub(super) async fn native_invite_target(
-    active: &mut ManagedMatrixSession,
-    room_id: &str,
-) -> Result<NativeInvite, MatrixAuthCommandError> {
-    let normalized_room_id = room_id.trim();
-    if normalized_room_id.is_empty() {
-        return Err(map_invite_error("v-rooms.1-invite-invalid-room"));
-    }
-    let snapshot = snapshot_invites(
-        &active.client,
-        active.sync.session_generation(),
-        &mut active.invite_avatars,
-    )
-    .await
-    .map_err(map_invite_error)?;
-    snapshot
-        .invites
-        .into_iter()
-        .find(|invite| invite.room_id == normalized_room_id)
-        .ok_or_else(|| map_invite_error("v-rooms.1-invite-not-found"))
-}
-
-pub(super) fn native_invite_room(
-    active: &ManagedMatrixSession,
-    invite: &NativeInvite,
-) -> Result<Room, MatrixAuthCommandError> {
-    let room_id = OwnedRoomId::try_from(invite.room_id.as_str())
-        .map_err(|_| map_invite_error("v-rooms.1-invite-invalid-room"))?;
-    active
-        .client
-        .get_room(&room_id)
-        .ok_or_else(|| map_invite_error("v-rooms.1-invite-not-found"))
 }

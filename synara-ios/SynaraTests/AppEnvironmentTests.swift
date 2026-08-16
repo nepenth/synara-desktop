@@ -21,20 +21,66 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertTrue(environment.later is MockLaterService)
     }
 
+    func testMatrixClientCoreSessionIdentityDefaultsToNilForMock() async {
+        let matrix: any MatrixClientServicing = MockMatrixClientService()
+
+        let identity = await matrix.coreSessionIdentity()
+
+        XCTAssertNil(identity)
+    }
+
+    func testSettingsCoreIdentitySelectionRequiresExactSwiftSessionMatch() throws {
+        let session = AuthenticatedSession(
+            userID: "@alice:matrix.org",
+            deviceID: "SYNARA-IOS-DEVICE",
+            homeserverURL: try XCTUnwrap(URL(string: "https://matrix.org")),
+            accessToken: "token"
+        )
+        let matching = CoreSessionIdentity(
+            userID: session.userID,
+            deviceID: session.deviceID,
+            homeserverURL: session.homeserverURL.absoluteString
+        )
+        let differentDevice = CoreSessionIdentity(
+            userID: session.userID,
+            deviceID: "OTHER-DEVICE",
+            homeserverURL: session.homeserverURL.absoluteString
+        )
+
+        XCTAssertEqual(
+            SettingsAccountIdentitySelection.matchingCoreIdentity(matching, for: session),
+            matching
+        )
+        XCTAssertNil(SettingsAccountIdentitySelection.matchingCoreIdentity(differentDevice, for: session))
+        XCTAssertNil(SettingsAccountIdentitySelection.matchingCoreIdentity(nil, for: session))
+        XCTAssertEqual(
+            SettingsAccountIdentitySelection.homeserverDisplayValue(for: matching, fallback: session.homeserverURL),
+            "matrix.org"
+        )
+        XCTAssertEqual(
+            SettingsAccountIdentitySelection.homeserverDisplayValue(for: nil, fallback: session.homeserverURL),
+            "matrix.org"
+        )
+    }
+
+    func testLiveHomeserverDiscoveryConstructorUsesCoreService() {
+        XCTAssertTrue(AppEnvironment.makeLiveHomeserverDiscovery() is CoreHomeserverDiscoveryService)
+    }
+
     @MainActor
-    func testLiveEnvironmentUsesMatrixRustSDKServices() {
+    func testLiveEnvironmentUsesSharedCoreServices() {
         let environment = AppEnvironment.live()
 
-        XCTAssertTrue(environment.auth is MatrixRustSDKAuthService)
-        XCTAssertTrue(environment.roomList is MatrixRustSDKRoomListService)
-        XCTAssertTrue(environment.roomMembership is MatrixRustSDKRoomMembershipService)
-        XCTAssertTrue(environment.timeline is MatrixRustSDKTimelineService)
-        XCTAssertTrue(environment.later is MatrixRustSDKLaterService)
-        XCTAssertTrue(environment.messageSender is MatrixRustSDKMessageSendService)
-        XCTAssertTrue(environment.eventActions is MatrixRustSDKEventActionService)
-        XCTAssertTrue(environment.agentApprovals is MatrixRustSDKAgentApprovalService)
-        XCTAssertTrue(environment.crypto is MatrixRustSDKCryptoStatusService)
-        XCTAssertTrue(environment.roomManagement is MatrixRustSDKRoomManagementService)
+        XCTAssertTrue(environment.auth is SharedCoreAuthService)
+        XCTAssertTrue(environment.roomList is SharedCoreRoomListService)
+        XCTAssertTrue(environment.roomMembership is SharedCoreRoomMembershipService)
+        XCTAssertTrue(environment.timeline is SharedCoreTimelineService)
+        XCTAssertTrue(environment.later is SharedCoreLaterService)
+        XCTAssertTrue(environment.messageSender is SharedCoreMessageSendService)
+        XCTAssertTrue(environment.eventActions is SharedCoreEventActionService)
+        XCTAssertTrue(environment.agentApprovals is SharedCoreAgentApprovalService)
+        XCTAssertTrue(environment.crypto is SharedCoreCryptoStatusService)
+        XCTAssertTrue(environment.roomManagement is SharedCoreRoomManagementService)
     }
 
     func testRoomCryptoStatusFlagsRecoveryAttentionForEncryptedProblems() {

@@ -1,0 +1,14 @@
+# Workspace root — Synara shared-native-core program (P1 — crate extraction).
+#
+# This slice (SNC-P1-1) only scaffolds the workspace and the empty
+# crates/synara-core package. src-tauri is intentionally EXCLUDED for now so
+# the desktop shell keeps resolving exactly as today (standalone package with
+# its own committed src-tauri/Cargo.lock). Later P1 slices will fold src-tauri
+# into the workspace as it starts depending on synara-core.
+[workspace]
+resolver = "2"
+members = ["crates/synara-core", "crates/synara-core-bindgen"]
+# Keep the desktop shell a standalone package for now (see comment above);
+# adding it to `members` would move the lockfile to the workspace root and is
+# deferred to a later slice.
+exclude = ["src-tauri"]

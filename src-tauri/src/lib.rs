@@ -3,6 +3,7 @@
     windows_subsystem = "windows"
 )]
 
+mod bridge;
 mod build_info;
 mod desktop;
 mod desktop_agent_actions;
@@ -10,6 +11,7 @@ mod desktop_file_transfer;
 mod desktop_integration;
 mod desktop_logging;
 mod desktop_notifications;
+mod desktop_platform;
 mod desktop_sanitize;
 mod desktop_secret_store;
 mod desktop_session;
@@ -27,6 +29,8 @@ mod menu;
 
 use serde::Serialize;
 use std::path::PathBuf;
+use std::sync::Arc;
+use synara_core::platform::Platform;
 use tauri::{
     webview::{NewWindowResponse, WebviewWindowBuilder},
     DragDropEvent, Emitter, LogicalSize, Manager, Size, WebviewUrl, WindowEvent,
@@ -627,6 +631,15 @@ pub fn run() {
             window.show()?;
             window.unminimize()?;
             window.set_focus()?;
+
+            // One desktop platform allocation is shared by the shell state and
+            // the managed Core. P3.1 auth probes therefore retain this
+            // platform's established HTTP user-agent injection without giving
+            // Core a Tauri type or creating a fallback platform.
+            let platform: Arc<dyn Platform> =
+                Arc::new(desktop_platform::TauriPlatform::new(app.handle().clone()));
+            app.manage(Arc::clone(&platform));
+            app.manage(Arc::new(synara_core::Core::new(platform)));
             Ok(())
         })
         .build(context)

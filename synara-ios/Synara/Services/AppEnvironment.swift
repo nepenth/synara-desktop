@@ -1,4 +1,5 @@
 import SwiftUI
+import SynaraCore
 
 struct AppEnvironment {
     let session: AppSessionStore
@@ -31,9 +32,16 @@ struct AppEnvironment {
     static func live() -> AppEnvironment {
         let logger = AppLogger()
         let secureStore = KeychainSecureSessionStore()
+        let storeRoot = SharedCoreProductHost.liveStoreRoot()
+        let core = SharedCore.newWithSecretStore(store: KeychainIosSecretVault())
         if ProcessInfo.processInfo.environment["SYNARA_RESET_SESSION_ON_LAUNCH"] == "1" {
             try? secureStore.delete()
-            try? MatrixRustSDKClientStore.deletePersistedStores()
+            Task {
+                _ = try? await SharedCoreLeftovers.wipePersistedStores(
+                    core: core,
+                    storeRoot: storeRoot.path
+                )
+            }
         }
         let session = AppSessionStore(
             secureStore: secureStore,
@@ -44,37 +52,29 @@ struct AppEnvironment {
         } else if case .signedIn = session.currentState {
             logger.info("Session restore succeeded", category: .auth)
         }
-        let matrixSDKClientStore = MatrixRustSDKClientStore(logger: logger)
-        let matrix = MatrixRustSDKMatrixClientService(clientStore: matrixSDKClientStore)
-        let pusherService = MatrixPusherService(
-            clientStore: matrixSDKClientStore,
+        let host = SharedCoreProductHost(
+            core: core,
+            storeRoot: storeRoot,
+            sessionStore: session
+        )
+        let matrix = SharedCoreMatrixClientService(host: host)
+        let pusherService = SharedCorePusherService(
+            host: host,
             gatewayURL: resolvedPushGatewayURL(),
             logger: logger
-        )
-        let sparsePushRouteResolver = MatrixSparsePushRouteResolver(
-            sessionStore: session,
-            clientStore: matrixSDKClientStore
         )
         let push = SynaraPushService(
             logger: logger,
             pusherService: pusherService,
-            sparseRouteResolver: sparsePushRouteResolver
+            sparseRouteResolver: SharedCoreSparsePushRouteResolver()
         )
         let router = AppRouter()
         let drafts = DraftStore()
-        let timeline = MatrixRustSDKTimelineService(
-            sessionStore: session,
-            clientStore: matrixSDKClientStore,
-            logger: logger
-        )
-        let roomList = MatrixRustSDKRoomListService(
-            sessionStore: session,
-            clientStore: matrixSDKClientStore,
-            logger: logger
-        )
-        let roomMembership = MatrixRustSDKRoomMembershipService(sessionStore: session, clientStore: matrixSDKClientStore)
-        let crypto = MatrixRustSDKCryptoStatusService(sessionStore: session, clientStore: matrixSDKClientStore)
-        let roomManagement = MatrixRustSDKRoomManagementService(sessionStore: session, clientStore: matrixSDKClientStore)
+        let timeline = SharedCoreTimelineService(host: host)
+        let roomList = SharedCoreRoomListService(host: host)
+        let roomMembership = SharedCoreRoomMembershipService(host: host)
+        let crypto = SharedCoreCryptoStatusService(host: host)
+        let roomManagement = SharedCoreRoomManagementService(host: host)
         let sessionReadiness = SignedInSessionReadiness()
         return AppEnvironment(
             session: session,
@@ -85,8 +85,8 @@ struct AppEnvironment {
                 defaults: SynaraSharedConstants.appGroupDefaults() ?? .standard
             ),
             router: router,
-            homeserverDiscovery: PlaceholderHomeserverDiscoveryService(),
-            auth: MatrixRustSDKAuthService(clientStore: matrixSDKClientStore),
+            homeserverDiscovery: makeLiveHomeserverDiscovery(),
+            auth: SharedCoreAuthService(host: host),
             roomList: roomList,
             roomMembership: roomMembership,
             notificationPermission: UserNotificationPermissionService(),
@@ -100,19 +100,26 @@ struct AppEnvironment {
                 router: router
             ),
             timeline: timeline,
-            later: MatrixRustSDKLaterService(sessionStore: session, clientStore: matrixSDKClientStore),
-            messageSender: MatrixRustSDKMessageSendService(sessionStore: session, clientStore: matrixSDKClientStore),
+            later: SharedCoreLaterService(host: host),
+            messageSender: SharedCoreMessageSendService(host: host),
             drafts: drafts,
-            eventActions: MatrixRustSDKEventActionService(sessionStore: session, clientStore: matrixSDKClientStore),
-            agentApprovals: MatrixRustSDKAgentApprovalService(sessionStore: session, clientStore: matrixSDKClientStore),
-            agentApprovalReactions: MatrixRustSDKAgentApprovalReactionService(sessionStore: session, clientStore: matrixSDKClientStore),
-            readMarkers: MatrixRoomReadMarkerService(sessionStore: session, clientStore: matrixSDKClientStore),
-            mediaLoader: MatrixMediaLoader(sessionStore: session, clientStore: matrixSDKClientStore),
-            mediaUploader: MatrixMediaUploadService(sessionStore: session, clientStore: matrixSDKClientStore),
+            eventActions: SharedCoreEventActionService(host: host),
+            agentApprovals: SharedCoreAgentApprovalService(host: host),
+            agentApprovalReactions: SharedCoreAgentApprovalReactionService(host: host),
+            readMarkers: MatrixRoomReadMarkerService(
+                sessionStore: session,
+                clientStore: SharedCoreReadMarkerStore(host: host)
+            ),
+            mediaLoader: SharedCoreMediaLoader(host: host),
+            mediaUploader: SharedCoreMediaUploadService(host: host),
             crypto: crypto,
             roomManagement: roomManagement,
             sessionReadiness: sessionReadiness
         )
+    }
+
+    static func makeLiveHomeserverDiscovery() -> HomeserverDiscovering {
+        CoreHomeserverDiscoveryService()
     }
 
     static func mock(

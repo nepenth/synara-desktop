@@ -2,50 +2,34 @@ use super::*;
 
 #[tauri::command]
 pub async fn matrix_mdirect_snapshot(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeMDirectSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    snapshot_mdirect(&active.client, active.sync.session_generation())
-        .await
-        .map_err(map_mdirect_error)
+    crate::bridge::mdirect::mdirect_snapshot(core.inner().as_ref()).await
 }
 
 /// V-SEND.R-PACK-READ: personal `im.ponies.user_emotes` account-data pack.
 #[tauri::command]
 pub async fn matrix_get_user_image_pack(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeUserImagePackSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    snapshot_user_image_pack(&active.client, active.sync.session_generation())
-        .await
-        .map_err(map_pack_read_error)
+    crate::bridge::user_image_pack::user_image_pack(core.inner().as_ref()).await
 }
 
 /// V-SEND.R-PACK-READ: `im.ponies.room_emotes` state packs for a room.
 #[tauri::command]
 pub async fn matrix_get_room_image_packs(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
 ) -> Result<NativeRoomImagePacksSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    snapshot_room_image_packs(&active.client, active.sync.session_generation(), &room_id)
-        .await
-        .map_err(map_pack_read_error)
+    crate::bridge::room_image_packs::room_image_packs(core.inner().as_ref(), room_id).await
 }
 
 /// V-SEND.R-PACK-READ: global packs enabled via `im.ponies.emote_rooms`.
 #[tauri::command]
 pub async fn matrix_get_global_image_packs(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeGlobalImagePacksSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    snapshot_global_image_packs(&active.client, active.sync.session_generation())
-        .await
-        .map_err(map_pack_read_error)
+    crate::bridge::global_image_packs::global_image_packs(core.inner().as_ref()).await
 }
 
 /// V-SEND.R-PACK-WRITE — replace the personal `im.ponies.user_emotes`
@@ -54,18 +38,10 @@ pub async fn matrix_get_global_image_packs(
 /// not be used as a fallback.
 #[tauri::command]
 pub async fn matrix_set_user_image_pack(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     content: serde_json::Value,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    let client = {
-        let session = state.session.lock().await;
-        let active = require_session(session.as_ref())?;
-        active.client.clone()
-    };
-    set_user_image_pack(&client, content)
-        .await
-        .map_err(map_pack_write_error)?;
-    Ok(MatrixProfileWriteResult { status: "ok" })
+    crate::bridge::image_pack_writes::set_user_image_pack(core.inner().as_ref(), content).await
 }
 
 /// V-SEND.R-PACK-WRITE — replace the global `im.ponies.emote_rooms`
@@ -74,18 +50,10 @@ pub async fn matrix_set_user_image_pack(
 /// `mx.setAccountData(PoniesEmoteRooms)` must not be used as a fallback.
 #[tauri::command]
 pub async fn matrix_set_global_image_packs(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     content: serde_json::Value,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    let client = {
-        let session = state.session.lock().await;
-        let active = require_session(session.as_ref())?;
-        active.client.clone()
-    };
-    set_global_image_packs(&client, content)
-        .await
-        .map_err(map_pack_write_error)?;
-    Ok(MatrixProfileWriteResult { status: "ok" })
+    crate::bridge::image_pack_writes::set_global_image_packs(core.inner().as_ref(), content).await
 }
 
 /// V-SEND.R-PACK-WRITE — create/update/delete a `im.ponies.room_emotes` state
@@ -94,236 +62,140 @@ pub async fn matrix_set_global_image_packs(
 /// `mx.sendStateEvent(PoniesRoomEmotes)` must not be used as a fallback.
 #[tauri::command]
 pub async fn matrix_set_room_image_pack(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     state_key: String,
     content: serde_json::Value,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    let client = {
-        let session = state.session.lock().await;
-        let active = require_session(session.as_ref())?;
-        active.client.clone()
-    };
-    set_room_image_pack(&client, &room_id, &state_key, content)
-        .await
-        .map_err(map_pack_write_error)?;
-    Ok(MatrixProfileWriteResult { status: "ok" })
+    crate::bridge::image_pack_writes::set_room_image_pack(
+        core.inner().as_ref(),
+        room_id,
+        state_key,
+        content,
+    )
+    .await
 }
 
 #[tauri::command]
 pub async fn matrix_mdirect_add(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     user_id: String,
 ) -> Result<NativeMDirectMutationResult, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    add_room_to_mdirect(&active.client, &room_id, &user_id)
-        .await
-        .map_err(map_mdirect_error)
+    crate::bridge::mdirect::mdirect_add(core.inner().as_ref(), room_id, user_id).await
 }
 
 #[tauri::command]
 pub async fn matrix_mdirect_remove(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
 ) -> Result<NativeMDirectMutationResult, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    remove_room_from_mdirect(&active.client, &room_id)
-        .await
-        .map_err(map_mdirect_error)
+    crate::bridge::mdirect::mdirect_remove(core.inner().as_ref(), room_id).await
 }
 
 #[tauri::command]
 pub async fn matrix_later_snapshot(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    snapshot_later(&active.client, active.sync.session_generation())
-        .await
-        .map_err(map_later_notes_error)
+    crate::bridge::later::later_snapshot(core.inner().as_ref()).await
 }
 
 #[tauri::command]
 pub async fn matrix_later_upsert(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     item: SynaraLaterItem,
 ) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    upsert_later_item(&active.client, active.sync.session_generation(), item)
-        .await
-        .map_err(map_later_notes_error)
+    crate::bridge::later::later_upsert(core.inner().as_ref(), item).await
 }
 
 #[tauri::command]
 pub async fn matrix_later_complete(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     item_id: String,
     completed_at: Option<f64>,
 ) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    let completed_at = completed_at.unwrap_or_else(|| {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as f64)
-            .unwrap_or(0.0)
-    });
-    complete_later_item_live(
-        &active.client,
-        active.sync.session_generation(),
-        item_id,
-        completed_at,
-    )
-    .await
-    .map_err(map_later_notes_error)
+    crate::bridge::later::later_complete(core.inner().as_ref(), item_id, completed_at).await
 }
 
 #[tauri::command]
 pub async fn matrix_later_snooze(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     item_id: String,
     due_ts: f64,
 ) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    snooze_later_item_live(
-        &active.client,
-        active.sync.session_generation(),
-        item_id,
-        due_ts,
-    )
-    .await
-    .map_err(map_later_notes_error)
+    crate::bridge::later::later_snooze(core.inner().as_ref(), item_id, due_ts).await
 }
 
 #[tauri::command]
 pub async fn matrix_later_clear_completed(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    clear_completed_later_live(&active.client, active.sync.session_generation())
-        .await
-        .map_err(map_later_notes_error)
+    crate::bridge::later::later_clear_completed(core.inner().as_ref()).await
 }
 
 #[tauri::command]
 pub async fn matrix_later_mark_reminded(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     item_id: String,
     reminded_at: Option<f64>,
 ) -> Result<NativeLaterSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    let reminded_at = reminded_at.unwrap_or_else(|| {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as f64)
-            .unwrap_or(0.0)
-    });
-    mark_later_reminded_live(
-        &active.client,
-        active.sync.session_generation(),
-        item_id,
-        reminded_at,
-    )
-    .await
-    .map_err(map_later_notes_error)
+    crate::bridge::later::later_mark_reminded(core.inner().as_ref(), item_id, reminded_at).await
 }
 
 #[tauri::command]
 pub async fn matrix_room_notes_snapshot(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    snapshot_room_notes(&active.client, active.sync.session_generation())
-        .await
-        .map_err(map_later_notes_error)
+    crate::bridge::room_notes::room_notes_snapshot(core.inner().as_ref()).await
 }
 
 #[tauri::command]
 pub async fn matrix_room_notes_upsert(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     item: SynaraRoomNoteItem,
 ) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    upsert_room_note_item(&active.client, active.sync.session_generation(), item)
-        .await
-        .map_err(map_later_notes_error)
+    crate::bridge::room_notes::room_notes_upsert(core.inner().as_ref(), item).await
 }
 
 #[tauri::command]
 pub async fn matrix_room_notes_delete(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     item_id: String,
 ) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    delete_room_note_item_live(
-        &active.client,
-        active.sync.session_generation(),
-        room_id,
-        item_id,
-    )
-    .await
-    .map_err(map_later_notes_error)
+    crate::bridge::room_notes::room_notes_delete(core.inner().as_ref(), room_id, item_id).await
 }
 
 #[tauri::command]
 pub async fn matrix_room_notes_complete_todo(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     item_id: String,
     completed: bool,
 ) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as f64)
-        .unwrap_or(0.0);
-    complete_room_todo_item_live(
-        &active.client,
-        active.sync.session_generation(),
+    crate::bridge::room_notes::room_notes_complete_todo(
+        core.inner().as_ref(),
         room_id,
         item_id,
         completed,
-        now,
     )
     .await
-    .map_err(map_later_notes_error)
 }
 
 #[tauri::command]
 pub async fn matrix_room_notes_move_todo(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     item_id: String,
     direction: RoomNoteMoveDirection,
 ) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as f64)
-        .unwrap_or(0.0);
-    move_room_todo_item_live(
-        &active.client,
-        active.sync.session_generation(),
+    crate::bridge::room_notes::room_notes_move_todo(
+        core.inner().as_ref(),
         room_id,
         item_id,
         direction,
-        now,
     )
     .await
-    .map_err(map_later_notes_error)
 }
 
 pub(super) fn map_mdirect_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {

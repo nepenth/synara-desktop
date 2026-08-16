@@ -1,25 +1,21 @@
+use std::sync::Arc;
+
 use super::*;
 
 #[tauri::command]
 pub async fn matrix_typing_snapshot(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeTypingSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    Ok(active.typing.snapshot().await)
+    crate::bridge::typing_snapshot::typing_snapshot(core.inner().as_ref()).await
 }
 
 #[tauri::command]
 pub async fn matrix_typing_set(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     typing: bool,
 ) -> Result<(), MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    set_typing_notice(&active.client, &room_id, typing)
-        .await
-        .map_err(map_typing_error)
+    crate::bridge::typing_set::typing_set(core.inner().as_ref(), room_id, typing).await
 }
 
 pub(super) fn map_typing_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {

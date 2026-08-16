@@ -17,6 +17,9 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 serde_json = "1.0.109"
 serde = { version = "1.0.193", features = ["derive"] }
+# SNC-P1-2: matrix/dto lives in the shared native core; src-tauri (excluded
+# from the workspace) consumes it as a plain path dependency.
+synara-core = { path = "../crates/synara-core", version = "0.1.0" }
 keyring = { version = "3.6.3", default-features = false, features = [
   "apple-native",
   "linux-native-sync-persistent",

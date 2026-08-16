@@ -16,7 +16,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use super::paths::{StorePathError, StorePaths};
+use synara_core::app::store::{StorePathError, StorePaths};
 
 /// Current on-disk layout revision. Bump this whenever a change touches state,
 /// crypto, cache, media, or store-key schema; add the matching migration step.

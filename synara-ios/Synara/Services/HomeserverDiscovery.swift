@@ -1,4 +1,5 @@
 import Foundation
+import SynaraCore
 
 struct HomeserverSuggestion: Identifiable, Equatable {
     let id: String
@@ -88,16 +89,47 @@ protocol HomeserverDiscovering {
     func discover(rawAddress: String) async throws -> HomeserverDiscoveryResult
 }
 
-struct PlaceholderHomeserverDiscoveryService: HomeserverDiscovering {
-    let suggestions: [HomeserverSuggestion] = [
-        HomeserverSuggestion(name: "Matrix.org", address: "matrix.org")
-    ]
+protocol LoginFlowProbing {
+    func loginFlows(homeserverURL: URL) async throws -> [LoginFlowDto]
+}
+
+struct CoreLoginFlowProbe: LoginFlowProbing {
+    func loginFlows(homeserverURL: URL) async throws -> [LoginFlowDto] {
+        try await SynaraCore.loginFlows(homeserverUrl: homeserverURL.absoluteString)
+    }
+}
+
+struct CoreHomeserverDiscoveryService: HomeserverDiscovering {
+    let suggestions: [HomeserverSuggestion]
+    private let loginFlowProbe: any LoginFlowProbing
+
+    init(
+        suggestions: [HomeserverSuggestion] = [
+            HomeserverSuggestion(name: "Matrix.org", address: "matrix.org")
+        ],
+        loginFlowProbe: any LoginFlowProbing = CoreLoginFlowProbe()
+    ) {
+        self.suggestions = suggestions
+        self.loginFlowProbe = loginFlowProbe
+    }
 
     func discover(rawAddress: String) async throws -> HomeserverDiscoveryResult {
-        let url = try HomeserverAddressNormalizer.normalize(rawAddress)
+        let normalizedURL = try HomeserverAddressNormalizer.normalize(rawAddress)
+        let flows: [LoginFlowDto]
+
+        do {
+            flows = try await loginFlowProbe.loginFlows(homeserverURL: normalizedURL)
+        } catch {
+            throw HomeserverDiscoveryError.discoveryFailed
+        }
+
+        guard flows.contains(where: { $0.kind == "password" }) else {
+            throw HomeserverDiscoveryError.unsupportedServer
+        }
+
         return HomeserverDiscoveryResult(
-            requestedURL: url,
-            homeserverBaseURL: url,
+            requestedURL: normalizedURL,
+            homeserverBaseURL: normalizedURL,
             supportsPasswordLogin: true
         )
     }

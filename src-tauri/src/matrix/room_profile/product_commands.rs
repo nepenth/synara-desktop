@@ -1,10 +1,5 @@
 use super::*;
-use crate::matrix::room_profile::live::project_join_rule;
-use matrix_sdk::{
-    deserialized_responses::RawSyncOrStrippedState,
-    ruma::{events::room::join_rules::RoomJoinRulesEventContent, OwnedRoomId},
-    RoomState,
-};
+use matrix_sdk::ruma::OwnedRoomId;
 
 const DIRECTORY_VISIBILITY_INVALID: &str = "v-send.r-room-profile-directory-visibility-invalid";
 const DIRECTORY_VISIBILITY_REQUIRES_SESSION: &str =
@@ -32,120 +27,42 @@ const JOIN_RULE_READ_SDK_FAILED: &str = "v-send.r-room-profile-join-rule-read-sd
 const JOIN_RULE_DESERIALIZE_FAILED: &str = "v-send.r-room-profile-join-rule-deserialize-failed";
 const JOIN_RULE_UNSUPPORTED: &str = "v-send.r-room-profile-join-rule-unsupported";
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixRoomDirectoryVisibilityResult {
-    pub status: &'static str,
-    pub room_id: String,
-    pub session_generation: u64,
-    pub visibility: &'static str,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixRoomDirectoryVisibilityWriteResult {
-    pub status: &'static str,
-    pub room_id: String,
-    pub session_generation: u64,
-    pub requested_visibility: &'static str,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixRoomJoinRuleSnapshot {
-    pub status: &'static str,
-    pub room_id: String,
-    pub session_generation: u64,
-    pub join_rule: &'static str,
-}
+pub use synara_core::app::room_profile::{
+    MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
+    MatrixRoomJoinRuleSnapshot,
+};
 
 /// V-SEND.R-ROOM-PROFILE-JOIN-RULE — authoritative live room-scoped join-rule
 /// read through the managed native Matrix SDK client. This is intentionally a
 /// read-only gate owner; the Join Rules writer remains a separate residual.
 #[tauri::command]
 pub async fn matrix_room_join_rule_snapshot(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     session_generation: u64,
 ) -> Result<MatrixRoomJoinRuleSnapshot, MatrixAuthCommandError> {
-    let room_id = parse_room_join_rule_room_id(&room_id)?;
-    let session = state.session.lock().await;
-    let active = require_room_join_rule_session(session.as_ref())?;
-    let live_generation = active.sync.session_generation();
-    require_room_join_rule_generation(session_generation, live_generation)?;
-    let room = active
-        .client
-        .get_room(&room_id)
-        .ok_or_else(|| map_room_join_rule_error(JOIN_RULE_ROOM_NOT_FOUND))?;
-    if room.state() != RoomState::Joined {
-        return Err(map_room_join_rule_error(JOIN_RULE_ROOM_STATE_UNAVAILABLE));
-    }
-
-    let raw = room
-        .get_state_event_static::<RoomJoinRulesEventContent>()
-        .await
-        .map_err(|_| map_room_join_rule_error(JOIN_RULE_READ_SDK_FAILED))?
-        .ok_or_else(|| map_room_join_rule_error(JOIN_RULE_ROOM_STATE_UNAVAILABLE))?;
-    let event = match raw {
-        RawSyncOrStrippedState::Sync(raw) => raw
-            .deserialize()
-            .map_err(|_| map_room_join_rule_error(JOIN_RULE_DESERIALIZE_FAILED))?,
-        RawSyncOrStrippedState::Stripped(_) => {
-            return Err(map_room_join_rule_error(JOIN_RULE_ROOM_STATE_UNAVAILABLE));
-        }
-    };
-    let original = event
-        .as_original()
-        .ok_or_else(|| map_room_join_rule_error(JOIN_RULE_ROOM_STATE_UNAVAILABLE))?;
-    let join_rule = project_join_rule(&original.content.join_rule)
-        .ok_or_else(|| map_room_join_rule_error(JOIN_RULE_UNSUPPORTED))?;
-
-    Ok(MatrixRoomJoinRuleSnapshot {
-        status: "ok",
-        room_id: room_id.to_string(),
-        session_generation: live_generation,
-        join_rule,
-    })
+    crate::bridge::join_rule_snapshot::join_rule_snapshot(
+        core.inner().as_ref(),
+        room_id,
+        session_generation,
+    )
+    .await
 }
 
 /// V-SEND.R-ROOM-PROFILE-DIRECTORY-VISIBILITY — authoritative room-scoped
 /// directory visibility read through the managed native Matrix SDK client.
 #[tauri::command]
 pub async fn matrix_get_room_directory_visibility(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     session_generation: u64,
 ) -> Result<MatrixRoomDirectoryVisibilityResult, MatrixAuthCommandError> {
-    let room_id = parse_room_directory_visibility_room_id(&room_id)?;
-    let session = state.session.lock().await;
-    let active = require_room_directory_visibility_session(session.as_ref())?;
-    let live_generation = active.sync.session_generation();
-    require_room_directory_visibility_generation(session_generation, live_generation)?;
-    let room = active
-        .client
-        .get_room(&room_id)
-        .ok_or_else(|| map_room_directory_visibility_error(DIRECTORY_VISIBILITY_ROOM_NOT_FOUND))?;
-    let visibility = room
-        .privacy_settings()
-        .get_room_visibility()
-        .await
-        .map_err(|_| map_room_directory_visibility_error(DIRECTORY_VISIBILITY_GET_SDK_FAILED))?;
-    let visibility = match visibility {
-        Visibility::Public => "public",
-        Visibility::Private => "private",
-        _ => {
-            return Err(map_room_directory_visibility_error(
-                DIRECTORY_VISIBILITY_GET_SDK_FAILED,
-            ));
-        }
-    };
-
-    Ok(MatrixRoomDirectoryVisibilityResult {
-        status: "ok",
-        room_id: room_id.to_string(),
-        session_generation: live_generation,
-        visibility,
-    })
+    crate::bridge::directory_visibility::get_room_directory_visibility(
+        core.inner().as_ref(),
+        room_id,
+        session_generation,
+    )
+    .await
 }
 
 /// V-SEND.R-ROOM-PROFILE-DIRECTORY-VISIBILITY — permission-checked room-scoped
@@ -154,57 +71,18 @@ pub async fn matrix_get_room_directory_visibility(
 /// fresh `matrix_get_room_directory_visibility` before displaying success.
 #[tauri::command]
 pub async fn matrix_set_room_directory_visibility(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     session_generation: u64,
     visibility: String,
 ) -> Result<MatrixRoomDirectoryVisibilityWriteResult, MatrixAuthCommandError> {
-    let room_id = parse_room_directory_visibility_room_id(&room_id)?;
-    let (native_visibility, requested_visibility) = parse_room_directory_visibility(&visibility)?;
-    let session = state.session.lock().await;
-    let active = require_room_directory_visibility_session(session.as_ref())?;
-    let live_generation = active.sync.session_generation();
-    require_room_directory_visibility_generation(session_generation, live_generation)?;
-    let room = active
-        .client
-        .get_room(&room_id)
-        .ok_or_else(|| map_room_directory_visibility_error(DIRECTORY_VISIBILITY_ROOM_NOT_FOUND))?;
-
-    // Use the strict power-level read: missing or malformed room state must
-    // fail closed before the directory PUT.
-    let Some(room_version) = room.version() else {
-        return Err(map_room_directory_visibility_error(
-            DIRECTORY_VISIBILITY_PERMISSION_STATE_UNAVAILABLE,
-        ));
-    };
-    if room_version.rules().is_none() {
-        return Err(map_room_directory_visibility_error(
-            DIRECTORY_VISIBILITY_PERMISSION_STATE_UNAVAILABLE,
-        ));
-    }
-    let power_levels = room.power_levels().await.map_err(|_| {
-        map_room_directory_visibility_error(DIRECTORY_VISIBILITY_PERMISSION_STATE_UNAVAILABLE)
-    })?;
-    let user_id = active.client.user_id().ok_or_else(|| {
-        map_room_directory_visibility_error(DIRECTORY_VISIBILITY_PERMISSION_STATE_UNAVAILABLE)
-    })?;
-    if !power_levels.user_can_send_state(user_id, StateEventType::RoomCanonicalAlias) {
-        return Err(map_room_directory_visibility_error(
-            DIRECTORY_VISIBILITY_PERMISSION_DENIED,
-        ));
-    }
-
-    room.privacy_settings()
-        .update_room_visibility(native_visibility)
-        .await
-        .map_err(|_| map_room_directory_visibility_error(DIRECTORY_VISIBILITY_SET_SDK_FAILED))?;
-
-    Ok(MatrixRoomDirectoryVisibilityWriteResult {
-        status: "ok",
-        room_id: room_id.to_string(),
-        session_generation: live_generation,
-        requested_visibility,
-    })
+    crate::bridge::directory_visibility::set_room_directory_visibility(
+        core.inner().as_ref(),
+        room_id,
+        session_generation,
+        visibility,
+    )
+    .await
 }
 
 /// R-ROOM-PROFILE — sole native owner for a room's display name write.
@@ -213,31 +91,11 @@ pub async fn matrix_set_room_directory_visibility(
 /// the JS `mx.sendStateEvent(m.room.name)` must not be used as a fallback.
 #[tauri::command]
 pub async fn matrix_set_room_name(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     name: String,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    let name = parse_room_name(&name)?;
-    let room_id = parse_send_room_id(&room_id)?;
-    let room = {
-        let session = state.session.lock().await;
-        let active = require_session(session.as_ref())?;
-        active.client.get_room(&room_id).ok_or_else(|| {
-            MatrixAuthCommandError::new(
-                "NotFound",
-                "The native Matrix room is not available.",
-                "v-send.r-room-profile-room-not-found",
-            )
-        })?
-    };
-    room.set_name(name).await.map_err(|_| {
-        MatrixAuthCommandError::new(
-            "Unknown",
-            "The native Matrix room name could not be updated.",
-            "v-send.r-room-profile-name-sdk-failed",
-        )
-    })?;
-    Ok(MatrixProfileWriteResult { status: "ok" })
+    crate::bridge::room_profile_writes::set_room_name(core.inner().as_ref(), room_id, name).await
 }
 
 /// R-ROOM-PROFILE — sole native owner for a room's topic write.
@@ -246,31 +104,11 @@ pub async fn matrix_set_room_name(
 /// the JS `mx.sendStateEvent(m.room.topic)` must not be used as a fallback.
 #[tauri::command]
 pub async fn matrix_set_room_topic(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     topic: String,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    let topic = parse_room_topic(&topic)?;
-    let room_id = parse_send_room_id(&room_id)?;
-    let room = {
-        let session = state.session.lock().await;
-        let active = require_session(session.as_ref())?;
-        active.client.get_room(&room_id).ok_or_else(|| {
-            MatrixAuthCommandError::new(
-                "NotFound",
-                "The native Matrix room is not available.",
-                "v-send.r-room-profile-room-not-found",
-            )
-        })?
-    };
-    room.set_room_topic(&topic).await.map_err(|_| {
-        MatrixAuthCommandError::new(
-            "Unknown",
-            "The native Matrix room topic could not be updated.",
-            "v-send.r-room-profile-topic-sdk-failed",
-        )
-    })?;
-    Ok(MatrixProfileWriteResult { status: "ok" })
+    crate::bridge::room_profile_writes::set_room_topic(core.inner().as_ref(), room_id, topic).await
 }
 
 /// R-ROOM-PROFILE — sole native owner for a room's avatar URL write.
@@ -280,44 +118,11 @@ pub async fn matrix_set_room_topic(
 /// the JS `mx.sendStateEvent(m.room.avatar)` must not be used as a fallback.
 #[tauri::command]
 pub async fn matrix_set_room_avatar(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     mxc: String,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    let mxc = parse_avatar_mxc(&mxc)?;
-    let room_id = parse_send_room_id(&room_id)?;
-    let room = {
-        let session = state.session.lock().await;
-        let active = require_session(session.as_ref())?;
-        active.client.get_room(&room_id).ok_or_else(|| {
-            MatrixAuthCommandError::new(
-                "NotFound",
-                "The native Matrix room is not available.",
-                "v-send.r-room-profile-room-not-found",
-            )
-        })?
-    };
-    match mxc {
-        Some(url) => {
-            room.set_avatar_url(&url, None).await.map_err(|_| {
-                MatrixAuthCommandError::new(
-                    "Unknown",
-                    "The native Matrix room avatar could not be updated.",
-                    "v-send.r-room-profile-avatar-set-sdk-failed",
-                )
-            })?;
-        }
-        None => {
-            room.remove_avatar().await.map_err(|_| {
-                MatrixAuthCommandError::new(
-                    "Unknown",
-                    "The native Matrix room avatar could not be removed.",
-                    "v-send.r-room-profile-avatar-remove-sdk-failed",
-                )
-            })?;
-        }
-    }
-    Ok(MatrixProfileWriteResult { status: "ok" })
+    crate::bridge::room_profile_writes::set_room_avatar(core.inner().as_ref(), room_id, mxc).await
 }
 
 pub(super) fn parse_room_directory_visibility_room_id(
@@ -397,25 +202,6 @@ pub(super) fn parse_room_directory_visibility(
             DIRECTORY_VISIBILITY_INVALID,
         )),
     }
-}
-
-fn require_room_directory_visibility_session(
-    session: Option<&ManagedMatrixSession>,
-) -> Result<&ManagedMatrixSession, MatrixAuthCommandError> {
-    session
-        .ok_or_else(|| map_room_directory_visibility_error(DIRECTORY_VISIBILITY_REQUIRES_SESSION))
-}
-
-fn require_room_directory_visibility_generation(
-    requested: u64,
-    live: u64,
-) -> Result<(), MatrixAuthCommandError> {
-    if requested == 0 || requested != live {
-        return Err(map_room_directory_visibility_error(
-            DIRECTORY_VISIBILITY_STALE_GENERATION,
-        ));
-    }
-    Ok(())
 }
 
 pub(super) fn map_room_directory_visibility_error(

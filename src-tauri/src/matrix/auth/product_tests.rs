@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use super::*;
 use super::{
     account_data::*, auth_commands::*, backup::*, cross_signing::*, devices::*, media::*,
@@ -19,6 +21,7 @@ const PRODUCT_SOURCE: &str = concat!(
     include_str!("../media/product_commands.rs"),
     include_str!("../members/product_commands.rs"),
     include_str!("../presence/product_commands.rs"),
+    include_str!("../room_directory/product_commands.rs"),
     include_str!("../room_list/product_commands.rs"),
     include_str!("../room_ops/product_commands.rs"),
     include_str!("../room_profile/product_commands.rs"),
@@ -38,6 +41,7 @@ const PRODUCT_SOURCE: &str = concat!(
 // directly rather than the product.rs module wrapper.
 const AUTH_PRODUCT_COMMANDS_SOURCE: &str = include_str!("product_commands.rs");
 const DEVICE_PRODUCT_COMMANDS_SOURCE: &str = include_str!("../devices/product_commands.rs");
+const LOGIN_SOURCE: &str = include_str!("../../../../crates/synara-core/src/app/auth/login.rs");
 
 #[test]
 fn v_presence_registers_the_frozen_native_surface() {
@@ -84,7 +88,16 @@ fn room_publish_join_rule_snapshot_registers_one_native_read_owner() {
             assert!(schema.contains(command));
         }
     }
-    assert!(product.contains("get_state_event_static::<RoomJoinRulesEventContent>()"));
+    let command = product
+        .split("pub async fn matrix_room_join_rule_snapshot")
+        .nth(1)
+        .expect("join-rule snapshot command")
+        .split("#[tauri::command]")
+        .next()
+        .expect("join-rule snapshot command body");
+    assert!(command.contains("crate::bridge::join_rule_snapshot::join_rule_snapshot"));
+    assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!command.contains("get_state_event_static::<RoomJoinRulesEventContent>()"));
     assert!(product.contains("session_generation"));
     assert!(!product.contains("matrix_set_room_join_rule"));
     assert!(live.contains("matrix-room-join-rule-updated"));
@@ -234,10 +247,7 @@ fn matrix_login_flows_dto_is_privacy_safe_and_maps_domain_flows() {
         LoginFlow::from_matrix_parts("m.login.sso", None),
     ];
     let response = MatrixLoginFlowsResponse {
-        flows: flows
-            .into_iter()
-            .map(MatrixLoginFlowDto::from_domain)
-            .collect(),
+        flows: flows.into_iter().map(MatrixLoginFlowDto::from).collect(),
     };
     assert_eq!(response.flows[0].kind, "password");
     assert_eq!(response.flows[0].matrix_type, "m.login.password");
@@ -309,12 +319,16 @@ fn v_auth_3_product_registers_login_flows_command() {
         "matrix_login_flows must be registered in the invoke handler"
     );
     assert!(
-        product_prod.contains("HttpLoginFlowTransport"),
-        "product path must use live HTTP login-flow transport"
+        product_prod.contains("crate::bridge::auth_probes::login_flows"),
+        "product path must delegate login-flow discovery to the Core bridge"
     );
     assert!(
-        product_prod.contains("discover_login_flows"),
-        "product path must call discover_login_flows"
+        !product_prod.contains("HttpLoginFlowTransport"),
+        "product path must not instantiate a login-flow transport"
+    );
+    assert!(
+        !product_prod.contains("discover_login_flows"),
+        "product path must not call login-flow discovery directly"
     );
 }
 
@@ -378,7 +392,7 @@ fn v_auth_3b_product_has_no_matrix_uia_login_stage_commands() {
         .next()
         .expect("product production section");
     let lib_src = include_str!("../../lib.rs");
-    let login_src = include_str!("login.rs");
+    let login_src = LOGIN_SOURCE;
     let login_prod = login_src
         .split("#[cfg(test)]")
         .next()
@@ -435,7 +449,7 @@ fn v_auth_2_product_has_no_token_login_command_or_login_token_sdk_call() {
         .split("#[cfg(test)]")
         .next()
         .expect("product production section");
-    let login_src = include_str!("login.rs");
+    let login_src = LOGIN_SOURCE;
     let login_prod = login_src
         .split("#[cfg(test)]")
         .next()
@@ -493,49 +507,339 @@ fn v_auth_2_product_has_no_token_login_command_or_login_token_sdk_call() {
 }
 
 #[test]
-fn crypto_status_projection_is_privacy_safe_and_reports_cross_signing_shape() {
-    let status = crypto_status(
-        7,
-        Some(CrossSigningStatus {
-            has_master: true,
-            has_self_signing: false,
-            has_user_signing: false,
-        }),
+fn crypto_status_routes_through_core_while_desktop_keeps_the_mutex_bound_sdk_read() {
+    let command = AUTH_PRODUCT_COMMANDS_SOURCE
+        .split("pub async fn matrix_crypto_status")
+        .nth(1)
+        .and_then(|source| source.split("pub async fn matrix_logout").next())
+        .expect("matrix_crypto_status command body");
+    assert!(
+        command.contains("crate::bridge::session_lifecycle::crypto_status"),
+        "the zero-argument command must delegate envelope/serialization to Core"
     );
-    assert!(status.encryption_enabled);
-    assert_eq!(status.cross_signing_state, MatrixCrossSigningState::Partial);
+    for forbidden in [
+        "state.session",
+        "active.client",
+        "cross_signing_status",
+        "CrossSigningStatus",
+        "MatrixIpcError",
+    ] {
+        assert!(
+            !command.contains(forbidden),
+            "matrix_crypto_status command must not reclaim desktop crypto ownership: {forbidden}"
+        );
+    }
 
-    let json = serde_json::to_string(&status).unwrap();
     assert_eq!(
-        json,
-        r#"{"sessionGeneration":7,"encryptionEnabled":true,"crossSigningState":"partial"}"#
+        crypto_cross_signing_state(false, false, false, false),
+        PlatformCryptoCrossSigningState::NotSetUp
     );
-    for forbidden in ["token", "key", "ciphertext", "passphrase"] {
-        assert!(!json.to_ascii_lowercase().contains(forbidden));
+    assert_eq!(
+        crypto_cross_signing_state(false, true, false, false),
+        PlatformCryptoCrossSigningState::Partial
+    );
+    assert_eq!(
+        crypto_cross_signing_state(true, true, true, true),
+        PlatformCryptoCrossSigningState::Ready
+    );
+
+    let product_source = include_str!("product.rs");
+    let projection = product_source
+        .split("pub(crate) async fn crypto_status_projection")
+        .nth(1)
+        .and_then(|source| {
+            source
+                .split("/// Read the exact legacy cross-signing observation")
+                .next()
+        })
+        .expect("desktop crypto projection must remain isolated");
+    let lock = projection
+        .find("self.session.lock().await")
+        .expect("crypto projection must take the existing auth mutex");
+    let sample = projection
+        .find("cross_signing_status().await")
+        .expect("crypto projection must sample only the existing SDK status");
+    assert!(
+        lock < sample,
+        "the existing auth mutex must remain held while crypto status is awaited"
+    );
+    assert!(
+        !projection.contains("drop(session)"),
+        "crypto status must not transfer or release session ownership before sampling"
+    );
+    for forbidden in [
+        "MatrixIpcError",
+        "diagnostic_id",
+        "request_user_identity",
+        "bootstrap_cross_signing",
+        "store_key",
+    ] {
+        assert!(
+            !projection.contains(forbidden),
+            "desktop crypto projection must stay read-only and string-free: {forbidden}"
+        );
     }
 }
 
 #[test]
-fn crypto_status_distinguishes_unavailable_unset_and_ready() {
-    assert_eq!(
-        cross_signing_state(None),
-        MatrixCrossSigningState::Unavailable
+fn cross_signing_status_routes_only_through_core_and_holds_the_auth_mutex_across_both_sdk_reads() {
+    let command_source = include_str!("../cross_signing/product_commands.rs");
+    let command = command_source
+        .split("pub async fn matrix_cross_signing_status")
+        .nth(1)
+        .and_then(|source| {
+            source
+                .split("pub async fn matrix_cross_signing_setup")
+                .next()
+        })
+        .expect("cross-signing status command body");
+    assert!(
+        command.contains("crate::bridge::cross_signing_status::cross_signing_status"),
+        "status handler must delegate Core envelope/serialization to its strict bridge"
     );
-    assert_eq!(
-        cross_signing_state(Some(&CrossSigningStatus {
-            has_master: false,
-            has_self_signing: false,
-            has_user_signing: false,
-        })),
-        MatrixCrossSigningState::NotSetUp
+    assert!(
+        command.contains("core: State<'_, Arc<synara_core::Core>>"),
+        "status handler takes only the managed Core state"
     );
+    for forbidden in [
+        "MatrixAuthState",
+        "state.session",
+        "active.client",
+        "live_cross_signing_status",
+        "request_user_identity",
+        "MatrixIpcError",
+    ] {
+        assert!(
+            !command.contains(forbidden),
+            "Tauri status handler must not reclaim desktop SDK ownership: {forbidden}"
+        );
+    }
+
+    let setup = command_source
+        .split("pub async fn matrix_cross_signing_setup")
+        .nth(1)
+        .and_then(|source| {
+            source
+                .split("pub async fn matrix_cross_signing_setup_password")
+                .next()
+        })
+        .expect("cross-signing setup command body");
+    assert!(setup.contains("crate::bridge::cross_signing_setup::cross_signing_setup"));
+    assert!(setup.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!setup.contains("active.client"));
+    assert!(!setup.contains("bootstrap_cross_signing"));
+
+    let product_source = include_str!("product.rs");
+    let projection = product_source
+        .split("pub(crate) async fn cross_signing_status_projection")
+        .nth(1)
+        .and_then(|source| source.split("/// Read secret-storage status").next())
+        .expect("desktop cross-signing projection must remain isolated");
+    let lock = projection
+        .find("self.session.lock().await")
+        .expect("cross-signing projection must take the existing auth mutex");
+    let private_status = projection
+        .find("cross_signing_status().await")
+        .expect("projection must retain the existing private status observation");
+    let identity_query = projection
+        .find("request_user_identity(user_id)")
+        .expect("projection must retain the existing desktop-owned identity query");
+    assert!(
+        lock < private_status && private_status < identity_query,
+        "the auth mutex must be acquired before and held across both legacy SDK awaits"
+    );
+    for forbidden in [
+        "drop(session)",
+        "client.clone",
+        "clone().request_user_identity",
+    ] {
+        assert!(
+            !projection.contains(forbidden),
+            "cross-signing observation must not clone/drop/reorder the legacy mutex owner: {forbidden}"
+        );
+    }
+    for forbidden in [
+        "MatrixIpcError",
+        "diagnostic_id",
+        "with_diagnostic",
+        "bootstrap_cross_signing",
+        "recovery",
+        "secret_storage",
+    ] {
+        assert!(
+            !projection.contains(forbidden),
+            "desktop projection must be a string-free read observation only: {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn secret_storage_status_routes_only_through_core_and_preserves_desktop_observation_ownership() {
+    let command_source = include_str!("../secret_storage/product_commands.rs");
+    let command = command_source
+        .split("pub async fn matrix_secret_storage_status")
+        .nth(1)
+        .and_then(|source| {
+            source
+                .split("pub async fn matrix_secret_storage_bootstrap")
+                .next()
+        })
+        .expect("secret-storage status command body");
+    assert!(
+        command.contains("crate::bridge::secret_storage_status::secret_storage_status"),
+        "status handler must delegate Core envelope/serialization to its strict bridge"
+    );
+    assert!(
+        command.contains("core: State<'_, Arc<synara_core::Core>>"),
+        "status handler takes only managed Core state"
+    );
+    for forbidden in [
+        "MatrixAuthState",
+        "state.session",
+        "active.client",
+        "live_secret_storage::status",
+        "matrix_secret_storage_bootstrap",
+        "matrix_secret_storage_unlock",
+        "matrix_secret_storage_reset",
+        "MatrixIpcError",
+    ] {
+        assert!(
+            !command.contains(forbidden),
+            "Tauri status handler must not reclaim desktop SDK ownership or writers: {forbidden}"
+        );
+    }
+
+    let product_source = include_str!("product.rs");
+    let projection = product_source
+        .split("pub(crate) async fn secret_storage_status_projection")
+        .nth(1)
+        .and_then(|source| source.split("/// Read the upload-size config").next())
+        .expect("desktop secret-storage projection must remain isolated");
+    let lock = projection
+        .find("self.session.lock().await")
+        .expect("secret-storage projection must take the existing auth mutex");
+    let observation = projection
+        .find("live_secret_storage::status(&active.client, active.sync.session_generation())")
+        .expect("projection must retain the existing desktop secret-storage status observation");
+    assert!(
+        lock < observation,
+        "the existing auth mutex must be acquired before and held through status observation"
+    );
+    for forbidden in [
+        "drop(session)",
+        "client.clone",
+        "matrix_secret_storage_bootstrap",
+        "matrix_secret_storage_unlock",
+        "matrix_secret_storage_reset",
+        "MatrixIpcError",
+        "with_diagnostic",
+    ] {
+        assert!(
+            !projection.contains(forbidden),
+            "secret-storage observation must remain a closed read projection: {forbidden}"
+        );
+    }
+
+    for (diagnostic_id, expected) in [
+        (
+            "v-crypto.4-status-default-key-failed",
+            PlatformSecretStorageStatusError::DefaultKeyLoadFailed,
+        ),
+        (
+            "v-crypto.4-status-key-info-failed",
+            PlatformSecretStorageStatusError::KeyInfoLoadFailed,
+        ),
+        (
+            "v-crypto.4-status-secret-check-failed",
+            PlatformSecretStorageStatusError::SecretCheckFailed,
+        ),
+        (
+            "unexpected-private-diagnostic",
+            PlatformSecretStorageStatusError::InvalidSnapshot,
+        ),
+    ] {
+        assert_eq!(
+            map_secret_storage_status_error(MatrixAuthCommandError::new(
+                "Recovery",
+                "Native secret storage status is unavailable.",
+                diagnostic_id,
+            )),
+            expected,
+            "desktop error text must reduce only to the closed Platform failure"
+        );
+    }
+}
+
+#[test]
+fn secret_storage_desktop_reducer_covers_every_state_and_fixed_missing_secret_bit() {
+    let states = [
+        (
+            NativeSecretStorageState::Unavailable,
+            false,
+            NativeSecretStorageAction::UnlockRequired,
+        ),
+        (
+            NativeSecretStorageState::NotSetUp,
+            false,
+            NativeSecretStorageAction::BootstrapRequired,
+        ),
+        (
+            NativeSecretStorageState::Locked,
+            false,
+            NativeSecretStorageAction::UnlockRequired,
+        ),
+        (
+            NativeSecretStorageState::Ready,
+            true,
+            NativeSecretStorageAction::None,
+        ),
+    ];
+    for (state, unlocked, action) in states {
+        for bits in 0_u8..16 {
+            let known = [
+                NativeMissingSecret::CrossSigningMaster,
+                NativeMissingSecret::CrossSigningSelfSigning,
+                NativeMissingSecret::CrossSigningUserSigning,
+                NativeMissingSecret::EncryptionBackup,
+            ];
+            let missing_secrets = known
+                .iter()
+                .enumerate()
+                .filter_map(|(index, missing)| (bits & (1 << index) != 0).then_some(*missing))
+                .collect();
+            let projection = platform_secret_storage_status(NativeSecretStorageStatus {
+                session_generation: 9,
+                state,
+                exists: true,
+                unlocked,
+                default_key_set: true,
+                passphrase_configured: true,
+                bootstrap_ready: true,
+                missing_secrets,
+                action,
+            })
+            .expect("every existing state/missing-secret projection is closed and valid");
+            let missing = projection.missing_secrets();
+            assert_eq!(missing.cross_signing_master(), bits & 1 != 0);
+            assert_eq!(missing.cross_signing_self_signing(), bits & 2 != 0);
+            assert_eq!(missing.cross_signing_user_signing(), bits & 4 != 0);
+            assert_eq!(missing.encryption_backup(), bits & 8 != 0);
+        }
+    }
+
     assert_eq!(
-        cross_signing_state(Some(&CrossSigningStatus {
-            has_master: true,
-            has_self_signing: true,
-            has_user_signing: true,
-        })),
-        MatrixCrossSigningState::Ready
+        platform_secret_storage_status(NativeSecretStorageStatus {
+            session_generation: 9,
+            state: NativeSecretStorageState::Ready,
+            exists: true,
+            unlocked: false,
+            default_key_set: true,
+            passphrase_configured: true,
+            bootstrap_ready: true,
+            missing_secrets: Vec::new(),
+            action: NativeSecretStorageAction::None,
+        }),
+        Err(PlatformSecretStorageStatusError::InvalidSnapshot)
     );
 }
 
@@ -922,6 +1226,233 @@ fn avatar_mxc_parser_rejects_invalid_uri() {
 }
 
 #[test]
+fn own_profile_writes_route_through_core_without_desktop_client_io() {
+    let product = PRODUCT_SOURCE;
+    for (name, bridge) in [
+        (
+            "matrix_set_own_display_name",
+            "crate::bridge::own_profile::set_own_display_name",
+        ),
+        (
+            "matrix_set_own_avatar",
+            "crate::bridge::own_profile::set_own_avatar",
+        ),
+    ] {
+        let command = product
+            .split(&format!("pub async fn {name}"))
+            .nth(1)
+            .unwrap_or_else(|| panic!("{name} command"));
+        let command = command
+            .split("#[tauri::command]")
+            .next()
+            .unwrap_or_else(|| panic!("{name} command body"));
+        assert!(
+            command.contains(bridge),
+            "{name} must dispatch through {bridge}"
+        );
+        assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+        assert!(!command.contains("active.client"));
+        assert!(!command.contains("set_display_name"));
+        assert!(!command.contains("set_avatar_url"));
+    }
+}
+
+#[test]
+fn backup_status_routes_through_core_without_desktop_client_io() {
+    let product = PRODUCT_SOURCE;
+    let command = product
+        .split("pub async fn matrix_backup_status")
+        .nth(1)
+        .expect("backup status command");
+    let command = command
+        .split("#[tauri::command]")
+        .next()
+        .expect("backup status command body");
+    assert!(command.contains("crate::bridge::backup_status::backup_status"));
+    assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!command.contains("active.client"));
+    assert!(!command.contains("live_backup::status"));
+}
+
+#[test]
+fn directory_protocols_routes_through_core_without_desktop_client_io() {
+    let product = PRODUCT_SOURCE;
+    let command = product
+        .split("pub async fn matrix_room_directory_protocols")
+        .nth(1)
+        .expect("directory protocols command");
+    let command = command
+        .split("#[tauri::command]")
+        .next()
+        .expect("directory protocols command body");
+    assert!(command.contains("crate::bridge::directory_protocols::room_directory_protocols"));
+    assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!command.contains("active.client"));
+    assert!(!command.contains("fetch_protocols"));
+}
+
+#[test]
+fn directory_search_and_cancel_route_through_core_without_desktop_client_io() {
+    let product = PRODUCT_SOURCE;
+    for (name, bridge) in [
+        (
+            "matrix_room_directory_search",
+            "crate::bridge::directory_search::room_directory_search",
+        ),
+        (
+            "matrix_room_directory_cancel",
+            "crate::bridge::directory_search::room_directory_cancel",
+        ),
+    ] {
+        let command = product
+            .split(&format!("pub async fn {name}"))
+            .nth(1)
+            .unwrap_or_else(|| panic!("{name} command"));
+        let command = command
+            .split("#[tauri::command]")
+            .next()
+            .unwrap_or_else(|| panic!("{name} command body"));
+        assert!(
+            command.contains(bridge),
+            "{name} must dispatch through {bridge}"
+        );
+        assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+        assert!(!command.contains("active.client"));
+        assert!(!command.contains("public_rooms_filtered"));
+        assert!(!command.contains("register_request"));
+        assert!(!command.contains("cancel_request"));
+    }
+}
+
+#[test]
+fn room_key_transfer_status_routes_through_core_without_desktop_flow() {
+    let product = PRODUCT_SOURCE;
+    let command = product
+        .split("pub async fn matrix_room_key_transfer_status")
+        .nth(1)
+        .expect("room-key transfer status command");
+    let command = command
+        .split("#[tauri::command]")
+        .next()
+        .expect("room-key transfer status command body");
+    assert!(command.contains("crate::bridge::room_key_status::room_key_transfer_status"));
+    assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!command.contains("live_room_keys"));
+    assert!(!command.contains("active.room_key_transfer"));
+    assert!(!command.contains("project_status"));
+}
+
+#[test]
+fn room_list_snapshot_routes_through_core_without_desktop_sync_owner() {
+    let product = PRODUCT_SOURCE;
+    let command = product
+        .split("pub async fn matrix_room_list_snapshot")
+        .nth(1)
+        .expect("room-list snapshot command");
+    let command = command
+        .split("#[tauri::command]")
+        .next()
+        .expect("room-list snapshot command body");
+    assert!(command.contains("crate::bridge::room_list::room_list_snapshot"));
+    assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!command.contains("snapshot_from_sync_owner"));
+    assert!(!command.contains("active.sync"));
+}
+
+#[test]
+fn invites_snapshot_routes_through_core_without_desktop_client_io() {
+    let product = PRODUCT_SOURCE;
+    let command = product
+        .split("pub async fn matrix_invites_snapshot")
+        .nth(1)
+        .expect("invites snapshot command");
+    let command = command
+        .split("#[tauri::command]")
+        .next()
+        .expect("invites snapshot command body");
+    assert!(command.contains("crate::bridge::invites_snapshot::invites_snapshot"));
+    assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!command.contains("snapshot_invites"));
+    assert!(!command.contains("active.client"));
+}
+
+#[test]
+fn invites_accept_routes_through_core_without_desktop_client_io() {
+    let product = PRODUCT_SOURCE;
+    let command = product
+        .split("pub async fn matrix_invites_accept")
+        .nth(1)
+        .expect("invites accept command");
+    let command = command
+        .split("#[tauri::command]")
+        .next()
+        .expect("invites accept command body");
+    assert!(command.contains("crate::bridge::invites_snapshot::invites_accept"));
+    assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!command.contains("native_invite_target"));
+    assert!(!command.contains("native_invite_room"));
+    assert!(!command.contains("active.client"));
+    assert!(!command.contains("mark_as_dm"));
+}
+
+#[test]
+fn invites_decline_routes_through_core_without_desktop_client_io() {
+    let product = PRODUCT_SOURCE;
+    let command = product
+        .split("pub async fn matrix_invites_decline")
+        .nth(1)
+        .expect("invites decline command");
+    let command = command
+        .split("#[tauri::command]")
+        .next()
+        .expect("invites decline command body");
+    assert!(command.contains("crate::bridge::invites_snapshot::invites_decline"));
+    assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!command.contains("native_invite_target"));
+    assert!(!command.contains("native_invite_room"));
+    assert!(!command.contains("active.client"));
+    assert!(!command.contains(".leave()"));
+}
+
+#[test]
+fn invites_report_spam_routes_through_core_without_desktop_client_io() {
+    let product = PRODUCT_SOURCE;
+    let command = product
+        .split("pub async fn matrix_invites_report_spam")
+        .nth(1)
+        .expect("invites report spam command");
+    let command = command
+        .split("#[tauri::command]")
+        .next()
+        .expect("invites report spam command body");
+    assert!(command.contains("crate::bridge::invites_snapshot::invites_report_spam"));
+    assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!command.contains("native_invite_target"));
+    assert!(!command.contains("native_invite_room"));
+    assert!(!command.contains("active.client"));
+    assert!(!command.contains("report_room"));
+}
+
+#[test]
+fn invites_block_sender_routes_through_core_without_desktop_client_io() {
+    let product = PRODUCT_SOURCE;
+    let command = product
+        .split("pub async fn matrix_invites_block_sender")
+        .nth(1)
+        .expect("invites block sender command");
+    let command = command
+        .split("#[tauri::command]")
+        .next()
+        .expect("invites block sender command body");
+    assert!(command.contains("crate::bridge::invites_snapshot::invites_block_sender"));
+    assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!command.contains("native_invite_target"));
+    assert!(!command.contains("native_invite_room"));
+    assert!(!command.contains("active.client"));
+    assert!(!command.contains("ignore_user"));
+}
+
+#[test]
 fn avatar_mime_validator_accepts_images_only() {
     assert_eq!(
         validate_avatar_mime("image/png").unwrap().essence_str(),
@@ -993,7 +1524,7 @@ fn room_leave_command_owns_sdk_leave_without_a_js_fallback() {
         .split("#[tauri::command]")
         .next()
         .expect("room leave command body");
-    assert!(command.contains("room.leave()"));
+    assert!(command.contains("crate::bridge::room_leave_join::room_leave"));
     assert!(!command.contains("mx.leave"));
 }
 
@@ -1123,7 +1654,7 @@ fn room_create_command_owns_sdk_create_without_a_js_fallback() {
         .split("#[tauri::command]")
         .next()
         .expect("room create command body");
-    assert!(command.contains("create_room(request)"));
+    assert!(command.contains("crate::bridge::room_create::room_create"));
     assert!(!command.contains("mx.createRoom"));
 }
 
@@ -1188,7 +1719,7 @@ fn room_join_command_owns_sdk_join_without_a_js_fallback() {
         .split("#[tauri::command]")
         .next()
         .expect("room join command body");
-    assert!(command.contains("join_room_by_id_or_alias"));
+    assert!(command.contains("crate::bridge::room_leave_join::room_join"));
     assert!(!command.contains("mx.joinRoom"));
 }
 
@@ -1229,9 +1760,59 @@ fn room_members_snapshot_owns_live_sdk_members_without_js_fallback() {
         .split("#[tauri::command]")
         .next()
         .expect("room members snapshot command body");
-    assert!(command.contains("members(RoomMemberships::empty())"));
+    assert!(command.contains("crate::bridge::room_members::room_members_snapshot"));
     assert!(!command.contains("getMembers"));
     assert!(!command.contains("matrix-js-sdk"));
+}
+
+#[test]
+fn space_commands_route_through_core_without_desktop_client_io() {
+    let product = PRODUCT_SOURCE;
+    for (name, bridge) in [
+        (
+            "matrix_space_parents_snapshot",
+            "crate::bridge::spaces::space_parents_snapshot",
+        ),
+        (
+            "matrix_space_hierarchy_snapshot",
+            "crate::bridge::spaces::space_hierarchy_snapshot",
+        ),
+        (
+            "matrix_space_children_snapshot",
+            "crate::bridge::spaces::space_children_snapshot",
+        ),
+        (
+            "matrix_space_child_set",
+            "crate::bridge::spaces::space_child_set",
+        ),
+        (
+            "matrix_space_child_remove",
+            "crate::bridge::spaces::space_child_remove",
+        ),
+        (
+            "matrix_restricted_join_reparent",
+            "crate::bridge::spaces::restricted_join_reparent",
+        ),
+    ] {
+        let command = product
+            .split(&format!("pub async fn {name}"))
+            .nth(1)
+            .unwrap_or_else(|| panic!("{name} command"));
+        let command = command
+            .split("#[tauri::command]")
+            .next()
+            .unwrap_or_else(|| panic!("{name} command body"));
+        assert!(
+            command.contains(bridge),
+            "{name} must dispatch through {bridge}"
+        );
+        assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
+        assert!(!command.contains("active.client"));
+        assert!(!command.contains("snapshot_space_"));
+        assert!(!command.contains("set_space_child"));
+        assert!(!command.contains("remove_space_child"));
+        assert!(!command.contains("reparent_restricted_join_allow"));
+    }
 }
 
 #[test]
@@ -1423,8 +2004,7 @@ fn power_read_commands_are_registered_and_use_live_room_state() {
         .split("#[tauri::command]")
         .next()
         .expect("power-level read command body");
-    assert!(power_command.contains("read_room_state_content"));
-    assert!(product.contains("get_state_event(StateEventType::from(event_type), \"\")"));
+    assert!(power_command.contains("crate::bridge::room_members::room_power_levels_snapshot"));
     assert!(!power_command.contains("send_state_event"));
     assert!(!power_command.contains("matrix-js-sdk"));
 
@@ -1435,7 +2015,7 @@ fn power_read_commands_are_registered_and_use_live_room_state() {
         .split("#[tauri::command]")
         .next()
         .expect("power-level tag read command body");
-    assert!(tags_command.contains("read_room_state_content"));
+    assert!(tags_command.contains("crate::bridge::room_members::room_power_level_tags_snapshot"));
     assert!(!tags_command.contains("send_state_event"));
 }
 
@@ -1484,7 +2064,11 @@ fn room_directory_visibility_commands_keep_the_native_owner_contract() {
         .split("#[tauri::command]")
         .next()
         .expect("directory visibility get command body");
-    assert!(get_command.contains("get_room_visibility()"));
+    assert!(
+        get_command.contains("crate::bridge::directory_visibility::get_room_directory_visibility")
+    );
+    assert!(get_command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!get_command.contains("get_room_visibility()"));
     let set_command = PRODUCT_SOURCE
         .split("pub async fn matrix_set_room_directory_visibility")
         .nth(1)
@@ -1492,11 +2076,13 @@ fn room_directory_visibility_commands_keep_the_native_owner_contract() {
         .split("#[tauri::command]")
         .next()
         .expect("directory visibility set command body");
-    assert!(!set_command.contains("get_room_visibility()"));
-    assert!(set_command.contains("update_room_visibility(native_visibility)"));
     assert!(
-        set_command.contains("user_can_send_state(user_id, StateEventType::RoomCanonicalAlias)")
+        set_command.contains("crate::bridge::directory_visibility::set_room_directory_visibility")
     );
+    assert!(set_command.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!set_command.contains("get_room_visibility()"));
+    assert!(!set_command.contains("update_room_visibility(native_visibility)"));
+    assert!(!set_command.contains("user_can_send_state"));
     assert!(!set_command.contains("power_levels_or_default"));
     assert!(!set_command.contains("RoomProfileIndex::set_directory_visibility"));
 }
@@ -1593,11 +2179,26 @@ fn room_moderation_error_mapping_is_stable() {
 fn room_moderation_commands_use_live_sdk_methods_without_js_fallbacks() {
     let product = PRODUCT_SOURCE;
     let expected_methods = [
-        ("matrix_room_invite", "invite_user_by_id"),
-        ("matrix_room_kick", "kick_user"),
-        ("matrix_room_ban", "ban_user"),
-        ("matrix_room_unban", "unban_user"),
-        ("matrix_room_set_power_level", "update_power_levels"),
+        (
+            "matrix_room_invite",
+            "crate::bridge::room_moderation::room_invite",
+        ),
+        (
+            "matrix_room_kick",
+            "crate::bridge::room_moderation::room_kick",
+        ),
+        (
+            "matrix_room_ban",
+            "crate::bridge::room_moderation::room_ban",
+        ),
+        (
+            "matrix_room_unban",
+            "crate::bridge::room_moderation::room_unban",
+        ),
+        (
+            "matrix_room_set_power_level",
+            "crate::bridge::room_moderation::room_set_power_level",
+        ),
     ];
 
     for (command_name, sdk_method) in expected_methods {
@@ -1619,7 +2220,7 @@ fn power_level_write_result_serializes_exact_wire_shape() {
     let result = NativePowerLevelWriteResult {
         status: "ok",
         room_id: "!room:example.org".to_owned(),
-        event_type: ROOM_POWER_LEVELS_EVENT_TYPE,
+        event_type: crate::matrix::members::ROOM_POWER_LEVELS_EVENT_TYPE,
         state_key: "",
         session_generation: 7,
         content: serde_json::json!({
@@ -1729,6 +2330,7 @@ fn power_level_commands_are_registered_and_have_no_bulk_single_user_loop() {
         .split("#[tauri::command]")
         .next()
         .expect("bulk power-level command body");
+    assert!(bulk_command.contains("crate::bridge::room_power_levels::room_set_power_levels"));
     assert!(!bulk_command.contains("update_power_levels"));
 }
 
@@ -1880,8 +2482,17 @@ fn media_errors_are_stable_and_privacy_safe() {
     assert!(!raw.contains("sdk error"));
 }
 
-#[test]
-fn media_commands_use_the_live_client_and_original_file() {
+#[tokio::test]
+async fn media_config_desktop_owner_keeps_the_live_client_and_closed_no_session_error() {
+    let error = MatrixAuthState::new()
+        .media_config_projection()
+        .await
+        .expect_err("a desktop-owned SDK observation requires a live session");
+    assert_eq!(
+        error,
+        synara_core::platform::PlatformMediaConfigError::NoSession
+    );
+
     let product = PRODUCT_SOURCE;
     let config = product
         .split("pub async fn matrix_media_config")
@@ -1891,8 +2502,35 @@ fn media_commands_use_the_live_client_and_original_file() {
         .split("#[tauri::command]")
         .next()
         .expect("media config command body");
-    assert!(config.contains("load_or_fetch_max_upload_size"));
-    assert!(!config.contains("matrix-js-sdk"));
+    assert!(config.contains("crate::bridge::media_config::media_config"));
+    assert!(config.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!config.contains("load_or_fetch_max_upload_size"));
+
+    // The former command already cloned Client under the auth mutex and
+    // released it before its cache/network read. Keep that exact safe behavior
+    // in desktop ownership; Core receives only the post-load scalar projection.
+    let desktop_owner = include_str!("product.rs");
+    let projection = desktop_owner
+        .split("pub(crate) async fn media_config_projection")
+        .nth(1)
+        .expect("desktop media config projection");
+    let clone = projection
+        .find("active.client.clone()")
+        .expect("clone the live client while holding the auth mutex");
+    let release = projection[clone..]
+        .find("};")
+        .map(|offset| clone + offset)
+        .expect("close the client/mutex scope before the SDK load");
+    let load = projection
+        .find("load_or_fetch_max_upload_size")
+        .expect("desktop owns the SDK cache/network load");
+    assert!(
+        clone < release && release < load,
+        "media config must preserve the existing clone-then-release lock semantics"
+    );
+    assert!(projection.contains("PlatformMediaConfig::new(upload_size)"));
+    assert!(!projection.contains("synara_core::Core"));
+    assert!(!projection.contains("matrix-js-sdk"));
 
     let download = product
         .split("pub async fn matrix_media_download")

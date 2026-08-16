@@ -3,44 +3,30 @@ use crate::matrix::presence::{NativePresenceSnapshotResult, NativePresenceSubscr
 
 #[tauri::command]
 pub async fn matrix_presence_snapshot(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     user_id: String,
 ) -> Result<NativePresenceSnapshotResult, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    active
-        .presence
-        .snapshot(&user_id)
-        .await
-        .map_err(map_presence_error)
+    crate::bridge::presence_snapshot::presence_snapshot(core.inner().as_ref(), user_id).await
 }
 
 #[tauri::command]
 pub async fn matrix_presence_subscribe(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     user_id: String,
 ) -> Result<NativePresenceSubscription, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    active
-        .presence
-        .subscribe(&user_id)
-        .await
-        .map_err(map_presence_error)
+    crate::bridge::presence_subscriptions::presence_subscribe(core.inner().as_ref(), user_id).await
 }
 
 #[tauri::command]
 pub async fn matrix_presence_unsubscribe(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     subscription_id: String,
 ) -> Result<(), MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
-    active
-        .presence
-        .unsubscribe(&subscription_id)
-        .await
-        .map_err(map_presence_error)
+    crate::bridge::presence_subscriptions::presence_unsubscribe(
+        core.inner().as_ref(),
+        subscription_id,
+    )
+    .await
 }
 
 pub(super) fn map_presence_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {

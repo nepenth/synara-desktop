@@ -788,3 +788,440 @@ fn p5_4_retire_generation_cancels_in_flight() {
     );
     assert!(focus.is_live());
 }
+
+// ---- SNC-P1-5c pure-module mirrors ------------------------------
+// The pure timeline modules (actions, composer, media, view) moved into
+// `synara_core::app::timeline` with their internal unit tests. These mirrors
+// exercise the same product contracts through the src-tauri adapter
+// re-exports so the desktop test count stays identical to the pre-move
+// baseline (same shape as SNC-P1-5a/b mirrors).
+
+mod actions_pure {
+    use super::*;
+
+    #[test]
+    fn formatted_body_attaches_only_when_it_differs_from_plain_text() {
+        assert!(!should_attach_formatted_body("hello", Some("hello")));
+        assert!(!should_attach_formatted_body("hello", Some("  ")));
+        assert!(should_attach_formatted_body("hello", Some("<p>hello</p>")));
+    }
+
+    #[test]
+    fn forward_plain_and_quote_bodies_attribute_the_source_sender() {
+        assert_eq!(
+            format_forwarded_plain_body("@alice:example.org", "hello", false),
+            "Forwarded from @alice:example.org\n\nhello"
+        );
+        assert_eq!(
+            format_forwarded_plain_body("@alice:example.org", "hello\nthere", true),
+            "> <@alice:example.org>\n> hello\n> there"
+        );
+    }
+
+    #[test]
+    fn action_request_schemas_stay_room_addressed() {
+        let edit: NativeTimelineEditTextRequest = serde_json::from_value(serde_json::json!({
+            "roomId": "!room:example.org",
+            "eventId": "$edit:example.org",
+            "body": "updated"
+        }))
+        .unwrap();
+        assert_eq!(edit.event_id, "$edit:example.org");
+
+        let media: NativeTimelineForwardMediaRequest = serde_json::from_value(serde_json::json!({
+            "sourceRoomId": "!source:example.org",
+            "eventId": "$media:example.org",
+            "targetRoomId": "!target:example.org"
+        }))
+        .unwrap();
+        assert_eq!(media.event_id, "$media:example.org");
+        assert_eq!(
+            format_forwarded_media_body("@alice:example.org", "photo.jpg"),
+            "Forwarded from @alice:example.org\n\nphoto.jpg"
+        );
+
+        let vote: NativeTimelinePollVoteRequest = serde_json::from_value(serde_json::json!({
+            "roomId": "!room:example.org",
+            "eventId": "$poll:example.org",
+            "answerIds": ["a1", "a2"]
+        }))
+        .unwrap();
+        assert_eq!(vote.answer_ids, vec!["a1", "a2"]);
+
+        let decline: NativeTimelineCallDeclineRequest = serde_json::from_value(serde_json::json!({
+            "roomId": "!room:example.org",
+            "eventId": "$rtc:example.org"
+        }))
+        .unwrap();
+        assert_eq!(decline.event_id, "$rtc:example.org");
+
+        let redact: NativeTimelineRedactRequest = serde_json::from_value(serde_json::json!({
+            "roomId": "!room:example.org",
+            "eventId": "$redact:example.org",
+            "reason": "spam"
+        }))
+        .unwrap();
+        assert_eq!(redact.reason.as_deref(), Some("spam"));
+
+        let forward: NativeTimelineForwardTextRequest = serde_json::from_value(serde_json::json!({
+            "sourceRoomId": "!source:example.org",
+            "eventId": "$fwd:example.org",
+            "targetRoomId": "!target:example.org",
+            "asQuote": true
+        }))
+        .unwrap();
+        assert!(forward.as_quote);
+
+        let readback = NativeTimelineActionReadback {
+            schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+            action: NativeTimelineActionKind::EditText,
+            room_id: "!room:example.org".into(),
+            event_id: "$new:example.org".into(),
+            status: "sent".into(),
+        };
+        let json = serde_json::to_value(readback).unwrap();
+        assert_eq!(json["schemaVersion"], 1);
+        assert_eq!(json["action"], "edit_text");
+        assert_eq!(json["status"], "sent");
+    }
+}
+
+mod composer_pure {
+    use super::*;
+
+    #[test]
+    fn registry_set_get_and_clear_are_room_scoped() {
+        let mut registry = ComposerDraftRegistry::new();
+        let draft = NativeComposerReplyDraft {
+            event_id: "$evt:example.org".into(),
+            sender_id: "@alice:example.org".into(),
+            body: "hello".into(),
+            formatted_body: Some("<p>hello</p>".into()),
+            thread_root_event_id: None,
+        };
+        registry.set("!room:example.org".into(), draft.clone());
+        assert_eq!(registry.get("!room:example.org"), Some(&draft));
+        assert!(registry.get("!other:example.org").is_none());
+        assert!(registry.clear("!room:example.org"));
+        assert!(!registry.clear("!room:example.org"));
+        assert_eq!(
+            reply_draft_readback("!room:example.org".into(), "cleared", None).status,
+            "cleared"
+        );
+    }
+
+    #[test]
+    fn set_reply_draft_request_accepts_optional_start_thread() {
+        let request: NativeComposerSetReplyDraftRequest =
+            serde_json::from_value(serde_json::json!({
+                "roomId": "!room:example.org",
+                "eventId": "$evt:example.org",
+                "startThread": true
+            }))
+            .unwrap();
+        assert!(request.start_thread);
+        assert_eq!(request.event_id, "$evt:example.org");
+    }
+}
+
+mod media_pure {
+    use super::*;
+    use matrix_sdk::ruma::events::room::MediaSource;
+
+    #[test]
+    fn handles_are_opaque_and_revoked_with_their_timeline_item() {
+        let mut registry = TimelineMediaRegistry::new(7, "live:!room:example.org");
+        let handle = registry
+            .register(
+                "item-1",
+                MediaSource::Plain("mxc://example.org/image".into()),
+                Some("image/png".into()),
+                Some(32),
+                Some(16),
+                None,
+            )
+            .unwrap();
+        let json = serde_json::to_string(&handle).unwrap();
+        assert!(!json.contains("mxc://"));
+        assert!(is_timeline_media_handle(&handle.handle_id));
+        assert_eq!(
+            handle.handle_id.len(),
+            TIMELINE_MEDIA_HANDLE_PREFIX.len() + 64
+        );
+        assert_eq!(registry.len(), 1);
+        assert!(registry.resolve(&handle.handle_id).is_some());
+        assert_eq!(registry.revoke_item("item-1"), 1);
+        assert!(registry.resolve(&handle.handle_id).is_none());
+    }
+
+    #[test]
+    fn reprojection_is_stable_and_retention_is_stream_bound() {
+        let mut registry = TimelineMediaRegistry::new(7, "focused:!room:example.org:$event");
+        let first = registry
+            .register(
+                "item-1",
+                MediaSource::Plain("mxc://example.org/one".into()),
+                Some("image/png".into()),
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        let updated = registry
+            .register(
+                "item-1",
+                MediaSource::Plain("mxc://example.org/two".into()),
+                Some("image/jpeg".into()),
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        assert_eq!(first.handle_id, updated.handle_id);
+        assert_eq!(registry.session_generation(), 7);
+        assert_eq!(registry.stream_id(), "focused:!room:example.org:$event");
+        registry.retain_items(["another-item"]);
+        assert!(registry.resolve(&first.handle_id).is_none());
+    }
+}
+
+mod view_pure {
+    use super::*;
+    use matrix_sdk::ruma::events::room::message::{
+        EmoteMessageEventContent, NoticeMessageEventContent, TextMessageEventContent,
+    };
+    use std::collections::HashMap;
+
+    use matrix_sdk::ruma::events::room::message::MessageType;
+    #[test]
+    fn formatted_body_projects_distinct_html_only() {
+        let rich = MessageType::Text(TextMessageEventContent::html(
+            "hello",
+            "<p><strong>hello</strong></p>",
+        ));
+        assert_eq!(
+            project_formatted_body(&rich).as_deref(),
+            Some("<p><strong>hello</strong></p>")
+        );
+
+        let plain = MessageType::Text(TextMessageEventContent::plain("hello"));
+        assert_eq!(project_formatted_body(&plain), None);
+
+        let same = MessageType::Notice(NoticeMessageEventContent::html("note", "note"));
+        assert_eq!(project_formatted_body(&same), None);
+
+        let emote = MessageType::Emote(EmoteMessageEventContent::html("waves", "<em>waves</em>"));
+        assert_eq!(
+            project_formatted_body(&emote).as_deref(),
+            Some("<em>waves</em>")
+        );
+    }
+
+    #[test]
+    fn message_type_labels_cover_text_notice_and_emote() {
+        assert_eq!(
+            project_message_type_and_media(
+                "item",
+                &MessageType::Text(TextMessageEventContent::plain("hi")),
+                None
+            )
+            .0
+            .as_deref(),
+            Some("text")
+        );
+        assert_eq!(
+            project_message_type_and_media(
+                "item",
+                &MessageType::Notice(NoticeMessageEventContent::plain("hi")),
+                None
+            )
+            .0
+            .as_deref(),
+            Some("notice")
+        );
+        assert_eq!(
+            project_message_type_and_media(
+                "item",
+                &MessageType::Emote(EmoteMessageEventContent::plain("hi")),
+                None
+            )
+            .0
+            .as_deref(),
+            Some("emote")
+        );
+    }
+
+    #[test]
+    fn poll_answers_project_counts_and_own_without_voter_ids() {
+        let mut votes = HashMap::new();
+        votes.insert(
+            "a1".into(),
+            vec!["@alice:example.org".into(), "@bob:example.org".into()],
+        );
+        votes.insert("a2".into(), vec!["@carol:example.org".into()]);
+
+        let answers = project_poll_answers(
+            [
+                ("a1".into(), "Yes".into()),
+                ("a2".into(), "No".into()),
+                ("a3".into(), "Maybe".into()),
+            ],
+            &votes,
+            Some("@alice:example.org"),
+        );
+
+        assert_eq!(
+            answers,
+            vec![
+                TimelinePollAnswer {
+                    id: "a1".into(),
+                    text: "Yes".into(),
+                    vote_count: 2,
+                    own: true,
+                },
+                TimelinePollAnswer {
+                    id: "a2".into(),
+                    text: "No".into(),
+                    vote_count: 1,
+                    own: false,
+                },
+                TimelinePollAnswer {
+                    id: "a3".into(),
+                    text: "Maybe".into(),
+                    vote_count: 0,
+                    own: false,
+                },
+            ]
+        );
+
+        let row = TimelinePollRow {
+            event: TimelineEventRowBase {
+                item_id: "poll-item".into(),
+                event_id: Some("$poll:example.org".into()),
+                sender_id: "@alice:example.org".into(),
+                sender_name: "@alice:example.org".into(),
+                origin_server_ts: 1,
+                capabilities: TimelineRowCapabilities {
+                    react: true,
+                    reply: false,
+                    edit: false,
+                    redact: true,
+                    report: false,
+                    pin: true,
+                    forward: false,
+                    vote: true,
+                    decline_call: false,
+                },
+            },
+            question: "Lunch?".into(),
+            closed: false,
+            max_selections: 1,
+            answers,
+        };
+        let json = serde_json::to_string(&row).unwrap();
+        assert!(json.contains("\"voteCount\":2"));
+        assert!(json.contains("\"own\":true"));
+        assert!(!json.contains("@bob:example.org"));
+        assert!(!json.contains("@carol:example.org"));
+        assert!(!json.contains("token"));
+        assert!(!json.contains("ciphertext"));
+    }
+
+    #[test]
+    fn reply_and_thread_summary_serialize_product_shape_without_secrets() {
+        let reply = TimelineReplyPreview {
+            event_id: "$parent:example.org".into(),
+            sender_name: "@alice:example.org".into(),
+            body: "Earlier message".into(),
+        };
+        let thread = TimelineThreadSummary {
+            root_event_id: "$root:example.org".into(),
+            reply_count: 3,
+            latest_event_id: Some("$latest:example.org".into()),
+        };
+        let message = TimelineMessageRow {
+            event: TimelineEventRowBase {
+                item_id: "msg-item".into(),
+                event_id: Some("$msg:example.org".into()),
+                sender_id: "@bob:example.org".into(),
+                sender_name: "@bob:example.org".into(),
+                origin_server_ts: 1,
+                capabilities: TimelineRowCapabilities {
+                    react: true,
+                    reply: true,
+                    edit: true,
+                    redact: true,
+                    report: false,
+                    pin: true,
+                    forward: true,
+                    vote: false,
+                    decline_call: false,
+                },
+            },
+            body: "Reply body".into(),
+            formatted_body: None,
+            message_type: Some("text".into()),
+            edited: false,
+            reply: Some(reply),
+            thread: Some(thread),
+            reactions: Vec::new(),
+            media: None,
+        };
+        let json = serde_json::to_string(&message).unwrap();
+        assert!(json.contains("\"eventId\":\"$parent:example.org\""));
+        assert!(json.contains("\"rootEventId\":\"$root:example.org\""));
+        assert!(json.contains("\"replyCount\":3"));
+        assert!(json.contains("\"latestEventId\":\"$latest:example.org\""));
+        assert!(!json.contains("ciphertext"));
+        assert!(!json.contains("access_token"));
+        assert!(!json.contains("mxc://"));
+    }
+
+    #[test]
+    fn snapshot_and_delta_project_pinned_event_ids_without_secrets() {
+        let snapshot = TimelineViewSnapshot {
+            schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+            session_generation: 1,
+            room_id: "!room:example.org".into(),
+            revision: 0,
+            position: TimelineViewPosition::LiveBottom,
+            pagination: TimelinePaginationState {
+                backward: TimelinePageState::Available,
+                forward: TimelinePageState::Available,
+            },
+            read_state: TimelineReadState {
+                own_read_event_id: None,
+                unread_anchor_event_id: None,
+                is_marked_unread: false,
+            },
+            pinned_event_ids: vec!["$pin:example.org".into(), "$pin2:example.org".into()],
+            rows: Vec::new(),
+            capabilities: TimelineViewCapabilities {
+                mark_read: true,
+                mark_unread: true,
+                paginate_backward: true,
+                paginate_forward: true,
+            },
+        };
+        let json = serde_json::to_string(&snapshot).unwrap();
+        assert!(json.contains("\"pinnedEventIds\""));
+        assert!(json.contains("$pin:example.org"));
+        assert!(!json.contains("ciphertext"));
+        assert!(!json.contains("access_token"));
+
+        let batch = TimelineViewDeltaBatch {
+            schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+            session_generation: 1,
+            stream_id: "live:!room:example.org:1".into(),
+            room_id: "!room:example.org".into(),
+            revision: 1,
+            ops: Vec::new(),
+            read_state: None,
+            pagination: None,
+            pinned_event_ids: Some(vec!["$pin:example.org".into()]),
+        };
+        let batch_json = serde_json::to_string(&batch).unwrap();
+        assert!(batch_json.contains("\"pinnedEventIds\""));
+        assert!(batch_json.contains("$pin:example.org"));
+    }
+}

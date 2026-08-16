@@ -3,7 +3,6 @@
 //! This is the only desktop product boundary for password login. The live
 //! `matrix_sdk::Client` and all access/refresh tokens remain in the Rust host.
 
-use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -12,55 +11,49 @@ use std::sync::Arc;
 use matrix_sdk::{
     attachment::AttachmentConfig,
     authentication::matrix::MatrixSession,
-    encryption::CrossSigningStatus,
     media::{MediaFormat, MediaRequestParameters},
-    room::edit::EditedContent,
     room::reply::{EnforceThread, Reply as AttachmentReply},
     ruma::{
         api::client::{
-            room::{
-                create_room::{self, v3::RoomPreset},
-                Visibility,
-            },
-            state::get_state_event_for_key,
+            room::{create_room, Visibility},
             uiaa,
         },
         events::{
-            poll::unstable_response::UnstablePollResponseEventContent,
             relation::{Reply, Thread},
             room::{
-                member::MembershipState,
                 message::{
                     AddMentions, MessageFormat, MessageType, Relation, RelationWithoutReplacement,
-                    ReplacementMetadata, ReplyWithinThread, RoomMessageEventContent,
-                    RoomMessageEventContentWithoutRelation,
+                    ReplyWithinThread, RoomMessageEventContent,
                 },
-                power_levels::UserPowerLevel,
                 ImageInfo, MediaSource,
             },
             sticker::StickerEventContent,
-            AnyInitialStateEvent, AnyMessageLikeEventContent, AnySyncMessageLikeEvent,
-            AnySyncTimelineEvent, Mentions, StateEventType,
+            AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncTimelineEvent, Mentions,
+            StateEventType,
         },
-        serde::Raw,
         EventId, Int, MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId,
-        OwnedServerName, OwnedTransactionId, OwnedUserId, RoomVersionId, UInt,
+        OwnedServerName, OwnedTransactionId, OwnedUserId, UInt,
     },
-    Client, Room, RoomMemberships, SessionMeta, SessionTokens,
+    Client, Room, SessionMeta, SessionTokens,
 };
 use mime::Mime;
 use serde::{Deserialize, Serialize};
+use synara_core::platform::{
+    PlatformCrossSigningOwnIdentity, PlatformCrossSigningPrivateState, PlatformCrossSigningStatus,
+    PlatformCryptoCrossSigningState, PlatformCryptoStatus, PlatformMediaConfig,
+    PlatformMediaConfigError, PlatformSecretStorageAction, PlatformSecretStorageMissingSecrets,
+    PlatformSecretStorageState, PlatformSecretStorageStatus, PlatformSecretStorageStatusError,
+};
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
 use zeroize::Zeroize;
 
 use super::{
-    complete_password_reset, discover_login_flows, login_with_password, normalize_homeserver_url,
-    password_reset_ephemeral_user_id, probe_register_flows, register_ephemeral_user_id,
-    register_submit, request_password_email_token, request_register_email_token, AuthError,
-    HttpLoginFlowTransport, LoginFlow, LoginOptions, PasswordEmailTokenResult,
-    PasswordResetOutcome, RegisterAuthStage, RegisterFlowsProbe, RegisterSubmitOutcome,
-    RegisterUiaFlow,
+    complete_password_reset, login_with_password, normalize_homeserver_url,
+    password_reset_ephemeral_user_id, register_ephemeral_user_id, register_submit,
+    request_password_email_token, request_register_email_token, AuthError, LoginFlow, LoginOptions,
+    PasswordEmailTokenResult, PasswordResetOutcome, RegisterAuthStage, RegisterFlowsProbe,
+    RegisterSubmitOutcome, RegisterUiaFlow,
 };
 use crate::matrix::account_data::{
     add_room_to_mdirect, clear_completed_later_live, complete_later_item_live,
@@ -80,17 +73,8 @@ use crate::matrix::backup::live::{
 use crate::matrix::client_builder::{
     build_unauthenticated_client, ClientBuildConfig, ClientBuilderError,
 };
-use crate::matrix::cross_signing::live::{
-    project_status, supported_authentication, NativeCrossSigningSetupOutcome,
-    NativeCrossSigningSetupResult, NativeCrossSigningStatus, SupportedBootstrapAuthentication,
-};
-use crate::matrix::devices::{
-    live::{snapshot as live_device_snapshot, supported_delete_authentication},
-    NativeDeviceDeleteChallenge, NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot,
-    PendingDeviceDeletion,
-};
-use crate::matrix::dto::{Membership as ProductMembership, RoomMember as ProductRoomMember};
-use crate::matrix::ipc::MAX_WIRE_COUNTER;
+use crate::matrix::cross_signing::live::{NativeCrossSigningSetupResult, NativeCrossSigningStatus};
+use crate::matrix::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot};
 use crate::matrix::lifecycle::{
     clear_session_material, persist_session_after_login, restore_session_from_vault,
     restore_session_onto_client, KeyringSessionMaterialVault, SessionMaterial,
@@ -104,22 +88,21 @@ use crate::matrix::room_keys::{
     RoomKeyTransferFlow,
 };
 use crate::matrix::room_list::{
-    snapshot_from_sync_owner, snapshot_invites, InviteAvatarHandles, NativeInvite,
-    NativeInviteSnapshot, NativeRoomListSnapshot,
+    snapshot_invites, InviteAvatarHandles, NativeInvite, NativeInviteSnapshot,
+    NativeRoomListSnapshot,
 };
 use crate::matrix::room_profile::NativeRoomJoinRuleOwner;
 use crate::matrix::secret_storage::live::{
-    self as live_secret_storage, NativeSecretStorageOperationResult, NativeSecretStorageStatus,
+    self as live_secret_storage, NativeMissingSecret, NativeSecretStorageAction,
+    NativeSecretStorageOperationResult, NativeSecretStorageState, NativeSecretStorageStatus,
 };
 use crate::matrix::send::{
     normalize_poll, poll_response_content, poll_start_content, AttachmentEnqueue, AttachmentKind,
     AttachmentSendQueue, SendQueue,
 };
 use crate::matrix::spaces::{
-    remove_space_child, reparent_restricted_join_allow, set_space_child, snapshot_space_children,
-    snapshot_space_hierarchy, snapshot_space_parents, NativeRestrictedJoinReparentResult,
-    NativeSpaceChildMutationResult, NativeSpaceChildrenSnapshot, NativeSpaceHierarchySnapshot,
-    NativeSpaceParentsSnapshot,
+    NativeRestrictedJoinReparentResult, NativeSpaceChildMutationResult,
+    NativeSpaceChildrenSnapshot, NativeSpaceHierarchySnapshot, NativeSpaceParentsSnapshot,
 };
 use crate::matrix::store::{
     get_or_migrate_store_key, migrate_store_to_current, reset_store_for_recovery, AccountIdentity,
@@ -130,16 +113,15 @@ use crate::matrix::sync::{
     SyncServiceOwner,
 };
 use crate::matrix::timeline::{
-    format_forwarded_media_body, format_forwarded_plain_body, reply_draft_readback,
-    should_attach_formatted_body, ComposerDraftRegistry, NativeComposerReplyDraft,
+    format_forwarded_media_body, format_forwarded_plain_body, should_attach_formatted_body,
     NativeComposerReplyDraftReadback, NativeComposerReplyDraftRoomRequest,
     NativeComposerSetReplyDraftRequest, NativeReactionMutationResult, NativeTimelineActionKind,
     NativeTimelineActionReadback, NativeTimelineCallDeclineRequest, NativeTimelineCloseRequest,
     NativeTimelineDirection, NativeTimelineEditTextRequest, NativeTimelineEventReadback,
     NativeTimelineForwardMediaRequest, NativeTimelineForwardTextRequest,
     NativeTimelineJumpLatestRequest, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
-    NativeTimelinePinRequest, NativeTimelinePollVoteRequest, NativeTimelineReadStateReadback,
-    NativeTimelineReadStateRequest, NativeTimelineRedactRequest, NativeTimelineRegistry,
+    NativeTimelineOwner, NativeTimelinePinRequest, NativeTimelinePollVoteRequest,
+    NativeTimelineReadStateReadback, NativeTimelineReadStateRequest, NativeTimelineRedactRequest,
     NativeTimelineReportRequest, NativeTimelineSnapshot, NativeTimelineViewPaginationRequest,
     TimelineMediaSource, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
 };
@@ -159,7 +141,7 @@ pub struct MatrixLoginIdentity {
     pub homeserver_url: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum MatrixSessionSnapshot {
     LoggedOut,
@@ -194,171 +176,27 @@ pub struct MatrixCryptoStatus {
 pub struct MatrixAuthCommandError {
     pub code: &'static str,
     pub message: &'static str,
-    pub diagnostic_id: &'static str,
+    pub diagnostic_id: String,
 }
 
-/// V-ROOMS.R-MEMBERS-READ — live native room-member projection.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NativeRoomMembersSnapshot {
-    pub session_generation: u64,
-    pub room_id: String,
-    pub members: Vec<ProductRoomMember>,
-}
+pub use synara_core::app::media::{
+    MatrixMediaConfigResult, MatrixMediaDownloadRequest, MatrixMediaDownloadResult,
+    MatrixUploadMediaResult,
+};
+pub use synara_core::app::members::NativeRoomMembersSnapshot;
+pub use synara_core::app::send::{
+    MatrixPollRespondResult, MatrixSendAttachmentResult, MatrixSendPollResult,
+    MatrixSendStickerResult, MatrixSendTextResult,
+};
+pub use synara_core::app::user_profile::MatrixProfileWriteResult;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixSendTextResult {
-    pub room_id: String,
-    pub event_id: String,
-    pub local_txn_id: String,
-    pub status: &'static str,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixSendAttachmentResult {
-    pub room_id: String,
-    pub event_id: String,
-    pub local_txn_id: String,
-    pub status: &'static str,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixSendStickerResult {
-    pub room_id: String,
-    pub event_id: String,
-    pub status: &'static str,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixSendPollResult {
-    pub room_id: String,
-    pub event_id: String,
-    pub status: &'static str,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixPollRespondResult {
-    pub room_id: String,
-    pub poll_event_id: String,
-    pub event_id: String,
-    pub status: &'static str,
-}
-
-/// V-SEND.R-AVATAR-UPLOAD — result of a native user-profile write
-/// (display name or avatar URL). `status` is always `"ok"` on success.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixProfileWriteResult {
-    pub status: &'static str,
-}
-
-/// V-SEND.R-AVATAR-UPLOAD — result of a native media upload for a user
-/// avatar. Returns the homeserver `mxc://` URI; no file bytes cross back.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixUploadMediaResult {
-    pub mxc: String,
-}
-
-/// V-SEND.R-MEDIA — the exact media-config result shape (`m.upload.size`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct MatrixMediaConfigResult {
-    #[serde(rename = "m.upload.size")]
-    pub upload_size: u64,
-}
-
-/// V-SEND.R-MEDIA — original-file bytes returned by the native media owner.
-/// This DTO is intentionally not part of a versioned Matrix envelope.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct MatrixMediaDownloadResult {
-    pub bytes: Vec<u8>,
-}
-
-/// V-SEND.R-MEDIA — camelCase request used by the native media owner.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct MatrixMediaDownloadRequest {
-    pub content_uri: String,
-}
-
-/// V-ROOMS.R-POWERS-BULK — acknowledged complete state replacement.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NativePowerLevelWriteResult {
-    pub status: &'static str,
-    pub room_id: String,
-    pub event_type: &'static str,
-    pub state_key: &'static str,
-    pub session_generation: u64,
-    pub content: serde_json::Value,
-}
-
-/// JSON-friendly create-room request owned by the desktop Matrix SDK route.
-/// `parent_room_id` is used for restricted join rules; the post-create space
-/// child edge remains an explicit `matrix_space_child_set` operation in TS.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct MatrixRoomCreateRequest {
-    pub name: Option<String>,
-    pub topic: Option<String>,
-    pub room_version: Option<String>,
-    pub room_alias_name: Option<String>,
-    #[serde(default)]
-    pub is_direct: bool,
-    #[serde(default)]
-    pub invite: Vec<String>,
-    pub visibility: Option<MatrixRoomCreateVisibility>,
-    pub preset: Option<MatrixRoomCreatePreset>,
-    pub creation_content: Option<MatrixRoomCreateContent>,
-    #[serde(default)]
-    pub encryption: bool,
-    pub join_rule: Option<String>,
-    #[serde(default)]
-    pub knock: bool,
-    pub parent_room_id: Option<String>,
-    pub power_level_content_override: Option<MatrixRoomCreatePowerLevels>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MatrixRoomCreateVisibility {
-    Private,
-    Public,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MatrixRoomCreatePreset {
-    #[serde(rename = "private_chat")]
-    Private,
-    #[serde(rename = "public_chat")]
-    Public,
-    #[serde(rename = "trusted_private_chat")]
-    TrustedPrivate,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct MatrixRoomCreateContent {
-    #[serde(rename = "type")]
-    pub room_type: Option<String>,
-    #[serde(rename = "m.federate", alias = "federate")]
-    pub federate: Option<bool>,
-    pub additional_creators: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct MatrixRoomCreatePowerLevels {
-    pub events_default: Option<i64>,
-    #[serde(default)]
-    pub events: BTreeMap<String, i64>,
-}
+pub use synara_core::app::members::{
+    NativePowerLevelWriteResult, MAX_POWER_LEVEL_CONTENT_JSON_BYTES,
+};
+pub use synara_core::app::room_ops::{
+    MatrixRoomCreateContent, MatrixRoomCreatePowerLevels, MatrixRoomCreatePreset,
+    MatrixRoomCreateRequest, MatrixRoomCreateVisibility,
+};
 
 /// Soft IPC/body cap for one-shot composer attachment transfer (bytes).
 const MAX_ATTACHMENT_IPC_BYTES: usize = 32 * 1024 * 1024;
@@ -374,22 +212,16 @@ const MAX_CALL_WIDGET_MEDIA_DOWNLOAD_BYTES: usize = MAX_ATTACHMENT_IPC_BYTES;
 /// bounded (well under the 32 MiB attachment cap).
 const MAX_AVATAR_IPC_BYTES: usize = 8 * 1024 * 1024;
 
-/// Power-level state is a JSON state event, so it uses the normal bounded
-/// Matrix IPC payload policy rather than an unbounded serde_json value.
-const MAX_POWER_LEVEL_CONTENT_JSON_BYTES: usize =
-    crate::matrix::ipc::MAX_ENVELOPE_PAYLOAD_JSON_BYTES;
-const MAX_POWER_LEVEL_TEXT_BYTES: usize = 4 * 1024;
-
 impl MatrixAuthCommandError {
     pub(crate) fn new(
         code: &'static str,
         message: &'static str,
-        diagnostic_id: &'static str,
+        diagnostic_id: impl Into<String>,
     ) -> Self {
         Self {
             code,
             message,
-            diagnostic_id,
+            diagnostic_id: diagnostic_id.into(),
         }
     }
 
@@ -413,21 +245,17 @@ impl MatrixAuthCommandError {
 struct ManagedMatrixSession {
     client: Client,
     identity: MatrixLoginIdentity,
-    sync: SyncServiceOwner,
-    invite_avatars: InviteAvatarHandles,
-    timelines: NativeTimelineRegistry,
-    composer_drafts: ComposerDraftRegistry,
+    sync: Arc<SyncServiceOwner>,
+    invite_avatars: Arc<tokio::sync::Mutex<InviteAvatarHandles>>,
+    timelines: Arc<NativeTimelineOwner>,
     sends: SendQueue,
     attachments: AttachmentSendQueue,
-    verification: NativeVerificationOwner,
-    _devices: NativeDeviceOwner,
-    _image_packs: NativeImagePackOwner,
-    typing: NativeTypingOwner,
-    presence: NativePresenceOwner,
-    join_rules: NativeRoomJoinRuleOwner,
-    pending_device_deletion: Option<PendingDeviceDeletion>,
-    next_device_delete_operation_id: u64,
-    pending_cross_signing_auth_session: Option<String>,
+    verification: Arc<NativeVerificationOwner>,
+    devices: Arc<NativeDeviceOwner>,
+    _image_packs: Arc<NativeImagePackOwner>,
+    typing: Arc<NativeTypingOwner>,
+    presence: Arc<NativePresenceOwner>,
+    join_rules: Arc<NativeRoomJoinRuleOwner>,
     room_key_transfer: Arc<Mutex<RoomKeyTransferFlow>>,
     selected_room_key_import: Option<SelectedRoomKeyImport>,
     next_room_key_import_selection_id: u64,
@@ -459,6 +287,152 @@ pub struct MatrixAuthState {
 impl MatrixAuthState {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Read the current SDK sync owner as the existing safe readiness DTO.
+    ///
+    /// This remains desktop-owned: no client, credential, store handle, or raw
+    /// SDK diagnostic leaves `MatrixAuthState`. The desktop `Platform` adapter
+    /// normalizes this legacy DTO into its string-free Core projection locally.
+    pub(crate) async fn sync_status_snapshot(&self) -> SyncReadinessSnapshot {
+        let session = self.session.lock().await;
+        match session.as_ref() {
+            Some(active) => active.sync.observe(),
+            None => unconfigured_snapshot(self.current_generation()),
+        }
+    }
+
+    /// Read the existing crypto-status observation as a closed Core projection.
+    ///
+    /// This intentionally keeps the auth mutex held while the live SDK crypto
+    /// owner is sampled, matching the pre-Core command behavior. The desktop
+    /// remains the sole Client/crypto/store owner: only a generation, boolean,
+    /// and fixed coarse state leave this method.
+    pub(crate) async fn crypto_status_projection(&self) -> PlatformCryptoStatus {
+        let session = self.session.lock().await;
+        let Some(active) = session.as_ref() else {
+            return PlatformCryptoStatus::new(
+                self.current_generation(),
+                false,
+                PlatformCryptoCrossSigningState::Unavailable,
+            )
+            .expect("unavailable is a valid closed crypto projection");
+        };
+
+        let cross_signing = active.client.encryption().cross_signing_status().await;
+        let (encryption_enabled, cross_signing_state) = match cross_signing.as_ref() {
+            None => (false, PlatformCryptoCrossSigningState::Unavailable),
+            Some(status) => (
+                true,
+                crypto_cross_signing_state(
+                    status.is_complete(),
+                    status.has_master,
+                    status.has_self_signing,
+                    status.has_user_signing,
+                ),
+            ),
+        };
+        PlatformCryptoStatus::new(
+            active.sync.session_generation(),
+            encryption_enabled,
+            cross_signing_state,
+        )
+        .expect("desktop crypto observation must map to a valid closed projection")
+    }
+
+    /// Read the exact legacy cross-signing observation as a closed Core projection.
+    ///
+    /// The auth mutex intentionally remains held from before
+    /// `cross_signing_status` through the existing `request_user_identity`
+    /// await. That preserves the legacy key-query/store side effects and its
+    /// serialization against session replacement. Only the bounded generation
+    /// and closed enums/errors leave this desktop-owned SDK method.
+    pub(crate) async fn cross_signing_status_projection(
+        &self,
+    ) -> Result<PlatformCrossSigningStatus, synara_core::platform::PlatformCrossSigningStatusError>
+    {
+        let session = self.session.lock().await;
+        let active = session
+            .as_ref()
+            .ok_or(synara_core::platform::PlatformCrossSigningStatusError::NoSession)?;
+
+        let encryption = active.client.encryption();
+        let private_status = encryption.cross_signing_status().await;
+        let Some(user_id) = active.client.user_id() else {
+            return Err(synara_core::platform::PlatformCrossSigningStatusError::UserMissing);
+        };
+        let own_identity = encryption
+            .request_user_identity(user_id)
+            .await
+            .map_err(|_| {
+                synara_core::platform::PlatformCrossSigningStatusError::IdentityQueryFailed
+            })?;
+
+        let private_state = match private_status.as_ref() {
+            None => PlatformCrossSigningPrivateState::Unavailable,
+            Some(status) => cross_signing_private_state(
+                status.is_complete(),
+                status.has_master,
+                status.has_self_signing,
+                status.has_user_signing,
+            ),
+        };
+        let own_identity = match own_identity.as_ref() {
+            None => PlatformCrossSigningOwnIdentity::Missing,
+            Some(identity) if identity.is_verified() => PlatformCrossSigningOwnIdentity::Verified,
+            Some(_) => PlatformCrossSigningOwnIdentity::Unverified,
+        };
+        PlatformCrossSigningStatus::new(
+            active.sync.session_generation(),
+            private_state,
+            own_identity,
+        )
+    }
+
+    /// Read secret-storage status through the desktop-owned Matrix session.
+    ///
+    /// This retains the pre-Core status command's auth mutex across every
+    /// existing SDK observation and reduces its legacy DTO locally to fixed
+    /// booleans/enums. No recovery material, key id, account-data value, SDK
+    /// object, or raw diagnostic reaches the Platform/Core seam.
+    pub(crate) async fn secret_storage_status_projection(
+        &self,
+    ) -> Result<PlatformSecretStorageStatus, PlatformSecretStorageStatusError> {
+        let session = self.session.lock().await;
+        let active = session
+            .as_ref()
+            .ok_or(PlatformSecretStorageStatusError::NoSession)?;
+        let status = live_secret_storage::status(&active.client, active.sync.session_generation())
+            .await
+            .map_err(map_secret_storage_status_error)?;
+        platform_secret_storage_status(status)
+    }
+
+    /// Read the upload-size config through the desktop-owned SDK client.
+    ///
+    /// This preserves the pre-Core `matrix_media_config` concurrency contract
+    /// exactly: clone the SDK Client while holding the auth mutex, release that
+    /// mutex, then allow `load_or_fetch_max_upload_size` to use its cache or
+    /// network. `Client` is reference-counted and the old command already did
+    /// this, so logout/session replacement may proceed without invalidating the
+    /// in-flight client/cache load. Core receives only the closed scalar result.
+    pub(crate) async fn media_config_projection(
+        &self,
+    ) -> Result<PlatformMediaConfig, PlatformMediaConfigError> {
+        let client = {
+            let session = self.session.lock().await;
+            let active = session
+                .as_ref()
+                .ok_or(PlatformMediaConfigError::NoSession)?;
+            active.client.clone()
+        };
+        let upload_size = client
+            .load_or_fetch_max_upload_size()
+            .await
+            .map_err(|_| PlatformMediaConfigError::LoadFailed)?;
+        let upload_size = u64::try_from(i64::from(upload_size))
+            .map_err(|_| PlatformMediaConfigError::UnsafeSize)?;
+        PlatformMediaConfig::new(upload_size)
     }
 
     /// A normal login supersedes any abandoned recovery affordance. This only
@@ -542,6 +516,8 @@ impl MatrixAuthState {
         let active = session.as_ref()?;
         let source = active
             .invite_avatars
+            .lock()
+            .await
             .resolve(active.sync.session_generation(), handle)?;
         Some((active.client.clone(), source))
     }
@@ -554,8 +530,108 @@ impl MatrixAuthState {
     ) -> Option<(Client, TimelineMediaSource)> {
         let session = self.session.lock().await;
         let active = session.as_ref()?;
-        let source = active.timelines.resolve_media(handle).await?;
+        let source = active.timelines.lock().await.resolve_media(handle).await?;
         Some((active.client.clone(), source))
+    }
+}
+
+/// Reduce the existing desktop-only secret-storage DTO before it reaches Core.
+///
+/// `NativeSecretStorageStatus` can contain a dynamic public list locally; this
+/// conversion collapses its four known labels into fixed bits before returning.
+fn platform_secret_storage_status(
+    status: NativeSecretStorageStatus,
+) -> Result<PlatformSecretStorageStatus, PlatformSecretStorageStatusError> {
+    let state = match status.state {
+        NativeSecretStorageState::Unavailable => PlatformSecretStorageState::Unavailable,
+        NativeSecretStorageState::NotSetUp => PlatformSecretStorageState::NotSetUp,
+        NativeSecretStorageState::Locked => PlatformSecretStorageState::Locked,
+        NativeSecretStorageState::Ready => PlatformSecretStorageState::Ready,
+    };
+    let action = match status.action {
+        NativeSecretStorageAction::BootstrapRequired => {
+            PlatformSecretStorageAction::BootstrapRequired
+        }
+        NativeSecretStorageAction::UnlockRequired => PlatformSecretStorageAction::UnlockRequired,
+        NativeSecretStorageAction::None => PlatformSecretStorageAction::None,
+    };
+    let missing_secrets = PlatformSecretStorageMissingSecrets::new(
+        status
+            .missing_secrets
+            .contains(&NativeMissingSecret::CrossSigningMaster),
+        status
+            .missing_secrets
+            .contains(&NativeMissingSecret::CrossSigningSelfSigning),
+        status
+            .missing_secrets
+            .contains(&NativeMissingSecret::CrossSigningUserSigning),
+        status
+            .missing_secrets
+            .contains(&NativeMissingSecret::EncryptionBackup),
+    );
+    PlatformSecretStorageStatus::new(
+        status.session_generation,
+        state,
+        status.exists,
+        status.unlocked,
+        status.default_key_set,
+        status.passphrase_configured,
+        status.bootstrap_ready,
+        missing_secrets,
+        action,
+    )
+}
+
+/// Map only the three exact legacy status failures to closed Platform errors.
+/// Any unexpected local result fails closed without moving a diagnostic string.
+fn map_secret_storage_status_error(
+    error: MatrixAuthCommandError,
+) -> PlatformSecretStorageStatusError {
+    match error.diagnostic_id.as_str() {
+        "v-crypto.4-status-default-key-failed" => {
+            PlatformSecretStorageStatusError::DefaultKeyLoadFailed
+        }
+        "v-crypto.4-status-key-info-failed" => PlatformSecretStorageStatusError::KeyInfoLoadFailed,
+        "v-crypto.4-status-secret-check-failed" => {
+            PlatformSecretStorageStatusError::SecretCheckFailed
+        }
+        _ => PlatformSecretStorageStatusError::InvalidSnapshot,
+    }
+}
+
+/// Reduce the current desktop SDK observation to only the existing coarse
+/// cross-signing vocabulary. The inputs are booleans so no SDK type can cross
+/// the Platform/Core seam.
+fn crypto_cross_signing_state(
+    is_complete: bool,
+    has_master: bool,
+    has_self_signing: bool,
+    has_user_signing: bool,
+) -> PlatformCryptoCrossSigningState {
+    if is_complete {
+        PlatformCryptoCrossSigningState::Ready
+    } else if has_master || has_self_signing || has_user_signing {
+        PlatformCryptoCrossSigningState::Partial
+    } else {
+        PlatformCryptoCrossSigningState::NotSetUp
+    }
+}
+
+/// Reduce the desktop SDK's private cross-signing result locally, before the
+/// closed projection enters the Platform/Core seam. This keeps all SDK status
+/// types and key details in the desktop process.
+fn cross_signing_private_state(
+    is_complete: bool,
+    has_master: bool,
+    has_self_signing: bool,
+    has_user_signing: bool,
+) -> PlatformCrossSigningPrivateState {
+    if is_complete {
+        PlatformCrossSigningPrivateState::Complete
+    } else if has_master || has_self_signing || has_user_signing {
+        PlatformCrossSigningPrivateState::Partial
+    } else {
+        PlatformCrossSigningPrivateState::Missing
     }
 }
 

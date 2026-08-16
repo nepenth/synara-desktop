@@ -2,6 +2,8 @@ experiment
 dist
 node_modules
 artifacts/
+# Cargo workspace build output at repo root (src-tauri has its own /target/).
+target/
 devAssets/*
 !devAssets/
 !devAssets/index.html

@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, "release/**"]
   pull_request:
-    branches: [main, "feature/matrix-rust-sdk-full-replacement", "release/**"]
+    branches: [main, "feature/matrix-rust-sdk-full-replacement", "feature/shared-native-core", "release/**"]
   workflow_dispatch:
 
 concurrency:
@@ -24,6 +24,8 @@ jobs:
     outputs:
       validate: ${{ steps.scope.outputs.validate }}
       validate_rust: ${{ steps.scope.outputs.validate_rust }}
+      validate_rust_tests: ${{ steps.scope.outputs.validate_rust_tests }}
+      rust_audit: ${{ steps.scope.outputs.rust_audit }}
       validate_frontend: ${{ steps.scope.outputs.validate_frontend }}
       ios: ${{ steps.scope.outputs.ios }}
       synapse_native_reactions: ${{ steps.scope.outputs.synapse_native_reactions }}
@@ -52,6 +54,8 @@ jobs:
           if [[ "${GITHUB_EVENT_NAME}" != "pull_request" ]]; then
             echo "validate=true" >> "$GITHUB_OUTPUT"
             echo "validate_rust=true" >> "$GITHUB_OUTPUT"
+            echo "validate_rust_tests=true" >> "$GITHUB_OUTPUT"
+            echo "rust_audit=true" >> "$GITHUB_OUTPUT"
             echo "validate_frontend=true" >> "$GITHUB_OUTPUT"
             echo "ios=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_reactions=true" >> "$GITHUB_OUTPUT"
@@ -59,6 +63,7 @@ jobs:
             echo "synapse_native_polls=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_rich_messages=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_threads=true" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_receipts=true" >> "$GITHUB_OUTPUT"
             echo "CI scope: full (event=${GITHUB_EVENT_NAME})"
             exit 0
           fi
@@ -66,6 +71,8 @@ jobs:
           if [[ -z "${BASE_SHA:-}" || -z "${HEAD_SHA:-}" ]]; then
             echo "validate=true" >> "$GITHUB_OUTPUT"
             echo "validate_rust=true" >> "$GITHUB_OUTPUT"
+            echo "validate_rust_tests=true" >> "$GITHUB_OUTPUT"
+            echo "rust_audit=true" >> "$GITHUB_OUTPUT"
             echo "validate_frontend=true" >> "$GITHUB_OUTPUT"
             echo "ios=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_reactions=true" >> "$GITHUB_OUTPUT"
@@ -73,6 +80,7 @@ jobs:
             echo "synapse_native_polls=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_rich_messages=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_threads=true" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_receipts=true" >> "$GITHUB_OUTPUT"
             echo "CI scope: full (missing PR SHAs)"
             exit 0
           fi
@@ -85,6 +93,7 @@ jobs:
             package.json \
             package-lock.json \
             scripts \
+            crates \
             src-tauri \
             synara; then
             echo "validate=false" >> "$GITHUB_OUTPUT"
@@ -99,6 +108,7 @@ jobs:
           if [[ "$VALIDATE" == "true" ]]; then
             if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
               .github/workflows/ci.yml \
+              crates \
               src-tauri \
               rust-toolchain.toml; then
               echo "validate_rust=false" >> "$GITHUB_OUTPUT"
@@ -136,11 +146,64 @@ jobs:
             VALIDATE_FRONTEND=false
           fi
 
-          # iOS simulator suite — only when iOS tree or shared CI build entrypoints change.
+          # cargo test is the long desktop job. On PRs targeting the shared-core
+          # development branch, mechanical app-harness moves are covered by
+          # `clippy --all-targets` (that compiles tests). Skip cargo test unless
+          # a live Synapse proof or send/timeline product command changed.
+          # Full cargo test still runs on push to main/release and dispatch.
+          if [[ "$VALIDATE_RUST" != "true" ]]; then
+            echo "validate_rust_tests=false" >> "$GITHUB_OUTPUT"
+            VALIDATE_RUST_TESTS=false
+          elif [[ "${GITHUB_BASE_REF:-}" == "feature/shared-native-core" ]] && git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            src-tauri/src/matrix/send/product_commands.rs \
+            src-tauri/src/matrix/send/live_synapse_proof \
+            src-tauri/src/matrix/timeline/live.rs \
+            src-tauri/src/matrix/timeline/live_synapse_proof \
+            src-tauri/src/matrix/timeline/product_commands.rs; then
+            echo "validate_rust_tests=false" >> "$GITHUB_OUTPUT"
+            VALIDATE_RUST_TESTS=false
+          else
+            echo "validate_rust_tests=true" >> "$GITHUB_OUTPUT"
+            VALIDATE_RUST_TESTS=true
+          fi
+
+          # cargo-audit only when lockfiles or the audit allowlist can change.
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
             .github/workflows/ci.yml \
-            synara-ios \
-            synara-ios/scripts/ci-build.sh; then
+            Cargo.lock \
+            Cargo.toml \
+            src-tauri/Cargo.lock \
+            src-tauri/Cargo.toml \
+            crates/synara-core/Cargo.toml \
+            .cargo/audit.toml; then
+            echo "rust_audit=false" >> "$GITHUB_OUTPUT"
+            RUST_AUDIT=false
+          else
+            echo "rust_audit=true" >> "$GITHUB_OUTPUT"
+            RUST_AUDIT=true
+          fi
+
+          # iOS simulator suite — only when the UniFFI / Swift / iOS shell
+          # surface can change. Mechanical P1 moves under
+          # crates/synara-core/src/app/ are covered by validate-rust; they do
+          # not regenerate bindings. Full iOS still runs on push to main/release
+          # and on workflow_dispatch.
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            rust-toolchain.toml \
+            Cargo.toml \
+            Cargo.lock \
+            crates/synara-core/Cargo.toml \
+            crates/synara-core/build.rs \
+            crates/synara-core/src/lib.rs \
+            crates/synara-core/src/synara_core.udl \
+            crates/synara-core/src/ffi.rs \
+            crates/synara-core/src/session_projection_ffi.rs \
+            crates/synara-core/src/shared_core_ffi.rs \
+            crates/synara-core-bindgen \
+            .github/workflows/ci.yml \
+            scripts/generate-synara-core-swift.sh \
+            scripts/check-synara-core-swift-scaffold.mjs \
+            synara-ios; then
             echo "ios=false" >> "$GITHUB_OUTPUT"
             IOS=false
           else
@@ -169,7 +232,9 @@ jobs:
             integration/synapse \
             src-tauri/Cargo.toml \
             src-tauri/Cargo.lock \
-            src-tauri/src/matrix/timeline; then
+            src-tauri/src/matrix/timeline/live.rs \
+            src-tauri/src/matrix/timeline/live_synapse_proof \
+            src-tauri/src/matrix/timeline/product_commands.rs; then
             echo "synapse_native_reactions=false" >> "$GITHUB_OUTPUT"
             SYNAPSE_NATIVE_REACTIONS=false
           else
@@ -184,7 +249,8 @@ jobs:
             integration/synapse \
             src-tauri/Cargo.toml \
             src-tauri/Cargo.lock \
-            src-tauri/src/matrix/send \
+            src-tauri/src/matrix/send/product_commands.rs \
+            src-tauri/src/matrix/send/live_synapse_proof \
             src-tauri/src/matrix/auth/product.rs; then
             echo "synapse_native_attachments=false" >> "$GITHUB_OUTPUT"
             SYNAPSE_NATIVE_ATTACHMENTS=false
@@ -200,7 +266,8 @@ jobs:
             integration/synapse \
             src-tauri/Cargo.toml \
             src-tauri/Cargo.lock \
-            src-tauri/src/matrix/send \
+            src-tauri/src/matrix/send/product_commands.rs \
+            src-tauri/src/matrix/send/live_synapse_proof \
             src-tauri/src/matrix/auth/product.rs; then
             echo "synapse_native_polls=false" >> "$GITHUB_OUTPUT"
             SYNAPSE_NATIVE_POLLS=false
@@ -258,7 +325,7 @@ jobs:
             SYNAPSE_NATIVE_RECEIPTS=true
           fi
 
-          echo "CI scope: validate=${VALIDATE} rust=${VALIDATE_RUST:-n/a} frontend=${VALIDATE_FRONTEND:-n/a} ios=${IOS} synapse=${SYNAPSE} synapse_native_reactions=${SYNAPSE_NATIVE_REACTIONS} synapse_native_attachments=${SYNAPSE_NATIVE_ATTACHMENTS} synapse_native_polls=${SYNAPSE_NATIVE_POLLS} synapse_native_rich_messages=${SYNAPSE_NATIVE_RICH_MESSAGES} synapse_native_threads=${SYNAPSE_NATIVE_THREADS} synapse_native_receipts=${SYNAPSE_NATIVE_RECEIPTS}"
+          echo "CI scope: validate=${VALIDATE} rust=${VALIDATE_RUST:-n/a} rust_tests=${VALIDATE_RUST_TESTS:-n/a} rust_audit=${RUST_AUDIT:-n/a} frontend=${VALIDATE_FRONTEND:-n/a} ios=${IOS} synapse=${SYNAPSE} synapse_native_reactions=${SYNAPSE_NATIVE_REACTIONS} synapse_native_attachments=${SYNAPSE_NATIVE_ATTACHMENTS} synapse_native_polls=${SYNAPSE_NATIVE_POLLS} synapse_native_rich_messages=${SYNAPSE_NATIVE_RICH_MESSAGES} synapse_native_threads=${SYNAPSE_NATIVE_THREADS} synapse_native_receipts=${SYNAPSE_NATIVE_RECEIPTS}"
           git diff --name-only "$BASE_SHA" "$HEAD_SHA" | head -80 || true
 
   validate-rust:
@@ -308,6 +375,7 @@ jobs:
         working-directory: src-tauri
 
       - name: Test Rust desktop shell
+        if: needs.changes.outputs.validate_rust_tests == 'true'
         run: cargo test --locked
         working-directory: src-tauri
 
@@ -319,7 +387,7 @@ jobs:
   rust-dependency-audit:
     name: Rust dependency audit (cargo-audit)
     needs: [changes]
-    if: needs.changes.outputs.validate_rust == 'true'
+    if: needs.changes.outputs.rust_audit == 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     steps:
@@ -431,13 +499,24 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.ios == 'true'
     runs-on: macos-26
-    timeout-minutes: 45
+    # Bounded cap allows post-test output/upload.
+    # 90m: S3b + UniFFI merge-ups exceed the 60m GitHub default (cancelled at ~61m).
+    timeout-minutes: 90
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Install Rust 1.93 and Apple targets
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+        with:
+          toolchain: 1.93
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,aarch64-apple-darwin
+
       - name: Install XcodeGen
         run: brew install xcodegen
+
+      - name: Check SynaraCore Swift scaffold
+        run: node scripts/check-synara-core-swift-scaffold.mjs
 
       - name: Build and run unsigned simulator tests
         run: scripts/ci-build.sh

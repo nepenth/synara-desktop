@@ -38,7 +38,7 @@ test("rejects missing least-privilege permissions and timeouts", () => {
   assert.match(noPermissions.errors.join("\n"), /contents: read/);
 
   const noTimeout = inspect("ios-skeleton.yml", (workflow) =>
-    workflow.replace("    timeout-minutes: 45\n", "")
+    workflow.replace("    timeout-minutes: 60\n", "")
   );
   assert.match(noTimeout.errors.join("\n"), /must have a 1-120 minute timeout/);
 });

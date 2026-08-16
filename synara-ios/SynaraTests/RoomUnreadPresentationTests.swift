@@ -1,26 +1,40 @@
 import XCTest
+import SynaraCore
 @testable import Synara
 
 final class RoomUnreadPresentationTests: XCTestCase {
-    func testInvitedRoomsAlwaysShowUnreadAndHighlight() {
-        let unread = RoomUnreadPresentation.make(membership: .invited)
+    func testAdapterInvitedRoomsAlwaysShowUnreadAndHighlight() {
+        let unread = RoomUnreadPresentation.make(
+            membership: .invited,
+            numUnreadMessages: .max,
+            numUnreadNotifications: .max,
+            numUnreadMentions: .max,
+            isMarkedUnread: true
+        )
 
         XCTAssertEqual(unread.unreadCount, 1)
         XCTAssertTrue(unread.hasHighlight)
     }
 
-    func testUnreadCountUsesCanonicalSDKCounters() {
-        let unread = RoomUnreadPresentation.make(
+    func testAdapterUnreadCountUsesTheLargerCanonicalSDKCounter() {
+        let notificationCount = RoomUnreadPresentation.make(
             membership: .joined,
             numUnreadMessages: 4,
             numUnreadNotifications: 6
         )
+        let messageCount = RoomUnreadPresentation.make(
+            membership: .joined,
+            numUnreadMessages: 7,
+            numUnreadNotifications: 3
+        )
 
-        XCTAssertEqual(unread.unreadCount, 6)
-        XCTAssertFalse(unread.hasHighlight)
+        XCTAssertEqual(notificationCount.unreadCount, 6)
+        XCTAssertEqual(messageCount.unreadCount, 7)
+        XCTAssertFalse(notificationCount.hasHighlight)
+        XCTAssertFalse(messageCount.hasHighlight)
     }
 
-    func testMarkedUnreadShowsAtLeastOneBadgeWhenCountsAreZero() {
+    func testAdapterMarkedUnreadShowsAtLeastOneBadgeWhenCountsAreZero() {
         let unread = RoomUnreadPresentation.make(
             membership: .joined,
             isMarkedUnread: true
@@ -30,12 +44,26 @@ final class RoomUnreadPresentationTests: XCTestCase {
         XCTAssertFalse(unread.hasHighlight)
     }
 
-    func testCanonicalMentionCountSetsHighlightState() {
+    func testAdapterCanonicalMentionCountSetsHighlightState() {
         let mentionUnread = RoomUnreadPresentation.make(
             membership: .joined,
             numUnreadMentions: 1
         )
 
+        XCTAssertEqual(mentionUnread.unreadCount, 0)
         XCTAssertTrue(mentionUnread.hasHighlight)
+    }
+
+    func testGeneratedCoreBindingExecutesAndPreservesFullWidthJoinedCount() {
+        let presentation = SynaraCore.roomUnreadPresentation(
+            membership: .joined,
+            numUnreadMessages: .max,
+            numUnreadNotifications: 1,
+            numUnreadMentions: 0,
+            isMarkedUnread: false
+        )
+
+        XCTAssertEqual(presentation.unreadCount, .max)
+        XCTAssertFalse(presentation.hasHighlight)
     }
 }

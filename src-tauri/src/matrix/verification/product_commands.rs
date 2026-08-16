@@ -2,79 +2,65 @@ use super::*;
 
 #[tauri::command]
 pub async fn matrix_verification_list(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeVerificationInbox, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_verification_session(session.as_ref())?;
-    Ok(active.verification.list().await)
+    crate::bridge::verification_list::verification_list(core.inner().as_ref()).await
 }
 
 #[tauri::command]
 pub async fn matrix_verification_start(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     device_id: Option<String>,
 ) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_verification_session(session.as_ref())?;
-    active.verification.start(&active.client, device_id).await
+    crate::bridge::verification_start::verification_start(core.inner().as_ref(), device_id).await
 }
 
 #[tauri::command]
 pub async fn matrix_verification_accept(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     flow_id: String,
 ) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_verification_session(session.as_ref())?;
-    active.verification.accept(&flow_id).await
+    crate::bridge::verification_accept::verification_accept(core.inner().as_ref(), flow_id).await
 }
 
 #[tauri::command]
 pub async fn matrix_verification_begin_sas(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     flow_id: String,
 ) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_verification_session(session.as_ref())?;
-    active.verification.begin_sas(&flow_id).await
+    crate::bridge::verification_begin_sas::verification_begin_sas(core.inner().as_ref(), flow_id)
+        .await
 }
 
 #[tauri::command]
 pub async fn matrix_verification_confirm(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     flow_id: String,
 ) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_verification_session(session.as_ref())?;
-    active.verification.confirm(&flow_id).await
+    crate::bridge::verification_confirm::verification_confirm(core.inner().as_ref(), flow_id).await
 }
 
 #[tauri::command]
 pub async fn matrix_verification_mismatch(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     flow_id: String,
 ) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_verification_session(session.as_ref())?;
-    active.verification.mismatch(&flow_id).await
+    crate::bridge::verification_mismatch::verification_mismatch(core.inner().as_ref(), flow_id)
+        .await
 }
 
 #[tauri::command]
 pub async fn matrix_verification_cancel(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     flow_id: String,
 ) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_verification_session(session.as_ref())?;
-    active.verification.cancel(&flow_id).await
+    crate::bridge::verification_cancel::verification_cancel(core.inner().as_ref(), flow_id).await
 }
 
 #[tauri::command]
 pub async fn matrix_verification_dismiss(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     flow_id: String,
 ) -> Result<(), MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_verification_session(session.as_ref())?;
-    active.verification.dismiss(&flow_id).await
+    crate::bridge::verification_dismiss::verification_dismiss(core.inner().as_ref(), flow_id).await
 }

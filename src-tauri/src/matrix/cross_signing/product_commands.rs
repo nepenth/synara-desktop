@@ -1,78 +1,22 @@
+use std::sync::Arc;
+
 use super::*;
 
+/// SNC-P3.6 — retain the existing payload-free cross-signing status wire DTO
+/// while Core owns command registration, validation, and truth-table output.
+/// The desktop Platform remains the only Matrix SDK/client/crypto/store owner.
 #[tauri::command]
 pub async fn matrix_cross_signing_status(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeCrossSigningStatus, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_cross_signing_session(session.as_ref())?;
-    live_cross_signing_status(active).await
+    crate::bridge::cross_signing_status::cross_signing_status(core.inner().as_ref()).await
 }
 
 #[tauri::command]
 pub async fn matrix_cross_signing_setup(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeCrossSigningSetupResult, MatrixAuthCommandError> {
-    let mut session = state.session.lock().await;
-    let active = require_cross_signing_session_mut(session.as_mut())?;
-    let before = live_cross_signing_status(active).await?;
-    if before.bootstrap != crate::matrix::cross_signing::live::NativeCrossSigningBootstrap::Needed {
-        active.pending_cross_signing_auth_session = None;
-        return Ok(NativeCrossSigningSetupResult {
-            outcome: NativeCrossSigningSetupOutcome::AlreadyConfigured,
-            status: before,
-        });
-    }
-
-    match active
-        .client
-        .encryption()
-        .bootstrap_cross_signing_if_needed(None)
-        .await
-    {
-        Ok(()) => cross_signing_setup_complete(active).await,
-        Err(error) => {
-            let Some(info) = error.as_uiaa_response() else {
-                return Err(cross_signing_setup_error(
-                    "v-crypto.2-cross-signing-bootstrap-failed",
-                ));
-            };
-            match supported_authentication(info) {
-                Some(SupportedBootstrapAuthentication::Dummy) => {
-                    let mut dummy = uiaa::Dummy::new();
-                    dummy.session = info.session.clone();
-                    active
-                        .client
-                        .encryption()
-                        .bootstrap_cross_signing(Some(uiaa::AuthData::Dummy(dummy)))
-                        .await
-                        .map_err(|_| {
-                            cross_signing_setup_error(
-                                "v-crypto.2-cross-signing-dummy-auth-failed",
-                            )
-                        })?;
-                    cross_signing_setup_complete(active).await
-                }
-                Some(SupportedBootstrapAuthentication::Password) => {
-                    let auth_session = info.session.clone().ok_or_else(|| {
-                        cross_signing_setup_error(
-                            "v-crypto.2-cross-signing-auth-session-missing",
-                        )
-                    })?;
-                    active.pending_cross_signing_auth_session = Some(auth_session);
-                    Ok(NativeCrossSigningSetupResult {
-                        outcome: NativeCrossSigningSetupOutcome::AuthenticationRequired,
-                        status: live_cross_signing_status(active).await?,
-                    })
-                }
-                None => Err(MatrixAuthCommandError::new(
-                    "Forbidden",
-                    "The homeserver requires an unsupported authentication step for cross-signing setup.",
-                    "v-crypto.2-cross-signing-auth-unsupported",
-                )),
-            }
-        }
-    }
+    crate::bridge::cross_signing_setup::cross_signing_setup(core.inner().as_ref()).await
 }
 
 #[tauri::command]
@@ -100,15 +44,9 @@ pub(super) async fn matrix_cross_signing_setup_password_inner(
     let mut session = state.session.lock().await;
     let active = require_cross_signing_session_mut(session.as_mut())?;
     let auth_session = active
-        .pending_cross_signing_auth_session
-        .clone()
-        .ok_or_else(|| {
-            MatrixAuthCommandError::new(
-                "InvalidRequest",
-                "Start native cross-signing setup before authenticating it.",
-                "v-crypto.2-cross-signing-auth-not-pending",
-            )
-        })?;
+        .devices
+        .pending_cross_signing_auth()
+        .map_err(map_cross_signing_setup_owner_error)?;
     let user_id = active.client.user_id().ok_or_else(|| {
         MatrixAuthCommandError::new(
             "Forbidden",
@@ -127,7 +65,10 @@ pub(super) async fn matrix_cross_signing_setup_password_inner(
     {
         if let Some(info) = error.as_uiaa_response() {
             if let Some(auth_session) = info.session.clone() {
-                active.pending_cross_signing_auth_session = Some(auth_session);
+                active
+                    .devices
+                    .set_pending_cross_signing(Some(auth_session))
+                    .map_err(map_cross_signing_setup_owner_error)?;
             }
             return Err(MatrixAuthCommandError::new(
                 "Forbidden",
@@ -140,56 +81,29 @@ pub(super) async fn matrix_cross_signing_setup_password_inner(
         ));
     }
 
-    cross_signing_setup_complete(active).await
+    active
+        .devices
+        .finish_cross_signing_setup()
+        .await
+        .map_err(map_cross_signing_setup_owner_error)
 }
 
-pub(super) async fn live_cross_signing_status(
-    active: &ManagedMatrixSession,
-) -> Result<NativeCrossSigningStatus, MatrixAuthCommandError> {
-    let encryption = active.client.encryption();
-    let private_status = encryption.cross_signing_status().await;
-    let Some(user_id) = active.client.user_id() else {
-        return Err(MatrixAuthCommandError::new(
+fn map_cross_signing_setup_owner_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    match diagnostic_id {
+        "v-crypto.2-cross-signing-auth-not-pending" | "v-crypto.2-cross-signing-password-empty" => {
+            MatrixAuthCommandError::new(
+                "InvalidRequest",
+                "Start native cross-signing setup before authenticating it.",
+                diagnostic_id,
+            )
+        }
+        "v-crypto.2-cross-signing-user-missing" => MatrixAuthCommandError::new(
             "Forbidden",
             "No native Matrix session is active.",
-            "v-crypto.2-cross-signing-user-missing",
-        ));
-    };
-    let own_identity = encryption
-        .request_user_identity(user_id)
-        .await
-        .map_err(|_| {
-            MatrixAuthCommandError::new(
-                "Unknown",
-                "Native cross-signing status is unavailable.",
-                "v-crypto.2-cross-signing-identity-query-failed",
-            )
-        })?;
-
-    Ok(project_status(
-        active.sync.session_generation(),
-        private_status.as_ref(),
-        own_identity.is_some(),
-        own_identity
-            .as_ref()
-            .is_some_and(|identity| identity.is_verified()),
-    ))
-}
-
-pub(super) async fn cross_signing_setup_complete(
-    active: &mut ManagedMatrixSession,
-) -> Result<NativeCrossSigningSetupResult, MatrixAuthCommandError> {
-    active.pending_cross_signing_auth_session = None;
-    let status = live_cross_signing_status(active).await?;
-    if status.bootstrap == crate::matrix::cross_signing::live::NativeCrossSigningBootstrap::Needed {
-        return Err(cross_signing_setup_error(
-            "v-crypto.2-cross-signing-bootstrap-incomplete",
-        ));
+            diagnostic_id,
+        ),
+        _ => cross_signing_setup_error(diagnostic_id),
     }
-    Ok(NativeCrossSigningSetupResult {
-        outcome: NativeCrossSigningSetupOutcome::Complete,
-        status,
-    })
 }
 
 pub(super) fn cross_signing_setup_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {

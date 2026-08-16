@@ -1,4 +1,3 @@
-@preconcurrency import MatrixRustSDK
 @testable import Synara
 import XCTest
 
@@ -635,45 +634,6 @@ final class TimelineServiceTests: XCTestCase {
             | code | preserved |
             """
         )
-    }
-
-    func testMatrixRustSDKMapperPreservesFormattedTextMessages() {
-        let content = MsgLikeContent(
-            kind: .message(
-                content: MessageContent(
-                    msgType: .text(
-                        content: TextMessageContent(
-                            body: "- **Ship it**\n- Review fallback",
-                            formatted: FormattedBody(
-                                format: .html,
-                                body: #"<ul><li><strong>Ship it</strong></li><li>Review fallback</li></ul>"#
-                            )
-                        )
-                    ),
-                    body: "- **Ship it**\n- Review fallback",
-                    isEdited: false,
-                    mentions: nil
-                )
-            ),
-            reactions: [],
-            inReplyTo: nil,
-            threadRoot: nil,
-            threadSummary: nil
-        )
-
-        let kind = MatrixRustSDKTimelineMessageMapper.mapMessageLike(
-            content,
-            eventID: "$formatted-text",
-            eventTypeRaw: "m.room.message",
-            isEncrypted: false
-        )
-
-        if case let .formattedText(body, html) = kind {
-            XCTAssertEqual(body, "- **Ship it**\n- Review fallback")
-            XCTAssertEqual(html, #"<ul><li><strong>Ship it</strong></li><li>Review fallback</li></ul>"#)
-        } else {
-            XCTFail("Expected formatted text, got \(kind)")
-        }
     }
 
     func testAgentCardPayloadParserReadsHermesJSONMessageBody() throws {

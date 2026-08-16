@@ -6,27 +6,10 @@ use super::*;
 /// the JS `mx.setDisplayName` must not be used as a fallback.
 #[tauri::command]
 pub async fn matrix_set_own_display_name(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     display_name: String,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    let display_name = parse_display_name(&display_name)?;
-    let client = {
-        let session = state.session.lock().await;
-        let active = require_session(session.as_ref())?;
-        active.client.clone()
-    };
-    client
-        .account()
-        .set_display_name(display_name.as_deref())
-        .await
-        .map_err(|_| {
-            MatrixAuthCommandError::new(
-                "Unknown",
-                "The native Matrix display name could not be updated.",
-                "v-send.r-avatar-display-name-sdk-failed",
-            )
-        })?;
-    Ok(MatrixProfileWriteResult { status: "ok" })
+    crate::bridge::own_profile::set_own_display_name(core.inner().as_ref(), display_name).await
 }
 
 /// V-SEND.R-AVATAR-UPLOAD — sole native owner for the logged-in user's avatar
@@ -36,27 +19,10 @@ pub async fn matrix_set_own_display_name(
 /// the JS `mx.setAvatarUrl` must not be used as a fallback.
 #[tauri::command]
 pub async fn matrix_set_own_avatar(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     mxc: String,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
-    let mxc = parse_avatar_mxc(&mxc)?;
-    let client = {
-        let session = state.session.lock().await;
-        let active = require_session(session.as_ref())?;
-        active.client.clone()
-    };
-    client
-        .account()
-        .set_avatar_url(mxc.as_deref())
-        .await
-        .map_err(|_| {
-            MatrixAuthCommandError::new(
-                "Unknown",
-                "The native Matrix avatar could not be updated.",
-                "v-send.r-avatar-set-sdk-failed",
-            )
-        })?;
-    Ok(MatrixProfileWriteResult { status: "ok" })
+    crate::bridge::own_profile::set_own_avatar(core.inner().as_ref(), mxc).await
 }
 
 pub(super) fn map_avatar_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
@@ -84,30 +50,11 @@ pub(super) fn map_avatar_error(diagnostic_id: &'static str) -> MatrixAuthCommand
 pub(super) fn parse_display_name(
     display_name: &str,
 ) -> Result<Option<String>, MatrixAuthCommandError> {
-    let trimmed = display_name.trim();
-    if trimmed.is_empty() {
-        return Ok(None);
-    }
-    if trimmed.chars().count() > 255 {
-        return Err(map_avatar_error("v-send.r-avatar-display-name-too-long"));
-    }
-    Ok(Some(trimmed.to_owned()))
+    synara_core::app::user_profile::parse_own_display_name(display_name).map_err(map_avatar_error)
 }
 
 /// Parse and validate an avatar MXC URI. Empty/whitespace-only input is treated
 /// as a removal request (`None`). Non-empty values must be valid `mxc://` URIs.
 pub(super) fn parse_avatar_mxc(mxc: &str) -> Result<Option<OwnedMxcUri>, MatrixAuthCommandError> {
-    let trimmed = mxc.trim();
-    if trimmed.is_empty() {
-        return Ok(None);
-    }
-    if !trimmed.starts_with("mxc://") {
-        return Err(map_avatar_error("v-send.r-avatar-invalid-mxc"));
-    }
-    let owned = OwnedMxcUri::from(trimmed);
-    // Reject obviously incomplete URIs (no media id).
-    if owned.as_str().matches('/').count() < 3 {
-        return Err(map_avatar_error("v-send.r-avatar-invalid-mxc"));
-    }
-    Ok(Some(owned))
+    synara_core::app::user_profile::parse_own_avatar_mxc(mxc).map_err(map_avatar_error)
 }

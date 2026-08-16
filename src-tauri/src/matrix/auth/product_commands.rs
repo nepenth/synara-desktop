@@ -7,61 +7,27 @@ use crate::desktop_session_store::{
 };
 use matrix_sdk::authentication::AuthSession;
 
-/// V-AUTH.3 — privacy-safe login-flow DTO (no secrets; discovery only).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixLoginFlowDto {
-    /// Synara kind discriminator (`password`, `token`, `application_service`, `unknown`).
-    pub kind: String,
-    /// Original Matrix type string (`m.login.password`, custom types, …).
-    pub matrix_type: String,
-    /// Token flow: homeserver supports `get_login_token` (when known).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub get_login_token: Option<bool>,
-}
+/// V-AUTH.3 desktop compatibility re-exports for the shared command response.
+pub use synara_core::app::auth::{MatrixLoginFlowDto, MatrixLoginFlowsResponse};
 
-impl MatrixLoginFlowDto {
-    pub(super) fn from_domain(flow: LoginFlow) -> Self {
-        Self {
-            kind: flow.kind.as_str().to_owned(),
-            matrix_type: flow.matrix_type,
-            get_login_token: flow.get_login_token,
-        }
-    }
-}
-
-/// V-AUTH.3 — login-flow discovery response for the product UI.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MatrixLoginFlowsResponse {
-    pub flows: Vec<MatrixLoginFlowDto>,
-}
-
-/// V-AUTH.3 — discover homeserver login flows (unauthenticated CS `GET /login`).
+/// V-AUTH.3 / SNC-P3.1 — discover login flows through the managed shared Core.
 ///
-/// Fail-closed: transport/parse errors surface as privacy-safe command errors.
-/// No credentials are submitted; DTO never contains tokens or passwords.
+/// The renderer input and DTO remain byte-compatible. This command owns no
+/// transport: the Core uses the managed desktop Platform's established user
+/// agent for its credential-free probe.
 #[tauri::command]
 pub async fn matrix_login_flows(
+    core: State<'_, Arc<synara_core::Core>>,
     homeserver_url: String,
 ) -> Result<MatrixLoginFlowsResponse, MatrixAuthCommandError> {
-    let transport = HttpLoginFlowTransport::new().map_err(map_login_flows_auth_error)?;
-    let result = discover_login_flows(&homeserver_url, &transport)
-        .await
-        .map_err(map_login_flows_auth_error)?;
-    Ok(MatrixLoginFlowsResponse {
-        flows: result
-            .flows
-            .into_iter()
-            .map(MatrixLoginFlowDto::from_domain)
-            .collect(),
-    })
+    crate::bridge::auth_probes::login_flows(core.inner().as_ref(), homeserver_url).await
 }
 
 #[tauri::command]
 pub async fn matrix_login_password(
     app: AppHandle,
     state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     homeserver_url: String,
     user: String,
     password: String,
@@ -89,7 +55,7 @@ pub async fn matrix_login_password(
         Err(error) => {
             // The UI can only request archive-and-rebuild after one of these
             // fail-closed diagnostics. Normal login never calls the reset API.
-            if is_recoverable_store_login_diagnostic(error.diagnostic_id) {
+            if is_recoverable_store_login_diagnostic(&error.diagnostic_id) {
                 state.arm_store_recovery(requested_identity.clone()).await;
             }
             return Err(error);
@@ -120,18 +86,35 @@ pub async fn matrix_login_password(
 
     ensure_crypto_ready(&client).await?;
     let session_generation = state.next_generation();
-    let verification = NativeVerificationOwner::new(&client, session_generation);
-    let devices = NativeDeviceOwner::start(&client, app.clone(), session_generation)
-        .await
-        .map_err(map_device_error)?;
-    let image_packs = NativeImagePackOwner::start(&client, app.clone(), session_generation)
-        .map_err(map_pack_read_subscribe_error)?;
-    let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
-    let presence = NativePresenceOwner::start(&client, app.clone(), session_generation)
-        .map_err(map_presence_error)?;
-    let join_rules = NativeRoomJoinRuleOwner::start(&client, app.clone(), session_generation)
-        .map_err(map_room_join_rule_owner_error)?;
-    let sync = start_sync_owner(&client, session_generation).await?;
+    let verification = Arc::new(NativeVerificationOwner::new(&client, session_generation));
+    let devices = Arc::new(
+        crate::matrix::devices::start_device_owner(&client, app.clone(), session_generation)
+            .await
+            .map_err(map_device_error)?,
+    );
+    let image_packs = Arc::new(
+        crate::matrix::account_data::start_image_pack_owner(
+            &client,
+            app.clone(),
+            session_generation,
+        )
+        .map_err(map_pack_read_subscribe_error)?,
+    );
+    let typing =
+        Arc::new(NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?);
+    let presence = Arc::new(
+        crate::matrix::presence::start_presence_owner(&client, app.clone(), session_generation)
+            .map_err(map_presence_error)?,
+    );
+    let join_rules = Arc::new(
+        crate::matrix::room_profile::start_join_rule_owner(
+            &client,
+            app.clone(),
+            session_generation,
+        )
+        .map_err(map_room_join_rule_owner_error)?,
+    );
+    let sync = Arc::new(start_sync_owner(&client, session_generation).await?);
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
         .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-session-persist-failed"))?;
@@ -152,31 +135,64 @@ pub async fn matrix_login_password(
         return Err(error);
     }
 
+    let timelines = Arc::new(NativeTimelineOwner::new(
+        &client,
+        crate::matrix::timeline::timeline_view_emit(app.clone()),
+        session_generation,
+    ));
     // A successfully installed session supersedes every pending/awaiting
     // recovery capability, including one prepared by an earlier failed login.
     state.clear_store_recovery().await;
     *session = Some(ManagedMatrixSession {
         client,
         identity: identity.clone(),
-        sync,
-        invite_avatars: InviteAvatarHandles::new(session_generation),
-        timelines: NativeTimelineRegistry::new(session_generation),
-        composer_drafts: ComposerDraftRegistry::new(),
+        sync: sync.clone(),
+        invite_avatars: join_rules.invite_avatars(),
+        timelines: timelines.clone(),
         sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
-        verification,
-        _devices: devices,
-        _image_packs: image_packs,
-        typing,
-        presence,
-        join_rules,
-        pending_device_deletion: None,
-        next_device_delete_operation_id: 0,
-        pending_cross_signing_auth_session: None,
-        room_key_transfer: Arc::new(Mutex::new(RoomKeyTransferFlow::new(session_generation))),
+        verification: verification.clone(),
+        devices: devices.clone(),
+        _image_packs: image_packs.clone(),
+        typing: typing.clone(),
+        presence: presence.clone(),
+        join_rules: join_rules.clone(),
+
+        room_key_transfer: devices.room_key_transfer(),
         selected_room_key_import: None,
         next_room_key_import_selection_id: 0,
     });
+    drop(session);
+    crate::bridge::session_lifecycle::open_after_desktop_session_install(
+        core.inner().as_ref(),
+        &identity,
+        session_generation,
+    )
+    .await?;
+    core.inner()
+        .attach_typing(typing)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
+    core.inner()
+        .attach_presence(presence)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-presence-attach-failed"))?;
+    core.inner()
+        .attach_verification(verification)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-verification-attach-failed"))?;
+    core.inner()
+        .attach_devices(devices)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-device-attach-failed"))?;
+    core.inner()
+        .attach_join_rules(join_rules)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-join-rule-attach-failed"))?;
+    core.inner()
+        .attach_image_packs(image_packs)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-image-pack-attach-failed"))?;
+    core.inner()
+        .attach_timelines(timelines)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-timeline-attach-failed"))?;
+    core.inner()
+        .attach_sync(sync)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-sync-attach-failed"))?;
     Ok(identity)
 }
 
@@ -302,16 +318,16 @@ pub async fn matrix_password_reset_complete(
     .map_err(map_password_reset_auth_error)
 }
 
-/// V-AUTH.4b — probe registration UIAA flows (unauthenticated).
+/// V-AUTH.4b / SNC-P3.1 — probe registration UIAA flows through the managed Core.
+///
+/// This is only the credential-free flow probe. Account creation, email-token,
+/// and UIAA-continuation commands remain desktop-owned.
 #[tauri::command]
 pub async fn matrix_register_flows(
-    app: AppHandle,
+    core: State<'_, Arc<synara_core::Core>>,
     homeserver_url: String,
 ) -> Result<RegisterFlowsProbe, MatrixAuthCommandError> {
-    let client = build_register_ephemeral_client(&app, &homeserver_url).await?;
-    probe_register_flows(&client)
-        .await
-        .map_err(map_register_auth_error)
+    crate::bridge::auth_probes::register_flows(core.inner().as_ref(), homeserver_url).await
 }
 
 /// V-AUTH.4b — request a registration email token (unauthenticated).
@@ -351,10 +367,12 @@ pub enum MatrixRegisterOutcome {
 /// V-AUTH.4b — submit registration (+ UIAA stage). On complete, installs native session.
 ///
 /// Access/refresh tokens never leave the host. Unsupported UIAA stages fail closed.
+#[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
 #[tauri::command]
 pub async fn matrix_register(
     app: AppHandle,
     state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
     homeserver_url: String,
     username: String,
     password: String,
@@ -396,8 +414,57 @@ pub async fn matrix_register(
             error_message: challenge.error_message,
         }),
         RegisterSubmitOutcome::Complete(secrets) => {
-            let identity =
+            let (identity, session_generation) =
                 install_session_from_register_secrets(&app, &state, &mut session, secrets).await?;
+            let (typing, presence, verification, devices, join_rules, image_packs, timelines, sync) =
+                session
+                    .as_ref()
+                    .map(|active| {
+                        (
+                            active.typing.clone(),
+                            active.presence.clone(),
+                            active.verification.clone(),
+                            active.devices.clone(),
+                            active.join_rules.clone(),
+                            active._image_packs.clone(),
+                            active.timelines.clone(),
+                            active.sync.clone(),
+                        )
+                    })
+                    .ok_or_else(|| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
+            drop(session);
+            crate::bridge::session_lifecycle::open_after_desktop_session_install(
+                core.inner().as_ref(),
+                &identity,
+                session_generation,
+            )
+            .await?;
+            core.inner()
+                .attach_typing(typing)
+                .map_err(|_| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
+            core.inner()
+                .attach_presence(presence)
+                .map_err(|_| MatrixAuthCommandError::unavailable("p2-presence-attach-failed"))?;
+            core.inner()
+                .attach_verification(verification)
+                .map_err(|_| {
+                    MatrixAuthCommandError::unavailable("p2-verification-attach-failed")
+                })?;
+            core.inner()
+                .attach_devices(devices)
+                .map_err(|_| MatrixAuthCommandError::unavailable("p2-device-attach-failed"))?;
+            core.inner()
+                .attach_join_rules(join_rules)
+                .map_err(|_| MatrixAuthCommandError::unavailable("p2-join-rule-attach-failed"))?;
+            core.inner()
+                .attach_image_packs(image_packs)
+                .map_err(|_| MatrixAuthCommandError::unavailable("p2-image-pack-attach-failed"))?;
+            core.inner()
+                .attach_timelines(timelines)
+                .map_err(|_| MatrixAuthCommandError::unavailable("p2-timeline-attach-failed"))?;
+            core.inner()
+                .attach_sync(sync)
+                .map_err(|_| MatrixAuthCommandError::unavailable("p2-sync-attach-failed"))?;
             Ok(MatrixRegisterOutcome::Complete { identity })
         }
     }
@@ -407,8 +474,8 @@ pub(super) async fn install_session_from_register_secrets(
     app: &AppHandle,
     state: &State<'_, MatrixAuthState>,
     session: &mut Option<ManagedMatrixSession>,
-    secrets: super::super::register::RegisterCompleteSecrets,
-) -> Result<MatrixLoginIdentity, MatrixAuthCommandError> {
+    secrets: super::super::RegisterCompleteSecrets,
+) -> Result<(MatrixLoginIdentity, u64), MatrixAuthCommandError> {
     let homeserver_url = normalize_homeserver_url(&secrets.homeserver_url)
         .map_err(map_register_auth_error)?
         .into_string();
@@ -440,18 +507,35 @@ pub(super) async fn install_session_from_register_secrets(
 
     ensure_crypto_ready(&client).await?;
     let session_generation = state.next_generation();
-    let verification = NativeVerificationOwner::new(&client, session_generation);
-    let devices = NativeDeviceOwner::start(&client, app.clone(), session_generation)
-        .await
-        .map_err(map_device_error)?;
-    let image_packs = NativeImagePackOwner::start(&client, app.clone(), session_generation)
-        .map_err(map_pack_read_subscribe_error)?;
-    let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
-    let presence = NativePresenceOwner::start(&client, app.clone(), session_generation)
-        .map_err(map_presence_error)?;
-    let join_rules = NativeRoomJoinRuleOwner::start(&client, app.clone(), session_generation)
-        .map_err(map_room_join_rule_owner_error)?;
-    let sync = start_sync_owner(&client, session_generation).await?;
+    let verification = Arc::new(NativeVerificationOwner::new(&client, session_generation));
+    let devices = Arc::new(
+        crate::matrix::devices::start_device_owner(&client, app.clone(), session_generation)
+            .await
+            .map_err(map_device_error)?,
+    );
+    let image_packs = Arc::new(
+        crate::matrix::account_data::start_image_pack_owner(
+            &client,
+            app.clone(),
+            session_generation,
+        )
+        .map_err(map_pack_read_subscribe_error)?,
+    );
+    let typing =
+        Arc::new(NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?);
+    let presence = Arc::new(
+        crate::matrix::presence::start_presence_owner(&client, app.clone(), session_generation)
+            .map_err(map_presence_error)?,
+    );
+    let join_rules = Arc::new(
+        crate::matrix::room_profile::start_join_rule_owner(
+            &client,
+            app.clone(),
+            session_generation,
+        )
+        .map_err(map_room_join_rule_owner_error)?,
+    );
+    let sync = Arc::new(start_sync_owner(&client, session_generation).await?);
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
         .map_err(|_| MatrixAuthCommandError::unavailable("v-auth.4b-session-persist-failed"))?;
@@ -472,78 +556,85 @@ pub(super) async fn install_session_from_register_secrets(
         return Err(error);
     }
 
+    let timelines = Arc::new(NativeTimelineOwner::new(
+        &client,
+        crate::matrix::timeline::timeline_view_emit(app.clone()),
+        session_generation,
+    ));
     // Registration completed and is about to install a session, so no old
     // failed-login recovery capability may remain consumable.
     state.clear_store_recovery().await;
     *session = Some(ManagedMatrixSession {
         client,
         identity: identity.clone(),
-        sync,
-        invite_avatars: InviteAvatarHandles::new(session_generation),
-        timelines: NativeTimelineRegistry::new(session_generation),
-        composer_drafts: ComposerDraftRegistry::new(),
+        sync: sync.clone(),
+        invite_avatars: join_rules.invite_avatars(),
+        timelines,
         sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
-        verification,
-        _devices: devices,
-        _image_packs: image_packs,
-        typing,
-        presence,
-        join_rules,
-        pending_device_deletion: None,
-        next_device_delete_operation_id: 0,
-        pending_cross_signing_auth_session: None,
-        room_key_transfer: Arc::new(Mutex::new(RoomKeyTransferFlow::new(session_generation))),
+        verification: verification.clone(),
+        devices: devices.clone(),
+        _image_packs: image_packs.clone(),
+        typing: typing.clone(),
+        presence: presence.clone(),
+        join_rules: join_rules.clone(),
+
+        room_key_transfer: devices.room_key_transfer(),
         selected_room_key_import: None,
         next_room_key_import_selection_id: 0,
     });
-    Ok(identity)
+    Ok((identity, session_generation))
 }
 
+/// SNC-P3.2 — forward the existing read-only React session snapshot through
+/// the managed Core. The desktop session owner remains private to every other
+/// command; only this command consumes Core's stable envelope response.
 #[tauri::command]
 pub async fn matrix_session_snapshot(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<MatrixSessionSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    Ok(snapshot(session.as_ref()))
+    crate::bridge::session_lifecycle::session_snapshot(core.inner().as_ref()).await
 }
 
+/// SNC-P3.3 — keep the existing payload-free sync-status command while
+/// routing its exact DTO through the managed Core registry. The desktop
+/// Platform remains the sole owner of the live SDK sync owner.
 #[tauri::command]
 pub async fn matrix_sync_status(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<SyncReadinessSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    Ok(match session.as_ref() {
-        Some(active) => active.sync.observe(),
-        None => unconfigured_snapshot(state.current_generation()),
-    })
+    crate::bridge::session_lifecycle::sync_status(core.inner().as_ref()).await
 }
 
+/// SNC-P3.4 — retain the existing zero-argument crypto-status command while
+/// routing envelope validation and exact response serialization through Core.
+/// The desktop Platform still samples the live crypto owner under its auth
+/// mutex; this command receives only the already validated public DTO.
 #[tauri::command]
 pub async fn matrix_crypto_status(
-    state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<MatrixCryptoStatus, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let Some(active) = session.as_ref() else {
-        return Ok(crypto_status(state.current_generation(), None));
-    };
-    let cross_signing = active.client.encryption().cross_signing_status().await;
-    Ok(crypto_status(
-        active.sync.session_generation(),
-        cross_signing,
-    ))
+    crate::bridge::session_lifecycle::crypto_status(core.inner().as_ref()).await
 }
 
 #[tauri::command]
 pub async fn matrix_logout(
     app: AppHandle,
     state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<MatrixSessionSnapshot, MatrixAuthCommandError> {
     let mut session = state.session.lock().await;
     // Logout is also a security boundary when no session is installed: an old
     // Pending/AwaitingConfirmation recovery capability must never outlive it.
     state.clear_store_recovery().await;
     let Some(active) = session.as_ref() else {
+        // A repeated logout must also clear any stale Core projection left by
+        // a prior partial lifecycle failure. Release the desktop mutex first.
+        drop(session);
+        crate::bridge::session_lifecycle::close_after_desktop_session_removal(
+            core.inner().as_ref(),
+        )
+        .await?;
         return Ok(MatrixSessionSnapshot::LoggedOut);
     };
 
@@ -567,6 +658,11 @@ pub async fn matrix_logout(
     let remove_result = remove_active_identity(&app_data_root(&app)?);
     let _ = clear_frontend_session_envelope();
     *session = None;
+    // The desktop session is now gone. Release its async mutex before Core's
+    // await and close Core before reporting deferred non-session cleanup errors.
+    drop(session);
+    crate::bridge::session_lifecycle::close_after_desktop_session_removal(core.inner().as_ref())
+        .await?;
     clear_result?;
     remove_result?;
     Ok(MatrixSessionSnapshot::LoggedOut)
@@ -576,6 +672,7 @@ pub async fn matrix_logout(
 pub async fn matrix_restore_session(
     app: AppHandle,
     state: State<'_, MatrixAuthState>,
+    core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<MatrixLoginIdentity, MatrixAuthCommandError> {
     let mut session = state.session.lock().await;
     if let Some(active) = session.as_ref() {
@@ -607,43 +704,93 @@ pub async fn matrix_restore_session(
 
     ensure_crypto_ready(&client).await?;
     let session_generation = state.next_generation();
-    let verification = NativeVerificationOwner::new(&client, session_generation);
-    let devices = NativeDeviceOwner::start(&client, app.clone(), session_generation)
-        .await
-        .map_err(map_device_error)?;
-    let image_packs = NativeImagePackOwner::start(&client, app.clone(), session_generation)
-        .map_err(map_pack_read_subscribe_error)?;
-    let typing = NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?;
-    let presence = NativePresenceOwner::start(&client, app.clone(), session_generation)
-        .map_err(map_presence_error)?;
-    let join_rules = NativeRoomJoinRuleOwner::start(&client, app.clone(), session_generation)
-        .map_err(map_room_join_rule_owner_error)?;
-    let sync = start_sync_owner(&client, session_generation).await?;
+    let verification = Arc::new(NativeVerificationOwner::new(&client, session_generation));
+    let devices = Arc::new(
+        crate::matrix::devices::start_device_owner(&client, app.clone(), session_generation)
+            .await
+            .map_err(map_device_error)?,
+    );
+    let image_packs = Arc::new(
+        crate::matrix::account_data::start_image_pack_owner(
+            &client,
+            app.clone(),
+            session_generation,
+        )
+        .map_err(map_pack_read_subscribe_error)?,
+    );
+    let typing =
+        Arc::new(NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?);
+    let presence = Arc::new(
+        crate::matrix::presence::start_presence_owner(&client, app.clone(), session_generation)
+            .map_err(map_presence_error)?,
+    );
+    let join_rules = Arc::new(
+        crate::matrix::room_profile::start_join_rule_owner(
+            &client,
+            app.clone(),
+            session_generation,
+        )
+        .map_err(map_room_join_rule_owner_error)?,
+    );
+    let sync = Arc::new(start_sync_owner(&client, session_generation).await?);
+    let timelines = Arc::new(NativeTimelineOwner::new(
+        &client,
+        crate::matrix::timeline::timeline_view_emit(app.clone()),
+        session_generation,
+    ));
     // Restoring persisted material installs a new live session and therefore
     // revokes any stale recovery capability from an earlier failed login.
     state.clear_store_recovery().await;
     *session = Some(ManagedMatrixSession {
         client,
         identity: identity.clone(),
-        sync,
-        invite_avatars: InviteAvatarHandles::new(session_generation),
-        timelines: NativeTimelineRegistry::new(session_generation),
-        composer_drafts: ComposerDraftRegistry::new(),
+        sync: sync.clone(),
+        invite_avatars: join_rules.invite_avatars(),
+        timelines: timelines.clone(),
         sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
-        verification,
-        _devices: devices,
-        _image_packs: image_packs,
-        typing,
-        presence,
-        join_rules,
-        pending_device_deletion: None,
-        next_device_delete_operation_id: 0,
-        pending_cross_signing_auth_session: None,
-        room_key_transfer: Arc::new(Mutex::new(RoomKeyTransferFlow::new(session_generation))),
+        verification: verification.clone(),
+        devices: devices.clone(),
+        _image_packs: image_packs.clone(),
+        typing: typing.clone(),
+        presence: presence.clone(),
+        join_rules: join_rules.clone(),
+
+        room_key_transfer: devices.room_key_transfer(),
         selected_room_key_import: None,
         next_room_key_import_selection_id: 0,
     });
+    drop(session);
+    crate::bridge::session_lifecycle::open_after_desktop_session_install(
+        core.inner().as_ref(),
+        &identity,
+        session_generation,
+    )
+    .await?;
+    core.inner()
+        .attach_typing(typing)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
+    core.inner()
+        .attach_presence(presence)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-presence-attach-failed"))?;
+    core.inner()
+        .attach_verification(verification)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-verification-attach-failed"))?;
+    core.inner()
+        .attach_devices(devices)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-device-attach-failed"))?;
+    core.inner()
+        .attach_join_rules(join_rules)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-join-rule-attach-failed"))?;
+    core.inner()
+        .attach_image_packs(image_packs)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-image-pack-attach-failed"))?;
+    core.inner()
+        .attach_timelines(timelines)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-timeline-attach-failed"))?;
+    core.inner()
+        .attach_sync(sync)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-sync-attach-failed"))?;
     Ok(identity)
 }
 
@@ -742,28 +889,6 @@ pub(super) async fn ensure_crypto_ready(client: &Client) -> Result<(), MatrixAut
         ));
     }
     Ok(())
-}
-
-pub(super) fn crypto_status(
-    session_generation: u64,
-    cross_signing: Option<CrossSigningStatus>,
-) -> MatrixCryptoStatus {
-    MatrixCryptoStatus {
-        session_generation,
-        encryption_enabled: cross_signing.is_some(),
-        cross_signing_state: cross_signing_state(cross_signing.as_ref()),
-    }
-}
-
-pub(super) fn cross_signing_state(status: Option<&CrossSigningStatus>) -> MatrixCrossSigningState {
-    match status {
-        None => MatrixCrossSigningState::Unavailable,
-        Some(status) if status.is_complete() => MatrixCrossSigningState::Ready,
-        Some(status) if status.has_master || status.has_self_signing || status.has_user_signing => {
-            MatrixCrossSigningState::Partial
-        }
-        Some(_) => MatrixCrossSigningState::NotSetUp,
-    }
 }
 
 pub(super) fn map_sync_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {

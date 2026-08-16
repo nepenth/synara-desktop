@@ -1,4 +1,9 @@
-//! Deterministic unit tests for P2.4 task supervision and cancellation.
+//! Deterministic unit tests for P2.4 task supervision and cancellation (src-tauri side).
+//!
+//! SNC-P1-4: `super::*` resolves against the core `synara_core::task` types
+//! re-exported by this module plus the desktop `bridge` adapter; the 3
+//! supervisor-coupled follow/mirror tests run here (they need the desktop
+//! `MatrixSupervisor`).
 //!
 //! No live homeserver network. Pure registry + Tokio mock futures only.
 

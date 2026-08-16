@@ -1,15 +1,14 @@
 //! P4.2–P4.4 — Room-list snapshot/delta, membership/unread, tag/recent semantics.
 //!
-//! Deterministic projection of ordered room summaries for the partial path:
-//! - product DTOs only ([`RoomSummary`]) — no SDK Room/VectorDiff on the wire
-//! - ordered delta ops with monotonic sequence + session generation
-//! - gap / stale generation → resync (full snapshot reset)
-//! - P4.3: scope filters (joined/invites/unread/mentions/direct) + badge counts
-//! - P4.4: favorite / low-priority / folder filters + recent-activity sorts
+//! SNC-P1-5b: the room-list logic now lives in the shared native core at
+//! `crates/synara-core/src/app/room_list`. This module keeps every
+//! `crate::matrix::room_list::…` path resolving with **identical behavior** by
+//! re-exporting the core items (same pattern as the SNC-P1-5a sync adapter).
 //!
-//! D0.2 adds a production snapshot projection backed only by matrix-sdk-ui's
-//! room-list service. There is no JS room-list fallback while a native session
-//! is live and no dual-backend sync.
+//! `tests.rs` and `product_commands.rs` stay here (adapter side): `tests.rs`
+//! keeps the desktop room-list suite (15 tests) via `use super::*`, and
+//! `product_commands.rs` hosts the Tauri Platform matrix_room_list_* /
+//! matrix_invites_snapshot commands (serial product lane, untouchable).
 //!
 //! Authoritative design notes:
 //! - `docs/matrix-rust-sdk/p4.2-room-list.md`
@@ -19,57 +18,15 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
-mod counts;
-mod delta;
-mod error;
-mod filters;
-mod invite_avatars;
-mod invites;
-mod live;
-mod projection;
-mod sort;
-mod summary;
-
-pub use counts::RoomListBadgeCounts;
-pub use delta::{RoomListDeltaBatch, RoomListDeltaOp, RoomListSnapshot};
-pub use error::RoomListError;
-pub use filters::{
-    filter_rooms_by_scope, room_matches_scope, select_rooms_by_scope, select_rooms_in_folder,
-    RoomListScope,
+pub use synara_core::app::room_list::{
+    contains_bad_word, filter_rooms_by_scope, matrix_room_list_markers, recent_joined_rooms,
+    reconstruct, room_matches_scope, select_rooms_by_scope, select_rooms_in_folder,
+    snapshot_from_sync_owner, snapshot_invites, sort_rooms, sort_rooms_in_place,
+    InviteAvatarHandles, InviteAvatarSource, NativeInvite, NativeInviteSnapshot,
+    NativeInviteTriage, NativeRoomListSnapshot, RoomListBadgeCounts, RoomListDeltaBatch,
+    RoomListDeltaOp, RoomListError, RoomListProjection, RoomListScope, RoomListSnapshot,
+    RoomListSort, RoomSummaryBuilder, MATRIX_ROOM_LIST_MARKER, MAX_INVITE_AVATAR_HANDLES,
 };
-pub use invite_avatars::{InviteAvatarHandles, InviteAvatarSource, MAX_INVITE_AVATAR_HANDLES};
-pub use invites::{
-    contains_bad_word, snapshot_invites, NativeInvite, NativeInviteSnapshot, NativeInviteTriage,
-};
-pub use live::{snapshot_from_sync_owner, NativeRoomListSnapshot};
-pub use projection::{reconstruct, RoomListProjection};
-pub use sort::{recent_joined_rooms, sort_rooms, sort_rooms_in_place, RoomListSort};
-pub use summary::RoomSummaryBuilder;
-
-/// Static marker for link / schema smoke.
-pub const MATRIX_ROOM_LIST_MARKER: &str =
-    "matrix-room-list-p4.2+membership-unread-p4.3+semantics-p4.4";
-
-/// Touch room-list foundation paths so they remain linked in non-test builds.
-pub fn matrix_room_list_markers() -> &'static str {
-    let mut proj = RoomListProjection::new(1);
-    let snap = RoomListSnapshot::empty(1);
-    let _ = proj.apply_snapshot(snap);
-    let _scopes = RoomListScope::ALL.len();
-    let _counts = RoomListBadgeCounts::from_rooms(&[]);
-    let _sort = RoomListSort::RecentActivity.as_str();
-    debug_assert!(proj.is_empty());
-    debug_assert_eq!(proj.last_sequence(), 0);
-    debug_assert_eq!(RoomListDeltaOp::Clear.op_name(), "clear");
-    debug_assert_eq!(_scopes, 8);
-    debug_assert_eq!(_counts.joined, 0);
-    debug_assert_eq!(_sort, "recent_activity");
-    debug_assert_eq!(
-        MATRIX_ROOM_LIST_MARKER,
-        "matrix-room-list-p4.2+membership-unread-p4.3+semantics-p4.4"
-    );
-    MATRIX_ROOM_LIST_MARKER
-}
 
 #[cfg(test)]
 mod tests;

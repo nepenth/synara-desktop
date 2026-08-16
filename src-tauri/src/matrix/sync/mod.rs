@@ -1,54 +1,32 @@
-//! P4.1 — Sync service readiness / reconnect model (harness foundation).
+//! P4.1 — Sync service readiness / reconnect model (src-tauri adapter module).
 //!
-//! Owns the product mapping around `matrix_sdk_ui::sync_service::SyncService`:
-//! - privacy-safe readiness phases aligned with diagnostics `SyncPhase`
-//! - pure reconnect decision table (start / stop / restart)
-//! - session-generation-stamped owner for one authenticated client
+//! SNC-P1-5a: the sync logic now lives in the shared native core at
+//! `crates/synara-core/src/app/sync`. This module keeps every
+//! `crate::matrix::sync::…` path (SyncServiceOwner, probe_sliding_sync,
+//! server_supports_sliding_sync, SyncError, SyncReadiness, ReconnectAction,
+//! SyncIntent, SyncWatchService, matrix_sync_markers, …) resolving with
+//! **identical behavior** by re-exporting the core items.
+//!
+//! `tests.rs` stays here (adapter side) because it also imports the
+//! src-tauri-only `crate::matrix::client_builder` and
+//! `crate::matrix::diagnostics::SyncPhase` (the latter re-exported from the
+//! core seam via diagnostics/health.rs).
 //!
 //! **Harness / foundation only until cutover.** No production Tauri Matrix
-//! commands, no room-list deltas (P4.2), no dual-backend, no JS sync.
+//! commands, no room-list deltas (P4.2), no dual-backend.
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p4.1-sync-readiness.md`
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
-mod capability;
-mod error;
-mod readiness;
-mod reconnect;
-mod service;
-
-pub use capability::{probe_sliding_sync, server_supports_sliding_sync};
-pub use error::SyncError;
-pub use readiness::{
-    failure_diagnostic_from_sdk_state, readiness_from_sdk_state, snapshot_from_sdk_state,
-    SyncReadiness, SyncReadinessSnapshot,
+pub use synara_core::app::sync::{
+    assert_generation, build_sync_service, decide_reconnect, failure_diagnostic_from_sdk_state,
+    is_restartable, matrix_sync_markers, probe_sliding_sync, readiness_from_sdk_state,
+    readiness_of, server_supports_sliding_sync, snapshot_from_sdk_state, unconfigured_snapshot,
+    ReconnectAction, SyncError, SyncIntent, SyncReadiness, SyncReadinessSnapshot,
+    SyncServiceConfig, SyncServiceOwner, MATRIX_SYNC_MARKER,
 };
-pub use reconnect::{decide_reconnect, is_restartable, ReconnectAction, SyncIntent};
-pub use service::{
-    assert_generation, build_sync_service, readiness_of, unconfigured_snapshot, SyncServiceConfig,
-    SyncServiceOwner,
-};
-
-/// Static marker for link / schema smoke (no network, no Client).
-pub const MATRIX_SYNC_MARKER: &str = "matrix-sync-readiness-p4.1";
-
-/// Touch sync readiness paths so the foundation remains linked in non-test builds.
-pub fn matrix_sync_markers() -> &'static str {
-    let _phases = SyncReadiness::ALL.len();
-    let _idle = SyncReadiness::Idle.as_str();
-    let _ready = SyncReadiness::Running.is_product_ready();
-    let _action = decide_reconnect(SyncReadiness::Failed, SyncIntent::Recover);
-    let _cfg = SyncServiceConfig::default();
-    debug_assert_eq!(_phases, 6);
-    debug_assert_eq!(_idle, "idle");
-    debug_assert!(_ready);
-    debug_assert_eq!(_action, ReconnectAction::Restart);
-    debug_assert!(_cfg.offline_mode);
-    debug_assert_eq!(MATRIX_SYNC_MARKER, "matrix-sync-readiness-p4.1");
-    MATRIX_SYNC_MARKER
-}
 
 #[cfg(test)]
 mod tests;

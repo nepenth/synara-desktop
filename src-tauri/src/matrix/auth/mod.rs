@@ -3,7 +3,8 @@
 //! - homeserver URL + server-name input normalization
 //! - well-known discovery behind [`DiscoveryTransport`] (mock + live HTTP)
 //! - login-flow discovery behind [`LoginFlowTransport`] (mock + live HTTP)
-//! - password login against an unauthenticated P2.3 SDK client
+//! - password login / register / reset live in synara-core; this shell
+//!   keeps Tauri product commands and Keychain vault wiring
 //! - interactive auth (UIA) multi-stage coordinator (no secrets stored)
 //! - platform device display names (`Synara macOS` / `Synara Linux` / …)
 //! - stable Synara domain types (not raw SDK / Ruma on the boundary)
@@ -26,29 +27,12 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
-mod client_config;
-mod device_name;
-mod discovery;
 mod error;
 mod http_transport;
 mod input;
-mod login;
 mod login_flow;
 pub(crate) mod product;
-mod register;
-mod reset_password;
-mod uia;
 
-pub use client_config::{homeserver_url_for_client_builder, identity_with_discovered_homeserver};
-pub use device_name::{
-    host_device_platform, platform_device_display_name, DevicePlatform,
-    DEVICE_DISPLAY_NAME_DESKTOP_FALLBACK, DEVICE_DISPLAY_NAME_IOS, DEVICE_DISPLAY_NAME_LINUX,
-    DEVICE_DISPLAY_NAME_MACOS,
-};
-pub use discovery::{
-    discover_homeserver, discover_homeserver_and_login_flows, DiscoveryResult, DiscoveryTransport,
-    MockDiscoveryTransport, WellKnownClientConfig,
-};
 pub use error::AuthError;
 pub use http_transport::{
     parse_login_types_json, parse_well_known_client_json, HttpDiscoveryTransport,
@@ -58,24 +42,29 @@ pub use input::{
     normalize_homeserver_url, normalize_server_name, parse_discovery_input, DiscoveryInput,
     DiscoveryInputKind, NormalizedHomeserverUrl, NormalizedServerName,
 };
-pub use login::{login_with_password, LoginMethodKind, LoginOptions, LoginResult};
 pub use login_flow::{
-    discover_login_flows, map_matrix_login_types, LoginFlow, LoginFlowDiscoveryResult,
-    LoginFlowKind, LoginFlowTransport, MockLoginFlowTransport,
+    discover_login_flows, login_flows_response, map_matrix_login_types, LoginFlow,
+    LoginFlowDiscoveryResult, LoginFlowKind, LoginFlowTransport, MockLoginFlowTransport,
 };
 pub use product::{
     MatrixAuthCommandError, MatrixAuthState, MatrixLoginIdentity, MatrixSessionSnapshot,
 };
-pub use register::{
-    probe_register_flows, register_ephemeral_user_id, register_submit,
-    request_register_email_token, RegisterAuthStage, RegisterFlowsProbe, RegisterSubmitOutcome,
-    RegisterUiaChallenge, RegisterUiaFlow, SUPPORTED_REGISTER_STAGES,
+pub use synara_core::app::auth::{
+    complete_password_reset, discover_homeserver, discover_homeserver_and_login_flows,
+    homeserver_url_for_client_builder, host_device_platform, identity_with_discovered_homeserver,
+    login_with_password, password_reset_ephemeral_user_id, platform_device_display_name,
+    register_ephemeral_user_id, register_submit, request_password_email_token,
+    request_register_email_token, DevicePlatform, DiscoveryResult, DiscoveryTransport,
+    LoginMethodKind, LoginOptions, LoginResult, MockDiscoveryTransport, PasswordEmailTokenResult,
+    PasswordResetOutcome, RegisterAuthStage, RegisterCompleteSecrets, RegisterSubmitOutcome,
+    RegisterUiaChallenge, WellKnownClientConfig, DEVICE_DISPLAY_NAME_DESKTOP_FALLBACK,
+    DEVICE_DISPLAY_NAME_IOS, DEVICE_DISPLAY_NAME_LINUX, DEVICE_DISPLAY_NAME_MACOS,
 };
-pub use reset_password::{
-    complete_password_reset, password_reset_ephemeral_user_id, request_password_email_token,
-    PasswordEmailTokenResult, PasswordResetOutcome,
+/// Desktop compatibility re-exports for the shared read-only registration probe.
+pub use synara_core::app::auth::{
+    probe_register_flows, RegisterFlowsProbe, RegisterUiaFlow, SUPPORTED_REGISTER_STAGES,
 };
-pub use uia::{
+pub use synara_core::app::auth::{
     UiaFlowKind, UiaOutcome, UiaPhase, UiaSession, UiaStage, UiaStageKind, MAX_UIA_ID_CHARS,
     MAX_UIA_STAGES,
 };

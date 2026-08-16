@@ -21,16 +21,23 @@ L = likelihood, I = impact (H/M/L).
 | 2026-08-10 | Adopt ADR-0003 shared native core | Ends dual logic implementation; reuse heavily-tested engine |
 | 2026-08-10 | Keep ADR-0002's native-SwiftUI UI decision | UI stays platform-owned; only logic unifies |
 | 2026-08-10 | Ship project-owned uniffi bindings (drop `matrix-rust-components-swift`) | One version pin, one code path, full control of exposed surface |
+| 2026-08-13 | Owner 1B–5B, 7B–13, judgement 6 (see playbook §4) | `matrix_sdk` in Core; no Tauri/`keyring`; live Client + owners in Core; register only as capabilities land; serial iOS; feature-branch-only; no release; Apple proof operator-gated |
+| 2026-08-13 | Product events use owner emit callbacks, not `Platform::emit` | `Platform::emit` is the IPC envelope stream; wrapping product events would break React names |
+| 2026-08-13 | 21 census names stay desktop | Passwords, `client_secret`, Keyring logout/restore, passphrases, file paths, attachment/media bytes must not cross the 1 MiB Core envelope |
+| 2026-08-13 | Next lane is serial iOS (P4), not speculative 7B | Attached-owner writes that can land without secrets/bytes are exhausted as of #928 |
+
+## Closed for implementers (do not re-open in a slice)
+
+- Full `Platform` for dialogs/spellcheck on iOS: **no** until a SwiftUI
+  feature demands it. Reactive subset first (playbook P4-S2).
+- Heavy OS jobs (file pickers, 32 MiB attachments): **stay in shells**.
+- NSE split crate: **defer** until APNs work (P4-S11).
+- Routing leftover secrets/bytes: **forbidden** without a new owner
+  decision.
 
 ## Open questions
 
-- Should `synara-core` publish a brand (v0.1.0) version gate in P1, or align to
-  the app 2.0.x from day one? (Leaning: separate semver for the library crate.)
-- Does iOS need the full `Platform` sink for dialogs/spellcheck in P4, or only
-  the reactive subset (emit/status/badge/secret/notify)? (Leaning: reactive
-  subset first; extend when the SwiftUI feature set demands.)
-- Keep `tasks/registry` moving into the core, or leave heavy background jobs
-  (media export) in the shells? (Leaning: move registry, keep heavyweight OS
-  jobs in shells via the sink.)
-- NSE binding target: single `synara-core` vs `synara-core-nse` split at P4 vs
-  defer until APNs work begins?
+- Should `synara-core` publish a crate semver separate from app 2.0.x?
+  (Leaning: yes, later. Not a P4 blocker.)
+- NSE binding target: single `synara-core` vs `synara-core-nse` when
+  P4-S11 starts.

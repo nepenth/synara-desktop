@@ -12,6 +12,8 @@ settings:
     MARKETING_VERSION: "2.0.3"
     CURRENT_PROJECT_VERSION: "2.0.3"
 packages:
+  SynaraCore:
+    path: SynaraCore
   MatrixRustComponentsSwift:
     url: https://github.com/matrix-org/matrix-rust-components-swift.git
     exactVersion: 26.06.06
@@ -23,6 +25,8 @@ targets:
       - path: Synara
       - path: SynaraShared
     dependencies:
+      - package: SynaraCore
+        product: SynaraCore
       - package: MatrixRustComponentsSwift
         product: MatrixRustSDK
       - target: SynaraNotificationService

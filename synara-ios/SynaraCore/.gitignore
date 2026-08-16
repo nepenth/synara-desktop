@@ -1,0 +1,6 @@
+# Produced by scripts/generate-synara-core-swift.sh; never commit build output.
+/Sources/SynaraCore/Generated/*.swift
+/Sources/synara_coreFFI/include/*
+!/Sources/synara_coreFFI/include/.gitkeep
+/Artifacts/
+/.build/

@@ -1,0 +1,1624 @@
+// P4-1: deliberately narrow FFI bootstrap. Product commands and platform
+// callbacks are added only as their P4 migration slices land. Keeping this
+// namespace generated from a project-owned UDL proves the binding pipeline
+// without exposing credentials, Matrix SDK types, or shell-owned services.
+namespace synara_core {
+  string binding_scaffold_version();
+
+  // P4-2: credential-free, read-only Matrix login-flow discovery. The
+  // homeserver URL is normalized by the shared core before its bounded,
+  // redirect-free request is assembled.
+  [Async, Throws=LoginFlowsError]
+  sequence<LoginFlowDto> login_flows(string homeserver_url);
+
+  // P4-S1: credential-free registration-flow discovery. The closed DTO omits
+  // the desktop-only raw JSON params field from the UniFFI boundary.
+  [Async, Throws=RegisterFlowsError]
+  RegisterFlowsDto register_flows(string homeserver_url);
+
+  // P4: pure per-row unread/highlight projection used by the live iOS
+  // room-list adapter. This has no state, callback, error, or string input.
+  RoomUnreadPresentationDto room_unread_presentation(
+    RoomUnreadMembership membership,
+    u64 num_unread_messages,
+    u64 num_unread_notifications,
+    u64 num_unread_mentions,
+    boolean is_marked_unread
+  );
+
+  // P4: total cold-start recovery gate. It accepts only a scalar latest-state
+  // bit and a closed previous-state enum, and has no error or callback path.
+  boolean room_activity_recovery_required(
+    boolean latest_requires_recovery,
+    RoomActivityPreviousState previous_state
+  );
+};
+
+// Closed scalar input for the per-row unread presentation. It intentionally
+// does not carry a Matrix identifier, SDK value, or diagnostic string.
+enum RoomUnreadMembership {
+  "Joined",
+  "Invited"
+};
+
+// Scalar output of the total per-row unread presentation. The full-width
+// counter and boolean are the entire cross-platform surface.
+dictionary RoomUnreadPresentationDto {
+  u64 unread_count;
+  boolean has_highlight;
+};
+
+// Closed prior-activity classification for the cold-start recovery gate.
+// It never carries an identifier, SDK value, or diagnostic.
+enum RoomActivityPreviousState {
+  "Missing",
+  "Known"
+};
+
+// Public Swift DTO for one homeserver-advertised Matrix login type. It never
+// carries a credential, session, or client handle.
+dictionary LoginFlowDto {
+  string kind;
+  string matrix_type;
+  boolean? get_login_token;
+};
+
+// All fields below are fixed, privacy-safe values. In particular, no input
+// URL, HTTP diagnostic, response body, header, credential, or token crosses
+// the UniFFI error boundary.
+[Error]
+interface LoginFlowsError {
+  ProbeFailed(string category, string code, string description);
+};
+
+// One UIAA registration flow. Stages are public Matrix identifiers; raw UIAA
+// params and response JSON never cross the UniFFI boundary.
+dictionary RegisterUiaFlowDto {
+  sequence<string> stages;
+};
+
+enum RegisterFlowsStatus {
+  "FlowRequired",
+  "RegistrationDisabled",
+  "RateLimited",
+  "InvalidRequest"
+};
+
+dictionary RegisterFlowsDto {
+  RegisterFlowsStatus status;
+  string? session;
+  sequence<RegisterUiaFlowDto> flows;
+  sequence<string> completed;
+};
+
+// All fields are fixed, privacy-safe values. No URL, token, HTTP body, raw
+// response detail, or caller input crosses the UniFFI error boundary.
+[Error]
+interface RegisterFlowsError {
+  ProbeFailed(string category, string code, string description);
+};
+
+// P4-3: the iOS shell may mirror only the safe state of an already-installed
+// MatrixRustSDK client. This is not a client/session/credential API: it is a
+// Core open/close/session_snapshot facade with exactly six crossed fields.
+dictionary SessionProjection {
+  u64 generation;
+  string user_id;
+  string device_id;
+  string homeserver_url;
+  SessionProjectionLifecycle lifecycle;
+  boolean crypto_ready;
+};
+
+// Closed values only; no shell or SDK diagnostic string can be a lifecycle.
+enum SessionProjectionLifecycle {
+  "Empty",
+  "Opening",
+  "Authenticating",
+  "Restoring",
+  "Syncing",
+  "Ready",
+  "Stopping",
+  "LoggedOut",
+  "Failed",
+  "Wiping"
+};
+
+// All error fields below are fixed, privacy-safe source constants. Invalid
+// identifiers/URLs and Core internals are intentionally not echoed.
+[Error]
+interface SessionProjectionError {
+  Rejected(string code, string description);
+  Unavailable(string code, string description);
+};
+
+// The project-owned object does not expose Core, Platform, commands,
+// callbacks, Matrix SDK values, persistence, or networking.
+interface SessionProjectionCore {
+  constructor();
+
+  [Async, Throws=SessionProjectionError]
+  void open(SessionProjection projection);
+
+  [Async, Throws=SessionProjectionError]
+  SessionProjection? session_snapshot();
+
+  [Async, Throws=SessionProjectionError]
+  void close();
+};
+
+// P4-S3a: Swift-owned key/value secret store. Session tokens may live here
+// later. Passwords, recovery secrets, and media bytes must not use this as a
+// generic Core.command channel. Errors are static; keys/values are not echoed.
+[Error]
+interface IosSecretVaultError {
+  Unavailable(string code, string description);
+};
+
+callback interface IosSecretVault {
+  [Throws=IosSecretVaultError]
+  bytes? get(string key);
+
+  [Throws=IosSecretVaultError]
+  void put(string key, bytes value);
+
+  [Throws=IosSecretVaultError]
+  void delete(string key);
+};
+
+// Privacy-safe restore outcome. Tokens never cross this DTO.
+dictionary SessionRestoreDto {
+  string user_id;
+  string device_id;
+  string homeserver_url;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface SessionRestoreError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe login outcome. Tokens and password never cross this DTO.
+dictionary SessionLoginDto {
+  string user_id;
+  string device_id;
+  string homeserver_url;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface SessionLoginError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe attach outcome. Owner names only. No tokens or password.
+dictionary SessionAttachDto {
+  sequence<string> owners;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface SessionAttachError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe room-list row. No tokens or password.
+dictionary RoomListRoomDto {
+  string room_id;
+  string? name;
+  string? canonical_alias;
+  string? avatar_url;
+  string membership;
+  boolean is_direct;
+  boolean is_space;
+  boolean is_favorite;
+  u32 unread_count;
+  u32 highlight_count;
+  boolean marked_unread;
+  u64? last_activity_ts;
+};
+
+// Privacy-safe room-list snapshot from the registered Core command.
+dictionary RoomListSnapshotDto {
+  u64 session_generation;
+  sequence<string> ordered_room_ids;
+  sequence<RoomListRoomDto> rooms;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface RoomListSnapshotError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe invite row. No tokens or password.
+dictionary InviteDto {
+  string room_id;
+  string room_name;
+  string? avatar_handle_id;
+  string? room_topic;
+  string? room_alias;
+  string sender_id;
+  string sender_name;
+  boolean sender_ignored;
+  u64? invite_ts;
+  string? reason;
+  boolean is_space;
+  boolean is_direct;
+  boolean is_encrypted;
+  string triage;
+};
+
+// Privacy-safe invite snapshot from the registered Core command.
+dictionary InviteSnapshotDto {
+  u64 session_generation;
+  sequence<InviteDto> invites;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface InviteSnapshotError {
+  Failed(string code, string description);
+};
+
+// Requested open placement. Closed kind strings only. No tokens or password.
+dictionary TimelineOpenPositionDto {
+  string kind;
+  boolean at_bottom;
+  string? restored_anchor_event_id;
+  string? live_tail_event_id;
+  u64? updated_at_ms;
+  string? event_id;
+};
+
+// Privacy-safe resolved view placement. No tokens or password.
+dictionary TimelineViewPositionDto {
+  string kind;
+  string? event_id;
+};
+
+// Privacy-safe timeline snapshot from the registered Core command.
+dictionary TimelineSnapshotDto {
+  u32 schema_version;
+  u64 session_generation;
+  string room_id;
+  u64 revision;
+  TimelineViewPositionDto position;
+  string pagination_backward;
+  string pagination_forward;
+  string? own_read_event_id;
+  string? unread_anchor_event_id;
+  boolean is_marked_unread;
+  sequence<string> pinned_event_ids;
+  u32 row_count;
+  boolean mark_read;
+  boolean mark_unread;
+  boolean paginate_backward;
+  boolean paginate_forward;
+};
+
+// Privacy-safe timeline open readback. No tokens or password.
+dictionary TimelineOpenDto {
+  u32 schema_version;
+  string stream_id;
+  TimelineViewPositionDto position;
+  TimelineSnapshotDto snapshot;
+};
+
+// Privacy-safe single-event item. No tokens or password.
+dictionary TimelineEventItemDto {
+  string item_id;
+  string event_id;
+  string sender;
+  string event_type;
+  string body;
+  u64 origin_server_ts;
+  string? decryption_state;
+};
+
+// Privacy-safe single-event readback from the registered Core command.
+dictionary TimelineEventReadbackDto {
+  u64 session_generation;
+  string room_id;
+  string event_id;
+  TimelineEventItemDto item;
+};
+
+// Privacy-safe read-state write ack. Reuses the S6 snapshot.
+dictionary TimelineReadStateDto {
+  string action;
+  boolean? receipt_sent;
+  TimelineSnapshotDto snapshot;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface TimelineError {
+  Failed(string code, string description);
+};
+
+// Static source constants only. Never echo event id, room id, stream id, token, or password.
+[Error]
+interface TimelineReadStateError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe reaction sender. No tokens or password.
+dictionary TimelineReactionSenderDto {
+  string user_id;
+  string? reaction_event_id;
+};
+
+// Privacy-safe aggregated reaction. No tokens or password.
+dictionary TimelineReactionDto {
+  string key;
+  u32 count;
+  boolean me;
+  sequence<TimelineReactionSenderDto> senders;
+};
+
+// Privacy-safe reaction mutation ack from the registered Core command.
+dictionary TimelineReactionMutationDto {
+  string room_id;
+  string target_event_id;
+  string key;
+  string mutation;
+  TimelineReactionDto? readback;
+};
+
+// Static source constants only. Never echo room id, event id, reaction event id, key, token, or password.
+[Error]
+interface TimelineReactionError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe composer reply-draft preview. No tokens or password.
+dictionary ComposerReplyDraftPreviewDto {
+  string event_id;
+  string sender_id;
+  string body;
+  string? formatted_body;
+  string? thread_root_event_id;
+};
+
+// Privacy-safe composer reply-draft readback from the registered Core command.
+dictionary ComposerReplyDraftDto {
+  u32 schema_version;
+  string room_id;
+  string status;
+  ComposerReplyDraftPreviewDto? draft;
+};
+
+// Static source constants only. Never echo room id, event id, token, or password.
+[Error]
+interface ComposerReplyDraftError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe send-text write ack from the registered Core command.
+dictionary SendTextDto {
+  string room_id;
+  string event_id;
+  string local_txn_id;
+  string status;
+};
+
+// Static source constants only. Never echo body, room id, token, or password.
+[Error]
+interface SendTextError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe send-sticker write ack from the registered Core command.
+// Metadata / mxc only. No image bytes or file path.
+dictionary SendStickerDto {
+  string room_id;
+  string event_id;
+  string status;
+};
+
+// Static source constants only. Never echo mxc, room id, token, or password.
+[Error]
+interface SendStickerError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe send-poll write ack from the registered Core command.
+// No media bytes. Question and options stay out of Failed errors.
+dictionary SendPollDto {
+  string room_id;
+  string event_id;
+  string status;
+};
+
+// Static source constants only. Never echo question, options, room id, token, or password.
+[Error]
+interface SendPollError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe edit-message write ack from the registered Core command.
+// No media bytes. Body and event id stay out of Failed errors.
+dictionary EditMessageDto {
+  string room_id;
+  string event_id;
+  string local_txn_id;
+  string status;
+};
+
+// Static source constants only. Never echo body, event id, room id, token, or password.
+[Error]
+interface EditMessageError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe poll-respond write ack from the registered Core command.
+// No media bytes. Answers and event id stay out of Failed errors.
+dictionary PollRespondDto {
+  string room_id;
+  string poll_event_id;
+  string event_id;
+  string status;
+};
+
+// Static source constants only. Never echo answers, event id, room id, token, or password.
+[Error]
+interface PollRespondError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe timeline edit/redact/report write ack from the registered Core commands.
+// Body and reason stay out of Failed errors.
+dictionary TimelineMutateDto {
+  u32 schema_version;
+  string action;
+  string room_id;
+  string event_id;
+  string status;
+};
+
+// Static source constants only. Never echo body, event id, room id, reason, token, or password.
+[Error]
+interface TimelineMutateError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe timeline pin/unpin write ack from the registered Core commands.
+dictionary TimelinePinDto {
+  u32 schema_version;
+  string action;
+  string room_id;
+  string event_id;
+  string status;
+};
+
+// Static source constants only. Never echo event id, room id, token, or password.
+[Error]
+interface TimelinePinError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe timeline poll-vote / call-decline write ack from the registered Core commands.
+dictionary TimelineVoteDeclineDto {
+  u32 schema_version;
+  string action;
+  string room_id;
+  string event_id;
+  string status;
+};
+
+// Static source constants only. Never echo event id, room id, answer, token, or password.
+[Error]
+interface TimelineVoteDeclineError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe timeline forward write ack from the registered Core commands.
+dictionary TimelineForwardDto {
+  u32 schema_version;
+  string action;
+  string room_id;
+  string event_id;
+  string status;
+};
+
+// Static source constants only. Never echo event id, room id, token, or password.
+[Error]
+interface TimelineForwardError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe live session snapshot from the registered Core command.
+// logged_out leaves the identity fields empty. Never carries a token or password.
+dictionary SessionSnapshotDto {
+  string status;
+  string? user_id;
+  string? device_id;
+  string? homeserver_url;
+  u64? session_generation;
+};
+
+// Privacy-safe sync readiness from the registered Core command.
+dictionary SyncStatusDto {
+  string readiness;
+  u64 session_generation;
+  boolean offline_mode_enabled;
+  string? failure_diagnostic_id;
+  boolean? sliding_sync_capable;
+};
+
+// Privacy-safe media upload-size config from the registered Core command.
+dictionary MediaConfigDto {
+  u64 upload_size;
+};
+
+// Privacy-safe secret-storage status from the registered Core command.
+// missing_secrets uses the closed public labels only. No passphrase or secret.
+dictionary SecretStorageStatusDto {
+  u64 session_generation;
+  string state;
+  boolean exists;
+  boolean unlocked;
+  boolean default_key_set;
+  boolean passphrase_configured;
+  boolean bootstrap_ready;
+  sequence<string> missing_secrets;
+  string action;
+};
+
+// Static source constants only. Never echo user id, homeserver, device id, token, or password.
+[Error]
+interface SessionStatusError {
+  Failed(string code, string description);
+};
+
+// P4-S11: NSE read-only store status. Never reports tokens or start SyncService.
+dictionary NseStoreDto {
+  boolean read_only;
+  boolean owners_attached;
+  boolean sync_started;
+};
+
+// Local-store notification preview. Missing events fail closed; this DTO is
+// only returned when a matching event is already in the persisted store.
+dictionary NseEventPreviewDto {
+  string event_type;
+  string? sender_id;
+  string? body;
+  string? message_type;
+};
+
+// Static source constants only. Never echo room id, event id, user id, path, or token.
+[Error]
+interface NseStoreError {
+  Failed(string code, string description);
+};
+
+// P4-S10 leftover retirement. Status fields only; no passphrase, recovery key, or token.
+dictionary BackupStatusDto {
+  u64 session_generation;
+  string availability;
+  boolean enabled;
+  string device_state;
+  string recovery_state;
+  string action;
+};
+
+dictionary CryptoStatusDto {
+  u64 session_generation;
+  boolean encryption_enabled;
+  string cross_signing_state;
+};
+
+dictionary CrossSigningStatusDto {
+  u64 session_generation;
+  string readiness;
+};
+
+dictionary RoomKeyTransferStatusDto {
+  u64 session_generation;
+  string phase;
+  u32 keys_processed;
+};
+
+dictionary LeftoverAckDto {
+  string status;
+};
+
+dictionary LeftoverBytesDto {
+  bytes payload;
+};
+
+// Static source constants only. Never echo password, recovery key, event, body, bytes, URL, or token.
+[Error]
+interface LeftoverCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe typing room row. No tokens or password.
+dictionary TypingRoomDto {
+  string room_id;
+  sequence<string> user_ids;
+};
+
+// Privacy-safe typing snapshot from the registered Core command.
+dictionary TypingSnapshotDto {
+  u64 session_generation;
+  sequence<TypingRoomDto> rooms;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface TypingCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe presence snapshot. Identity fields only; no tokens or password.
+dictionary PresenceSnapshotDto {
+  string status;
+  u64 session_generation;
+  string user_id;
+  string? state;
+  boolean currently_active;
+  u64? last_active_ts;
+  string? status_msg;
+};
+
+// Privacy-safe presence subscription. No tokens or password.
+dictionary PresenceSubscriptionDto {
+  string subscription_id;
+  string user_id;
+  u64 session_generation;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface PresenceCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe SAS emoji. User-visible comparison only; no key material.
+dictionary VerificationEmojiDto {
+  string symbol;
+  string description;
+};
+
+// Privacy-safe SAS comparison. Emoji/decimals only; no tokens or MACs.
+dictionary VerificationSasDto {
+  sequence<VerificationEmojiDto>? emoji;
+  sequence<u16>? decimals;
+};
+
+// Privacy-safe verification request row. Identity/flow fields only; no tokens.
+// S8 list omits SAS. S9 mutation returns may include optional SAS comparison.
+dictionary VerificationRequestDto {
+  string flow_id;
+  string other_user_id;
+  string? other_device_id;
+  string direction;
+  string phase;
+  u64? started_ts;
+  VerificationSasDto? sas;
+};
+
+// Privacy-safe verification inbox from the registered Core command.
+dictionary VerificationInboxDto {
+  u64 session_generation;
+  sequence<VerificationRequestDto> requests;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface VerificationListError {
+  Failed(string code, string description);
+};
+
+// Static source constants only. Never echo user id, device id, flow id, token, or password.
+[Error]
+interface VerificationSasError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe device row. Identity/presentation fields only; no keys or tokens.
+dictionary DeviceSummaryDto {
+  string device_id;
+  string? display_name;
+  string? last_seen_ip;
+  u64? last_seen_ts;
+  string trust;
+  boolean is_current;
+};
+
+// Privacy-safe device inbox. No tokens or password.
+dictionary DeviceSnapshotDto {
+  u64 session_generation;
+  sequence<DeviceSummaryDto> devices;
+};
+
+// Privacy-safe delete challenge. Authentication type only; no password secret.
+dictionary DeviceDeleteChallengeDto {
+  u64 operation_id;
+  u64 session_generation;
+  string authentication;
+  boolean authentication_failed;
+};
+
+// Privacy-safe delete start result. Complete snapshot or challenge; no password secret.
+dictionary DeviceDeleteDto {
+  string outcome;
+  DeviceSnapshotDto? snapshot;
+  DeviceDeleteChallengeDto? challenge;
+};
+
+
+// Static source constants only. Never echo user id, device id, token, or password.
+[Error]
+interface DeviceCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe join-rule snapshot. Closed vocabulary only; no allow-list or tokens.
+dictionary RoomJoinRuleSnapshotDto {
+  string status;
+  string room_id;
+  u64 session_generation;
+  string join_rule;
+};
+
+// Static source constants only. Never echo room id, user id, token, or password.
+[Error]
+interface JoinRuleCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe image-pack row. Metadata/IDs/mxc URLs/JSON only; never image bytes.
+dictionary ImagePackDto {
+  string id;
+  string? room_id;
+  string? state_key;
+  string content_json;
+};
+
+// Privacy-safe user pack snapshot from the registered Core command.
+dictionary UserImagePackSnapshotDto {
+  u64 session_generation;
+  ImagePackDto? pack;
+};
+
+// Privacy-safe room pack snapshot from the registered Core command.
+dictionary RoomImagePacksSnapshotDto {
+  u64 session_generation;
+  string room_id;
+  sequence<ImagePackDto> packs;
+};
+
+// Privacy-safe global pack snapshot from the registered Core command.
+dictionary GlobalImagePacksSnapshotDto {
+  u64 session_generation;
+  sequence<ImagePackDto> packs;
+};
+
+// Privacy-safe pack write ack. Status only; no content or bytes.
+dictionary ImagePackWriteDto {
+  string status;
+};
+
+// Static source constants only. Never echo room id, pack JSON, token, or password.
+[Error]
+interface ImagePackCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe later item. Room/event ids and timestamps only; no tokens or bytes.
+dictionary LaterItemDto {
+  string id;
+  string kind;
+  string room_id;
+  string event_id;
+  f64 created_at;
+  f64? due_ts;
+  f64? reminded_at;
+  f64? completed_at;
+};
+
+// Privacy-safe later snapshot from the registered Core command.
+dictionary LaterSnapshotDto {
+  u64 session_generation;
+  u32 version;
+  sequence<LaterItemDto> items;
+};
+
+// Static source constants only. Never echo room id, event id, item id, token, or password.
+[Error]
+interface LaterCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe m.direct snapshot. User/room ids are the product map; no tokens.
+dictionary MDirectSnapshotDto {
+  u64 session_generation;
+  sequence<string> room_ids;
+  sequence<string> user_ids;
+};
+
+// Privacy-safe m.direct write ack. Status and the mutated room id only.
+dictionary MDirectMutationDto {
+  string room_id;
+  string status;
+};
+
+// Static source constants only. Never echo user id, room id, token, or password.
+[Error]
+interface MDirectCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe room-note item. Body/ids/timestamps may cross; no tokens or bytes.
+dictionary RoomNoteItemDto {
+  string id;
+  string kind;
+  string room_id;
+  f64 created_at;
+  f64 updated_at;
+  string? body;
+  f64? completed_at;
+  f64? order;
+  string? event_id;
+  f64? event_ts;
+  string? sender;
+};
+
+// Privacy-safe room-notes snapshot from the registered Core command.
+dictionary RoomNotesSnapshotDto {
+  u64 session_generation;
+  u32 version;
+  sequence<RoomNoteItemDto> items;
+};
+
+// Static source constants only. Never echo note body, room id, item id, token, or password.
+[Error]
+interface RoomNotesCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe own-profile write ack. Status only; no display name, mxc, or bytes.
+dictionary OwnProfileWriteDto {
+  string status;
+};
+
+// Static source constants only. Never echo display name, mxc, token, or password.
+[Error]
+interface OwnProfileCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe room-profile write ack. Status only; no room id, name, topic, mxc, or bytes.
+dictionary RoomProfileWriteDto {
+  string status;
+};
+
+// Static source constants only. Never echo room id, name, topic, mxc, token, or password.
+[Error]
+interface RoomProfileCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe directory-visibility read. Visibility is public/private only.
+dictionary RoomDirectoryVisibilityDto {
+  string status;
+  string room_id;
+  u64 session_generation;
+  string visibility;
+};
+
+// Privacy-safe directory-visibility write ack. Visibility is public/private only.
+dictionary RoomDirectoryVisibilityWriteDto {
+  string status;
+  string room_id;
+  u64 session_generation;
+  string requested_visibility;
+};
+
+// Static source constants only. Never echo room id, visibility, token, or password.
+[Error]
+interface DirectoryVisibilityCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe third-party directory protocol instance. Ids and description only.
+dictionary RoomDirectoryProtocolInstanceDto {
+  string protocol_id;
+  string instance_id;
+  string description;
+};
+
+// Privacy-safe protocol list. No tokens or password.
+dictionary RoomDirectoryProtocolsDto {
+  u64 session_generation;
+  sequence<RoomDirectoryProtocolInstanceDto> instances;
+};
+
+// Privacy-safe public-directory room hit. Metadata only; avatar_url is mxc, never bytes.
+dictionary RoomDirectoryHitDto {
+  string room_id;
+  string? name;
+  string? topic;
+  string? canonical_alias;
+  string? avatar_url;
+  u32 member_count;
+  boolean world_readable;
+  boolean guest_can_join;
+  string room_type;
+};
+
+// Privacy-safe search page. Room metadata only; no avatar bytes.
+dictionary RoomDirectoryPageDto {
+  u64 session_generation;
+  u64 request_id;
+  sequence<RoomDirectoryHitDto> chunk;
+  string? prev_batch;
+  string? next_batch;
+};
+
+// Privacy-safe search/cancel result. Status is ready/stale/cancelled.
+dictionary RoomDirectorySearchDto {
+  u64 session_generation;
+  u64 request_id;
+  string status;
+  RoomDirectoryPageDto? page;
+};
+
+// Static source constants only. Never echo term, server, room id, token, or password.
+[Error]
+interface DirectorySearchCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe room leave/join write ack. Status only; no room id, alias, or via servers.
+dictionary RoomMembershipWriteDto {
+  string status;
+};
+
+// Static source constants only. Never echo room id, alias, via server, token, or password.
+[Error]
+interface RoomMembershipCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe room invite/kick/ban/unban write ack. Status only; no room id, user id, or reason.
+dictionary RoomModerationWriteDto {
+  string status;
+};
+
+// Static source constants only. Never echo room id, user id, reason, token, or password.
+[Error]
+interface RoomModerationCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe room power-level write ack. Status only; no room id, user id, power level, or content.
+dictionary RoomPowerLevelWriteDto {
+  string status;
+};
+
+// Static source constants only. Never echo room id, user id, power level, content, token, or password.
+[Error]
+interface RoomPowerLevelCommandError {
+  Failed(string code, string description);
+};
+
+// Typed room-create request. Core scalar fields only. No path, passphrase, bytes,
+// nested create-content (spaces/room type), or power-level overrides.
+dictionary RoomCreateRequestDto {
+  string? name;
+  string? topic;
+  string? room_alias_name;
+  string? visibility;
+  string? preset;
+  boolean is_direct;
+  boolean encryption;
+  sequence<string> invite;
+  string? room_version;
+  string? join_rule;
+  boolean knock;
+  string? parent_room_id;
+};
+
+// Privacy-safe room-create result. Created room id only; no name, topic, alias, or invite.
+dictionary RoomCreateDto {
+  string room_id;
+};
+
+// Static source constants only. Never echo name, topic, alias, invite, parent, token, or password.
+[Error]
+interface RoomCreateCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe room member row. Ids, display name, mxc, membership, and power only.
+dictionary RoomMemberDto {
+  string room_id;
+  string user_id;
+  string? display_name;
+  string? avatar_url;
+  string membership;
+  i32 power_level;
+  boolean? is_direct_target;
+};
+
+// Privacy-safe members snapshot. Member rows only; no tokens, paths, or bytes.
+dictionary RoomMembersSnapshotDto {
+  u64 session_generation;
+  string room_id;
+  sequence<RoomMemberDto> members;
+};
+
+// Privacy-safe power-levels snapshot. Content is JSON text; no tokens or bytes.
+dictionary RoomPowerLevelsSnapshotDto {
+  string status;
+  u64 session_generation;
+  string room_id;
+  string event_type;
+  string state_key;
+  string content_json;
+};
+
+// Privacy-safe creators snapshot. Creator user ids only; no tokens or bytes.
+dictionary RoomCreatorsSnapshotDto {
+  string status;
+  u64 session_generation;
+  string room_id;
+  string event_type;
+  string state_key;
+  sequence<string> creators;
+};
+
+// Privacy-safe power-level-tags snapshot. Content is JSON text; no tokens or bytes.
+dictionary RoomPowerLevelTagsSnapshotDto {
+  string status;
+  u64 session_generation;
+  string room_id;
+  string event_type;
+  string state_key;
+  string content_json;
+};
+
+// Static source constants only. Never echo room id, member user ids, token, or password.
+[Error]
+interface RoomMembersSnapshotError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe space parent row. Child room id plus parent room ids only.
+dictionary SpaceParentEntryDto {
+  string room_id;
+  sequence<string> parent_ids;
+};
+
+// Privacy-safe space parents snapshot. Entries only; no tokens, paths, or bytes.
+dictionary SpaceParentsSnapshotDto {
+  u64 session_generation;
+  sequence<SpaceParentEntryDto> entries;
+};
+
+// Privacy-safe hierarchy room. Metadata only; avatar is an mxc reference.
+dictionary SpaceHierarchyRoomDto {
+  string room_id;
+  string? name;
+  string? canonical_alias;
+  string? topic;
+  string? avatar_url;
+  string? room_type;
+  u64 num_joined_members;
+  string join_rule;
+  boolean world_readable;
+  boolean guest_can_join;
+};
+
+// Privacy-safe space hierarchy snapshot. Room metadata only; no bytes.
+dictionary SpaceHierarchySnapshotDto {
+  u64 session_generation;
+  sequence<SpaceHierarchyRoomDto> rooms;
+};
+
+// Privacy-safe local space-child edge. Room ids, order, suggested, via only.
+dictionary SpaceChildEdgeDto {
+  string parent_id;
+  string child_id;
+  string? order;
+  boolean suggested;
+  sequence<string> via;
+  u64 origin_server_ts;
+};
+
+// Privacy-safe space children snapshot. Edges only; no tokens, paths, or bytes.
+dictionary SpaceChildrenSnapshotDto {
+  u64 session_generation;
+  sequence<SpaceChildEdgeDto> edges;
+};
+
+// Privacy-safe space-child write ack. Room ids and status only.
+dictionary SpaceChildMutationDto {
+  string parent_id;
+  string child_id;
+  string status;
+};
+
+// Privacy-safe restricted-join reparent ack. Room id and status only.
+dictionary RestrictedJoinReparentDto {
+  string room_id;
+  string status;
+};
+
+// Static source constants only. Never echo room id, via, order, token, or password.
+[Error]
+interface SpaceCommandError {
+  Failed(string code, string description);
+};
+
+// Static source constants only. Never echo room id, sender id, token, or password.
+[Error]
+interface InviteActionError {
+  Failed(string code, string description);
+};
+
+// P4-S2 constructor stays fail-closed. P4-S3a adds a vault-backed constructor.
+// UniFFI 0.28 Swift keeps `SharedCore()` for the primary constructor and
+// emits the named constructor as `SharedCore.newWithSecretStore(store:)`,
+// not a second `init(store:)`. P4-S3b adds restore_persisted_session.
+// P4-S3c adds dedicated login_with_password. P4-S3d adds attach_session_owners
+// for the desktop owner set. P4-S4 adds typed room_list_snapshot for
+// matrix_room_list_snapshot only. P4-S5 adds typed invites_snapshot for
+// matrix_invites_snapshot only. P4-S6 adds typed timeline_open /
+// timeline_close / timeline_paginate only. P4-S7 adds typed typing_snapshot /
+// typing_set / presence_snapshot / presence_subscribe / presence_unsubscribe
+// only. P4-S8 adds typed verification_list for matrix_verification_list only.
+// P4-S9 adds typed verification SAS start/accept/begin_sas/confirm/mismatch/cancel/dismiss.
+// P4-S9-2 adds typed device snapshot/rename/delete start/cancel only.
+// Backup/room-key/cross-signing stay off: leftover passphrase/path/password envelopes.
+// P4-S9-3 adds typed room_join_rule_snapshot only. No join-rule writer.
+// P4-S9-4 adds typed image-pack get/set for the six registered commands.
+// Pack metadata/IDs/URLs/JSON may cross. Image/media bytes stay off.
+// P4-S9-5 adds typed later snapshot/upsert/complete/snooze/clear_completed/mark_reminded.
+// P4-S9-6 adds typed m.direct snapshot/add/remove.
+// P4-S9-7 adds typed room-notes snapshot/upsert/delete/complete_todo/move_todo.
+// P4-S9-8 adds typed set_own_display_name / set_own_avatar.
+// Avatar is an mxc:// (or empty clear) reference only. Image bytes stay off.
+// P4-S9-9 adds typed set_room_name / set_room_topic / set_room_avatar.
+// Room avatar is an mxc:// (or empty clear) reference only. Image bytes stay off.
+// P4-S9-10 adds typed get/set room directory visibility.
+// P4-S9-11 adds typed directory protocols/search/cancel.
+// Search results stay metadata (ids/names/aliases/mxc). No avatar bytes.
+// P4-S9-12 adds typed room_leave / room_join.
+// Write ack is status only. Failed errors stay static and must not echo
+// room id, alias, or via servers.
+// P4-S9-13 adds typed room_invite / room_kick / room_ban / room_unban.
+// Write ack is status only. Failed errors stay static and must not echo
+// room id, user id, or reason.
+// P4-S9-14 adds typed room_set_power_level / room_set_power_levels /
+// room_set_power_level_tags. Write ack is status only. Failed errors stay
+// static and must not echo room id, user id, power level, or content JSON.
+// P4-S9-15 adds typed room_create for the registered room-create command only.
+// Request is name/topic/alias/visibility/preset plus Core scalar extras.
+// Nested create-content, power-level overrides, paths, passphrases, and
+// media bytes stay off. Success returns the created room id. Failed errors
+// stay static and must not echo name, topic, alias, invite, or parent.
+// P4-S9-16 adds typed room_members_snapshot / room_power_levels_snapshot /
+// room_creators_snapshot / room_power_level_tags_snapshot. These are reads.
+// Failed errors stay static and must not echo member user ids.
+// P4-S9-17 adds typed space parents/hierarchy/children snapshots plus child
+// set/remove and restricted-join reparent. Child set/remove are metadata
+// only (room ids, via, order, suggested). No bytes. Failed errors stay
+// static and must not echo room ids. Invite accept/decline stay off.
+// P4-S9-18 adds typed invite accept/decline/report-spam/block-sender.
+// These return the existing invite snapshot. Failed errors stay static
+// and must not echo room id or sender id. Timeline jump and read-state
+// stay off.
+// P4-S9-19 adds typed timeline event-readback / set-read-state / jump-latest.
+// Jump returns the existing open readback. Failed errors stay static
+// and must not echo event id, room id, or stream id. Timeline reactions
+// stay off.
+// P4-S9-21 adds typed composer set/get/clear reply-draft. These return the
+// existing reply-draft readback. Failed errors stay static and must not
+// echo room id or event id. Send text stays off.
+// P4-S11 adds a read-only NSE store API. It opens the persisted store and
+// looks up a local event preview. It never starts SyncService, never
+// attaches owners, and never boots leftover Client sync. Failed errors
+// stay static and must not echo room id, event id, user id, or tokens.
+// Password is a method argument only: not stored, not in the DTO, never echoed.
+// Still no generic command FFI, leftover registration, or APNs surface.
+interface SharedCore {
+  constructor();
+  [Name="new_with_secret_store"]
+  constructor(IosSecretVault store);
+
+  [Async, Throws=SessionRestoreError]
+  SessionRestoreDto restore_persisted_session(
+    string user_id,
+    string homeserver_url,
+    string store_root
+  );
+
+  [Async, Throws=SessionLoginError]
+  SessionLoginDto login_with_password(
+    string user_id,
+    string homeserver_url,
+    string store_root,
+    string password
+  );
+
+  [Async, Throws=SessionAttachError]
+  SessionAttachDto attach_session_owners();
+
+  [Async, Throws=RoomListSnapshotError]
+  RoomListSnapshotDto room_list_snapshot();
+
+  [Async, Throws=InviteSnapshotError]
+  InviteSnapshotDto invites_snapshot();
+
+  [Async, Throws=TimelineError]
+  TimelineOpenDto timeline_open(string room_id, TimelineOpenPositionDto position);
+
+  [Async, Throws=TimelineError]
+  boolean timeline_close(string stream_id);
+
+  [Async, Throws=TimelineError]
+  TimelineSnapshotDto timeline_paginate(string stream_id, string direction);
+
+  [Async, Throws=TypingCommandError]
+  TypingSnapshotDto typing_snapshot();
+
+  [Async, Throws=TypingCommandError]
+  void typing_set(string room_id, boolean typing);
+
+  [Async, Throws=PresenceCommandError]
+  PresenceSnapshotDto presence_snapshot(string user_id);
+
+  [Async, Throws=PresenceCommandError]
+  PresenceSubscriptionDto presence_subscribe(string user_id);
+
+  [Async, Throws=PresenceCommandError]
+  void presence_unsubscribe(string subscription_id);
+
+  [Async, Throws=VerificationListError]
+  VerificationInboxDto verification_list();
+
+  [Async, Throws=VerificationSasError]
+  VerificationRequestDto verification_start(string? device_id);
+
+  [Async, Throws=VerificationSasError]
+  VerificationRequestDto verification_accept(string flow_id);
+
+  [Async, Throws=VerificationSasError]
+  VerificationRequestDto verification_begin_sas(string flow_id);
+
+  [Async, Throws=VerificationSasError]
+  VerificationRequestDto verification_confirm(string flow_id);
+
+  [Async, Throws=VerificationSasError]
+  VerificationRequestDto verification_mismatch(string flow_id);
+
+  [Async, Throws=VerificationSasError]
+  VerificationRequestDto verification_cancel(string flow_id);
+
+  [Async, Throws=VerificationSasError]
+  void verification_dismiss(string flow_id);
+
+  [Async, Throws=DeviceCommandError]
+  DeviceSnapshotDto device_snapshot();
+
+  [Async, Throws=DeviceCommandError]
+  DeviceSnapshotDto device_rename(string device_id, string display_name);
+
+  [Async, Throws=DeviceCommandError]
+  DeviceDeleteDto device_delete_start(sequence<string> device_ids);
+
+  [Async, Throws=DeviceCommandError]
+  void device_delete_cancel(u64 operation_id, u64 session_generation);
+
+  [Async, Throws=JoinRuleCommandError]
+  RoomJoinRuleSnapshotDto room_join_rule_snapshot(string room_id, u64 session_generation);
+
+  [Async, Throws=ImagePackCommandError]
+  GlobalImagePacksSnapshotDto get_global_image_packs();
+
+  [Async, Throws=ImagePackCommandError]
+  UserImagePackSnapshotDto get_user_image_pack();
+
+  [Async, Throws=ImagePackCommandError]
+  RoomImagePacksSnapshotDto get_room_image_packs(string room_id);
+
+  [Async, Throws=ImagePackCommandError]
+  ImagePackWriteDto set_user_image_pack(string content_json);
+
+  [Async, Throws=ImagePackCommandError]
+  ImagePackWriteDto set_global_image_packs(string content_json);
+
+  [Async, Throws=ImagePackCommandError]
+  ImagePackWriteDto set_room_image_pack(string room_id, string state_key, string content_json);
+
+  [Async, Throws=LaterCommandError]
+  LaterSnapshotDto later_snapshot();
+
+  [Async, Throws=LaterCommandError]
+  LaterSnapshotDto later_upsert(LaterItemDto item);
+
+  [Async, Throws=LaterCommandError]
+  LaterSnapshotDto later_complete(string item_id, f64? completed_at);
+
+  [Async, Throws=LaterCommandError]
+  LaterSnapshotDto later_snooze(string item_id, f64 due_ts);
+
+  [Async, Throws=LaterCommandError]
+  LaterSnapshotDto later_clear_completed();
+
+  [Async, Throws=LaterCommandError]
+  LaterSnapshotDto later_mark_reminded(string item_id, f64? reminded_at);
+
+  [Async, Throws=MDirectCommandError]
+  MDirectSnapshotDto mdirect_snapshot();
+
+  [Async, Throws=MDirectCommandError]
+  MDirectMutationDto mdirect_add(string room_id, string user_id);
+
+  [Async, Throws=MDirectCommandError]
+  MDirectMutationDto mdirect_remove(string room_id);
+
+  [Async, Throws=RoomNotesCommandError]
+  RoomNotesSnapshotDto room_notes_snapshot();
+
+  [Async, Throws=RoomNotesCommandError]
+  RoomNotesSnapshotDto room_notes_upsert(RoomNoteItemDto item);
+
+  [Async, Throws=RoomNotesCommandError]
+  RoomNotesSnapshotDto room_notes_delete(string room_id, string item_id);
+
+  [Async, Throws=RoomNotesCommandError]
+  RoomNotesSnapshotDto room_notes_complete_todo(string room_id, string item_id, boolean completed);
+
+  [Async, Throws=RoomNotesCommandError]
+  RoomNotesSnapshotDto room_notes_move_todo(string room_id, string item_id, string direction);
+
+  [Async, Throws=OwnProfileCommandError]
+  OwnProfileWriteDto set_own_display_name(string display_name);
+
+  [Async, Throws=OwnProfileCommandError]
+  OwnProfileWriteDto set_own_avatar(string mxc);
+
+  [Async, Throws=RoomProfileCommandError]
+  RoomProfileWriteDto set_room_name(string room_id, string name);
+
+  [Async, Throws=RoomProfileCommandError]
+  RoomProfileWriteDto set_room_topic(string room_id, string topic);
+
+  [Async, Throws=RoomProfileCommandError]
+  RoomProfileWriteDto set_room_avatar(string room_id, string mxc);
+
+  [Async, Throws=DirectoryVisibilityCommandError]
+  RoomDirectoryVisibilityDto get_room_directory_visibility(string room_id, u64 session_generation);
+
+  [Async, Throws=DirectoryVisibilityCommandError]
+  RoomDirectoryVisibilityWriteDto set_room_directory_visibility(string room_id, u64 session_generation, string visibility);
+
+  [Async, Throws=DirectorySearchCommandError]
+  RoomDirectoryProtocolsDto room_directory_protocols();
+
+  [Async, Throws=DirectorySearchCommandError]
+  RoomDirectorySearchDto room_directory_search(u64 session_generation, u64 request_id, string? server_name, string? term, string? room_type, string? third_party_instance_id, u64 limit, string? since);
+
+  [Async, Throws=DirectorySearchCommandError]
+  RoomDirectorySearchDto room_directory_cancel(u64 session_generation, u64 request_id);
+
+  [Async, Throws=RoomMembershipCommandError]
+  RoomMembershipWriteDto room_leave(string room_id);
+
+  [Async, Throws=RoomMembershipCommandError]
+  RoomMembershipWriteDto room_join(string room_id_or_alias, sequence<string>? via_servers);
+
+  [Async, Throws=RoomModerationCommandError]
+  RoomModerationWriteDto room_invite(string room_id, string user_id, string? reason);
+
+  [Async, Throws=RoomModerationCommandError]
+  RoomModerationWriteDto room_kick(string room_id, string user_id, string? reason);
+
+  [Async, Throws=RoomModerationCommandError]
+  RoomModerationWriteDto room_ban(string room_id, string user_id, string? reason);
+
+  [Async, Throws=RoomModerationCommandError]
+  RoomModerationWriteDto room_unban(string room_id, string user_id);
+
+  [Async, Throws=RoomPowerLevelCommandError]
+  RoomPowerLevelWriteDto room_set_power_level(string room_id, string user_id, i64 power_level);
+
+  [Async, Throws=RoomPowerLevelCommandError]
+  RoomPowerLevelWriteDto room_set_power_levels(string room_id, string content_json);
+
+  [Async, Throws=RoomPowerLevelCommandError]
+  RoomPowerLevelWriteDto room_set_power_level_tags(string room_id, string content_json);
+
+  [Async, Throws=RoomCreateCommandError]
+  RoomCreateDto room_create(RoomCreateRequestDto request);
+
+  [Async, Throws=RoomMembersSnapshotError]
+  RoomMembersSnapshotDto room_members_snapshot(string room_id);
+
+  [Async, Throws=RoomMembersSnapshotError]
+  RoomPowerLevelsSnapshotDto room_power_levels_snapshot(string room_id);
+
+  [Async, Throws=RoomMembersSnapshotError]
+  RoomCreatorsSnapshotDto room_creators_snapshot(string room_id);
+
+  [Async, Throws=RoomMembersSnapshotError]
+  RoomPowerLevelTagsSnapshotDto room_power_level_tags_snapshot(string room_id);
+
+  [Async, Throws=SpaceCommandError]
+  SpaceParentsSnapshotDto space_parents_snapshot();
+
+  [Async, Throws=SpaceCommandError]
+  SpaceHierarchySnapshotDto space_hierarchy_snapshot(string room_id);
+
+  [Async, Throws=SpaceCommandError]
+  SpaceChildrenSnapshotDto space_children_snapshot();
+
+  [Async, Throws=SpaceCommandError]
+  SpaceChildMutationDto space_child_set(string parent_id, string child_id, sequence<string> via, string? order, boolean? suggested);
+
+  [Async, Throws=SpaceCommandError]
+  SpaceChildMutationDto space_child_remove(string parent_id, string child_id);
+
+  [Async, Throws=SpaceCommandError]
+  RestrictedJoinReparentDto restricted_join_reparent(string room_id, string? remove_parent_id, string add_parent_id);
+
+  [Async, Throws=InviteActionError]
+  InviteSnapshotDto invites_accept(string room_id);
+
+  [Async, Throws=InviteActionError]
+  InviteSnapshotDto invites_decline(string room_id);
+
+  [Async, Throws=InviteActionError]
+  InviteSnapshotDto invites_report_spam(string room_id);
+
+  [Async, Throws=InviteActionError]
+  InviteSnapshotDto invites_block_sender(string room_id);
+
+  [Async, Throws=TimelineReadStateError]
+  TimelineEventReadbackDto timeline_event_readback(string room_id, string event_id);
+
+  [Async, Throws=TimelineReadStateError]
+  TimelineReadStateDto timeline_set_read_state(string stream_id, string action);
+
+  [Async, Throws=TimelineReadStateError]
+  TimelineOpenDto timeline_jump_latest(string stream_id);
+
+  [Async, Throws=TimelineReactionError]
+  TimelineReactionMutationDto reaction_ensure(string room_id, string event_id, string key);
+
+  [Async, Throws=TimelineReactionError]
+  TimelineReactionMutationDto reaction_redact(string room_id, string target_event_id, string reaction_event_id, string key);
+
+  [Async, Throws=TimelineReactionError]
+  TimelineReactionMutationDto timeline_reaction_toggle(string room_id, string event_id, string key);
+
+  [Async, Throws=ComposerReplyDraftError]
+  ComposerReplyDraftDto composer_set_reply_draft(string room_id, string event_id, boolean start_thread);
+
+  [Async, Throws=ComposerReplyDraftError]
+  ComposerReplyDraftDto composer_get_reply_draft(string room_id);
+
+  [Async, Throws=ComposerReplyDraftError]
+  ComposerReplyDraftDto composer_clear_reply_draft(string room_id);
+
+  [Async, Throws=SendTextError]
+  SendTextDto send_text(string room_id, string body, string? msg_type, string? formatted_body, sequence<string>? mention_user_ids, boolean? mention_room, string? reply_to, string? thread_root, string? txn_id);
+
+  [Async, Throws=SendStickerError]
+  SendStickerDto send_sticker(string room_id, string body, string mxc, u64? width, u64? height, string? mimetype, u64? size, string? reply_to, string? thread_root);
+
+  [Async, Throws=SendPollError]
+  SendPollDto send_poll(string room_id, string question, sequence<string> answers, u32 max_selections, string? thread_root, string? reply_to);
+
+  [Async, Throws=EditMessageError]
+  EditMessageDto edit_message(string room_id, string event_id, string body, string? msg_type, string? formatted_body, sequence<string>? mention_user_ids, boolean? mention_room, string? txn_id);
+
+  [Async, Throws=PollRespondError]
+  PollRespondDto poll_respond(string room_id, string poll_event_id, sequence<string> answer_ids);
+
+  [Async, Throws=TimelineMutateError]
+  TimelineMutateDto timeline_edit_text(string room_id, string event_id, string body, string? formatted_body);
+
+  [Async, Throws=TimelineMutateError]
+  TimelineMutateDto timeline_redact(string room_id, string event_id, string? reason);
+
+  [Async, Throws=TimelineMutateError]
+  TimelineMutateDto timeline_report(string room_id, string event_id, string? reason);
+
+  [Async, Throws=TimelinePinError]
+  TimelinePinDto timeline_pin(string room_id, string event_id);
+
+  [Async, Throws=TimelinePinError]
+  TimelinePinDto timeline_unpin(string room_id, string event_id);
+
+  [Async, Throws=TimelineVoteDeclineError]
+  TimelineVoteDeclineDto timeline_poll_vote(string room_id, string event_id, sequence<string> answer_ids);
+
+  [Async, Throws=TimelineVoteDeclineError]
+  TimelineVoteDeclineDto timeline_call_decline(string room_id, string event_id);
+
+  [Async, Throws=TimelineForwardError]
+  TimelineForwardDto timeline_forward_text(string source_room_id, string event_id, string target_room_id, boolean as_quote);
+
+  [Async, Throws=TimelineForwardError]
+  TimelineForwardDto timeline_forward_media(string source_room_id, string event_id, string target_room_id);
+
+  [Async, Throws=SessionStatusError]
+  SessionSnapshotDto session_snapshot();
+
+  [Async, Throws=SessionStatusError]
+  SyncStatusDto sync_status();
+
+  [Async, Throws=SessionStatusError]
+  MediaConfigDto media_config();
+
+  [Async, Throws=SessionStatusError]
+  SecretStorageStatusDto secret_storage_status();
+
+  [Async, Throws=NseStoreError]
+  NseStoreDto nse_open_read_only_store(
+    string user_id,
+    string homeserver_url,
+    string store_root
+  );
+
+  [Async, Throws=NseStoreError]
+  NseStoreDto nse_store_status();
+
+  [Async, Throws=NseStoreError]
+  NseEventPreviewDto nse_event_preview(string room_id, string event_id);
+
+  [Async, Throws=LeftoverCommandError]
+  BackupStatusDto backup_status();
+
+  [Async, Throws=LeftoverCommandError]
+  CryptoStatusDto crypto_status();
+
+  [Async, Throws=LeftoverCommandError]
+  CrossSigningStatusDto cross_signing_status();
+
+  [Async, Throws=LeftoverCommandError]
+  RoomKeyTransferStatusDto room_key_transfer_status();
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverAckDto wipe_persisted_stores(string store_root);
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverAckDto logout();
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverAckDto recover(string recovery_key);
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverAckDto send_raw_room_event(string room_id, string event_type, string content_json);
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverAckDto set_notification_mode(string room_id, string mode);
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverBytesDto media_download(string mxc);
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverBytesDto media_thumbnail(string mxc, u64 width, u64 height);
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverAckDto media_upload(bytes payload, string mime_type, string filename);
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverBytesDto room_avatar_bytes(string room_id);
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverAckDto pusher_set(string push_key, string app_id, string gateway_url, string app_display_name, string device_display_name, string lang);
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverAckDto pusher_delete(string push_key, string app_id);
+
+};
