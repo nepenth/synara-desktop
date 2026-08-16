@@ -68,8 +68,10 @@ timeline, and crypto are not implemented twice.
 
 **Today:** that end state has not been reached. Desktop already drives
 most product Matrix I/O through Core (`Core::command`, 111 registered
-names). iOS still re-implements the live engine in Swift. The branch is
-`feature/shared-native-core` only — not `main`, not a release.
+names). iOS product `MatrixRustSDK` callers are retired via leftover
+UniFFI (#986); leftover I/O fail-closes without a live homeserver and
+does not start SyncService. This is not iOS-on-engine. SNC engineering
+is on `main` via #991. It is not a release.
 
 How to implement the remaining gap without confusion:
 [11-implementer-playbook.md](11-implementer-playbook.md).
@@ -88,6 +90,7 @@ set. Do not tick them from a single PR.
   returns zero hits after P4 (supporting service names may live on in a thin
   adapter layer).
 - A single feature toggle/bugfix authored once in `synara-core` lands on both
-  platforms (demonstrated by at least one post-P4 change).
-- Work has been merged from `feature/shared-native-core` to `main` only
-  after engineering finish is accepted. Release is a later, separate gate.
+  platforms (demonstrated by at least one post-P4 change). **Not claimed.**
+- SNC engineering merged to `main` in #991 (`05a0961c`). That merge is not
+  program-done, P4 acceptance, or a release. Release remains a later,
+  separate gate.

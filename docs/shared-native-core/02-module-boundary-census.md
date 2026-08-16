@@ -2,8 +2,8 @@
 
 All paths relative to the repository root. Census technique: `git ls-files`,
 `grep -rl`, `grep -rn` over `src-tauri/src`, `synara-ios`, `.github/workflows`.
-The current source evidence is `feature/shared-native-core`
-`162d9dff` (#988 iOS CI re-enable after #987).
+The current source evidence is `main`
+`05a0961c` (#991 merge of `feature/shared-native-core`).
 
 ## 2.1 Desktop application-logic layer
 

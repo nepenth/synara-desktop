@@ -1,14 +1,12 @@
 # 06 — Migration Phases (P1–P5)
 
 Methodology mirrors the js→rust burn-down: small additive slices, each a
-squashed PR onto `feature/shared-native-core` with a provenance anchor and the
+squashed PR onto `main` with a provenance anchor and the
 path-scoped CI required by the workflow plus its aggregate Quality gate.
-On PRs that target the development feature branch, mechanical `src/app/`
-harness moves run fmt/clippy/check (clippy compiles tests) and skip
-`cargo test` plus Synapse live proofs unless send/timeline product commands
-or `live_synapse_proof` change. Desktop package and full Synapse evidence
-run only when selected or explicitly required by the relevant protected,
-integration, or release path. **Never a big-bang move.**
+The former `feature/shared-native-core` mechanical-extract shortcut no
+longer applies. Desktop package and full Synapse evidence run when
+selected or required by the relevant protected, integration, or release
+path. **Never a big-bang move.**
 
 ## P0 — ADR + plan + census (done)
 
@@ -20,8 +18,8 @@ integration, or release path. **Never a big-bang move.**
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
 
-**Current bounded status at `162d9dff`
-(#988):** #713 mechanically moved notifications, polls,
+**Current bounded status at `05a0961c`
+(#991):** #713 mechanically moved notifications, polls,
 relations, threads, and unread; #714 moved raw content, receipts, routes, and
 security; #716 moved search, legacy, and media_cache; #717 moved media_export
 and crypto_store; #734 moved the room-directory session harness; #735 moved
@@ -155,14 +153,18 @@ Goal: iOS consumes the same engine; Swift re-implementations retired.
    - #980 desktop source-scan hygiene after the S9 rematch
    - #981 docs honesty after #980
    - #982 records local UniFFI generate
-   - #983 records S10 leftover stop (not a product retirement)
+   - #983 recorded a temporary S10 leftover stop (superseded by operator authorization + #986)
    - P4-S11 NSE read-only store API — landed in #984 (never starts sync; helper + XCTest; not a product NSE swap)
    - #985 refreshes provenance
-   - P4-S10 leftover UniFFI + product caller retirement — landed in #986
+   - P4-S10 leftover UniFFI + product caller retirement — landed in #986 (operator-authorized)
    - #987 refreshes provenance
-   - #988 re-enables iOS CI (Quality green including iOS, not skipped)
+   - #988 re-enables iOS CI (Quality green including iOS, not skipped; not `if: false`)
+   - #989 refreshes provenance
+   - #990 union-preserves `main` store recovery into SNC
+   - #992 raises rustc recursion limit for Linux release builds
+   - #991 merges SNC engineering onto `main` (`05a0961c`; Quality + iOS + package smoke green)
    - Local Apple UniFFI generate has been run; generated sources remain gitignored
-   - Product `MatrixRustSDK` grep is comments only; leftover I/O fail-closed; SyncService not started; iOS CI re-enabled
+   - Product `MatrixRustSDK` grep is comments only; leftover I/O fail-closed; SyncService not started; iOS CI on
 4. Remove `matrix-rust-components-swift` from `project.yml` when nothing
    references `MatrixRustSDK` anymore.
 
@@ -171,8 +173,8 @@ core; `grep -rn 'MatrixRustSDK' synara-ios/Synara --include='*.swift'` returns
 zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
 
-> **Bounded evidence note — not P4 acceptance:** At the current feature tip
-> `162d9dff` (#988), UniFFI exposes credential-free `login_flows` /
+> **Bounded evidence note — not P4 acceptance:** At the current `main` tip
+> `05a0961c` (#991), UniFFI exposes credential-free `login_flows` /
 > `register_flows`, SharedCore constructors, S3 vault/restore/login/attach,
 > typed wrappers through S9-31, the S11 NSE read-only store helper
 > (never starts sync; not a product NSE swap), and S10 leftover UniFFI.
