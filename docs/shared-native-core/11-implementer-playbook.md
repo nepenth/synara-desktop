@@ -10,9 +10,9 @@ Older “144 `Core::command` handlers” sentences in `03-target-architecture.md
 and `06-migration-phases.md` are stale. Do not register the 21 leftovers in
 section 6 to satisfy them.
 
-Evidence tip when this playbook was written: `feature/shared-native-core`
-`162d9dff` (#988 iOS CI re-enable after #987). Re-fetch before you start.
-Do not treat this SHA as eternal.
+Evidence tip when this playbook was written: `main`
+`05a0961c` (#991 merge of `feature/shared-native-core`). Re-fetch
+before you start. Do not treat this SHA as eternal.
 
 ---
 
@@ -22,8 +22,8 @@ One Rust core (`crates/synara-core`) that both the desktop Tauri app
 (macOS and Linux) and the iOS app consume, so sync, room list, timeline,
 and crypto are not implemented twice.
 
-That end state has **not** been reached. The work lives only on
-`feature/shared-native-core`. It is not on `main`. It is not a release.
+That end state has **not** been reached. SNC engineering is on `main`
+via #991. It is not a release.
 
 Never claim the program is 100% complete. Never claim iOS is on the
 shared engine. Never claim P5 or MAC-IOS-006 is done.
@@ -36,8 +36,8 @@ shared engine. Never claim P5 or MAC-IOS-006 is done.
 |---|---|
 | Desktop macOS/Linux | Live Matrix `Client` and native owners live in Core. React still invokes `matrix_*`. **111** of those names are registered on `Core::command`. Desktop is a thinner shell, not a thin shell. |
 | iOS | UniFFI scaffold through S9-31 + S11 NSE read-only store helper (never starts sync; not a product NSE swap) + **S10 leftover UniFFI** (#986). `AppEnvironment.live()` constructs one caller-owned `SharedCore` and SharedCore product services. Product `MatrixRustSDK` callers are retired (comments may remain). Leftover wipe/logout are local-only; recover/raw-send/media/pusher/notification/avatar and leftover status reads fail closed without a live homeserver and do not start SyncService. This is not iOS-on-engine and not P4 acceptance. Local Apple generate has been run; generated sources remain gitignored. Checked-in `SynaraCore.swift` remains the bootstrap stub. iOS CI is re-enabled (#988): `ios-tests` runs when the iOS path filter matches; Quality on #988 was green including iOS (ran, not skipped). XCTest construction of `SharedCore` is not iOS-on-engine. |
-| `main` | Diverged. Recovery / MAC-IOS-006 docs live there. Not feature evidence. |
-| Release | Forbidden until engineering finish is accepted and then merged to `main`. |
+| `main` | SNC engineering tip. #991 merged `feature/shared-native-core` (`172df893`, including #992) with prior `main` (`60876379`). Quality + iOS + package smoke were green. |
+| Release | Forbidden until program-done is accepted and P5 operator/Apple gates pass. #991 is not a release. |
 
 Census size: `REACT_MATRIX_COMMAND_CENSUS` in
 `crates/synara-core/src/transport/census.rs` is the full React/Tauri
@@ -48,12 +48,11 @@ and fail-closed.** Those 21 are intended shell leftovers (section 6).
 
 ## 3. Absolute rules (break any one and stop)
 
-1. Merge product/docs/CI slices only to `feature/shared-native-core`.
-2. Never merge `main` except the operator-approved integration merge
-   of this branch after leftover retirement and iOS CI re-enable are
-   on the tip and that PR's Quality is fully green including iOS
-   (not skipped). Never touch #39, #705, #672, tags, or releases.
-   Do not squash the entire SNC program unless protection requires it.
+1. Merge product/docs/CI slices to `main`. The
+   `feature/shared-native-core` lane ended at #991.
+2. Never rewrite `main` history. Never force-push. Never touch #39,
+   #705, #672, tags, or releases. Do not start P5. Do not squash the
+   entire SNC program.
 3. Never claim 100%, iOS shared-engine parity, or Apple readiness.
 4. Core may use `matrix_sdk`. Core must not import Tauri. Core must not
    depend on the `keyring` crate.
@@ -79,21 +78,21 @@ and fail-closed.** Those 21 are intended shell leftovers (section 6).
     If disk is under 20 Gi: stop. Docs-only PRs are still allowed.
     Do not change UDL. Do not hand-edit generated Swift. Do not invent
     a no-bindgen path.
-11. After each **product** PR: squash-merge to `feature/shared-native-core`
-    only, then a **docs honesty** PR, then **re-run section 5**. If
-    section 5 step 4, stop. Do not start a second product slice to keep
-    a turn busy.
-12. `gh pr create --base feature/shared-native-core`. Merge with
+11. After each **product** PR: squash-merge to `main`, then a
+    **docs honesty** PR, then **re-run section 5**. If section 5
+    step 4, stop. Do not start a second product slice to keep a
+    turn busy.
+12. `gh pr create --base main`. Merge with
     `gh pr merge N --squash`. Do not pass `--delete-branch` if the
-    feature branch is checked out locally (GitHub still merges).
+    working branch is checked out locally (GitHub still merges).
 13. Do not launch DeepSeek on scheduler fires.
 14. MAC-IOS-006 is operator-gated. It is not the coding path.
 15. Apple-only UI, Keychain, APNs, and NSE stay Swift. Logic moves; UI
     does not.
 
-Worktree for this program: `synara-desktop-snc-image-packs`.
-The owner surface is `origin/feature/shared-native-core`, not the folder
-name. Orchestrator notes: `/Users/nepenthe/.grok/snc-orchestrator/STATE.md`.
+The owner surface is `origin/main`. Leftover SNC worktrees on disk are
+historical; do not treat a folder name as the tip. Orchestrator notes:
+`/Users/nepenthe/.grok/snc-orchestrator/STATE.md`.
 
 ---
 
@@ -111,9 +110,9 @@ These are numbered owner calls. Do not re-litigate them in a slice PR.
 | 6 | Register Core commands only as capabilities land. No speculative routes. |
 | 7B | Route remaining `matrix_*` through `Core::command` as owners land. Desktop leftovers in section 6 stay desktop. |
 | 8B | Serial iOS after Core owns a live client. Apple-only stays Swift. |
-| 9 | Feature branch only until engineering complete, then `main`. |
+| 9 | Feature-branch-only period ended at #991. Future slices target `main`. |
 | 10 | Continue engineering. MAC-IOS-006 is not the coding path. |
-| 11 | No release until shared core is complete and merged to `main`. |
+| 11 | No release until shared core is program-done and P5 gates pass. #991 is not a release. |
 | 12 | Apple proof stays operator-gated. |
 | 13 | DeepSeek paused. Grok does the routes. |
 
@@ -142,21 +141,25 @@ Run this checklist in order. Stop at the first yes.
    S9-27/#975, S9-28/#976, S9-29/#977, S9-30/#978, and
    S9-31/#979 landed. #980 is CI hygiene after the S9 rematch.
    #981 refreshes provenance. #982 records local UniFFI generate.
-   #983 records the S10 leftover stop. #984 lands S11 NSE
-   read-only store (helper + XCTest; never starts sync; not a
-   product NSE swap). #985 refreshes provenance. #986 lands S10
-   leftover UniFFI and retires product `MatrixRustSDK` callers
-   (operator authorized leftovers to cross UniFFI; leftover I/O
-   that needs a live homeserver stays fail-closed planted). #987
-   refreshes provenance. #988 re-enables iOS CI (removes `if: false`;
-   Quality on #988 green including iOS, not skipped) and restores
-   Later sort/complete helpers. Local Apple UniFFI generate has been
-   run; generated sources remain gitignored. Next operator-approved
-   step is merge this branch to `main` only after that PR's Quality
-   is fully green including iOS (not skipped). Do not start P5.
-   Four-target release bindgen needs headroom well above 20 Gi for
-   the whole run, not just at start. If disk is under 20 Gi: stop.
-   Docs-only PRs are still allowed.
+   #983 recorded a temporary S10 leftover stop (playbook §9.6).
+   Operator authorization plus #986 superseded that stop. #984
+   lands S11 NSE read-only store (helper + XCTest; never starts
+   sync; not a product NSE swap). #985 refreshes provenance. #986
+   lands S10 leftover UniFFI and retires product `MatrixRustSDK`
+   callers (operator authorized leftovers to cross UniFFI; leftover
+   I/O that needs a live homeserver stays fail-closed planted).
+   #987 refreshes provenance. #988 re-enables iOS CI (removes
+   `if: false`; Quality on #988 green including iOS, not skipped)
+   and restores Later sort/complete helpers. #989 refreshes
+   provenance. #990 union-preserves `main` store recovery. #992
+   raises the rustc recursion limit. #991 merges SNC onto `main`
+   (`05a0961c`; Quality + iOS + package smoke green). Local Apple
+   UniFFI generate has been run; generated sources remain
+   gitignored. Checked-in `SynaraCore.swift` remains the bootstrap
+   stub. Do not start P5. Dual-platform Core bugfix proof is not
+   claimed. Four-target release bindgen needs headroom well above
+   20 Gi for the whole run, not just at start. If disk is under
+   20 Gi: stop. Docs-only PRs are still allowed.
 4. **Otherwise stop.** Update `STATE.md`. Do not open a padding PR.
    Do not route logout, email-token, or media "just to have a merge."
 
@@ -235,7 +238,7 @@ Use this only when section 5 step 2 is yes.
 
 ### 8.1 Before you type
 
-- `git fetch origin feature/shared-native-core`
+- `git fetch origin main`
 - Worktree clean. Branch `agent/snc-<short-name>` from origin tip.
 - Confirm the census name exists and is **not** already in
   `core.registered_commands()`.
@@ -265,7 +268,7 @@ Use this only when section 5 step 2 is yes.
    bridge and `!active.client`.
 9. `rustfmt --edition 2021` from the worktree on touched `.rs` files.
 10. Commit `feat(core): route <name> through Core::command`.
-11. `gh pr create --base feature/shared-native-core`.
+11. `gh pr create --base main`.
 12. `gh pr merge N --squash` with subject ending `(#N)`.
 13. Docs honesty PR (section 10).
 14. Re-run section 5. If step 4, stop.
@@ -499,7 +502,8 @@ allowed. Do not change UDL.
 ### 9.4c P4-S3c — password login (Option A chosen)
 
 S3b landed in #937 (`4edfc1f5`). S3c landed in #938 (`9b4ec54f`).
-This slice proceeds from that tip on `feature/shared-native-core`.
+This slice proceeded from that tip on `feature/shared-native-core`
+and is now on `main` via #991.
 
 **Chosen: Option A — dedicated `SharedCore.login_with_password` FFI.**
 
@@ -547,11 +551,13 @@ S9-30 timeline forward landed in #978. S9-31 landed in #979 and
 adds typed UniFFI wrappers for the registered session/status read
 commands. #980 is CI hygiene after the S9 rematch.
 #981 refreshes provenance. #982 records local UniFFI generate.
-#983 records the S10 leftover stop. #984 lands S11 NSE read-only
+#983 recorded a temporary S10 leftover stop (superseded by
+operator authorization + #986). #984 lands S11 NSE read-only
 store. #985 refreshes provenance. #986 lands S10 leftover UniFFI
 and retires product `MatrixRustSDK` callers. #987 refreshes
-provenance. #988 re-enables iOS CI. Local Apple UniFFI generate
-has been run; generated sources remain gitignored.
+provenance. #988 re-enables iOS CI. #989–#992 and #991 bring
+that tip onto `main`. Local Apple UniFFI generate has been run;
+generated sources remain gitignored.
 
 1. `SharedCore.session_snapshot` / `sync_status` / `media_config` /
    `secret_storage_status` call `Core.command` with the same null
@@ -577,10 +583,9 @@ has been run; generated sources remain gitignored.
    `AppEnvironment.live()`. Do not retire `MatrixRustSDK`.
 5. One command family per PR. S9-31 has landed. S11 NSE read-only
    store landed in #984. S10 leftover retirement landed in #986.
-   iOS CI re-enable landed in #988. Next operator-approved step is
-   merge this branch to `main` only after that PR's Quality is
-   fully green including iOS. Do not start P5. Do not hit
-   production homeservers.
+   iOS CI re-enable landed in #988. The merge to `main` landed in
+   #991. Do not start P5. Dual-platform Core bugfix proof is not
+   claimed. Do not hit production homeservers.
 
 ### 9.6 When you may delete `MatrixRustSDK`
 
@@ -595,14 +600,15 @@ RoomListService / TimelineService / MatrixRustSDKService have no
 remaining callers. That is a late P4 PR of its own, not a side effect.
 
 **S10 live map recorded in #983 at `1207aece` (after #982):** one
-hundred nine hits in nine product Swift files. **#986 retires the
-product callers.** After #986, `grep -rn 'MatrixRustSDK'
-synara-ios/Synara --include='*.swift'` is comments only
-(`MatrixSessionProjectionMirror.swift`). The leftover client file is
-deleted. Helpers already in pbxproj wrap the registered SharedCore
-families plus the leftover UniFFI family. UniFFI 0.28 constructors
-stay `SharedCore()` and `SharedCore.newWithSecretStore(store:)`. No
-`SharedCore(store:)`.
+hundred nine hits in nine product Swift files. That #983 record was
+a temporary leftover **stop**. Operator authorization plus #986
+superseded it and **retired the product callers.** After #986,
+`grep -rn 'MatrixRustSDK' synara-ios/Synara --include='*.swift'` is
+comments only (`MatrixSessionProjectionMirror.swift`). The leftover
+client file is deleted. Helpers already in pbxproj wrap the
+registered SharedCore families plus the leftover UniFFI family.
+UniFFI 0.28 constructors stay `SharedCore()` and
+`SharedCore.newWithSecretStore(store:)`. No `SharedCore(store:)`.
 
 `AppEnvironment.live()` now constructs one caller-owned `SharedCore`
 and SharedCore product services. Leftover wipe/logout are local-only.
@@ -648,7 +654,7 @@ After every product merge:
    match existing style. Lists may use digits.
 4. State leftovers honestly. Do not mark P4/P5 accepted.
 5. Commit `docs(core): refresh provenance after #<N>`.
-6. Merge only to `feature/shared-native-core`.
+6. Merge only to `main`.
 7. Re-run section 5. If step 4, stop.
 
 ---
@@ -675,8 +681,8 @@ After every product merge:
 
 ## 12. Definition of program-done (not now)
 
-All of the following, then merge to `main`, then P5 operator/Apple
-gates. Checking any one box early is a lie.
+All of the following, then P5 operator/Apple gates. SNC engineering
+already lives on `main` (#991). Checking any one box early is a lie.
 
 - [ ] Desktop `src-tauri` is a thin registrar + Keychain + byte/secret
       leftovers only.
@@ -691,4 +697,4 @@ gates. Checking any one box early is a lie.
 - [ ] P5 gates in `06-migration-phases.md` and
       `synara-ios/docs/device-readiness.md` have operator evidence.
 
-Until that list is true: keep implementing on `feature/shared-native-core`.
+Until that list is true: keep implementing on `main`. Do not start P5.

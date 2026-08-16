@@ -1,7 +1,7 @@
 # Shared Native Core (synara-core) — Program Plan
 
-**Status at `feature/shared-native-core`
-`162d9dff` (#988 iOS CI re-enable after #987):** P0 is
+**Status at `main`
+`05a0961c` (#991 merge of `feature/shared-native-core`):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
 remain in progress. P5 has not started. Owner: Synara engineering. The current
 provenance, gates, and successor steps are in `10-current-handoff.md`.
@@ -13,8 +13,8 @@ One Rust app-logic core (`crates/synara-core`) that both the desktop Tauri
 app (macOS and Linux) and the iOS app consume, so sync, room list, timeline,
 and crypto are not implemented twice.
 
-That end state has **not** been reached. The work lives only on
-`feature/shared-native-core`. It is not on `main`. It is not a release.
+That end state has **not** been reached. SNC engineering is on `main`
+via #991. It is not a release.
 
 ## Decision record
 
@@ -144,18 +144,20 @@ acceptance criteria have all passed.
   S4–S9-31 (#940–#979) add typed SharedCore wrappers for the registered
   command families. #949 exposes the UniFFI 0.28 store constructor. #980
   refreshes desktop source-scan tests. #981 refreshes provenance. #982
-  records local UniFFI generate. #983 records the S10 leftover stop
-  (not a product retirement). #984 lands the S11 NSE read-only store
-  helper without starting sync; it is not a product NSE swap. #985
-  refreshes provenance. #986 lands S10 leftover UniFFI and retires
-  product `MatrixRustSDK` callers. Leftover I/O that needs a live
-  homeserver stays fail-closed planted. SyncService is not started.
-  This is not iOS-on-engine. #987 refreshes provenance. #988
-  re-enables iOS CI (Quality on #988 green including iOS, not
-  skipped). Local Apple generate has been run; generated sources
-  remain gitignored. Checked-in `SynaraCore.swift` remains the
-  bootstrap stub. iOS still has no registration product UI. P4 is
-  not accepted.
+  records local UniFFI generate. #983 recorded a temporary S10 leftover
+  stop (playbook §9.6); operator authorization plus #986 superseded it.
+  #984 lands the S11 NSE read-only store helper without starting sync;
+  it is not a product NSE swap. #985 refreshes provenance. #986 lands
+  S10 leftover UniFFI and retires product `MatrixRustSDK` callers.
+  Leftover I/O that needs a live homeserver stays fail-closed planted.
+  SyncService is not started. This is not iOS-on-engine. #987 refreshes
+  provenance. #988 re-enables iOS CI (Quality on #988 green including
+  iOS, not skipped). #989 refreshes provenance. #990 union-preserves
+  `main` store recovery. #992 raises the rustc recursion limit. #991
+  merges SNC onto `main` (`05a0961c`; Quality + iOS + package smoke
+  green). Local Apple generate has been run; generated sources remain
+  gitignored. Checked-in `SynaraCore.swift` remains the bootstrap stub.
+  iOS still has no registration product UI. P4 is not accepted.
 - **P5 — not started.** Do not claim iOS shared-engine parity, iOS migration,
   or Apple release readiness from the bounded work above.
 
@@ -169,18 +171,19 @@ acceptance criteria have all passed.
    section 9 order. S1–S9-31, S10 leftover retirement (#986), and
    S11 have landed. Product `MatrixRustSDK` callers are retired.
    Leftover I/O that needs a live homeserver stays fail-closed.
-   SyncService is not started. iOS CI is re-enabled (#988).
-   Regenerating Swift bindings needs disk ≥ 20 Gi. Do not start P5.
-   Next operator-approved step is merge this branch to `main` only
-   after that PR's Quality is fully green including iOS.
+   SyncService is not started. iOS CI is on (#988; not `if: false`).
+   Regenerating Swift bindings needs disk ≥ 20 Gi. Dual-platform
+   “one Core bugfix on desktop+iOS” is not claimed. Do not start P5.
+   The operator-approved merge to `main` landed in #991.
 3. **P3 thinning** continues as iOS/desktop leftovers shrink. Desktop is
    not a thin shell while Keychain, byte commands, and password UIAA live
    there — and those leftovers are *intended*.
 4. **P1 ledger** stays open until leftover Keychain/Tauri adapters are
    accepted as the permanent shell, not because more mechanical `git mv`
    remains.
-5. **P5** after engineering finish, then merge to `main`, then
-   operator/Apple gates. MAC-IOS-006 is not the coding path.
+5. **P5** after remaining engineering, then operator/Apple gates
+   (signed device, APNs, TestFlight, production E2EE). MAC-IOS-006 is
+   not the coding path. SNC engineering already lives on `main`.
 
 ## Phase acceptance targets
 
@@ -227,7 +230,7 @@ above does not relax them.
 
 - Small additive slices, each a PR with green desktop CI (Quality + Desktop
   package + full matrix at tip).
-- Worktree isolation; branch base = feature; squashed PRs; provenance anchor.
+- Worktree isolation; branch base = `main`; squashed PRs; provenance anchor.
 - Domain modules carry their tests; preserve behavior while extracting them.
 - The IPC/transport contract tests and command census are the north star for
   transport migration; unregistered commands fail closed rather than silently

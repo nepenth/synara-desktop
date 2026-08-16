@@ -10,16 +10,17 @@
 
 | Item | Verified state |
 |---|---|
-| Feature evidence tip | `feature/shared-native-core` is `162d9dff`, the merge for #988 (iOS CI re-enable after #987). |
-| Immediately preceding merges | #986 S10 leftover retirement (`566ddb34`), #987 docs (`b7f0b6d7`). |
-| Main evidence tip | `main` is `608763799125a121572fc3b7ff613680159cbf2a`, after #712. |
-| Verified common ancestry | `git merge-base` is `afe1e3148b83ee48d389d253734fdad5e8aeccd5` (#666). |
+| Evidence tip | `main` is `05a0961c93b31cfbb9d3b56bd63c34ff1a46faa1`, the merge commit of #991. |
+| #991 parents | `608763799125a121572fc3b7ff613680159cbf2a` (prior `main`, after #712) + `172df893c2047bce94648b7a1adee774181ca803` (SNC tip, #992 recursion-limit). |
+| Immediately preceding SNC merges | #988 iOS CI re-enable, #989 docs, #990 union-preserve `main` store recovery, #992 rustc recursion limit. |
+| Feature lane | `feature/shared-native-core` was an ancestor of `main` after #991 and has been deleted. No open PRs targeted it. |
 
-The two branch tips intentionally diverge after that common ancestor. The
-feature branch is the shared-core migration lane; the later recovery work on
-`main` has not thereby become feature evidence. Do not describe main recovery
-documentation as reachable from this feature tip, and do not infer that either
-lane has reconciled the other.
+#991 is the operator-authorized integration of SNC engineering onto
+`main`. Quality, iOS simulator tests, and package smoke were green on
+that merge. #990 union-preserved later `main` store-recovery work into
+the SNC lane before the merge. Do not describe the lanes as still
+diverged. Do not treat #991 as P4 acceptance, iOS-on-engine, dual-platform
+Core bugfix proof, or a release.
 
 #713 and #714 are **P1-only mechanical extraction clusters**. Their exact
 residency changes are:
@@ -146,8 +147,8 @@ residency changes are:
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the feature-tip provenance; use `162d9dff`/#988 for
-current feature claims. #718 only narrows hosted iOS selection to the UniFFI /
+anchor, but it is no longer the tip provenance; use `05a0961c`/#991 for
+current claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
 ## 2. Live pull-request and release state
@@ -160,16 +161,14 @@ This state was checked at the evidence snapshot **before this ledger PR**:
   must not be reopened or merged.
 - #672 is closed, stale, and unauthorized. Its remote head was deleted. It
   must not be reopened, rebased, merged, tagged, or published.
-- The two open Dependabot PRs are external, stale, behind-`main`, dependency
-  PRs. They target `main` and are not shared-core or release work; they are not
-  part of this ledger.
+- Open Dependabot PRs (#678, #993) target `main` and are not shared-core
+  or release work; they are not part of this ledger. Do not delete those
+  remotes.
 - #39 is closed and draft. It authorizes no `main` action.
 
-A **new** reconciliation PR may exist only after explicit recorded approval
-from both the auth/store-security owner and the shared-Core owner. It must then
-be a fresh, union-preserving reconciliation of current `main` into current
-`feature/shared-native-core`, followed by fresh exact-head CI and independent
-union review. These are replacement conditions, not permission to revive #705.
+#990 already union-preserved later `main` store recovery into the SNC
+lane, and #991 merged that lane to `main`. A further reconciliation PR
+is not the next step. These conditions are not permission to revive #705.
 
 A **new** v2.0.4 preparation PR may exist only after separate explicit
 authorization. It must start from then-current `main`, receive new review, CI,
@@ -177,7 +176,7 @@ and required physical/release evidence, and use only a new immutable v2.0.4 tag
 at the exact resulting `main` SHA. v2.0.3 is untouched and is never reused.
 These conditions do not authorize an action through #39.
 
-## 3. Phase status at the feature evidence tip
+## 3. Phase status at the `main` evidence tip
 
 ### P0 — complete
 
@@ -384,9 +383,9 @@ The exact bounded iOS evidence is:
   slice.
 - #981: docs honesty after #980. Not a product slice.
 - #982: records local UniFFI generate. Generated sources remain gitignored.
-- #983: records the S10 leftover stop after #982. Mapped 109 product
-  `MatrixRustSDK` hits. Leftover callers still require the Swift SDK
-  client (playbook §9.6). Not a product retirement.
+- #983: recorded a temporary S10 leftover stop after #982. Mapped 109
+  product `MatrixRustSDK` hits. That stop was superseded by operator
+  authorization and #986. Not current leftover policy.
 - #984: S11 SharedCore NSE read-only store without starting sync.
   Helper + XCTest. Not a product NSE swap. Does not retire leftovers.
 - #985: docs honesty after #984. Not a product slice.
@@ -394,9 +393,16 @@ The exact bounded iOS evidence is:
   retirement. Leftover I/O that needs a live homeserver stays
   fail-closed planted. SyncService is not started. Not iOS-on-engine.
 - #987: docs honesty after #986. Not a product slice.
-- #988: re-enables iOS CI (`if: needs.changes.outputs.ios == 'true'`).
-  Quality on #988 was green including iOS (ran, not skipped).
-  Restores Later sort/complete helpers so the simulator job compiles.
+- #988: re-enables iOS CI (`if: needs.changes.outputs.ios == 'true'`,
+  not `if: false`). Quality on #988 was green including iOS (ran, not
+  skipped). Restores Later sort/complete helpers so the simulator job
+  compiles.
+- #989: docs honesty after #988. Not a product slice.
+- #990: union-preserves later `main` store recovery into the SNC lane.
+- #992: raises rustc recursion limit for Linux release builds.
+- #991: merges SNC engineering onto `main` at `05a0961c`. Quality +
+  iOS + package smoke green. Not P4 acceptance, not iOS-on-engine,
+  not a dual-platform Core bugfix proof, not P5.
 
 #708 and #710 add no Core command route. #931/#933/#935 add UniFFI probes /
 construction / vault only. Later P4 slices add typed wrappers; they do
@@ -422,12 +428,12 @@ listed in the existing phase and release documents.
 
 ## 4. Main recovery and physical-Mac evidence boundary
 
-The source recovery work from #695 and #697 remains on `main`; it is not a
-feature-branch recovery claim. `main` commit
-`608763799125a121572fc3b7ff613680159cbf2a` (#712) adds MAC-IOS-006 in the
-main-only version of `MACOS_WORKSTATION_HANDOFF.md` and updates
-`MACOS_IOS_VALIDATION_QUEUE.md`. This ledger intentionally does not treat that
-main documentation change as a feature source link or a reconciliation.
+The source recovery work from #695 and #697 is on `main`. #712
+(`60876379`) added MAC-IOS-006 in `MACOS_WORKSTATION_HANDOFF.md` and
+updated `MACOS_IOS_VALIDATION_QUEUE.md`. #990 union-preserved later
+`main` store recovery into the SNC lane; #991 brought both histories
+onto `main` at `05a0961c`. MAC-IOS-006 remains operator-gated and is
+not a coding path.
 
 MAC-IOS-006 is source-independent and operator-gated. It requires a physical
 Mac rehearsal and a fixed, privacy-safe record only: commit SHA; platform/tool
@@ -438,9 +444,8 @@ raw logs, diagnostics, identities, or private artifacts.
 
 ## 5. Gates and non-authorizations
 
-1. **Reconciliation:** require both auth/store-security and shared-Core-owner
-   approval before a *new* union-preserving current-main → current-feature PR;
-   then require fresh exact-head CI and independent union review.
+1. **Reconciliation:** #990/#991 already landed the authorized union.
+   Do not open a new main↔feature reconciliation. Do not revive #705.
 2. **Physical recovery:** require the approved physical-Mac operator evidence
    before treating MAC-IOS-006 as satisfied.
 3. **P2/P3 boundary:** the current qualified-candidate audit found no safe
@@ -474,15 +479,10 @@ for any of those gates.
 - CI is path-scoped. A docs-only diff under this directory is expected to skip
   Rust, frontend, iOS, and Synapse heavy jobs while the CI scope and aggregate
   gate report. Hosted iOS simulator coverage is selected only when the UniFFI /
-  UDL / bindgen / Swift / iOS-shell surface can change. On PRs targeting
-  `feature/shared-native-core`, mechanical P1 `src/app/` extraction runs
-  `validate-rust` fmt/clippy/check (clippy compiles tests) and skips
-  `cargo test`, `cargo-audit`, and Synapse live proofs unless send/timeline
-  product commands, `live_synapse_proof`, lockfiles, or this workflow change.
-  Development merges of those mechanical extracts may proceed after review
-  without waiting for the full quality-gate wall-clock; P1 completion still
-  requires later formatting/lint/test evidence at the exact head. Push to
-  `main` / `release/**` and `workflow_dispatch` still run the full suite.
+  UDL / bindgen / Swift / iOS-shell surface can change. The former
+  `feature/shared-native-core` mechanical-extract shortcut no longer applies;
+  future slices target `main`. Push to `main` / `release/**` and
+  `workflow_dispatch` still run the full suite when those paths select it.
 
 ## 7. Ordered resume playbook
 
@@ -528,37 +528,39 @@ for any of those gates.
    timeline forward landed in #978. S9-31 typed
    session/status reads landed in #979. #980 is CI hygiene after the
    S9 rematch. #981 refreshes provenance. #982 records local UniFFI
-   generate. #983 records the S10 leftover stop. #984 lands S11 NSE
-   read-only store (helper + XCTest; never starts sync; not a
-   product NSE swap). #985 refreshes provenance. #986 lands S10
-   leftover UniFFI and retires product `MatrixRustSDK` callers.
-   #987 refreshes provenance. #988 re-enables iOS CI. Local Apple
-   UniFFI generate has been run; generated sources remain
-   gitignored. Next operator-approved step is merge this branch to
-   `main` only after that PR's Quality is fully green including iOS.
-   Do not start P5. Four-target release bindgen needs headroom well
-   above 20 Gi for the whole run, not just at start. If disk is
-   under 20 Gi: stop. Docs-only PRs are still allowed.
+   generate. #983 recorded a temporary S10 leftover stop (superseded
+   by operator authorization + #986). #984 lands S11 NSE read-only
+   store (helper + XCTest; never starts sync; not a product NSE
+   swap). #985 refreshes provenance. #986 lands S10 leftover UniFFI
+   and retires product `MatrixRustSDK` callers. #987 refreshes
+   provenance. #988 re-enables iOS CI. #989 refreshes provenance.
+   #990 union-preserves `main` store recovery. #992 raises the rustc
+   recursion limit. #991 merges SNC onto `main`. Local Apple UniFFI
+   generate has been run; generated sources remain gitignored.
+   Checked-in `SynaraCore.swift` remains the bootstrap stub. Do not
+   start P5. Dual-platform Core bugfix proof is not claimed.
+   Four-target release bindgen needs headroom well above 20 Gi for
+   the whole run, not just at start. If disk is under 20 Gi: stop.
+   Docs-only PRs are still allowed.
 4. After S3, consume already-registered commands one family per PR.
-   S4 — not S3b–S3d — adds the first UniFFI command wrapper, for
-   `matrix_room_list_snapshot` only. Retire `MatrixRustSDKService` last.
-5. After each product PR: squash-merge to `feature/shared-native-core`
-   only, docs honesty, then re-run playbook section 5. If step 4, stop.
+   S4 through S9-31, S10 leftover retirement, and S11 have landed.
+   Product `MatrixRustSDK` callers are retired. Do not start P5.
+5. After each product PR: squash-merge to `main`, docs honesty, then
+   re-run playbook section 5. If step 4, stop.
 
 ### Immediately safe
 
 1. Review and merge this docs-only ledger PR only if its exact head is green;
    it changes neither source nor a release path.
-2. Retain the verified feature/main provenance above, then clean the worker's
+2. Retain the verified `main` provenance above, then clean the worker's
    own branch and worktree after that PR is merged or closed.
-3. For any future docs-only correction, fetch first, use the fresh feature tip,
-   and state its exact provenance. Do not reuse a stale branch or PR.
+3. For any future docs-only correction, fetch first, use the fresh `main`
+   tip, and state its exact provenance. Do not reuse a stale branch or PR.
 
 ### Requires new approval
 
-1. Obtain both named owner approvals before opening a new current-main →
-   current-feature reconciliation, then perform the required fresh union review
-   and exact-head CI.
+1. Do not open a new main↔feature reconciliation. #990/#991 already
+   landed the authorized union.
 2. For P2/P3, use normal review for a future eligible bounded command. Obtain
    a separately approved ADR/foundation only for a platform-boundary expansion
    or unsafe/dynamic field.
@@ -575,7 +577,7 @@ for any of those gates.
 ### Prohibited without approval
 
 - Reopen, rebase, merge, tag from, or otherwise revive #705 or #672.
-- Reconcile `main` into feature, act on #39/`main`, create or move a release
+- Revive a feature-lane reconciliation, act on #39, create or move a release
   tag, publish v2.0.4, or change v2.0.3.
 - Widen the platform boundary or introduce an unsafe/dynamic field without the
   separately approved ADR/foundation.

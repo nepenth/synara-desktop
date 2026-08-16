@@ -1,14 +1,14 @@
 # ADR 0003: Shared native core (synara-core) for desktop + iOS
 
-Status: accepted and in implementation (2026-08-10; progress recorded 2026-08-13).
+Status: accepted and in implementation (2026-08-10; progress recorded 2026-08-16; SNC engineering on `main` via #991).
 Supersedes the separate Swift service-layer direction implied by ADR-0002 for
 app-logic ownership (ADR-0002's native-SwiftUI UI decision is retained).
 
 **End state:** one Rust core (`synara-core`) that both the desktop Tauri
 app (macOS and Linux) and the iOS app consume, so sync, room list,
 timeline, and crypto are not implemented twice. **That end state has not
-been reached.** Implementation lives only on `feature/shared-native-core`.
-It is not on `main`. It is not a release. How to finish it:
+been reached.** SNC engineering is on `main` via #991
+(`05a0961c`). It is not a release. How to finish it:
 `docs/shared-native-core/11-implementer-playbook.md`.
 
 ## Context

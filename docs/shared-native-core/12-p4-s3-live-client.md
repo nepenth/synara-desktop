@@ -4,7 +4,7 @@ This is the plan playbook §9.4 requires before guessing at password FFI.
 It does **not** accept P4 or claim iOS is on the shared engine.
 
 Evidence tip when written: `feature/shared-native-core` `ee896416` (#935 S3a).
-Current feature tip: `162d9dff` (#988).
+Current evidence tip: `main` `05a0961c` (#991).
 S3a landed in #935. S3b restore landed in #937 (`4edfc1f5`).
 S3c login (Option A) landed in #938 (`9b4ec54f`).
 S3d attach landed in #939 (`ad63d56d`).
@@ -16,17 +16,20 @@ S8 verification list landed in #947 (`52874c20`).
 S9 verification SAS landed in #948 (`c56a82aa`).
 S9-2 through S9-31 typed SharedCore wrappers landed in #950–#979.
 #980 is CI hygiene after the S9 rematch. #981 refreshes provenance.
-#982 records local UniFFI generate. #983 records the S10 leftover
-stop. #984 lands S11 NSE read-only store (helper + XCTest; never
-starts sync; not a product NSE swap). #985 refreshes provenance.
-#986 lands S10 leftover UniFFI and retires product `MatrixRustSDK`
-callers. Leftover I/O that needs a live homeserver stays fail-closed
-planted. SyncService is not started. This is not iOS-on-engine.
-#987 refreshes provenance. #988 re-enables iOS CI. Local Apple
-UniFFI generate has been run; generated sources remain gitignored.
+#982 records local UniFFI generate. #983 recorded a temporary S10
+leftover stop (superseded by operator authorization + #986). #984
+lands S11 NSE read-only store (helper + XCTest; never starts sync;
+not a product NSE swap). #985 refreshes provenance. #986 lands S10
+leftover UniFFI and retires product `MatrixRustSDK` callers. Leftover
+I/O that needs a live homeserver stays fail-closed planted.
+SyncService is not started. This is not iOS-on-engine. #987 refreshes
+provenance. #988 re-enables iOS CI. #989 refreshes provenance. #990
+union-preserves `main` store recovery. #992 raises the rustc
+recursion limit. #991 merges SNC onto `main`. Local Apple UniFFI
+generate has been run; generated sources remain gitignored.
+Checked-in `SynaraCore.swift` remains the bootstrap stub.
 Playbook recipe: §9.5.
-Next operator-approved step is merge this branch to `main` only after
-that PR's Quality is fully green including iOS. Do not start P5.
+Do not start P5. Dual-platform Core bugfix proof is not claimed.
 
 ## Decision
 
@@ -36,8 +39,9 @@ password is a method argument only — not stored, not in the DTO, never
 echoed. It never rides `Core.command` and does not register
 `matrix_login_password`.
 
-S3 is four serial product PRs. Each one merges only to
-`feature/shared-native-core`.
+S3 was four serial product PRs. Those slices merged to
+`feature/shared-native-core` and are now on `main` via #991.
+Future slices target `main`.
 
 | Slice | What lands | What must not land |
 |---|---|---|

@@ -21,7 +21,8 @@ L = likelihood, I = impact (H/M/L).
 | 2026-08-10 | Adopt ADR-0003 shared native core | Ends dual logic implementation; reuse heavily-tested engine |
 | 2026-08-10 | Keep ADR-0002's native-SwiftUI UI decision | UI stays platform-owned; only logic unifies |
 | 2026-08-10 | Ship project-owned uniffi bindings (drop `matrix-rust-components-swift`) | One version pin, one code path, full control of exposed surface |
-| 2026-08-13 | Owner 1B–5B, 7B–13, judgement 6 (see playbook §4) | `matrix_sdk` in Core; no Tauri/`keyring`; live Client + owners in Core; register only as capabilities land; serial iOS; feature-branch-only; no release; Apple proof operator-gated |
+| 2026-08-13 | Owner 1B–5B, 7B–13, judgement 6 (see playbook §4) | `matrix_sdk` in Core; no Tauri/`keyring`; live Client + owners in Core; register only as capabilities land; serial iOS; no release; Apple proof operator-gated |
+| 2026-08-16 | SNC engineering on `main` via #991 | Feature-branch-only period ended after leftover retirement, iOS CI re-enable, and green Quality including iOS. Future slices target `main`. Not a release. |
 | 2026-08-13 | Product events use owner emit callbacks, not `Platform::emit` | `Platform::emit` is the IPC envelope stream; wrapping product events would break React names |
 | 2026-08-13 | 21 census names stay desktop | Passwords, `client_secret`, Keyring logout/restore, passphrases, file paths, attachment/media bytes must not cross the 1 MiB Core envelope |
 | 2026-08-13 | Next lane is serial iOS (P4), not speculative 7B | Attached-owner writes that can land without secrets/bytes are exhausted as of #928 |
@@ -31,13 +32,16 @@ L = likelihood, I = impact (H/M/L).
 - Full `Platform` for dialogs/spellcheck on iOS: **no** until a SwiftUI
   feature demands it. Reactive subset first (playbook P4-S2).
 - Heavy OS jobs (file pickers, 32 MiB attachments): **stay in shells**.
-- NSE split crate: **defer** until APNs work (P4-S11).
-- Routing leftover secrets/bytes: **forbidden** without a new owner
-  decision.
+- NSE split crate: **defer** until APNs work (P5). S11 read-only store
+  landed in #984 and never starts sync.
+- Routing leftover **desktop** secrets/bytes through `Core::command`:
+  **forbidden** without a new owner decision. That 21-name desktop
+  leftover list is unchanged. It is not a 7B policy against the
+  operator-authorized S10 leftover UniFFI that landed in #986.
 
 ## Open questions
 
 - Should `synara-core` publish a crate semver separate from app 2.0.x?
   (Leaning: yes, later. Not a P4 blocker.)
 - NSE binding target: single `synara-core` vs `synara-core-nse` when
-  P4-S11 starts.
+  APNs/P5 work starts. S11 read-only store already landed in #984.

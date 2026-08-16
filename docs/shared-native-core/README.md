@@ -5,17 +5,16 @@ clients onto **one transport-agnostic Rust application-logic core** —
 `crates/synara-core` — consumed by both platforms, so sync, room list,
 timeline, and crypto are not implemented twice.
 
-**That end state has not been reached.** The work lives only on
-`feature/shared-native-core`. It is not on `main`. It is not a release.
-Never claim 100%. Implementers start at
+**That end state has not been reached.** SNC engineering is on `main`
+via #991. It is not a release. Never claim 100%. Implementers start at
 [11-implementer-playbook.md](11-implementer-playbook.md).
 P4-S3 plan: [12-p4-s3-live-client.md](12-p4-s3-live-client.md).
 
 | | |
 |---|---|
 | Owner | Synara engineering |
-| Status | P0 complete; P1 extraction and bounded P2, P3, and P4 slices are merged at the evidence base below. P2–P4 remain in progress; P5 has not started. Desktop uses Core for one hundred eleven commands. iOS has typed SharedCore wrappers through S9-31, the S11 NSE helper, and S10 leftover UniFFI; product `MatrixRustSDK` callers are retired. This is not iOS-on-engine. |
-| Evidence base | `feature/shared-native-core` at `162d9dff` (#988 iOS CI re-enable after #987) |
+| Status | P0 complete; P1 extraction and bounded P2, P3, and P4 slices are merged at the evidence base below. P2–P4 remain in progress; P5 has not started. Desktop uses Core for one hundred eleven commands. iOS has typed SharedCore wrappers through S9-31, the S11 NSE helper, and S10 leftover UniFFI; product `MatrixRustSDK` callers are retired. This is not iOS-on-engine. Dual-platform “one Core bugfix on desktop+iOS” is not claimed. |
+| Evidence base | `main` at `05a0961c` (#991 merge of `feature/shared-native-core`; parents `60876379` + `172df893`) |
 | Decision | [ADR 0003](../adr/0003-shared-native-rust-core.md) |
 | Program ledger | `docs/shared-native-core/` (this directory) |
 | Related ADRs | [0001](../adr/0001-ios-repository-layout.md), [0002](../adr/0002-ios-architecture.md) |
@@ -120,7 +119,7 @@ P4-S3 plan: [12-p4-s3-live-client.md](12-p4-s3-live-client.md).
 ## Current milestone ledger
 
 The following describes merged source reachable from
-`162d9dff` (#988). #708 and #710 remain the prior pure-helper P4
+`05a0961c` (#991). #708 and #710 remain the prior pure-helper P4
 evidence. #931 adds credential-free `register_flows`. #933 adds
 constructor-only `SharedCore`. #935 adds the S3a `IosSecretVault`
 callback. S3b restore landed in #937 (`4edfc1f5`). S3c Option A
@@ -135,15 +134,20 @@ S9-2 through S9-31 typed SharedCore wrappers for the remaining
 registered command families landed in #950–#979. #949 exposes the
 UniFFI 0.28 `SharedCore` store constructor. #980 refreshes desktop
 source-scan tests after the S9 rematch. #981 refreshes provenance.
-#982 records local UniFFI generate. #983 records the S10 leftover
-stop (not a product retirement). #984 lands the S11 NSE read-only
-store helper without starting sync; it is not a product NSE swap.
-#985 refreshes provenance. #986 lands S10 leftover UniFFI and
-retires product `MatrixRustSDK` callers. Leftover I/O that needs a
-live homeserver stays fail-closed planted. SyncService is not
-started. This is not iOS-on-engine. #987 refreshes provenance.
-#988 re-enables iOS CI (Quality on #988 green including iOS, not
-skipped) and restores Later sort/complete helpers. Local Apple
+#982 records local UniFFI generate. #983 recorded a temporary S10
+leftover **stop** after a playbook §9.6 gate; that stop was
+superseded by operator authorization and #986. #984 lands the S11
+NSE read-only store helper without starting sync; it is not a
+product NSE swap. #985 refreshes provenance. #986 lands S10 leftover
+UniFFI and retires product `MatrixRustSDK` callers. Leftover I/O
+that needs a live homeserver stays fail-closed planted. SyncService
+is not started. This is not iOS-on-engine. #987 refreshes
+provenance. #988 re-enables iOS CI (Quality on #988 green including
+iOS, not skipped) and restores Later sort/complete helpers. #989
+refreshes provenance after #988. #990 union-preserves `main` store
+recovery into the SNC lane. #992 raises the rustc recursion limit
+for Linux release builds. #991 merges SNC engineering onto `main`
+(`05a0961c`; Quality + iOS + package smoke green). Local Apple
 `scripts/generate-synara-core-swift.sh` has been run at this tip;
 generated `synara_core.swift` and the XCFramework remain gitignored
 and are not committed. Checked-in `SynaraCore.swift` remains the
@@ -157,12 +161,12 @@ bootstrap stub. UniFFI constructors are unchanged (`SharedCore()` /
 | P1 | #669, #673–#677, #680–#681, #713–#714, #716–#717, #720–#721, #723–#726, #728–#729, #731–#732, #734–#735, #737–#738, #740–#741, #743–#744, #747–#748, #751, #753, #755, #757–#758, #760, #762, #764, #766, #768, #770, #772, #774, #776, #778, #780–#781, #783–#784, #786, #788, #790, #792, #794, #796, #798, #800–#801, #803, #805, #807–#808, #810, #812, #814, #816 | Extraction slices plus live client/login adapters, emit owners, NativeTimelineRegistry, and NativeVerificationOwner; leftover Keychain/Tauri commands not all moved. |
 | P2 | #683–#689, #694, #698, #701–#702, #706, #818, #820, #822, #824, #826, #828, #830, #832, #834, #836, #838, #840, #842, #844, #846, #848, #850, #852, #854, #856, #858, #860, #862, #864, #866, #868, #870, #872, #874, #876, #878, #880, #882, #884, #886, #888, #890, #892, #894, #896, #898, #900, #902, #904, #906, #908, #910, #912, #914, #916, #918, #920, #922, #924, #926, #928 | One-hundred-eleven-command registry (invite spam/block added); full desktop-invoke parity is not reached. |
 | P3 | #690–#691, #694, #698, #701–#702, #706 | The listed auth and read-only/session bridges use Core; `src-tauri` is not yet a fully thin shell. |
-| P4 | #685, #692–#693, #696, #699, #703, #708, #710, #931, #933, #935, #937–#940, #942, #944–#945, #947–#988 | UniFFI scaffold through S9-31 typed wrappers plus #980–#982 hygiene, #983 S10 leftover stop, #984 S11 NSE helper, #985 provenance, #986 S10 leftover UniFFI (product `MatrixRustSDK` callers retired; leftover I/O fail-closed; SyncService not started; not iOS-on-engine), #987 provenance, and #988 iOS CI re-enable (Quality green including iOS, not skipped); local UniFFI generate has been run; generated sources remain uncommitted; Apple release proof does not. |
+| P4 | #685, #692–#693, #696, #699, #703, #708, #710, #931, #933, #935, #937–#940, #942, #944–#945, #947–#992, #991 | UniFFI scaffold through S9-31 typed wrappers plus #980–#982 hygiene, #983 temporary leftover stop (superseded), #984 S11 NSE helper, #985 provenance, #986 S10 leftover UniFFI (operator-authorized; product `MatrixRustSDK` callers retired; leftover I/O fail-closed; SyncService not started; not iOS-on-engine), #987–#989 provenance, #990 main-recovery union, #992 recursion-limit, and #991 merge to `main` (Quality + iOS + package smoke green); local UniFFI generate has been run; generated sources remain uncommitted; Apple release proof does not. |
 | P5 | None | Not started. The release gates below remain required. |
 
 Read [11-implementer-playbook.md](11-implementer-playbook.md) before writing
-code. Read [10-current-handoff.md](10-current-handoff.md) for feature/main
-provenance, recovery separation, and non-authorizations. Those files do not
+code. Read [10-current-handoff.md](10-current-handoff.md) for `main`
+provenance, remaining gaps, and non-authorizations. Those files do not
 relax the acceptance criteria below.
 
 ## Ownership, privacy, and release gates
