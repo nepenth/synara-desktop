@@ -12,4 +12,5 @@ test('RoomAvatar presentation boundary has no direct matrix-js-sdk importer', ()
   assert.doesNotMatch(source, /matrix-js-sdk/);
   assert.match(source, /RoomJoinRulePresentation/);
   assert.match(source, /getRoomIconSrc/);
+  assert.match(source, /useNativeMatrixMediaSrc/);
 });

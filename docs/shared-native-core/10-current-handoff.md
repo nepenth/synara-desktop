@@ -426,9 +426,13 @@ The exact bounded iOS evidence is:
   `matrix_media_download`. Not `Core::command`.
 - #1006: desktop JS media retire on `main` at `76f67441`. Composer
   send is native-only; `browser-encrypt-attachment` removed; `sw.ts`
-  is a stub; leftover encrypted `mxc://` fail-closes. Leftover avatar
-  `<img src=mxc://>` display remains. Quality green (iOS skipped).
-  Not Apple generate. Not dual-platform proof. Not P4 engine ready.
+  is a stub; leftover encrypted `mxc://` fail-closes. Quality green
+  (iOS skipped). Not Apple generate. Not dual-platform proof. Not P4
+  engine ready.
+- Leftover IDB/WASM + avatar display (in-pr): FeatureCheck IndexedDB
+  gate and crypto-wasm Vite plugin removed. Room/user/pack avatars
+  resolve leftover `mxc://` through native blob URLs. Logout still
+  wipes old IndexedDB store names.
 - Local Apple UniFFI generate on Darwin at `dd62d24d` for the
   S30–S35 fields (room-list `is_encrypted` / `notification_mode`,
   timeline media handle / `timeline_media_bytes`, device snapshot

@@ -2,11 +2,25 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { downloadMatrixMedia, resolveMatrixMediaUrl, resolveMatrixThumbnailUrl } from '../media';
+import {
+  downloadMatrixMedia,
+  isNativeMediaContentUri,
+  resolveMatrixMediaUrl,
+  resolveMatrixThumbnailUrl,
+} from '../media';
 
 type MockMatrixClient = {
   mxcUrlToHttp: (...args: unknown[]) => string | null;
 };
+
+test('isNativeMediaContentUri matches leftover mxc and timeline handles', () => {
+  assert.equal(isNativeMediaContentUri('mxc://example/avatar'), true);
+  assert.equal(isNativeMediaContentUri('synara-media://localhost/timeline-media-ab'), true);
+  assert.equal(isNativeMediaContentUri('timeline-media-ab'), true);
+  assert.equal(isNativeMediaContentUri('https://example.org/avatar'), false);
+  assert.equal(isNativeMediaContentUri('blob:https://example.org/1'), false);
+  assert.equal(isNativeMediaContentUri(undefined), false);
+});
 
 test('resolveMatrixMediaUrl delegates authenticated MXC conversion to matrix-js-sdk', () => {
   const calls: unknown[][] = [];
@@ -155,4 +169,23 @@ test('desktop media boundary has no JS encrypt/decrypt leftover', () => {
   assert.doesNotMatch(roomInput, /encryptFile|browser-encrypt-attachment/);
   assert.match(roomInput, /Native Matrix attachment send is unavailable/);
   assert.doesNotMatch(sw, /_matrix\/client\/v1\/media|accessToken|Bearer/);
+});
+
+test('desktop leftover avatars resolve through native media src', () => {
+  const roomAvatar = readFileSync(
+    join(process.cwd(), 'src/app/components/room-avatar/RoomAvatar.tsx'),
+    'utf8'
+  );
+  const userAvatar = readFileSync(
+    join(process.cwd(), 'src/app/components/user-avatar/UserAvatar.tsx'),
+    'utf8'
+  );
+  const hook = readFileSync(
+    join(process.cwd(), 'src/app/hooks/useNativeMatrixMediaSrc.ts'),
+    'utf8'
+  );
+  assert.match(roomAvatar, /useNativeMatrixMediaSrc/);
+  assert.match(userAvatar, /useNativeMatrixMediaSrc/);
+  assert.match(hook, /createMatrixMediaObjectUrl/);
+  assert.doesNotMatch(hook, /browser-encrypt-attachment|decryptFile/);
 });

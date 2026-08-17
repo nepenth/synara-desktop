@@ -1,5 +1,5 @@
 import React from 'react';
-import { Avatar, AvatarFallback, AvatarImage, Box, Button, Icon, Icons, Text } from 'folds';
+import { Avatar, AvatarFallback, Box, Button, Icon, Icons, Text } from 'folds';
 import { useUserImagePack } from '../../../hooks/useImagePacks';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../styles.css';
@@ -8,6 +8,7 @@ import { ImagePack, ImageUsage } from '../../../plugins/custom-emoji';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { resolveOptionalMatrixMediaUrl } from '../../../matrix/media';
+import { NativeAvatarImage } from '../../../components/NativeAvatarImage';
 
 type UserPackProps = {
   onViewPack: (imagePack: ImagePack) => void;
@@ -44,7 +45,7 @@ export function UserPack({ onViewPack }: UserPackProps) {
           before={
             <Avatar size="300" radii="300">
               {avatarUrl ? (
-                <AvatarImage style={{ objectFit: 'contain' }} src={avatarUrl} />
+                <NativeAvatarImage style={{ objectFit: 'contain' }} src={avatarUrl} />
               ) : (
                 <AvatarFallback>
                   <Icon size="400" src={Icons.Sticker} filled />

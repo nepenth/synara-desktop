@@ -7,7 +7,6 @@ import {
   Icons,
   IconButton,
   Avatar,
-  AvatarImage,
   AvatarFallback,
   config,
   Spinner,
@@ -42,6 +41,7 @@ import { AccountDataEvent } from '../../../../types/matrix/accountData';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { stopPropagation } from '../../../utils/keyboard';
 import { resolveOptionalMatrixMediaUrl } from '../../../matrix/media';
+import { NativeAvatarImage } from '../../../components/NativeAvatarImage';
 import { setGlobalImagePacksNative } from '../../../features/room/nativeImagePack';
 
 function GlobalPackSelector({
@@ -190,7 +190,10 @@ function GlobalPackSelector({
                             <Box alignItems="Center" gap="300">
                               <Avatar size="300" radii="300">
                                 {avatarUrl ? (
-                                  <AvatarImage style={{ objectFit: 'contain' }} src={avatarUrl} />
+                                  <NativeAvatarImage
+                                    style={{ objectFit: 'contain' }}
+                                    src={avatarUrl}
+                                  />
                                 ) : (
                                   <AvatarFallback>
                                     <Icon size="400" src={Icons.Sticker} filled />
@@ -389,7 +392,7 @@ export function GlobalPacks({ onViewPack }: GlobalPacksProps) {
               )}
               <Avatar size="300" radii="300">
                 {avatarUrl ? (
-                  <AvatarImage style={{ objectFit: 'contain' }} src={avatarUrl} />
+                  <NativeAvatarImage style={{ objectFit: 'contain' }} src={avatarUrl} />
                 ) : (
                   <AvatarFallback>
                     <Icon size="400" src={Icons.Sticker} filled />

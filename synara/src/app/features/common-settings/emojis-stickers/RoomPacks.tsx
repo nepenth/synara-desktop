@@ -6,7 +6,6 @@ import {
   Icon,
   Icons,
   Avatar,
-  AvatarImage,
   AvatarFallback,
   toRem,
   config,
@@ -40,6 +39,7 @@ import { useAlive } from '../../../hooks/useAlive';
 import { useRoomCreators } from '../../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../../hooks/useRoomPermissions';
 import { resolveOptionalMatrixMediaUrl } from '../../../matrix/media';
+import { NativeAvatarImage } from '../../../components/NativeAvatarImage';
 import { setRoomImagePackNative } from '../../room/nativeImagePack';
 
 type CreatePackTileProps = {
@@ -255,7 +255,7 @@ export function RoomPacks({ onViewPack }: RoomPacksProps) {
                 ))}
               <Avatar size="300" radii="300">
                 {avatarUrl ? (
-                  <AvatarImage style={{ objectFit: 'contain' }} src={avatarUrl} />
+                  <NativeAvatarImage style={{ objectFit: 'contain' }} src={avatarUrl} />
                 ) : (
                   <AvatarFallback>
                     <Icon size="400" src={Icons.Sticker} filled />

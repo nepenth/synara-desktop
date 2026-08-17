@@ -25,16 +25,18 @@ import { CompactUploadCardRenderer } from '../upload-card';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { PackMetaReader } from '../../plugins/custom-emoji';
 import { resolveOptionalMatrixMediaUrl } from '../../matrix/media';
+import { useNativeMatrixMediaSrc } from '../../hooks/useNativeMatrixMediaSrc';
 
 type ImagePackAvatarProps = {
   url?: string;
   name?: string;
 };
 function ImagePackAvatar({ url, name }: ImagePackAvatarProps) {
+  const resolvedUrl = useNativeMatrixMediaSrc(url);
   return (
     <Avatar size="500" className={ContainerColor({ variant: 'Secondary' })}>
-      {url ? (
-        <AvatarImage src={url} alt={name ?? 'Unknown'} />
+      {resolvedUrl ? (
+        <AvatarImage src={resolvedUrl} alt={name ?? 'Unknown'} />
       ) : (
         <AvatarFallback>
           <Text size="H2">{nameInitials(name ?? 'Unknown')}</Text>

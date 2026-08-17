@@ -73,9 +73,8 @@ Current honesty (update if the graph has moved):
   dual-platform Core bugfix proof, live
   homeserver proof after the app can launch. S30–S35 Apple generate
   has been run locally; future UDL changes still need generate.
-  Optional later: leftover
-  avatar display via native blob URLs. Re-enable hosted iOS CI only
-  when an operator asks.
+  Leftover avatar display uses native blob URLs. Re-enable hosted
+  iOS CI only when an operator asks.
 
 Propose a plan first. Wait for approval. Then execute.
 ```

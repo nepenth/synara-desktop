@@ -117,6 +117,17 @@ export async function downloadMatrixMedia(
   throw new Error('Invalid Matrix media URL');
 }
 
+/** Leftover `mxc://` and opaque handles must not be used as `<img src>`. */
+export function isNativeMediaContentUri(contentUri: string | undefined): boolean {
+  if (!contentUri) return false;
+  const trimmed = contentUri.trim();
+  return (
+    trimmed.startsWith('mxc://') ||
+    trimmed.startsWith('synara-media://') ||
+    trimmed.startsWith(TIMELINE_MEDIA_HANDLE_PREFIX)
+  );
+}
+
 export async function createMatrixMediaObjectUrl(
   mx: MatrixMediaClient,
   mxcUrl: string,

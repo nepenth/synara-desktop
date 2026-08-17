@@ -48,6 +48,7 @@ const tests = [
   'src/app/utils/__tests__/timelineOpening.test.ts',
   'src/app/pages/client/__tests__/syncStatusCopy.test.ts',
   'src/app/pages/__tests__/pathUtils.test.ts',
+  'src/app/pages/__tests__/leftoverBrowserClientGuard.test.ts',
   'src/app/utils/__tests__/timelineVirtualization.test.ts',
   'src/app/utils/__tests__/desktop.test.ts',
   'src/app/utils/__tests__/desktopUpdater.test.ts',
