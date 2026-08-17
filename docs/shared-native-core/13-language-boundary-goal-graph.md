@@ -137,7 +137,7 @@ flowchart TD
 | P4-S37 presence + sticker pack UI | `landed` #1001 | required | Settings/room details consume presence. Composer lists image-pack names and sends via `SharedCoreSendSticker`. |
 | Desktop native media cutover | `landed` #1001 | required | Live timeline uses `synara-media://` + handle resolve. Leftover `mxc://` is avatar/pack only. |
 | Desktop JS media retire | `landed` #1006 | required | Composer send is native-only. `browser-encrypt-attachment` removed. `sw.ts` is a stub. Leftover encrypted `mxc://` fail-closes. Leftover avatar `<img src=mxc://>` display remains. Not Apple generate. Not dual-platform proof. |
-| P4 engine ready | pending | gate | Product paths call Core. Not claimed: Apple generate, paused iOS CI (#1003), and paused live homeserver proof still sit in front of the gate. |
+| P4 engine ready | pending | gate | Product paths call Core. Not claimed: paused iOS CI (#1003) and paused live homeserver proof still sit in front of the gate. Local Apple generate for S30–S35 has been run; generated sources remain gitignored. |
 | P5 | `blocked` | operator | Do not start. Apple/TestFlight/physical-device. |
 
 ---
@@ -152,7 +152,8 @@ presence, and sticker-pack UI call Core. Desktop live media uses the
 handle owner. Composer send is native-only. Hosted iOS CI stays
 paused (#1003). Live homeserver proof is paused until an environment
 can launch the app. Do not start P5. Do not claim P4 engine ready.
-Apple generate is required for the new UniFFI fields. Leftover
+Local Apple generate has been run on Darwin for the S30–S35 fields;
+generated sources remain gitignored. Leftover
 encrypted `mxc://` fail-closes. Leftover avatar `<img src=mxc://>`
 display remains. Dual-platform Core bugfix proof is not claimed. Do
 not register byte commands on `Core::command`. The next required
@@ -165,5 +166,6 @@ graph node is the P4 engine-ready gate (blocked). Do not invent S38.
 - Disk under 20 Gi and the slice needs cargo/UniFFI.
 - The next node is P5.
 - A leftover secret/byte command would have to cross `Core::command`.
-- The only remaining work is Apple generate, a live homeserver, dual-platform
-  proof, leftover avatar display, or a merge. Do not invent S38.
+- The only remaining work is a live homeserver, dual-platform
+  proof, leftover avatar display, paused iOS CI, or a merge. Future
+  UDL changes still need Apple generate. Do not invent S38.

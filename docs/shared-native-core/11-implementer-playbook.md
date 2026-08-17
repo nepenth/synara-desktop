@@ -40,7 +40,7 @@ shared engine. Never claim P5 or MAC-IOS-006 is done.
 | Surface | Today |
 |---|---|
 | Desktop macOS/Linux | Live Matrix `Client` and native owners live in Core. React still invokes `matrix_*`. **111** of those names are registered on `Core::command`. Desktop is a thinner shell, not a thin shell. Composer send is native-only. JS encrypt/decrypt and SW token injection are retired. Leftover avatar `<img src=mxc://>` display remains. |
-| iOS | UniFFI scaffold through S9-31 + S11 NSE + S10 leftover UniFFI + **P4-S12–S37 on `main` via #1001**. Product session, sync start, room list, timeline, verification, typing, room details, read markers, crypto status, reactions, opaque media handles, last-message previews, Settings devices, presence, and sticker-pack UI call SharedCore. Leftover recover/raw-send/media-bytes/pusher/notification/avatar I/O still fail closed without a live homeserver (decision 15). This is not iOS-on-engine and not P4 acceptance: Apple generate is still required for the new UniFFI fields; hosted iOS CI is paused (#1003); live homeserver proof is paused. Checked-in `SynaraCore.swift` remains the bootstrap stub. Quality treats skipped `ios-tests` as OK. XCTest construction of `SharedCore` is not iOS-on-engine. Desktop JS media retire (#1006) does not change those iOS gates. |
+| iOS | UniFFI scaffold through S9-31 + S11 NSE + S10 leftover UniFFI + **P4-S12–S37 on `main` via #1001**. Product session, sync start, room list, timeline, verification, typing, room details, read markers, crypto status, reactions, opaque media handles, last-message previews, Settings devices, presence, and sticker-pack UI call SharedCore. Leftover recover/raw-send/media-bytes/pusher/notification/avatar I/O still fail closed without a live homeserver (decision 15). This is not iOS-on-engine and not P4 acceptance: local Apple generate has been run on Darwin for the S30–S35 fields (`dd62d24d`); generated sources remain gitignored; hosted iOS CI is paused (#1003); live homeserver proof is paused. Checked-in `SynaraCore.swift` remains the bootstrap stub. Quality treats skipped `ios-tests` as OK. XCTest construction of `SharedCore` is not iOS-on-engine. Desktop JS media retire (#1006) does not change those iOS gates. |
 | `main` | SNC engineering tip. #991 brought the feature lane onto `main`. #1000 recorded ADR 0004. #1002 added the Long-running recipe. #1003 paused hosted iOS simulator CI. #1001 landed P4-S12–S37. #1004 docs honesty. #1005 leftover handle download. #1006 desktop JS media retire (`76f67441`). |
 | Release | Forbidden until program-done is accepted and P5 operator/Apple gates pass. #991 is not a release. |
 
@@ -184,8 +184,8 @@ Run this checklist in order. Stop at the first yes.
    stub). Leftover avatar `<img src=mxc://>` display remains. Live
    homeserver proof is paused. Do not claim iOS-on-engine or P4
    engine ready. Do not invent S38.
-   Local Apple UniFFI generate has been run for earlier fields;
-   new S30–S35 UniFFI fields still need Apple generate. Generated
+   Local Apple UniFFI generate has been run on Darwin for the
+   S30–S35 fields (`dd62d24d`). Generated
    sources remain gitignored. Checked-in `SynaraCore.swift` remains
    the bootstrap stub. Do not start P5. Dual-platform Core bugfix
    proof is not claimed. Four-target release bindgen needs headroom
@@ -664,7 +664,8 @@ operator authorization + #986). #984 lands S11 NSE read-only
 store. #985 refreshes provenance. #986 lands S10 leftover UniFFI
 and retires product `MatrixRustSDK` callers. #987 refreshes
 provenance. #988 re-enables iOS CI. #989–#992 and #991 bring
-that tip onto `main`. Local Apple UniFFI generate has been run;
+that tip onto `main`. Local Apple UniFFI generate has been run on
+Darwin for the S30–S35 fields (`dd62d24d`);
 generated sources remain gitignored.
 
 1. `SharedCore.session_snapshot` / `sync_status` / `media_config` /

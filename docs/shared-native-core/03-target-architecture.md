@@ -42,9 +42,10 @@ P4-S12–S37 product consume (#1001). Desktop JS encrypt/decrypt is
 retired (#1006). Product `MatrixRustSDK` callers
 are retired (comments may remain). This is not iOS-on-engine. Hosted
 iOS CI is paused (#1003). Live homeserver proof is paused. Local
-Apple generate has been run for earlier fields; new S30–S35 UniFFI
-fields still need Apple generate. Generated sources remain gitignored.
-Checked-in `SynaraCore.swift` remains the bootstrap stub. Product events on desktop use **owner emit callbacks**, not
+Apple generate has been run on Darwin for the S30–S35 fields
+(`dd62d24d`). Generated sources remain gitignored.
+Checked-in `SynaraCore.swift` remains the bootstrap stub. This is not
+P4 acceptance and not dual-platform proof. Product events on desktop use **owner emit callbacks**, not
 `Platform::emit`. `Platform::emit` is the typed IPC envelope stream.
 See [11-implementer-playbook.md](11-implementer-playbook.md) §3 rule 7.
 

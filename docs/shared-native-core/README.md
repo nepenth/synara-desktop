@@ -159,10 +159,11 @@ crypto/read-marker/device/last-message/media-handle/presence/sticker
 paths call Core. #1006 (`76f67441`) retires desktop JS encrypt/decrypt.
 SyncService can be started through SharedCore;
 live homeserver proof is paused. This is not iOS-on-engine. Local
-Apple generate has been run for earlier fields; new S30–S35 UniFFI
-fields still need Apple generate. Generated `synara_core.swift` and
+Apple generate has been run on Darwin for the S30–S35 UniFFI
+fields (`dd62d24d`). Generated `synara_core.swift` and
 the XCFramework remain gitignored. Checked-in `SynaraCore.swift`
-remains the bootstrap stub. UniFFI constructors are unchanged
+remains the bootstrap stub. This is not P4 acceptance and not
+dual-platform proof. UniFFI constructors are unchanged
 (`SharedCore()` / `newWithSecretStore`). Password never rides a
 generic UniFFI `command`.
 
@@ -172,7 +173,7 @@ generic UniFFI `command`.
 | P1 | #669, #673–#677, #680–#681, #713–#714, #716–#717, #720–#721, #723–#726, #728–#729, #731–#732, #734–#735, #737–#738, #740–#741, #743–#744, #747–#748, #751, #753, #755, #757–#758, #760, #762, #764, #766, #768, #770, #772, #774, #776, #778, #780–#781, #783–#784, #786, #788, #790, #792, #794, #796, #798, #800–#801, #803, #805, #807–#808, #810, #812, #814, #816 | Extraction slices plus live client/login adapters, emit owners, NativeTimelineRegistry, and NativeVerificationOwner; leftover Keychain/Tauri commands not all moved. |
 | P2 | #683–#689, #694, #698, #701–#702, #706, #818, #820, #822, #824, #826, #828, #830, #832, #834, #836, #838, #840, #842, #844, #846, #848, #850, #852, #854, #856, #858, #860, #862, #864, #866, #868, #870, #872, #874, #876, #878, #880, #882, #884, #886, #888, #890, #892, #894, #896, #898, #900, #902, #904, #906, #908, #910, #912, #914, #916, #918, #920, #922, #924, #926, #928 | One-hundred-eleven-command registry (invite spam/block added); full desktop-invoke parity is not reached. |
 | P3 | #690–#691, #694, #698, #701–#702, #706 | The listed auth and read-only/session bridges use Core; `src-tauri` is not yet a fully thin shell. |
-| P4 | #685, #692–#693, #696, #699, #703, #708, #710, #931, #933, #935, #937–#940, #942, #944–#945, #947–#992, #991, #1000–#1006 | UniFFI scaffold through S9-31 plus S10/S11 and #991 on `main`; #1000 ADR 0004; #1001 P4-S12–S37 product consume; #1002 Long-running recipe; #1003 hosted iOS CI paused; #1004 docs honesty; #1005 leftover handle download; #1006 desktop JS media retire. Leftover I/O that needs a live homeserver stays fail-closed. Not iOS-on-engine. Apple generate still required for new UniFFI fields. Live homeserver proof paused. |
+| P4 | #685, #692–#693, #696, #699, #703, #708, #710, #931, #933, #935, #937–#940, #942, #944–#945, #947–#992, #991, #1000–#1006 | UniFFI scaffold through S9-31 plus S10/S11 and #991 on `main`; #1000 ADR 0004; #1001 P4-S12–S37 product consume; #1002 Long-running recipe; #1003 hosted iOS CI paused; #1004 docs honesty; #1005 leftover handle download; #1006 desktop JS media retire. Leftover I/O that needs a live homeserver stays fail-closed. Not iOS-on-engine. Local Apple generate has been run for S30–S35; generated sources remain gitignored. Not P4 engine ready. Live homeserver proof paused. |
 | P5 | None | Not started. The release gates below remain required. |
 
 Read [11-implementer-playbook.md](11-implementer-playbook.md) before writing
