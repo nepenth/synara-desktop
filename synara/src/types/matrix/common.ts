@@ -1,5 +1,3 @@
-import { EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
-
 export const MATRIX_BLUR_HASH_PROPERTY_NAME = 'xyz.amorgan.blurhash';
 export const MATRIX_SPOILER_PROPERTY_NAME = 'page.codeberg.everypizza.msc4193.spoiler';
 export const MATRIX_SPOILER_REASON_PROPERTY_NAME =
@@ -30,6 +28,22 @@ export type IAudioInfo = {
 export type IFileInfo = {
   mimetype?: string;
   size?: number;
+};
+
+/** Wire shape of an encrypted file. Decrypt is native; JS does not implement it. */
+export type EncryptedAttachmentInfo = {
+  v: string;
+  key: {
+    alg: string;
+    key_ops: string[];
+    kty: string;
+    k: string;
+    ext: boolean;
+  };
+  iv: string;
+  hashes: {
+    [alg: string]: string;
+  };
 };
 
 export type IEncryptedFile = EncryptedAttachmentInfo & {

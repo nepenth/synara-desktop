@@ -100,7 +100,7 @@ Leave the current language in place when:
 | iOS UI | SwiftUI | Stay Swift. Consume UniFFI. |
 | iOS Matrix adapters | `SharedCore*` wrappers; leftover I/O fail-closed | Thin Swift over Rust. Not a second engine. NSE stays a narrow read-only store surface and never starts sync. |
 | Desktop UI | React / Jotai / Slate / vanilla-extract | Stay TypeScript. Presenter and virtualization only. |
-| Media bytes / decrypt-for-display | Native queues plus leftover `browser-encrypt-attachment` and `synara/src/sw.ts` | Rust-owned delivery. JS decrypt is a candidate to delete, not rewrite. |
+| Media bytes / decrypt-for-display | Native queues; leftover `matrix_send_attachment` / `matrix_media_download` (not `Core::command`) | Rust-owned delivery. Desktop JS encrypt/decrypt and SW token injection are retired. Leftover encrypted `mxc://` without a handle fail-closes. Leftover avatar `<img src=mxc://>` display is still a later visual pass. |
 | Markdown / HTML render / PDF | TypeScript and pdf.js | Stay TypeScript. |
 | Element Call / MatrixRTC | Placeholder WebView widget | A Rust widget bridge may come later. Do not start a Rust WebRTC stack. |
 | Agent / Hermes workflows | React cards plus native action bridge | Policy and approval state may move to core if iOS must share those semantics. Composer and card UI stay put. |
@@ -126,12 +126,17 @@ list.
    start SyncService through Core, replace remaining fail-closed
    leftovers that need a live homeserver, and keep NSE read-only. Do not
    start P5 from this ADR. Follow playbook section 5 and section 9.
-4. **Native media as the sole decrypt/delivery path.** Retire
-   `browser-encrypt-attachment` and shrink `synara/src/sw.ts` once
-   desktop and iOS both receive bytes from the native owner. Rust
-   already has the queues; the work is cutover, not a new media crate.
-   Byte-bearing commands stay shell-side until a written owner decision
-   defines a byte channel.
+4. **Native media as the sole decrypt/delivery path.** Desktop composer
+   send and timeline/leftover `mxc://` download use the native owner.
+   `browser-encrypt-attachment` is removed; `synara/src/sw.ts` is a stub
+   (no Matrix token injection). Leftover encrypted `mxc://` without a
+   handle fail-closes. iOS leftover media I/O stays fail-closed
+   (decision 15). Byte-bearing commands stay shell-side until a written
+   owner decision defines a byte channel. Do not register
+   `matrix_send_attachment` / `matrix_upload_media` /
+   `matrix_media_download` on `Core::command`. Leftover avatar
+   `<img src=mxc://>` display is a later visual pass, not a JS decrypt
+   rewrite.
 5. **Harness-only domains go live in Core** when they are shared product
    behavior (search is the example). Do not promote a harness just to
    have a merge.

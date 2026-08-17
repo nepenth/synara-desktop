@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { downloadMatrixMedia, resolveMatrixMediaUrl, resolveMatrixThumbnailUrl } from '../media';
 
 type MockMatrixClient = {
@@ -58,35 +60,36 @@ test('resolveMatrixThumbnailUrl requests cropped authenticated thumbnails', () =
   assert.deepEqual(calls, [['mxc://example/avatar', 100, 100, 'crop', undefined, undefined, true]]);
 });
 
-test('downloadMatrixMedia fetches resolved Matrix media through the desktop media boundary', async () => {
+test('downloadMatrixMedia resolves leftover mxc through native download without JS fetch', async () => {
   const originalFetch = globalThis.fetch;
-  const requests: Array<{ url: string; method?: string }> = [];
-  const blob = new Blob(['hello'], { type: 'text/plain' });
-  globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
-    requests.push({ url: String(url), method: init?.method });
-    return { blob: async () => blob } as Response;
+  const originalWindow = globalThis.window;
+  const requests: string[] = [];
+  globalThis.fetch = (async (url: RequestInfo | URL) => {
+    requests.push(String(url));
+    return { blob: async () => new Blob(['js']) } as Response;
   }) as typeof fetch;
 
-  const mx: MockMatrixClient = {
-    mxcUrlToHttp: () => 'https://matrix.example.org/_matrix/media/v3/download/example/media',
+  (globalThis as { window: unknown }).window = {
+    __TAURI_INTERNALS__: {
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        assert.equal(command, 'matrix_media_download');
+        assert.equal(args?.contentUri, 'mxc://example/media');
+        return { bytes: [9, 8, 7] };
+      },
+    },
   };
 
+  const mx = { mxcUrlToHttp: () => 'https://example.invalid/should-not-run' };
+
   try {
-    assert.equal(
-      await downloadMatrixMedia(mx as never, 'mxc://example/media', {
-        mimeType: 'text/plain',
-        useAuthentication: true,
-      }),
-      blob
-    );
-    assert.deepEqual(requests, [
-      {
-        url: 'https://matrix.example.org/_matrix/media/v3/download/example/media',
-        method: 'GET',
-      },
-    ]);
+    const blob = await downloadMatrixMedia(mx as never, 'mxc://example/media', {
+      mimeType: 'text/plain',
+    });
+    assert.equal(requests.length, 0);
+    assert.equal(await blob.arrayBuffer().then((buf) => new Uint8Array(buf).join(',')), '9,8,7');
   } finally {
     globalThis.fetch = originalFetch;
+    (globalThis as { window: unknown }).window = originalWindow;
   }
 });
 
@@ -115,12 +118,6 @@ test('downloadMatrixMedia resolves timeline handles through native download with
   try {
     const blob = await downloadMatrixMedia(mx as never, `synara-media://localhost/${handle}`, {
       mimeType: 'image/png',
-      encryptedInfo: {
-        v: 'v2',
-        key: { alg: 'A256CTR', ext: true, k: 'x', key_ops: ['encrypt', 'decrypt'], kty: 'oct' },
-        iv: 'iv',
-        hashes: { sha256: 'hash' },
-      },
     });
     assert.equal(requests.length, 0);
     assert.equal(await blob.arrayBuffer().then((buf) => new Uint8Array(buf).join(',')), '1,2,3');
@@ -129,4 +126,33 @@ test('downloadMatrixMedia resolves timeline handles through native download with
     globalThis.fetch = originalFetch;
     (globalThis as { window: unknown }).window = originalWindow;
   }
+});
+
+test('downloadMatrixMedia fail-closes leftover encrypted mxc without a native handle', async () => {
+  const mx = { mxcUrlToHttp: () => 'https://example.invalid/should-not-run' };
+  await assert.rejects(
+    downloadMatrixMedia(mx as never, 'mxc://example/enc', {
+      mimeType: 'image/png',
+      encryptedInfo: {
+        v: 'v2',
+        key: { alg: 'A256CTR', ext: true, k: 'x', key_ops: ['encrypt', 'decrypt'], kty: 'oct' },
+        iv: 'iv',
+        hashes: { sha256: 'hash' },
+      },
+    }),
+    /Leftover encrypted media requires a native handle/
+  );
+});
+
+test('desktop media boundary has no JS encrypt/decrypt leftover', () => {
+  const media = readFileSync(fileURLToPath(new URL('../media.ts', import.meta.url)), 'utf8');
+  const roomInput = readFileSync(
+    fileURLToPath(new URL('../../features/room/RoomInput.tsx', import.meta.url)),
+    'utf8'
+  );
+  const sw = readFileSync(fileURLToPath(new URL('../../../sw.ts', import.meta.url)), 'utf8');
+  assert.doesNotMatch(media, /browser-encrypt-attachment|decryptFile|downloadEncryptedMedia/);
+  assert.doesNotMatch(roomInput, /encryptFile|browser-encrypt-attachment/);
+  assert.match(roomInput, /Native Matrix attachment send is unavailable/);
+  assert.doesNotMatch(sw, /_matrix\/client\/v1\/media|accessToken|Bearer/);
 });

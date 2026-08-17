@@ -21,9 +21,10 @@ Do not register `matrix_send_attachment` / `matrix_upload_media` /
 The presenter boundary already forbids `mxc://` on timeline JSON. The
 native owner keeps `MediaSource` behind the handle, including encrypted
 sources. Desktop no longer treats leftover `mxc://` +
-`browser-encrypt-attachment` as the live timeline decrypt path. UniFFI
-leftover `media_download(mxc)` stays planted fail-closed on iOS
-(decision 15).
+`browser-encrypt-attachment` as the live timeline decrypt path. Composer
+send is native-only; JS encrypt/decrypt is retired. Leftover encrypted
+`mxc://` without a handle fail-closes. UniFFI leftover
+`media_download(mxc)` stays planted fail-closed on iOS (decision 15).
 
 ## Must not
 

@@ -420,6 +420,13 @@ The exact bounded iOS evidence is:
   I/O stay fail-closed (decision 15). Not iOS-on-engine. Apple
   generate still required for new UniFFI fields. Live homeserver
   proof paused.
+- #1005: leftover `downloadMatrixMedia` routes `synara-media://` /
+  `timeline-media-*` and leftover `mxc://` through
+  `matrix_media_download`. Not `Core::command`.
+- Desktop JS media retire (in-pr): composer send is native-only;
+  `browser-encrypt-attachment` removed; `sw.ts` is a stub; leftover
+  encrypted `mxc://` fail-closes. Leftover avatar `<img src=mxc://>`
+  display remains. Not Apple generate. Not dual-platform proof.
 
 #708 and #710 add no Core command route. #931/#933/#935 add UniFFI probes /
 construction / vault only. Later P4 slices add typed wrappers; they do
@@ -570,8 +577,10 @@ for any of those gates.
    landed. Product `MatrixRustSDK` callers are retired. Do not start
    P5. Do not claim P4 engine ready. Hosted iOS CI stays paused.
    Live homeserver proof stays paused until an environment can
-   launch the app. JS `browser-encrypt-attachment` remains the
-   leftover send fallback and leftover `mxc://` avatar/pack decrypt.
+   launch the app. Desktop JS encrypt/decrypt is retired; leftover
+   encrypted `mxc://` fail-closes. Leftover avatar `<img src=mxc://>`
+   display remains. Apple generate and dual-platform Core bugfix
+   proof still need a Mac / live app.
 5. After each product PR: squash-merge to `main`, docs honesty, then
    re-run playbook section 5. If step 4, stop.
 

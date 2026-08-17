@@ -14,7 +14,7 @@ import {
 } from 'folds';
 import classNames from 'classnames';
 import { BlurhashCanvas } from 'react-blurhash';
-import { EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
+import { EncryptedAttachmentInfo } from '../../../../types/matrix/common';
 import {
   IThumbnailContent,
   IVideoInfo,

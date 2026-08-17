@@ -4,7 +4,7 @@ import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { FALLBACK_MIMETYPE } from '../../../utils/mimeTypes';
-import { createMatrixMediaObjectUrl, resolveMatrixMediaUrl } from '../../../matrix/media';
+import { createMatrixMediaObjectUrl } from '../../../matrix/media';
 
 export type ThumbnailContentProps = {
   info: IThumbnailContent;
@@ -23,15 +23,11 @@ export function ThumbnailContent({ info, renderImage }: ThumbnailContentProps) {
         throw new Error('Failed to load thumbnail');
       }
 
-      if (encInfo) {
-        return createMatrixMediaObjectUrl(mx, thumbMxcUrl, {
-          useAuthentication,
-          mimeType: thumbInfo.mimetype ?? FALLBACK_MIMETYPE,
-          encryptedInfo: encInfo,
-        });
-      }
-
-      return resolveMatrixMediaUrl(mx, thumbMxcUrl, { useAuthentication });
+      return createMatrixMediaObjectUrl(mx, thumbMxcUrl, {
+        useAuthentication,
+        mimeType: thumbInfo.mimetype ?? FALLBACK_MIMETYPE,
+        encryptedInfo: encInfo,
+      });
     }, [mx, info, useAuthentication])
   );
 

@@ -1,6 +1,6 @@
 import { Badge, Box, Icon, IconButton, Icons, Spinner, Text, as, toRem } from 'folds';
 import React, { ReactNode, useCallback } from 'react';
-import { EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
+import { EncryptedAttachmentInfo } from '../../../types/matrix/common';
 import FileSaver from 'file-saver';
 import { mimeTypeToExt } from '../../utils/mimeTypes';
 import { useMatrixClient } from '../../hooks/useMatrixClient';

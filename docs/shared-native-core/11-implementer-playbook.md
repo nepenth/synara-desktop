@@ -38,7 +38,7 @@ shared engine. Never claim P5 or MAC-IOS-006 is done.
 
 | Surface | Today |
 |---|---|
-| Desktop macOS/Linux | Live Matrix `Client` and native owners live in Core. React still invokes `matrix_*`. **111** of those names are registered on `Core::command`. Desktop is a thinner shell, not a thin shell. |
+| Desktop macOS/Linux | Live Matrix `Client` and native owners live in Core. React still invokes `matrix_*`. **111** of those names are registered on `Core::command`. Desktop is a thinner shell, not a thin shell. Composer send is native-only. JS encrypt/decrypt and SW token injection are retired. Leftover avatar `<img src=mxc://>` display remains. |
 | iOS | UniFFI scaffold through S9-31 + S11 NSE + S10 leftover UniFFI + **P4-S12–S37 on `main` via #1001**. Product session, sync start, room list, timeline, verification, typing, room details, read markers, crypto status, reactions, opaque media handles, last-message previews, Settings devices, presence, and sticker-pack UI call SharedCore. Leftover recover/raw-send/media-bytes/pusher/notification/avatar I/O still fail closed without a live homeserver (decision 15). This is not iOS-on-engine and not P4 acceptance: Apple generate is still required for the new UniFFI fields; hosted iOS CI is paused (#1003); live homeserver proof is paused. Checked-in `SynaraCore.swift` remains the bootstrap stub. Quality treats skipped `ios-tests` as OK. XCTest construction of `SharedCore` is not iOS-on-engine. |
 | `main` | SNC engineering tip. #991 brought the feature lane onto `main`. #1000 recorded ADR 0004. #1002 added the Long-running recipe. #1003 paused hosted iOS simulator CI. #1001 landed P4-S12–S37 (`7ecbfdf9`). |
 | Release | Forbidden until program-done is accepted and P5 operator/Apple gates pass. #991 is not a release. |
@@ -131,7 +131,7 @@ crate or a parallel ledger.
 |---|---|
 | 7B: non-secret live I/O already on an attached owner (as of #928 there are none left to invent) | Presentation, Slate, pdf.js, timeline viewport math |
 | P4 then P5: iOS-on-engine; start SyncService through Core; NSE stays read-only and never starts sync | SwiftUI, Keychain, APNs, NSE lifecycle |
-| Native media delivery cutover: retire `browser-encrypt-attachment` and shrink `synara/src/sw.ts` once both shells get bytes from the native owner | `matrix_send_attachment` / `matrix_upload_media` / `matrix_media_download` on the Core envelope |
+| Native media delivery cutover: desktop JS encrypt/decrypt retired; leftover send is native-only; leftover encrypted `mxc://` fail-closes; `sw.ts` is a stub | `matrix_send_attachment` / `matrix_upload_media` / `matrix_media_download` on the Core envelope |
 | Harness → live only when the domain is shared product behavior | Node `scripts/*.mjs`, WASM/IndexedDB leftovers (delete, do not rewrite) |
 | Optional after iOS-on-engine: agent-action *policy* in Core if iOS must share it | Agent-card / composer UI; Element Call WebRTC stack |
 
@@ -177,8 +177,11 @@ Run this checklist in order. Stop at the first yes.
    iOS simulator CI until `main` is stable. #1001 lands P4-S12–S37
    (`7ecbfdf9`): start_sync, restore bootstrap, emit sinks, leftover
    status, product timeline/room-list/crypto/read-marker/device/
-   last-message/media-handle/presence/sticker paths. Live homeserver
-   proof is paused. Do not claim iOS-on-engine or P4 engine ready.
+   last-message/media-handle/presence/sticker paths. Desktop JS
+   encrypt/decrypt is retired (composer send native-only; leftover
+   encrypted `mxc://` fail-closes; `sw.ts` is a stub). Leftover avatar
+   `<img src=mxc://>` display remains. Live homeserver proof is paused.
+   Do not claim iOS-on-engine or P4 engine ready.
    Local Apple UniFFI generate has been run for earlier fields;
    new S30–S35 UniFFI fields still need Apple generate. Generated
    sources remain gitignored. Checked-in `SynaraCore.swift` remains

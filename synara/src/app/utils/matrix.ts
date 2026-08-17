@@ -1,11 +1,6 @@
-import {
-  EncryptedAttachmentInfo,
-  decryptAttachment,
-  encryptAttachment,
-} from 'browser-encrypt-attachment';
 import to from 'await-to-js';
 import { type MatrixClientReading, type MatrixEventReading, type RoomReading } from './room';
-import { IImageInfo, IThumbnailContent, IVideoInfo } from '../../types/matrix/common';
+import { IImageInfo, IVideoInfo } from '../../types/matrix/common';
 import { getStateEvent } from './room';
 import { Membership, StateEvent } from '../../types/matrix/room';
 
@@ -122,64 +117,6 @@ export const getVideoInfo = (video: HTMLVideoElement, fileOrBlob: File | Blob): 
   info.mimetype = fileOrBlob.type;
   info.size = fileOrBlob.size;
   return info;
-};
-
-export const getThumbnailContent = (thumbnailInfo: {
-  thumbnail: File | Blob;
-  encInfo: EncryptedAttachmentInfo | undefined;
-  mxc: string;
-  width: number;
-  height: number;
-}): IThumbnailContent => {
-  const { thumbnail, encInfo, mxc, width, height } = thumbnailInfo;
-
-  const content: IThumbnailContent = {
-    thumbnail_info: {
-      mimetype: thumbnail.type,
-      size: thumbnail.size,
-      w: width,
-      h: height,
-    },
-  };
-  if (encInfo) {
-    content.thumbnail_file = {
-      ...encInfo,
-      url: mxc,
-    };
-  } else {
-    content.thumbnail_url = mxc;
-  }
-  return content;
-};
-
-export const encryptFile = async <T extends File | Blob>(
-  file: T
-): Promise<{
-  encInfo: EncryptedAttachmentInfo;
-  file: File;
-  originalFile: T;
-}> => {
-  const dataBuffer = await file.arrayBuffer();
-  const encryptedAttachment = await encryptAttachment(dataBuffer);
-  const fileName = file instanceof File ? file.name : 'encrypted-thumbnail';
-  const encFile = new File([encryptedAttachment.data], fileName, {
-    type: file.type,
-  });
-  return {
-    encInfo: encryptedAttachment.info,
-    file: encFile,
-    originalFile: file,
-  };
-};
-
-export const decryptFile = async (
-  dataBuffer: ArrayBuffer,
-  type: string,
-  encInfo: EncryptedAttachmentInfo
-): Promise<Blob> => {
-  const dataArray = await decryptAttachment(dataBuffer, encInfo);
-  const blob = new Blob([dataArray], { type });
-  return blob;
 };
 
 export type TUploadContent = File;
@@ -310,20 +247,9 @@ export const mxcUrlToHttp = (
   );
 
 export const downloadMedia = async (src: string): Promise<Blob> => {
-  // this request is authenticated by service worker
   const res = await fetch(src, { method: 'GET' });
   const blob = await res.blob();
   return blob;
-};
-
-export const downloadEncryptedMedia = async (
-  src: string,
-  decryptContent: (buf: ArrayBuffer) => Promise<Blob>
-): Promise<Blob> => {
-  const encryptedContent = await downloadMedia(src);
-  const decryptedContent = await decryptContent(await encryptedContent.arrayBuffer());
-
-  return decryptedContent;
 };
 
 export const rateLimitedActions = async <T, R = void>(
