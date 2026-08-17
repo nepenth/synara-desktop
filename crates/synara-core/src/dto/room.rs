@@ -106,6 +106,9 @@ pub struct RoomSummary {
     /// Last activity timestamp in milliseconds since Unix epoch.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_activity_ts: Option<u64>,
+    /// Privacy-safe last-message preview. Never tokens or `mxc://`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_message_preview: Option<String>,
     /// Bounded hero list for name/avatar fallbacks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub heroes: Option<Vec<RoomHero>>,

@@ -179,6 +179,7 @@ test('valid_room_summary parses', () => {
   assert.equal(r.roomId, '!room:example.org');
   assert.equal(r.membership, 'join');
   assert.equal(r.notificationMode, 'mentions');
+  assert.equal(r.lastMessagePreview, undefined);
   assert.equal(r.heroes?.length, 1);
 });
 

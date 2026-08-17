@@ -148,6 +148,21 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
             homeserverURL: homeserver
         )
     }
+
+    func presence(userID: String) async -> SharedCorePresence? {
+        guard let snapshot = try? await SharedCoreTypingPresence.presenceSnapshot(
+            core: host.core,
+            userId: userID
+        ) else {
+            return nil
+        }
+        return SharedCorePresenceLive.presence(
+            userId: snapshot.userId,
+            state: snapshot.state,
+            currentlyActive: snapshot.currentlyActive,
+            statusMsg: snapshot.statusMsg
+        )
+    }
 }
 
 final class SharedCoreRoomListService: RoomListServicing {
@@ -175,7 +190,8 @@ final class SharedCoreRoomListService: RoomListServicing {
                         unreadCount: Int($0.unreadCount),
                         highlightCount: Int($0.highlightCount),
                         markedUnread: $0.markedUnread,
-                        lastActivityTs: $0.lastActivityTs
+                        lastActivityTs: $0.lastActivityTs,
+                        lastMessagePreview: $0.lastMessagePreview
                     )
                 },
                 invites: invites.map {
@@ -523,6 +539,40 @@ final class SharedCoreMessageSendService: MessageSending {
                 kind: .text(body),
                 replyToEventID: request.replyToEventID,
                 isEdited: request.editEventID != nil,
+                reactions: [:]
+            )
+        } catch {
+            throw MessageSendError.failed
+        }
+    }
+
+    func sendSticker(_ request: StickerSendRequest) async throws -> TimelineItem {
+        let body = request.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        let mxc = request.mxc.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard body.isEmpty == false, mxc.hasPrefix("mxc://") else {
+            throw MessageSendError.failed
+        }
+        do {
+            _ = try await SharedCoreSendSticker.sendSticker(
+                core: host.core,
+                roomId: request.roomID,
+                body: body,
+                mxc: mxc,
+                width: request.width,
+                height: request.height,
+                mimetype: request.mimetype,
+                size: request.size,
+                replyTo: request.replyToEventID,
+                threadRoot: request.threadRoot
+            )
+            return TimelineItem(
+                id: "$local-\(UUID().uuidString)",
+                eventID: "$local-\(UUID().uuidString)",
+                senderID: signedInUserID(),
+                timestamp: Date(),
+                kind: .unknown(type: "sticker"),
+                replyToEventID: request.replyToEventID,
+                isEdited: false,
                 reactions: [:]
             )
         } catch {
@@ -1036,6 +1086,38 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
             isEncrypted: room?.isEncrypted ?? invite?.isEncrypted ?? false,
             notificationMode: SharedCoreRoomDetails.notificationMode(room?.notificationMode)
         )
+    }
+
+    func stickers(roomID: String) async -> [SharedCoreSticker] {
+        var rows: [SharedCoreSticker] = []
+        if let user = try? await SharedCoreImagePacks.getUserImagePack(core: host.core),
+           let pack = user.pack
+        {
+            rows.append(contentsOf: SharedCoreImagePackRows.stickers(
+                packId: pack.id,
+                packName: nil,
+                contentJSON: pack.contentJson
+            ))
+        }
+        if let room = try? await SharedCoreImagePacks.getRoomImagePacks(core: host.core, roomId: roomID) {
+            for pack in room.packs {
+                rows.append(contentsOf: SharedCoreImagePackRows.stickers(
+                    packId: pack.id,
+                    packName: nil,
+                    contentJSON: pack.contentJson
+                ))
+            }
+        }
+        if let global = try? await SharedCoreImagePacks.getGlobalImagePacks(core: host.core) {
+            for pack in global.packs {
+                rows.append(contentsOf: SharedCoreImagePackRows.stickers(
+                    packId: pack.id,
+                    packName: nil,
+                    contentJSON: pack.contentJson
+                ))
+            }
+        }
+        return rows
     }
 
     private func coreSessionUserID() async -> String? {

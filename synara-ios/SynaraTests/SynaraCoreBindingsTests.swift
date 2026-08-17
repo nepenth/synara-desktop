@@ -459,6 +459,23 @@ final class SynaraCoreBindingsTests: XCTestCase {
             ).displayName,
             "iPhone"
         )
+        XCTAssertEqual(
+            SharedCorePresenceLive.presence(
+                userId: "@alice:example.org",
+                state: "online",
+                currentlyActive: true,
+                statusMsg: "On a call"
+            ).displayName,
+            "Online"
+        )
+        let stickers = SharedCoreImagePackRows.stickers(
+            packId: "user",
+            packName: "Mine",
+            contentJSON: #"{"pack":{"display_name":"Mine"},"images":{"smile":{"url":"mxc://example.org/abc","body":":)"},"bad":{"url":"https://example.org/x"}}}"#
+        )
+        XCTAssertEqual(stickers.map(\.body), [":)"])
+        XCTAssertEqual(stickers.first?.mxc, "mxc://example.org/abc")
+        XCTAssertEqual(stickers.first?.packName, "Mine")
         let publicError = String(describing: SharedCoreTimelineRows.displayKind(
             rowKind: "poll",
             body: "Lunch?",
@@ -687,6 +704,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(details.aliases, ["#ops:example.org"])
         XCTAssertEqual(details.avatarURL, "mxc://example.org/roomAvatar")
         XCTAssertEqual(details.memberCount, 1)
+        XCTAssertEqual(details.members.map(\.userID), ["@alice:example.org", "@bob:example.org"])
         XCTAssertEqual(details.isPublic, true)
         XCTAssertEqual(details.isEncrypted, true)
         XCTAssertEqual(
@@ -771,7 +789,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     unreadCount: 0,
                     highlightCount: 0,
                     markedUnread: false,
-                    lastActivityTs: 1_700_000_000_000
+                    lastActivityTs: 1_700_000_000_000,
+                    lastMessagePreview: nil
                 ),
                 SharedCoreRoomListRows.RoomRow(
                     roomId: "!space:example.org",
@@ -782,7 +801,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     unreadCount: 0,
                     highlightCount: 0,
                     markedUnread: false,
-                    lastActivityTs: nil
+                    lastActivityTs: nil,
+                    lastMessagePreview: "Hello from Alice"
                 ),
             ],
             invites: [
@@ -802,6 +822,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
             ]
         )
         XCTAssertEqual(rooms.first?.lastMessagePreview, "Invited by Alex")
+        XCTAssertEqual(rooms.last?.lastMessagePreview, "Hello from Alice")
         XCTAssertEqual(rooms.first?.parentSpaces, [SpaceSummary(id: "!space:example.org", name: "Team")])
         XCTAssertEqual(rooms.first?.membership, .invited)
         let publicError = String(describing: rooms)

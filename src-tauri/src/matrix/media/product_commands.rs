@@ -71,15 +71,21 @@ pub async fn matrix_media_config(
     crate::bridge::media_config::media_config(core.inner().as_ref()).await
 }
 
-/// V-SEND.R-MEDIA — original-file download owner. The managed SDK media cache
-/// may satisfy the request; otherwise the SDK uses the authenticated media
-/// endpoint selected for this live client.
+/// V-SEND.R-MEDIA / P4-S36 — original-file download owner.
+///
+/// Timeline handles (`timeline-media-*`) resolve through the native owner so
+/// encrypted sources never become leftover `mxc://` on the wire. Plain `mxc://`
+/// stays available for leftover avatar/pack paths only. Bytes never cross
+/// `Core::command`.
 #[tauri::command]
 pub async fn matrix_media_download(
     state: State<'_, MatrixAuthState>,
     content_uri: String,
 ) -> Result<MatrixMediaDownloadResult, MatrixAuthCommandError> {
     let request = MatrixMediaDownloadRequest { content_uri };
+    if crate::matrix::timeline::is_timeline_media_handle(&request.content_uri) {
+        return download_timeline_media_handle(&state, &request.content_uri).await;
+    }
     let content_uri = parse_media_download_uri(&request.content_uri)?;
     let media_request = MediaRequestParameters {
         source: MediaSource::Plain(content_uri),
@@ -96,6 +102,26 @@ pub async fn matrix_media_download(
         .map_err(|_| map_media_download_error("v-send.r-media-download-sdk-failed"))?;
     validate_media_download_size(bytes.len())?;
 
+    Ok(MatrixMediaDownloadResult { bytes })
+}
+
+async fn download_timeline_media_handle(
+    state: &State<'_, MatrixAuthState>,
+    handle: &str,
+) -> Result<MatrixMediaDownloadResult, MatrixAuthCommandError> {
+    let Some((client, source)) = state.resolve_timeline_media(handle).await else {
+        return Err(map_media_download_error("v-send.r-media-unknown-handle"));
+    };
+    let media_request = MediaRequestParameters {
+        source: source.source,
+        format: MediaFormat::File,
+    };
+    let bytes = client
+        .media()
+        .get_media_content(&media_request, true)
+        .await
+        .map_err(|_| map_media_download_error("v-send.r-media-download-sdk-failed"))?;
+    validate_media_download_size(bytes.len())?;
     Ok(MatrixMediaDownloadResult { bytes })
 }
 

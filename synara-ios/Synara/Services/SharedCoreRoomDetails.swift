@@ -59,7 +59,14 @@ enum SharedCoreRoomDetails {
             ),
             powerLevels: power,
             notificationMode: notificationMode,
-            avatarURL: room?.avatarUrl
+            avatarURL: room?.avatarUrl,
+            members: members.map {
+                RoomMemberSummary(
+                    userID: $0.userId,
+                    membership: $0.membership,
+                    powerLevel: $0.powerLevel
+                )
+            }
         )
     }
 

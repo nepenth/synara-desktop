@@ -31,6 +31,7 @@ mod error;
 mod filters;
 mod invite_avatars;
 mod invites;
+mod last_message;
 mod live;
 mod projection;
 mod sort;
@@ -49,6 +50,10 @@ pub use filters::{
 pub use invite_avatars::{InviteAvatarHandles, InviteAvatarSource, MAX_INVITE_AVATAR_HANDLES};
 pub use invites::{
     contains_bad_word, snapshot_invites, NativeInvite, NativeInviteSnapshot, NativeInviteTriage,
+};
+pub use last_message::{
+    last_message_preview_from_event_json, last_message_preview_from_event_json_str,
+    last_message_preview_from_invite, sanitize_last_message_preview,
 };
 pub use live::{
     snapshot_from_sync_owner, NativeRoomListOwner, NativeRoomListSnapshot,

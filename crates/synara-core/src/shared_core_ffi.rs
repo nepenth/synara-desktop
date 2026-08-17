@@ -1059,6 +1059,7 @@ pub struct RoomListRoomDto {
     pub highlight_count: u32,
     pub marked_unread: bool,
     pub last_activity_ts: Option<u64>,
+    pub last_message_preview: Option<String>,
     pub is_encrypted: bool,
     pub notification_mode: Option<String>,
 }
@@ -3365,6 +3366,7 @@ impl SharedCore {
                     highlight_count: room.highlight_count,
                     marked_unread: room.marked_unread,
                     last_activity_ts: room.last_activity_ts,
+                    last_message_preview: room.last_message_preview,
                     is_encrypted: room.is_encrypted,
                     notification_mode: room.notification_mode.map(|mode| mode.as_str().to_owned()),
                 })

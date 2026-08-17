@@ -2540,8 +2540,11 @@ async fn media_config_desktop_owner_keeps_the_live_client_and_closed_no_session_
         .split("#[tauri::command]")
         .next()
         .expect("media download command body");
+    assert!(download.contains("is_timeline_media_handle"));
+    assert!(download.contains("resolve_timeline_media"));
     assert!(download.contains("MediaFormat::File"));
     assert!(download.contains("get_media_content(&media_request, true)"));
     assert!(!download.contains("Thumbnail"));
     assert!(!download.contains("mxcUrlToHttp"));
+    assert!(!download.contains("Core::command"));
 }

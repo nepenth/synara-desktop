@@ -51,6 +51,7 @@ export type RoomSummary = {
   markedUnread: boolean;
   notificationMode?: NotificationMode;
   lastActivityTs?: number;
+  lastMessagePreview?: string;
   heroes?: RoomHero[];
   tombstoneSuccessorRoomId?: string;
 };
@@ -78,6 +79,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
   const highlightCount = reqNumber(value, 'highlightCount');
   const markedUnread = reqBoolean(value, 'markedUnread');
   const lastActivityTs = optNumber(value, 'lastActivityTs');
+  const lastMessagePreview = optString(value, 'lastMessagePreview');
   const tombstoneSuccessorRoomId = optString(value, 'tombstoneSuccessorRoomId');
   if (
     roomId === null ||
@@ -92,6 +94,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
     highlightCount === null ||
     markedUnread === null ||
     lastActivityTs === null ||
+    lastMessagePreview === null ||
     tombstoneSuccessorRoomId === null ||
     !isMembership(value.membership)
   ) {
@@ -131,6 +134,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
     markedUnread,
     notificationMode,
     lastActivityTs,
+    lastMessagePreview,
     heroes,
     tombstoneSuccessorRoomId,
   };

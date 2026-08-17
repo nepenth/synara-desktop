@@ -275,6 +275,7 @@ dictionary RoomListRoomDto {
   u32 highlight_count;
   boolean marked_unread;
   u64? last_activity_ts;
+  string? last_message_preview;
   boolean is_encrypted;
   string? notification_mode;
 };

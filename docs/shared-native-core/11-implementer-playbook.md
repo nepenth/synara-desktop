@@ -482,6 +482,15 @@ P4-S31/S32/S33 timeline reactions + media handle
        channel (ADR 0005). Not Core.command. NSE cannot download.
 P4-S34 product device list              stacked
        Settings lists leftover-safe device snapshot rows. No keys.
+P4-S35 last-message preview             stacked
+       Core projects a privacy-safe last_message_preview. UniFFI
+       room-list DTO and both UIs consume it. No mxc/token.
+P4-S36 desktop media handle cutover     stacked
+       Leftover matrix_media_download resolves timeline-media-*
+       through the native owner. Not Core.command.
+P4-S37 presence + sticker pack UI       stacked
+       Settings/room details consume presence. Composer lists
+       image-pack names and sends via SharedCoreSendSticker.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -1072,6 +1081,28 @@ P4 acceptance.
 **Tests:** UDL has the new fields and `timeline_media_bytes`; without
 a session media fail-closes with no handle/mxc/token echo; Swift
 mappers cover notify mode, reactions, handle URL, and device name.
+
+### 9.26 P4-S35–S37 — last-message preview, desktop media cutover, presence/stickers
+
+Joined-room last-message text was empty even though the SDK latest
+event is available. Desktop leftover `mxc://` download was still the
+documented live path. iOS had presence and image-pack wrappers with
+no product UI.
+
+**Lands:** privacy-safe `last_message_preview` on Core / UniFFI /
+product room lists; desktop `matrix_media_download` resolves
+`timeline-media-*` handles through the native owner (ADR 0005);
+Settings/room-details presence and a composer sticker-pack list that
+sends via `SharedCoreSendSticker`. No leftover registration. No
+pack image bytes.
+
+**Must not land:** `matrix_send_attachment` on Core; byte/secret
+envelopes; inventing preview text without a latest event; P5;
+claiming iOS-on-engine or P4 acceptance.
+
+**Tests:** UDL has `last_message_preview`; preview sanitizer rejects
+mxc/token; handle download prefers `timeline-media-*`; Swift mappers
+cover joined preview, presence display name, and pack rows.
 
 ---
 

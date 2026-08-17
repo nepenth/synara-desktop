@@ -67,6 +67,9 @@ flowchart TD
   s30[S30_room_list_encryption]
   s33[S33_native_media_handle]
   s34[S34_product_devices]
+  s35[S35_last_message_preview]
+  s36[S36_desktop_media_cutover]
+  s37[S37_presence_sticker_ui]
   media[desktop_native_media_cutover]
   done[p4_engine_ready]
   p5[P5_operator_gated]
@@ -92,8 +95,12 @@ flowchart TD
   s29 --> s30
   s30 --> s33
   s33 --> s34
-  s34 --> done
+  s34 --> s35
+  s35 --> s36
+  s36 --> s37
+  s37 --> done
   s33 --> media
+  s36 --> media
   s15 --> done
   media --> done
   done --> p5
@@ -123,7 +130,10 @@ flowchart TD
 | P4-S30 room-list encryption + notify mode | `in-pr` #1001 | required | UniFFI keeps Core `is_encrypted` / `notification_mode`. Product roomStatus / details consume them. |
 | P4-S31–S33 reactions + media handle | `in-pr` #1001 | required | Row DTO keeps reaction counts and opaque handles. `timeline_media_bytes` is UniFFI bytes, not `Core.command`. |
 | P4-S34 product device list | `in-pr` #1001 | required | Settings lists device snapshot display names. No keys. |
-| Desktop native media cutover | `blocked` | required | Desktop still downloads via leftover `mxc://` Tauri command. iOS handle channel is S33. Do not register `matrix_send_attachment`. |
+| P4-S35 last-message preview | `in-pr` #1001 | required | Core/UniFFI project a privacy-safe last-message preview. Product room lists consume it. |
+| P4-S36 desktop media handle cutover | `in-pr` #1001 | required | Leftover `matrix_media_download` resolves `timeline-media-*` through the native owner. Not `Core.command`. |
+| P4-S37 presence + sticker pack UI | `in-pr` #1001 | required | Settings/room details consume presence. Composer lists image-pack names and sends via `SharedCoreSendSticker`. |
+| Desktop native media cutover | `in-pr` #1001 | required | Live timeline uses `synara-media://` + handle resolve. Leftover `mxc://` is avatar/pack only. |
 | P4 engine ready | pending | gate | Session + sync + room list + timeline + crypto product paths call Core on iOS. Not claimed. |
 | P5 | `blocked` | operator | Do not start. Apple/TestFlight/physical-device. |
 
@@ -131,12 +141,12 @@ flowchart TD
 
 ## Current pointer
 
-**S12–S34 are on #1001.** Session, sync, room list, timeline,
+**S12–S37 are on #1001.** Session, sync, room list, timeline,
 verification, typing, room-details, read-marker, crypto, reactions,
-opaque media handles, and Settings devices call Core. Desktop
-leftover `mxc://` download stays **blocked** for cutover. Do not
-start P5. Do not claim P4 engine ready. Apple generate is required
-for the new UniFFI fields.
+opaque media handles, last-message previews, Settings devices,
+presence, and sticker-pack UI call Core. Desktop live media uses
+the handle owner. Do not start P5. Do not claim P4 engine ready.
+Apple generate is required for the new UniFFI fields.
 
 ---
 
@@ -146,5 +156,3 @@ for the new UniFFI fields.
 - The next node is P5.
 - A leftover secret/byte command would have to cross `Core::command`.
 - The only remaining work is Apple generate, a live homeserver, or a merge.
-- Desktop native media cutover would need a native byte channel that is
-  not `Core::command`, and iOS leftover media is fail-closed (decision 15).

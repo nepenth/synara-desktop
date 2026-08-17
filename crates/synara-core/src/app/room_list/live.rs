@@ -9,11 +9,16 @@ use std::time::Duration;
 use eyeball_im::VectorDiff;
 use futures_util::StreamExt;
 use matrix_sdk::notification_settings::RoomNotificationMode;
+use matrix_sdk::ruma::events::MessageLikeEventContent;
 use matrix_sdk::{Room, RoomState};
 use matrix_sdk_ui::room_list_service::filters;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
+use crate::app::room_list::last_message::{
+    last_message_preview_from_event_json, last_message_preview_from_event_json_str,
+    last_message_preview_from_invite,
+};
 use crate::app::sync::SyncServiceOwner;
 use crate::dto::{Membership, NotificationMode, RoomSummary};
 
@@ -147,8 +152,33 @@ async fn project_room(room: &Room) -> RoomSummary {
         marked_unread: room.is_marked_unread(),
         notification_mode,
         last_activity_ts,
+        last_message_preview: last_message_preview(room),
         heroes: None,
         tombstone_successor_room_id: None,
+    }
+}
+
+fn last_message_preview(room: &Room) -> Option<String> {
+    use matrix_sdk::latest_events::LatestEventValue;
+    match room.latest_event() {
+        LatestEventValue::None => None,
+        LatestEventValue::RemoteInvite { inviter, .. } => {
+            last_message_preview_from_invite(inviter.as_ref().map(|id| id.as_str()))
+        }
+        LatestEventValue::Remote(event) => {
+            last_message_preview_from_event_json_str(event.raw().json().get())
+        }
+        LatestEventValue::LocalIsSending(local)
+        | LatestEventValue::LocalHasBeenSent { value: local, .. }
+        | LatestEventValue::LocalCannotBeSent(local) => {
+            let Ok(content) = local.content.deserialize() else {
+                return None;
+            };
+            last_message_preview_from_event_json(&serde_json::json!({
+                "type": content.event_type().to_string(),
+                "content": content,
+            }))
+        }
     }
 }
 

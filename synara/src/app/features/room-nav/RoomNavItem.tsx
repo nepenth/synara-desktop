@@ -302,10 +302,15 @@ function RoomNavItemImpl({
                 />
               )}
             </Avatar>
-            <Box as="span" grow="Yes">
+            <Box as="span" grow="Yes" direction="Column">
               <Text priority={unread ? '500' : '300'} as="span" size="Inherit" truncate>
                 {roomName}
               </Text>
+              {room.lastMessagePreview ? (
+                <Text as="span" size="T200" priority="300" truncate>
+                  {room.lastMessagePreview}
+                </Text>
+              ) : null}
             </Box>
             {!optionsVisible && !unread && !selected && typingMember.length > 0 && (
               <Badge size="300" variant="Secondary" fill="Soft" radii="Pill" outlined>

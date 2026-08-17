@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var isLogoutConfirmationPresented = false
     @State private var sessionCryptoStatus: SessionCryptoStatus = .unknown
     @State private var sessionDevices: [SharedCoreSessionDevice] = []
+    @State private var ownPresence: SharedCorePresence?
     @State private var coreSessionIdentity: CoreSessionIdentity?
     @State private var recoveryKey = ""
     @State private var cryptoActionMessage: String?
@@ -40,6 +41,17 @@ struct SettingsView: View {
                     Text("Not signed in")
                         .foregroundStyle(SynaraColor.secondaryText)
                         .accessibilityIdentifier("SettingsAccountSignedOut")
+                }
+            }
+
+            if let ownPresence {
+                Section("Presence") {
+                    SettingsInfoRow(title: "Status", value: ownPresence.displayName)
+                        .accessibilityIdentifier("SettingsPresenceStatus")
+                    if let status = ownPresence.statusMessage, status.isEmpty == false {
+                        SettingsInfoRow(title: "Message", value: status)
+                            .accessibilityIdentifier("SettingsPresenceMessage")
+                    }
                 }
             }
 
@@ -257,6 +269,7 @@ struct SettingsView: View {
             await refreshCryptoStatus()
             await refreshDevices()
             await refreshCoreSessionIdentity()
+            await refreshOwnPresence()
         }
     }
 
@@ -311,6 +324,24 @@ struct SettingsView: View {
         let devices = await environment.crypto.sessionDevices()
         await MainActor.run {
             sessionDevices = devices
+        }
+    }
+
+    private func refreshOwnPresence() async {
+        let userID: String?
+        if case .signedIn(let session) = environment.session.currentState {
+            userID = session.userID
+        } else {
+            userID = nil
+        }
+        let presence: SharedCorePresence?
+        if let userID {
+            presence = await environment.matrix.presence(userID: userID)
+        } else {
+            presence = nil
+        }
+        await MainActor.run {
+            ownPresence = presence
         }
     }
 

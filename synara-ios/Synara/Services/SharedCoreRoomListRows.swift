@@ -4,10 +4,10 @@ import Foundation
 /// snapshots to product room rows. P4-S26 adds unread lookup from that
 /// mapped snapshot.
 ///
-/// Joined-room last-message text is not on the list DTO and stays empty.
-/// Invite preview uses sender name / topic / reason from the invite
-/// snapshot. Avatar is an `mxc://` URL. This is not iOS-on-engine and
-/// not P4 acceptance.
+/// Joined-room last-message text comes from the privacy-safe list DTO
+/// preview. Invite preview still prefers sender name / topic / reason
+/// from the invite snapshot. Avatar is an `mxc://` URL. This is not
+/// iOS-on-engine and not P4 acceptance.
 enum SharedCoreRoomListRows {
     struct RoomRow {
         let roomId: String
@@ -19,6 +19,7 @@ enum SharedCoreRoomListRows {
         let highlightCount: Int
         let markedUnread: Bool
         let lastActivityTs: UInt64?
+        let lastMessagePreview: String?
     }
 
     struct InviteRow {
@@ -49,7 +50,11 @@ enum SharedCoreRoomListRows {
             return RoomSummary(
                 id: room.roomId,
                 name: room.name ?? invite?.roomName ?? room.roomId,
-                lastMessagePreview: preview(membership: room.membership, invite: invite),
+                lastMessagePreview: preview(
+                    membership: room.membership,
+                    invite: invite,
+                    lastMessagePreview: room.lastMessagePreview
+                ),
                 unreadCount: room.unreadCount,
                 hasHighlight: room.highlightCount > 0 || room.markedUnread,
                 kind: room.isDirect ? .directMessage : .room,
@@ -66,19 +71,30 @@ enum SharedCoreRoomListRows {
         }
     }
 
+    static func preview(
+        membership: String,
+        invite: InviteRow?,
+        lastMessagePreview: String?
+    ) -> String {
+        if isInvited(membership), let invite {
+            let reason = invite.reason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if reason.isEmpty == false {
+                return reason
+            }
+            let sender = invite.senderName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if sender.isEmpty == false {
+                return "Invited by \(sender)"
+            }
+            let topic = invite.roomTopic?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if topic.isEmpty == false {
+                return topic
+            }
+        }
+        return lastMessagePreview?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
     static func preview(membership: String, invite: InviteRow?) -> String {
-        guard isInvited(membership), let invite else {
-            return ""
-        }
-        let reason = invite.reason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if reason.isEmpty == false {
-            return reason
-        }
-        let sender = invite.senderName.trimmingCharacters(in: .whitespacesAndNewlines)
-        if sender.isEmpty == false {
-            return "Invited by \(sender)"
-        }
-        return invite.roomTopic?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        preview(membership: membership, invite: invite, lastMessagePreview: nil)
     }
 
     static func isInvited(_ membership: String) -> Bool {
