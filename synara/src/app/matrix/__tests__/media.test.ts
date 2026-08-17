@@ -89,3 +89,44 @@ test('downloadMatrixMedia fetches resolved Matrix media through the desktop medi
     globalThis.fetch = originalFetch;
   }
 });
+
+test('downloadMatrixMedia resolves timeline handles through native download without JS fetch', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
+  const requests: string[] = [];
+  globalThis.fetch = (async (url: RequestInfo | URL) => {
+    requests.push(String(url));
+    return { blob: async () => new Blob(['js']) } as Response;
+  }) as typeof fetch;
+
+  const handle = `timeline-media-${'ab'.repeat(32)}`;
+  (globalThis as { window: unknown }).window = {
+    __TAURI_INTERNALS__: {
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        assert.equal(command, 'matrix_media_download');
+        assert.equal(args?.contentUri, handle);
+        return { bytes: [1, 2, 3] };
+      },
+    },
+  };
+
+  const mx = { mxcUrlToHttp: () => 'https://example.invalid/should-not-run' };
+
+  try {
+    const blob = await downloadMatrixMedia(mx as never, `synara-media://localhost/${handle}`, {
+      mimeType: 'image/png',
+      encryptedInfo: {
+        v: 'v2',
+        key: { alg: 'A256CTR', ext: true, k: 'x', key_ops: ['encrypt', 'decrypt'], kty: 'oct' },
+        iv: 'iv',
+        hashes: { sha256: 'hash' },
+      },
+    });
+    assert.equal(requests.length, 0);
+    assert.equal(await blob.arrayBuffer().then((buf) => new Uint8Array(buf).join(',')), '1,2,3');
+    assert.equal(blob.type, 'image/png');
+  } finally {
+    globalThis.fetch = originalFetch;
+    (globalThis as { window: unknown }).window = originalWindow;
+  }
+});
