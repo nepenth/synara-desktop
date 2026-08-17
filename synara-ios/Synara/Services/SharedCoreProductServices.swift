@@ -7,6 +7,7 @@ final class SharedCoreProductHost {
     let core: SharedCore
     let storeRoot: URL
     let sessionStore: AppSessionStore
+    let livePoller: SharedCoreLivePoller
 
     init(
         core: SharedCore,
@@ -16,6 +17,7 @@ final class SharedCoreProductHost {
         self.core = core
         self.storeRoot = storeRoot
         self.sessionStore = sessionStore
+        self.livePoller = SharedCoreLivePoller(core: core)
     }
 
     static func liveStoreRoot() -> URL {
@@ -212,6 +214,7 @@ final class SharedCoreRoomMembershipService: RoomMembershipServicing {
 
 final class SharedCoreTimelineService: TimelineServicing {
     private let host: SharedCoreProductHost
+    private let streamLock = NSLock()
     private var streams: [String: String] = [:]
 
     init(host: SharedCoreProductHost) {
@@ -220,7 +223,7 @@ final class SharedCoreTimelineService: TimelineServicing {
 
     func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
         do {
-            if let previous = streams.removeValue(forKey: roomID) {
+            if let previous = takeStream(for: roomID) {
                 _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: previous)
             }
             let position = TimelineOpenPositionDto(
@@ -236,7 +239,7 @@ final class SharedCoreTimelineService: TimelineServicing {
                 roomId: roomID,
                 position: position
             )
-            streams[roomID] = opened.streamId
+            storeStream(opened.streamId, for: roomID)
             return SharedCoreTimelineRows.outcome(from: opened.snapshot.rows)
         } catch {
             return .empty
@@ -245,7 +248,7 @@ final class SharedCoreTimelineService: TimelineServicing {
 
     func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome {
         _ = eventID
-        guard let streamId = streams[roomID] else {
+        guard let streamId = stream(for: roomID) else {
             return .empty
         }
         do {
@@ -260,14 +263,85 @@ final class SharedCoreTimelineService: TimelineServicing {
         }
     }
 
+    func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome> {
+        AsyncStream { continuation in
+            let task = Task {
+                let initial = await loadInitialTimeline(roomID: roomID, focusedEventID: focusedEventID)
+                continuation.yield(initial)
+                for await update in host.livePoller.timelineSignals(roomId: roomID) {
+                    guard Task.isCancelled == false else {
+                        break
+                    }
+                    let watchingStreamId = stream(for: roomID)
+                    guard SharedCoreTimelineLiveRefresh.shouldRefresh(
+                        watchingRoomID: roomID,
+                        watchingStreamId: watchingStreamId,
+                        updateRoomId: update.roomId,
+                        updateStreamId: update.streamId
+                    ) else {
+                        continue
+                    }
+                    continuation.yield(
+                        await refreshOpenTimeline(roomID: roomID, focusedEventID: focusedEventID)
+                    )
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
     func clearSessionCaches() {
-        let streamIds = Array(streams.values)
-        streams.removeAll()
+        let streamIds = takeAllStreams()
         Task {
             for streamId in streamIds {
                 _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: streamId)
             }
         }
+    }
+
+    private func refreshOpenTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
+        if focusedEventID == nil, let streamId = stream(for: roomID) {
+            do {
+                let opened = try await SharedCoreTimelineReadState.timelineJumpLatest(
+                    core: host.core,
+                    streamId: streamId
+                )
+                storeStream(opened.streamId, for: roomID)
+                return SharedCoreTimelineRows.outcome(from: opened.snapshot.rows)
+            } catch {
+                return await loadInitialTimeline(roomID: roomID, focusedEventID: focusedEventID)
+            }
+        }
+        return await loadInitialTimeline(roomID: roomID, focusedEventID: focusedEventID)
+    }
+
+    private func stream(for roomID: String) -> String? {
+        streamLock.lock()
+        defer { streamLock.unlock() }
+        return streams[roomID]
+    }
+
+    private func storeStream(_ streamId: String, for roomID: String) {
+        streamLock.lock()
+        streams[roomID] = streamId
+        streamLock.unlock()
+    }
+
+    private func takeStream(for roomID: String) -> String? {
+        streamLock.lock()
+        defer { streamLock.unlock() }
+        return streams.removeValue(forKey: roomID)
+    }
+
+    private func takeAllStreams() -> [String] {
+        streamLock.lock()
+        defer { streamLock.unlock() }
+        let values = Array(streams.values)
+        streams.removeAll()
+        return values
     }
 }
 

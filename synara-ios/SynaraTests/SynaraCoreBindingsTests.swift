@@ -341,6 +341,60 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(SharedCoreTimelineRows.outcome(from: []), .empty)
     }
 
+    func testSharedCoreTimelineLiveRefreshMatchesRoomAndStream() {
+        XCTAssertTrue(
+            SharedCoreTimelineLiveRefresh.shouldRefresh(
+                watchingRoomID: "!s18:example.org",
+                watchingStreamId: "view-1",
+                updateRoomId: "!s18:example.org",
+                updateStreamId: "view-1"
+            )
+        )
+        XCTAssertTrue(
+            SharedCoreTimelineLiveRefresh.shouldRefresh(
+                watchingRoomID: "!s18:example.org",
+                watchingStreamId: "view-1",
+                updateRoomId: "!s18:example.org",
+                updateStreamId: ""
+            )
+        )
+        XCTAssertFalse(
+            SharedCoreTimelineLiveRefresh.shouldRefresh(
+                watchingRoomID: "!s18:example.org",
+                watchingStreamId: "view-1",
+                updateRoomId: "!other:example.org",
+                updateStreamId: "view-1"
+            )
+        )
+        XCTAssertFalse(
+            SharedCoreTimelineLiveRefresh.shouldRefresh(
+                watchingRoomID: "!s18:example.org",
+                watchingStreamId: "view-1",
+                updateRoomId: "!s18:example.org",
+                updateStreamId: "view-2"
+            )
+        )
+    }
+
+    func testSharedCoreTimelineUpdatesWithoutSessionYieldsEmptyWithoutEcho() async {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreTimelineService(host: host)
+        var outcomes: [TimelineLoadOutcome] = []
+        for await outcome in service.timelineUpdates(roomID: "!s18:example.org", focusedEventID: nil) {
+            outcomes.append(outcome)
+            let publicError = String(describing: outcome)
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+            break
+        }
+        XCTAssertEqual(outcomes, [.empty])
+    }
+
     func testSharedCoreTimelineWithoutSessionFailsClosed() async {
         let core = SharedCore()
         let position = TimelineOpenPositionDto(

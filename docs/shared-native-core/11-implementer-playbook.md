@@ -434,6 +434,10 @@ P4-S16 product timeline rows          stacked on S12–S15
 P4-S17 owner emit poll                stacked on S12–S16
        Presence/devices/join_rules/image_packs poll queue.
        Summaries only. No presence user id. NSE cannot poll.
+P4-S18 product timeline live poll     stacked on S12–S17
+       SharedCoreTimelineService.timelineUpdates stays open and
+       re-fetches on S14 summaries. One host poller. No room-list
+       emit. No media bytes.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -777,6 +781,26 @@ NSE fail-closes. Helper + XCTest.
 
 **Tests:** UDL surface; poll empty without attach; NSE forbids poll;
 enqueue then poll is privacy-safe.
+
+### 9.13 P4-S18 — product timeline live poll
+
+S14 queued view-delta summaries. Product `timelineUpdates` still used
+the one-shot protocol default, so the UI stream finished after the
+first open.
+
+**Lands:** `SharedCoreTimelineService.timelineUpdates` yields the
+initial open, then stays open. One `SharedCoreLivePoller` per host
+drains `poll_timeline_view_updates` so two rooms cannot steal each
+other's summaries. Matching `room_id` (and stream id when known)
+re-fetches via `timeline_jump_latest` on live, or re-open when
+focused. Helper + XCTest.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+`Platform::emit`; room-list emit; P5; claiming iOS-on-engine or P4
+acceptance.
+
+**Tests:** refresh matcher is room/stream-safe; without a session the
+product stream yields `.empty` with no token echo and can be cancelled.
 
 ---
 
