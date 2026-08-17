@@ -9,6 +9,7 @@ timeline, and crypto are not implemented twice.
 via #991. It is not a release. Never claim 100%. Implementers start at
 [11-implementer-playbook.md](11-implementer-playbook.md).
 P4-S3 plan: [12-p4-s3-live-client.md](12-p4-s3-live-client.md).
+Language-boundary loop: [13-language-boundary-goal-graph.md](13-language-boundary-goal-graph.md).
 Long-running Cloud Agent: [14-long-running-agent.md](14-long-running-agent.md).
 
 | | |
@@ -17,8 +18,9 @@ Long-running Cloud Agent: [14-long-running-agent.md](14-long-running-agent.md).
 | Status | P0 complete; P1 extraction and bounded P2, P3, and P4 slices are merged at the evidence base below. P2–P4 remain in progress; P5 has not started. Desktop uses Core for one hundred eleven commands. iOS has typed SharedCore wrappers through S9-31, the S11 NSE helper, and S10 leftover UniFFI; product `MatrixRustSDK` callers are retired. This is not iOS-on-engine. Dual-platform “one Core bugfix on desktop+iOS” is not claimed. |
 | Evidence base | `main` at `05a0961c` (#991 merge of `feature/shared-native-core`; parents `60876379` + `172df893`) |
 | Decision | [ADR 0003](../adr/0003-shared-native-rust-core.md) |
+| Language boundaries | [ADR 0004](../adr/0004-rust-language-boundaries.md) |
 | Program ledger | `docs/shared-native-core/` (this directory) |
-| Related ADRs | [0001](../adr/0001-ios-repository-layout.md), [0002](../adr/0002-ios-architecture.md) |
+| Related ADRs | [0001](../adr/0001-ios-repository-layout.md), [0002](../adr/0002-ios-architecture.md), [0004](../adr/0004-rust-language-boundaries.md) |
 
 ## TL;DR
 

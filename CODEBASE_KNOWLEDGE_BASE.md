@@ -497,6 +497,8 @@ check:repo-layout → check:versions → check:matrix-boundaries
 | Linux build guide | `docs/linux.md` |
 | ADR: iOS layout | `docs/adr/0001-ios-repository-layout.md` |
 | ADR: iOS architecture | `docs/adr/0002-ios-architecture.md` |
+| ADR: shared native Rust core | `docs/adr/0003-shared-native-rust-core.md` |
+| ADR: Rust language boundaries | `docs/adr/0004-rust-language-boundaries.md` |
 
 ---
 
