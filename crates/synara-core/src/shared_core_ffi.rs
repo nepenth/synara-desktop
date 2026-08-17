@@ -198,7 +198,7 @@ use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::app::verification::{
     NativeVerificationDirection, NativeVerificationEmoji, NativeVerificationInbox,
     NativeVerificationOwner, NativeVerificationPhase, NativeVerificationRequest,
-    NativeVerificationSas,
+    NativeVerificationSas, NativeVerificationUpdateSignal,
 };
 use crate::core::Core;
 use crate::dto::{SessionLifecycle, SessionSnapshot};
@@ -2889,7 +2889,17 @@ impl SharedCore {
             NativePresenceOwner::start(&client, presence_emit, generation)
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
-        let verification = Arc::new(NativeVerificationOwner::new(&client, generation));
+        let verification_emit = {
+            let queue = Arc::clone(&owner_updates);
+            Arc::new(move |update: NativeVerificationUpdateSignal| {
+                push_owner_update(&queue, "verification", update.session_generation, None);
+            })
+        };
+        let verification = Arc::new(NativeVerificationOwner::with_emit(
+            &client,
+            verification_emit,
+            generation,
+        ));
         let devices_emit = {
             let queue = Arc::clone(&owner_updates);
             Arc::new(move |update: NativeDeviceUpdateSignal| {

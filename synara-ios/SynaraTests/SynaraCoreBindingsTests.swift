@@ -535,6 +535,74 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreVerificationLiveMapsPhasesWithoutEcho() {
+        let incoming = SharedCoreVerificationLive.state(
+            phase: "requested",
+            direction: "incoming",
+            flowId: "flow-1",
+            otherUserId: "@bob:example.org",
+            otherDeviceId: "DEVICE1"
+        )
+        guard case let .requestReceived(request) = incoming else {
+            XCTFail("Incoming requested must map to requestReceived")
+            return
+        }
+        XCTAssertEqual(request.flowID, "flow-1")
+        XCTAssertEqual(request.userID, "@bob:example.org")
+        let publicError = String(describing: incoming)
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "requested",
+                direction: "outgoing",
+                flowId: "flow-2",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: nil
+            ),
+            .requestSent
+        )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "sas_ready",
+                direction: "outgoing",
+                flowId: "flow-3",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: "DEVICE1",
+                decimals: [1, 2, 3]
+            ),
+            .decimals([1, 2, 3])
+        )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "done",
+                direction: "outgoing",
+                flowId: "flow-4",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: nil
+            ),
+            .finished
+        )
+    }
+
+    func testSharedCoreVerificationActionsWithoutSessionFailClosedWithoutEcho() async {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreCryptoStatusService(host: host)
+        let started = await service.requestDeviceVerification()
+        let publicError = String(describing: started)
+        XCTAssertEqual(started, .failed("Device verification is unavailable."))
+        for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+        let accepted = await service.acceptVerificationRequest()
+        XCTAssertEqual(accepted, .unavailable("Device verification is unavailable."))
+    }
+
     func testSharedCoreVerificationListWithoutSessionFailsClosed() async {
         let core = SharedCore()
 

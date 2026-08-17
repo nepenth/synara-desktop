@@ -442,6 +442,9 @@ P4-S19 room-list live poll            stacked on S12–S18
        After start_sync, a joined-room entries stream queues
        session-generation wake-ups. Product roomUpdates re-fetches
        the existing snapshot. No room ids on the DTO.
+P4-S20 product verification           stacked on S12–S19
+       SharedCoreCryptoStatusService calls list/SAS. verification
+       family on the S17 owner queue. No tokens or SAS secrets.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -826,6 +829,23 @@ iOS-on-engine or P4 acceptance.
 **Tests:** UDL surface; poll empty without start; NSE forbids poll;
 enqueue then poll is privacy-safe with no room id, user id, or URL
 echo.
+
+### 9.15 P4-S20 — product verification consume
+
+S8/S9 typed list/SAS wrappers exist. Product crypto still finished
+`verificationUpdates` immediately and returned unavailable for every
+SAS action. Incoming requests had no owner emit.
+
+**Lands:** attach queues `verification` on the S17 owner poll (no user
+id). Incoming register and SAS mutations signal. Product maps inbox
+rows to `CryptoVerificationState` and calls start/accept/begin_sas/
+confirm/mismatch/cancel. Helper + XCTest. Recover stays leftover.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+`Platform::emit`; P5; claiming iOS-on-engine or P4 acceptance.
+
+**Tests:** phase mapper has no token echo; start without session is
+fail-closed; accept without a flow is unavailable.
 
 ---
 

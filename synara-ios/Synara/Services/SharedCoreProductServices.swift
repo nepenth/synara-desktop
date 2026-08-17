@@ -587,6 +587,8 @@ final class SharedCoreAgentApprovalReactionService: AgentApprovalReactionServici
 
 final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     private let host: SharedCoreProductHost
+    private let flowLock = NSLock()
+    private var flowId: String?
 
     init(host: SharedCoreProductHost) {
         self.host = host
@@ -613,7 +615,23 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
 
     func verificationUpdates() -> AsyncStream<CryptoVerificationState> {
         AsyncStream { continuation in
-            continuation.finish()
+            let task = Task {
+                if let state = await currentVerificationState() {
+                    continuation.yield(state)
+                }
+                for await _ in host.livePoller.ownerSignals(families: ["verification", "devices"]) {
+                    guard Task.isCancelled == false else {
+                        break
+                    }
+                    if let state = await currentVerificationState() {
+                        continuation.yield(state)
+                    }
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
         }
     }
 
@@ -623,27 +641,64 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     }
 
     func requestDeviceVerification() async -> CryptoActionResult {
-        .unavailable("Device verification is unavailable.")
+        await runVerification {
+            let dto = try await SharedCoreVerificationSas.verificationStart(
+                core: host.core,
+                deviceId: nil
+            )
+            storeFlow(dto.flowId)
+            return "Device verification request sent."
+        }
     }
 
     func acceptVerificationRequest() async -> CryptoActionResult {
-        .unavailable("Device verification is unavailable.")
+        await runVerification(requiresFlow: true) { flowId in
+            _ = try await SharedCoreVerificationSas.verificationAccept(
+                core: host.core,
+                flowId: flowId
+            )
+            return "Verification request accepted."
+        }
     }
 
     func startSasVerification() async -> CryptoActionResult {
-        .unavailable("Device verification is unavailable.")
+        await runVerification(requiresFlow: true) { flowId in
+            _ = try await SharedCoreVerificationSas.verificationBeginSas(
+                core: host.core,
+                flowId: flowId
+            )
+            return "Verification comparison started."
+        }
     }
 
     func approveVerification() async -> CryptoActionResult {
-        .unavailable("Device verification is unavailable.")
+        await runVerification(requiresFlow: true) { flowId in
+            _ = try await SharedCoreVerificationSas.verificationConfirm(
+                core: host.core,
+                flowId: flowId
+            )
+            return "Device verified."
+        }
     }
 
     func declineVerification() async -> CryptoActionResult {
-        .unavailable("Device verification is unavailable.")
+        await runVerification(requiresFlow: true) { flowId in
+            _ = try await SharedCoreVerificationSas.verificationMismatch(
+                core: host.core,
+                flowId: flowId
+            )
+            return "Verification declined."
+        }
     }
 
     func cancelVerification() async -> CryptoActionResult {
-        .unavailable("Device verification is unavailable.")
+        await runVerification(requiresFlow: true) { flowId in
+            _ = try await SharedCoreVerificationSas.verificationCancel(
+                core: host.core,
+                flowId: flowId
+            )
+            return "Verification cancelled."
+        }
     }
 
     func recover(recoveryKey: String) async -> CryptoActionResult {
@@ -653,6 +708,53 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         } catch {
             return .failed("Recovery is unavailable.")
         }
+    }
+
+    private func currentVerificationState() async -> CryptoVerificationState? {
+        guard let inbox = try? await SharedCoreVerificationList.verificationList(core: host.core) else {
+            return nil
+        }
+        if let first = inbox.requests.first {
+            storeFlow(first.flowId)
+        }
+        return SharedCoreVerificationLive.state(from: inbox)
+    }
+
+    private func runVerification(
+        message: () async throws -> String
+    ) async -> CryptoActionResult {
+        do {
+            return .completed(try await message())
+        } catch {
+            return .failed("Device verification is unavailable.")
+        }
+    }
+
+    private func runVerification(
+        requiresFlow: Bool,
+        message: (String) async throws -> String
+    ) async -> CryptoActionResult {
+        _ = requiresFlow
+        guard let flowId = resolvedFlowId() else {
+            return .unavailable("Device verification is unavailable.")
+        }
+        do {
+            return .completed(try await message(flowId))
+        } catch {
+            return .failed("Device verification is unavailable.")
+        }
+    }
+
+    private func storeFlow(_ flowId: String) {
+        flowLock.lock()
+        self.flowId = flowId
+        flowLock.unlock()
+    }
+
+    private func resolvedFlowId() -> String? {
+        flowLock.lock()
+        defer { flowLock.unlock() }
+        return flowId
     }
 }
 

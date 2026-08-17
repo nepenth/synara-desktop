@@ -31,6 +31,7 @@ final class SharedCoreLivePoller: @unchecked Sendable {
     private let lock = NSLock()
     private var waiters: [UUID: (roomId: String, continuation: AsyncStream<TimelineViewUpdateDto>.Continuation)] = [:]
     private var roomListWaiters: [UUID: AsyncStream<Void>.Continuation] = [:]
+    private var ownerWaiters: [UUID: (families: Set<String>, continuation: AsyncStream<OwnerUpdateDto>.Continuation)] = [:]
     private var pollTask: Task<Void, Never>?
 
     init(core: SharedCore) {
@@ -63,6 +64,19 @@ final class SharedCoreLivePoller: @unchecked Sendable {
         }
     }
 
+    func ownerSignals(families: Set<String>) -> AsyncStream<OwnerUpdateDto> {
+        AsyncStream { continuation in
+            let id = UUID()
+            lock.lock()
+            ownerWaiters[id] = (families, continuation)
+            startPollLocked()
+            lock.unlock()
+            continuation.onTermination = { [weak self] _ in
+                self?.removeOwnerWaiter(id)
+            }
+        }
+    }
+
     private func removeWaiter(_ id: UUID) {
         lock.lock()
         waiters.removeValue(forKey: id)
@@ -77,8 +91,15 @@ final class SharedCoreLivePoller: @unchecked Sendable {
         lock.unlock()
     }
 
+    private func removeOwnerWaiter(_ id: UUID) {
+        lock.lock()
+        ownerWaiters.removeValue(forKey: id)
+        stopPollIfIdleLocked()
+        lock.unlock()
+    }
+
     private func stopPollIfIdleLocked() {
-        if waiters.isEmpty && roomListWaiters.isEmpty {
+        if waiters.isEmpty && roomListWaiters.isEmpty && ownerWaiters.isEmpty {
             pollTask?.cancel()
             pollTask = nil
         }
@@ -97,17 +118,24 @@ final class SharedCoreLivePoller: @unchecked Sendable {
                 }
                 let wantsTimeline = self?.hasTimelineWaiters() ?? false
                 let wantsRooms = self?.hasRoomListWaiters() ?? false
+                let wantsOwners = self?.hasOwnerWaiters() ?? false
                 let updates = wantsTimeline
                     ? ((try? await SharedCoreTimelineViewUpdates.poll(core: core)) ?? [])
                     : []
                 let rooms = wantsRooms
                     ? ((try? await SharedCoreRoomListUpdates.poll(core: core)) ?? [])
                     : []
+                let owners = wantsOwners
+                    ? ((try? await SharedCoreOwnerUpdates.poll(core: core)) ?? [])
+                    : []
                 if updates.isEmpty == false {
                     self?.dispatch(updates)
                 }
                 if rooms.isEmpty == false {
                     self?.dispatchRoomList()
+                }
+                if owners.isEmpty == false {
+                    self?.dispatchOwners(owners)
                 }
             }
         }
@@ -123,6 +151,12 @@ final class SharedCoreLivePoller: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return roomListWaiters.isEmpty == false
+    }
+
+    private func hasOwnerWaiters() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return ownerWaiters.isEmpty == false
     }
 
     private func dispatch(_ updates: [TimelineViewUpdateDto]) {
@@ -142,6 +176,17 @@ final class SharedCoreLivePoller: @unchecked Sendable {
         lock.unlock()
         for continuation in waiters.values {
             continuation.yield(())
+        }
+    }
+
+    private func dispatchOwners(_ updates: [OwnerUpdateDto]) {
+        lock.lock()
+        let waiters = ownerWaiters
+        lock.unlock()
+        for update in updates {
+            for waiter in waiters.values where waiter.families.contains(update.family) {
+                waiter.continuation.yield(update)
+            }
         }
     }
 }

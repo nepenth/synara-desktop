@@ -86,6 +86,7 @@ fn poll_owner_updates_without_attach_returns_empty() {
 fn enqueue_then_poll_owner_updates_is_privacy_safe() {
     let shared = SharedCore::new();
     shared.enqueue_owner_update_for_test("presence".to_owned(), 3, None);
+    shared.enqueue_owner_update_for_test("verification".to_owned(), 3, None);
     shared.enqueue_owner_update_for_test(
         "join_rules".to_owned(),
         3,
@@ -94,12 +95,14 @@ fn enqueue_then_poll_owner_updates_is_privacy_safe() {
     let updates = test_runtime()
         .block_on(shared.poll_owner_updates())
         .expect("queued summaries drain");
-    assert_eq!(updates.len(), 2);
+    assert_eq!(updates.len(), 3);
     assert_eq!(updates[0].family, "presence");
     assert_eq!(updates[0].session_generation, 3);
     assert_eq!(updates[0].room_id, None);
-    assert_eq!(updates[1].family, "join_rules");
-    assert_eq!(updates[1].room_id.as_deref(), Some("!s17Room:example.org"));
+    assert_eq!(updates[1].family, "verification");
+    assert_eq!(updates[1].room_id, None);
+    assert_eq!(updates[2].family, "join_rules");
+    assert_eq!(updates[2].room_id.as_deref(), Some("!s17Room:example.org"));
     let text = format!("{updates:?}");
     assert!(!text.contains("syt_"));
     assert!(!text.contains("password"));

@@ -19,7 +19,7 @@ pub use inbox::{
     VerificationDirection, VerificationFlow, VerificationInbox, VerificationPhase, MAX_OPEN_FLOWS,
     MAX_SAS_EMOJI,
 };
-pub use live::NativeVerificationOwner;
+pub use live::{NativeVerificationOwner, NativeVerificationUpdateSignal, VerificationUpdateEmit};
 pub use native::{
     phase_rank, NativeVerificationDirection, NativeVerificationEmoji, NativeVerificationInbox,
     NativeVerificationPhase, NativeVerificationRequest, NativeVerificationSas,
