@@ -137,7 +137,7 @@ flowchart TD
 | P4-S37 presence + sticker pack UI | `landed` #1001 | required | Settings/room details consume presence. Composer lists image-pack names and sends via `SharedCoreSendSticker`. |
 | Desktop native media cutover | `landed` #1001 | required | Live timeline uses `synara-media://` + handle resolve. Leftover `mxc://` is avatar/pack only. |
 | Desktop JS media retire | `landed` #1006 | required | Composer send is native-only. `browser-encrypt-attachment` removed. `sw.ts` is a stub. Leftover encrypted `mxc://` fail-closes. Not Apple generate. Not dual-platform proof. |
-| Leftover IDB/WASM + avatar display | `in-pr` | optional | FeatureCheck IndexedDB gate and crypto-wasm Vite plugin removed. Room/user/pack avatars resolve leftover `mxc://` through native blob URLs. Logout still wipes old IndexedDB store names. |
+| Leftover IDB/WASM + avatar display | `landed` #1009 | optional | FeatureCheck IndexedDB gate and crypto-wasm Vite plugin removed. Room/user/pack avatars resolve leftover `mxc://` through native blob URLs. Logout still wipes old IndexedDB store names. |
 | P4 engine ready | pending | gate | Product paths call Core. Not claimed: paused iOS CI (#1003) and paused live homeserver proof still sit in front of the gate. Local Apple generate for S30–S35 has been run; generated sources remain gitignored. |
 | P5 | `blocked` | operator | Do not start. Apple/TestFlight/physical-device. |
 
@@ -146,7 +146,8 @@ flowchart TD
 ## Current pointer
 
 **S12–S37 landed on `main` via #1001. Desktop JS media retire landed
-via #1006 (`76f67441`).** Session, sync, room list, timeline,
+via #1006. Leftover IDB/WASM + avatar display landed via #1009
+(`01c4bef5`).** Session, sync, room list, timeline,
 verification, typing, room-details, read-marker, crypto, reactions,
 opaque media handles, last-message previews, Settings devices,
 presence, and sticker-pack UI call Core. Desktop live media uses the

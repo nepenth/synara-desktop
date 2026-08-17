@@ -46,7 +46,7 @@ Read, in order:
    #1003, #1004, #1005, and #1006 have merged.
 
 Start from the latest implementation tip, not a stale main graph:
-- Start from `origin/main` (`76f67441` after #1006). Refresh the graph.
+- Start from `origin/main` (`01c4bef5` after #1009). Refresh the graph.
 
 Loop until every required graph node is landed or blocked:
 - One P4 family at a time. Local cargo tests. Commit. Push. Draft PR.
