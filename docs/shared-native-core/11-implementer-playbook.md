@@ -438,6 +438,10 @@ P4-S18 product timeline live poll     stacked on S12–S17
        SharedCoreTimelineService.timelineUpdates stays open and
        re-fetches on S14 summaries. One host poller. No room-list
        emit. No media bytes.
+P4-S19 room-list live poll            stacked on S12–S18
+       After start_sync, a joined-room entries stream queues
+       session-generation wake-ups. Product roomUpdates re-fetches
+       the existing snapshot. No room ids on the DTO.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -801,6 +805,27 @@ acceptance.
 
 **Tests:** refresh matcher is room/stream-safe; without a session the
 product stream yields `.empty` with no token echo and can be cancelled.
+
+### 9.14 P4-S19 — room-list live emit
+
+S14 deferred room-list live because attach is before SyncService
+start. S12 starts that owner. Product `roomUpdates` still finished
+immediately.
+
+**Lands:** `start_sync` starts a joined-room entries listener in the
+background (start_sync does not wait on `all_rooms`).
+`SharedCore.poll_room_list_updates` drains `{ session_generation }`
+only. Empty queue is success. NSE fail-closes. Product
+`SharedCoreRoomListService.roomUpdates` stays open and re-fetches
+via the existing snapshot. Helper + XCTest.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+`Platform::emit`; room ids/names on the DTO; P5; claiming
+iOS-on-engine or P4 acceptance.
+
+**Tests:** UDL surface; poll empty without start; NSE forbids poll;
+enqueue then poll is privacy-safe with no room id, user id, or URL
+echo.
 
 ---
 

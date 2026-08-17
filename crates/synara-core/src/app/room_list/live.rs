@@ -3,6 +3,7 @@
 //! SDK room objects and vector diffs stop here. The Tauri boundary receives
 //! only ordered room IDs and product-owned, privacy-safe summaries.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use eyeball_im::VectorDiff;
@@ -11,9 +12,55 @@ use matrix_sdk::notification_settings::RoomNotificationMode;
 use matrix_sdk::{Room, RoomState};
 use matrix_sdk_ui::room_list_service::filters;
 use serde::{Deserialize, Serialize};
+use tokio::task::JoinHandle;
 
 use crate::app::sync::SyncServiceOwner;
 use crate::dto::{Membership, NotificationMode, RoomSummary};
+
+/// Privacy-safe room-list wake-up. No room ids, names, tokens, or password.
+/// iOS re-fetches via the existing snapshot command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NativeRoomListUpdateSignal {
+    pub session_generation: u64,
+}
+
+pub type RoomListUpdateEmit = Arc<dyn Fn(NativeRoomListUpdateSignal) + Send + Sync>;
+
+/// Owns one joined-room entries stream for an attached SyncService.
+pub struct NativeRoomListOwner {
+    task: JoinHandle<()>,
+}
+
+impl NativeRoomListOwner {
+    pub fn start(owner: &SyncServiceOwner, emit: RoomListUpdateEmit) -> Self {
+        let service = owner.room_list_service();
+        let session_generation = owner.session_generation();
+        let task = tokio::spawn(async move {
+            let Ok(list) = service.all_rooms().await else {
+                return;
+            };
+            let (entries, controller) = list.entries_with_dynamic_adapters(usize::MAX);
+            if !controller.set_filter(Box::new(filters::new_filter_joined())) {
+                return;
+            }
+            futures_util::pin_mut!(entries);
+            while let Some(diffs) = entries.next().await {
+                if diffs.is_empty() {
+                    continue;
+                }
+                emit(NativeRoomListUpdateSignal { session_generation });
+            }
+            drop(controller);
+        });
+        Self { task }
+    }
+}
+
+impl Drop for NativeRoomListOwner {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
 
 const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(5);
 

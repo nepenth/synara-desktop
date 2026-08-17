@@ -53,6 +53,7 @@ flowchart TD
   s16[S16_product_timeline_rows]
   s17[S17_owner_emit_poll]
   s18[S18_product_timeline_live]
+  s19[S19_room_list_live]
   media[desktop_native_media_cutover]
   done[p4_engine_ready]
   p5[P5_operator_gated]
@@ -64,7 +65,8 @@ flowchart TD
   s14 --> s16
   s16 --> s17
   s17 --> s18
-  s18 --> done
+  s18 --> s19
+  s19 --> done
   s15 --> done
   media --> done
   done --> p5
@@ -79,7 +81,8 @@ flowchart TD
 | P4-S15 leftover I/O live | `in-pr` #1001 | required | Owner leftover status after attach. Recover/media/raw-send stay fail-closed (decision 15). No byte/secret envelopes. |
 | P4-S16 product timeline rows | `in-pr` #1001 | required | Snapshot DTO keeps privacy-safe row bodies. Product maps them. No media bytes. |
 | P4-S17 owner emit poll | `in-pr` #1001 | required | Presence/devices/join_rules/image_packs poll queue. Summaries only. NSE cannot poll. |
-| P4-S18 product timeline live poll | `in-pr` #1001 | required | Product `timelineUpdates` consumes S14 summaries. One host poller. No room-list emit. |
+| P4-S18 product timeline live poll | `in-pr` #1001 | required | Product `timelineUpdates` consumes S14 summaries. One host poller. |
+| P4-S19 room-list live poll | `in-pr` #1001 | required | After start_sync, wake-ups only. Product `roomUpdates` re-fetches snapshot. No room ids. |
 | Desktop native media cutover | `blocked` | required | Both shells do not yet get bytes from a native owner. iOS leftover media stays fail-closed (decision 15). Bytes must not cross `Core::command`. Do not register `matrix_send_attachment`. |
 | P4 engine ready | pending | gate | Session + sync + room list + timeline + crypto product paths call Core on iOS. Not claimed. |
 | P5 | `blocked` | operator | Do not start. Apple/TestFlight/physical-device. |
@@ -88,10 +91,10 @@ flowchart TD
 
 ## Current pointer
 
-**S12–S18 are on #1001.** Product timeline now consumes the S14 poll.
-Room-list live still has no Core emit. Media cutover stays **blocked**
-(decision 15). Do not start P5. Do not claim P4 engine ready. Stop if
-only media/P5/Apple/room-list-emit remain.
+**S12–S19 are on #1001.** Room-list and timeline product streams now
+consume Core polls. Media cutover stays **blocked** (decision 15). Do
+not start P5. Do not claim P4 engine ready. Stop if only media/P5/Apple
+remain.
 
 ---
 

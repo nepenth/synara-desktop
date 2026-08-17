@@ -277,6 +277,21 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCorePollRoomListUpdatesWithoutSessionReturnsEmpty() async {
+        let core = SharedCore()
+
+        do {
+            let updates = try await SharedCoreRoomListUpdates.poll(core: core)
+            XCTAssertTrue(updates.isEmpty)
+            let publicError = String(describing: updates)
+            for forbidden in ["password", "syt_", "@alice:example.org", "token", "!room"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        } catch {
+            XCTFail("Empty room-list update queue must not fail: \(error)")
+        }
+    }
+
     func testSharedCorePollOwnerUpdatesWithoutSessionReturnsEmpty() async {
         let core = SharedCore()
 

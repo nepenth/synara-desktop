@@ -186,6 +186,23 @@ final class SharedCoreRoomListService: RoomListServicing {
     func clearCache() {
         cachedNames.removeAll()
     }
+
+    func roomUpdates() -> AsyncStream<RoomListState> {
+        AsyncStream { continuation in
+            let task = Task {
+                for await _ in host.livePoller.roomListSignals() {
+                    guard Task.isCancelled == false else {
+                        break
+                    }
+                    continuation.yield(await loadRooms())
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
 }
 
 final class SharedCoreRoomMembershipService: RoomMembershipServicing {

@@ -174,7 +174,8 @@ use crate::app::presence::{
     NativePresenceSubscription, NativePresenceUpdate,
 };
 use crate::app::room_list::{
-    NativeInvite, NativeInviteSnapshot, NativeInviteTriage, NativeRoomListSnapshot,
+    NativeInvite, NativeInviteSnapshot, NativeInviteTriage, NativeRoomListOwner,
+    NativeRoomListSnapshot, NativeRoomListUpdateSignal,
 };
 use crate::app::room_profile::{
     MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner, NativeRoomJoinRuleUpdate,
@@ -259,6 +260,12 @@ const NSE_FORBIDS_OWNER_POLL_DESCRIPTION: &str =
 const OWNER_UPDATE_POLL_FAILED_CODE: &str = "p4-s17-owner-update-poll-failed";
 const OWNER_UPDATE_POLL_FAILED_DESCRIPTION: &str = "Owner updates could not be polled.";
 const OWNER_UPDATE_QUEUE_CAP: usize = 32;
+const NSE_FORBIDS_ROOM_LIST_POLL_CODE: &str = "p4-s19-nse-forbids-poll";
+const NSE_FORBIDS_ROOM_LIST_POLL_DESCRIPTION: &str =
+    "The NSE read-only store cannot poll room list updates.";
+const ROOM_LIST_UPDATE_POLL_FAILED_CODE: &str = "p4-s19-room-list-update-poll-failed";
+const ROOM_LIST_UPDATE_POLL_FAILED_DESCRIPTION: &str = "Room list updates could not be polled.";
+const ROOM_LIST_UPDATE_QUEUE_CAP: usize = 32;
 const NSE_OWNERS_ATTACHED_CODE: &str = "p4-s11-nse-owners-already-attached";
 const NSE_OWNERS_ATTACHED_DESCRIPTION: &str =
     "The NSE read-only store cannot open after owners attach.";
@@ -954,6 +961,48 @@ fn owner_update_poll_failed(code: &'static str, description: &'static str) -> Ow
     OwnerUpdateError::Failed {
         code: code.to_owned(),
         description: description.to_owned(),
+    }
+}
+
+/// Privacy-safe room-list wake-up. No room ids, names, tokens, or password.
+/// iOS re-fetches via the existing snapshot command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomListUpdateDto {
+    pub session_generation: u64,
+}
+
+/// Static fail-closed room-list update poll error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoomListUpdateError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for RoomListUpdateError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for RoomListUpdateError {}
+
+fn room_list_update_poll_failed(
+    code: &'static str,
+    description: &'static str,
+) -> RoomListUpdateError {
+    RoomListUpdateError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn push_room_list_update(queue: &Mutex<Vec<RoomListUpdateDto>>, session_generation: u64) {
+    if let Ok(mut guard) = queue.lock() {
+        if guard.len() >= ROOM_LIST_UPDATE_QUEUE_CAP {
+            guard.remove(0);
+        }
+        guard.push(RoomListUpdateDto { session_generation });
     }
 }
 
@@ -2468,6 +2517,8 @@ pub struct SharedCore {
     nse_read_only: Mutex<bool>,
     timeline_view_updates: Arc<Mutex<Vec<TimelineViewDeltaBatch>>>,
     owner_updates: Arc<Mutex<Vec<OwnerUpdateDto>>>,
+    room_list_updates: Arc<Mutex<Vec<RoomListUpdateDto>>>,
+    room_list_live: Arc<Mutex<Option<NativeRoomListOwner>>>,
 }
 
 impl SharedCore {
@@ -2483,6 +2534,8 @@ impl SharedCore {
             nse_read_only: Mutex::new(false),
             timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
             owner_updates: Arc::new(Mutex::new(Vec::new())),
+            room_list_updates: Arc::new(Mutex::new(Vec::new())),
+            room_list_live: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -2499,6 +2552,8 @@ impl SharedCore {
             nse_read_only: Mutex::new(false),
             timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
             owner_updates: Arc::new(Mutex::new(Vec::new())),
+            room_list_updates: Arc::new(Mutex::new(Vec::new())),
+            room_list_live: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -2955,6 +3010,7 @@ impl SharedCore {
                 sync_start_failed(SYNC_START_FAILED_CODE, SYNC_START_FAILED_DESCRIPTION)
             }
         })?;
+        self.spawn_room_list_live();
         Ok(SyncStartDto {
             readiness: snapshot.readiness.as_str().to_owned(),
             session_generation: snapshot.session_generation,
@@ -2964,6 +3020,20 @@ impl SharedCore {
             ),
             offline_mode_enabled: snapshot.offline_mode_enabled,
         })
+    }
+
+    fn spawn_room_list_live(&self) {
+        let Some(owner) = self.core.attached_sync_owner() else {
+            return;
+        };
+        let queue = Arc::clone(&self.room_list_updates);
+        let emit = Arc::new(move |update: NativeRoomListUpdateSignal| {
+            push_room_list_update(&queue, update.session_generation);
+        });
+        let live = NativeRoomListOwner::start(&owner, emit);
+        if let Ok(mut guard) = self.room_list_live.lock() {
+            *guard = Some(live);
+        }
     }
 
     /// Drain queued timeline view-delta summaries. Not `Core.command`.
@@ -3049,6 +3119,34 @@ impl SharedCore {
         room_id: Option<String>,
     ) {
         push_owner_update(&self.owner_updates, family, session_generation, room_id);
+    }
+
+    /// Drain queued room-list wake-ups. Not `Core.command`.
+    ///
+    /// NSE forbids this. An empty queue returns an empty list. Room ids
+    /// and names are never included. This is not Platform::emit.
+    pub async fn poll_room_list_updates(
+        &self,
+    ) -> Result<Vec<RoomListUpdateDto>, RoomListUpdateError> {
+        if self.is_nse_read_only() {
+            return Err(room_list_update_poll_failed(
+                NSE_FORBIDS_ROOM_LIST_POLL_CODE,
+                NSE_FORBIDS_ROOM_LIST_POLL_DESCRIPTION,
+            ));
+        }
+        let mut guard = self.room_list_updates.lock().map_err(|_| {
+            room_list_update_poll_failed(
+                ROOM_LIST_UPDATE_POLL_FAILED_CODE,
+                ROOM_LIST_UPDATE_POLL_FAILED_DESCRIPTION,
+            )
+        })?;
+        Ok(guard.drain(..).collect())
+    }
+
+    /// Test-only enqueue onto the room-list emit queue. Not on UDL.
+    #[doc(hidden)]
+    pub fn enqueue_room_list_update_for_test(&self, session_generation: u64) {
+        push_room_list_update(&self.room_list_updates, session_generation);
     }
 
     /// Typed consume of the already-registered `matrix_room_list_snapshot`.

@@ -249,6 +249,18 @@ interface OwnerUpdateError {
   Failed(string code, string description);
 };
 
+// Privacy-safe room-list wake-up. No room ids, names, tokens, or password.
+// iOS re-fetches via the existing snapshot command.
+dictionary RoomListUpdateDto {
+  u64 session_generation;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface RoomListUpdateError {
+  Failed(string code, string description);
+};
+
 // Privacy-safe room-list row. No tokens or password.
 dictionary RoomListRoomDto {
   string room_id;
@@ -1295,6 +1307,8 @@ interface InviteActionError {
 // not Platform::emit and not a generic command FFI.
 // P4-S17 adds poll_owner_updates for presence/devices/join_rules/
 // image_packs. Summaries only. No presence user id. NSE cannot poll.
+// P4-S19 adds poll_room_list_updates after start_sync. Wake-ups only.
+// No room ids. NSE cannot poll.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -1328,6 +1342,9 @@ interface SharedCore {
 
   [Async, Throws=OwnerUpdateError]
   sequence<OwnerUpdateDto> poll_owner_updates();
+
+  [Async, Throws=RoomListUpdateError]
+  sequence<RoomListUpdateDto> poll_room_list_updates();
 
   [Async, Throws=RoomListSnapshotError]
   RoomListSnapshotDto room_list_snapshot();

@@ -50,7 +50,10 @@ pub use invite_avatars::{InviteAvatarHandles, InviteAvatarSource, MAX_INVITE_AVA
 pub use invites::{
     contains_bad_word, snapshot_invites, NativeInvite, NativeInviteSnapshot, NativeInviteTriage,
 };
-pub use live::{snapshot_from_sync_owner, NativeRoomListSnapshot};
+pub use live::{
+    snapshot_from_sync_owner, NativeRoomListOwner, NativeRoomListSnapshot,
+    NativeRoomListUpdateSignal, RoomListUpdateEmit,
+};
 pub use projection::{reconstruct, RoomListProjection};
 pub use sort::{recent_joined_rooms, sort_rooms, sort_rooms_in_place, RoomListSort};
 pub use summary::RoomSummaryBuilder;
