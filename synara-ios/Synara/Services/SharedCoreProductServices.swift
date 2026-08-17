@@ -161,21 +161,38 @@ final class SharedCoreRoomListService: RoomListServicing {
     func loadRooms() async -> RoomListState {
         do {
             let snapshot = try await SharedCoreRoomList.roomListSnapshot(core: host.core)
-            let rooms = snapshot.rooms.map { room in
-                RoomSummary(
-                    id: room.roomId,
-                    name: room.name ?? room.roomId,
-                    lastMessagePreview: "",
-                    unreadCount: Int(room.unreadCount),
-                    hasHighlight: room.highlightCount > 0 || room.markedUnread,
-                    kind: room.isDirect ? .directMessage : .room,
-                    membership: room.membership == "invited" ? .invited : .joined,
-                    lastActivityAt: room.lastActivityTs.map {
-                        Date(timeIntervalSince1970: TimeInterval($0) / 1000)
-                    } ?? Date(timeIntervalSince1970: 0),
-                    avatarURL: room.avatarUrl.flatMap(URL.init(string:))
-                )
-            }
+            let invites = (try? await SharedCoreInvites.invitesSnapshot(core: host.core))?.invites ?? []
+            let spaceParents = (try? await SharedCoreSpaces.spaceParentsSnapshot(core: host.core))?.entries ?? []
+            let rooms = SharedCoreRoomListRows.rooms(
+                rooms: snapshot.rooms.map {
+                    SharedCoreRoomListRows.RoomRow(
+                        roomId: $0.roomId,
+                        name: $0.name,
+                        avatarUrl: $0.avatarUrl,
+                        membership: $0.membership,
+                        isDirect: $0.isDirect,
+                        unreadCount: Int($0.unreadCount),
+                        highlightCount: Int($0.highlightCount),
+                        markedUnread: $0.markedUnread,
+                        lastActivityTs: $0.lastActivityTs
+                    )
+                },
+                invites: invites.map {
+                    SharedCoreRoomListRows.InviteRow(
+                        roomId: $0.roomId,
+                        roomName: $0.roomName,
+                        roomTopic: $0.roomTopic,
+                        senderName: $0.senderName,
+                        reason: $0.reason
+                    )
+                },
+                spaceParents: spaceParents.map {
+                    SharedCoreRoomListRows.SpaceParentRow(
+                        roomId: $0.roomId,
+                        parentIds: $0.parentIds
+                    )
+                }
+            )
             cachedNames = Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, $0.name) })
             return rooms.isEmpty ? .empty : .loaded(rooms)
         } catch {

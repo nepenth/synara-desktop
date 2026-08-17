@@ -661,6 +661,72 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreRoomListRowsMapsInviteAndSpaceWithoutEcho() {
+        let rooms = SharedCoreRoomListRows.rooms(
+            rooms: [
+                SharedCoreRoomListRows.RoomRow(
+                    roomId: "!s25:example.org",
+                    name: "Ops",
+                    avatarUrl: "mxc://example.org/room",
+                    membership: "invite",
+                    isDirect: false,
+                    unreadCount: 0,
+                    highlightCount: 0,
+                    markedUnread: false,
+                    lastActivityTs: 1_700_000_000_000
+                ),
+                SharedCoreRoomListRows.RoomRow(
+                    roomId: "!space:example.org",
+                    name: "Team",
+                    avatarUrl: nil,
+                    membership: "join",
+                    isDirect: false,
+                    unreadCount: 0,
+                    highlightCount: 0,
+                    markedUnread: false,
+                    lastActivityTs: nil
+                ),
+            ],
+            invites: [
+                SharedCoreRoomListRows.InviteRow(
+                    roomId: "!s25:example.org",
+                    roomName: "Ops",
+                    roomTopic: "On-call",
+                    senderName: "Alex",
+                    reason: nil
+                ),
+            ],
+            spaceParents: [
+                SharedCoreRoomListRows.SpaceParentRow(
+                    roomId: "!s25:example.org",
+                    parentIds: ["!space:example.org"]
+                ),
+            ]
+        )
+        XCTAssertEqual(rooms.first?.lastMessagePreview, "Invited by Alex")
+        XCTAssertEqual(rooms.first?.parentSpaces, [SpaceSummary(id: "!space:example.org", name: "Team")])
+        XCTAssertEqual(rooms.first?.membership, .invited)
+        let publicError = String(describing: rooms)
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreRoomListWithoutSessionIsEmptyWithoutEcho() async {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreRoomListService(host: host)
+        let state = await service.loadRooms()
+        XCTAssertEqual(state, .empty)
+        let publicError = String(describing: state)
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
     func testSharedCoreTypingPresenceWithoutSessionFailsClosed() async {
         let core = SharedCore()
 

@@ -457,6 +457,9 @@ P4-S23 product foreground resume      stacked on S12–S22
 P4-S24 product read markers           stacked on S12–S23
        Product mark-as-read uses timeline set_read_state.
        No HTTP access token. No media bytes. No UDL.
+P4-S25 product room-list spaces/invites stacked on S12–S24
+       Product loadRooms maps space parents and invite
+       previews. Joined last-message stays empty. No UDL.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -930,6 +933,25 @@ P4 acceptance.
 
 **Tests:** mapper prefers own-read and skips `$local` / `$pending`;
 without a session mark/read stay nil with no token echo.
+
+### 9.20 P4-S25 — product room-list spaces and invite previews
+
+S4/S5/S9-17 typed room-list, invite, and space-parent snapshots
+exist. Product `loadRooms` still left `lastMessagePreview` empty and
+`parentSpaces` empty, so space chips and invite rows had no Core
+text.
+
+**Lands:** product `SharedCoreRoomListService.loadRooms` maps invite
+sender/topic/reason into the preview for invited rooms and space
+parent ids/names from the parents snapshot. Helper + XCTest.
+Joined-room last-message text stays empty (not on the list DTO).
+
+**Must not land:** leftover registration; byte/secret envelopes;
+UDL changes; last-message invention; P5; claiming iOS-on-engine or
+P4 acceptance.
+
+**Tests:** mapper fills invite preview and parent space without
+token echo; without a session `loadRooms` is empty.
 
 ---
 
