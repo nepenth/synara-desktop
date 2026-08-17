@@ -9,6 +9,8 @@ timeline, and crypto are not implemented twice.
 via #991. It is not a release. Never claim 100%. Implementers start at
 [11-implementer-playbook.md](11-implementer-playbook.md).
 P4-S3 plan: [12-p4-s3-live-client.md](12-p4-s3-live-client.md).
+Language-boundary loop: [13-language-boundary-goal-graph.md](13-language-boundary-goal-graph.md).
+Long-running Cloud Agent: [14-long-running-agent.md](14-long-running-agent.md).
 
 | | |
 |---|---|

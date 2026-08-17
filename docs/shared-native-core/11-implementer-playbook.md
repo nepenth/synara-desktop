@@ -5,6 +5,8 @@ Read it before editing product code. If this file and an older plan
 paragraph disagree, this file plus `10-current-handoff.md` win for
 *what to do next*; ADR-0003 plus `01-context-and-goals.md` win for
 *what done means*; ADR-0004 wins for *what may be written in Rust*.
+To launch a Long-running Cloud Agent, use
+[14-long-running-agent.md](14-long-running-agent.md).
 
 Older “144 `Core::command` handlers” sentences in `03-target-architecture.md`
 and `06-migration-phases.md` are stale. Do not register the 21 leftovers in
