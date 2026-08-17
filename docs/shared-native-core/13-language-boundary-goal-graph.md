@@ -136,7 +136,8 @@ flowchart TD
 | P4-S36 desktop media handle cutover | `landed` #1001 | required | Leftover `matrix_media_download` resolves `timeline-media-*` through the native owner. Not `Core.command`. |
 | P4-S37 presence + sticker pack UI | `landed` #1001 | required | Settings/room details consume presence. Composer lists image-pack names and sends via `SharedCoreSendSticker`. |
 | Desktop native media cutover | `landed` #1001 | required | Live timeline uses `synara-media://` + handle resolve. Leftover `mxc://` is avatar/pack only. |
-| Desktop JS media retire | `landed` #1006 | required | Composer send is native-only. `browser-encrypt-attachment` removed. `sw.ts` is a stub. Leftover encrypted `mxc://` fail-closes. Leftover avatar `<img src=mxc://>` display remains. Not Apple generate. Not dual-platform proof. |
+| Desktop JS media retire | `landed` #1006 | required | Composer send is native-only. `browser-encrypt-attachment` removed. `sw.ts` is a stub. Leftover encrypted `mxc://` fail-closes. Not Apple generate. Not dual-platform proof. |
+| Leftover IDB/WASM + avatar display | `in-pr` | optional | FeatureCheck IndexedDB gate and crypto-wasm Vite plugin removed. Room/user/pack avatars resolve leftover `mxc://` through native blob URLs. Logout still wipes old IndexedDB store names. |
 | P4 engine ready | pending | gate | Product paths call Core. Not claimed: paused iOS CI (#1003) and paused live homeserver proof still sit in front of the gate. Local Apple generate for S30–S35 has been run; generated sources remain gitignored. |
 | P5 | `blocked` | operator | Do not start. Apple/TestFlight/physical-device. |
 
@@ -154,8 +155,8 @@ paused (#1003). Live homeserver proof is paused until an environment
 can launch the app. Do not start P5. Do not claim P4 engine ready.
 Local Apple generate has been run on Darwin for the S30–S35 fields;
 generated sources remain gitignored. Leftover
-encrypted `mxc://` fail-closes. Leftover avatar `<img src=mxc://>`
-display remains. Dual-platform Core bugfix proof is not claimed. Do
+encrypted `mxc://` fail-closes. Leftover avatar display uses native
+blob URLs. Dual-platform Core bugfix proof is not claimed. Do
 not register byte commands on `Core::command`. The next required
 graph node is the P4 engine-ready gate (blocked). Do not invent S38.
 
@@ -167,5 +168,5 @@ graph node is the P4 engine-ready gate (blocked). Do not invent S38.
 - The next node is P5.
 - A leftover secret/byte command would have to cross `Core::command`.
 - The only remaining work is a live homeserver, dual-platform
-  proof, leftover avatar display, paused iOS CI, or a merge. Future
+  proof, paused iOS CI, or a merge. Future
   UDL changes still need Apple generate. Do not invent S38.

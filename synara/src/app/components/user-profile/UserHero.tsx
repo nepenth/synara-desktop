@@ -21,6 +21,7 @@ import { UserPresence } from '../../features/matrix-presence/nativePresence';
 import { AvatarPresence, PresenceBadge } from '../presence';
 import { ImageViewer } from '../image-viewer';
 import { stopPropagation } from '../../utils/keyboard';
+import { useNativeMatrixMediaSrc } from '../../hooks/useNativeMatrixMediaSrc';
 
 type UserHeroProps = {
   userId: string;
@@ -28,6 +29,7 @@ type UserHeroProps = {
   presence?: UserPresence;
 };
 export function UserHero({ userId, avatarUrl, presence }: UserHeroProps) {
+  const resolvedAvatarUrl = useNativeMatrixMediaSrc(avatarUrl);
   const [viewAvatar, setViewAvatar] = useState<string>();
 
   return (
@@ -36,11 +38,16 @@ export function UserHero({ userId, avatarUrl, presence }: UserHeroProps) {
         className={css.UserHeroCoverContainer}
         style={{
           backgroundColor: colorMXID(userId),
-          filter: avatarUrl ? undefined : 'brightness(50%)',
+          filter: resolvedAvatarUrl ? undefined : 'brightness(50%)',
         }}
       >
-        {avatarUrl && (
-          <img className={css.UserHeroCover} src={avatarUrl} alt={userId} draggable="false" />
+        {resolvedAvatarUrl && (
+          <img
+            className={css.UserHeroCover}
+            src={resolvedAvatarUrl}
+            alt={userId}
+            draggable="false"
+          />
         )}
       </div>
       <div className={css.UserHeroAvatarContainer}>
@@ -51,8 +58,8 @@ export function UserHero({ userId, avatarUrl, presence }: UserHeroProps) {
           }
         >
           <Avatar
-            as={avatarUrl ? 'button' : 'div'}
-            onClick={avatarUrl ? () => setViewAvatar(avatarUrl) : undefined}
+            as={resolvedAvatarUrl ? 'button' : 'div'}
+            onClick={resolvedAvatarUrl ? () => setViewAvatar(resolvedAvatarUrl) : undefined}
             className={css.UserHeroAvatar}
             size="500"
           >

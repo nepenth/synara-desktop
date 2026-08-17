@@ -1,14 +1,11 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { wasm } from '@rollup/plugin-wasm';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
 import { NodeGlobalsPolyfillPlugin } from '@esbuild-plugins/node-globals-polyfill';
 import inject from '@rollup/plugin-inject';
 import topLevelAwait from 'vite-plugin-top-level-await';
 import { VitePWA } from 'vite-plugin-pwa';
-import fs from 'fs';
-import path from 'path';
 import buildConfig from './build.config';
 
 const copyFiles = {
@@ -33,35 +30,6 @@ const copyFiles = {
   ],
 };
 
-function serverMatrixSdkCryptoWasm(wasmFilePath) {
-  return {
-    name: 'vite-plugin-serve-matrix-sdk-crypto-wasm',
-    configureServer(server) {
-      server.middlewares.use((req, res, next) => {
-        if (req.url === wasmFilePath) {
-          const resolvedPath = path.join(
-            path.resolve(),
-            '/node_modules/@matrix-org/matrix-sdk-crypto-wasm/pkg/matrix_sdk_crypto_wasm_bg.wasm'
-          );
-
-          if (fs.existsSync(resolvedPath)) {
-            res.setHeader('Content-Type', 'application/wasm');
-            res.setHeader('Cache-Control', 'no-cache');
-
-            const fileStream = fs.createReadStream(resolvedPath);
-            fileStream.pipe(res);
-          } else {
-            res.writeHead(404);
-            res.end('File not found');
-          }
-        } else {
-          next();
-        }
-      });
-    },
-  };
-}
-
 export default defineConfig({
   appType: 'spa',
   publicDir: false,
@@ -75,7 +43,6 @@ export default defineConfig({
     },
   },
   plugins: [
-    serverMatrixSdkCryptoWasm('/node_modules/.vite/deps/pkg/matrix_sdk_crypto_wasm_bg.wasm'),
     topLevelAwait({
       // The export name of top-level await promise for each chunk module
       promiseExportName: '__tla',
@@ -84,7 +51,6 @@ export default defineConfig({
     }),
     viteStaticCopy(copyFiles),
     vanillaExtractPlugin(),
-    wasm(),
     react(),
     // Bundles a stub worker so injectManifest still has an entry; app manifest/install support is disabled.
     VitePWA({
