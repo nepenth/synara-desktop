@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { downloadMatrixMedia, resolveMatrixMediaUrl, resolveMatrixThumbnailUrl } from '../media';
 
 type MockMatrixClient = {
@@ -145,12 +145,12 @@ test('downloadMatrixMedia fail-closes leftover encrypted mxc without a native ha
 });
 
 test('desktop media boundary has no JS encrypt/decrypt leftover', () => {
-  const media = readFileSync(fileURLToPath(new URL('../media.ts', import.meta.url)), 'utf8');
+  const media = readFileSync(join(process.cwd(), 'src/app/matrix/media.ts'), 'utf8');
   const roomInput = readFileSync(
-    fileURLToPath(new URL('../../features/room/RoomInput.tsx', import.meta.url)),
+    join(process.cwd(), 'src/app/features/room/RoomInput.tsx'),
     'utf8'
   );
-  const sw = readFileSync(fileURLToPath(new URL('../../../sw.ts', import.meta.url)), 'utf8');
+  const sw = readFileSync(join(process.cwd(), 'src/sw.ts'), 'utf8');
   assert.doesNotMatch(media, /browser-encrypt-attachment|decryptFile|downloadEncryptedMedia/);
   assert.doesNotMatch(roomInput, /encryptFile|browser-encrypt-attachment/);
   assert.match(roomInput, /Native Matrix attachment send is unavailable/);

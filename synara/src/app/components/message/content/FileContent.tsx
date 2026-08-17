@@ -15,9 +15,8 @@ import {
   as,
 } from 'folds';
 import FileSaver from 'file-saver';
-import { EncryptedAttachmentInfo } from '../../../../types/matrix/common';
+import { EncryptedAttachmentInfo, IFileInfo } from '../../../../types/matrix/common';
 import FocusTrap from 'focus-trap-react';
-import { IFileInfo } from '../../../../types/matrix/common';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { bytesToSize } from '../../../utils/common';
