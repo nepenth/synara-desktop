@@ -1,5 +1,25 @@
 import type { EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
+import { invokeDesktopWithAvailability } from '../utils/desktop';
 import { decryptFile, downloadEncryptedMedia, downloadMedia, mxcUrlToHttp } from '../utils/matrix';
+
+const TIMELINE_MEDIA_HANDLE_PREFIX = 'timeline-media-';
+
+/** Prefer an opaque timeline handle over leftover `mxc://` or protocol URLs. */
+function timelineMediaHandleFromUri(contentUri: string): string | null {
+  const trimmed = contentUri.trim();
+  if (trimmed.startsWith(TIMELINE_MEDIA_HANDLE_PREFIX)) {
+    return trimmed;
+  }
+  const match = /^synara-media:\/\/[^/]*\/(.+)$/i.exec(trimmed);
+  if (!match?.[1]) {
+    return null;
+  }
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
 
 type MatrixMediaClient = Parameters<typeof mxcUrlToHttp>[0];
 
@@ -68,11 +88,31 @@ export function resolveMatrixThumbnailUrl(
   }
 }
 
+async function downloadNativeTimelineMedia(contentUri: string, mimeType: string): Promise<Blob> {
+  const handle = timelineMediaHandleFromUri(contentUri);
+  if (!handle) {
+    throw new Error('Invalid native timeline media handle');
+  }
+  const result = await invokeDesktopWithAvailability<{ bytes?: unknown }>(
+    'matrix_media_download',
+    { contentUri: handle }
+  );
+  if (!result.available || !result.value || !Array.isArray(result.value.bytes)) {
+    throw new Error('Native timeline media download failed');
+  }
+  const bytes = Uint8Array.from(result.value.bytes.map((b) => (typeof b === 'number' ? b : 0)));
+  return new Blob([bytes], { type: mimeType });
+}
+
 export async function downloadMatrixMedia(
   mx: MatrixMediaClient,
   mxcUrl: string,
   options: MatrixMediaDownloadOptions
 ): Promise<Blob> {
+  // Live timeline media is a native handle. Do not JS-decrypt or fetch mxc.
+  if (timelineMediaHandleFromUri(mxcUrl)) {
+    return downloadNativeTimelineMedia(mxcUrl, options.mimeType);
+  }
   const mediaUrl = resolveMatrixMediaUrl(mx, mxcUrl, options);
   if (options.encryptedInfo) {
     const encryptedInfo = options.encryptedInfo;
