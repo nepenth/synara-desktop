@@ -10,6 +10,8 @@ timeline, and crypto are not implemented twice. **That end state has not
 been reached.** SNC engineering is on `main` via #991
 (`05a0961c`). It is not a release. How to finish it:
 `docs/shared-native-core/11-implementer-playbook.md`.
+What may be written in Rust, and what must stay put:
+[ADR 0004](0004-rust-language-boundaries.md).
 
 ## Context
 

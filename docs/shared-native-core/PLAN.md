@@ -19,6 +19,7 @@ via #991. It is not a release.
 ## Decision record
 
 - ADR 0003: `docs/adr/0003-shared-native-rust-core.md`
+- ADR 0004 (what may be written in Rust): `docs/adr/0004-rust-language-boundaries.md`
 
 Full docs: see this directory's README and 01–10 (architecture, census,
 platform sinks, transport/FFI, phases, risk, parity matrix, references, and the

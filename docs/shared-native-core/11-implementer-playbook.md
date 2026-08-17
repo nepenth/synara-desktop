@@ -4,7 +4,8 @@ This file is the operating manual for finishing the shared native core.
 Read it before editing product code. If this file and an older plan
 paragraph disagree, this file plus `10-current-handoff.md` win for
 *what to do next*; ADR-0003 plus `01-context-and-goals.md` win for
-*what done means*. The language-boundary loop operator is
+*what done means*; ADR-0004 wins for *what may be written in Rust*.
+The language-boundary loop operator is
 [13-language-boundary-goal-graph.md](13-language-boundary-goal-graph.md).
 
 Older “144 `Core::command` handlers” sentences in `03-target-architecture.md`
@@ -116,8 +117,21 @@ These are numbered owner calls. Do not re-litigate them in a slice PR.
 | 11 | No release until shared core is program-done and P5 gates pass. #991 is not a release. |
 | 12 | Apple proof stays operator-gated. |
 | 13 | DeepSeek paused. Grok does the routes. |
-| 14 | Language boundaries: [ADR 0004](../adr/0004-rust-language-boundaries.md). UI, Keychain, APNs, NSE lifecycle, and Node scripts stay put. Do not start a Slint/Dioxus/egui rewrite or Tauri iOS. |
+| 14 | [ADR 0004](../adr/0004-rust-language-boundaries.md): apply the can/should rubric before new Rust. No Slint/Dioxus/egui desktop rewrite. No Tauri iOS or Rust-on-iOS UI. No Node CI/guardrail rewrite. The twenty-one leftovers in section 6 stay desktop. Native media cutover deletes JS decrypt; it does not register byte commands on `Core::command`. iOS-on-engine follows section 5 and section 9; do not start P5 from a language-boundary PR. |
 | 15 | Leftover recover, raw-send, notification-mode, media bytes, room-avatar bytes, and pusher I/O stay fail-closed without a live homeserver. Do not invent a Core recover command or a byte/secret envelope. Leftover **status** that already has a Core owner (backup, room-key transfer) is the live leftover path. Crypto/cross-signing status stay on `Platform` (`IosFailClosedPlatform` remains fail-closed). |
+
+### Language boundaries (ADR 0004)
+
+Use this filter, then continue at section 5. Do not open a second core
+crate or a parallel ledger.
+
+| Should be Rust (playbook path) | Stay put / must not |
+|---|---|
+| 7B: non-secret live I/O already on an attached owner (as of #928 there are none left to invent) | Presentation, Slate, pdf.js, timeline viewport math |
+| P4 then P5: iOS-on-engine; start SyncService through Core; NSE stays read-only and never starts sync | SwiftUI, Keychain, APNs, NSE lifecycle |
+| Native media delivery cutover: retire `browser-encrypt-attachment` and shrink `synara/src/sw.ts` once both shells get bytes from the native owner | `matrix_send_attachment` / `matrix_upload_media` / `matrix_media_download` on the Core envelope |
+| Harness → live only when the domain is shared product behavior | Node `scripts/*.mjs`, WASM/IndexedDB leftovers (delete, do not rewrite) |
+| Optional after iOS-on-engine: agent-action *policy* in Core if iOS must share it | Agent-card / composer UI; Element Call WebRTC stack |
 
 ---
 
@@ -1146,6 +1160,7 @@ After every product merge:
 | `src-tauri/src/matrix/auth/product_tests.rs` | `PRODUCT_SOURCE` thin-bridge tests |
 | `synara-ios/Synara/Services/` | iOS adapters (P4) |
 | `docs/shared-native-core/` | Plans and ledger |
+| `docs/adr/0004-rust-language-boundaries.md` | Can/should rubric; stay-put list |
 
 ---
 
