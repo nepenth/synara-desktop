@@ -106,10 +106,7 @@ struct AppEnvironment {
             eventActions: SharedCoreEventActionService(host: host),
             agentApprovals: SharedCoreAgentApprovalService(host: host),
             agentApprovalReactions: SharedCoreAgentApprovalReactionService(host: host),
-            readMarkers: MatrixRoomReadMarkerService(
-                sessionStore: session,
-                clientStore: SharedCoreReadMarkerStore(host: host)
-            ),
+            readMarkers: SharedCoreRoomReadMarkerService(host: host),
             mediaLoader: SharedCoreMediaLoader(host: host),
             mediaUploader: SharedCoreMediaUploadService(host: host),
             crypto: crypto,

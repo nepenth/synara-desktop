@@ -10,6 +10,8 @@
 //! never registered as `matrix_login_password`. The password is not stored,
 //! not copied into a DTO, never echoed, and is zeroized on drop.
 //! P4-S3d adds `attach_session_owners` for the desktop owner set.
+//! P4-S12 adds `start_sync` for that already-attached SyncService. NSE
+//! still cannot start sync. This is not iOS-on-engine.
 //! P4-S4 adds a typed `room_list_snapshot` wrapper that calls the
 //! already-registered `matrix_room_list_snapshot` Core command only.
 //! P4-S5 adds a typed `invites_snapshot` wrapper that calls the
@@ -149,10 +151,11 @@ use matrix_sdk::Client;
 use zeroize::Zeroizing;
 
 use crate::app::account_data::{
-    NativeGlobalImagePacksSnapshot, NativeImagePack, NativeImagePackOwner, NativeLaterSnapshot,
-    NativeMDirectSnapshot, NativeRoomImagePacksSnapshot, NativeRoomNotesSnapshot,
-    NativeUserImagePackSnapshot, RoomNoteMoveDirection, SynaraLaterItem, SynaraLaterItemKind,
-    SynaraRoomNoteItem, SynaraRoomNoteItemKind,
+    NativeGlobalImagePacksSnapshot, NativeImagePack, NativeImagePackOwner,
+    NativeImagePackUpdateSignal, NativeLaterSnapshot, NativeMDirectSnapshot,
+    NativeRoomImagePacksSnapshot, NativeRoomNotesSnapshot, NativeUserImagePackSnapshot,
+    RoomNoteMoveDirection, SynaraLaterItem, SynaraLaterItemKind, SynaraRoomNoteItem,
+    SynaraRoomNoteItemKind,
 };
 use crate::app::auth::{
     login_with_password as core_login_with_password, DevicePlatform, LoginOptions,
@@ -160,7 +163,7 @@ use crate::app::auth::{
 use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig};
 use crate::app::devices::{
     NativeDeviceDeleteAuthentication, NativeDeviceDeleteResult, NativeDeviceOwner,
-    NativeDeviceSnapshot, NativeDeviceTrust,
+    NativeDeviceSnapshot, NativeDeviceTrust, NativeDeviceUpdateSignal,
 };
 use crate::app::lifecycle::{
     persist_session_after_login, restore_session_from_vault, restore_session_onto_client,
@@ -168,30 +171,35 @@ use crate::app::lifecycle::{
 };
 use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceState,
-    NativePresenceSubscription,
+    NativePresenceSubscription, NativePresenceUpdate,
 };
 use crate::app::room_list::{
-    NativeInvite, NativeInviteSnapshot, NativeInviteTriage, NativeRoomListSnapshot,
+    NativeInvite, NativeInviteSnapshot, NativeInviteTriage, NativeRoomListOwner,
+    NativeRoomListSnapshot, NativeRoomListUpdateSignal,
 };
-use crate::app::room_profile::{MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner};
+use crate::app::room_profile::{
+    MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner, NativeRoomJoinRuleUpdate,
+};
 use crate::app::store::{
     get_or_create_store_key, AccountIdentity, StoreKeyId, StoreKeyMaterial, StoreKeyVault,
     StoreKeyVaultError, STORE_KEY_LEN,
 };
-use crate::app::sync::{build_sync_service, SyncServiceConfig};
+use crate::app::sync::{build_sync_service, SyncReadiness, SyncServiceConfig};
 use crate::app::timeline::{
     NativeComposerReplyDraft, NativeDecryptionState, NativeReactionMutation,
     NativeReactionMutationResult, NativeTimelineDirection, NativeTimelineEventReadback,
     NativeTimelineItem, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
     NativeTimelineOwner, NativeTimelineReaction, NativeTimelineReactionSender,
     NativeTimelineReadAction, NativeTimelineReadStateReadback, NativeTimelineViewportHint,
-    TimelinePageState, TimelineViewPosition, TimelineViewSnapshot,
+    TimelineMediaHandle, TimelinePageState, TimelineReaction, TimelineViewDeltaBatch,
+    TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot, TimelineViewUpdateEmit,
+    TIMELINE_VIEW_SCHEMA_VERSION,
 };
-use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
+use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot, NativeTypingUpdateSignal};
 use crate::app::verification::{
     NativeVerificationDirection, NativeVerificationEmoji, NativeVerificationInbox,
     NativeVerificationOwner, NativeVerificationPhase, NativeVerificationRequest,
-    NativeVerificationSas,
+    NativeVerificationSas, NativeVerificationUpdateSignal,
 };
 use crate::core::Core;
 use crate::dto::{SessionLifecycle, SessionSnapshot};
@@ -235,6 +243,41 @@ const NSE_PAYLOAD_OVERSIZE_DESCRIPTION: &str = "The NSE store request exceeds th
 const NSE_FORBIDS_ATTACH_CODE: &str = "p4-s11-nse-read-only-forbids-attach";
 const NSE_FORBIDS_ATTACH_DESCRIPTION: &str =
     "The NSE read-only store cannot attach session owners.";
+const NSE_FORBIDS_START_CODE: &str = "p4-s12-nse-forbids-start";
+const NSE_FORBIDS_START_DESCRIPTION: &str = "The NSE read-only store cannot start SyncService.";
+const NSE_FORBIDS_MEDIA_CODE: &str = "p4-s33-nse-forbids-media";
+const NSE_FORBIDS_MEDIA_DESCRIPTION: &str =
+    "The NSE read-only store cannot download timeline media.";
+const TIMELINE_MEDIA_NO_SESSION_CODE: &str = "p4-s33-media-no-session";
+const TIMELINE_MEDIA_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
+const TIMELINE_MEDIA_UNKNOWN_HANDLE_CODE: &str = "p4-s33-media-unknown-handle";
+const TIMELINE_MEDIA_UNKNOWN_HANDLE_DESCRIPTION: &str = "The timeline media handle is unknown.";
+const TIMELINE_MEDIA_TOO_LARGE_CODE: &str = "p4-s33-media-too-large";
+const TIMELINE_MEDIA_TOO_LARGE_DESCRIPTION: &str = "The timeline media exceeds the size limit.";
+const TIMELINE_MEDIA_FAILED_CODE: &str = "p4-s33-media-failed";
+const TIMELINE_MEDIA_FAILED_DESCRIPTION: &str = "Timeline media could not be downloaded.";
+const SYNC_NOT_ATTACHED_CODE: &str = "p4-s12-sync-not-attached";
+const SYNC_NOT_ATTACHED_DESCRIPTION: &str = "Session owners are not attached.";
+const SYNC_START_FAILED_CODE: &str = "p4-s12-sync-start-failed";
+const SYNC_START_FAILED_DESCRIPTION: &str = "SyncService could not be started.";
+const NSE_FORBIDS_POLL_CODE: &str = "p4-s14-nse-forbids-poll";
+const NSE_FORBIDS_POLL_DESCRIPTION: &str =
+    "The NSE read-only store cannot poll timeline view updates.";
+const TIMELINE_VIEW_POLL_FAILED_CODE: &str = "p4-s14-timeline-view-poll-failed";
+const TIMELINE_VIEW_POLL_FAILED_DESCRIPTION: &str = "Timeline view updates could not be polled.";
+const TIMELINE_VIEW_UPDATE_QUEUE_CAP: usize = 32;
+const NSE_FORBIDS_OWNER_POLL_CODE: &str = "p4-s17-nse-forbids-poll";
+const NSE_FORBIDS_OWNER_POLL_DESCRIPTION: &str =
+    "The NSE read-only store cannot poll owner updates.";
+const OWNER_UPDATE_POLL_FAILED_CODE: &str = "p4-s17-owner-update-poll-failed";
+const OWNER_UPDATE_POLL_FAILED_DESCRIPTION: &str = "Owner updates could not be polled.";
+const OWNER_UPDATE_QUEUE_CAP: usize = 32;
+const NSE_FORBIDS_ROOM_LIST_POLL_CODE: &str = "p4-s19-nse-forbids-poll";
+const NSE_FORBIDS_ROOM_LIST_POLL_DESCRIPTION: &str =
+    "The NSE read-only store cannot poll room list updates.";
+const ROOM_LIST_UPDATE_POLL_FAILED_CODE: &str = "p4-s19-room-list-update-poll-failed";
+const ROOM_LIST_UPDATE_POLL_FAILED_DESCRIPTION: &str = "Room list updates could not be polled.";
+const ROOM_LIST_UPDATE_QUEUE_CAP: usize = 32;
 const NSE_OWNERS_ATTACHED_CODE: &str = "p4-s11-nse-owners-already-attached";
 const NSE_OWNERS_ATTACHED_DESCRIPTION: &str =
     "The NSE read-only store cannot open after owners attach.";
@@ -821,6 +864,178 @@ fn attach_failed(code: &'static str, description: &'static str) -> SessionAttach
     }
 }
 
+/// Privacy-safe start outcome. No tokens, URLs, or SDK error text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncStartDto {
+    pub readiness: String,
+    pub session_generation: u64,
+    pub started: bool,
+    pub offline_mode_enabled: bool,
+}
+
+/// Static fail-closed start error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SyncStartError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for SyncStartError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for SyncStartError {}
+
+fn sync_start_failed(code: &'static str, description: &'static str) -> SyncStartError {
+    SyncStartError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+/// Privacy-safe drained timeline view-delta summary. No row bodies or tokens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineViewUpdateDto {
+    pub schema_version: u32,
+    pub session_generation: u64,
+    pub stream_id: String,
+    pub room_id: String,
+    pub revision: u64,
+    pub op_count: u32,
+}
+
+/// Static fail-closed timeline view-update poll error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TimelineViewUpdateError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for TimelineViewUpdateError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for TimelineViewUpdateError {}
+
+fn timeline_view_poll_failed(
+    code: &'static str,
+    description: &'static str,
+) -> TimelineViewUpdateError {
+    TimelineViewUpdateError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn timeline_view_update_dto(batch: TimelineViewDeltaBatch) -> TimelineViewUpdateDto {
+    TimelineViewUpdateDto {
+        schema_version: batch.schema_version,
+        session_generation: batch.session_generation,
+        stream_id: batch.stream_id,
+        room_id: batch.room_id,
+        revision: batch.revision,
+        op_count: u32::try_from(batch.ops.len()).unwrap_or(u32::MAX),
+    }
+}
+
+/// Privacy-safe owner emit summary. No user id, tokens, or password.
+/// iOS re-fetches via the existing snapshot commands.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnerUpdateDto {
+    pub family: String,
+    pub session_generation: u64,
+    pub room_id: Option<String>,
+}
+
+/// Static fail-closed owner-update poll error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OwnerUpdateError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for OwnerUpdateError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for OwnerUpdateError {}
+
+fn owner_update_poll_failed(code: &'static str, description: &'static str) -> OwnerUpdateError {
+    OwnerUpdateError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+/// Privacy-safe room-list wake-up. No room ids, names, tokens, or password.
+/// iOS re-fetches via the existing snapshot command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomListUpdateDto {
+    pub session_generation: u64,
+}
+
+/// Static fail-closed room-list update poll error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoomListUpdateError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for RoomListUpdateError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for RoomListUpdateError {}
+
+fn room_list_update_poll_failed(
+    code: &'static str,
+    description: &'static str,
+) -> RoomListUpdateError {
+    RoomListUpdateError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn push_room_list_update(queue: &Mutex<Vec<RoomListUpdateDto>>, session_generation: u64) {
+    if let Ok(mut guard) = queue.lock() {
+        if guard.len() >= ROOM_LIST_UPDATE_QUEUE_CAP {
+            guard.remove(0);
+        }
+        guard.push(RoomListUpdateDto { session_generation });
+    }
+}
+
+fn push_owner_update(
+    queue: &Mutex<Vec<OwnerUpdateDto>>,
+    family: impl Into<String>,
+    session_generation: u64,
+    room_id: Option<String>,
+) {
+    if let Ok(mut guard) = queue.lock() {
+        if guard.len() >= OWNER_UPDATE_QUEUE_CAP {
+            guard.remove(0);
+        }
+        guard.push(OwnerUpdateDto {
+            family: family.into(),
+            session_generation,
+            room_id,
+        });
+    }
+}
+
 /// Privacy-safe room-list snapshot. Tokens and password never appear here.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RoomListSnapshotDto {
@@ -844,6 +1059,9 @@ pub struct RoomListRoomDto {
     pub highlight_count: u32,
     pub marked_unread: bool,
     pub last_activity_ts: Option<u64>,
+    pub last_message_preview: Option<String>,
+    pub is_encrypted: bool,
+    pub notification_mode: Option<String>,
 }
 
 /// Static fail-closed room-list error. Fields are source constants only.
@@ -1008,6 +1226,37 @@ pub struct TimelineSnapshotDto {
     pub mark_unread: bool,
     pub paginate_backward: bool,
     pub paginate_forward: bool,
+    pub rows: Vec<TimelineViewRowDto>,
+}
+
+/// Privacy-safe timeline view row. Message text only; no media bytes or tokens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineViewRowDto {
+    pub kind: String,
+    pub item_id: String,
+    pub event_id: String,
+    pub sender: String,
+    pub body: String,
+    pub origin_server_ts: u64,
+    pub edited: bool,
+    pub reply_to_event_id: Option<String>,
+    pub decryption_state: Option<String>,
+    pub message_type: Option<String>,
+    pub formatted_body: Option<String>,
+    pub reactions: Vec<TimelineViewReactionDto>,
+    pub media_handle_id: Option<String>,
+    pub media_mime_type: Option<String>,
+    pub media_width: Option<u32>,
+    pub media_height: Option<u32>,
+    pub media_duration_ms: Option<u64>,
+}
+
+/// Privacy-safe reaction count on a view row. No user ids.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineViewReactionDto {
+    pub key: String,
+    pub count: u32,
+    pub own: Option<bool>,
 }
 
 /// Privacy-safe timeline open readback. No tokens or password.
@@ -1584,6 +1833,29 @@ fn timeline_failed(code: &'static str, description: &'static str) -> TimelineErr
     }
 }
 
+/// Static fail-closed native media-handle error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TimelineMediaError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for TimelineMediaError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for TimelineMediaError {}
+
+fn timeline_media_failed(code: &'static str, description: &'static str) -> TimelineMediaError {
+    TimelineMediaError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
 fn map_timeline_open_core_error(error: MatrixIpcError) -> TimelineError {
     match error.diagnostic_id.as_deref() {
         Some("p2-timeline-open-no-session") => timeline_failed(
@@ -1644,7 +1916,7 @@ fn open_position_from_dto(
     position: TimelineOpenPositionDto,
 ) -> Result<NativeTimelineOpenPosition, TimelineError> {
     match position.kind.as_str() {
-        "live_bottom" => Ok(NativeTimelineOpenPosition::LiveBottom),
+        "live" | "live_bottom" => Ok(NativeTimelineOpenPosition::LiveBottom),
         "unread" => Ok(NativeTimelineOpenPosition::Unread),
         "focused" => {
             let event_id = position
@@ -1730,6 +2002,275 @@ fn timeline_snapshot_dto(snapshot: TimelineViewSnapshot) -> TimelineSnapshotDto 
         mark_unread: snapshot.capabilities.mark_unread,
         paginate_backward: snapshot.capabilities.paginate_backward,
         paginate_forward: snapshot.capabilities.paginate_forward,
+        rows: snapshot
+            .rows
+            .into_iter()
+            .map(timeline_view_row_dto)
+            .collect(),
+    }
+}
+
+fn view_reaction_dtos(reactions: Vec<TimelineReaction>) -> Vec<TimelineViewReactionDto> {
+    reactions
+        .into_iter()
+        .map(|reaction| TimelineViewReactionDto {
+            key: reaction.key,
+            count: reaction.count,
+            own: reaction.own,
+        })
+        .collect()
+}
+
+fn view_media_fields(
+    media: Option<TimelineMediaHandle>,
+) -> (
+    Option<String>,
+    Option<String>,
+    Option<u32>,
+    Option<u32>,
+    Option<u64>,
+) {
+    match media {
+        Some(handle) => (
+            Some(handle.handle_id),
+            handle.mime_type,
+            handle.width,
+            handle.height,
+            handle.duration_ms,
+        ),
+        None => (None, None, None, None, None),
+    }
+}
+
+fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
+    match row {
+        TimelineViewRow::Message(message) => {
+            let (media_handle_id, media_mime_type, media_width, media_height, media_duration_ms) =
+                view_media_fields(message.media);
+            TimelineViewRowDto {
+                kind: "message".to_owned(),
+                item_id: message.event.item_id,
+                event_id: message.event.event_id.unwrap_or_default(),
+                sender: message.event.sender_id,
+                body: message.body,
+                origin_server_ts: message.event.origin_server_ts,
+                edited: message.edited,
+                reply_to_event_id: message.reply.map(|preview| preview.event_id),
+                decryption_state: None,
+                message_type: message.message_type,
+                formatted_body: message.formatted_body,
+                reactions: view_reaction_dtos(message.reactions),
+                media_handle_id,
+                media_mime_type,
+                media_width,
+                media_height,
+                media_duration_ms,
+            }
+        }
+        TimelineViewRow::Sticker { event, media } => {
+            let (media_handle_id, media_mime_type, media_width, media_height, media_duration_ms) =
+                view_media_fields(Some(media));
+            TimelineViewRowDto {
+                kind: "sticker".to_owned(),
+                item_id: event.item_id,
+                event_id: event.event_id.unwrap_or_default(),
+                sender: event.sender_id,
+                body: String::new(),
+                origin_server_ts: event.origin_server_ts,
+                edited: false,
+                reply_to_event_id: None,
+                decryption_state: None,
+                message_type: Some("m.sticker".to_owned()),
+                formatted_body: None,
+                reactions: Vec::new(),
+                media_handle_id,
+                media_mime_type,
+                media_width,
+                media_height,
+                media_duration_ms,
+            }
+        }
+        TimelineViewRow::Poll(poll) => TimelineViewRowDto {
+            kind: "poll".to_owned(),
+            item_id: poll.event.item_id,
+            event_id: poll.event.event_id.unwrap_or_default(),
+            sender: poll.event.sender_id,
+            body: poll.question,
+            origin_server_ts: poll.event.origin_server_ts,
+            edited: false,
+            reply_to_event_id: None,
+            decryption_state: None,
+            message_type: None,
+            formatted_body: None,
+            reactions: Vec::new(),
+            media_handle_id: None,
+            media_mime_type: None,
+            media_width: None,
+            media_height: None,
+            media_duration_ms: None,
+        },
+        TimelineViewRow::Membership(membership) => TimelineViewRowDto {
+            kind: "membership".to_owned(),
+            item_id: membership.event.item_id,
+            event_id: membership.event.event_id.unwrap_or_default(),
+            sender: membership.event.sender_id,
+            body: membership.summary,
+            origin_server_ts: membership.event.origin_server_ts,
+            edited: false,
+            reply_to_event_id: None,
+            decryption_state: None,
+            message_type: None,
+            formatted_body: None,
+            reactions: Vec::new(),
+            media_handle_id: None,
+            media_mime_type: None,
+            media_width: None,
+            media_height: None,
+            media_duration_ms: None,
+        },
+        TimelineViewRow::State(state) => TimelineViewRowDto {
+            kind: "state".to_owned(),
+            item_id: state.event.item_id,
+            event_id: state.event.event_id.unwrap_or_default(),
+            sender: state.event.sender_id,
+            body: state.summary,
+            origin_server_ts: state.event.origin_server_ts,
+            edited: false,
+            reply_to_event_id: None,
+            decryption_state: None,
+            message_type: Some(state.state_type),
+            formatted_body: None,
+            reactions: Vec::new(),
+            media_handle_id: None,
+            media_mime_type: None,
+            media_width: None,
+            media_height: None,
+            media_duration_ms: None,
+        },
+        TimelineViewRow::Call(call) => TimelineViewRowDto {
+            kind: "call".to_owned(),
+            item_id: call.event.item_id,
+            event_id: call.event.event_id.unwrap_or_default(),
+            sender: call.event.sender_id,
+            body: call.call_kind,
+            origin_server_ts: call.event.origin_server_ts,
+            edited: false,
+            reply_to_event_id: None,
+            decryption_state: None,
+            message_type: None,
+            formatted_body: None,
+            reactions: Vec::new(),
+            media_handle_id: None,
+            media_mime_type: None,
+            media_width: None,
+            media_height: None,
+            media_duration_ms: None,
+        },
+        TimelineViewRow::Redacted(redacted) => TimelineViewRowDto {
+            kind: "redacted".to_owned(),
+            item_id: redacted.item_id,
+            event_id: redacted.event_id,
+            sender: String::new(),
+            body: redacted.summary,
+            origin_server_ts: 0,
+            edited: false,
+            reply_to_event_id: None,
+            decryption_state: None,
+            message_type: None,
+            formatted_body: None,
+            reactions: Vec::new(),
+            media_handle_id: None,
+            media_mime_type: None,
+            media_width: None,
+            media_height: None,
+            media_duration_ms: None,
+        },
+        TimelineViewRow::EncryptedUnavailable(encrypted) => TimelineViewRowDto {
+            kind: "encrypted".to_owned(),
+            item_id: encrypted.item_id,
+            event_id: encrypted.event_id,
+            sender: String::new(),
+            body: encrypted.reason_code.clone(),
+            origin_server_ts: 0,
+            edited: false,
+            reply_to_event_id: None,
+            decryption_state: Some(encrypted.reason_code),
+            message_type: None,
+            formatted_body: None,
+            reactions: Vec::new(),
+            media_handle_id: None,
+            media_mime_type: None,
+            media_width: None,
+            media_height: None,
+            media_duration_ms: None,
+        },
+        TimelineViewRow::Other(other) => TimelineViewRowDto {
+            kind: "other".to_owned(),
+            item_id: other.item_id,
+            event_id: other.event_id.unwrap_or_default(),
+            sender: String::new(),
+            body: other.summary,
+            origin_server_ts: 0,
+            edited: false,
+            reply_to_event_id: None,
+            decryption_state: None,
+            message_type: other.event_type,
+            formatted_body: None,
+            reactions: Vec::new(),
+            media_handle_id: None,
+            media_mime_type: None,
+            media_width: None,
+            media_height: None,
+            media_duration_ms: None,
+        },
+        TimelineViewRow::DateSeparator {
+            item_id,
+            timestamp_ms,
+        } => TimelineViewRowDto {
+            kind: "date_separator".to_owned(),
+            item_id,
+            event_id: String::new(),
+            sender: String::new(),
+            body: String::new(),
+            origin_server_ts: timestamp_ms,
+            edited: false,
+            reply_to_event_id: None,
+            decryption_state: None,
+            message_type: None,
+            formatted_body: None,
+            reactions: Vec::new(),
+            media_handle_id: None,
+            media_mime_type: None,
+            media_width: None,
+            media_height: None,
+            media_duration_ms: None,
+        },
+        TimelineViewRow::ReadMarker { item_id } => virtual_row_dto("read_marker", item_id),
+        TimelineViewRow::UnreadMarker { item_id } => virtual_row_dto("unread_marker", item_id),
+        TimelineViewRow::TimelineStart { item_id } => virtual_row_dto("timeline_start", item_id),
+        TimelineViewRow::Pagination { item_id, .. } => virtual_row_dto("pagination", item_id),
+    }
+}
+
+fn virtual_row_dto(kind: &str, item_id: String) -> TimelineViewRowDto {
+    TimelineViewRowDto {
+        kind: kind.to_owned(),
+        item_id,
+        event_id: String::new(),
+        sender: String::new(),
+        body: String::new(),
+        origin_server_ts: 0,
+        edited: false,
+        reply_to_event_id: None,
+        decryption_state: None,
+        message_type: None,
+        formatted_body: None,
+        reactions: Vec::new(),
+        media_handle_id: None,
+        media_mime_type: None,
+        media_width: None,
+        media_height: None,
+        media_duration_ms: None,
     }
 }
 
@@ -2132,6 +2673,10 @@ pub struct SharedCore {
     restored_client: Mutex<RestoredClientSlot>,
     owner_attach: Mutex<OwnerAttachSlot>,
     nse_read_only: Mutex<bool>,
+    timeline_view_updates: Arc<Mutex<Vec<TimelineViewDeltaBatch>>>,
+    owner_updates: Arc<Mutex<Vec<OwnerUpdateDto>>>,
+    room_list_updates: Arc<Mutex<Vec<RoomListUpdateDto>>>,
+    room_list_live: Arc<Mutex<Option<NativeRoomListOwner>>>,
 }
 
 impl SharedCore {
@@ -2145,6 +2690,10 @@ impl SharedCore {
             restored_client: Mutex::new(RestoredClientSlot::Empty),
             owner_attach: Mutex::new(OwnerAttachSlot::Empty),
             nse_read_only: Mutex::new(false),
+            timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
+            owner_updates: Arc::new(Mutex::new(Vec::new())),
+            room_list_updates: Arc::new(Mutex::new(Vec::new())),
+            room_list_live: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -2159,6 +2708,10 @@ impl SharedCore {
             restored_client: Mutex::new(RestoredClientSlot::Empty),
             owner_attach: Mutex::new(OwnerAttachSlot::Empty),
             nse_read_only: Mutex::new(false),
+            timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
+            owner_updates: Arc::new(Mutex::new(Vec::new())),
+            room_list_updates: Arc::new(Mutex::new(Vec::new())),
+            room_list_live: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -2435,10 +2988,11 @@ impl SharedCore {
 
     /// Attach the desktop owner set on the retained Client. No Core.command.
     ///
-    /// Builds owners with no-op emit sinks (Platform::emit stays a later
-    /// slice). SyncService is attached but not started so iOS does not run a
-    /// second live sync while MatrixRustSDK still owns product room list.
-    /// Fail-closed if no Client is retained or owners are already attached.
+    /// Builds owners with a queued timeline view-delta sink (P4-S14).
+    /// Other product emits stay no-op. Platform::emit is still not used
+    /// for product events. SyncService is attached but not started;
+    /// P4-S12 `start_sync` starts it. Fail-closed if no Client is
+    /// retained or owners are already attached.
     pub async fn attach_session_owners(&self) -> Result<SessionAttachDto, SessionAttachError> {
         if self.is_nse_read_only() {
             return Err(attach_failed(
@@ -2477,33 +3031,96 @@ impl SharedCore {
             return Err(attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION));
         }
 
+        let owner_updates = Arc::clone(&self.owner_updates);
+        let typing_emit = {
+            let queue = Arc::clone(&owner_updates);
+            Arc::new(move |update: NativeTypingUpdateSignal| {
+                push_owner_update(
+                    &queue,
+                    "typing",
+                    update.session_generation,
+                    Some(update.room_id),
+                );
+            })
+        };
         let typing = Arc::new(
-            NativeTypingOwner::start(&client, generation)
+            NativeTypingOwner::with_emit(&client, typing_emit, generation)
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
+        let presence_emit = {
+            let queue = Arc::clone(&owner_updates);
+            Arc::new(move |update: NativePresenceUpdate| {
+                let _ = update;
+                push_owner_update(&queue, "presence", generation, None);
+            })
+        };
         let presence = Arc::new(
-            NativePresenceOwner::start(&client, Arc::new(|_| {}), generation)
+            NativePresenceOwner::start(&client, presence_emit, generation)
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
-        let verification = Arc::new(NativeVerificationOwner::new(&client, generation));
+        let verification_emit = {
+            let queue = Arc::clone(&owner_updates);
+            Arc::new(move |update: NativeVerificationUpdateSignal| {
+                push_owner_update(&queue, "verification", update.session_generation, None);
+            })
+        };
+        let verification = Arc::new(NativeVerificationOwner::with_emit(
+            &client,
+            verification_emit,
+            generation,
+        ));
+        let devices_emit = {
+            let queue = Arc::clone(&owner_updates);
+            Arc::new(move |update: NativeDeviceUpdateSignal| {
+                push_owner_update(&queue, "devices", update.session_generation, None);
+            })
+        };
         let devices = Arc::new(
-            NativeDeviceOwner::start(&client, Arc::new(|_| {}), generation)
+            NativeDeviceOwner::start(&client, devices_emit, generation)
                 .await
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
+        let join_rules_emit = {
+            let queue = Arc::clone(&owner_updates);
+            Arc::new(move |update: NativeRoomJoinRuleUpdate| {
+                let (session_generation, room_id) = match update {
+                    NativeRoomJoinRuleUpdate::Ready {
+                        room_id,
+                        session_generation,
+                        ..
+                    }
+                    | NativeRoomJoinRuleUpdate::Unavailable {
+                        room_id,
+                        session_generation,
+                    } => (session_generation, Some(room_id)),
+                };
+                push_owner_update(&queue, "join_rules", session_generation, room_id);
+            })
+        };
         let join_rules = Arc::new(
-            NativeRoomJoinRuleOwner::start(&client, Arc::new(|_| {}), generation)
+            NativeRoomJoinRuleOwner::start(&client, join_rules_emit, generation)
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
+        let image_packs_emit = {
+            let queue = Arc::clone(&owner_updates);
+            Arc::new(move |update: NativeImagePackUpdateSignal| {
+                push_owner_update(&queue, "image_packs", update.session_generation, None);
+            })
+        };
         let image_packs = Arc::new(
-            NativeImagePackOwner::start(&client, Arc::new(|_| {}), generation)
+            NativeImagePackOwner::start(&client, image_packs_emit, generation)
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
-        let timelines = Arc::new(NativeTimelineOwner::new(
-            &client,
-            Arc::new(|_| {}),
-            generation,
-        ));
+        let timeline_updates = Arc::clone(&self.timeline_view_updates);
+        let timeline_emit: TimelineViewUpdateEmit = Arc::new(move |batch| {
+            if let Ok(mut guard) = timeline_updates.lock() {
+                if guard.len() >= TIMELINE_VIEW_UPDATE_QUEUE_CAP {
+                    guard.remove(0);
+                }
+                guard.push(batch);
+            }
+        });
+        let timelines = Arc::new(NativeTimelineOwner::new(&client, timeline_emit, generation));
         let sync = Arc::new(
             build_sync_service(&client, generation, SyncServiceConfig::default())
                 .await
@@ -2546,6 +3163,171 @@ impl SharedCore {
         })
     }
 
+    /// Start the already-attached SyncService. Not `Core.command`.
+    ///
+    /// NSE forbids this. Missing attach fail-closes. Start failures stay
+    /// static and never echo user id, homeserver, device id, or tokens.
+    /// A second start is a restart of the same owner. This is not
+    /// iOS-on-engine and not P4 acceptance.
+    pub async fn start_sync(&self) -> Result<SyncStartDto, SyncStartError> {
+        if self.is_nse_read_only() {
+            return Err(sync_start_failed(
+                NSE_FORBIDS_START_CODE,
+                NSE_FORBIDS_START_DESCRIPTION,
+            ));
+        }
+        if !self.owners_attached() {
+            return Err(sync_start_failed(
+                SYNC_NOT_ATTACHED_CODE,
+                SYNC_NOT_ATTACHED_DESCRIPTION,
+            ));
+        }
+        let snapshot = self.core.start_attached_sync().await.map_err(|code| {
+            if code == SYNC_NOT_ATTACHED_CODE {
+                sync_start_failed(SYNC_NOT_ATTACHED_CODE, SYNC_NOT_ATTACHED_DESCRIPTION)
+            } else {
+                sync_start_failed(SYNC_START_FAILED_CODE, SYNC_START_FAILED_DESCRIPTION)
+            }
+        })?;
+        self.spawn_room_list_live();
+        Ok(SyncStartDto {
+            readiness: snapshot.readiness.as_str().to_owned(),
+            session_generation: snapshot.session_generation,
+            started: matches!(
+                snapshot.readiness,
+                SyncReadiness::Running | SyncReadiness::Offline
+            ),
+            offline_mode_enabled: snapshot.offline_mode_enabled,
+        })
+    }
+
+    fn spawn_room_list_live(&self) {
+        let Some(owner) = self.core.attached_sync_owner() else {
+            return;
+        };
+        let queue = Arc::clone(&self.room_list_updates);
+        let emit = Arc::new(move |update: NativeRoomListUpdateSignal| {
+            push_room_list_update(&queue, update.session_generation);
+        });
+        let live = NativeRoomListOwner::start(&owner, emit);
+        if let Ok(mut guard) = self.room_list_live.lock() {
+            *guard = Some(live);
+        }
+    }
+
+    /// Drain queued timeline view-delta summaries. Not `Core.command`.
+    ///
+    /// NSE forbids this. An empty queue returns an empty list. This is
+    /// not Platform::emit. Failed errors stay static.
+    pub async fn poll_timeline_view_updates(
+        &self,
+    ) -> Result<Vec<TimelineViewUpdateDto>, TimelineViewUpdateError> {
+        if self.is_nse_read_only() {
+            return Err(timeline_view_poll_failed(
+                NSE_FORBIDS_POLL_CODE,
+                NSE_FORBIDS_POLL_DESCRIPTION,
+            ));
+        }
+        let mut guard = self.timeline_view_updates.lock().map_err(|_| {
+            timeline_view_poll_failed(
+                TIMELINE_VIEW_POLL_FAILED_CODE,
+                TIMELINE_VIEW_POLL_FAILED_DESCRIPTION,
+            )
+        })?;
+        Ok(guard.drain(..).map(timeline_view_update_dto).collect())
+    }
+
+    /// Test-only enqueue onto the attach timeline emit queue. Not on UDL.
+    #[doc(hidden)]
+    pub fn enqueue_timeline_view_update_for_test(
+        &self,
+        stream_id: String,
+        room_id: String,
+        revision: u64,
+    ) {
+        use crate::app::timeline::TimelineReadState;
+        let batch = TimelineViewDeltaBatch {
+            schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+            session_generation: 1,
+            stream_id,
+            room_id,
+            revision,
+            ops: Vec::new(),
+            read_state: Some(TimelineReadState {
+                own_read_event_id: None,
+                unread_anchor_event_id: None,
+                is_marked_unread: false,
+            }),
+            pagination: None,
+            pinned_event_ids: None,
+        };
+        if let Ok(mut guard) = self.timeline_view_updates.lock() {
+            if guard.len() >= TIMELINE_VIEW_UPDATE_QUEUE_CAP {
+                guard.remove(0);
+            }
+            guard.push(batch);
+        }
+    }
+
+    /// Drain queued owner emit summaries. Not `Core.command`.
+    ///
+    /// NSE forbids this. An empty queue returns an empty list. Presence
+    /// user ids are never included. This is not Platform::emit.
+    pub async fn poll_owner_updates(&self) -> Result<Vec<OwnerUpdateDto>, OwnerUpdateError> {
+        if self.is_nse_read_only() {
+            return Err(owner_update_poll_failed(
+                NSE_FORBIDS_OWNER_POLL_CODE,
+                NSE_FORBIDS_OWNER_POLL_DESCRIPTION,
+            ));
+        }
+        let mut guard = self.owner_updates.lock().map_err(|_| {
+            owner_update_poll_failed(
+                OWNER_UPDATE_POLL_FAILED_CODE,
+                OWNER_UPDATE_POLL_FAILED_DESCRIPTION,
+            )
+        })?;
+        Ok(guard.drain(..).collect())
+    }
+
+    /// Test-only enqueue onto the attach owner emit queue. Not on UDL.
+    #[doc(hidden)]
+    pub fn enqueue_owner_update_for_test(
+        &self,
+        family: String,
+        session_generation: u64,
+        room_id: Option<String>,
+    ) {
+        push_owner_update(&self.owner_updates, family, session_generation, room_id);
+    }
+
+    /// Drain queued room-list wake-ups. Not `Core.command`.
+    ///
+    /// NSE forbids this. An empty queue returns an empty list. Room ids
+    /// and names are never included. This is not Platform::emit.
+    pub async fn poll_room_list_updates(
+        &self,
+    ) -> Result<Vec<RoomListUpdateDto>, RoomListUpdateError> {
+        if self.is_nse_read_only() {
+            return Err(room_list_update_poll_failed(
+                NSE_FORBIDS_ROOM_LIST_POLL_CODE,
+                NSE_FORBIDS_ROOM_LIST_POLL_DESCRIPTION,
+            ));
+        }
+        let mut guard = self.room_list_updates.lock().map_err(|_| {
+            room_list_update_poll_failed(
+                ROOM_LIST_UPDATE_POLL_FAILED_CODE,
+                ROOM_LIST_UPDATE_POLL_FAILED_DESCRIPTION,
+            )
+        })?;
+        Ok(guard.drain(..).collect())
+    }
+
+    /// Test-only enqueue onto the room-list emit queue. Not on UDL.
+    #[doc(hidden)]
+    pub fn enqueue_room_list_update_for_test(&self, session_generation: u64) {
+        push_room_list_update(&self.room_list_updates, session_generation);
+    }
+
     /// Typed consume of the already-registered `matrix_room_list_snapshot`.
     ///
     /// Uses `Core::command` with the same null camelCase payload desktop
@@ -2584,6 +3366,9 @@ impl SharedCore {
                     highlight_count: room.highlight_count,
                     marked_unread: room.marked_unread,
                     last_activity_ts: room.last_activity_ts,
+                    last_message_preview: room.last_message_preview,
+                    is_encrypted: room.is_encrypted,
+                    notification_mode: room.notification_mode.map(|mode| mode.as_str().to_owned()),
                 })
                 .collect(),
         })
@@ -4646,6 +5431,44 @@ impl SharedCore {
             LEFTOVER_UNAVAILABLE_CODE,
             LEFTOVER_UNAVAILABLE_DESCRIPTION,
         ))
+    }
+
+    /// Download bytes for an opaque timeline media handle.
+    ///
+    /// Dedicated UniFFI bytes, not a `Core.command` envelope. NSE cannot
+    /// download. Unknown handles and missing owners fail closed without
+    /// echoing the handle, mxc, or tokens.
+    pub async fn timeline_media_bytes(
+        &self,
+        handle_id: String,
+    ) -> Result<LeftoverBytesDto, TimelineMediaError> {
+        if self.is_nse_read_only() {
+            return Err(timeline_media_failed(
+                NSE_FORBIDS_MEDIA_CODE,
+                NSE_FORBIDS_MEDIA_DESCRIPTION,
+            ));
+        }
+        let Some(owner) = self.core.attached_timeline_owner() else {
+            return Err(timeline_media_failed(
+                TIMELINE_MEDIA_NO_SESSION_CODE,
+                TIMELINE_MEDIA_NO_SESSION_DESCRIPTION,
+            ));
+        };
+        match owner.media_bytes(&handle_id).await {
+            Ok(payload) => Ok(LeftoverBytesDto { payload }),
+            Err("p4-s33-media-unknown-handle") => Err(timeline_media_failed(
+                TIMELINE_MEDIA_UNKNOWN_HANDLE_CODE,
+                TIMELINE_MEDIA_UNKNOWN_HANDLE_DESCRIPTION,
+            )),
+            Err("p4-s33-media-too-large") => Err(timeline_media_failed(
+                TIMELINE_MEDIA_TOO_LARGE_CODE,
+                TIMELINE_MEDIA_TOO_LARGE_DESCRIPTION,
+            )),
+            Err(_) => Err(timeline_media_failed(
+                TIMELINE_MEDIA_FAILED_CODE,
+                TIMELINE_MEDIA_FAILED_DESCRIPTION,
+            )),
+        }
     }
 
     pub async fn media_download(
@@ -9456,13 +10279,21 @@ fn leftover_status_envelope_payload(
 fn map_leftover_status_core_error(error: MatrixIpcError) -> LeftoverCommandError {
     match error.diagnostic_id.as_deref() {
         Some(code)
+            if code.ends_with("-no-session")
+                || code.contains("requires-session")
+                || code.contains("-session-missing") =>
+        {
+            leftover_failed(code, LEFTOVER_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
             if code.starts_with("p2-backup-status-")
                 || code.starts_with("p2-crypto-status-")
                 || code.starts_with("p2-cross-signing-status-")
                 || code.starts_with("p2-room-key-transfer-status-")
-                || code.starts_with("v-crypto.2-") =>
+                || code.starts_with("v-crypto.2-")
+                || code.starts_with("v-crypto.3-") =>
         {
-            leftover_failed(code, LEFTOVER_NO_SESSION_DESCRIPTION)
+            leftover_failed(code, LEFTOVER_UNAVAILABLE_DESCRIPTION)
         }
         _ => leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION),
     }
@@ -10049,5 +10880,52 @@ mod tests {
             .expect("validated leftover wipe");
         assert_eq!(ack.status, "wiped");
         assert!(!root.exists());
+    }
+
+    #[test]
+    fn timeline_view_row_dto_maps_message_without_token_echo() {
+        use crate::app::timeline::{
+            TimelineEventRowBase, TimelineMessageRow, TimelineRowCapabilities,
+        };
+        let row = TimelineViewRow::Message(Box::new(TimelineMessageRow {
+            event: TimelineEventRowBase {
+                item_id: "item-1".to_owned(),
+                event_id: Some("$evt:example.org".to_owned()),
+                sender_id: "@alice:example.org".to_owned(),
+                sender_name: "@alice:example.org".to_owned(),
+                origin_server_ts: 1_700_000_000_000,
+                capabilities: TimelineRowCapabilities {
+                    react: true,
+                    reply: true,
+                    edit: false,
+                    redact: true,
+                    report: true,
+                    pin: true,
+                    forward: true,
+                    vote: false,
+                    decline_call: false,
+                },
+            },
+            body: "hello".to_owned(),
+            formatted_body: None,
+            message_type: Some("m.text".to_owned()),
+            edited: false,
+            reply: None,
+            thread: None,
+            reactions: Vec::new(),
+            media: None,
+        }));
+        let dto = timeline_view_row_dto(row);
+        assert_eq!(dto.kind, "message");
+        assert_eq!(dto.item_id, "item-1");
+        assert_eq!(dto.event_id, "$evt:example.org");
+        assert_eq!(dto.body, "hello");
+        assert_eq!(dto.message_type.as_deref(), Some("m.text"));
+        assert!(dto.reactions.is_empty());
+        assert!(dto.media_handle_id.is_none());
+        let text = format!("{dto:?}");
+        assert!(!text.contains("syt_"));
+        assert!(!text.contains("password"));
+        assert!(!text.contains("mxc://"));
     }
 }

@@ -23,6 +23,32 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertNotNil(core)
     }
 
+    func testSharedCoreLeftoverStatusWithoutAttachFailsClosed() async {
+        let core = SharedCore()
+
+        do {
+            _ = try await SharedCoreLeftovers.backupStatus(core: core)
+            XCTFail("Fail-closed SharedCore must not read leftover backup status without attach")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-backup-status-no-session"))
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreLeftovers.roomKeyTransferStatus(core: core)
+            XCTFail("Fail-closed SharedCore must not read leftover room-key status without attach")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-key-transfer-status-no-session"))
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testSharedCoreLeftoversWithoutSessionFailClosed() async {
         let core = SharedCore.newWithSecretStore(store: InMemoryIosSecretVault())
         let recoveryKey = "s10-secret-recovery-key"
@@ -212,6 +238,111 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreSessionBootstrapWithoutSessionDoesNotStart() async {
+        let core = SharedCore()
+        let storeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("synara-s13-no-session", isDirectory: true)
+        let userID = "@alice:example.org"
+        let homeserver = "https://matrix.example.org"
+
+        let outcome = await SharedCoreSessionBootstrap.prepareLiveSession(
+            userID: userID,
+            homeserverURL: homeserver,
+            storeRoot: storeRoot,
+            core: core
+        )
+
+        XCTAssertFalse(outcome.restored)
+        XCTAssertFalse(outcome.attached)
+        XCTAssertFalse(outcome.started)
+        XCTAssertNil(outcome.readiness)
+        let publicError = String(describing: outcome)
+        for forbidden in ["password", "syt_", userID, "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreResumeFromForegroundWithoutSessionStaysStoppedWithoutEcho() async throws {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreMatrixClientService(host: host)
+        let session = AuthenticatedSession(
+            userID: "@alice:example.org",
+            deviceID: "DEVICE",
+            homeserverURL: try XCTUnwrap(URL(string: "https://matrix.example.org")),
+            accessToken: "syt_secret_token"
+        )
+        await service.resumeFromForeground(session: session)
+        XCTAssertEqual(service.syncStatus, .stopped)
+        let publicError = String(describing: service.syncStatus)
+        for forbidden in ["password", "syt_secret_token", "@alice:example.org", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreStartSyncWithoutAttachFailsClosed() async {
+        let core = SharedCore()
+
+        do {
+            _ = try await SharedCoreSyncStart.startSync(core: core)
+            XCTFail("Fail-closed SharedCore must not start sync without attach")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p4-s12-sync-not-attached"))
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
+    func testSharedCorePollRoomListUpdatesWithoutSessionReturnsEmpty() async {
+        let core = SharedCore()
+
+        do {
+            let updates = try await SharedCoreRoomListUpdates.poll(core: core)
+            XCTAssertTrue(updates.isEmpty)
+            let publicError = String(describing: updates)
+            for forbidden in ["password", "syt_", "@alice:example.org", "token", "!room"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        } catch {
+            XCTFail("Empty room-list update queue must not fail: \(error)")
+        }
+    }
+
+    func testSharedCorePollOwnerUpdatesWithoutSessionReturnsEmpty() async {
+        let core = SharedCore()
+
+        do {
+            let updates = try await SharedCoreOwnerUpdates.poll(core: core)
+            XCTAssertTrue(updates.isEmpty)
+            let publicError = String(describing: updates)
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        } catch {
+            XCTFail("Empty owner-update queue must not fail: \(error)")
+        }
+    }
+
+    func testSharedCorePollTimelineViewUpdatesWithoutSessionReturnsEmpty() async {
+        let core = SharedCore()
+
+        do {
+            let updates = try await SharedCoreTimelineViewUpdates.poll(core: core)
+            XCTAssertTrue(updates.isEmpty)
+            let publicError = String(describing: updates)
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        } catch {
+            XCTFail("Empty timeline view-update queue must not fail: \(error)")
+        }
+    }
+
     func testSharedCoreRoomListWithoutSessionFailsClosed() async {
         let core = SharedCore()
 
@@ -240,6 +371,173 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 XCTAssertFalse(publicError.contains(forbidden))
             }
         }
+    }
+
+    func testSharedCoreTimelineRowsWithoutItemsAreEmpty() {
+        XCTAssertEqual(SharedCoreTimelineRows.outcome(from: []), .empty)
+    }
+
+    func testSharedCoreTimelineRowsMapsNonMessageBodiesWithoutEcho() {
+        XCTAssertEqual(
+            SharedCoreTimelineRows.displayKind(
+                rowKind: "poll",
+                body: "Lunch?",
+                formattedBody: nil
+            ),
+            .text("Lunch?")
+        )
+        XCTAssertEqual(
+            SharedCoreTimelineRows.displayKind(
+                rowKind: "membership",
+                body: "@alex joined",
+                formattedBody: nil
+            ),
+            .text("@alex joined")
+        )
+        XCTAssertEqual(
+            SharedCoreTimelineRows.displayKind(
+                rowKind: "state",
+                body: "Topic changed",
+                formattedBody: nil
+            ),
+            .text("Topic changed")
+        )
+        XCTAssertEqual(
+            SharedCoreTimelineRows.displayKind(
+                rowKind: "call",
+                body: "voice",
+                formattedBody: nil
+            ),
+            .text("voice")
+        )
+        XCTAssertEqual(
+            SharedCoreTimelineRows.displayKind(
+                rowKind: "sticker",
+                body: "",
+                formattedBody: nil
+            ),
+            .unknown(type: "sticker")
+        )
+        XCTAssertNil(
+            SharedCoreTimelineRows.displayKind(
+                rowKind: "date_separator",
+                body: "",
+                formattedBody: nil
+            )
+        )
+        XCTAssertEqual(
+            SharedCoreTimelineRows.displayKind(
+                rowKind: "encrypted",
+                body: "unable_to_decrypt",
+                formattedBody: nil
+            ),
+            .encryptedPlaceholder
+        )
+        XCTAssertEqual(
+            SharedCoreTimelineRows.reactionCounts([("👍", 2), ("🎉", 1)]),
+            ["👍": 2, "🎉": 1]
+        )
+        if case let .mediaPlaceholder(resource) = SharedCoreTimelineRows.displayKind(
+            rowKind: "message",
+            body: "photo.jpg",
+            formattedBody: nil,
+            messageType: "image",
+            mediaHandleId: "timeline-media-s32",
+            mediaMimeType: "image/jpeg"
+        ) {
+            XCTAssertEqual(resource.filename, "photo.jpg")
+            XCTAssertEqual(SharedCoreTimelineMedia.handleId(from: resource.authenticatedURL), "timeline-media-s32")
+        } else {
+            XCTFail("Image rows with a handle must map to a media placeholder")
+        }
+        XCTAssertEqual(
+            SharedCoreDevicesLive.devices(
+                deviceId: "DEVICE1",
+                displayName: "iPhone",
+                isCurrent: true,
+                trust: "verified"
+            ).displayName,
+            "iPhone"
+        )
+        XCTAssertEqual(
+            SharedCorePresenceLive.presence(
+                userId: "@alice:example.org",
+                state: "online",
+                currentlyActive: true,
+                statusMsg: "On a call"
+            ).displayName,
+            "Online"
+        )
+        let stickers = SharedCoreImagePackRows.stickers(
+            packId: "user",
+            packName: "Mine",
+            contentJSON: #"{"pack":{"display_name":"Mine"},"images":{"smile":{"url":"mxc://example.org/abc","body":":)"},"bad":{"url":"https://example.org/x"}}}"#
+        )
+        XCTAssertEqual(stickers.map(\.body), [":)"])
+        XCTAssertEqual(stickers.first?.mxc, "mxc://example.org/abc")
+        XCTAssertEqual(stickers.first?.packName, "Mine")
+        let publicError = String(describing: SharedCoreTimelineRows.displayKind(
+            rowKind: "poll",
+            body: "Lunch?",
+            formattedBody: nil
+        ))
+        for forbidden in ["password", "syt_", "token", "mxc://"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreTimelineLiveRefreshMatchesRoomAndStream() {
+        XCTAssertTrue(
+            SharedCoreTimelineLiveRefresh.shouldRefresh(
+                watchingRoomID: "!s18:example.org",
+                watchingStreamId: "view-1",
+                updateRoomId: "!s18:example.org",
+                updateStreamId: "view-1"
+            )
+        )
+        XCTAssertTrue(
+            SharedCoreTimelineLiveRefresh.shouldRefresh(
+                watchingRoomID: "!s18:example.org",
+                watchingStreamId: "view-1",
+                updateRoomId: "!s18:example.org",
+                updateStreamId: ""
+            )
+        )
+        XCTAssertFalse(
+            SharedCoreTimelineLiveRefresh.shouldRefresh(
+                watchingRoomID: "!s18:example.org",
+                watchingStreamId: "view-1",
+                updateRoomId: "!other:example.org",
+                updateStreamId: "view-1"
+            )
+        )
+        XCTAssertFalse(
+            SharedCoreTimelineLiveRefresh.shouldRefresh(
+                watchingRoomID: "!s18:example.org",
+                watchingStreamId: "view-1",
+                updateRoomId: "!s18:example.org",
+                updateStreamId: "view-2"
+            )
+        )
+    }
+
+    func testSharedCoreTimelineUpdatesWithoutSessionYieldsEmptyWithoutEcho() async {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreTimelineService(host: host)
+        var outcomes: [TimelineLoadOutcome] = []
+        for await outcome in service.timelineUpdates(roomID: "!s18:example.org", focusedEventID: nil) {
+            outcomes.append(outcome)
+            let publicError = String(describing: outcome)
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+            break
+        }
+        XCTAssertEqual(outcomes, [.empty])
     }
 
     func testSharedCoreTimelineWithoutSessionFailsClosed() async {
@@ -292,6 +590,395 @@ final class SynaraCoreBindingsTests: XCTestCase {
             for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
                 XCTAssertFalse(publicError.contains(forbidden))
             }
+        }
+    }
+
+    func testSharedCoreTypingLiveMatchesRoomWithoutEcho() {
+        let users = SharedCoreTypingLive.users(
+            roomID: "!s21:example.org",
+            rooms: [
+                (roomId: "!other:example.org", userIds: ["@carol:example.org"]),
+                (roomId: "!s21:example.org", userIds: ["@bob:example.org"]),
+            ]
+        )
+        XCTAssertEqual(users, ["@bob:example.org"])
+        XCTAssertTrue(
+            SharedCoreTypingLive.shouldRefresh(watchingRoomID: "!s21:example.org", updateRoomId: "!s21:example.org")
+        )
+        XCTAssertFalse(
+            SharedCoreTypingLive.shouldRefresh(watchingRoomID: "!s21:example.org", updateRoomId: "!other:example.org")
+        )
+        let publicError = String(describing: users)
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreTypingUsersWithoutSessionYieldsEmptyWithoutEcho() async {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreTimelineService(host: host)
+        var batches: [[String]] = []
+        for await users in service.typingUsers(roomID: "!s21:example.org") {
+            batches.append(users)
+            let publicError = String(describing: users)
+            for forbidden in ["password", "syt_", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+            break
+        }
+        XCTAssertEqual(batches, [[]])
+    }
+
+    func testSharedCoreReadMarkersPrefersOwnReadWithoutEcho() {
+        let acknowledged = SharedCoreReadMarkers.acknowledgedEventID(
+            ownReadEventID: "$s24-own:example.org",
+            rowEventIDs: ["$local-1", "$s24-row:example.org"]
+        )
+        XCTAssertEqual(acknowledged, "$s24-own:example.org")
+        XCTAssertEqual(
+            SharedCoreReadMarkers.acknowledgedEventID(
+                ownReadEventID: "$pending-1",
+                rowEventIDs: ["$local-1", "$s24-row:example.org"]
+            ),
+            "$s24-row:example.org"
+        )
+        let publicError = String(describing: acknowledged)
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreReadMarkersWithoutSessionStayEmptyWithoutEcho() async {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreRoomReadMarkerService(host: host)
+        let marked = await service.markRoomAsRead(roomID: "!s24:example.org")
+        let fullyRead = await service.fullyReadEventID(roomID: "!s24:example.org")
+        XCTAssertNil(marked)
+        XCTAssertNil(fullyRead)
+        let publicError = String(describing: (marked, fullyRead))
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreRoomDetailsMapsSnapshotsWithoutEcho() {
+        let powerJSON = """
+        {"users_default":0,"events_default":0,"state_default":50,"invite":50,"kick":50,"ban":50,"redact":50,"events":{"m.room.name":50,"m.room.topic":50,"m.room.avatar":50,"m.room.canonical_alias":50},"users":{"@alice:example.org":100}}
+        """
+        let details = SharedCoreRoomDetails.details(
+            roomID: "!s22:example.org",
+            ownUserID: "@alice:example.org",
+            room: SharedCoreRoomDetails.RoomRow(
+                roomId: "!s22:example.org",
+                name: "Ops",
+                canonicalAlias: "#ops:example.org",
+                avatarUrl: "mxc://example.org/roomAvatar"
+            ),
+            members: [
+                SharedCoreRoomDetails.MemberRow(
+                    userId: "@alice:example.org",
+                    membership: "join",
+                    powerLevel: 100
+                ),
+                SharedCoreRoomDetails.MemberRow(
+                    userId: "@bob:example.org",
+                    membership: "leave",
+                    powerLevel: 0
+                ),
+            ],
+            powerLevelsJSON: powerJSON,
+            joinRule: "public",
+            topic: "Invite topic",
+            isEncrypted: true
+        )
+        XCTAssertEqual(details.name, "Ops")
+        XCTAssertEqual(details.topic, "Invite topic")
+        XCTAssertEqual(details.aliases, ["#ops:example.org"])
+        XCTAssertEqual(details.avatarURL, "mxc://example.org/roomAvatar")
+        XCTAssertEqual(details.memberCount, 1)
+        XCTAssertEqual(details.members.map(\.userID), ["@alice:example.org", "@bob:example.org"])
+        XCTAssertEqual(details.isPublic, true)
+        XCTAssertEqual(details.isEncrypted, true)
+        XCTAssertEqual(
+            SharedCoreRoomDetails.notificationMode("mentions"),
+            .mentionsOnly
+        )
+        XCTAssertEqual(SharedCoreRoomDetails.notificationMode("mute"), .mute)
+        XCTAssertEqual(SharedCoreRoomDetails.notificationMode("all"), .allMessages)
+        XCTAssertEqual(details.canInvite, true)
+        XCTAssertEqual(details.canEditName, true)
+        XCTAssertEqual(details.canEditAliases, true)
+        XCTAssertEqual(details.powerLevels?.ownUserLevel, 100)
+        XCTAssertEqual(details.notificationMode, .allMessages)
+        let publicError = String(describing: details)
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreRoomDetailsWithoutSessionFallsBackWithoutEcho() async {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreRoomManagementService(host: host)
+        let details = await service.roomDetails(roomID: "!s22:example.org")
+        XCTAssertEqual(details?.name, "!s22:example.org")
+        XCTAssertEqual(details?.canInvite, false)
+        XCTAssertNil(details?.powerLevels)
+        let publicError = String(describing: details)
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreReadMarkersPrefersOwnReadWithoutEcho() {
+        let acknowledged = SharedCoreReadMarkers.acknowledgedEventID(
+            ownReadEventID: "$s24-own:example.org",
+            rowEventIDs: ["$local-1", "$s24-row:example.org"]
+        )
+        XCTAssertEqual(acknowledged, "$s24-own:example.org")
+        XCTAssertEqual(
+            SharedCoreReadMarkers.acknowledgedEventID(
+                ownReadEventID: "$pending-1",
+                rowEventIDs: ["$local-1", "$s24-row:example.org"]
+            ),
+            "$s24-row:example.org"
+        )
+        let publicError = String(describing: acknowledged)
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreReadMarkersWithoutSessionStayEmptyWithoutEcho() async {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreRoomReadMarkerService(host: host)
+        let marked = await service.markRoomAsRead(roomID: "!s24:example.org")
+        let fullyRead = await service.fullyReadEventID(roomID: "!s24:example.org")
+        XCTAssertNil(marked)
+        XCTAssertNil(fullyRead)
+        let publicError = String(describing: (marked, fullyRead))
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreRoomListRowsMapsInviteAndSpaceWithoutEcho() {
+        let rooms = SharedCoreRoomListRows.rooms(
+            rooms: [
+                SharedCoreRoomListRows.RoomRow(
+                    roomId: "!s25:example.org",
+                    name: "Ops",
+                    avatarUrl: "mxc://example.org/room",
+                    membership: "invite",
+                    isDirect: false,
+                    unreadCount: 0,
+                    highlightCount: 0,
+                    markedUnread: false,
+                    lastActivityTs: 1_700_000_000_000,
+                    lastMessagePreview: nil
+                ),
+                SharedCoreRoomListRows.RoomRow(
+                    roomId: "!space:example.org",
+                    name: "Team",
+                    avatarUrl: nil,
+                    membership: "join",
+                    isDirect: false,
+                    unreadCount: 0,
+                    highlightCount: 0,
+                    markedUnread: false,
+                    lastActivityTs: nil,
+                    lastMessagePreview: "Hello from Alice"
+                ),
+            ],
+            invites: [
+                SharedCoreRoomListRows.InviteRow(
+                    roomId: "!s25:example.org",
+                    roomName: "Ops",
+                    roomTopic: "On-call",
+                    senderName: "Alex",
+                    reason: nil
+                ),
+            ],
+            spaceParents: [
+                SharedCoreRoomListRows.SpaceParentRow(
+                    roomId: "!s25:example.org",
+                    parentIds: ["!space:example.org"]
+                ),
+            ]
+        )
+        XCTAssertEqual(rooms.first?.lastMessagePreview, "Invited by Alex")
+        XCTAssertEqual(rooms.last?.lastMessagePreview, "Hello from Alice")
+        XCTAssertEqual(rooms.first?.parentSpaces, [SpaceSummary(id: "!space:example.org", name: "Team")])
+        XCTAssertEqual(rooms.first?.membership, .invited)
+        let publicError = String(describing: rooms)
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreRoomListWithoutSessionIsEmptyWithoutEcho() async {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreRoomListService(host: host)
+        let state = await service.loadRooms()
+        XCTAssertEqual(state, .empty)
+        let publicError = String(describing: state)
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreRoomListUnreadLookupUsesSnapshotWithoutEcho() {
+        XCTAssertTrue(SharedCoreRoomListRows.hasUnreadMessages(unreadCount: 2, hasHighlight: false))
+        XCTAssertTrue(SharedCoreRoomListRows.hasUnreadMessages(unreadCount: 0, hasHighlight: true))
+        XCTAssertFalse(SharedCoreRoomListRows.hasUnreadMessages(unreadCount: 0, hasHighlight: false))
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreRoomListService(host: host)
+        XCTAssertFalse(service.hasUnreadMessages(roomID: "!s26:example.org"))
+        XCTAssertFalse(service.isAgentRoom(roomID: "!s26:example.org"))
+        let publicError = String(describing: service.hasUnreadMessages(roomID: "!s26:example.org"))
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreSessionCryptoMapsLeftoverStatusWithoutEcho() {
+        let ready = SharedCoreSessionCrypto.status(
+            crossSigningState: "ready",
+            backupEnabled: true,
+            backupAvailability: "available",
+            backupDeviceState: "ready",
+            recoveryState: "ready",
+            secretStorageState: "ready"
+        )
+        XCTAssertEqual(ready.verification, .verified)
+        XCTAssertEqual(ready.recovery, .enabled)
+        XCTAssertEqual(ready.backup, .enabled)
+        XCTAssertNil(ready.hasDevicesToVerifyAgainst)
+        XCTAssertNil(ready.isLastDevice)
+        XCTAssertEqual(ready.unableToDecryptCount, 0)
+
+        let attention = SharedCoreSessionCrypto.status(
+            crossSigningState: "not_set_up",
+            backupEnabled: false,
+            backupAvailability: "available",
+            backupDeviceState: "downloading",
+            recoveryState: "incomplete",
+            secretStorageState: "locked"
+        )
+        XCTAssertEqual(attention.verification, .unverified)
+        XCTAssertEqual(attention.recovery, .incomplete)
+        XCTAssertEqual(attention.backup, .syncing)
+
+        let missing = SharedCoreSessionCrypto.status(
+            crossSigningState: "unavailable",
+            backupEnabled: false,
+            backupAvailability: "missing",
+            backupDeviceState: "unavailable",
+            recoveryState: "not_set_up",
+            secretStorageState: "unavailable"
+        )
+        XCTAssertEqual(missing.verification, .unverified)
+        XCTAssertEqual(missing.recovery, .disabled)
+        XCTAssertEqual(missing.backup, .unavailable)
+
+        let secretStorageFallback = SharedCoreSessionCrypto.status(
+            crossSigningState: nil,
+            backupEnabled: nil,
+            backupAvailability: nil,
+            backupDeviceState: nil,
+            recoveryState: nil,
+            secretStorageState: "locked"
+        )
+        XCTAssertEqual(secretStorageFallback.verification, .unknown)
+        XCTAssertEqual(secretStorageFallback.recovery, .incomplete)
+        XCTAssertEqual(secretStorageFallback.backup, .unknown)
+
+        let publicError = String(describing: ready)
+        for forbidden in ["password", "syt_", "token", "missing_secrets", "recovery_key"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreSessionStatusWithoutSessionIsUnknownWithoutEcho() async {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreCryptoStatusService(host: host)
+        let status = await service.sessionStatus()
+        XCTAssertEqual(status, .unknown)
+        let publicError = String(describing: status)
+        for forbidden in ["password", "syt_", "token", "missing_secrets", "recovery_key"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreRoomCryptoMapsInviteAndSessionWithoutEcho() {
+        let session = SharedCoreSessionCrypto.status(
+            crossSigningState: "not_set_up",
+            backupEnabled: false,
+            backupAvailability: "available",
+            backupDeviceState: "ready",
+            recoveryState: "incomplete",
+            secretStorageState: "locked"
+        )
+        let invited = SharedCoreSessionCrypto.roomStatus(isEncrypted: true, session: session)
+        XCTAssertEqual(invited.encryption, .encrypted)
+        XCTAssertEqual(invited.verification, .unverified)
+        XCTAssertEqual(invited.recovery, .incomplete)
+        XCTAssertEqual(invited.unableToDecryptCount, 0)
+        XCTAssertTrue(invited.needsCryptoActionBanner)
+
+        let joinedUnknown = SharedCoreSessionCrypto.roomStatus(isEncrypted: nil, session: session)
+        XCTAssertEqual(joinedUnknown.encryption, .unknown)
+        XCTAssertEqual(joinedUnknown.verification, .unverified)
+
+        let clearInvite = SharedCoreSessionCrypto.roomStatus(isEncrypted: false, session: .unknown)
+        XCTAssertEqual(clearInvite.encryption, .notEncrypted)
+        XCTAssertEqual(clearInvite.verification, .unknown)
+
+        let publicError = String(describing: invited)
+        for forbidden in ["password", "syt_", "token", "missing_secrets", "recovery_key"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreRoomStatusWithoutSessionIsUnknownWithoutEcho() async {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreCryptoStatusService(host: host)
+        let status = await service.roomStatus(roomID: "!s28:example.org")
+        XCTAssertEqual(status, .unknown)
+        let publicError = String(describing: status)
+        for forbidden in ["password", "syt_", "token", "missing_secrets", "recovery_key"] {
+            XCTAssertFalse(publicError.contains(forbidden))
         }
     }
 
@@ -365,6 +1052,74 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 XCTAssertFalse(publicError.contains(forbidden))
             }
         }
+    }
+
+    func testSharedCoreVerificationLiveMapsPhasesWithoutEcho() {
+        let incoming = SharedCoreVerificationLive.state(
+            phase: "requested",
+            direction: "incoming",
+            flowId: "flow-1",
+            otherUserId: "@bob:example.org",
+            otherDeviceId: "DEVICE1"
+        )
+        guard case let .requestReceived(request) = incoming else {
+            XCTFail("Incoming requested must map to requestReceived")
+            return
+        }
+        XCTAssertEqual(request.flowID, "flow-1")
+        XCTAssertEqual(request.userID, "@bob:example.org")
+        let publicError = String(describing: incoming)
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "requested",
+                direction: "outgoing",
+                flowId: "flow-2",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: nil
+            ),
+            .requestSent
+        )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "sas_ready",
+                direction: "outgoing",
+                flowId: "flow-3",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: "DEVICE1",
+                decimals: [1, 2, 3]
+            ),
+            .decimals([1, 2, 3])
+        )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "done",
+                direction: "outgoing",
+                flowId: "flow-4",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: nil
+            ),
+            .finished
+        )
+    }
+
+    func testSharedCoreVerificationActionsWithoutSessionFailClosedWithoutEcho() async {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreCryptoStatusService(host: host)
+        let started = await service.requestDeviceVerification()
+        let publicError = String(describing: started)
+        XCTAssertEqual(started, .failed("Device verification is unavailable."))
+        for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+        let accepted = await service.acceptVerificationRequest()
+        XCTAssertEqual(accepted, .unavailable("Device verification is unavailable."))
     }
 
     func testSharedCoreVerificationListWithoutSessionFailsClosed() async {

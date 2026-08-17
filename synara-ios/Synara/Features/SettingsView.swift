@@ -8,6 +8,8 @@ struct SettingsView: View {
     @State private var isRegisteringPush = false
     @State private var isLogoutConfirmationPresented = false
     @State private var sessionCryptoStatus: SessionCryptoStatus = .unknown
+    @State private var sessionDevices: [SharedCoreSessionDevice] = []
+    @State private var ownPresence: SharedCorePresence?
     @State private var coreSessionIdentity: CoreSessionIdentity?
     @State private var recoveryKey = ""
     @State private var cryptoActionMessage: String?
@@ -39,6 +41,17 @@ struct SettingsView: View {
                     Text("Not signed in")
                         .foregroundStyle(SynaraColor.secondaryText)
                         .accessibilityIdentifier("SettingsAccountSignedOut")
+                }
+            }
+
+            if let ownPresence {
+                Section("Presence") {
+                    SettingsInfoRow(title: "Status", value: ownPresence.displayName)
+                        .accessibilityIdentifier("SettingsPresenceStatus")
+                    if let status = ownPresence.statusMessage, status.isEmpty == false {
+                        SettingsInfoRow(title: "Message", value: status)
+                            .accessibilityIdentifier("SettingsPresenceMessage")
+                    }
                 }
             }
 
@@ -169,6 +182,17 @@ struct SettingsView: View {
                     .accessibilityIdentifier("SecurityLogoutWipeRow")
             }
 
+            if sessionDevices.isEmpty == false {
+                Section("Sessions") {
+                    ForEach(sessionDevices) { device in
+                        SettingsInfoRow(
+                            title: device.isCurrent ? "This device" : "Device",
+                            value: device.displayName
+                        )
+                    }
+                }
+            }
+
             Section("About") {
                 NavigationLink {
                     AboutSettingsView()
@@ -243,7 +267,9 @@ struct SettingsView: View {
             )
             await refreshNotificationStatus()
             await refreshCryptoStatus()
+            await refreshDevices()
             await refreshCoreSessionIdentity()
+            await refreshOwnPresence()
         }
     }
 
@@ -291,6 +317,31 @@ struct SettingsView: View {
         let status = await environment.crypto.sessionStatus()
         await MainActor.run {
             sessionCryptoStatus = status
+        }
+    }
+
+    private func refreshDevices() async {
+        let devices = await environment.crypto.sessionDevices()
+        await MainActor.run {
+            sessionDevices = devices
+        }
+    }
+
+    private func refreshOwnPresence() async {
+        let userID: String?
+        if case .signedIn(let session) = environment.session.currentState {
+            userID = session.userID
+        } else {
+            userID = nil
+        }
+        let presence: SharedCorePresence?
+        if let userID {
+            presence = await environment.matrix.presence(userID: userID)
+        } else {
+            presence = nil
+        }
+        await MainActor.run {
+            ownPresence = presence
         }
     }
 

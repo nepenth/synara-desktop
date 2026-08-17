@@ -623,6 +623,23 @@ test('F4 downloadMedia proxies matrix_media_download', async () => {
   assert.deepEqual(dl?.bytes, [10, 20, 30]);
 });
 
+test('P4-S36 downloadMedia prefers timeline handles over leftover mxc', async () => {
+  const seen: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const { invoke } = invokingWith({
+    matrix_media_download: { bytes: [7, 8, 9] },
+  });
+  const client = createNativeMatrixClient(async (command, args) => {
+    seen.push({ command, args });
+    return invoke(command, args);
+  });
+  const handle = `timeline-media-${'ab'.repeat(32)}`;
+  const dl = await client.downloadMedia(`synara-media://localhost/${handle}`);
+  assert.deepEqual(dl?.bytes, [7, 8, 9]);
+  assert.equal(seen[0]?.command, 'matrix_media_download');
+  assert.equal(seen[0]?.args?.contentUri, handle);
+  assert.notEqual(seen[0]?.args?.contentUri, 'mxc://example.org/f1');
+});
+
 test('F4 getProfileInfo returns session identity', async () => {
   const { invoke } = invokingWith({
     matrix_session_snapshot: {

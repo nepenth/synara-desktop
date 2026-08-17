@@ -80,6 +80,23 @@
 		1F6B9D2E4A7083C5B1D7E9A0 /* SharedCoreSessionRestore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3E1A7B94D0526F1E8A0C4D /* SharedCoreSessionRestore.swift */; };
 		6C9E0F1A2B3C4D5E6F708192 /* SharedCoreSessionLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B8D4E6A1C3059F7E0A1B3C5 /* SharedCoreSessionLogin.swift */; };
 		7D0F1A2B3C4D5E6F708192A3 /* SharedCoreSessionAttach.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C9E5F7B2D4160A8F1B2C4D6 /* SharedCoreSessionAttach.swift */; };
+		1B2C3D4E5F60718293A4B5C6 /* SharedCoreSyncStart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1B2C3D4E5F60718293A4B5 /* SharedCoreSyncStart.swift */; };
+		2C3D4E5F60718293A4B5C6D7 /* SharedCoreSessionBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C2D3E4F60718293A4B5C6D7 /* SharedCoreSessionBootstrap.swift */; };
+		3E4F60718293A4B5C6D7E8F9 /* SharedCoreTimelineViewUpdates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D3E4F60718293A4B5C6D7E8 /* SharedCoreTimelineViewUpdates.swift */; };
+		5A718293A4B5C6D7E8F90A1B /* SharedCoreTimelineRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F60718293A4B5C6D7E8F90A /* SharedCoreTimelineRows.swift */; };
+		718293A4B5C6D7E8F90A1B2C /* SharedCoreOwnerUpdates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60718293A4B5C6D7E8F90A1B /* SharedCoreOwnerUpdates.swift */; };
+		93A4B5C6D7E8F90A1B2C3D4E /* SharedCoreTimelineLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8293A4B5C6D7E8F90A1B2C3D /* SharedCoreTimelineLive.swift */; };
+		C6D7E8F90A1B2C3D4E5F6071 /* SharedCoreRoomListUpdates.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C6D7E8F90A1B2C3D4E5F60 /* SharedCoreRoomListUpdates.swift */; };
+		E8F90A1B2C3D4E5F60718293 /* SharedCoreVerificationLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E8F90A1B2C3D4E5F607182 /* SharedCoreVerificationLive.swift */; };
+		0B2C3D4E5F60718293A4B5C7 /* SharedCoreTypingLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = F91A2B3C4D5E6F708192A3B4 /* SharedCoreTypingLive.swift */; };
+		F1A2B3C4D5E6F708192A3B5D /* SharedCoreRoomDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0F1A2B3C4D5E6F708192A4C /* SharedCoreRoomDetails.swift */; };
+		B3C4D5E6F708192A3B4C5D6E /* SharedCoreReadMarkers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B3C4D5E6F708192A3B4C5D /* SharedCoreReadMarkers.swift */; };
+		D5E6F708192A3B4C5D6E7F80 /* SharedCoreRoomListRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4D5E6F708192A3B4C5D6E7F /* SharedCoreRoomListRows.swift */; };
+		F708192A3B4C5D6E7F8091A2 /* SharedCoreSessionCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6F708192A3B4C5D6E7F8091 /* SharedCoreSessionCrypto.swift */; };
+		B8192A3B4C5D6E7F8091A2C3 /* SharedCoreTimelineMedia.swift in Sources */ = {isa = PBXBuildFile; fileRef = A708192A3B4C5D6E7F8091B3 /* SharedCoreTimelineMedia.swift */; };
+		C92A3B4C5D6E7F8091A2B3D4 /* SharedCoreDevicesLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8192A3B4C5D6E7F8091C4 /* SharedCoreDevicesLive.swift */; };
+		E14C5D6E7F8091F708192A3B /* SharedCorePresenceLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = C92A3B4C5D6E7F8091D5E6F7 /* SharedCorePresenceLive.swift */; };
+		F25D6E7F8091A8192A3B4C5D /* SharedCoreImagePackRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = D03B4C5D6E7F8091E6F70819 /* SharedCoreImagePackRows.swift */; };
 		8E1A2B3C4D5E6F708192A4B5 /* SharedCoreRoomList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D0A6E8C3E5271B902C3D5E7 /* SharedCoreRoomList.swift */; };
 		9F2B3C4D5E6F708192A5B6C7 /* SharedCoreInvites.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1B7F9D4F6382C013D4E6F8 /* SharedCoreInvites.swift */; };
 		A03C4D5E6F708192A6B7C8D9 /* SharedCoreTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F2C8A0E507493D124E5F7A9 /* SharedCoreTimeline.swift */; };
@@ -264,6 +281,23 @@
 		8C3E1A7B94D0526F1E8A0C4D /* SharedCoreSessionRestore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionRestore.swift; sourceTree = "<group>"; };
 		2B8D4E6A1C3059F7E0A1B3C5 /* SharedCoreSessionLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionLogin.swift; sourceTree = "<group>"; };
 		3C9E5F7B2D4160A8F1B2C4D6 /* SharedCoreSessionAttach.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionAttach.swift; sourceTree = "<group>"; };
+		0A1B2C3D4E5F60718293A4B5 /* SharedCoreSyncStart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSyncStart.swift; sourceTree = "<group>"; };
+		1C2D3E4F60718293A4B5C6D7 /* SharedCoreSessionBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionBootstrap.swift; sourceTree = "<group>"; };
+		2D3E4F60718293A4B5C6D7E8 /* SharedCoreTimelineViewUpdates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineViewUpdates.swift; sourceTree = "<group>"; };
+		4F60718293A4B5C6D7E8F90A /* SharedCoreTimelineRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineRows.swift; sourceTree = "<group>"; };
+		60718293A4B5C6D7E8F90A1B /* SharedCoreOwnerUpdates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreOwnerUpdates.swift; sourceTree = "<group>"; };
+		8293A4B5C6D7E8F90A1B2C3D /* SharedCoreTimelineLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineLive.swift; sourceTree = "<group>"; };
+		B5C6D7E8F90A1B2C3D4E5F60 /* SharedCoreRoomListUpdates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomListUpdates.swift; sourceTree = "<group>"; };
+		D7E8F90A1B2C3D4E5F607182 /* SharedCoreVerificationLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreVerificationLive.swift; sourceTree = "<group>"; };
+		F91A2B3C4D5E6F708192A3B4 /* SharedCoreTypingLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTypingLive.swift; sourceTree = "<group>"; };
+		E0F1A2B3C4D5E6F708192A4C /* SharedCoreRoomDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomDetails.swift; sourceTree = "<group>"; };
+		A2B3C4D5E6F708192A3B4C5D /* SharedCoreReadMarkers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreReadMarkers.swift; sourceTree = "<group>"; };
+		C4D5E6F708192A3B4C5D6E7F /* SharedCoreRoomListRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomListRows.swift; sourceTree = "<group>"; };
+		E6F708192A3B4C5D6E7F8091 /* SharedCoreSessionCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionCrypto.swift; sourceTree = "<group>"; };
+		A708192A3B4C5D6E7F8091B3 /* SharedCoreTimelineMedia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineMedia.swift; sourceTree = "<group>"; };
+		B8192A3B4C5D6E7F8091C4 /* SharedCoreDevicesLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreDevicesLive.swift; sourceTree = "<group>"; };
+		C92A3B4C5D6E7F8091D5E6F7 /* SharedCorePresenceLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCorePresenceLive.swift; sourceTree = "<group>"; };
+		D03B4C5D6E7F8091E6F70819 /* SharedCoreImagePackRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreImagePackRows.swift; sourceTree = "<group>"; };
 		4D0A6E8C3E5271B902C3D5E7 /* SharedCoreRoomList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomList.swift; sourceTree = "<group>"; };
 		5E1B7F9D4F6382C013D4E6F8 /* SharedCoreInvites.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreInvites.swift; sourceTree = "<group>"; };
 		6F2C8A0E507493D124E5F7A9 /* SharedCoreTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimeline.swift; sourceTree = "<group>"; };
@@ -443,6 +477,23 @@
 				8C3E1A7B94D0526F1E8A0C4D /* SharedCoreSessionRestore.swift */,
 				2B8D4E6A1C3059F7E0A1B3C5 /* SharedCoreSessionLogin.swift */,
 				3C9E5F7B2D4160A8F1B2C4D6 /* SharedCoreSessionAttach.swift */,
+				0A1B2C3D4E5F60718293A4B5 /* SharedCoreSyncStart.swift */,
+				1C2D3E4F60718293A4B5C6D7 /* SharedCoreSessionBootstrap.swift */,
+				2D3E4F60718293A4B5C6D7E8 /* SharedCoreTimelineViewUpdates.swift */,
+				4F60718293A4B5C6D7E8F90A /* SharedCoreTimelineRows.swift */,
+				60718293A4B5C6D7E8F90A1B /* SharedCoreOwnerUpdates.swift */,
+				8293A4B5C6D7E8F90A1B2C3D /* SharedCoreTimelineLive.swift */,
+				B5C6D7E8F90A1B2C3D4E5F60 /* SharedCoreRoomListUpdates.swift */,
+				D7E8F90A1B2C3D4E5F607182 /* SharedCoreVerificationLive.swift */,
+				F91A2B3C4D5E6F708192A3B4 /* SharedCoreTypingLive.swift */,
+				E0F1A2B3C4D5E6F708192A4C /* SharedCoreRoomDetails.swift */,
+				A2B3C4D5E6F708192A3B4C5D /* SharedCoreReadMarkers.swift */,
+				C4D5E6F708192A3B4C5D6E7F /* SharedCoreRoomListRows.swift */,
+				E6F708192A3B4C5D6E7F8091 /* SharedCoreSessionCrypto.swift */,
+				A708192A3B4C5D6E7F8091B3 /* SharedCoreTimelineMedia.swift */,
+				B8192A3B4C5D6E7F8091C4 /* SharedCoreDevicesLive.swift */,
+				C92A3B4C5D6E7F8091D5E6F7 /* SharedCorePresenceLive.swift */,
+				D03B4C5D6E7F8091E6F70819 /* SharedCoreImagePackRows.swift */,
 				4D0A6E8C3E5271B902C3D5E7 /* SharedCoreRoomList.swift */,
 				5E1B7F9D4F6382C013D4E6F8 /* SharedCoreInvites.swift */,
 				6F2C8A0E507493D124E5F7A9 /* SharedCoreTimeline.swift */,
@@ -776,6 +827,23 @@
 				1F6B9D2E4A7083C5B1D7E9A0 /* SharedCoreSessionRestore.swift in Sources */,
 				6C9E0F1A2B3C4D5E6F708192 /* SharedCoreSessionLogin.swift in Sources */,
 				7D0F1A2B3C4D5E6F708192A3 /* SharedCoreSessionAttach.swift in Sources */,
+				1B2C3D4E5F60718293A4B5C6 /* SharedCoreSyncStart.swift in Sources */,
+				2C3D4E5F60718293A4B5C6D7 /* SharedCoreSessionBootstrap.swift in Sources */,
+				3E4F60718293A4B5C6D7E8F9 /* SharedCoreTimelineViewUpdates.swift in Sources */,
+				5A718293A4B5C6D7E8F90A1B /* SharedCoreTimelineRows.swift in Sources */,
+				718293A4B5C6D7E8F90A1B2C /* SharedCoreOwnerUpdates.swift in Sources */,
+				93A4B5C6D7E8F90A1B2C3D4E /* SharedCoreTimelineLive.swift in Sources */,
+				C6D7E8F90A1B2C3D4E5F6071 /* SharedCoreRoomListUpdates.swift in Sources */,
+				E8F90A1B2C3D4E5F60718293 /* SharedCoreVerificationLive.swift in Sources */,
+				0B2C3D4E5F60718293A4B5C7 /* SharedCoreTypingLive.swift in Sources */,
+				F1A2B3C4D5E6F708192A3B5D /* SharedCoreRoomDetails.swift in Sources */,
+				B3C4D5E6F708192A3B4C5D6E /* SharedCoreReadMarkers.swift in Sources */,
+				D5E6F708192A3B4C5D6E7F80 /* SharedCoreRoomListRows.swift in Sources */,
+				F708192A3B4C5D6E7F8091A2 /* SharedCoreSessionCrypto.swift in Sources */,
+				B8192A3B4C5D6E7F8091A2C3 /* SharedCoreTimelineMedia.swift in Sources */,
+				C92A3B4C5D6E7F8091A2B3D4 /* SharedCoreDevicesLive.swift in Sources */,
+				E14C5D6E7F8091F708192A3B /* SharedCorePresenceLive.swift in Sources */,
+				F25D6E7F8091A8192A3B4C5D /* SharedCoreImagePackRows.swift in Sources */,
 				8E1A2B3C4D5E6F708192A4B5 /* SharedCoreRoomList.swift in Sources */,
 				9F2B3C4D5E6F708192A5B6C7 /* SharedCoreInvites.swift in Sources */,
 				A03C4D5E6F708192A6B7C8D9 /* SharedCoreTimeline.swift in Sources */,

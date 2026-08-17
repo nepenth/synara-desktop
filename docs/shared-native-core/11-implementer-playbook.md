@@ -5,6 +5,8 @@ Read it before editing product code. If this file and an older plan
 paragraph disagree, this file plus `10-current-handoff.md` win for
 *what to do next*; ADR-0003 plus `01-context-and-goals.md` win for
 *what done means*; ADR-0004 wins for *what may be written in Rust*.
+The language-boundary loop operator is
+[13-language-boundary-goal-graph.md](13-language-boundary-goal-graph.md).
 To launch a Long-running Cloud Agent, use
 [14-long-running-agent.md](14-long-running-agent.md).
 
@@ -37,7 +39,7 @@ shared engine. Never claim P5 or MAC-IOS-006 is done.
 | Surface | Today |
 |---|---|
 | Desktop macOS/Linux | Live Matrix `Client` and native owners live in Core. React still invokes `matrix_*`. **111** of those names are registered on `Core::command`. Desktop is a thinner shell, not a thin shell. |
-| iOS | UniFFI scaffold through S9-31 + S11 NSE read-only store helper (never starts sync; not a product NSE swap) + **S10 leftover UniFFI** (#986). `AppEnvironment.live()` constructs one caller-owned `SharedCore` and SharedCore product services. Product `MatrixRustSDK` callers are retired (comments may remain). Leftover wipe/logout are local-only; recover/raw-send/media/pusher/notification/avatar and leftover status reads fail closed without a live homeserver and do not start SyncService. This is not iOS-on-engine and not P4 acceptance. Local Apple generate has been run; generated sources remain gitignored. Checked-in `SynaraCore.swift` remains the bootstrap stub. iOS CI is re-enabled (#988): `ios-tests` runs when the iOS path filter matches; Quality on #988 was green including iOS (ran, not skipped). XCTest construction of `SharedCore` is not iOS-on-engine. |
+| iOS | UniFFI scaffold through S9-31 + S11 NSE read-only store helper (never starts sync; not a product NSE swap) + **S10 leftover UniFFI** (#986). `AppEnvironment.live()` constructs one caller-owned `SharedCore` and SharedCore product services. Product `MatrixRustSDK` callers are retired (comments may remain). Leftover wipe/logout are local-only; recover/raw-send/media/pusher/notification/avatar and leftover status reads fail closed without a live homeserver and do not start SyncService. This is not iOS-on-engine and not P4 acceptance. Local Apple generate has been run; generated sources remain gitignored. Checked-in `SynaraCore.swift` remains the bootstrap stub. Hosted iOS CI is paused (#1003) until `main` is stable; Quality treats skipped `ios-tests` as OK. #988 had previously re-enabled it. XCTest construction of `SharedCore` is not iOS-on-engine. |
 | `main` | SNC engineering tip. #991 merged `feature/shared-native-core` (`172df893`, including #992) with prior `main` (`60876379`). Quality + iOS + package smoke were green. |
 | Release | Forbidden until program-done is accepted and P5 operator/Apple gates pass. #991 is not a release. |
 
@@ -118,6 +120,7 @@ These are numbered owner calls. Do not re-litigate them in a slice PR.
 | 12 | Apple proof stays operator-gated. |
 | 13 | DeepSeek paused. Grok does the routes. |
 | 14 | [ADR 0004](../adr/0004-rust-language-boundaries.md): apply the can/should rubric before new Rust. No Slint/Dioxus/egui desktop rewrite. No Tauri iOS or Rust-on-iOS UI. No Node CI/guardrail rewrite. The twenty-one leftovers in section 6 stay desktop. Native media cutover deletes JS decrypt; it does not register byte commands on `Core::command`. iOS-on-engine follows section 5 and section 9; do not start P5 from a language-boundary PR. |
+| 15 | Leftover recover, raw-send, notification-mode, media bytes, room-avatar bytes, and pusher I/O stay fail-closed without a live homeserver. Do not invent a Core recover command or a byte/secret envelope. Leftover **status** that already has a Core owner (backup, room-key transfer) is the live leftover path. Crypto/cross-signing status stay on `Platform` (`IosFailClosedPlatform` remains fail-closed). |
 
 ### Language boundaries (ADR 0004)
 
@@ -427,6 +430,83 @@ P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        homeserver; SyncService not started)
 P4-S11 NSE read-only store API        LANDED #984
        (never boot sync in NSE; helper + XCTest; not a product NSE swap)
+P4-S12 start attached SyncService     this slice
+       SharedCore.start_sync only. NSE still cannot start sync.
+       Not P4 acceptance. Do not start P5.
+P4-S13 restore bootstrap              stacked on S12
+       Cold-start restore → attach → start on a fresh SharedCore.
+       Product `SharedCoreMatrixClientService.start` is the one path.
+       NSE still cannot start sync. Not P4 acceptance.
+P4-S14 emit sinks                     stacked on S12/S13
+       Timeline view-delta poll queue only. Summaries, not row
+       bodies. NSE still cannot poll. Not Platform::emit.
+P4-S15 leftover I/O live              stacked on S12–S14
+       Owner leftover status after attach. Homeserver leftover
+       I/O stays fail-closed (decision 15). No byte/secret
+       envelopes.
+P4-S16 product timeline rows          stacked on S12–S15
+       Snapshot DTO keeps privacy-safe row bodies. Product
+       SharedCoreTimelineService maps them. No media bytes.
+P4-S17 owner emit poll                stacked on S12–S16
+       Presence/devices/join_rules/image_packs poll queue.
+       Summaries only. No presence user id. NSE cannot poll.
+P4-S18 product timeline live poll     stacked on S12–S17
+       SharedCoreTimelineService.timelineUpdates stays open and
+       re-fetches on S14 summaries. One host poller. No room-list
+       emit. No media bytes.
+P4-S19 room-list live poll            stacked on S12–S18
+       After start_sync, a joined-room entries stream queues
+       session-generation wake-ups. Product roomUpdates re-fetches
+       the existing snapshot. No room ids on the DTO.
+P4-S20 product verification           stacked on S12–S19
+       SharedCoreCryptoStatusService calls list/SAS. verification
+       family on the S17 owner queue. No tokens or SAS secrets.
+P4-S21 product typing live            stacked on S12–S20
+       typing family on the S17 owner queue (room id only).
+       Product typingUsers re-fetches the existing snapshot.
+P4-S22 product room details           stacked on S12–S21
+       Product roomDetails maps list / members / power /
+       join-rule / invite snapshots. No media bytes. No UDL.
+P4-S23 product foreground resume      stacked on S12–S22
+       Product resumeFromForeground uses the S13 bootstrap.
+       Second start is a restart. No pause command. No NSE.
+P4-S24 product read markers           stacked on S12–S23
+       Product mark-as-read uses timeline set_read_state.
+       No HTTP access token. No media bytes. No UDL.
+P4-S25 product room-list spaces/invites stacked on S12–S24
+       Product loadRooms maps space parents and invite
+       previews. Joined last-message stays empty. No UDL.
+P4-S26 product room-list unread lookup stacked on S12–S25
+       Product hasUnreadMessages uses the cached snapshot.
+       Agent rooms stay false without Core agent cards.
+P4-S27 product session crypto status  stacked on S12–S26
+       Product sessionStatus maps leftover backup / crypto and
+       secret-storage status. No recovery keys. No UDL.
+P4-S28 product room crypto status     stacked on S12–S27
+       Product roomStatus reuses the S27 mapper plus invite
+       encryption. Joined-room encryption stays unknown. No UDL.
+P4-S29 product timeline non-message rows stacked on S12–S28
+       Poll / membership / state / call / other bodies already
+       on the row DTO map to text. No media bytes. No UDL.
+P4-S30 room-list encryption + notify mode stacked on S12–S29
+       UniFFI room-list DTO keeps is_encrypted and notification_mode
+       already on the Core snapshot. Product roomStatus / details
+       consume them. No last-message invention.
+P4-S31/S32/S33 timeline reactions + media handle
+       Row DTO keeps reaction counts and opaque media handles.
+       SharedCore.timeline_media_bytes is a dedicated UniFFI byte
+       channel (ADR 0005). Not Core.command. NSE cannot download.
+P4-S34 product device list              stacked
+       Settings lists leftover-safe device snapshot rows. No keys.
+P4-S35 last-message preview             stacked
+       Core projects a privacy-safe last_message_preview. UniFFI
+       room-list DTO and both UIs consume it. No mxc/token.
+P4-S36 desktop media handle cutover     stacked
+       Leftover matrix_media_download resolves timeline-media-*
+       through the native owner. Not Core.command.
+P4-S37 presence + sticker pack UI       stacked
+       Settings/room details consume presence. Composer lists
+       image-pack names and sends via SharedCoreSendSticker.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -645,10 +725,400 @@ not iOS-on-engine and not P4 acceptance. The spike under
 
 **Remaining honesty:** `SessionLoginDto` is identity-only (no access
 token, by design). Product `AuthenticatedSession` still stores an
-empty access token after SharedCore login. SharedCore attach does not
-start SyncService. Product event emit sinks are no-op. Desktop
-twenty-one leftovers stay unregistered on `Core::command`. iOS CI
-is re-enabled (#988). Do not start P5.
+empty access token after SharedCore login. SharedCore attach still
+does not start SyncService; P4-S12 adds a separate `start_sync`.
+P4-S13 product `start(session:)` restores, attaches, then starts.
+Product event emit sinks: timeline view-delta is a poll queue (S14);
+presence, devices, join_rules, and image_packs remain no-op. Desktop
+twenty-one leftovers stay unregistered on `Core::command`. iOS CI is
+re-enabled (#988). Do not start P5. This is not iOS-on-engine.
+
+### 9.7 P4-S12 — start attached SyncService
+
+S10 retired product `MatrixRustSDK` callers. The S3d reason for leaving
+SyncService unstarted (no dual live sync) is gone. This slice starts
+the already-attached owner only.
+
+**Lands:** `SharedCore.start_sync` FFI. Helper + XCTest. NSE still
+fail-closes. Product login no longer starts sync; S13 bootstrap does.
+
+**Must not land:** leftover registration; byte/secret envelopes; starting
+sync in NSE; P5; claiming iOS-on-engine or P4 acceptance; a generic
+`Core.command` FFI; emit-sink product events.
+
+**UDL:** adds `start_sync` on `SharedCore`. Section 9.2 disk gate
+applies. Implement in `crates/synara-core/src/shared_core_ffi.rs`.
+Do not change NSE methods to start sync.
+
+**Tests:** no-attach fail-closed; NSE forbids start; planted attach then
+start returns a privacy-safe readiness DTO with no tokens, user id, or
+URL. Failed errors stay static.
+
+### 9.8 P4-S13 — restore bootstrap
+
+S12 starts an already-attached owner. Cold launch still only restored
+the Keychain `AuthenticatedSession` and never called SharedCore
+restore, so `start_sync` fail-closed.
+
+**Lands:** `SharedCoreSessionBootstrap.prepareLiveSession` runs restore
+→ attach → start, each fail-closed. Product `start(session:)` uses that
+one path. Login no longer attaches or starts on its own. Rust proof:
+planted persist on core A, restore+attach+start on core B with the same
+vault.
+
+**Must not land:** leftover registration; byte/secret envelopes; starting
+sync in NSE; P5; claiming iOS-on-engine; emit-sink product events (S14).
+
+### 9.9 P4-S14 — timeline view-delta emit sink
+
+S13 starts sync on cold launch. Timeline still cannot tell iOS that
+rows changed because attach used a no-op `TimelineViewUpdateEmit`.
+
+**Lands:** attach installs a bounded queue (cap 32, drop oldest).
+`SharedCore.poll_timeline_view_updates` drains privacy-safe summaries
+only (`schema_version`, `session_generation`, `stream_id`, `room_id`,
+`revision`, `op_count`). Empty queue is success. Helper + XCTest. NSE
+still fail-closes. iOS re-fetches snapshot via existing timeline
+open/paginate.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+`Platform::emit` for product events; row bodies or tokens on the DTO;
+polling in NSE; room-list live updates; presence/devices/join_rules/
+image_packs sinks; P5; claiming iOS-on-engine or P4 acceptance; a
+generic `Core.command` FFI.
+
+**UDL:** adds `poll_timeline_view_updates` on `SharedCore`. Section 9.2
+disk gate applies. Implement in `crates/synara-core/src/shared_core_ffi.rs`.
+Do not change NSE methods to poll.
+
+**Tests:** UDL surface; poll empty without attach; NSE forbids poll;
+enqueue then poll is privacy-safe with no token, user id, or URL echo.
+Failed errors stay static.
+
+### 9.10 P4-S15 — leftover I/O that already has a Core owner
+
+S10 authorized leftover UniFFI. Status wrappers already call Core
+commands. After S13 attach, leftover **status** that lives on
+`NativeDeviceOwner` can return a privacy-safe DTO without a homeserver.
+Leftover recover/raw-send/media/pusher still need live I/O.
+
+**Lands:** planted attach then `room_key_transfer_status` is live and
+privacy-safe. Owner no-session leftover status stays static. Recover,
+raw send, and media after attach stay `p4-s10-leftover-unavailable`.
+Owner decision 15. Helper already exists (`SharedCoreLeftovers`).
+XCTest fail-closed leftover status without attach.
+
+**Must not land:** leftover registration on `Core::command`; byte/secret
+envelopes; implementing recover/media against a live homeserver;
+starting leftover I/O in NSE; P5; claiming iOS-on-engine or P4
+acceptance.
+
+**Tests:** leftover backup/room-key status without attach is
+`p2-*-no-session` with no token/user/URL echo. After planted
+attach+start, room-key status is a DTO; recover/raw-send/media stay
+unavailable and never echo secrets.
+
+### 9.11 P4-S16 — product timeline rows
+
+S6 open/paginate returned a Core snapshot but the UniFFI DTO kept only
+`row_count`. Product `SharedCoreTimelineService` always returned
+`.empty`, and it opened with kind `live` which the FFI rejected.
+
+**Lands:** `TimelineSnapshotDto.rows` as privacy-safe
+`TimelineViewRowDto` (kind, ids, sender, body, timestamp). `live` is
+an alias for `live_bottom`. Product maps rows to `TimelineItem` and
+keeps the stream for paginate. No media bytes.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+`Platform::emit`; P5; claiming iOS-on-engine or P4 acceptance.
+
+**Tests:** UDL has `rows`; `live` open without session is still
+`p2-timeline-open-no-session`; mapper unit test has no token echo.
+
+### 9.12 P4-S17 — remaining owner emit sinks
+
+S14 queued timeline view-deltas. Presence, devices, join_rules, and
+image_packs still used `Arc::new(|_| {})` at attach.
+
+**Lands:** attach installs a bounded owner-update queue (cap 32).
+`SharedCore.poll_owner_updates` drains `{ family, session_generation,
+room_id? }`. Presence user ids never appear. Empty queue is success.
+NSE fail-closes. Helper + XCTest.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+`Platform::emit`; P5; claiming iOS-on-engine or P4 acceptance.
+
+**Tests:** UDL surface; poll empty without attach; NSE forbids poll;
+enqueue then poll is privacy-safe.
+
+### 9.13 P4-S18 — product timeline live poll
+
+S14 queued view-delta summaries. Product `timelineUpdates` still used
+the one-shot protocol default, so the UI stream finished after the
+first open.
+
+**Lands:** `SharedCoreTimelineService.timelineUpdates` yields the
+initial open, then stays open. One `SharedCoreLivePoller` per host
+drains `poll_timeline_view_updates` so two rooms cannot steal each
+other's summaries. Matching `room_id` (and stream id when known)
+re-fetches via `timeline_jump_latest` on live, or re-open when
+focused. Helper + XCTest.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+`Platform::emit`; room-list emit; P5; claiming iOS-on-engine or P4
+acceptance.
+
+**Tests:** refresh matcher is room/stream-safe; without a session the
+product stream yields `.empty` with no token echo and can be cancelled.
+
+### 9.14 P4-S19 — room-list live emit
+
+S14 deferred room-list live because attach is before SyncService
+start. S12 starts that owner. Product `roomUpdates` still finished
+immediately.
+
+**Lands:** `start_sync` starts a joined-room entries listener in the
+background (start_sync does not wait on `all_rooms`).
+`SharedCore.poll_room_list_updates` drains `{ session_generation }`
+only. Empty queue is success. NSE fail-closes. Product
+`SharedCoreRoomListService.roomUpdates` stays open and re-fetches
+via the existing snapshot. Helper + XCTest.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+`Platform::emit`; room ids/names on the DTO; P5; claiming
+iOS-on-engine or P4 acceptance.
+
+**Tests:** UDL surface; poll empty without start; NSE forbids poll;
+enqueue then poll is privacy-safe with no room id, user id, or URL
+echo.
+
+### 9.15 P4-S20 — product verification consume
+
+S8/S9 typed list/SAS wrappers exist. Product crypto still finished
+`verificationUpdates` immediately and returned unavailable for every
+SAS action. Incoming requests had no owner emit.
+
+**Lands:** attach queues `verification` on the S17 owner poll (no user
+id). Incoming register and SAS mutations signal. Product maps inbox
+rows to `CryptoVerificationState` and calls start/accept/begin_sas/
+confirm/mismatch/cancel. Helper + XCTest. Recover stays leftover.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+`Platform::emit`; P5; claiming iOS-on-engine or P4 acceptance.
+
+**Tests:** phase mapper has no token echo; start without session is
+fail-closed; accept without a flow is unavailable.
+
+### 9.16 P4-S21 — product typing live
+
+S7 typed typing snapshot/set exist. Product `typingUsers` still
+yielded one empty list and finished. The typing owner had no emit.
+
+**Lands:** attach queues `typing` on the S17 owner poll with `room_id`
+only (no user ids). Product `SharedCoreTimelineService.typingUsers`
+stays open and re-fetches via the existing snapshot. Helper + XCTest.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+`Platform::emit`; user ids on the owner DTO; P5; claiming
+iOS-on-engine or P4 acceptance.
+
+**Tests:** room matcher is privacy-safe; without a session the product
+stream yields `[]` with no token echo and can be cancelled.
+
+### 9.17 P4-S22 — product room details
+
+S9-3/S9-16 typed join-rule and members snapshots exist. Product
+`roomDetails` still returned a placeholder (name = room id, no
+permissions). Room details UI already loads that one-shot.
+
+**Lands:** product `SharedCoreRoomManagementService.roomDetails`
+maps the existing list / members / power-level / join-rule / invite
+snapshots. Helper + XCTest. Topic and encryption come from the
+invite snapshot when the room is an invite. Notification mode stays
+the leftover default.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+UDL changes; room-avatar bytes; P5; claiming iOS-on-engine or P4
+acceptance.
+
+**Tests:** mapper fills name/members/permissions without token echo;
+without a session the product path falls back to the room id and
+disables edits.
+
+### 9.18 P4-S23 — product foreground resume
+
+S13 made `start(session:)` the one restore → attach → start path.
+`SynaraApp` already calls `resumeFromForeground` on scene active, but
+the SharedCore implementation was a no-op. S12 already treats a
+second `start_sync` as a restart.
+
+**Lands:** product `resumeFromForeground` uses the same S13 bootstrap
+as `start`. Helper comment + XCTest. Pause stays a no-op (no Core
+pause). NSE background sync stays false.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+starting sync in NSE; a pause/stop SyncService command; P5; claiming
+iOS-on-engine or P4 acceptance.
+
+**Tests:** without a session, resume stays `.stopped` with no token
+echo.
+
+### 9.19 P4-S24 — product read markers
+
+S9-19 typed set-read-state exists. Product mark-as-read still used
+homeserver HTTP with the empty SharedCore access token, so the live
+path could not acknowledge. `clearMarkedUnread` was a no-op.
+
+**Lands:** product `SharedCoreRoomReadMarkerService` opens a live
+view, calls `mark_read`, and maps `own_read_event_id` (else the last
+ackable row). Helper + XCTest. Temporary stream is closed. HTTP
+Bearer leftovers stay unused on the live path.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+UDL changes; starting sync in NSE; P5; claiming iOS-on-engine or
+P4 acceptance.
+
+**Tests:** mapper prefers own-read and skips `$local` / `$pending`;
+without a session mark/read stay nil with no token echo.
+
+### 9.20 P4-S25 — product room-list spaces and invite previews
+
+S4/S5/S9-17 typed room-list, invite, and space-parent snapshots
+exist. Product `loadRooms` still left `lastMessagePreview` empty and
+`parentSpaces` empty, so space chips and invite rows had no Core
+text.
+
+**Lands:** product `SharedCoreRoomListService.loadRooms` maps invite
+sender/topic/reason into the preview for invited rooms and space
+parent ids/names from the parents snapshot. Helper + XCTest.
+Joined-room last-message text stays empty (not on the list DTO).
+
+**Must not land:** leftover registration; byte/secret envelopes;
+UDL changes; last-message invention; P5; claiming iOS-on-engine or
+P4 acceptance.
+
+**Tests:** mapper fills invite preview and parent space without
+token echo; without a session `loadRooms` is empty.
+
+### 9.21 P4-S26 — product room-list unread lookup
+
+S25 mapped unread counts onto `RoomSummary`, but product
+`hasUnreadMessages` still used the protocol default `false`. Timeline
+focus already calls that method to decide whether to load a fully-read
+marker.
+
+**Lands:** `SharedCoreRoomListService` caches the last snapshot and
+answers unread from `unreadCount` / `hasHighlight`. Agent rooms stay
+false unless a mapped row already has agent activity. Helper + XCTest.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+UDL changes; inventing agent cards; P5; claiming iOS-on-engine or
+P4 acceptance.
+
+**Tests:** unread helper is true for count or highlight; without a
+cached snapshot the product lookup is false with no token echo.
+
+### 9.22 P4-S27 — product session crypto status
+
+Settings already shows Device Verification, Key Recovery, and Key
+Backup from `sessionStatus()`, but the SharedCore impl hardcoded
+recovery as unknown and mapped backup from `encryptionEnabled`.
+Decision 15 leftover **status** already has Core owners for backup
+and secret-storage.
+
+**Lands:** product `SharedCoreCryptoStatusService.sessionStatus`
+composes leftover crypto/backup plus `secret_storage_status` through
+`SharedCoreSessionCrypto`. Recovery keys and missing-secret lists
+never appear on the product status. `roomStatus` is S28.
+`retryDecryption` stays fail-closed. Helper + XCTest.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+UDL changes; mapping recover I/O as live; P5; claiming iOS-on-engine
+or P4 acceptance.
+
+**Tests:** mapper covers ready / incomplete / missing / secret-storage
+fallback without token or recovery-key echo; without a session
+`sessionStatus` is unknown.
+
+### 9.23 P4-S28 — product room crypto status
+
+Timeline already calls `roomStatus` for the crypto banner, but the
+SharedCore impl returned `.unknown`. S27 mapped leftover session
+status; invite snapshots already expose `is_encrypted`.
+
+**Lands:** product `SharedCoreCryptoStatusService.roomStatus` reuses
+the S27 session mapper and invite encryption when the room is an
+invite. Joined-room encryption stays unknown (not on the list DTO).
+UTD count stays 0. `retryDecryption` stays fail-closed. Helper +
+XCTest.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+UDL changes; inventing joined-room encryption or UTD counts; P5;
+claiming iOS-on-engine or P4 acceptance.
+
+**Tests:** mapper fills invite encryption and session recovery
+without token echo; without a session `roomStatus` is unknown.
+
+### 9.24 P4-S29 — product timeline non-message row bodies
+
+S16 mapped message / redacted / encrypted rows. Core already puts
+poll questions and membership / state / call summaries in `body`,
+but the product mapper showed `Unsupported event: poll`.
+
+**Lands:** `SharedCoreTimelineRows.displayKind` maps poll /
+membership / state / call / other / sticker to `.text` when body
+is non-empty. Empty sticker stays unknown. Virtual kinds still
+skip. No media bytes. No mxc invention. Helper + XCTest.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+UDL changes; media placeholders without a URL; P5; claiming
+iOS-on-engine or P4 acceptance.
+
+**Tests:** poll / membership / state / call map to text; empty
+sticker stays unknown; date separators stay skipped; no token or
+mxc echo.
+
+### 9.25 P4-S30–S34 — room encryption, reactions, media handle, devices
+
+Core already projected joined-room encryption, notification mode,
+timeline reactions, and opaque media handles. UniFFI dropped them.
+Settings had no device list despite `device_snapshot`.
+
+**Lands:** room-list DTO `is_encrypted` / `notification_mode`;
+timeline row reactions + media handle metadata; `timeline_media_bytes`
+dedicated UniFFI channel (ADR 0005); Settings device rows from the
+existing snapshot. No `mxc://` on the row DTO. No leftover
+registration. NSE cannot download.
+
+**Must not land:** `matrix_send_attachment` on Core; byte/secret
+envelopes; last-message invention; P5; claiming iOS-on-engine or
+P4 acceptance.
+
+**Tests:** UDL has the new fields and `timeline_media_bytes`; without
+a session media fail-closes with no handle/mxc/token echo; Swift
+mappers cover notify mode, reactions, handle URL, and device name.
+
+### 9.26 P4-S35–S37 — last-message preview, desktop media cutover, presence/stickers
+
+Joined-room last-message text was empty even though the SDK latest
+event is available. Desktop leftover `mxc://` download was still the
+documented live path. iOS had presence and image-pack wrappers with
+no product UI.
+
+**Lands:** privacy-safe `last_message_preview` on Core / UniFFI /
+product room lists; desktop `matrix_media_download` resolves
+`timeline-media-*` handles through the native owner (ADR 0005);
+Settings/room-details presence and a composer sticker-pack list that
+sends via `SharedCoreSendSticker`. No leftover registration. No
+pack image bytes.
+
+**Must not land:** `matrix_send_attachment` on Core; byte/secret
+envelopes; inventing preview text without a latest event; P5;
+claiming iOS-on-engine or P4 acceptance.
+
+**Tests:** UDL has `last_message_preview`; preview sanitizer rejects
+mxc/token; handle download prefers `timeline-media-*`; Swift mappers
+cover joined preview, presence display name, and pack rows.
 
 ---
 

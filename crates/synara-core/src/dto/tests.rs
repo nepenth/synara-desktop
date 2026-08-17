@@ -109,6 +109,7 @@ fn room_summary_round_trip_and_fixture() {
         marked_unread: false,
         notification_mode: Some(NotificationMode::Mentions),
         last_activity_ts: Some(1_720_000_000_000),
+        last_message_preview: Some("Hello from Alice".into()),
         heroes: Some(vec![RoomHero {
             user_id: "@bob:example.org".into(),
             display_name: Some("Bob".into()),
@@ -358,6 +359,7 @@ fn room_summary_is_call_defaults_and_round_trips() {
         marked_unread: false,
         notification_mode: None,
         last_activity_ts: None,
+        last_message_preview: None,
         heroes: None,
         tombstone_successor_room_id: None,
     };

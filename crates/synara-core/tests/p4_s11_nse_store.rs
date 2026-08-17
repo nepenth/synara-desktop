@@ -108,7 +108,10 @@ fn nse_store_surface_is_read_only_and_cannot_start_sync() {
     assert!(shared_core.contains("nse_event_preview("));
     assert!(shared_core.contains("secret_storage_status("));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("start_sync"));
+    assert!(shared_core.contains("start_sync()"));
+    assert!(shared_core.contains("poll_timeline_view_updates()"));
+    assert!(shared_core.contains("poll_owner_updates()"));
+    assert!(shared_core.contains("poll_room_list_updates()"));
     assert!(!shared_core.contains("sync_start"));
     assert!(!shared_core.contains("build_sync_service"));
     assert!(!shared_core.contains("matrix_login_password"));
@@ -126,6 +129,10 @@ fn nse_store_surface_is_read_only_and_cannot_start_sync() {
     assert!(nse.contains("nse_event_preview"));
     assert!(!nse.contains("build_sync_service"));
     assert!(!nse.contains("attach_session_owners"));
+    assert!(!nse.contains("start_sync"));
+    assert!(!nse.contains("poll_timeline_view_updates"));
+    assert!(!nse.contains("poll_owner_updates"));
+    assert!(!nse.contains("poll_room_list_updates"));
     assert!(!nse.contains(".start()"));
     assert!(!nse.contains("sliding_sync"));
     assert!(nse.contains("Room::event"));

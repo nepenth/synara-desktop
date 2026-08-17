@@ -32,6 +32,15 @@ use super::{
     NativeVerificationPhase, NativeVerificationRequest, NativeVerificationSas,
 };
 
+/// Privacy-safe verification wake-up. No user ids, tokens, or SAS secrets.
+/// iOS re-fetches via the existing list command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NativeVerificationUpdateSignal {
+    pub session_generation: u64,
+}
+
+pub type VerificationUpdateEmit = Arc<dyn Fn(NativeVerificationUpdateSignal) + Send + Sync>;
+
 #[derive(Clone)]
 struct ManagedVerification {
     request: VerificationRequest,
@@ -52,29 +61,51 @@ struct VerificationRegistry {
 pub struct NativeVerificationOwner {
     client: Client,
     registry: Arc<Mutex<VerificationRegistry>>,
+    emit: VerificationUpdateEmit,
+    session_generation: u64,
     _request_handler: EventHandlerHandle,
 }
 
 impl NativeVerificationOwner {
     pub fn new(client: &Client, session_generation: u64) -> Self {
+        Self::with_emit(client, Arc::new(|_| {}), session_generation)
+    }
+
+    pub fn with_emit(
+        client: &Client,
+        emit: VerificationUpdateEmit,
+        session_generation: u64,
+    ) -> Self {
         let registry = Arc::new(Mutex::new(VerificationRegistry {
             session_generation,
             requests: HashMap::new(),
         }));
         let handler_registry = registry.clone();
+        let handler_emit = Arc::clone(&emit);
         let request_handler = client.add_event_handler(
             move |event: ToDeviceKeyVerificationRequestEvent, client: Client| {
                 let registry = handler_registry.clone();
+                let emit = Arc::clone(&handler_emit);
                 async move {
-                    register_incoming_request(&registry, &client, event).await;
+                    if register_incoming_request(&registry, &client, event).await {
+                        emit(NativeVerificationUpdateSignal { session_generation });
+                    }
                 }
             },
         );
         Self {
             client: client.clone(),
             registry,
+            emit,
+            session_generation,
             _request_handler: request_handler,
         }
+    }
+
+    fn signal(&self) {
+        (self.emit)(NativeVerificationUpdateSignal {
+            session_generation: self.session_generation,
+        });
     }
 
     pub async fn list(&self) -> NativeVerificationInbox {
@@ -150,12 +181,15 @@ impl NativeVerificationOwner {
         };
         let mut registry = self.registry.lock().await;
         registry.requests.insert(flow_id.clone(), managed);
-        Ok(project_request(
+        let projected = project_request(
             registry
                 .requests
                 .get_mut(&flow_id)
                 .expect("verification was inserted"),
-        ))
+        );
+        drop(registry);
+        self.signal();
+        Ok(projected)
     }
 
     pub async fn accept(&self, flow_id: &str) -> Result<NativeVerificationRequest, &'static str> {
@@ -164,7 +198,9 @@ impl NativeVerificationOwner {
             .accept_with_methods(vec![VerificationMethod::SasV1])
             .await
             .map_err(|_| "v-crypto.1-accept-failed")?;
-        self.snapshot(flow_id).await
+        let snapshot = self.snapshot(flow_id).await?;
+        self.signal();
+        Ok(snapshot)
     }
 
     pub async fn begin_sas(
@@ -199,7 +235,10 @@ impl NativeVerificationOwner {
             .ok_or("v-crypto.1-flow-not-found")?;
         managed.other_device_id = Some(sas.other_device().device_id().to_owned());
         managed.sas = Some(sas);
-        Ok(project_request(managed))
+        let projected = project_request(managed);
+        drop(registry);
+        self.signal();
+        Ok(projected)
     }
 
     pub async fn confirm(&self, flow_id: &str) -> Result<NativeVerificationRequest, &'static str> {
@@ -216,7 +255,10 @@ impl NativeVerificationOwner {
             .get_mut(flow_id)
             .ok_or("v-crypto.1-flow-not-found")?;
         managed.user_confirmed = true;
-        Ok(project_request(managed))
+        let projected = project_request(managed);
+        drop(registry);
+        self.signal();
+        Ok(projected)
     }
 
     pub async fn mismatch(&self, flow_id: &str) -> Result<NativeVerificationRequest, &'static str> {
@@ -230,7 +272,10 @@ impl NativeVerificationOwner {
             .get_mut(flow_id)
             .ok_or("v-crypto.1-flow-not-found")?;
         managed.user_mismatched = true;
-        Ok(project_request(managed))
+        let projected = project_request(managed);
+        drop(registry);
+        self.signal();
+        Ok(projected)
     }
 
     pub async fn cancel(&self, flow_id: &str) -> Result<NativeVerificationRequest, &'static str> {
@@ -252,7 +297,9 @@ impl NativeVerificationOwner {
                 .await
                 .map_err(|_| "v-crypto.1-request-cancel-failed")?;
         }
-        self.snapshot(flow_id).await
+        let snapshot = self.snapshot(flow_id).await?;
+        self.signal();
+        Ok(snapshot)
     }
 
     pub async fn dismiss(&self, flow_id: &str) -> Result<(), &'static str> {
@@ -271,6 +318,8 @@ impl NativeVerificationOwner {
             return Err("v-crypto.1-dismiss-active-flow");
         }
         registry.requests.remove(flow_id);
+        drop(registry);
+        self.signal();
         Ok(())
     }
 
@@ -307,23 +356,25 @@ async fn register_incoming_request(
     registry: &Arc<Mutex<VerificationRegistry>>,
     client: &Client,
     event: ToDeviceKeyVerificationRequestEvent,
-) {
+) -> bool {
     let flow_id = event.content.transaction_id.to_string();
     let Some(request) = client
         .encryption()
         .get_verification_request(&event.sender, &flow_id)
         .await
     else {
-        return;
+        return false;
     };
     if !request.is_self_verification() {
-        return;
+        return false;
     }
     let mut registry = registry.lock().await;
-    registry
-        .requests
-        .entry(flow_id)
-        .or_insert(ManagedVerification {
+    if registry.requests.contains_key(&flow_id) {
+        return false;
+    }
+    registry.requests.insert(
+        flow_id,
+        ManagedVerification {
             request,
             other_user_id: event.sender,
             other_device_id: Some(event.content.from_device),
@@ -332,7 +383,9 @@ async fn register_incoming_request(
             sas: None,
             user_confirmed: false,
             user_mismatched: false,
-        });
+        },
+    );
+    true
 }
 
 fn project_request(managed: &mut ManagedVerification) -> NativeVerificationRequest {

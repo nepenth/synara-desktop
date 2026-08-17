@@ -72,11 +72,17 @@ protocol MatrixClientServicing: AnyObject {
     /// Optional, display-only readback. It must not affect SDK lifecycle or
     /// session/credential ownership.
     func coreSessionIdentity() async -> CoreSessionIdentity?
+    func presence(userID: String) async -> SharedCorePresence?
 }
 
 extension MatrixClientServicing {
     func coreSessionIdentity() async -> CoreSessionIdentity? {
         nil
+    }
+
+    func presence(userID: String) async -> SharedCorePresence? {
+        _ = userID
+        return nil
     }
 }
 
@@ -336,6 +342,13 @@ protocol CryptoStatusServicing {
     func declineVerification() async -> CryptoActionResult
     func cancelVerification() async -> CryptoActionResult
     func recover(recoveryKey: String) async -> CryptoActionResult
+    func sessionDevices() async -> [SharedCoreSessionDevice]
+}
+
+extension CryptoStatusServicing {
+    func sessionDevices() async -> [SharedCoreSessionDevice] {
+        []
+    }
 }
 
 enum SynaraRoomVisibility: String, CaseIterable, Identifiable, Equatable {
@@ -459,6 +472,14 @@ struct RoomPowerLevelSummary: Equatable {
     )
 }
 
+struct RoomMemberSummary: Equatable, Identifiable {
+    let userID: String
+    let membership: String
+    let powerLevel: Int
+
+    var id: String { userID }
+}
+
 struct RoomDetails: Equatable {
     let roomID: String
     let name: String
@@ -475,6 +496,7 @@ struct RoomDetails: Equatable {
     let powerLevels: RoomPowerLevelSummary?
     let notificationMode: SynaraRoomNotificationMode
     let avatarURL: String?
+    let members: [RoomMemberSummary]
 }
 
 enum RoomManagementError: LocalizedError, Equatable {
@@ -519,6 +541,14 @@ protocol RoomManagementServicing {
     func roomDetails(roomID: String) async -> RoomDetails?
     func updateRoomProfile(_ request: RoomProfileUpdateRequest) async throws
     func setNotificationMode(_ mode: SynaraRoomNotificationMode, roomID: String) async throws
+    func stickers(roomID: String) async -> [SharedCoreSticker]
+}
+
+extension RoomManagementServicing {
+    func stickers(roomID: String) async -> [SharedCoreSticker] {
+        _ = roomID
+        return []
+    }
 }
 
 protocol SettingsStoring {
@@ -763,7 +793,8 @@ final class MockRoomManagementService: RoomManagementServicing {
             canEditAliases: true,
             powerLevels: .fullPower,
             notificationMode: .allMessages,
-            avatarURL: nil
+            avatarURL: nil,
+            members: []
         )
         return RoomOperationResult(roomID: roomID, name: trimmedName)
     }
@@ -833,7 +864,8 @@ final class MockRoomManagementService: RoomManagementServicing {
             canEditAliases: true,
             powerLevels: .fullPower,
             notificationMode: .allMessages,
-            avatarURL: nil
+            avatarURL: nil,
+            members: []
         )
     }
 
@@ -884,7 +916,8 @@ final class MockRoomManagementService: RoomManagementServicing {
             canEditAliases: details.canEditAliases,
             powerLevels: details.powerLevels,
             notificationMode: details.notificationMode,
-            avatarURL: avatarURL(after: request.avatar, current: details.avatarURL)
+            avatarURL: avatarURL(after: request.avatar, current: details.avatarURL),
+            members: details.members
         )
         detailsByRoomID[request.roomID] = details
     }
@@ -919,7 +952,8 @@ final class MockRoomManagementService: RoomManagementServicing {
             canEditAliases: details.canEditAliases,
             powerLevels: details.powerLevels,
             notificationMode: mode,
-            avatarURL: details.avatarURL
+            avatarURL: details.avatarURL,
+            members: details.members
         )
         detailsByRoomID[roomID] = details
     }

@@ -16,7 +16,7 @@ mod native;
 
 pub use error::TypingError;
 pub use index::{TypingIndex, MAX_TYPING_USERS_PER_ROOM};
-pub use live::{set_typing_notice, NativeTypingOwner};
+pub use live::{set_typing_notice, NativeTypingOwner, NativeTypingUpdateSignal, TypingUpdateEmit};
 pub use native::NativeTypingSnapshot;
 
 /// Static marker for link / schema smoke.

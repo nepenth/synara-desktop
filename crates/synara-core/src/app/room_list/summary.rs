@@ -22,6 +22,7 @@ pub struct RoomSummaryBuilder {
     highlight_count: u32,
     marked_unread: bool,
     last_activity_ts: Option<u64>,
+    last_message_preview: Option<String>,
 }
 
 impl RoomSummaryBuilder {
@@ -40,6 +41,7 @@ impl RoomSummaryBuilder {
             highlight_count: 0,
             marked_unread: false,
             last_activity_ts: None,
+            last_message_preview: None,
         }
     }
 
@@ -99,6 +101,11 @@ impl RoomSummaryBuilder {
         self
     }
 
+    pub fn last_message_preview(mut self, preview: impl Into<String>) -> Self {
+        self.last_message_preview = Some(preview.into());
+        self
+    }
+
     pub fn build(self) -> Result<RoomSummary, super::error::RoomListError> {
         let room_id = self.room_id.trim().to_owned();
         if room_id.is_empty() || !room_id.starts_with('!') {
@@ -126,6 +133,7 @@ impl RoomSummaryBuilder {
             marked_unread: self.marked_unread,
             notification_mode: None,
             last_activity_ts: self.last_activity_ts,
+            last_message_preview: self.last_message_preview,
             heroes: None,
             tombstone_successor_room_id: None,
         })

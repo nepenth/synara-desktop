@@ -21,8 +21,28 @@ enum MessageSendError: LocalizedError, Equatable {
     }
 }
 
+struct StickerSendRequest: Equatable {
+    let roomID: String
+    let body: String
+    let mxc: String
+    let width: UInt64?
+    let height: UInt64?
+    let mimetype: String?
+    let size: UInt64?
+    let replyToEventID: String?
+    let threadRoot: String?
+}
+
 protocol MessageSending {
     func send(_ request: MessageSendRequest) async throws -> TimelineItem
+    func sendSticker(_ request: StickerSendRequest) async throws -> TimelineItem
+}
+
+extension MessageSending {
+    func sendSticker(_ request: StickerSendRequest) async throws -> TimelineItem {
+        _ = request
+        throw MessageSendError.failed
+    }
 }
 
 final class DraftStore {

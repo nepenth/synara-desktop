@@ -7,6 +7,7 @@ final class SharedCoreProductHost {
     let core: SharedCore
     let storeRoot: URL
     let sessionStore: AppSessionStore
+    let livePoller: SharedCoreLivePoller
 
     init(
         core: SharedCore,
@@ -16,6 +17,7 @@ final class SharedCoreProductHost {
         self.core = core
         self.storeRoot = storeRoot
         self.sessionStore = sessionStore
+        self.livePoller = SharedCoreLivePoller(core: core)
     }
 
     static func liveStoreRoot() -> URL {
@@ -48,7 +50,6 @@ struct SharedCoreAuthService: AuthServicing {
                 password: request.password,
                 core: host.core
             )
-            _ = try? await SharedCoreSessionAttach.attachSessionOwners(core: host.core)
             return AuthenticatedSession(
                 userID: dto.userId,
                 deviceID: dto.deviceId,
@@ -74,8 +75,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     }
 
     func start(session: AuthenticatedSession) async {
-        syncStatus = .stopped
-        _ = session
+        await applyLiveSession(session)
     }
 
     func warmSync(session: AuthenticatedSession) async {
@@ -99,7 +99,24 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     func pauseForBackground() async {}
 
     func resumeFromForeground(session: AuthenticatedSession) async {
-        _ = session
+        await applyLiveSession(session)
+    }
+
+    private func applyLiveSession(_ session: AuthenticatedSession) async {
+        syncStatus = .starting
+        let outcome = await SharedCoreSessionBootstrap.prepareLiveSession(
+            userID: session.userID,
+            homeserverURL: session.homeserverURL.absoluteString,
+            storeRoot: host.storeRoot,
+            core: host.core
+        )
+        if outcome.started {
+            syncStatus = .syncing
+        } else if outcome.attached || outcome.restored {
+            syncStatus = .starting
+        } else {
+            syncStatus = .stopped
+        }
     }
 
     func syncForBackgroundNotification(session: AuthenticatedSession) async -> Bool {
@@ -131,11 +148,27 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
             homeserverURL: homeserver
         )
     }
+
+    func presence(userID: String) async -> SharedCorePresence? {
+        guard let snapshot = try? await SharedCoreTypingPresence.presenceSnapshot(
+            core: host.core,
+            userId: userID
+        ) else {
+            return nil
+        }
+        return SharedCorePresenceLive.presence(
+            userId: snapshot.userId,
+            state: snapshot.state,
+            currentlyActive: snapshot.currentlyActive,
+            statusMsg: snapshot.statusMsg
+        )
+    }
 }
 
 final class SharedCoreRoomListService: RoomListServicing {
     private let host: SharedCoreProductHost
     private var cachedNames: [String: String] = [:]
+    private var cachedRooms: [String: RoomSummary] = [:]
 
     init(host: SharedCoreProductHost) {
         self.host = host
@@ -144,22 +177,41 @@ final class SharedCoreRoomListService: RoomListServicing {
     func loadRooms() async -> RoomListState {
         do {
             let snapshot = try await SharedCoreRoomList.roomListSnapshot(core: host.core)
-            let rooms = snapshot.rooms.map { room in
-                RoomSummary(
-                    id: room.roomId,
-                    name: room.name ?? room.roomId,
-                    lastMessagePreview: "",
-                    unreadCount: Int(room.unreadCount),
-                    hasHighlight: room.highlightCount > 0 || room.markedUnread,
-                    kind: room.isDirect ? .directMessage : .room,
-                    membership: room.membership == "invited" ? .invited : .joined,
-                    lastActivityAt: room.lastActivityTs.map {
-                        Date(timeIntervalSince1970: TimeInterval($0) / 1000)
-                    } ?? Date(timeIntervalSince1970: 0),
-                    avatarURL: room.avatarUrl.flatMap(URL.init(string:))
-                )
-            }
+            let invites = (try? await SharedCoreInvites.invitesSnapshot(core: host.core))?.invites ?? []
+            let spaceParents = (try? await SharedCoreSpaces.spaceParentsSnapshot(core: host.core))?.entries ?? []
+            let rooms = SharedCoreRoomListRows.rooms(
+                rooms: snapshot.rooms.map {
+                    SharedCoreRoomListRows.RoomRow(
+                        roomId: $0.roomId,
+                        name: $0.name,
+                        avatarUrl: $0.avatarUrl,
+                        membership: $0.membership,
+                        isDirect: $0.isDirect,
+                        unreadCount: Int($0.unreadCount),
+                        highlightCount: Int($0.highlightCount),
+                        markedUnread: $0.markedUnread,
+                        lastActivityTs: $0.lastActivityTs,
+                        lastMessagePreview: $0.lastMessagePreview
+                    )
+                },
+                invites: invites.map {
+                    SharedCoreRoomListRows.InviteRow(
+                        roomId: $0.roomId,
+                        roomName: $0.roomName,
+                        roomTopic: $0.roomTopic,
+                        senderName: $0.senderName,
+                        reason: $0.reason
+                    )
+                },
+                spaceParents: spaceParents.map {
+                    SharedCoreRoomListRows.SpaceParentRow(
+                        roomId: $0.roomId,
+                        parentIds: $0.parentIds
+                    )
+                }
+            )
             cachedNames = Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, $0.name) })
+            cachedRooms = Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, $0) })
             return rooms.isEmpty ? .empty : .loaded(rooms)
         } catch {
             return .empty
@@ -170,8 +222,40 @@ final class SharedCoreRoomListService: RoomListServicing {
         cachedNames[roomID]
     }
 
+    func isAgentRoom(roomID: String) -> Bool {
+        cachedRooms[roomID]?.isAgentRoom ?? false
+    }
+
+    func hasUnreadMessages(roomID: String) -> Bool {
+        guard let room = cachedRooms[roomID] else {
+            return false
+        }
+        return SharedCoreRoomListRows.hasUnreadMessages(
+            unreadCount: room.unreadCount,
+            hasHighlight: room.hasHighlight
+        )
+    }
+
     func clearCache() {
         cachedNames.removeAll()
+        cachedRooms.removeAll()
+    }
+
+    func roomUpdates() -> AsyncStream<RoomListState> {
+        AsyncStream { continuation in
+            let task = Task {
+                for await _ in host.livePoller.roomListSignals() {
+                    guard Task.isCancelled == false else {
+                        break
+                    }
+                    continuation.yield(await loadRooms())
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
     }
 }
 
@@ -201,6 +285,8 @@ final class SharedCoreRoomMembershipService: RoomMembershipServicing {
 
 final class SharedCoreTimelineService: TimelineServicing {
     private let host: SharedCoreProductHost
+    private let streamLock = NSLock()
+    private var streams: [String: String] = [:]
 
     init(host: SharedCoreProductHost) {
         self.host = host
@@ -208,6 +294,9 @@ final class SharedCoreTimelineService: TimelineServicing {
 
     func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
         do {
+            if let previous = takeStream(for: roomID) {
+                _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: previous)
+            }
             let position = TimelineOpenPositionDto(
                 kind: focusedEventID == nil ? "live" : "focused",
                 atBottom: focusedEventID == nil,
@@ -221,19 +310,141 @@ final class SharedCoreTimelineService: TimelineServicing {
                 roomId: roomID,
                 position: position
             )
-            _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: opened.streamId)
-            return opened.snapshot.rowCount == 0 ? .empty : .empty
+            storeStream(opened.streamId, for: roomID)
+            return SharedCoreTimelineRows.outcome(from: opened.snapshot.rows)
         } catch {
             return .empty
         }
     }
 
     func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome {
-        _ = (roomID, eventID)
-        return .empty
+        _ = eventID
+        guard let streamId = stream(for: roomID) else {
+            return .empty
+        }
+        do {
+            let snapshot = try await SharedCoreTimeline.timelinePaginate(
+                core: host.core,
+                streamId: streamId,
+                direction: "backwards"
+            )
+            return SharedCoreTimelineRows.outcome(from: snapshot.rows)
+        } catch {
+            return .empty
+        }
     }
 
-    func clearSessionCaches() {}
+    func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome> {
+        AsyncStream { continuation in
+            let task = Task {
+                let initial = await loadInitialTimeline(roomID: roomID, focusedEventID: focusedEventID)
+                continuation.yield(initial)
+                for await update in host.livePoller.timelineSignals(roomId: roomID) {
+                    guard Task.isCancelled == false else {
+                        break
+                    }
+                    let watchingStreamId = stream(for: roomID)
+                    guard SharedCoreTimelineLiveRefresh.shouldRefresh(
+                        watchingRoomID: roomID,
+                        watchingStreamId: watchingStreamId,
+                        updateRoomId: update.roomId,
+                        updateStreamId: update.streamId
+                    ) else {
+                        continue
+                    }
+                    continuation.yield(
+                        await refreshOpenTimeline(roomID: roomID, focusedEventID: focusedEventID)
+                    )
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
+    func typingUsers(roomID: String) -> AsyncStream<[String]> {
+        AsyncStream { continuation in
+            let task = Task {
+                continuation.yield(await typingUsersInRoom(roomID))
+                for await update in host.livePoller.ownerSignals(families: ["typing"]) {
+                    guard Task.isCancelled == false else {
+                        break
+                    }
+                    guard SharedCoreTypingLive.shouldRefresh(
+                        watchingRoomID: roomID,
+                        updateRoomId: update.roomId
+                    ) else {
+                        continue
+                    }
+                    continuation.yield(await typingUsersInRoom(roomID))
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
+    func clearSessionCaches() {
+        let streamIds = takeAllStreams()
+        Task {
+            for streamId in streamIds {
+                _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: streamId)
+            }
+        }
+    }
+
+    private func refreshOpenTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
+        if focusedEventID == nil, let streamId = stream(for: roomID) {
+            do {
+                let opened = try await SharedCoreTimelineReadState.timelineJumpLatest(
+                    core: host.core,
+                    streamId: streamId
+                )
+                storeStream(opened.streamId, for: roomID)
+                return SharedCoreTimelineRows.outcome(from: opened.snapshot.rows)
+            } catch {
+                return await loadInitialTimeline(roomID: roomID, focusedEventID: focusedEventID)
+            }
+        }
+        return await loadInitialTimeline(roomID: roomID, focusedEventID: focusedEventID)
+    }
+
+    private func stream(for roomID: String) -> String? {
+        streamLock.lock()
+        defer { streamLock.unlock() }
+        return streams[roomID]
+    }
+
+    private func storeStream(_ streamId: String, for roomID: String) {
+        streamLock.lock()
+        streams[roomID] = streamId
+        streamLock.unlock()
+    }
+
+    private func takeStream(for roomID: String) -> String? {
+        streamLock.lock()
+        defer { streamLock.unlock() }
+        return streams.removeValue(forKey: roomID)
+    }
+
+    private func takeAllStreams() -> [String] {
+        streamLock.lock()
+        defer { streamLock.unlock() }
+        let values = Array(streams.values)
+        streams.removeAll()
+        return values
+    }
+
+    private func typingUsersInRoom(_ roomID: String) async -> [String] {
+        guard let snapshot = try? await SharedCoreTypingPresence.typingSnapshot(core: host.core) else {
+            return []
+        }
+        return SharedCoreTypingLive.users(roomID: roomID, from: snapshot)
+    }
 }
 
 final class SharedCoreLaterService: LaterServicing {
@@ -328,6 +539,40 @@ final class SharedCoreMessageSendService: MessageSending {
                 kind: .text(body),
                 replyToEventID: request.replyToEventID,
                 isEdited: request.editEventID != nil,
+                reactions: [:]
+            )
+        } catch {
+            throw MessageSendError.failed
+        }
+    }
+
+    func sendSticker(_ request: StickerSendRequest) async throws -> TimelineItem {
+        let body = request.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        let mxc = request.mxc.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard body.isEmpty == false, mxc.hasPrefix("mxc://") else {
+            throw MessageSendError.failed
+        }
+        do {
+            _ = try await SharedCoreSendSticker.sendSticker(
+                core: host.core,
+                roomId: request.roomID,
+                body: body,
+                mxc: mxc,
+                width: request.width,
+                height: request.height,
+                mimetype: request.mimetype,
+                size: request.size,
+                replyTo: request.replyToEventID,
+                threadRoot: request.threadRoot
+            )
+            return TimelineItem(
+                id: "$local-\(UUID().uuidString)",
+                eventID: "$local-\(UUID().uuidString)",
+                senderID: signedInUserID(),
+                timestamp: Date(),
+                kind: .unknown(type: "sticker"),
+                replyToEventID: request.replyToEventID,
+                isEdited: false,
                 reactions: [:]
             )
         } catch {
@@ -461,33 +706,63 @@ final class SharedCoreAgentApprovalReactionService: AgentApprovalReactionServici
 
 final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     private let host: SharedCoreProductHost
+    private let flowLock = NSLock()
+    private var flowId: String?
 
     init(host: SharedCoreProductHost) {
         self.host = host
     }
 
     func roomStatus(roomID: String) async -> RoomCryptoStatus {
-        _ = roomID
-        return .unknown
+        let session = await sessionStatus()
+        let listEncrypted = await listEncryption(roomID: roomID)
+        let inviteEncrypted = await inviteEncryption(roomID: roomID)
+        let isEncrypted = listEncrypted ?? inviteEncrypted
+        guard session != .unknown || isEncrypted != nil else {
+            return .unknown
+        }
+        return SharedCoreSessionCrypto.roomStatus(
+            isEncrypted: isEncrypted,
+            session: session
+        )
     }
 
     func sessionStatus() async -> SessionCryptoStatus {
-        if let status = try? await SharedCoreLeftovers.cryptoStatus(core: host.core) {
-            return SessionCryptoStatus(
-                verification: status.crossSigningState == "ready" ? .verified : .unknown,
-                recovery: .unknown,
-                backup: status.encryptionEnabled ? .enabled : .unknown,
-                hasDevicesToVerifyAgainst: nil,
-                isLastDevice: nil,
-                unableToDecryptCount: 0
-            )
+        let crypto = try? await SharedCoreLeftovers.cryptoStatus(core: host.core)
+        let backup = try? await SharedCoreLeftovers.backupStatus(core: host.core)
+        let secretStorage = try? await SharedCoreSessionStatus.secretStorageStatus(core: host.core)
+        guard crypto != nil || backup != nil || secretStorage != nil else {
+            return .unknown
         }
-        return .unknown
+        return SharedCoreSessionCrypto.status(
+            crossSigningState: crypto?.crossSigningState,
+            backupEnabled: backup?.enabled,
+            backupAvailability: backup?.availability,
+            backupDeviceState: backup?.deviceState,
+            recoveryState: backup?.recoveryState,
+            secretStorageState: secretStorage?.state
+        )
     }
 
     func verificationUpdates() -> AsyncStream<CryptoVerificationState> {
         AsyncStream { continuation in
-            continuation.finish()
+            let task = Task {
+                if let state = await currentVerificationState() {
+                    continuation.yield(state)
+                }
+                for await _ in host.livePoller.ownerSignals(families: ["verification", "devices"]) {
+                    guard Task.isCancelled == false else {
+                        break
+                    }
+                    if let state = await currentVerificationState() {
+                        continuation.yield(state)
+                    }
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
         }
     }
 
@@ -497,27 +772,64 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     }
 
     func requestDeviceVerification() async -> CryptoActionResult {
-        .unavailable("Device verification is unavailable.")
+        await runVerification {
+            let dto = try await SharedCoreVerificationSas.verificationStart(
+                core: host.core,
+                deviceId: nil
+            )
+            storeFlow(dto.flowId)
+            return "Device verification request sent."
+        }
     }
 
     func acceptVerificationRequest() async -> CryptoActionResult {
-        .unavailable("Device verification is unavailable.")
+        await runVerification(requiresFlow: true) { flowId in
+            _ = try await SharedCoreVerificationSas.verificationAccept(
+                core: host.core,
+                flowId: flowId
+            )
+            return "Verification request accepted."
+        }
     }
 
     func startSasVerification() async -> CryptoActionResult {
-        .unavailable("Device verification is unavailable.")
+        await runVerification(requiresFlow: true) { flowId in
+            _ = try await SharedCoreVerificationSas.verificationBeginSas(
+                core: host.core,
+                flowId: flowId
+            )
+            return "Verification comparison started."
+        }
     }
 
     func approveVerification() async -> CryptoActionResult {
-        .unavailable("Device verification is unavailable.")
+        await runVerification(requiresFlow: true) { flowId in
+            _ = try await SharedCoreVerificationSas.verificationConfirm(
+                core: host.core,
+                flowId: flowId
+            )
+            return "Device verified."
+        }
     }
 
     func declineVerification() async -> CryptoActionResult {
-        .unavailable("Device verification is unavailable.")
+        await runVerification(requiresFlow: true) { flowId in
+            _ = try await SharedCoreVerificationSas.verificationMismatch(
+                core: host.core,
+                flowId: flowId
+            )
+            return "Verification declined."
+        }
     }
 
     func cancelVerification() async -> CryptoActionResult {
-        .unavailable("Device verification is unavailable.")
+        await runVerification(requiresFlow: true) { flowId in
+            _ = try await SharedCoreVerificationSas.verificationCancel(
+                core: host.core,
+                flowId: flowId
+            )
+            return "Verification cancelled."
+        }
     }
 
     func recover(recoveryKey: String) async -> CryptoActionResult {
@@ -527,6 +839,81 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         } catch {
             return .failed("Recovery is unavailable.")
         }
+    }
+
+    func sessionDevices() async -> [SharedCoreSessionDevice] {
+        guard let snapshot = try? await SharedCoreDevices.deviceSnapshot(core: host.core) else {
+            return []
+        }
+        return snapshot.devices.map {
+            SharedCoreDevicesLive.devices(
+                deviceId: $0.deviceId,
+                displayName: $0.displayName,
+                isCurrent: $0.isCurrent,
+                trust: $0.trust
+            )
+        }
+    }
+
+    private func listEncryption(roomID: String) async -> Bool? {
+        guard let rooms = try? await SharedCoreRoomList.roomListSnapshot(core: host.core) else {
+            return nil
+        }
+        return rooms.rooms.first { $0.roomId == roomID }?.isEncrypted
+    }
+
+    private func inviteEncryption(roomID: String) async -> Bool? {
+        guard let invites = try? await SharedCoreInvites.invitesSnapshot(core: host.core) else {
+            return nil
+        }
+        return invites.invites.first { $0.roomId == roomID }?.isEncrypted
+    }
+
+    private func currentVerificationState() async -> CryptoVerificationState? {
+        guard let inbox = try? await SharedCoreVerificationList.verificationList(core: host.core) else {
+            return nil
+        }
+        if let first = inbox.requests.first {
+            storeFlow(first.flowId)
+        }
+        return SharedCoreVerificationLive.state(from: inbox)
+    }
+
+    private func runVerification(
+        message: () async throws -> String
+    ) async -> CryptoActionResult {
+        do {
+            return .completed(try await message())
+        } catch {
+            return .failed("Device verification is unavailable.")
+        }
+    }
+
+    private func runVerification(
+        requiresFlow: Bool,
+        message: (String) async throws -> String
+    ) async -> CryptoActionResult {
+        _ = requiresFlow
+        guard let flowId = resolvedFlowId() else {
+            return .unavailable("Device verification is unavailable.")
+        }
+        do {
+            return .completed(try await message(flowId))
+        } catch {
+            return .failed("Device verification is unavailable.")
+        }
+    }
+
+    private func storeFlow(_ flowId: String) {
+        flowLock.lock()
+        self.flowId = flowId
+        flowLock.unlock()
+    }
+
+    private func resolvedFlowId() -> String? {
+        flowLock.lock()
+        defer { flowLock.unlock() }
+        return flowId
     }
 }
 
@@ -655,23 +1042,89 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
     }
 
     func roomDetails(roomID: String) async -> RoomDetails? {
-        RoomDetails(
-            roomID: roomID,
-            name: roomID,
-            topic: nil,
-            aliases: [],
-            isEncrypted: false,
-            isPublic: nil,
-            memberCount: 0,
-            canInvite: false,
-            canEditName: false,
-            canEditTopic: false,
-            canEditAvatar: false,
-            canEditAliases: false,
-            powerLevels: nil,
-            notificationMode: .allMessages,
-            avatarURL: nil
+        let ownUserID = await coreSessionUserID()
+        let list = try? await SharedCoreRoomList.roomListSnapshot(core: host.core)
+        let room = list?.rooms.first(where: { $0.roomId == roomID })
+        let members = try? await SharedCoreRoomMembersSnapshots.roomMembersSnapshot(
+            core: host.core,
+            roomId: roomID
         )
+        let power = try? await SharedCoreRoomMembersSnapshots.roomPowerLevelsSnapshot(
+            core: host.core,
+            roomId: roomID
+        )
+        let generation = list?.sessionGeneration ?? members?.sessionGeneration ?? 0
+        let join = try? await SharedCoreJoinRules.roomJoinRuleSnapshot(
+            core: host.core,
+            roomId: roomID,
+            sessionGeneration: generation
+        )
+        let invite = (try? await SharedCoreInvites.invitesSnapshot(core: host.core))?
+            .invites
+            .first(where: { $0.roomId == roomID })
+        return SharedCoreRoomDetails.details(
+            roomID: roomID,
+            ownUserID: ownUserID,
+            room: room.map {
+                SharedCoreRoomDetails.RoomRow(
+                    roomId: $0.roomId,
+                    name: $0.name,
+                    canonicalAlias: $0.canonicalAlias,
+                    avatarUrl: $0.avatarUrl
+                )
+            },
+            members: members?.members.map {
+                SharedCoreRoomDetails.MemberRow(
+                    userId: $0.userId,
+                    membership: $0.membership,
+                    powerLevel: Int($0.powerLevel)
+                )
+            } ?? [],
+            powerLevelsJSON: power?.contentJson,
+            joinRule: join?.joinRule,
+            topic: invite?.roomTopic,
+            isEncrypted: room?.isEncrypted ?? invite?.isEncrypted ?? false,
+            notificationMode: SharedCoreRoomDetails.notificationMode(room?.notificationMode)
+        )
+    }
+
+    func stickers(roomID: String) async -> [SharedCoreSticker] {
+        var rows: [SharedCoreSticker] = []
+        if let user = try? await SharedCoreImagePacks.getUserImagePack(core: host.core),
+           let pack = user.pack
+        {
+            rows.append(contentsOf: SharedCoreImagePackRows.stickers(
+                packId: pack.id,
+                packName: nil,
+                contentJSON: pack.contentJson
+            ))
+        }
+        if let room = try? await SharedCoreImagePacks.getRoomImagePacks(core: host.core, roomId: roomID) {
+            for pack in room.packs {
+                rows.append(contentsOf: SharedCoreImagePackRows.stickers(
+                    packId: pack.id,
+                    packName: nil,
+                    contentJSON: pack.contentJson
+                ))
+            }
+        }
+        if let global = try? await SharedCoreImagePacks.getGlobalImagePacks(core: host.core) {
+            for pack in global.packs {
+                rows.append(contentsOf: SharedCoreImagePackRows.stickers(
+                    packId: pack.id,
+                    packName: nil,
+                    contentJSON: pack.contentJson
+                ))
+            }
+        }
+        return rows
+    }
+
+    private func coreSessionUserID() async -> String? {
+        guard let snapshot = try? await SharedCoreSessionStatus.sessionSnapshot(core: host.core) else {
+            return nil
+        }
+        return snapshot.userId
     }
 
     func updateRoomProfile(_ request: RoomProfileUpdateRequest) async throws {
@@ -722,6 +1175,9 @@ final class SharedCoreMediaLoader: MediaLoading {
         guard resource.isEncrypted == false else {
             return .failed("Encrypted media requires recovered keys before it can be opened.")
         }
+        if SharedCoreTimelineMedia.handleId(from: resource.authenticatedURL) != nil {
+            return .thumbnail(resource)
+        }
         guard let url = resource.authenticatedURL else {
             return .failed("Media is unavailable.")
         }
@@ -739,21 +1195,18 @@ final class SharedCoreMediaLoader: MediaLoading {
     }
 
     func loadThumbnailData(for resource: MediaResource, width: UInt64, height: UInt64) async -> Data? {
-        guard resource.isEncrypted == false,
-              let url = resource.authenticatedURL else {
-            return nil
-        }
-        return try? await SharedCoreLeftovers.mediaThumbnail(
-            core: host.core,
-            mxc: url.absoluteString,
-            width: width,
-            height: height
-        ).payload
+        _ = (width, height)
+        return await loadMediaData(for: resource)
     }
 
     func loadMediaData(for resource: MediaResource) async -> Data? {
-        guard resource.isEncrypted == false,
-              let url = resource.authenticatedURL else {
+        guard resource.isEncrypted == false else {
+            return nil
+        }
+        if let handle = SharedCoreTimelineMedia.handleId(from: resource.authenticatedURL) {
+            return try? await SharedCoreTimelineMedia.mediaBytes(core: host.core, handleId: handle)
+        }
+        guard let url = resource.authenticatedURL else {
             return nil
         }
         return try? await SharedCoreLeftovers.mediaDownload(
@@ -850,24 +1303,64 @@ final class SharedCorePusherService: MatrixPusherServicing {
     }
 }
 
-final class SharedCoreReadMarkerStore: RoomReadMarkerClientStoring {
+final class SharedCoreRoomReadMarkerService: RoomReadMarkerServicing {
     private let host: SharedCoreProductHost
 
     init(host: SharedCoreProductHost) {
         self.host = host
     }
 
-    func latestEventID(roomID: String, session: AuthenticatedSession) async throws -> String? {
-        _ = session
-        let readback = try await SharedCoreTimelineReadState.timelineEventReadback(
-            core: host.core,
-            roomId: roomID,
-            eventId: ""
-        )
-        return readback.item.eventId
+    func fullyReadEventID(roomID: String) async -> String? {
+        await withOpenLive(roomID: roomID) { opened in
+            SharedCoreReadMarkers.acknowledgedEventID(
+                ownReadEventID: opened.snapshot.ownReadEventId,
+                rowEventIDs: opened.snapshot.rows.map(\.eventId)
+            )
+        }
     }
 
-    func clearMarkedUnread(roomID: String, session: AuthenticatedSession) async throws {
-        _ = (roomID, session)
+    func markFullyRead(roomID: String, eventID: String) async -> Bool {
+        guard MatrixServerEventIDPolicy.canAcknowledge(eventID) else {
+            return false
+        }
+        return await markRoomAsRead(roomID: roomID) != nil
+    }
+
+    func markRoomAsRead(roomID: String) async -> String? {
+        await withOpenLive(roomID: roomID) { opened in
+            let readback = try? await SharedCoreTimelineReadState.timelineSetReadState(
+                core: host.core,
+                streamId: opened.streamId,
+                action: "mark_read"
+            )
+            return SharedCoreReadMarkers.acknowledgedEventID(
+                ownReadEventID: readback?.snapshot.ownReadEventId ?? opened.snapshot.ownReadEventId,
+                rowEventIDs: (readback?.snapshot.rows ?? opened.snapshot.rows).map(\.eventId)
+            )
+        }
+    }
+
+    private func withOpenLive<T>(
+        roomID: String,
+        body: (TimelineOpenDto) async -> T?
+    ) async -> T? {
+        let position = TimelineOpenPositionDto(
+            kind: "live",
+            atBottom: true,
+            restoredAnchorEventId: nil,
+            liveTailEventId: nil,
+            updatedAtMs: nil,
+            eventId: nil
+        )
+        guard let opened = try? await SharedCoreTimeline.timelineOpen(
+            core: host.core,
+            roomId: roomID,
+            position: position
+        ) else {
+            return nil
+        }
+        let result = await body(opened)
+        _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: opened.streamId)
+        return result
     }
 }

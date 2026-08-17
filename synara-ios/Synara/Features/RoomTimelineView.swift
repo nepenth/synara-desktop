@@ -245,6 +245,7 @@ struct RoomTimelineView: View {
     @State private var cryptoActionMessage: String?
     @State private var isCryptoBannerDismissed = false
     @State private var isRoomDetailsPresented = false
+    @State private var isStickerPackPresented = false
     @State private var shouldReturnToListAfterDetailsDismiss = false
     @State private var isTimelineSearchPresented = false
     @State private var timelineSearchQuery = ""
@@ -326,6 +327,7 @@ struct RoomTimelineView: View {
                 onUploadFailed: { message in
                     uploadState = .failed(message)
                 },
+                onOpenStickers: { isStickerPackPresented = true },
                 selectedPhoto: $selectedPhoto,
                 isFocusedExternally: $isComposerFocused
             )
@@ -350,6 +352,9 @@ struct RoomTimelineView: View {
                     isRoomDetailsPresented = false
                 }
             )
+        }
+        .sheet(isPresented: $isStickerPackPresented) {
+            StickerPackSheet(roomID: roomID, onSend: sendSticker)
         }
         .sheet(isPresented: $isTimelineSearchPresented) {
             TimelineSearchSheet(
@@ -1471,6 +1476,33 @@ struct RoomTimelineView: View {
 
     private func sendMessage(body rawBody: String) {
         performSend(body: rawBody, replyToEventID: replyTarget?.eventID, editEventID: editTarget?.eventID)
+    }
+
+    private func sendSticker(_ sticker: SharedCoreSticker) {
+        let request = StickerSendRequest(
+            roomID: roomID,
+            body: sticker.body,
+            mxc: sticker.mxc,
+            width: sticker.width,
+            height: sticker.height,
+            mimetype: sticker.mimetype,
+            size: sticker.size,
+            replyToEventID: replyTarget?.eventID,
+            threadRoot: nil
+        )
+        Task {
+            do {
+                _ = try await environment.messageSender.sendSticker(request)
+                await MainActor.run {
+                    sendError = nil
+                    clearComposerRelation()
+                }
+            } catch {
+                await MainActor.run {
+                    sendError = MessageSendError.failed.localizedDescription
+                }
+            }
+        }
     }
 
     private func retryFailedMessage(_ item: TimelineItem) {
@@ -3469,6 +3501,9 @@ private struct RoomDetailsView: View {
                     Button("Invite User", action: inviteUser)
                         .disabled(isLoading || inviteUserID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || details?.canInvite == false)
                         .accessibilityIdentifier("RoomInviteUserButton")
+                    ForEach(details?.members.prefix(12) ?? []) { member in
+                        RoomMemberPresenceRow(member: member)
+                    }
                 }
 
                 Section("Aliases And Avatar") {
@@ -3747,6 +3782,72 @@ private struct RoomDetailsView: View {
                     message = RoomManagementError.failed.localizedDescription
                     isLoading = false
                 }
+            }
+        }
+    }
+}
+
+private struct RoomMemberPresenceRow: View {
+    let member: RoomMemberSummary
+    @Environment(\.appEnvironment) private var environment
+    @State private var presence: SharedCorePresence?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+            Text(member.userID)
+                .font(SynaraTypography.body)
+            Text(presence?.displayName ?? member.membership)
+                .font(SynaraTypography.supporting)
+                .foregroundStyle(SynaraColor.secondaryText)
+        }
+        .accessibilityIdentifier("RoomMemberPresenceRow")
+        .task(id: member.userID) {
+            presence = await environment.matrix.presence(userID: member.userID)
+        }
+    }
+}
+
+private struct StickerPackSheet: View {
+    let roomID: String
+    let onSend: (SharedCoreSticker) -> Void
+    @Environment(\.appEnvironment) private var environment
+    @Environment(\.dismiss) private var dismiss
+    @State private var stickers: [SharedCoreSticker] = []
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if stickers.isEmpty {
+                    Text("No sticker packs are available.")
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .accessibilityIdentifier("StickerPackEmpty")
+                } else {
+                    ForEach(stickers) { sticker in
+                        Button {
+                            onSend(sticker)
+                            dismiss()
+                        } label: {
+                            VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                                Text(sticker.body)
+                                    .font(SynaraTypography.body)
+                                Text(sticker.packName)
+                                    .font(SynaraTypography.supporting)
+                                    .foregroundStyle(SynaraColor.secondaryText)
+                            }
+                        }
+                        .accessibilityIdentifier("StickerPackItem")
+                    }
+                }
+            }
+            .navigationTitle("Stickers")
+            .accessibilityIdentifier("StickerPackSheet")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+            }
+            .task(id: roomID) {
+                stickers = await environment.roomManagement.stickers(roomID: roomID)
             }
         }
     }
@@ -4854,6 +4955,7 @@ private struct ComposerView: View {
         let onCameraImage: (UIImage) -> Void
     #endif
     let onUploadFailed: (String) -> Void
+    var onOpenStickers: (() -> Void)? = nil
     @Binding var selectedPhoto: PhotosPickerItem?
     @Binding var isFocusedExternally: Bool
     @State private var isAttachmentSheetPresented = false
@@ -4918,6 +5020,20 @@ private struct ComposerView: View {
                 .contentShape(Rectangle())
                 .accessibilityLabel("Attach")
                 .accessibilityIdentifier("AttachmentButton")
+
+                if let onOpenStickers {
+                    Button(action: onOpenStickers) {
+                        Image(systemName: "face.smiling")
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(width: 34, height: 34)
+                            .background(SynaraColor.secondarySurface)
+                            .foregroundStyle(SynaraColor.secondaryText)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Stickers")
+                    .accessibilityIdentifier("StickerPackButton")
+                }
 
                 HStack(alignment: .center, spacing: SynaraSpacing.xSmall) {
                     composerField

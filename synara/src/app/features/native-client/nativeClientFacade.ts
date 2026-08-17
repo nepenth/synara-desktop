@@ -207,6 +207,7 @@ export type FacadeRoomReading = {
   unreadCount: number;
   highlightCount: number;
   lastActivityTs?: number;
+  lastMessagePreview?: string;
   tombstoneSuccessorRoomId?: string | null;
   getMyMembership(): string;
   getCanonicalAlias(): string | null;
@@ -222,6 +223,25 @@ export type FacadeTimelineEventReading = {
   type: string;
   body: string;
   originServerTs: number;
+};
+
+const TIMELINE_MEDIA_HANDLE_PREFIX = 'timeline-media-';
+
+/** Prefer an opaque timeline handle over leftover `mxc://` or protocol URLs. */
+export const timelineMediaHandleFromUri = (contentUri: string): string | null => {
+  const trimmed = contentUri.trim();
+  if (trimmed.startsWith(TIMELINE_MEDIA_HANDLE_PREFIX)) {
+    return trimmed;
+  }
+  const match = /^synara-media:\/\/[^/]*\/(.+)$/i.exec(trimmed);
+  if (!match?.[1]) {
+    return null;
+  }
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
 };
 
 const parseRoomListSnapshot = (value: unknown): NativeRoomListSnapshot | null => {
@@ -290,6 +310,9 @@ const toRoomReading = (
     getEventReadUpTo: () => null,
     getLastActiveTimestamp: () => summary().lastActivityTs,
     getBumpStamp: () => summary().lastActivityTs,
+    get lastMessagePreview() {
+      return summary().lastMessagePreview;
+    },
     getThreads: () => [],
     accountData: { get: () => undefined },
     getMyMembership: () => summary().membership,
@@ -969,9 +992,11 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       return parseMediaConfig(result.value);
     },
 
-    /** F4 — download original file bytes via matrix_media_download (fail-closed null). */
+    /** F4 / P4-S36 — download via handle or leftover mxc. Handles stay opaque. */
     async downloadMedia(contentUri: string): Promise<FacadeMediaDownloadResult | null> {
-      const result = await invoke('matrix_media_download', { contentUri });
+      const result = await invoke('matrix_media_download', {
+        contentUri: timelineMediaHandleFromUri(contentUri) ?? contentUri,
+      });
       if (!result.available) return null;
       return parseMediaDownload(result.value);
     },

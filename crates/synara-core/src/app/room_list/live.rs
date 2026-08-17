@@ -3,17 +3,69 @@
 //! SDK room objects and vector diffs stop here. The Tauri boundary receives
 //! only ordered room IDs and product-owned, privacy-safe summaries.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use eyeball_im::VectorDiff;
 use futures_util::StreamExt;
 use matrix_sdk::notification_settings::RoomNotificationMode;
+use matrix_sdk::ruma::events::MessageLikeEventContent;
 use matrix_sdk::{Room, RoomState};
 use matrix_sdk_ui::room_list_service::filters;
 use serde::{Deserialize, Serialize};
+use tokio::task::JoinHandle;
 
+use crate::app::room_list::last_message::{
+    last_message_preview_from_event_json, last_message_preview_from_event_json_str,
+    last_message_preview_from_invite,
+};
 use crate::app::sync::SyncServiceOwner;
 use crate::dto::{Membership, NotificationMode, RoomSummary};
+
+/// Privacy-safe room-list wake-up. No room ids, names, tokens, or password.
+/// iOS re-fetches via the existing snapshot command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NativeRoomListUpdateSignal {
+    pub session_generation: u64,
+}
+
+pub type RoomListUpdateEmit = Arc<dyn Fn(NativeRoomListUpdateSignal) + Send + Sync>;
+
+/// Owns one joined-room entries stream for an attached SyncService.
+pub struct NativeRoomListOwner {
+    task: JoinHandle<()>,
+}
+
+impl NativeRoomListOwner {
+    pub fn start(owner: &SyncServiceOwner, emit: RoomListUpdateEmit) -> Self {
+        let service = owner.room_list_service();
+        let session_generation = owner.session_generation();
+        let task = tokio::spawn(async move {
+            let Ok(list) = service.all_rooms().await else {
+                return;
+            };
+            let (entries, controller) = list.entries_with_dynamic_adapters(usize::MAX);
+            if !controller.set_filter(Box::new(filters::new_filter_joined())) {
+                return;
+            }
+            futures_util::pin_mut!(entries);
+            while let Some(diffs) = entries.next().await {
+                if diffs.is_empty() {
+                    continue;
+                }
+                emit(NativeRoomListUpdateSignal { session_generation });
+            }
+            drop(controller);
+        });
+        Self { task }
+    }
+}
+
+impl Drop for NativeRoomListOwner {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
 
 const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -100,8 +152,33 @@ async fn project_room(room: &Room) -> RoomSummary {
         marked_unread: room.is_marked_unread(),
         notification_mode,
         last_activity_ts,
+        last_message_preview: last_message_preview(room),
         heroes: None,
         tombstone_successor_room_id: None,
+    }
+}
+
+fn last_message_preview(room: &Room) -> Option<String> {
+    use matrix_sdk::latest_events::LatestEventValue;
+    match room.latest_event() {
+        LatestEventValue::None => None,
+        LatestEventValue::RemoteInvite { inviter, .. } => {
+            last_message_preview_from_invite(inviter.as_ref().map(|id| id.as_str()))
+        }
+        LatestEventValue::Remote(event) => {
+            last_message_preview_from_event_json_str(event.raw().json().get())
+        }
+        LatestEventValue::LocalIsSending(local)
+        | LatestEventValue::LocalHasBeenSent { value: local, .. }
+        | LatestEventValue::LocalCannotBeSent(local) => {
+            let Ok(content) = local.content.deserialize() else {
+                return None;
+            };
+            last_message_preview_from_event_json(&serde_json::json!({
+                "type": content.event_type().to_string(),
+                "content": content,
+            }))
+        }
     }
 }
 

@@ -90,6 +90,7 @@ export type RoomReading = {
   getEventReadUpTo(userId: UserId): string | null;
   getLastActiveTimestamp?(): number | undefined;
   getBumpStamp?(): number | undefined;
+  lastMessagePreview?: string;
   getThreads?(): { events: MatrixEventReading[] }[];
   accountData: { get(eventType: string): MatrixEventReading | undefined };
   getMyMembership(): string;
