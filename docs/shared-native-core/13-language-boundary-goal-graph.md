@@ -136,7 +136,7 @@ flowchart TD
 | P4-S36 desktop media handle cutover | `landed` #1001 | required | Leftover `matrix_media_download` resolves `timeline-media-*` through the native owner. Not `Core.command`. |
 | P4-S37 presence + sticker pack UI | `landed` #1001 | required | Settings/room details consume presence. Composer lists image-pack names and sends via `SharedCoreSendSticker`. |
 | Desktop native media cutover | `landed` #1001 | required | Live timeline uses `synara-media://` + handle resolve. Leftover `mxc://` is avatar/pack only. |
-| Desktop JS media retire | `in-pr` | required | Composer send is native-only. `browser-encrypt-attachment` removed. `sw.ts` is a stub. Leftover encrypted `mxc://` fail-closes. Leftover avatar `<img src=mxc://>` display remains. Not Apple generate. Not dual-platform proof. |
+| Desktop JS media retire | `landed` #1006 | required | Composer send is native-only. `browser-encrypt-attachment` removed. `sw.ts` is a stub. Leftover encrypted `mxc://` fail-closes. Leftover avatar `<img src=mxc://>` display remains. Not Apple generate. Not dual-platform proof. |
 | P4 engine ready | pending | gate | Product paths call Core. Not claimed: Apple generate, paused iOS CI (#1003), and paused live homeserver proof still sit in front of the gate. |
 | P5 | `blocked` | operator | Do not start. Apple/TestFlight/physical-device. |
 
@@ -144,17 +144,19 @@ flowchart TD
 
 ## Current pointer
 
-**S12–S37 landed on `main` via #1001 (`7ecbfdf9`).** Session, sync,
-room list, timeline, verification, typing, room-details, read-marker,
-crypto, reactions, opaque media handles, last-message previews,
-Settings devices, presence, and sticker-pack UI call Core. Desktop
-live media uses the handle owner. Hosted iOS CI stays paused (#1003).
-Live homeserver proof is paused until an environment can launch the
-app. Do not start P5. Do not claim P4 engine ready. Apple generate
-is required for the new UniFFI fields. Desktop JS encrypt/decrypt is
-retired; leftover encrypted `mxc://` fail-closes. Leftover avatar
-`<img src=mxc://>` display remains. Dual-platform Core bugfix proof
-is not claimed. Do not register byte commands on `Core::command`.
+**S12–S37 landed on `main` via #1001. Desktop JS media retire landed
+via #1006 (`76f67441`).** Session, sync, room list, timeline,
+verification, typing, room-details, read-marker, crypto, reactions,
+opaque media handles, last-message previews, Settings devices,
+presence, and sticker-pack UI call Core. Desktop live media uses the
+handle owner. Composer send is native-only. Hosted iOS CI stays
+paused (#1003). Live homeserver proof is paused until an environment
+can launch the app. Do not start P5. Do not claim P4 engine ready.
+Apple generate is required for the new UniFFI fields. Leftover
+encrypted `mxc://` fail-closes. Leftover avatar `<img src=mxc://>`
+display remains. Dual-platform Core bugfix proof is not claimed. Do
+not register byte commands on `Core::command`. The next required
+graph node is the P4 engine-ready gate (blocked). Do not invent S38.
 
 ---
 
@@ -163,4 +165,5 @@ is not claimed. Do not register byte commands on `Core::command`.
 - Disk under 20 Gi and the slice needs cargo/UniFFI.
 - The next node is P5.
 - A leftover secret/byte command would have to cross `Core::command`.
-- The only remaining work is Apple generate, a live homeserver, or a merge.
+- The only remaining work is Apple generate, a live homeserver, dual-platform
+  proof, leftover avatar display, or a merge. Do not invent S38.

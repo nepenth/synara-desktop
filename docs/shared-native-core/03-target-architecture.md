@@ -31,14 +31,15 @@ synara-ios/                    # iOS shell (slim after P4)
 
 **Target** is section 3.2–3.5: both shells are thin adapters over one Core.
 
-**Current (tip `7ecbfdf9` on `main`):** desktop already calls `Core::command` for one
+**Current (tip `76f67441` on `main`):** desktop already calls `Core::command` for one
 hundred eleven names and attaches live owners. iOS has typed SharedCore
 wrappers through S9-31 (helper + XCTest), plus credential-free
 `login_flows` / `register_flows`, `SharedCore` constructors, optional
 `IosSecretVault`, restore, dedicated `login_with_password`, owner
 attach, the S11 NSE read-only store helper (#984; never starts
 sync; not a product NSE swap), S10 leftover UniFFI (#986), and
-P4-S12–S37 product consume (#1001). Product `MatrixRustSDK` callers
+P4-S12–S37 product consume (#1001). Desktop JS encrypt/decrypt is
+retired (#1006). Product `MatrixRustSDK` callers
 are retired (comments may remain). This is not iOS-on-engine. Hosted
 iOS CI is paused (#1003). Live homeserver proof is paused. Local
 Apple generate has been run for earlier fields; new S30–S35 UniFFI

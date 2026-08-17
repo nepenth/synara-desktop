@@ -18,8 +18,8 @@ path. **Never a big-bang move.**
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
 
-**Current bounded status at `7ecbfdf9`
-(#1001):** #713 mechanically moved notifications, polls,
+**Current bounded status at `76f67441`
+(#1006):** #713 mechanically moved notifications, polls,
 relations, threads, and unread; #714 moved raw content, receipts, routes, and
 security; #716 moved search, legacy, and media_cache; #717 moved media_export
 and crypto_store; #734 moved the room-directory session harness; #735 moved
@@ -167,6 +167,9 @@ Goal: iOS consumes the same engine; Swift re-implementations retired.
    - #1002 adds the Long-running Cloud Agent recipe
    - #1003 pauses hosted iOS simulator CI until `main` is stable
    - #1001 lands P4-S12–S37 (`7ecbfdf9`)
+   - #1004 docs honesty after #1001
+   - #1005 leftover `matrix_media_download` handle resolve
+   - #1006 desktop JS media retire (`76f67441`)
    - Local Apple UniFFI generate has been run for earlier fields; new S30–S35 fields still need Apple generate; generated sources remain gitignored
    - Product `MatrixRustSDK` grep is comments only; leftover I/O fail-closed; SyncService can be started through SharedCore; live homeserver proof paused; hosted iOS CI paused
 4. Remove `matrix-rust-components-swift` from `project.yml` when nothing
@@ -178,12 +181,13 @@ zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
 
 > **Bounded evidence note — not P4 acceptance:** At the current `main` tip
-> `7ecbfdf9` (#1001), UniFFI exposes credential-free `login_flows` /
+> `76f67441` (#1006), UniFFI exposes credential-free `login_flows` /
 > `register_flows`, SharedCore constructors, S3 vault/restore/login/attach,
 > typed wrappers through S9-31, the S11 NSE read-only store helper
 > (never starts sync; not a product NSE swap), S10 leftover UniFFI, and
 > P4-S12–S37 product consume (start_sync through last-message, desktop
-> media handle cutover, presence/stickers). Product `MatrixRustSDK`
+> media handle cutover, presence/stickers). #1006 retires desktop JS
+> encrypt/decrypt. Product `MatrixRustSDK`
 > callers are retired. Leftover I/O that needs a live homeserver stays
 > fail-closed planted. SyncService can be started through SharedCore;
 > live homeserver proof is paused. This is not iOS-on-engine.

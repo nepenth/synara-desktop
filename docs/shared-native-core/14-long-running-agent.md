@@ -43,10 +43,10 @@ Read, in order:
 3. docs/shared-native-core/13-language-boundary-goal-graph.md if present
 4. docs/adr/0004-rust-language-boundaries.md if present (else PR #1000)
 5. Open PRs only for work that is still open. #1000, #1001, #1002,
-   and #1003 have merged.
+   #1003, #1004, #1005, and #1006 have merged.
 
 Start from the latest implementation tip, not a stale main graph:
-- Start from `origin/main` (`7ecbfdf9` after #1001). Refresh the graph.
+- Start from `origin/main` (`76f67441` after #1006). Refresh the graph.
 
 Loop until every required graph node is landed or blocked:
 - One P4 family at a time. Local cargo tests. Commit. Push. Draft PR.
@@ -58,6 +58,7 @@ Loop until every required graph node is landed or blocked:
 
 Current honesty (update if the graph has moved):
 - S12–S37 landed on `main` via #1001. ADR 0004 landed via #1000.
+  Desktop JS media retire landed via #1006 (`76f67441`).
 - Hosted iOS CI stays paused (#1003). Live homeserver proof stays paused
   until an environment can launch the app.
 - Desktop live timeline media uses `synara-media://` + handle resolve.
@@ -66,12 +67,13 @@ Current honesty (update if the graph has moved):
   Leftover avatar `<img src=mxc://>` display remains. iOS leftover
   media I/O stays fail-closed (decision 15). Do not register
   `matrix_send_attachment`.
-- Do not invent a byte channel. Do not start P5. Do not claim
-  iOS-on-engine or P4 engine ready.
+- Do not invent a byte channel. Do not invent S38. Do not start P5.
+  Do not claim iOS-on-engine or P4 engine ready.
 - Remaining non-P5 work that needs a Mac or a live app: Apple generate
   for new UniFFI fields, dual-platform Core bugfix proof, live
   homeserver proof after the app can launch. Optional later: leftover
-  avatar display via native blob URLs.
+  avatar display via native blob URLs. Re-enable hosted iOS CI only
+  when an operator asks.
 
 Propose a plan first. Wait for approval. Then execute.
 ```
@@ -79,7 +81,7 @@ Propose a plan first. Wait for approval. Then execute.
 ## What this agent will not do
 
 - Enable the team setting for you.
-- Merge already-landed #1000 / #1001 / #1002 / #1003 again.
+- Merge already-landed #1000 / #1001 / #1002 / #1003 / #1004 / #1005 / #1006 again.
 - Start P5 or TestFlight.
 - Hand-edit generated Swift or invent a no-bindgen Apple generate path.
 - Invent a dual-platform Core bugfix proof that did not run on iOS.
