@@ -218,6 +218,23 @@ interface SyncStartError {
   Failed(string code, string description);
 };
 
+// Privacy-safe drained timeline view-delta summary. No row bodies, tokens,
+// or password. iOS re-fetches snapshot via the existing timeline commands.
+dictionary TimelineViewUpdateDto {
+  u32 schema_version;
+  u64 session_generation;
+  string stream_id;
+  string room_id;
+  u64 revision;
+  u32 op_count;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface TimelineViewUpdateError {
+  Failed(string code, string description);
+};
+
 // Privacy-safe room-list row. No tokens or password.
 dictionary RoomListRoomDto {
   string room_id;
@@ -1243,6 +1260,9 @@ interface InviteActionError {
 // stay static and must not echo room id, event id, user id, or tokens.
 // P4-S12 adds start_sync for the already-attached SyncService only.
 // NSE still cannot start sync. This is not P4 acceptance or iOS-on-engine.
+// P4-S14 adds poll_timeline_view_updates for the attached timeline emit
+// sink. It drains privacy-safe summaries only. NSE cannot poll. This is
+// not Platform::emit and not a generic command FFI.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -1270,6 +1290,9 @@ interface SharedCore {
 
   [Async, Throws=SyncStartError]
   SyncStartDto start_sync();
+
+  [Async, Throws=TimelineViewUpdateError]
+  sequence<TimelineViewUpdateDto> poll_timeline_view_updates();
 
   [Async, Throws=RoomListSnapshotError]
   RoomListSnapshotDto room_list_snapshot();

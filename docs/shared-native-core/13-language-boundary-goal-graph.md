@@ -69,8 +69,8 @@ flowchart TD
 | ADR 0004 rubric | `in-pr` #1000 | required docs | Can/should filter. No UI/CI rewrite. |
 | P4-S12 start_sync | `in-pr` #1001 | required | Start already-attached SyncService. NSE still cannot start. |
 | P4-S13 restore bootstrap | `in-pr` #1001 | required | Cold-start: restore vault session → attach → start. One product path with login. |
-| P4-S14 emit sinks | pending | required | Replace no-op product event emits so room list/timeline update live. |
-| P4-S15 leftover I/O live | pending | required | Planted leftover I/O that needs a live homeserver stays fail-closed until a written owner decision. Prefer status/recover that already have Core owners. No byte/secret envelopes. |
+| P4-S14 emit sinks | `in-pr` #1001 | required | Timeline view-delta poll queue. Summaries only. NSE cannot poll. Other product emits stay no-op. |
+| P4-S15 leftover I/O live | next | required | Planted leftover I/O that needs a live homeserver stays fail-closed until a written owner decision. Prefer status/recover that already have Core owners. No byte/secret envelopes. |
 | Desktop native media cutover | pending | required | Retire `browser-encrypt-attachment` and shrink `synara/src/sw.ts` once both shells get bytes from the native owner. Do not register `matrix_send_attachment` on Core. |
 | P4 engine ready | pending | gate | Session + sync + room list + timeline + crypto product paths call Core on iOS. Not claimed. |
 | P5 | `blocked` | operator | Do not start. Apple/TestFlight/physical-device. |
@@ -79,8 +79,10 @@ flowchart TD
 
 ## Current pointer
 
-**S13 is on #1001 with S12.** After that PR merges: set S14 `next`.
-Do not start P5. Next implementer: emit sinks (S14) or media cutover.
+**S14 is on #1001 with S12 and S13.** Timeline view-delta is the first
+emit family. After that PR merges: set S15 `next` if not already
+started. Do not start P5. Next implementer: leftover I/O (S15) or
+desktop native media cutover.
 
 ---
 

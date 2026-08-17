@@ -187,7 +187,8 @@ use crate::app::timeline::{
     NativeTimelineItem, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
     NativeTimelineOwner, NativeTimelineReaction, NativeTimelineReactionSender,
     NativeTimelineReadAction, NativeTimelineReadStateReadback, NativeTimelineViewportHint,
-    TimelinePageState, TimelineViewPosition, TimelineViewSnapshot,
+    TimelinePageState, TimelineViewDeltaBatch, TimelineViewPosition, TimelineViewSnapshot,
+    TimelineViewUpdateEmit, TIMELINE_VIEW_SCHEMA_VERSION,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::app::verification::{
@@ -243,6 +244,12 @@ const SYNC_NOT_ATTACHED_CODE: &str = "p4-s12-sync-not-attached";
 const SYNC_NOT_ATTACHED_DESCRIPTION: &str = "Session owners are not attached.";
 const SYNC_START_FAILED_CODE: &str = "p4-s12-sync-start-failed";
 const SYNC_START_FAILED_DESCRIPTION: &str = "SyncService could not be started.";
+const NSE_FORBIDS_POLL_CODE: &str = "p4-s14-nse-forbids-poll";
+const NSE_FORBIDS_POLL_DESCRIPTION: &str =
+    "The NSE read-only store cannot poll timeline view updates.";
+const TIMELINE_VIEW_POLL_FAILED_CODE: &str = "p4-s14-timeline-view-poll-failed";
+const TIMELINE_VIEW_POLL_FAILED_DESCRIPTION: &str = "Timeline view updates could not be polled.";
+const TIMELINE_VIEW_UPDATE_QUEUE_CAP: usize = 32;
 const NSE_OWNERS_ATTACHED_CODE: &str = "p4-s11-nse-owners-already-attached";
 const NSE_OWNERS_ATTACHED_DESCRIPTION: &str =
     "The NSE read-only store cannot open after owners attach.";
@@ -858,6 +865,54 @@ fn sync_start_failed(code: &'static str, description: &'static str) -> SyncStart
     SyncStartError::Failed {
         code: code.to_owned(),
         description: description.to_owned(),
+    }
+}
+
+/// Privacy-safe drained timeline view-delta summary. No row bodies or tokens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineViewUpdateDto {
+    pub schema_version: u32,
+    pub session_generation: u64,
+    pub stream_id: String,
+    pub room_id: String,
+    pub revision: u64,
+    pub op_count: u32,
+}
+
+/// Static fail-closed timeline view-update poll error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TimelineViewUpdateError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for TimelineViewUpdateError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for TimelineViewUpdateError {}
+
+fn timeline_view_poll_failed(
+    code: &'static str,
+    description: &'static str,
+) -> TimelineViewUpdateError {
+    TimelineViewUpdateError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn timeline_view_update_dto(batch: TimelineViewDeltaBatch) -> TimelineViewUpdateDto {
+    TimelineViewUpdateDto {
+        schema_version: batch.schema_version,
+        session_generation: batch.session_generation,
+        stream_id: batch.stream_id,
+        room_id: batch.room_id,
+        revision: batch.revision,
+        op_count: u32::try_from(batch.ops.len()).unwrap_or(u32::MAX),
     }
 }
 
@@ -2172,6 +2227,7 @@ pub struct SharedCore {
     restored_client: Mutex<RestoredClientSlot>,
     owner_attach: Mutex<OwnerAttachSlot>,
     nse_read_only: Mutex<bool>,
+    timeline_view_updates: Arc<Mutex<Vec<TimelineViewDeltaBatch>>>,
 }
 
 impl SharedCore {
@@ -2185,6 +2241,7 @@ impl SharedCore {
             restored_client: Mutex::new(RestoredClientSlot::Empty),
             owner_attach: Mutex::new(OwnerAttachSlot::Empty),
             nse_read_only: Mutex::new(false),
+            timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -2199,6 +2256,7 @@ impl SharedCore {
             restored_client: Mutex::new(RestoredClientSlot::Empty),
             owner_attach: Mutex::new(OwnerAttachSlot::Empty),
             nse_read_only: Mutex::new(false),
+            timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -2475,10 +2533,11 @@ impl SharedCore {
 
     /// Attach the desktop owner set on the retained Client. No Core.command.
     ///
-    /// Builds owners with no-op emit sinks (Platform::emit stays a later
-    /// slice). SyncService is attached but not started; P4-S12
-    /// `start_sync` starts it. Fail-closed if no Client is retained or
-    /// owners are already attached.
+    /// Builds owners with a queued timeline view-delta sink (P4-S14).
+    /// Other product emits stay no-op. Platform::emit is still not used
+    /// for product events. SyncService is attached but not started;
+    /// P4-S12 `start_sync` starts it. Fail-closed if no Client is
+    /// retained or owners are already attached.
     pub async fn attach_session_owners(&self) -> Result<SessionAttachDto, SessionAttachError> {
         if self.is_nse_read_only() {
             return Err(attach_failed(
@@ -2539,11 +2598,16 @@ impl SharedCore {
             NativeImagePackOwner::start(&client, Arc::new(|_| {}), generation)
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
-        let timelines = Arc::new(NativeTimelineOwner::new(
-            &client,
-            Arc::new(|_| {}),
-            generation,
-        ));
+        let timeline_updates = Arc::clone(&self.timeline_view_updates);
+        let timeline_emit: TimelineViewUpdateEmit = Arc::new(move |batch| {
+            if let Ok(mut guard) = timeline_updates.lock() {
+                if guard.len() >= TIMELINE_VIEW_UPDATE_QUEUE_CAP {
+                    guard.remove(0);
+                }
+                guard.push(batch);
+            }
+        });
+        let timelines = Arc::new(NativeTimelineOwner::new(&client, timeline_emit, generation));
         let sync = Arc::new(
             build_sync_service(&client, generation, SyncServiceConfig::default())
                 .await
@@ -2621,6 +2685,60 @@ impl SharedCore {
             ),
             offline_mode_enabled: snapshot.offline_mode_enabled,
         })
+    }
+
+    /// Drain queued timeline view-delta summaries. Not `Core.command`.
+    ///
+    /// NSE forbids this. An empty queue returns an empty list. This is
+    /// not Platform::emit. Failed errors stay static.
+    pub async fn poll_timeline_view_updates(
+        &self,
+    ) -> Result<Vec<TimelineViewUpdateDto>, TimelineViewUpdateError> {
+        if self.is_nse_read_only() {
+            return Err(timeline_view_poll_failed(
+                NSE_FORBIDS_POLL_CODE,
+                NSE_FORBIDS_POLL_DESCRIPTION,
+            ));
+        }
+        let mut guard = self.timeline_view_updates.lock().map_err(|_| {
+            timeline_view_poll_failed(
+                TIMELINE_VIEW_POLL_FAILED_CODE,
+                TIMELINE_VIEW_POLL_FAILED_DESCRIPTION,
+            )
+        })?;
+        Ok(guard.drain(..).map(timeline_view_update_dto).collect())
+    }
+
+    /// Test-only enqueue onto the attach timeline emit queue. Not on UDL.
+    #[doc(hidden)]
+    pub fn enqueue_timeline_view_update_for_test(
+        &self,
+        stream_id: String,
+        room_id: String,
+        revision: u64,
+    ) {
+        use crate::app::timeline::TimelineReadState;
+        let batch = TimelineViewDeltaBatch {
+            schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+            session_generation: 1,
+            stream_id,
+            room_id,
+            revision,
+            ops: Vec::new(),
+            read_state: Some(TimelineReadState {
+                own_read_event_id: None,
+                unread_anchor_event_id: None,
+                is_marked_unread: false,
+            }),
+            pagination: None,
+            pinned_event_ids: None,
+        };
+        if let Ok(mut guard) = self.timeline_view_updates.lock() {
+            if guard.len() >= TIMELINE_VIEW_UPDATE_QUEUE_CAP {
+                guard.remove(0);
+            }
+            guard.push(batch);
+        }
     }
 
     /// Typed consume of the already-registered `matrix_room_list_snapshot`.

@@ -82,6 +82,7 @@
 		7D0F1A2B3C4D5E6F708192A3 /* SharedCoreSessionAttach.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C9E5F7B2D4160A8F1B2C4D6 /* SharedCoreSessionAttach.swift */; };
 		1B2C3D4E5F60718293A4B5C6 /* SharedCoreSyncStart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1B2C3D4E5F60718293A4B5 /* SharedCoreSyncStart.swift */; };
 		2C3D4E5F60718293A4B5C6D7 /* SharedCoreSessionBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C2D3E4F60718293A4B5C6D7 /* SharedCoreSessionBootstrap.swift */; };
+		3E4F60718293A4B5C6D7E8F9 /* SharedCoreTimelineViewUpdates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D3E4F60718293A4B5C6D7E8 /* SharedCoreTimelineViewUpdates.swift */; };
 		8E1A2B3C4D5E6F708192A4B5 /* SharedCoreRoomList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D0A6E8C3E5271B902C3D5E7 /* SharedCoreRoomList.swift */; };
 		9F2B3C4D5E6F708192A5B6C7 /* SharedCoreInvites.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1B7F9D4F6382C013D4E6F8 /* SharedCoreInvites.swift */; };
 		A03C4D5E6F708192A6B7C8D9 /* SharedCoreTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F2C8A0E507493D124E5F7A9 /* SharedCoreTimeline.swift */; };
@@ -268,6 +269,7 @@
 		3C9E5F7B2D4160A8F1B2C4D6 /* SharedCoreSessionAttach.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionAttach.swift; sourceTree = "<group>"; };
 		0A1B2C3D4E5F60718293A4B5 /* SharedCoreSyncStart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSyncStart.swift; sourceTree = "<group>"; };
 		1C2D3E4F60718293A4B5C6D7 /* SharedCoreSessionBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionBootstrap.swift; sourceTree = "<group>"; };
+		2D3E4F60718293A4B5C6D7E8 /* SharedCoreTimelineViewUpdates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineViewUpdates.swift; sourceTree = "<group>"; };
 		4D0A6E8C3E5271B902C3D5E7 /* SharedCoreRoomList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomList.swift; sourceTree = "<group>"; };
 		5E1B7F9D4F6382C013D4E6F8 /* SharedCoreInvites.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreInvites.swift; sourceTree = "<group>"; };
 		6F2C8A0E507493D124E5F7A9 /* SharedCoreTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimeline.swift; sourceTree = "<group>"; };
@@ -449,6 +451,7 @@
 				3C9E5F7B2D4160A8F1B2C4D6 /* SharedCoreSessionAttach.swift */,
 				0A1B2C3D4E5F60718293A4B5 /* SharedCoreSyncStart.swift */,
 				1C2D3E4F60718293A4B5C6D7 /* SharedCoreSessionBootstrap.swift */,
+				2D3E4F60718293A4B5C6D7E8 /* SharedCoreTimelineViewUpdates.swift */,
 				4D0A6E8C3E5271B902C3D5E7 /* SharedCoreRoomList.swift */,
 				5E1B7F9D4F6382C013D4E6F8 /* SharedCoreInvites.swift */,
 				6F2C8A0E507493D124E5F7A9 /* SharedCoreTimeline.swift */,
@@ -784,6 +787,7 @@
 				7D0F1A2B3C4D5E6F708192A3 /* SharedCoreSessionAttach.swift in Sources */,
 				1B2C3D4E5F60718293A4B5C6 /* SharedCoreSyncStart.swift in Sources */,
 				2C3D4E5F60718293A4B5C6D7 /* SharedCoreSessionBootstrap.swift in Sources */,
+				3E4F60718293A4B5C6D7E8F9 /* SharedCoreTimelineViewUpdates.swift in Sources */,
 				8E1A2B3C4D5E6F708192A4B5 /* SharedCoreRoomList.swift in Sources */,
 				9F2B3C4D5E6F708192A5B6C7 /* SharedCoreInvites.swift in Sources */,
 				A03C4D5E6F708192A6B7C8D9 /* SharedCoreTimeline.swift in Sources */,

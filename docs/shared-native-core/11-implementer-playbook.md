@@ -419,6 +419,9 @@ P4-S13 restore bootstrap              stacked on S12
        Cold-start restore → attach → start on a fresh SharedCore.
        Product `SharedCoreMatrixClientService.start` is the one path.
        NSE still cannot start sync. Not P4 acceptance.
+P4-S14 emit sinks                     stacked on S12/S13
+       Timeline view-delta poll queue only. Summaries, not row
+       bodies. NSE still cannot poll. Not Platform::emit.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -640,9 +643,10 @@ token, by design). Product `AuthenticatedSession` still stores an
 empty access token after SharedCore login. SharedCore attach still
 does not start SyncService; P4-S12 adds a separate `start_sync`.
 P4-S13 product `start(session:)` restores, attaches, then starts.
-Product event emit sinks are no-op. Desktop twenty-one leftovers stay
-unregistered on `Core::command`. iOS CI is re-enabled (#988). Do not
-start P5. This is not iOS-on-engine.
+Product event emit sinks: timeline view-delta is a poll queue (S14);
+presence, devices, join_rules, and image_packs remain no-op. Desktop
+twenty-one leftovers stay unregistered on `Core::command`. iOS CI is
+re-enabled (#988). Do not start P5. This is not iOS-on-engine.
 
 ### 9.7 P4-S12 — start attached SyncService
 
@@ -679,6 +683,32 @@ vault.
 
 **Must not land:** leftover registration; byte/secret envelopes; starting
 sync in NSE; P5; claiming iOS-on-engine; emit-sink product events (S14).
+
+### 9.9 P4-S14 — timeline view-delta emit sink
+
+S13 starts sync on cold launch. Timeline still cannot tell iOS that
+rows changed because attach used a no-op `TimelineViewUpdateEmit`.
+
+**Lands:** attach installs a bounded queue (cap 32, drop oldest).
+`SharedCore.poll_timeline_view_updates` drains privacy-safe summaries
+only (`schema_version`, `session_generation`, `stream_id`, `room_id`,
+`revision`, `op_count`). Empty queue is success. Helper + XCTest. NSE
+still fail-closes. iOS re-fetches snapshot via existing timeline
+open/paginate.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+`Platform::emit` for product events; row bodies or tokens on the DTO;
+polling in NSE; room-list live updates; presence/devices/join_rules/
+image_packs sinks; P5; claiming iOS-on-engine or P4 acceptance; a
+generic `Core.command` FFI.
+
+**UDL:** adds `poll_timeline_view_updates` on `SharedCore`. Section 9.2
+disk gate applies. Implement in `crates/synara-core/src/shared_core_ffi.rs`.
+Do not change NSE methods to poll.
+
+**Tests:** UDL surface; poll empty without attach; NSE forbids poll;
+enqueue then poll is privacy-safe with no token, user id, or URL echo.
+Failed errors stay static.
 
 ---
 

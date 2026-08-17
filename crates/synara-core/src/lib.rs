@@ -65,9 +65,10 @@ pub use shared_core_ffi::{
     TimelineOpenPositionDto, TimelinePinDto, TimelinePinError, TimelineReactionDto,
     TimelineReactionError, TimelineReactionMutationDto, TimelineReactionSenderDto,
     TimelineReadStateDto, TimelineReadStateError, TimelineSnapshotDto, TimelineViewPositionDto,
-    TimelineVoteDeclineDto, TimelineVoteDeclineError, TypingCommandError, TypingRoomDto,
-    TypingSnapshotDto, UserImagePackSnapshotDto, VerificationEmojiDto, VerificationInboxDto,
-    VerificationListError, VerificationRequestDto, VerificationSasDto, VerificationSasError,
+    TimelineViewUpdateDto, TimelineViewUpdateError, TimelineVoteDeclineDto,
+    TimelineVoteDeclineError, TypingCommandError, TypingRoomDto, TypingSnapshotDto,
+    UserImagePackSnapshotDto, VerificationEmojiDto, VerificationInboxDto, VerificationListError,
+    VerificationRequestDto, VerificationSasDto, VerificationSasError,
 };
 
 mod core;
