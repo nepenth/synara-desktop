@@ -818,6 +818,51 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreRoomCryptoMapsInviteAndSessionWithoutEcho() {
+        let session = SharedCoreSessionCrypto.status(
+            crossSigningState: "not_set_up",
+            backupEnabled: false,
+            backupAvailability: "available",
+            backupDeviceState: "ready",
+            recoveryState: "incomplete",
+            secretStorageState: "locked"
+        )
+        let invited = SharedCoreSessionCrypto.roomStatus(isEncrypted: true, session: session)
+        XCTAssertEqual(invited.encryption, .encrypted)
+        XCTAssertEqual(invited.verification, .unverified)
+        XCTAssertEqual(invited.recovery, .incomplete)
+        XCTAssertEqual(invited.unableToDecryptCount, 0)
+        XCTAssertTrue(invited.needsCryptoActionBanner)
+
+        let joinedUnknown = SharedCoreSessionCrypto.roomStatus(isEncrypted: nil, session: session)
+        XCTAssertEqual(joinedUnknown.encryption, .unknown)
+        XCTAssertEqual(joinedUnknown.verification, .unverified)
+
+        let clearInvite = SharedCoreSessionCrypto.roomStatus(isEncrypted: false, session: .unknown)
+        XCTAssertEqual(clearInvite.encryption, .notEncrypted)
+        XCTAssertEqual(clearInvite.verification, .unknown)
+
+        let publicError = String(describing: invited)
+        for forbidden in ["password", "syt_", "token", "missing_secrets", "recovery_key"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreRoomStatusWithoutSessionIsUnknownWithoutEcho() async {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreCryptoStatusService(host: host)
+        let status = await service.roomStatus(roomID: "!s28:example.org")
+        XCTAssertEqual(status, .unknown)
+        let publicError = String(describing: status)
+        for forbidden in ["password", "syt_", "token", "missing_secrets", "recovery_key"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
     func testSharedCoreTypingPresenceWithoutSessionFailsClosed() async {
         let core = SharedCore()
 

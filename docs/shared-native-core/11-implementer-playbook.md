@@ -466,6 +466,9 @@ P4-S26 product room-list unread lookup stacked on S12–S25
 P4-S27 product session crypto status  stacked on S12–S26
        Product sessionStatus maps leftover backup / crypto and
        secret-storage status. No recovery keys. No UDL.
+P4-S28 product room crypto status     stacked on S12–S27
+       Product roomStatus reuses the S27 mapper plus invite
+       encryption. Joined-room encryption stays unknown. No UDL.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -988,8 +991,8 @@ and secret-storage.
 **Lands:** product `SharedCoreCryptoStatusService.sessionStatus`
 composes leftover crypto/backup plus `secret_storage_status` through
 `SharedCoreSessionCrypto`. Recovery keys and missing-secret lists
-never appear on the product status. `roomStatus` / `retryDecryption`
-stay fail-closed. Helper + XCTest.
+never appear on the product status. `roomStatus` is S28.
+`retryDecryption` stays fail-closed. Helper + XCTest.
 
 **Must not land:** leftover registration; byte/secret envelopes;
 UDL changes; mapping recover I/O as live; P5; claiming iOS-on-engine
@@ -998,6 +1001,25 @@ or P4 acceptance.
 **Tests:** mapper covers ready / incomplete / missing / secret-storage
 fallback without token or recovery-key echo; without a session
 `sessionStatus` is unknown.
+
+### 9.23 P4-S28 — product room crypto status
+
+Timeline already calls `roomStatus` for the crypto banner, but the
+SharedCore impl returned `.unknown`. S27 mapped leftover session
+status; invite snapshots already expose `is_encrypted`.
+
+**Lands:** product `SharedCoreCryptoStatusService.roomStatus` reuses
+the S27 session mapper and invite encryption when the room is an
+invite. Joined-room encryption stays unknown (not on the list DTO).
+UTD count stays 0. `retryDecryption` stays fail-closed. Helper +
+XCTest.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+UDL changes; inventing joined-room encryption or UTD counts; P5;
+claiming iOS-on-engine or P4 acceptance.
+
+**Tests:** mapper fills invite encryption and session recovery
+without token echo; without a session `roomStatus` is unknown.
 
 ---
 

@@ -664,8 +664,15 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     }
 
     func roomStatus(roomID: String) async -> RoomCryptoStatus {
-        _ = roomID
-        return .unknown
+        let session = await sessionStatus()
+        let inviteEncrypted = await inviteEncryption(roomID: roomID)
+        guard session != .unknown || inviteEncrypted != nil else {
+            return .unknown
+        }
+        return SharedCoreSessionCrypto.roomStatus(
+            isEncrypted: inviteEncrypted,
+            session: session
+        )
     }
 
     func sessionStatus() async -> SessionCryptoStatus {
@@ -780,6 +787,13 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         } catch {
             return .failed("Recovery is unavailable.")
         }
+    }
+
+    private func inviteEncryption(roomID: String) async -> Bool? {
+        guard let invites = try? await SharedCoreInvites.invitesSnapshot(core: host.core) else {
+            return nil
+        }
+        return invites.invites.first { $0.roomId == roomID }?.isEncrypted
     }
 
     private func currentVerificationState() async -> CryptoVerificationState? {
