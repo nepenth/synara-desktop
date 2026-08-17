@@ -55,6 +55,7 @@ flowchart TD
   s18[S18_product_timeline_live]
   s19[S19_room_list_live]
   s20[S20_product_verification]
+  s21[S21_product_typing]
   media[desktop_native_media_cutover]
   done[p4_engine_ready]
   p5[P5_operator_gated]
@@ -68,7 +69,8 @@ flowchart TD
   s17 --> s18
   s18 --> s19
   s19 --> s20
-  s20 --> done
+  s20 --> s21
+  s21 --> done
   s15 --> done
   media --> done
   done --> p5
@@ -86,6 +88,7 @@ flowchart TD
 | P4-S18 product timeline live poll | `in-pr` #1001 | required | Product `timelineUpdates` consumes S14 summaries. One host poller. |
 | P4-S19 room-list live poll | `in-pr` #1001 | required | After start_sync, wake-ups only. Product `roomUpdates` re-fetches snapshot. No room ids. |
 | P4-S20 product verification | `in-pr` #1001 | required | Product crypto calls list/SAS. `verification` family on the S17 owner queue. |
+| P4-S21 product typing live | `in-pr` #1001 | required | `typing` family on the S17 owner queue (room id only). Product `typingUsers` re-fetches snapshot. |
 | Desktop native media cutover | `blocked` | required | Both shells do not yet get bytes from a native owner. iOS leftover media stays fail-closed (decision 15). Bytes must not cross `Core::command`. Do not register `matrix_send_attachment`. |
 | P4 engine ready | pending | gate | Session + sync + room list + timeline + crypto product paths call Core on iOS. Not claimed. |
 | P5 | `blocked` | operator | Do not start. Apple/TestFlight/physical-device. |
@@ -94,10 +97,10 @@ flowchart TD
 
 ## Current pointer
 
-**S12–S20 are on #1001.** Session, sync, room list, timeline, and
-verification product paths call Core. Media cutover stays **blocked**
-(decision 15). Do not start P5. Do not claim P4 engine ready. Stop if
-only media/P5/Apple remain.
+**S12–S21 are on #1001.** Session, sync, room list, timeline,
+verification, and typing product paths call Core. Media cutover stays
+**blocked** (decision 15). Do not start P5. Do not claim P4 engine
+ready. Stop if only media/P5/Apple remain.
 
 ---
 

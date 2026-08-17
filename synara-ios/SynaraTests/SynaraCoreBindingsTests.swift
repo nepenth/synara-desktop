@@ -463,6 +463,46 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreTypingLiveMatchesRoomWithoutEcho() {
+        let users = SharedCoreTypingLive.users(
+            roomID: "!s21:example.org",
+            rooms: [
+                (roomId: "!other:example.org", userIds: ["@carol:example.org"]),
+                (roomId: "!s21:example.org", userIds: ["@bob:example.org"]),
+            ]
+        )
+        XCTAssertEqual(users, ["@bob:example.org"])
+        XCTAssertTrue(
+            SharedCoreTypingLive.shouldRefresh(watchingRoomID: "!s21:example.org", updateRoomId: "!s21:example.org")
+        )
+        XCTAssertFalse(
+            SharedCoreTypingLive.shouldRefresh(watchingRoomID: "!s21:example.org", updateRoomId: "!other:example.org")
+        )
+        let publicError = String(describing: users)
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreTypingUsersWithoutSessionYieldsEmptyWithoutEcho() async {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreTimelineService(host: host)
+        var batches: [[String]] = []
+        for await users in service.typingUsers(roomID: "!s21:example.org") {
+            batches.append(users)
+            let publicError = String(describing: users)
+            for forbidden in ["password", "syt_", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+            break
+        }
+        XCTAssertEqual(batches, [[]])
+    }
+
     func testSharedCoreTypingPresenceWithoutSessionFailsClosed() async {
         let core = SharedCore()
 

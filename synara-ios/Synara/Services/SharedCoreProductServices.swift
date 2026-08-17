@@ -310,6 +310,30 @@ final class SharedCoreTimelineService: TimelineServicing {
         }
     }
 
+    func typingUsers(roomID: String) -> AsyncStream<[String]> {
+        AsyncStream { continuation in
+            let task = Task {
+                continuation.yield(await typingUsersInRoom(roomID))
+                for await update in host.livePoller.ownerSignals(families: ["typing"]) {
+                    guard Task.isCancelled == false else {
+                        break
+                    }
+                    guard SharedCoreTypingLive.shouldRefresh(
+                        watchingRoomID: roomID,
+                        updateRoomId: update.roomId
+                    ) else {
+                        continue
+                    }
+                    continuation.yield(await typingUsersInRoom(roomID))
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
     func clearSessionCaches() {
         let streamIds = takeAllStreams()
         Task {
@@ -359,6 +383,13 @@ final class SharedCoreTimelineService: TimelineServicing {
         let values = Array(streams.values)
         streams.removeAll()
         return values
+    }
+
+    private func typingUsersInRoom(_ roomID: String) async -> [String] {
+        guard let snapshot = try? await SharedCoreTypingPresence.typingSnapshot(core: host.core) else {
+            return []
+        }
+        return SharedCoreTypingLive.users(roomID: roomID, from: snapshot)
     }
 }
 

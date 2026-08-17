@@ -10,6 +10,16 @@ use tokio::sync::Mutex;
 
 use super::{NativeTypingSnapshot, TypingIndex, MAX_TYPING_USERS_PER_ROOM};
 
+/// Privacy-safe typing wake-up. No user ids, tokens, or password.
+/// iOS re-fetches via the existing snapshot command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeTypingUpdateSignal {
+    pub session_generation: u64,
+    pub room_id: String,
+}
+
+pub type TypingUpdateEmit = Arc<dyn Fn(NativeTypingUpdateSignal) + Send + Sync>;
+
 /// Owns live `m.typing` projection for one managed session.
 pub struct NativeTypingOwner {
     client: Client,
@@ -19,6 +29,14 @@ pub struct NativeTypingOwner {
 
 impl NativeTypingOwner {
     pub fn start(client: &Client, session_generation: u64) -> Result<Self, &'static str> {
+        Self::with_emit(client, Arc::new(|_| {}), session_generation)
+    }
+
+    pub fn with_emit(
+        client: &Client,
+        emit: TypingUpdateEmit,
+        session_generation: u64,
+    ) -> Result<Self, &'static str> {
         let own_user_id = client
             .user_id()
             .ok_or("v-rooms.4-typing-owner-user-missing")?
@@ -28,10 +46,12 @@ impl NativeTypingOwner {
         let handle = client.add_event_handler(move |event: SyncTypingEvent, room: Room| {
             let index = index_for_handler.clone();
             let own_user_id = own_user_id.clone();
+            let emit = Arc::clone(&emit);
             async move {
                 if room.state() != RoomState::Joined {
                     return;
                 }
+                let room_id = room.room_id().to_string();
                 let users: Vec<String> = event
                     .content
                     .user_ids
@@ -41,7 +61,12 @@ impl NativeTypingOwner {
                     .map(|user_id| user_id.to_string())
                     .collect();
                 let mut index = index.lock().await;
-                let _ = index.set_users(room.room_id().as_str(), users);
+                let _ = index.set_users(&room_id, users);
+                drop(index);
+                emit(NativeTypingUpdateSignal {
+                    session_generation,
+                    room_id,
+                });
             }
         });
         Ok(Self {

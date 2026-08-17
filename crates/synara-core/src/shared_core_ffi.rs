@@ -194,7 +194,7 @@ use crate::app::timeline::{
     TimelinePageState, TimelineViewDeltaBatch, TimelineViewPosition, TimelineViewRow,
     TimelineViewSnapshot, TimelineViewUpdateEmit, TIMELINE_VIEW_SCHEMA_VERSION,
 };
-use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
+use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot, NativeTypingUpdateSignal};
 use crate::app::verification::{
     NativeVerificationDirection, NativeVerificationEmoji, NativeVerificationInbox,
     NativeVerificationOwner, NativeVerificationPhase, NativeVerificationRequest,
@@ -2873,11 +2873,22 @@ impl SharedCore {
             return Err(attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION));
         }
 
+        let owner_updates = Arc::clone(&self.owner_updates);
+        let typing_emit = {
+            let queue = Arc::clone(&owner_updates);
+            Arc::new(move |update: NativeTypingUpdateSignal| {
+                push_owner_update(
+                    &queue,
+                    "typing",
+                    update.session_generation,
+                    Some(update.room_id),
+                );
+            })
+        };
         let typing = Arc::new(
-            NativeTypingOwner::start(&client, generation)
+            NativeTypingOwner::with_emit(&client, typing_emit, generation)
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
-        let owner_updates = Arc::clone(&self.owner_updates);
         let presence_emit = {
             let queue = Arc::clone(&owner_updates);
             Arc::new(move |update: NativePresenceUpdate| {

@@ -445,6 +445,9 @@ P4-S19 room-list live poll            stacked on S12–S18
 P4-S20 product verification           stacked on S12–S19
        SharedCoreCryptoStatusService calls list/SAS. verification
        family on the S17 owner queue. No tokens or SAS secrets.
+P4-S21 product typing live            stacked on S12–S20
+       typing family on the S17 owner queue (room id only).
+       Product typingUsers re-fetches the existing snapshot.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -846,6 +849,22 @@ confirm/mismatch/cancel. Helper + XCTest. Recover stays leftover.
 
 **Tests:** phase mapper has no token echo; start without session is
 fail-closed; accept without a flow is unavailable.
+
+### 9.16 P4-S21 — product typing live
+
+S7 typed typing snapshot/set exist. Product `typingUsers` still
+yielded one empty list and finished. The typing owner had no emit.
+
+**Lands:** attach queues `typing` on the S17 owner poll with `room_id`
+only (no user ids). Product `SharedCoreTimelineService.typingUsers`
+stays open and re-fetches via the existing snapshot. Helper + XCTest.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+`Platform::emit`; user ids on the owner DTO; P5; claiming
+iOS-on-engine or P4 acceptance.
+
+**Tests:** room matcher is privacy-safe; without a session the product
+stream yields `[]` with no token echo and can be cancelled.
 
 ---
 
