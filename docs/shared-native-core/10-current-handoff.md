@@ -10,9 +10,9 @@
 
 | Item | Verified state |
 |---|---|
-| Evidence tip | `main` is `76f674413b620906f697331c6af70e9d0f8a349f`, the merge commit of #1006. |
-| #1006 parents | `3cea3282eef1f58a4f50e4d3468146205e6cffee` (#1005 on `main`) + `41c655f7730a226d200891d4e73191a6e8f99a00` (JS media retire tip). |
-| Immediately preceding SNC merges | #1000 ADR 0004, #1002 Long-running recipe, #1003 hosted iOS CI pause, #1001 P4-S12–S37, #1004 docs honesty after #1001, #1005 leftover handle download, #1006 desktop JS media retire. |
+| Evidence tip | `main` is `01c4bef5d29e4fdc00f31970e8271bf4459bf6a0`, the merge commit of #1009. |
+| #1009 parents | `1a7b93c1dfe979318d6954ef3d85edb714fca1cb` (#1008 on `main`) + `84ed9ed0c3afed32a7725aa62632e722d637390b` (leftover IDB/avatar tip). |
+| Immediately preceding SNC merges | #1000 ADR 0004, #1002 Long-running recipe, #1003 hosted iOS CI pause, #1001 P4-S12–S37, #1004–#1007 docs/media, #1008 Apple generate record, #1009 leftover IDB/WASM + avatar display. |
 | Feature lane | `feature/shared-native-core` was an ancestor of `main` after #991 and has been deleted. No open PRs targeted it. |
 
 #991 is the operator-authorized integration of SNC engineering onto
@@ -158,7 +158,7 @@ Swift / iOS-shell surface; it does not change product behavior.
 
 This state was checked at the evidence snapshot **before this ledger PR**:
 
-- #1006 is merged on `main` at `76f67441`. There is no open product
+- #1009 is merged on `main` at `01c4bef5`. There is no open product
   shared-core PR and no open release PR. This docs-only PR is the sole
   intended new scoped PR; it is not a source or release path.
 - #705 is closed, stale, and approval-gated. Its remote head was deleted. It
@@ -429,10 +429,13 @@ The exact bounded iOS evidence is:
   is a stub; leftover encrypted `mxc://` fail-closes. Quality green
   (iOS skipped). Not Apple generate. Not dual-platform proof. Not P4
   engine ready.
-- Leftover IDB/WASM + avatar display (in-pr): FeatureCheck IndexedDB
-  gate and crypto-wasm Vite plugin removed. Room/user/pack avatars
-  resolve leftover `mxc://` through native blob URLs. Logout still
-  wipes old IndexedDB store names.
+- #1008: records local Apple UniFFI generate for S30–S35 on Darwin
+  at `dd62d24d`. Generated sources remain gitignored.
+- #1009: leftover IDB/WASM + avatar display on `main` at `01c4bef5`.
+  FeatureCheck IndexedDB gate and crypto-wasm Vite plugin removed.
+  Room/user/pack avatars resolve leftover `mxc://` through native
+  blob URLs. Logout still wipes old IndexedDB store names. Quality
+  green (iOS skipped). Not P4 engine ready.
 - Local Apple UniFFI generate on Darwin at `dd62d24d` for the
   S30–S35 fields (room-list `is_encrypted` / `notification_mode`,
   timeline media handle / `timeline_media_bytes`, device snapshot

@@ -15,8 +15,8 @@ and `06-migration-phases.md` are stale. Do not register the 21 leftovers in
 section 6 to satisfy them.
 
 Evidence tip when this playbook was written: `main`
-`76f67441` (#1006 merge of desktop JS media retire, after
-#1000/#1001/#1002/#1003/#1004/#1005).
+`01c4bef5` (#1009 leftover IDB/WASM + avatar display, after
+#1006/#1007/#1008).
 Re-fetch before you start. Do not treat this SHA as eternal.
 
 ---
