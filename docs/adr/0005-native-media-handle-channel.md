@@ -1,6 +1,6 @@
 # 0005 — Native media handle channel
 
-Status: Proposed on #1001. Not program-done. Not P4 acceptance.
+Status: Accepted on `main` via #1001. Not program-done. Not P4 acceptance.
 
 ## Decision
 

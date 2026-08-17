@@ -18,8 +18,8 @@ path. **Never a big-bang move.**
 Goal: introduce `crates/synara-core` holding `matrix/`, `tasks/`, `dto/`,
 `ipc/` **by `git mv` + path updates only**; every test must pass identically.
 
-**Current bounded status at `05a0961c`
-(#991):** #713 mechanically moved notifications, polls,
+**Current bounded status at `7ecbfdf9`
+(#1001):** #713 mechanically moved notifications, polls,
 relations, threads, and unread; #714 moved raw content, receipts, routes, and
 security; #716 moved search, legacy, and media_cache; #717 moved media_export
 and crypto_store; #734 moved the room-directory session harness; #735 moved
@@ -163,8 +163,12 @@ Goal: iOS consumes the same engine; Swift re-implementations retired.
    - #990 union-preserves `main` store recovery into SNC
    - #992 raises rustc recursion limit for Linux release builds
    - #991 merges SNC engineering onto `main` (`05a0961c`; Quality + iOS + package smoke green)
-   - Local Apple UniFFI generate has been run; generated sources remain gitignored
-   - Product `MatrixRustSDK` grep is comments only; leftover I/O fail-closed; SyncService not started; iOS CI on
+   - #1000 records ADR 0004
+   - #1002 adds the Long-running Cloud Agent recipe
+   - #1003 pauses hosted iOS simulator CI until `main` is stable
+   - #1001 lands P4-S12–S37 (`7ecbfdf9`)
+   - Local Apple UniFFI generate has been run for earlier fields; new S30–S35 fields still need Apple generate; generated sources remain gitignored
+   - Product `MatrixRustSDK` grep is comments only; leftover I/O fail-closed; SyncService can be started through SharedCore; live homeserver proof paused; hosted iOS CI paused
 4. Remove `matrix-rust-components-swift` from `project.yml` when nothing
    references `MatrixRustSDK` anymore.
 
@@ -174,15 +178,19 @@ zero; a sample feature command implemented once in `synara-core` and exercised
 by a SwiftUI unit test and a React hook test.
 
 > **Bounded evidence note — not P4 acceptance:** At the current `main` tip
-> `05a0961c` (#991), UniFFI exposes credential-free `login_flows` /
+> `7ecbfdf9` (#1001), UniFFI exposes credential-free `login_flows` /
 > `register_flows`, SharedCore constructors, S3 vault/restore/login/attach,
 > typed wrappers through S9-31, the S11 NSE read-only store helper
-> (never starts sync; not a product NSE swap), and S10 leftover UniFFI.
-> Product `MatrixRustSDK` callers are retired. Leftover I/O that needs a
-> live homeserver stays fail-closed planted. SyncService is not started.
-> This is not iOS-on-engine.
-> Local Apple generate has been run; generated sources remain gitignored.
-> Checked-in `SynaraCore.swift` remains the bootstrap stub. iOS CI is re-enabled.
+> (never starts sync; not a product NSE swap), S10 leftover UniFFI, and
+> P4-S12–S37 product consume (start_sync through last-message, desktop
+> media handle cutover, presence/stickers). Product `MatrixRustSDK`
+> callers are retired. Leftover I/O that needs a live homeserver stays
+> fail-closed planted. SyncService can be started through SharedCore;
+> live homeserver proof is paused. This is not iOS-on-engine.
+> Local Apple generate has been run for earlier fields; new S30–S35
+> UniFFI fields still need Apple generate. Generated sources remain
+> gitignored. Checked-in `SynaraCore.swift` remains the bootstrap stub.
+> Hosted iOS CI is paused (#1003).
 > The prior #708 work is only the pure iOS room-row unread presentation from closed
 > `Joined`/`Invited` membership, scalar counters, and a marked-unread flag to a
 > `u64` count plus highlight boolean. The prior #710 work is only the pure
