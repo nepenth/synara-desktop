@@ -15,8 +15,8 @@ and `06-migration-phases.md` are stale. Do not register the 21 leftovers in
 section 6 to satisfy them.
 
 Evidence tip when this playbook was written: `main`
-`05a0961c` (#991 merge of `feature/shared-native-core`). Re-fetch
-before you start. Do not treat this SHA as eternal.
+`7ecbfdf9` (#1001 merge of P4-S12–S37, after #1000/#1002/#1003).
+Re-fetch before you start. Do not treat this SHA as eternal.
 
 ---
 
@@ -39,8 +39,8 @@ shared engine. Never claim P5 or MAC-IOS-006 is done.
 | Surface | Today |
 |---|---|
 | Desktop macOS/Linux | Live Matrix `Client` and native owners live in Core. React still invokes `matrix_*`. **111** of those names are registered on `Core::command`. Desktop is a thinner shell, not a thin shell. |
-| iOS | UniFFI scaffold through S9-31 + S11 NSE read-only store helper (never starts sync; not a product NSE swap) + **S10 leftover UniFFI** (#986). `AppEnvironment.live()` constructs one caller-owned `SharedCore` and SharedCore product services. Product `MatrixRustSDK` callers are retired (comments may remain). Leftover wipe/logout are local-only; recover/raw-send/media/pusher/notification/avatar and leftover status reads fail closed without a live homeserver and do not start SyncService. This is not iOS-on-engine and not P4 acceptance. Local Apple generate has been run; generated sources remain gitignored. Checked-in `SynaraCore.swift` remains the bootstrap stub. Hosted iOS CI is paused (#1003) until `main` is stable; Quality treats skipped `ios-tests` as OK. #988 had previously re-enabled it. XCTest construction of `SharedCore` is not iOS-on-engine. |
-| `main` | SNC engineering tip. #991 merged `feature/shared-native-core` (`172df893`, including #992) with prior `main` (`60876379`). Quality + iOS + package smoke were green. |
+| iOS | UniFFI scaffold through S9-31 + S11 NSE + S10 leftover UniFFI + **P4-S12–S37 on `main` via #1001**. Product session, sync start, room list, timeline, verification, typing, room details, read markers, crypto status, reactions, opaque media handles, last-message previews, Settings devices, presence, and sticker-pack UI call SharedCore. Leftover recover/raw-send/media-bytes/pusher/notification/avatar I/O still fail closed without a live homeserver (decision 15). This is not iOS-on-engine and not P4 acceptance: Apple generate is still required for the new UniFFI fields; hosted iOS CI is paused (#1003); live homeserver proof is paused. Checked-in `SynaraCore.swift` remains the bootstrap stub. Quality treats skipped `ios-tests` as OK. XCTest construction of `SharedCore` is not iOS-on-engine. |
+| `main` | SNC engineering tip. #991 brought the feature lane onto `main`. #1000 recorded ADR 0004. #1002 added the Long-running recipe. #1003 paused hosted iOS simulator CI. #1001 landed P4-S12–S37 (`7ecbfdf9`). |
 | Release | Forbidden until program-done is accepted and P5 operator/Apple gates pass. #991 is not a release. |
 
 Census size: `REACT_MATRIX_COMMAND_CENSUS` in
@@ -171,14 +171,21 @@ Run this checklist in order. Stop at the first yes.
    `if: false`; Quality on #988 green including iOS, not skipped)
    and restores Later sort/complete helpers. #989 refreshes
    provenance. #990 union-preserves `main` store recovery. #992
-   raises the rustc recursion limit. #991 merges SNC onto `main`
-   (`05a0961c`; Quality + iOS + package smoke green). Local Apple
-   UniFFI generate has been run; generated sources remain
-   gitignored. Checked-in `SynaraCore.swift` remains the bootstrap
-   stub. Do not start P5. Dual-platform Core bugfix proof is not
-   claimed. Four-target release bindgen needs headroom well above
-   20 Gi for the whole run, not just at start. If disk is under
-   20 Gi: stop. Docs-only PRs are still allowed.
+   raises the rustc recursion limit.    #991 merges SNC onto `main`
+   (`05a0961c`; Quality + iOS + package smoke green). #1000 records
+   ADR 0004. #1002 adds the Long-running recipe. #1003 pauses hosted
+   iOS simulator CI until `main` is stable. #1001 lands P4-S12–S37
+   (`7ecbfdf9`): start_sync, restore bootstrap, emit sinks, leftover
+   status, product timeline/room-list/crypto/read-marker/device/
+   last-message/media-handle/presence/sticker paths. Live homeserver
+   proof is paused. Do not claim iOS-on-engine or P4 engine ready.
+   Local Apple UniFFI generate has been run for earlier fields;
+   new S30–S35 UniFFI fields still need Apple generate. Generated
+   sources remain gitignored. Checked-in `SynaraCore.swift` remains
+   the bootstrap stub. Do not start P5. Dual-platform Core bugfix
+   proof is not claimed. Four-target release bindgen needs headroom
+   well above 20 Gi for the whole run, not just at start. If disk
+   is under 20 Gi: stop. Docs-only PRs are still allowed.
 4. **Otherwise stop.** Update `STATE.md`. Do not open a padding PR.
    Do not route logout, email-token, or media "just to have a merge."
 
@@ -430,81 +437,81 @@ P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        homeserver; SyncService not started)
 P4-S11 NSE read-only store API        LANDED #984
        (never boot sync in NSE; helper + XCTest; not a product NSE swap)
-P4-S12 start attached SyncService     this slice
+P4-S12 start attached SyncService     LANDED #1001
        SharedCore.start_sync only. NSE still cannot start sync.
        Not P4 acceptance. Do not start P5.
-P4-S13 restore bootstrap              stacked on S12
+P4-S13 restore bootstrap              LANDED #1001
        Cold-start restore → attach → start on a fresh SharedCore.
        Product `SharedCoreMatrixClientService.start` is the one path.
        NSE still cannot start sync. Not P4 acceptance.
-P4-S14 emit sinks                     stacked on S12/S13
+P4-S14 emit sinks                     LANDED #1001
        Timeline view-delta poll queue only. Summaries, not row
        bodies. NSE still cannot poll. Not Platform::emit.
-P4-S15 leftover I/O live              stacked on S12–S14
+P4-S15 leftover I/O live              LANDED #1001
        Owner leftover status after attach. Homeserver leftover
        I/O stays fail-closed (decision 15). No byte/secret
        envelopes.
-P4-S16 product timeline rows          stacked on S12–S15
+P4-S16 product timeline rows          LANDED #1001
        Snapshot DTO keeps privacy-safe row bodies. Product
        SharedCoreTimelineService maps them. No media bytes.
-P4-S17 owner emit poll                stacked on S12–S16
+P4-S17 owner emit poll                LANDED #1001
        Presence/devices/join_rules/image_packs poll queue.
        Summaries only. No presence user id. NSE cannot poll.
-P4-S18 product timeline live poll     stacked on S12–S17
+P4-S18 product timeline live poll     LANDED #1001
        SharedCoreTimelineService.timelineUpdates stays open and
        re-fetches on S14 summaries. One host poller. No room-list
        emit. No media bytes.
-P4-S19 room-list live poll            stacked on S12–S18
+P4-S19 room-list live poll            LANDED #1001
        After start_sync, a joined-room entries stream queues
        session-generation wake-ups. Product roomUpdates re-fetches
        the existing snapshot. No room ids on the DTO.
-P4-S20 product verification           stacked on S12–S19
+P4-S20 product verification           LANDED #1001
        SharedCoreCryptoStatusService calls list/SAS. verification
        family on the S17 owner queue. No tokens or SAS secrets.
-P4-S21 product typing live            stacked on S12–S20
+P4-S21 product typing live            LANDED #1001
        typing family on the S17 owner queue (room id only).
        Product typingUsers re-fetches the existing snapshot.
-P4-S22 product room details           stacked on S12–S21
+P4-S22 product room details           LANDED #1001
        Product roomDetails maps list / members / power /
        join-rule / invite snapshots. No media bytes. No UDL.
-P4-S23 product foreground resume      stacked on S12–S22
+P4-S23 product foreground resume      LANDED #1001
        Product resumeFromForeground uses the S13 bootstrap.
        Second start is a restart. No pause command. No NSE.
-P4-S24 product read markers           stacked on S12–S23
+P4-S24 product read markers           LANDED #1001
        Product mark-as-read uses timeline set_read_state.
        No HTTP access token. No media bytes. No UDL.
-P4-S25 product room-list spaces/invites stacked on S12–S24
+P4-S25 product room-list spaces/invites LANDED #1001
        Product loadRooms maps space parents and invite
-       previews. Joined last-message stays empty. No UDL.
-P4-S26 product room-list unread lookup stacked on S12–S25
+       previews. Joined last-message later filled by S35. No UDL.
+P4-S26 product room-list unread lookup LANDED #1001
        Product hasUnreadMessages uses the cached snapshot.
        Agent rooms stay false without Core agent cards.
-P4-S27 product session crypto status  stacked on S12–S26
+P4-S27 product session crypto status  LANDED #1001
        Product sessionStatus maps leftover backup / crypto and
        secret-storage status. No recovery keys. No UDL.
-P4-S28 product room crypto status     stacked on S12–S27
+P4-S28 product room crypto status     LANDED #1001
        Product roomStatus reuses the S27 mapper plus invite
-       encryption. Joined-room encryption stays unknown. No UDL.
-P4-S29 product timeline non-message rows stacked on S12–S28
+       encryption. Joined-room encryption later filled by S30.
+P4-S29 product timeline non-message rows LANDED #1001
        Poll / membership / state / call / other bodies already
        on the row DTO map to text. No media bytes. No UDL.
-P4-S30 room-list encryption + notify mode stacked on S12–S29
+P4-S30 room-list encryption + notify mode LANDED #1001
        UniFFI room-list DTO keeps is_encrypted and notification_mode
        already on the Core snapshot. Product roomStatus / details
        consume them. No last-message invention.
-P4-S31/S32/S33 timeline reactions + media handle
+P4-S31/S32/S33 timeline reactions + media handle LANDED #1001
        Row DTO keeps reaction counts and opaque media handles.
        SharedCore.timeline_media_bytes is a dedicated UniFFI byte
        channel (ADR 0005). Not Core.command. NSE cannot download.
-P4-S34 product device list              stacked
+P4-S34 product device list              LANDED #1001
        Settings lists leftover-safe device snapshot rows. No keys.
-P4-S35 last-message preview             stacked
+P4-S35 last-message preview             LANDED #1001
        Core projects a privacy-safe last_message_preview. UniFFI
        room-list DTO and both UIs consume it. No mxc/token.
-P4-S36 desktop media handle cutover     stacked
+P4-S36 desktop media handle cutover     LANDED #1001
        Leftover matrix_media_download resolves timeline-media-*
        through the native owner. Not Core.command.
-P4-S37 presence + sticker pack UI       stacked
+P4-S37 presence + sticker pack UI       LANDED #1001
        Settings/room details consume presence. Composer lists
        image-pack names and sends via SharedCoreSendSticker.
 ```

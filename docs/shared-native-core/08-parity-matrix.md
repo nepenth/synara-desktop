@@ -4,15 +4,16 @@ Legend: ✅ shipping / 🔨 in progress / ⛔ not yet
 
 ## Current bounded evidence (not parity completion)
 
-At `main` `05a0961c`
-(#991), P2 still registers one hundred eleven names—the prior one
+At `main` `7ecbfdf9`
+(#1001), P2 still registers one hundred eleven names—the prior one
 hundred nine plus `matrix_invites_report_spam` and
 `matrix_invites_block_sender`. Desktop uses that registry. iOS has
 typed SharedCore wrappers through S9-31, the S11 NSE read-only
-store helper (never starts sync), and S10 leftover UniFFI. Product
-`MatrixRustSDK` callers are retired; leftover I/O fail-closes
-without a live homeserver. iOS CI is re-enabled. This is not
-iOS-on-engine.
+store helper (never starts sync), S10 leftover UniFFI, and
+P4-S12–S37 product consume. Product `MatrixRustSDK` callers are
+retired; leftover I/O fail-closes without a live homeserver.
+Hosted iOS CI is paused (#1003). Live homeserver proof is paused.
+This is not iOS-on-engine.
 The previous one hundred nine remain—
 `matrix_login_flows`, `matrix_register_flows`, `matrix_session_snapshot`,
 `matrix_sync_status`, `matrix_crypto_status`, `matrix_media_config`,
@@ -32,8 +33,9 @@ highlight boolean. The prior #710 work is only a pure cold-start decision from
 a latest-state boolean and `{Missing, Known}` to a boolean; Swift maps
 `nil`/`.distantPast` to `Missing` and a real `Date` to `Known`. Neither is Core
 SDK/service ownership: product `MatrixRustSDK` callers are retired;
-leftover I/O fail-closes without a live homeserver and does not start
-SyncService. This is not iOS-on-engine.
+leftover I/O fail-closes without a live homeserver. SharedCore can
+start SyncService (S12); live homeserver proof is paused. This is not
+iOS-on-engine.
 
 | Capability | Desktop (src-tauri engine) | iOS today (Swift re-impl) | After P4+P5 (shared core) |
 |---|---|---|---|

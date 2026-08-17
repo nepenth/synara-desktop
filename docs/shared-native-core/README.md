@@ -16,7 +16,7 @@ Long-running Cloud Agent: [14-long-running-agent.md](14-long-running-agent.md).
 |---|---|
 | Owner | Synara engineering |
 | Status | P0 complete; P1 extraction and bounded P2, P3, and P4 slices are merged at the evidence base below. P2–P4 remain in progress; P5 has not started. Desktop uses Core for one hundred eleven commands. iOS has typed SharedCore wrappers through S9-31, the S11 NSE helper, and S10 leftover UniFFI; product `MatrixRustSDK` callers are retired. This is not iOS-on-engine. Dual-platform “one Core bugfix on desktop+iOS” is not claimed. |
-| Evidence base | `main` at `05a0961c` (#991 merge of `feature/shared-native-core`; parents `60876379` + `172df893`) |
+| Evidence base | `main` at `7ecbfdf9` (#1001 merge of P4-S12–S37; parents `401a98e1` #1003 + `b2eaf6c5` product tip). #991 remains the feature-lane integration. |
 | Decision | [ADR 0003](../adr/0003-shared-native-rust-core.md) |
 | Language boundaries | [ADR 0004](../adr/0004-rust-language-boundaries.md) |
 | Program ledger | `docs/shared-native-core/` (this directory) |
@@ -122,7 +122,8 @@ Long-running Cloud Agent: [14-long-running-agent.md](14-long-running-agent.md).
 ## Current milestone ledger
 
 The following describes merged source reachable from
-`05a0961c` (#991). #708 and #710 remain the prior pure-helper P4
+`7ecbfdf9` (#1001). #991 remains the feature-lane integration.
+#708 and #710 remain the prior pure-helper P4
 evidence. #931 adds credential-free `register_flows`. #933 adds
 constructor-only `SharedCore`. #935 adds the S3a `IosSecretVault`
 callback. S3b restore landed in #937 (`4edfc1f5`). S3c Option A
@@ -143,20 +144,25 @@ superseded by operator authorization and #986. #984 lands the S11
 NSE read-only store helper without starting sync; it is not a
 product NSE swap. #985 refreshes provenance. #986 lands S10 leftover
 UniFFI and retires product `MatrixRustSDK` callers. Leftover I/O
-that needs a live homeserver stays fail-closed planted. SyncService
-is not started. This is not iOS-on-engine. #987 refreshes
+that needs a live homeserver stays fail-closed planted. #987 refreshes
 provenance. #988 re-enables iOS CI (Quality on #988 green including
 iOS, not skipped) and restores Later sort/complete helpers. #989
 refreshes provenance after #988. #990 union-preserves `main` store
 recovery into the SNC lane. #992 raises the rustc recursion limit
 for Linux release builds. #991 merges SNC engineering onto `main`
-(`05a0961c`; Quality + iOS + package smoke green). Local Apple
-`scripts/generate-synara-core-swift.sh` has been run at this tip;
-generated `synara_core.swift` and the XCFramework remain gitignored
-and are not committed. Checked-in `SynaraCore.swift` remains the
-bootstrap stub. UniFFI constructors are unchanged (`SharedCore()` /
-`newWithSecretStore`). Password never rides a generic UniFFI
-`command`.
+(`05a0961c`; Quality + iOS + package smoke green). #1000 records
+ADR 0004. #1002 adds the Long-running Cloud Agent recipe. #1003
+pauses hosted iOS simulator CI until `main` is stable. #1001 lands
+P4-S12–S37 (`7ecbfdf9`): product session/sync/room-list/timeline/
+crypto/read-marker/device/last-message/media-handle/presence/sticker
+paths call Core. SyncService can be started through SharedCore;
+live homeserver proof is paused. This is not iOS-on-engine. Local
+Apple generate has been run for earlier fields; new S30–S35 UniFFI
+fields still need Apple generate. Generated `synara_core.swift` and
+the XCFramework remain gitignored. Checked-in `SynaraCore.swift`
+remains the bootstrap stub. UniFFI constructors are unchanged
+(`SharedCore()` / `newWithSecretStore`). Password never rides a
+generic UniFFI `command`.
 
 | Phase | Merged evidence | Current boundary |
 |---|---|---|
@@ -164,7 +170,7 @@ bootstrap stub. UniFFI constructors are unchanged (`SharedCore()` /
 | P1 | #669, #673–#677, #680–#681, #713–#714, #716–#717, #720–#721, #723–#726, #728–#729, #731–#732, #734–#735, #737–#738, #740–#741, #743–#744, #747–#748, #751, #753, #755, #757–#758, #760, #762, #764, #766, #768, #770, #772, #774, #776, #778, #780–#781, #783–#784, #786, #788, #790, #792, #794, #796, #798, #800–#801, #803, #805, #807–#808, #810, #812, #814, #816 | Extraction slices plus live client/login adapters, emit owners, NativeTimelineRegistry, and NativeVerificationOwner; leftover Keychain/Tauri commands not all moved. |
 | P2 | #683–#689, #694, #698, #701–#702, #706, #818, #820, #822, #824, #826, #828, #830, #832, #834, #836, #838, #840, #842, #844, #846, #848, #850, #852, #854, #856, #858, #860, #862, #864, #866, #868, #870, #872, #874, #876, #878, #880, #882, #884, #886, #888, #890, #892, #894, #896, #898, #900, #902, #904, #906, #908, #910, #912, #914, #916, #918, #920, #922, #924, #926, #928 | One-hundred-eleven-command registry (invite spam/block added); full desktop-invoke parity is not reached. |
 | P3 | #690–#691, #694, #698, #701–#702, #706 | The listed auth and read-only/session bridges use Core; `src-tauri` is not yet a fully thin shell. |
-| P4 | #685, #692–#693, #696, #699, #703, #708, #710, #931, #933, #935, #937–#940, #942, #944–#945, #947–#992, #991 | UniFFI scaffold through S9-31 typed wrappers plus #980–#982 hygiene, #983 temporary leftover stop (superseded), #984 S11 NSE helper, #985 provenance, #986 S10 leftover UniFFI (operator-authorized; product `MatrixRustSDK` callers retired; leftover I/O fail-closed; SyncService not started; not iOS-on-engine), #987–#989 provenance, #990 main-recovery union, #992 recursion-limit, and #991 merge to `main` (Quality + iOS + package smoke green); local UniFFI generate has been run; generated sources remain uncommitted; Apple release proof does not. |
+| P4 | #685, #692–#693, #696, #699, #703, #708, #710, #931, #933, #935, #937–#940, #942, #944–#945, #947–#992, #991, #1000–#1003, #1001 | UniFFI scaffold through S9-31 plus S10/S11 and #991 on `main`; #1000 ADR 0004; #1001 P4-S12–S37 product consume (start_sync through last-message, desktop media handle cutover, presence/stickers); #1002 Long-running recipe; #1003 hosted iOS CI paused. Leftover I/O that needs a live homeserver stays fail-closed. Not iOS-on-engine. Apple generate still required for new UniFFI fields. Live homeserver proof paused. |
 | P5 | None | Not started. The release gates below remain required. |
 
 Read [11-implementer-playbook.md](11-implementer-playbook.md) before writing

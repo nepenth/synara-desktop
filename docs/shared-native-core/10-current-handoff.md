@@ -10,17 +10,19 @@
 
 | Item | Verified state |
 |---|---|
-| Evidence tip | `main` is `05a0961c93b31cfbb9d3b56bd63c34ff1a46faa1`, the merge commit of #991. |
-| #991 parents | `608763799125a121572fc3b7ff613680159cbf2a` (prior `main`, after #712) + `172df893c2047bce94648b7a1adee774181ca803` (SNC tip, #992 recursion-limit). |
-| Immediately preceding SNC merges | #988 iOS CI re-enable, #989 docs, #990 union-preserve `main` store recovery, #992 rustc recursion limit. |
+| Evidence tip | `main` is `7ecbfdf9a476633c9cc1c3906fe4bce8aa205236`, the merge commit of #1001. |
+| #1001 parents | `401a98e14f7c71888f4cb98803c41f1e6563823d` (#1003 iOS CI pause on `main`) + `b2eaf6c55c8ff57f74d144bbcb45c163433c48d5` (product tip after merging paused `main`). |
+| Immediately preceding SNC merges | #1000 ADR 0004, #1002 Long-running recipe, #1003 hosted iOS CI pause, #1001 P4-S12–S37. |
 | Feature lane | `feature/shared-native-core` was an ancestor of `main` after #991 and has been deleted. No open PRs targeted it. |
 
 #991 is the operator-authorized integration of SNC engineering onto
 `main`. Quality, iOS simulator tests, and package smoke were green on
-that merge. #990 union-preserved later `main` store-recovery work into
-the SNC lane before the merge. Do not describe the lanes as still
-diverged. Do not treat #991 as P4 acceptance, iOS-on-engine, dual-platform
-Core bugfix proof, or a release.
+that merge. #1001 later landed P4-S12–S37 on that tip after #1000/#1002/#1003.
+#990 union-preserved later `main` store-recovery work into
+the SNC lane before #991. Do not describe the lanes as still
+diverged. Do not treat #991 or #1001 as P4 acceptance, iOS-on-engine,
+dual-platform Core bugfix proof, or a release. Hosted iOS CI is paused
+(#1003). Live homeserver proof is paused.
 
 #713 and #714 are **P1-only mechanical extraction clusters**. Their exact
 residency changes are:
@@ -147,7 +149,7 @@ residency changes are:
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the tip provenance; use `05a0961c`/#991 for
+anchor, but it is no longer the tip provenance; use `7ecbfdf9`/#1001 for
 current claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -403,6 +405,21 @@ The exact bounded iOS evidence is:
 - #991: merges SNC engineering onto `main` at `05a0961c`. Quality +
   iOS + package smoke green. Not P4 acceptance, not iOS-on-engine,
   not a dual-platform Core bugfix proof, not P5.
+- #1000: records ADR 0004 language boundaries. Docs only.
+- #1002: Long-running Cloud Agent launch recipe. Docs only.
+- #1003: pauses hosted iOS simulator CI (`ios-tests` `if: false`;
+  `ios` scope forced false; `ios-skeleton.yml` skipped). Quality
+  treats skipped iOS as OK. Release.yml TestFlight / exact-tag iOS
+  stay on.
+- #1001: P4-S12–S37 on `main` at `7ecbfdf9`. Product session, sync
+  start, room list, timeline, verification, typing, room details,
+  read markers, crypto status, reactions, opaque media handles,
+  last-message previews, Settings devices, presence, and sticker-pack
+  UI call Core. Desktop live timeline media uses `synara-media://`
+  handle resolve. Leftover recover/media-bytes/raw-send/pusher/avatar
+  I/O stay fail-closed (decision 15). Not iOS-on-engine. Apple
+  generate still required for new UniFFI fields. Live homeserver
+  proof paused.
 
 #708 and #710 add no Core command route. #931/#933/#935 add UniFFI probes /
 construction / vault only. Later P4 slices add typed wrappers; they do
@@ -411,14 +428,17 @@ not make product iOS a Core SDK or service owner. Actual SDK
 execution, and session, platform credential storage, store, crypto, sync, and
 lifecycle ownership no longer go through a product
 `MatrixRustSDKService`. They go through caller-owned SharedCore
-leftover/product adapters that fail closed without a live homeserver
-and do not start SyncService. This is not iOS-on-engine. Local Apple
-`scripts/generate-synara-core-swift.sh` has been run; generated
-`synara_core.swift` and the XCFramework remain gitignored. Checked-in
-`SynaraCore.swift` remains the bootstrap stub. UniFFI constructors are
-unchanged (`SharedCore()` / `newWithSecretStore`). iOS CI is
-re-enabled (#988). Product `MatrixRustSDK` callers are retired;
-comments may remain. P4 is not accepted.
+product adapters. Leftover recover/media-bytes/raw-send/pusher/avatar
+I/O still fail closed without a live homeserver (decision 15).
+SharedCore can start an already-attached SyncService (S12). This is
+not iOS-on-engine. Local Apple generate has been run for earlier
+fields; new S30–S35 UniFFI fields still need Apple generate.
+Generated `synara_core.swift` and the XCFramework remain gitignored.
+Checked-in `SynaraCore.swift` remains the bootstrap stub. UniFFI
+constructors are unchanged (`SharedCore()` / `newWithSecretStore`).
+Hosted iOS CI is paused (#1003). Product `MatrixRustSDK` callers are
+retired; comments may remain. P4 is not accepted. Live homeserver
+proof is paused.
 
 ### P5 — not started
 
@@ -535,16 +555,23 @@ for any of those gates.
    and retires product `MatrixRustSDK` callers. #987 refreshes
    provenance. #988 re-enables iOS CI. #989 refreshes provenance.
    #990 union-preserves `main` store recovery. #992 raises the rustc
-   recursion limit. #991 merges SNC onto `main`. Local Apple UniFFI
-   generate has been run; generated sources remain gitignored.
-   Checked-in `SynaraCore.swift` remains the bootstrap stub. Do not
+   recursion limit.    #991 merges SNC onto `main`. #1000 records ADR 0004. #1002 adds
+   the Long-running recipe. #1003 pauses hosted iOS CI. #1001 lands
+   P4-S12–S37. Local Apple UniFFI generate has been run for earlier
+   fields; new S30–S35 fields still need Apple generate. Generated
+   sources remain gitignored. Checked-in `SynaraCore.swift` remains
+   the bootstrap stub. Live homeserver proof is paused. Do not
    start P5. Dual-platform Core bugfix proof is not claimed.
    Four-target release bindgen needs headroom well above 20 Gi for
    the whole run, not just at start. If disk is under 20 Gi: stop.
    Docs-only PRs are still allowed.
 4. After S3, consume already-registered commands one family per PR.
-   S4 through S9-31, S10 leftover retirement, and S11 have landed.
-   Product `MatrixRustSDK` callers are retired. Do not start P5.
+   S4 through S9-31, S10 leftover retirement, S11, and S12–S37 have
+   landed. Product `MatrixRustSDK` callers are retired. Do not start
+   P5. Do not claim P4 engine ready. Hosted iOS CI stays paused.
+   Live homeserver proof stays paused until an environment can
+   launch the app. JS `browser-encrypt-attachment` remains the
+   leftover send fallback and leftover `mxc://` avatar/pack decrypt.
 5. After each product PR: squash-merge to `main`, docs honesty, then
    re-run playbook section 5. If step 4, stop.
 

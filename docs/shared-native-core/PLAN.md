@@ -1,10 +1,12 @@
 # Shared Native Core (synara-core) — Program Plan
 
 **Status at `main`
-`05a0961c` (#991 merge of `feature/shared-native-core`):** P0 is
+`7ecbfdf9` (#1001 merge of P4-S12–S37):** P0 is
 complete; P1 extraction and bounded P2, P3, and P4 slices are merged. P2–P4
-remain in progress. P5 has not started. Owner: Synara engineering. The current
-provenance, gates, and successor steps are in `10-current-handoff.md`.
+remain in progress. P4 engine ready is not claimed. P5 has not started.
+Hosted iOS CI is paused (#1003). Live homeserver proof is paused. Owner:
+Synara engineering. The current provenance, gates, and successor steps are
+in `10-current-handoff.md`.
 **Hand a weaker model [11-implementer-playbook.md](11-implementer-playbook.md).**
 
 ## Goal
@@ -14,7 +16,7 @@ app (macOS and Linux) and the iOS app consume, so sync, room list, timeline,
 and crypto are not implemented twice.
 
 That end state has **not** been reached. SNC engineering is on `main`
-via #991. It is not a release.
+via #991, with P4-S12–S37 on `main` via #1001. It is not a release.
 
 ## Decision record
 
@@ -151,14 +153,19 @@ acceptance criteria have all passed.
   it is not a product NSE swap. #985 refreshes provenance. #986 lands
   S10 leftover UniFFI and retires product `MatrixRustSDK` callers.
   Leftover I/O that needs a live homeserver stays fail-closed planted.
-  SyncService is not started. This is not iOS-on-engine. #987 refreshes
-  provenance. #988 re-enables iOS CI (Quality on #988 green including
-  iOS, not skipped). #989 refreshes provenance. #990 union-preserves
-  `main` store recovery. #992 raises the rustc recursion limit. #991
-  merges SNC onto `main` (`05a0961c`; Quality + iOS + package smoke
-  green). Local Apple generate has been run; generated sources remain
-  gitignored. Checked-in `SynaraCore.swift` remains the bootstrap stub.
-  iOS still has no registration product UI. P4 is not accepted.
+  #987 refreshes provenance. #988 re-enables iOS CI (Quality on #988
+  green including iOS, not skipped). #989 refreshes provenance. #990
+  union-preserves `main` store recovery. #992 raises the rustc
+  recursion limit. #991 merges SNC onto `main` (`05a0961c`; Quality +
+  iOS + package smoke green). #1000 records ADR 0004. #1002 adds the
+  Long-running recipe. #1003 pauses hosted iOS CI. #1001 lands
+  P4-S12–S37 (`7ecbfdf9`). SyncService can be started through
+  SharedCore; live homeserver proof is paused. This is not
+  iOS-on-engine. Local Apple generate has been run for earlier fields;
+  new S30–S35 UniFFI fields still need Apple generate. Generated
+  sources remain gitignored. Checked-in `SynaraCore.swift` remains the
+  bootstrap stub. iOS still has no registration product UI. P4 is not
+  accepted.
 - **P5 — not started.** Do not claim iOS shared-engine parity, iOS migration,
   or Apple release readiness from the bounded work above.
 
@@ -169,13 +176,15 @@ acceptance criteria have all passed.
    five invite commands are already registered. Twenty-one census names
    stay desktop (secrets, file paths, bytes).
 2. **P4 serial iOS** of surfaces Core already owns, in the playbook
-   section 9 order. S1–S9-31, S10 leftover retirement (#986), and
-   S11 have landed. Product `MatrixRustSDK` callers are retired.
-   Leftover I/O that needs a live homeserver stays fail-closed.
-   SyncService is not started. iOS CI is on (#988; not `if: false`).
-   Regenerating Swift bindings needs disk ≥ 20 Gi. Dual-platform
+   section 9 order. S1–S9-31, S10 leftover retirement (#986), S11,
+   and S12–S37 (#1001) have landed. Product `MatrixRustSDK` callers
+   are retired. Leftover I/O that needs a live homeserver stays
+   fail-closed. Hosted iOS CI is paused (#1003). Live homeserver
+   proof is paused. Regenerating Swift bindings needs disk ≥ 20 Gi
+   and Apple generate for the new UniFFI fields. Dual-platform
    “one Core bugfix on desktop+iOS” is not claimed. Do not start P5.
-   The operator-approved merge to `main` landed in #991.
+   Do not claim P4 engine ready. The operator-approved feature-lane
+   merge to `main` landed in #991; S12–S37 landed in #1001.
 3. **P3 thinning** continues as iOS/desktop leftovers shrink. Desktop is
    not a thin shell while Keychain, byte commands, and password UIAA live
    there — and those leftovers are *intended*.

@@ -3,7 +3,8 @@
 All paths relative to the repository root. Census technique: `git ls-files`,
 `grep -rl`, `grep -rn` over `src-tauri/src`, `synara-ios`, `.github/workflows`.
 The current source evidence is `main`
-`05a0961c` (#991 merge of `feature/shared-native-core`).
+`7ecbfdf9` (#1001 merge of P4-S12–S37). #991 remains the feature-lane
+integration.
 
 ## 2.1 Desktop application-logic layer
 
@@ -171,7 +172,10 @@ SynaraNotificationService/       NotificationService.swift (APNs-backed NSE)
 `.github/workflows/ci.yml` jobs: `changes`, `validate-rust`,
 `rust-dependency-audit`, `validate-frontend`, `ios-tests`, plus six Synapse
 native proofs (reactions, attachments, polls, rich-messages, threads, receipts),
-and `quality-gate` (aggregates required checks). Independent workflows:
-`ios-skeleton.yml` (iOS Diagnostics, macOS-26) and `desktop-package-smoke.yml`
-(macOS bundle + Linux .deb + Arch). The `check-matrix-boundaries` guard
-(`scripts/check-matrix-boundaries.mjs`) runs on any `src-tauri` diff (PR #642).
+and `quality-gate` (aggregates required checks). **TEMPORARY (2026-08-17):**
+hosted `ios-tests` and `ios-skeleton.yml` are paused (#1003) until `main` is
+stable; Quality treats skipped iOS as OK. Independent workflows:
+`ios-skeleton.yml` (iOS Diagnostics, macOS-26, currently skipped) and
+`desktop-package-smoke.yml` (macOS bundle + Linux .deb + Arch). The
+`check-matrix-boundaries` guard (`scripts/check-matrix-boundaries.mjs`) runs
+on any `src-tauri` diff (PR #642).

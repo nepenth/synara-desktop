@@ -42,11 +42,11 @@ Read, in order:
 2. docs/shared-native-core/11-implementer-playbook.md (§5 then §9)
 3. docs/shared-native-core/13-language-boundary-goal-graph.md if present
 4. docs/adr/0004-rust-language-boundaries.md if present (else PR #1000)
-5. Open PRs: #1000 (ADR 0004) and #1001 (P4-S12–S15 on cursor/p4-s12-start-sync-7875)
+5. Open PRs only for work that is still open. #1000, #1001, #1002,
+   and #1003 have merged.
 
 Start from the latest implementation tip, not a stale main graph:
-- Prefer branch cursor/p4-s12-start-sync-7875 / PR #1001 if it is still open.
-- If that PR has merged, start from origin/main and refresh the graph.
+- Start from `origin/main` (`7ecbfdf9` after #1001). Refresh the graph.
 
 Loop until every required graph node is landed or blocked:
 - One P4 family at a time. Local cargo tests. Commit. Push. Draft PR.
@@ -57,10 +57,18 @@ Loop until every required graph node is landed or blocked:
 - Do not rewrite UI in Slint/Dioxus/egui. Do not do Tauri iOS.
 
 Current honesty (update if the graph has moved):
-- S12 start_sync, S13 restore bootstrap, S14 timeline view-delta poll, S15 leftover owner status are on #1001.
-- Desktop native media cutover is blocked: iOS leftover media stays fail-closed (playbook decision 15); bytes must not cross Core::command; do not register matrix_send_attachment.
-- While media is blocked, do not invent a byte channel. Instead work P4 engine-ready gaps that do not need bytes: product iOS timeline rows from existing SharedCore snapshot/paginate (SharedCoreTimelineService must not keep returning .empty); remaining no-op emit families using the same poll-queue pattern as S14 (presence, devices, join_rules, image_packs) if an owner already emits; keep leftovers fail-closed.
-- Stop if the only remaining work is P5, Apple UniFFI generate, a live homeserver, a merge, or a media byte-channel owner decision.
+- S12–S37 landed on `main` via #1001. ADR 0004 landed via #1000.
+- Hosted iOS CI stays paused (#1003). Live homeserver proof stays paused
+  until an environment can launch the app.
+- Desktop live timeline media uses `synara-media://` + handle resolve.
+  Leftover `mxc://` is avatar/pack only. JS `browser-encrypt-attachment`
+  remains the leftover send fallback. iOS leftover media I/O stays
+  fail-closed (decision 15). Do not register `matrix_send_attachment`.
+- Do not invent a byte channel. Do not start P5. Do not claim
+  iOS-on-engine or P4 engine ready.
+- Remaining non-P5 work: docs honesty, Apple generate for new UniFFI
+  fields, leftover JS media retire when both shells take bytes from the
+  native owner, then live proof after the app can launch.
 
 Propose a plan first. Wait for approval. Then execute.
 ```
@@ -68,7 +76,7 @@ Propose a plan first. Wait for approval. Then execute.
 ## What this agent will not do
 
 - Enable the team setting for you.
-- Merge #1000 / #1001.
+- Merge already-landed #1000 / #1001 / #1002 / #1003 again.
 - Start P5 or TestFlight.
 - Retire `browser-encrypt-attachment` / shrink `synara/src/sw.ts` until
   both shells have a native byte channel that is not `Core::command`.

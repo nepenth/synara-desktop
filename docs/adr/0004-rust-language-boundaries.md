@@ -42,9 +42,11 @@ Existing decisions this ADR does not reopen:
 The shared-core program is in progress, not done. Desktop routes one
 hundred eleven `matrix_*` commands through Core. Twenty-one secret- or
 byte-sensitive names stay unregistered on purpose. iOS has typed
-`SharedCore` wrappers; product `MatrixRustSDK` callers are retired; iOS
-is not yet on-engine (SyncService is not started; leftover I/O that needs
-a live homeserver stays fail-closed).
+`SharedCore` wrappers and P4-S12–S37 product consume on `main` (#1001);
+product `MatrixRustSDK` callers are retired; iOS is not yet on-engine
+(Apple generate, paused hosted iOS CI, and paused live homeserver proof
+still sit in front of that claim; leftover I/O that needs a live
+homeserver stays fail-closed).
 
 ## Decision
 
