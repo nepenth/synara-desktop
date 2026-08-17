@@ -151,10 +151,11 @@ use matrix_sdk::Client;
 use zeroize::Zeroizing;
 
 use crate::app::account_data::{
-    NativeGlobalImagePacksSnapshot, NativeImagePack, NativeImagePackOwner, NativeLaterSnapshot,
-    NativeMDirectSnapshot, NativeRoomImagePacksSnapshot, NativeRoomNotesSnapshot,
-    NativeUserImagePackSnapshot, RoomNoteMoveDirection, SynaraLaterItem, SynaraLaterItemKind,
-    SynaraRoomNoteItem, SynaraRoomNoteItemKind,
+    NativeGlobalImagePacksSnapshot, NativeImagePack, NativeImagePackOwner,
+    NativeImagePackUpdateSignal, NativeLaterSnapshot, NativeMDirectSnapshot,
+    NativeRoomImagePacksSnapshot, NativeRoomNotesSnapshot, NativeUserImagePackSnapshot,
+    RoomNoteMoveDirection, SynaraLaterItem, SynaraLaterItemKind, SynaraRoomNoteItem,
+    SynaraRoomNoteItemKind,
 };
 use crate::app::auth::{
     login_with_password as core_login_with_password, DevicePlatform, LoginOptions,
@@ -162,7 +163,7 @@ use crate::app::auth::{
 use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig};
 use crate::app::devices::{
     NativeDeviceDeleteAuthentication, NativeDeviceDeleteResult, NativeDeviceOwner,
-    NativeDeviceSnapshot, NativeDeviceTrust,
+    NativeDeviceSnapshot, NativeDeviceTrust, NativeDeviceUpdateSignal,
 };
 use crate::app::lifecycle::{
     persist_session_after_login, restore_session_from_vault, restore_session_onto_client,
@@ -170,12 +171,14 @@ use crate::app::lifecycle::{
 };
 use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceState,
-    NativePresenceSubscription,
+    NativePresenceSubscription, NativePresenceUpdate,
 };
 use crate::app::room_list::{
     NativeInvite, NativeInviteSnapshot, NativeInviteTriage, NativeRoomListSnapshot,
 };
-use crate::app::room_profile::{MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner};
+use crate::app::room_profile::{
+    MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner, NativeRoomJoinRuleUpdate,
+};
 use crate::app::store::{
     get_or_create_store_key, AccountIdentity, StoreKeyId, StoreKeyMaterial, StoreKeyVault,
     StoreKeyVaultError, STORE_KEY_LEN,
@@ -250,6 +253,12 @@ const NSE_FORBIDS_POLL_DESCRIPTION: &str =
 const TIMELINE_VIEW_POLL_FAILED_CODE: &str = "p4-s14-timeline-view-poll-failed";
 const TIMELINE_VIEW_POLL_FAILED_DESCRIPTION: &str = "Timeline view updates could not be polled.";
 const TIMELINE_VIEW_UPDATE_QUEUE_CAP: usize = 32;
+const NSE_FORBIDS_OWNER_POLL_CODE: &str = "p4-s17-nse-forbids-poll";
+const NSE_FORBIDS_OWNER_POLL_DESCRIPTION: &str =
+    "The NSE read-only store cannot poll owner updates.";
+const OWNER_UPDATE_POLL_FAILED_CODE: &str = "p4-s17-owner-update-poll-failed";
+const OWNER_UPDATE_POLL_FAILED_DESCRIPTION: &str = "Owner updates could not be polled.";
+const OWNER_UPDATE_QUEUE_CAP: usize = 32;
 const NSE_OWNERS_ATTACHED_CODE: &str = "p4-s11-nse-owners-already-attached";
 const NSE_OWNERS_ATTACHED_DESCRIPTION: &str =
     "The NSE read-only store cannot open after owners attach.";
@@ -913,6 +922,56 @@ fn timeline_view_update_dto(batch: TimelineViewDeltaBatch) -> TimelineViewUpdate
         room_id: batch.room_id,
         revision: batch.revision,
         op_count: u32::try_from(batch.ops.len()).unwrap_or(u32::MAX),
+    }
+}
+
+/// Privacy-safe owner emit summary. No user id, tokens, or password.
+/// iOS re-fetches via the existing snapshot commands.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnerUpdateDto {
+    pub family: String,
+    pub session_generation: u64,
+    pub room_id: Option<String>,
+}
+
+/// Static fail-closed owner-update poll error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OwnerUpdateError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for OwnerUpdateError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for OwnerUpdateError {}
+
+fn owner_update_poll_failed(code: &'static str, description: &'static str) -> OwnerUpdateError {
+    OwnerUpdateError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn push_owner_update(
+    queue: &Mutex<Vec<OwnerUpdateDto>>,
+    family: impl Into<String>,
+    session_generation: u64,
+    room_id: Option<String>,
+) {
+    if let Ok(mut guard) = queue.lock() {
+        if guard.len() >= OWNER_UPDATE_QUEUE_CAP {
+            guard.remove(0);
+        }
+        guard.push(OwnerUpdateDto {
+            family: family.into(),
+            session_generation,
+            room_id,
+        });
     }
 }
 
@@ -2408,6 +2467,7 @@ pub struct SharedCore {
     owner_attach: Mutex<OwnerAttachSlot>,
     nse_read_only: Mutex<bool>,
     timeline_view_updates: Arc<Mutex<Vec<TimelineViewDeltaBatch>>>,
+    owner_updates: Arc<Mutex<Vec<OwnerUpdateDto>>>,
 }
 
 impl SharedCore {
@@ -2422,6 +2482,7 @@ impl SharedCore {
             owner_attach: Mutex::new(OwnerAttachSlot::Empty),
             nse_read_only: Mutex::new(false),
             timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
+            owner_updates: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -2437,6 +2498,7 @@ impl SharedCore {
             owner_attach: Mutex::new(OwnerAttachSlot::Empty),
             nse_read_only: Mutex::new(false),
             timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
+            owner_updates: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -2760,22 +2822,59 @@ impl SharedCore {
             NativeTypingOwner::start(&client, generation)
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
+        let owner_updates = Arc::clone(&self.owner_updates);
+        let presence_emit = {
+            let queue = Arc::clone(&owner_updates);
+            Arc::new(move |update: NativePresenceUpdate| {
+                let _ = update;
+                push_owner_update(&queue, "presence", generation, None);
+            })
+        };
         let presence = Arc::new(
-            NativePresenceOwner::start(&client, Arc::new(|_| {}), generation)
+            NativePresenceOwner::start(&client, presence_emit, generation)
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
         let verification = Arc::new(NativeVerificationOwner::new(&client, generation));
+        let devices_emit = {
+            let queue = Arc::clone(&owner_updates);
+            Arc::new(move |update: NativeDeviceUpdateSignal| {
+                push_owner_update(&queue, "devices", update.session_generation, None);
+            })
+        };
         let devices = Arc::new(
-            NativeDeviceOwner::start(&client, Arc::new(|_| {}), generation)
+            NativeDeviceOwner::start(&client, devices_emit, generation)
                 .await
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
+        let join_rules_emit = {
+            let queue = Arc::clone(&owner_updates);
+            Arc::new(move |update: NativeRoomJoinRuleUpdate| {
+                let (session_generation, room_id) = match update {
+                    NativeRoomJoinRuleUpdate::Ready {
+                        room_id,
+                        session_generation,
+                        ..
+                    }
+                    | NativeRoomJoinRuleUpdate::Unavailable {
+                        room_id,
+                        session_generation,
+                    } => (session_generation, Some(room_id)),
+                };
+                push_owner_update(&queue, "join_rules", session_generation, room_id);
+            })
+        };
         let join_rules = Arc::new(
-            NativeRoomJoinRuleOwner::start(&client, Arc::new(|_| {}), generation)
+            NativeRoomJoinRuleOwner::start(&client, join_rules_emit, generation)
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
+        let image_packs_emit = {
+            let queue = Arc::clone(&owner_updates);
+            Arc::new(move |update: NativeImagePackUpdateSignal| {
+                push_owner_update(&queue, "image_packs", update.session_generation, None);
+            })
+        };
         let image_packs = Arc::new(
-            NativeImagePackOwner::start(&client, Arc::new(|_| {}), generation)
+            NativeImagePackOwner::start(&client, image_packs_emit, generation)
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
         let timeline_updates = Arc::clone(&self.timeline_view_updates);
@@ -2919,6 +3018,37 @@ impl SharedCore {
             }
             guard.push(batch);
         }
+    }
+
+    /// Drain queued owner emit summaries. Not `Core.command`.
+    ///
+    /// NSE forbids this. An empty queue returns an empty list. Presence
+    /// user ids are never included. This is not Platform::emit.
+    pub async fn poll_owner_updates(&self) -> Result<Vec<OwnerUpdateDto>, OwnerUpdateError> {
+        if self.is_nse_read_only() {
+            return Err(owner_update_poll_failed(
+                NSE_FORBIDS_OWNER_POLL_CODE,
+                NSE_FORBIDS_OWNER_POLL_DESCRIPTION,
+            ));
+        }
+        let mut guard = self.owner_updates.lock().map_err(|_| {
+            owner_update_poll_failed(
+                OWNER_UPDATE_POLL_FAILED_CODE,
+                OWNER_UPDATE_POLL_FAILED_DESCRIPTION,
+            )
+        })?;
+        Ok(guard.drain(..).collect())
+    }
+
+    /// Test-only enqueue onto the attach owner emit queue. Not on UDL.
+    #[doc(hidden)]
+    pub fn enqueue_owner_update_for_test(
+        &self,
+        family: String,
+        session_generation: u64,
+        room_id: Option<String>,
+    ) {
+        push_owner_update(&self.owner_updates, family, session_generation, room_id);
     }
 
     /// Typed consume of the already-registered `matrix_room_list_snapshot`.

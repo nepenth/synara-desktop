@@ -431,6 +431,9 @@ P4-S15 leftover I/O live              stacked on S12–S14
 P4-S16 product timeline rows          stacked on S12–S15
        Snapshot DTO keeps privacy-safe row bodies. Product
        SharedCoreTimelineService maps them. No media bytes.
+P4-S17 owner emit poll                stacked on S12–S16
+       Presence/devices/join_rules/image_packs poll queue.
+       Summaries only. No presence user id. NSE cannot poll.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -758,6 +761,22 @@ keeps the stream for paginate. No media bytes.
 
 **Tests:** UDL has `rows`; `live` open without session is still
 `p2-timeline-open-no-session`; mapper unit test has no token echo.
+
+### 9.12 P4-S17 — remaining owner emit sinks
+
+S14 queued timeline view-deltas. Presence, devices, join_rules, and
+image_packs still used `Arc::new(|_| {})` at attach.
+
+**Lands:** attach installs a bounded owner-update queue (cap 32).
+`SharedCore.poll_owner_updates` drains `{ family, session_generation,
+room_id? }`. Presence user ids never appear. Empty queue is success.
+NSE fail-closes. Helper + XCTest.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+`Platform::emit`; P5; claiming iOS-on-engine or P4 acceptance.
+
+**Tests:** UDL surface; poll empty without attach; NSE forbids poll;
+enqueue then poll is privacy-safe.
 
 ---
 

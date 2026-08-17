@@ -235,6 +235,20 @@ interface TimelineViewUpdateError {
   Failed(string code, string description);
 };
 
+// Privacy-safe owner emit summary. No user id, tokens, or password.
+// iOS re-fetches via the existing snapshot commands.
+dictionary OwnerUpdateDto {
+  string family;
+  u64 session_generation;
+  string? room_id;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface OwnerUpdateError {
+  Failed(string code, string description);
+};
+
 // Privacy-safe room-list row. No tokens or password.
 dictionary RoomListRoomDto {
   string room_id;
@@ -1279,6 +1293,8 @@ interface InviteActionError {
 // P4-S14 adds poll_timeline_view_updates for the attached timeline emit
 // sink. It drains privacy-safe summaries only. NSE cannot poll. This is
 // not Platform::emit and not a generic command FFI.
+// P4-S17 adds poll_owner_updates for presence/devices/join_rules/
+// image_packs. Summaries only. No presence user id. NSE cannot poll.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -1309,6 +1325,9 @@ interface SharedCore {
 
   [Async, Throws=TimelineViewUpdateError]
   sequence<TimelineViewUpdateDto> poll_timeline_view_updates();
+
+  [Async, Throws=OwnerUpdateError]
+  sequence<OwnerUpdateDto> poll_owner_updates();
 
   [Async, Throws=RoomListSnapshotError]
   RoomListSnapshotDto room_list_snapshot();

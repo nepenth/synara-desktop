@@ -277,6 +277,21 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCorePollOwnerUpdatesWithoutSessionReturnsEmpty() async {
+        let core = SharedCore()
+
+        do {
+            let updates = try await SharedCoreOwnerUpdates.poll(core: core)
+            XCTAssertTrue(updates.isEmpty)
+            let publicError = String(describing: updates)
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        } catch {
+            XCTFail("Empty owner-update queue must not fail: \(error)")
+        }
+    }
+
     func testSharedCorePollTimelineViewUpdatesWithoutSessionReturnsEmpty() async {
         let core = SharedCore()
 

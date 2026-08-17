@@ -51,6 +51,7 @@ flowchart TD
   s14[S14_emit_sinks]
   s15[S15_live_leftover_io]
   s16[S16_product_timeline_rows]
+  s17[S17_owner_emit_poll]
   media[desktop_native_media_cutover]
   done[p4_engine_ready]
   p5[P5_operator_gated]
@@ -60,7 +61,8 @@ flowchart TD
   s13 --> s14
   s13 --> s15
   s14 --> s16
-  s16 --> done
+  s16 --> s17
+  s17 --> done
   s15 --> done
   media --> done
   done --> p5
@@ -74,6 +76,7 @@ flowchart TD
 | P4-S14 emit sinks | `in-pr` #1001 | required | Timeline view-delta poll queue. Summaries only. NSE cannot poll. Other product emits stay no-op. |
 | P4-S15 leftover I/O live | `in-pr` #1001 | required | Owner leftover status after attach. Recover/media/raw-send stay fail-closed (decision 15). No byte/secret envelopes. |
 | P4-S16 product timeline rows | `in-pr` #1001 | required | Snapshot DTO keeps privacy-safe row bodies. Product maps them. No media bytes. |
+| P4-S17 owner emit poll | `in-pr` #1001 | required | Presence/devices/join_rules/image_packs poll queue. Summaries only. NSE cannot poll. |
 | Desktop native media cutover | `blocked` | required | Both shells do not yet get bytes from a native owner. iOS leftover media stays fail-closed (decision 15). Bytes must not cross `Core::command`. Do not register `matrix_send_attachment`. |
 | P4 engine ready | pending | gate | Session + sync + room list + timeline + crypto product paths call Core on iOS. Not claimed. |
 | P5 | `blocked` | operator | Do not start. Apple/TestFlight/physical-device. |
@@ -82,10 +85,9 @@ flowchart TD
 
 ## Current pointer
 
-**S12–S16 are on #1001.** Product timeline rows are the unblocked
-engine-ready gap while media cutover stays **blocked** (decision 15).
-Do not start P5. Do not claim P4 engine ready. After S16: remaining
-no-op emit families, or stop if only media/P5/Apple remain.
+**S12–S17 are on #1001.** Owner emit poll finishes the no-op attach
+sinks. Media cutover stays **blocked** (decision 15). Do not start P5.
+Do not claim P4 engine ready. Stop if only media/P5/Apple remain.
 
 ---
 
