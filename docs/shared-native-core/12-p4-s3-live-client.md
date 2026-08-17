@@ -4,7 +4,7 @@ This is the plan playbook §9.4 requires before guessing at password FFI.
 It does **not** accept P4 or claim iOS is on the shared engine.
 
 Evidence tip when written: `feature/shared-native-core` `ee896416` (#935 S3a).
-Current evidence tip: `main` `05a0961c` (#991).
+Current evidence tip: `main` `7ecbfdf9` (#1001).
 S3a landed in #935. S3b restore landed in #937 (`4edfc1f5`).
 S3c login (Option A) landed in #938 (`9b4ec54f`).
 S3d attach landed in #939 (`ad63d56d`).
@@ -22,12 +22,16 @@ lands S11 NSE read-only store (helper + XCTest; never starts sync;
 not a product NSE swap). #985 refreshes provenance. #986 lands S10
 leftover UniFFI and retires product `MatrixRustSDK` callers. Leftover
 I/O that needs a live homeserver stays fail-closed planted.
-SyncService is not started. This is not iOS-on-engine. #987 refreshes
-provenance. #988 re-enables iOS CI. #989 refreshes provenance. #990
-union-preserves `main` store recovery. #992 raises the rustc
-recursion limit. #991 merges SNC onto `main`. Local Apple UniFFI
-generate has been run; generated sources remain gitignored.
-Checked-in `SynaraCore.swift` remains the bootstrap stub.
+#987 refreshes provenance. #988 re-enables iOS CI. #989 refreshes
+provenance. #990 union-preserves `main` store recovery. #992 raises
+the rustc recursion limit. #991 merges SNC onto `main`. #1000
+records ADR 0004. #1002 adds the Long-running recipe. #1003 pauses
+hosted iOS CI. #1001 lands P4-S12–S37. SyncService can be started
+through SharedCore; live homeserver proof is paused. This is not
+iOS-on-engine. Local Apple UniFFI generate has been run for earlier
+fields; new S30–S35 fields still need Apple generate. Generated
+sources remain gitignored. Checked-in `SynaraCore.swift` remains the
+bootstrap stub.
 Playbook recipe: §9.5.
 Do not start P5. Dual-platform Core bugfix proof is not claimed.
 

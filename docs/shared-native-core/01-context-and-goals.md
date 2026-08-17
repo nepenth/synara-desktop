@@ -70,8 +70,11 @@ timeline, and crypto are not implemented twice.
 most product Matrix I/O through Core (`Core::command`, 111 registered
 names). iOS product `MatrixRustSDK` callers are retired via leftover
 UniFFI (#986); leftover I/O fail-closes without a live homeserver and
-does not start SyncService. This is not iOS-on-engine. SNC engineering
-is on `main` via #991. It is not a release.
+does not start leftover recover/media/raw-send I/O. SharedCore can
+start SyncService (S12 on #1001); live homeserver proof is paused.
+This is not iOS-on-engine. SNC engineering is on `main` via #991,
+with P4-S12–S37 on `main` via #1001. It is not a release. Hosted iOS
+CI is paused (#1003).
 
 How to implement the remaining gap without confusion:
 [11-implementer-playbook.md](11-implementer-playbook.md).
@@ -93,6 +96,6 @@ set. Do not tick them from a single PR.
   adapter layer).
 - A single feature toggle/bugfix authored once in `synara-core` lands on both
   platforms (demonstrated by at least one post-P4 change). **Not claimed.**
-- SNC engineering merged to `main` in #991 (`05a0961c`). That merge is not
-  program-done, P4 acceptance, or a release. Release remains a later,
-  separate gate.
+- SNC engineering merged to `main` in #991 (`05a0961c`); P4-S12–S37
+  landed in #1001 (`7ecbfdf9`). Those merges are not program-done, P4
+  acceptance, or a release. Release remains a later, separate gate.
