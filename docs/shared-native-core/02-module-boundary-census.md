@@ -3,7 +3,8 @@
 All paths relative to the repository root. Census technique: `git ls-files`,
 `grep -rl`, `grep -rn` over `src-tauri/src`, `synara-ios`, `.github/workflows`.
 The current source evidence is `main`
-`7ecbfdf9` (#1001 merge of P4-S12–S37). #991 remains the feature-lane
+`76f67441` (#1006 merge of desktop JS media retire). #1001 remains
+the P4-S12–S37 merge. #991 remains the feature-lane
 integration.
 
 ## 2.1 Desktop application-logic layer

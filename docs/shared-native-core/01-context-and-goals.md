@@ -97,5 +97,6 @@ set. Do not tick them from a single PR.
 - A single feature toggle/bugfix authored once in `synara-core` lands on both
   platforms (demonstrated by at least one post-P4 change). **Not claimed.**
 - SNC engineering merged to `main` in #991 (`05a0961c`); P4-S12–S37
-  landed in #1001 (`7ecbfdf9`). Those merges are not program-done, P4
+  landed in #1001 (`7ecbfdf9`); desktop JS media retire landed in
+  #1006 (`76f67441`). Those merges are not program-done, P4
   acceptance, or a release. Release remains a later, separate gate.

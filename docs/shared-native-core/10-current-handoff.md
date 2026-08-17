@@ -10,19 +10,20 @@
 
 | Item | Verified state |
 |---|---|
-| Evidence tip | `main` is `7ecbfdf9a476633c9cc1c3906fe4bce8aa205236`, the merge commit of #1001. |
-| #1001 parents | `401a98e14f7c71888f4cb98803c41f1e6563823d` (#1003 iOS CI pause on `main`) + `b2eaf6c55c8ff57f74d144bbcb45c163433c48d5` (product tip after merging paused `main`). |
-| Immediately preceding SNC merges | #1000 ADR 0004, #1002 Long-running recipe, #1003 hosted iOS CI pause, #1001 P4-S12–S37. |
+| Evidence tip | `main` is `76f674413b620906f697331c6af70e9d0f8a349f`, the merge commit of #1006. |
+| #1006 parents | `3cea3282eef1f58a4f50e4d3468146205e6cffee` (#1005 on `main`) + `41c655f7730a226d200891d4e73191a6e8f99a00` (JS media retire tip). |
+| Immediately preceding SNC merges | #1000 ADR 0004, #1002 Long-running recipe, #1003 hosted iOS CI pause, #1001 P4-S12–S37, #1004 docs honesty after #1001, #1005 leftover handle download, #1006 desktop JS media retire. |
 | Feature lane | `feature/shared-native-core` was an ancestor of `main` after #991 and has been deleted. No open PRs targeted it. |
 
 #991 is the operator-authorized integration of SNC engineering onto
 `main`. Quality, iOS simulator tests, and package smoke were green on
 that merge. #1001 later landed P4-S12–S37 on that tip after #1000/#1002/#1003.
-#990 union-preserved later `main` store-recovery work into
+#1006 later retired desktop JS encrypt/decrypt on that line after
+#1004/#1005. #990 union-preserved later `main` store-recovery work into
 the SNC lane before #991. Do not describe the lanes as still
-diverged. Do not treat #991 or #1001 as P4 acceptance, iOS-on-engine,
-dual-platform Core bugfix proof, or a release. Hosted iOS CI is paused
-(#1003). Live homeserver proof is paused.
+diverged. Do not treat #991, #1001, or #1006 as P4 acceptance,
+iOS-on-engine, dual-platform Core bugfix proof, or a release. Hosted
+iOS CI is paused (#1003). Live homeserver proof is paused.
 
 #713 and #714 are **P1-only mechanical extraction clusters**. Their exact
 residency changes are:
@@ -149,7 +150,7 @@ residency changes are:
 They move pure projection code and path references only. They add **no** P2
 command registration, no UDL expansion, and no iOS behavior or service-owner
 change. The previous `fa6e6b63`/#710 evidence is still a useful bounded P4
-anchor, but it is no longer the tip provenance; use `7ecbfdf9`/#1001 for
+anchor, but it is no longer the tip provenance; use `76f67441`/#1006 for
 current claims. #718 only narrows hosted iOS selection to the UniFFI /
 Swift / iOS-shell surface; it does not change product behavior.
 
@@ -157,8 +158,9 @@ Swift / iOS-shell surface; it does not change product behavior.
 
 This state was checked at the evidence snapshot **before this ledger PR**:
 
-- There was no open shared-core PR and no open release PR. This docs-only PR is
-  the sole intended new scoped PR; it is not a source or release path.
+- #1006 is merged on `main` at `76f67441`. There is no open product
+  shared-core PR and no open release PR. This docs-only PR is the sole
+  intended new scoped PR; it is not a source or release path.
 - #705 is closed, stale, and approval-gated. Its remote head was deleted. It
   must not be reopened or merged.
 - #672 is closed, stale, and unauthorized. Its remote head was deleted. It
@@ -423,10 +425,11 @@ The exact bounded iOS evidence is:
 - #1005: leftover `downloadMatrixMedia` routes `synara-media://` /
   `timeline-media-*` and leftover `mxc://` through
   `matrix_media_download`. Not `Core::command`.
-- Desktop JS media retire (in-pr): composer send is native-only;
-  `browser-encrypt-attachment` removed; `sw.ts` is a stub; leftover
-  encrypted `mxc://` fail-closes. Leftover avatar `<img src=mxc://>`
-  display remains. Not Apple generate. Not dual-platform proof.
+- #1006: desktop JS media retire on `main` at `76f67441`. Composer
+  send is native-only; `browser-encrypt-attachment` removed; `sw.ts`
+  is a stub; leftover encrypted `mxc://` fail-closes. Leftover avatar
+  `<img src=mxc://>` display remains. Quality green (iOS skipped).
+  Not Apple generate. Not dual-platform proof. Not P4 engine ready.
 
 #708 and #710 add no Core command route. #931/#933/#935 add UniFFI probes /
 construction / vault only. Later P4 slices add typed wrappers; they do
@@ -573,14 +576,15 @@ for any of those gates.
    the whole run, not just at start. If disk is under 20 Gi: stop.
    Docs-only PRs are still allowed.
 4. After S3, consume already-registered commands one family per PR.
-   S4 through S9-31, S10 leftover retirement, S11, and S12–S37 have
-   landed. Product `MatrixRustSDK` callers are retired. Do not start
-   P5. Do not claim P4 engine ready. Hosted iOS CI stays paused.
-   Live homeserver proof stays paused until an environment can
-   launch the app. Desktop JS encrypt/decrypt is retired; leftover
-   encrypted `mxc://` fail-closes. Leftover avatar `<img src=mxc://>`
-   display remains. Apple generate and dual-platform Core bugfix
-   proof still need a Mac / live app.
+   S4 through S9-31, S10 leftover retirement, S11, S12–S37, and
+   desktop JS media retire (#1006) have landed. Product
+   `MatrixRustSDK` callers are retired. Do not start P5. Do not
+   claim P4 engine ready. Do not invent S38. Hosted iOS CI stays
+   paused. Live homeserver proof stays paused until an environment
+   can launch the app. Leftover encrypted `mxc://` fail-closes.
+   Leftover avatar `<img src=mxc://>` display remains. Apple
+   generate and dual-platform Core bugfix proof still need a Mac /
+   live app.
 5. After each product PR: squash-merge to `main`, docs honesty, then
    re-run playbook section 5. If step 4, stop.
 

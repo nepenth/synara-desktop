@@ -4,13 +4,14 @@ Legend: ✅ shipping / 🔨 in progress / ⛔ not yet
 
 ## Current bounded evidence (not parity completion)
 
-At `main` `7ecbfdf9`
-(#1001), P2 still registers one hundred eleven names—the prior one
+At `main` `76f67441`
+(#1006), P2 still registers one hundred eleven names—the prior one
 hundred nine plus `matrix_invites_report_spam` and
 `matrix_invites_block_sender`. Desktop uses that registry. iOS has
 typed SharedCore wrappers through S9-31, the S11 NSE read-only
 store helper (never starts sync), S10 leftover UniFFI, and
-P4-S12–S37 product consume. Product `MatrixRustSDK` callers are
+P4-S12–S37 product consume. #1006 retires desktop JS encrypt/decrypt.
+Product `MatrixRustSDK` callers are
 retired; leftover I/O fail-closes without a live homeserver.
 Hosted iOS CI is paused (#1003). Live homeserver proof is paused.
 This is not iOS-on-engine.
