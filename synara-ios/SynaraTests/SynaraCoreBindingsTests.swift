@@ -262,6 +262,27 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreResumeFromForegroundWithoutSessionStaysStoppedWithoutEcho() async throws {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreMatrixClientService(host: host)
+        let session = AuthenticatedSession(
+            userID: "@alice:example.org",
+            deviceID: "DEVICE",
+            homeserverURL: try XCTUnwrap(URL(string: "https://matrix.example.org")),
+            accessToken: "syt_secret_token"
+        )
+        await service.resumeFromForeground(session: session)
+        XCTAssertEqual(service.syncStatus, .stopped)
+        let publicError = String(describing: service.syncStatus)
+        for forbidden in ["password", "syt_secret_token", "@alice:example.org", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
     func testSharedCoreStartSyncWithoutAttachFailsClosed() async {
         let core = SharedCore()
 

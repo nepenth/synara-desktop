@@ -75,20 +75,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     }
 
     func start(session: AuthenticatedSession) async {
-        syncStatus = .starting
-        let outcome = await SharedCoreSessionBootstrap.prepareLiveSession(
-            userID: session.userID,
-            homeserverURL: session.homeserverURL.absoluteString,
-            storeRoot: host.storeRoot,
-            core: host.core
-        )
-        if outcome.started {
-            syncStatus = .syncing
-        } else if outcome.attached || outcome.restored {
-            syncStatus = .starting
-        } else {
-            syncStatus = .stopped
-        }
+        await applyLiveSession(session)
     }
 
     func warmSync(session: AuthenticatedSession) async {
@@ -112,7 +99,24 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     func pauseForBackground() async {}
 
     func resumeFromForeground(session: AuthenticatedSession) async {
-        _ = session
+        await applyLiveSession(session)
+    }
+
+    private func applyLiveSession(_ session: AuthenticatedSession) async {
+        syncStatus = .starting
+        let outcome = await SharedCoreSessionBootstrap.prepareLiveSession(
+            userID: session.userID,
+            homeserverURL: session.homeserverURL.absoluteString,
+            storeRoot: host.storeRoot,
+            core: host.core
+        )
+        if outcome.started {
+            syncStatus = .syncing
+        } else if outcome.attached || outcome.restored {
+            syncStatus = .starting
+        } else {
+            syncStatus = .stopped
+        }
     }
 
     func syncForBackgroundNotification(session: AuthenticatedSession) async -> Bool {

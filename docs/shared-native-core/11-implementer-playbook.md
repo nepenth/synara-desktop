@@ -451,6 +451,9 @@ P4-S21 product typing live            stacked on S12–S20
 P4-S22 product room details           stacked on S12–S21
        Product roomDetails maps list / members / power /
        join-rule / invite snapshots. No media bytes. No UDL.
+P4-S23 product foreground resume      stacked on S12–S22
+       Product resumeFromForeground uses the S13 bootstrap.
+       Second start is a restart. No pause command. No NSE.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -888,6 +891,24 @@ acceptance.
 **Tests:** mapper fills name/members/permissions without token echo;
 without a session the product path falls back to the room id and
 disables edits.
+
+### 9.18 P4-S23 — product foreground resume
+
+S13 made `start(session:)` the one restore → attach → start path.
+`SynaraApp` already calls `resumeFromForeground` on scene active, but
+the SharedCore implementation was a no-op. S12 already treats a
+second `start_sync` as a restart.
+
+**Lands:** product `resumeFromForeground` uses the same S13 bootstrap
+as `start`. Helper comment + XCTest. Pause stays a no-op (no Core
+pause). NSE background sync stays false.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+starting sync in NSE; a pause/stop SyncService command; P5; claiming
+iOS-on-engine or P4 acceptance.
+
+**Tests:** without a session, resume stays `.stopped` with no token
+echo.
 
 ---
 

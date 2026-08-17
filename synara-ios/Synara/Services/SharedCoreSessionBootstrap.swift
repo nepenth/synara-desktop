@@ -6,8 +6,10 @@ import SynaraCore
 /// Uses an already-constructed SharedCore. The caller owns the core so
 /// UniFFI does not free the retained Client. Each step is fail-closed
 /// and independent: a retained login client skips restore, an already
-/// attached owner set skips attach, then start runs. NSE still cannot
-/// start sync. This is not iOS-on-engine and not P4 acceptance.
+/// attached owner set skips attach, then start runs. Product
+/// `start(session:)` and P4-S23 `resumeFromForeground` share this path.
+/// NSE still cannot start sync. This is not iOS-on-engine and not P4
+/// acceptance.
 enum SharedCoreSessionBootstrap {
     struct Outcome: Equatable {
         var restored: Bool
