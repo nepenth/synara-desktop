@@ -7,6 +7,8 @@ paragraph disagree, this file plus `10-current-handoff.md` win for
 *what done means*; ADR-0004 wins for *what may be written in Rust*.
 The language-boundary loop operator is
 [13-language-boundary-goal-graph.md](13-language-boundary-goal-graph.md).
+To launch a Long-running Cloud Agent, use
+[14-long-running-agent.md](14-long-running-agent.md).
 
 Older “144 `Core::command` handlers” sentences in `03-target-architecture.md`
 and `06-migration-phases.md` are stale. Do not register the 21 leftovers in
@@ -37,7 +39,7 @@ shared engine. Never claim P5 or MAC-IOS-006 is done.
 | Surface | Today |
 |---|---|
 | Desktop macOS/Linux | Live Matrix `Client` and native owners live in Core. React still invokes `matrix_*`. **111** of those names are registered on `Core::command`. Desktop is a thinner shell, not a thin shell. |
-| iOS | UniFFI scaffold through S9-31 + S11 NSE read-only store helper (never starts sync; not a product NSE swap) + **S10 leftover UniFFI** (#986). `AppEnvironment.live()` constructs one caller-owned `SharedCore` and SharedCore product services. Product `MatrixRustSDK` callers are retired (comments may remain). Leftover wipe/logout are local-only; recover/raw-send/media/pusher/notification/avatar and leftover status reads fail closed without a live homeserver and do not start SyncService. This is not iOS-on-engine and not P4 acceptance. Local Apple generate has been run; generated sources remain gitignored. Checked-in `SynaraCore.swift` remains the bootstrap stub. iOS CI is re-enabled (#988): `ios-tests` runs when the iOS path filter matches; Quality on #988 was green including iOS (ran, not skipped). XCTest construction of `SharedCore` is not iOS-on-engine. |
+| iOS | UniFFI scaffold through S9-31 + S11 NSE read-only store helper (never starts sync; not a product NSE swap) + **S10 leftover UniFFI** (#986). `AppEnvironment.live()` constructs one caller-owned `SharedCore` and SharedCore product services. Product `MatrixRustSDK` callers are retired (comments may remain). Leftover wipe/logout are local-only; recover/raw-send/media/pusher/notification/avatar and leftover status reads fail closed without a live homeserver and do not start SyncService. This is not iOS-on-engine and not P4 acceptance. Local Apple generate has been run; generated sources remain gitignored. Checked-in `SynaraCore.swift` remains the bootstrap stub. Hosted iOS CI is paused (#1003) until `main` is stable; Quality treats skipped `ios-tests` as OK. #988 had previously re-enabled it. XCTest construction of `SharedCore` is not iOS-on-engine. |
 | `main` | SNC engineering tip. #991 merged `feature/shared-native-core` (`172df893`, including #992) with prior `main` (`60876379`). Quality + iOS + package smoke were green. |
 | Release | Forbidden until program-done is accepted and P5 operator/Apple gates pass. #991 is not a release. |
 
