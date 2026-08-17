@@ -914,23 +914,56 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
     }
 
     func roomDetails(roomID: String) async -> RoomDetails? {
-        RoomDetails(
-            roomID: roomID,
-            name: roomID,
-            topic: nil,
-            aliases: [],
-            isEncrypted: false,
-            isPublic: nil,
-            memberCount: 0,
-            canInvite: false,
-            canEditName: false,
-            canEditTopic: false,
-            canEditAvatar: false,
-            canEditAliases: false,
-            powerLevels: nil,
-            notificationMode: .allMessages,
-            avatarURL: nil
+        let ownUserID = await coreSessionUserID()
+        let list = try? await SharedCoreRoomList.roomListSnapshot(core: host.core)
+        let room = list?.rooms.first(where: { $0.roomId == roomID })
+        let members = try? await SharedCoreRoomMembersSnapshots.roomMembersSnapshot(
+            core: host.core,
+            roomId: roomID
         )
+        let power = try? await SharedCoreRoomMembersSnapshots.roomPowerLevelsSnapshot(
+            core: host.core,
+            roomId: roomID
+        )
+        let generation = list?.sessionGeneration ?? members?.sessionGeneration ?? 0
+        let join = try? await SharedCoreJoinRules.roomJoinRuleSnapshot(
+            core: host.core,
+            roomId: roomID,
+            sessionGeneration: generation
+        )
+        let invite = (try? await SharedCoreInvites.invitesSnapshot(core: host.core))?
+            .invites
+            .first(where: { $0.roomId == roomID })
+        return SharedCoreRoomDetails.details(
+            roomID: roomID,
+            ownUserID: ownUserID,
+            room: room.map {
+                SharedCoreRoomDetails.RoomRow(
+                    roomId: $0.roomId,
+                    name: $0.name,
+                    canonicalAlias: $0.canonicalAlias,
+                    avatarUrl: $0.avatarUrl
+                )
+            },
+            members: members?.members.map {
+                SharedCoreRoomDetails.MemberRow(
+                    userId: $0.userId,
+                    membership: $0.membership,
+                    powerLevel: Int($0.powerLevel)
+                )
+            } ?? [],
+            powerLevelsJSON: power?.contentJson,
+            joinRule: join?.joinRule,
+            topic: invite?.roomTopic,
+            isEncrypted: invite?.isEncrypted ?? false
+        )
+    }
+
+    private func coreSessionUserID() async -> String? {
+        guard let snapshot = try? await SharedCoreSessionStatus.sessionSnapshot(core: host.core) else {
+            return nil
+        }
+        return snapshot.userId
     }
 
     func updateRoomProfile(_ request: RoomProfileUpdateRequest) async throws {

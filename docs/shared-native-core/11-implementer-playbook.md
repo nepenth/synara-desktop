@@ -448,6 +448,9 @@ P4-S20 product verification           stacked on S12–S19
 P4-S21 product typing live            stacked on S12–S20
        typing family on the S17 owner queue (room id only).
        Product typingUsers re-fetches the existing snapshot.
+P4-S22 product room details           stacked on S12–S21
+       Product roomDetails maps list / members / power /
+       join-rule / invite snapshots. No media bytes. No UDL.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -865,6 +868,26 @@ iOS-on-engine or P4 acceptance.
 
 **Tests:** room matcher is privacy-safe; without a session the product
 stream yields `[]` with no token echo and can be cancelled.
+
+### 9.17 P4-S22 — product room details
+
+S9-3/S9-16 typed join-rule and members snapshots exist. Product
+`roomDetails` still returned a placeholder (name = room id, no
+permissions). Room details UI already loads that one-shot.
+
+**Lands:** product `SharedCoreRoomManagementService.roomDetails`
+maps the existing list / members / power-level / join-rule / invite
+snapshots. Helper + XCTest. Topic and encryption come from the
+invite snapshot when the room is an invite. Notification mode stays
+the leftover default.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+UDL changes; room-avatar bytes; P5; claiming iOS-on-engine or P4
+acceptance.
+
+**Tests:** mapper fills name/members/permissions without token echo;
+without a session the product path falls back to the room id and
+disables edits.
 
 ---
 

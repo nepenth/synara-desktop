@@ -503,6 +503,71 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(batches, [[]])
     }
 
+    func testSharedCoreRoomDetailsMapsSnapshotsWithoutEcho() {
+        let powerJSON = """
+        {"users_default":0,"events_default":0,"state_default":50,"invite":50,"kick":50,"ban":50,"redact":50,"events":{"m.room.name":50,"m.room.topic":50,"m.room.avatar":50,"m.room.canonical_alias":50},"users":{"@alice:example.org":100}}
+        """
+        let details = SharedCoreRoomDetails.details(
+            roomID: "!s22:example.org",
+            ownUserID: "@alice:example.org",
+            room: SharedCoreRoomDetails.RoomRow(
+                roomId: "!s22:example.org",
+                name: "Ops",
+                canonicalAlias: "#ops:example.org",
+                avatarUrl: "mxc://example.org/roomAvatar"
+            ),
+            members: [
+                SharedCoreRoomDetails.MemberRow(
+                    userId: "@alice:example.org",
+                    membership: "join",
+                    powerLevel: 100
+                ),
+                SharedCoreRoomDetails.MemberRow(
+                    userId: "@bob:example.org",
+                    membership: "leave",
+                    powerLevel: 0
+                ),
+            ],
+            powerLevelsJSON: powerJSON,
+            joinRule: "public",
+            topic: "Invite topic",
+            isEncrypted: true
+        )
+        XCTAssertEqual(details.name, "Ops")
+        XCTAssertEqual(details.topic, "Invite topic")
+        XCTAssertEqual(details.aliases, ["#ops:example.org"])
+        XCTAssertEqual(details.avatarURL, "mxc://example.org/roomAvatar")
+        XCTAssertEqual(details.memberCount, 1)
+        XCTAssertEqual(details.isPublic, true)
+        XCTAssertEqual(details.isEncrypted, true)
+        XCTAssertEqual(details.canInvite, true)
+        XCTAssertEqual(details.canEditName, true)
+        XCTAssertEqual(details.canEditAliases, true)
+        XCTAssertEqual(details.powerLevels?.ownUserLevel, 100)
+        XCTAssertEqual(details.notificationMode, .allMessages)
+        let publicError = String(describing: details)
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreRoomDetailsWithoutSessionFallsBackWithoutEcho() async {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreRoomManagementService(host: host)
+        let details = await service.roomDetails(roomID: "!s22:example.org")
+        XCTAssertEqual(details?.name, "!s22:example.org")
+        XCTAssertEqual(details?.canInvite, false)
+        XCTAssertNil(details?.powerLevels)
+        let publicError = String(describing: details)
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
     func testSharedCoreTypingPresenceWithoutSessionFailsClosed() async {
         let core = SharedCore()
 
