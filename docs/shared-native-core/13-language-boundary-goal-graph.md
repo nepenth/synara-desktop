@@ -71,7 +71,7 @@ flowchart TD
 | P4-S13 restore bootstrap | `in-pr` #1001 | required | Cold-start: restore vault session → attach → start. One product path with login. |
 | P4-S14 emit sinks | `in-pr` #1001 | required | Timeline view-delta poll queue. Summaries only. NSE cannot poll. Other product emits stay no-op. |
 | P4-S15 leftover I/O live | `in-pr` #1001 | required | Owner leftover status after attach. Recover/media/raw-send stay fail-closed (decision 15). No byte/secret envelopes. |
-| Desktop native media cutover | next | required | Retire `browser-encrypt-attachment` and shrink `synara/src/sw.ts` once both shells get bytes from the native owner. Do not register `matrix_send_attachment` on Core. |
+| Desktop native media cutover | `blocked` | required | Both shells do not yet get bytes from a native owner. iOS leftover media stays fail-closed (decision 15). Bytes must not cross `Core::command`. Do not register `matrix_send_attachment`. |
 | P4 engine ready | pending | gate | Session + sync + room list + timeline + crypto product paths call Core on iOS. Not claimed. |
 | P5 | `blocked` | operator | Do not start. Apple/TestFlight/physical-device. |
 
@@ -79,11 +79,12 @@ flowchart TD
 
 ## Current pointer
 
-**S15 is on #1001 with S12–S14.** Owner leftover status is live after
-attach; homeserver leftover I/O stays fail-closed (decision 15). After
-that PR merges: set desktop native media cutover `next` if not already
-started. Do not start P5. Next implementer: desktop native media
-cutover. Do not claim P4 engine ready.
+**S12–S15 are on #1001.** The next required node is desktop native
+media cutover, and it is **blocked**: iOS leftover media stays
+fail-closed (decision 15), and bytes must not cross `Core::command`.
+Do not start P5. Do not claim P4 engine ready. Stop the loop here
+until an owner decision defines a native byte channel that is not
+`Core::command`.
 
 ---
 
@@ -93,3 +94,5 @@ cutover. Do not claim P4 engine ready.
 - The next node is P5.
 - A leftover secret/byte command would have to cross `Core::command`.
 - The only remaining work is Apple generate, a live homeserver, or a merge.
+- Desktop native media cutover would need a native byte channel that is
+  not `Core::command`, and iOS leftover media is fail-closed (decision 15).
