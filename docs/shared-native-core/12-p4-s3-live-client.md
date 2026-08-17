@@ -28,10 +28,10 @@ the rustc recursion limit. #991 merges SNC onto `main`. #1000
 records ADR 0004. #1002 adds the Long-running recipe. #1003 pauses
 hosted iOS CI. #1001 lands P4-S12–S37. SyncService can be started
 through SharedCore; live homeserver proof is paused. This is not
-iOS-on-engine. Local Apple UniFFI generate has been run for earlier
-fields; new S30–S35 fields still need Apple generate. Generated
+iOS-on-engine. Local Apple UniFFI generate has been run on Darwin for
+the S30–S35 fields (`dd62d24d`). Generated
 sources remain gitignored. Checked-in `SynaraCore.swift` remains the
-bootstrap stub.
+bootstrap stub. This is not P4 acceptance and not dual-platform proof.
 Playbook recipe: §9.5.
 Do not start P5. Dual-platform Core bugfix proof is not claimed.
 

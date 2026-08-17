@@ -69,9 +69,11 @@ Current honesty (update if the graph has moved):
   `matrix_send_attachment`.
 - Do not invent a byte channel. Do not invent S38. Do not start P5.
   Do not claim iOS-on-engine or P4 engine ready.
-- Remaining non-P5 work that needs a Mac or a live app: Apple generate
-  for new UniFFI fields, dual-platform Core bugfix proof, live
-  homeserver proof after the app can launch. Optional later: leftover
+- Remaining non-P5 work that needs a Mac or a live app:
+  dual-platform Core bugfix proof, live
+  homeserver proof after the app can launch. S30–S35 Apple generate
+  has been run locally; future UDL changes still need generate.
+  Optional later: leftover
   avatar display via native blob URLs. Re-enable hosted iOS CI only
   when an operator asks.
 

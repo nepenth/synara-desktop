@@ -170,7 +170,7 @@ Goal: iOS consumes the same engine; Swift re-implementations retired.
    - #1004 docs honesty after #1001
    - #1005 leftover `matrix_media_download` handle resolve
    - #1006 desktop JS media retire (`76f67441`)
-   - Local Apple UniFFI generate has been run for earlier fields; new S30–S35 fields still need Apple generate; generated sources remain gitignored
+   - Local Apple UniFFI generate has been run on Darwin for the S30–S35 fields (`dd62d24d`); generated sources remain gitignored; not iOS-on-engine; not P4 acceptance
    - Product `MatrixRustSDK` grep is comments only; leftover I/O fail-closed; SyncService can be started through SharedCore; live homeserver proof paused; hosted iOS CI paused
 4. Remove `matrix-rust-components-swift` from `project.yml` when nothing
    references `MatrixRustSDK` anymore.
@@ -191,9 +191,10 @@ by a SwiftUI unit test and a React hook test.
 > callers are retired. Leftover I/O that needs a live homeserver stays
 > fail-closed planted. SyncService can be started through SharedCore;
 > live homeserver proof is paused. This is not iOS-on-engine.
-> Local Apple generate has been run for earlier fields; new S30–S35
-> UniFFI fields still need Apple generate. Generated sources remain
+> Local Apple generate has been run on Darwin for the S30–S35
+> fields (`dd62d24d`). Generated sources remain
 > gitignored. Checked-in `SynaraCore.swift` remains the bootstrap stub.
+> This is not P4 acceptance and not dual-platform proof.
 > Hosted iOS CI is paused (#1003).
 > The prior #708 work is only the pure iOS room-row unread presentation from closed
 > `Joined`/`Invited` membership, scalar counters, and a marked-unread flag to a

@@ -162,11 +162,11 @@ acceptance criteria have all passed.
   P4-S12–S37 (`7ecbfdf9`). #1006 retires desktop JS encrypt/decrypt
   (`76f67441`). SyncService can be started through
   SharedCore; live homeserver proof is paused. This is not
-  iOS-on-engine. Local Apple generate has been run for earlier fields;
-  new S30–S35 UniFFI fields still need Apple generate. Generated
+  iOS-on-engine. Local Apple generate has been run on Darwin for the
+  S30–S35 UniFFI fields (`dd62d24d`). Generated
   sources remain gitignored. Checked-in `SynaraCore.swift` remains the
   bootstrap stub. iOS still has no registration product UI. P4 is not
-  accepted.
+  accepted. This is not dual-platform proof.
 - **P5 — not started.** Do not claim iOS shared-engine parity, iOS migration,
   or Apple release readiness from the bounded work above.
 
@@ -182,8 +182,8 @@ acceptance criteria have all passed.
    encrypt/decrypt. Product `MatrixRustSDK` callers
    are retired. Leftover I/O that needs a live homeserver stays
    fail-closed. Hosted iOS CI is paused (#1003). Live homeserver
-   proof is paused. Regenerating Swift bindings needs disk ≥ 20 Gi
-   and Apple generate for the new UniFFI fields. Dual-platform
+   proof is paused. S30–S35 Apple generate has been run locally;
+   future UDL changes still need generate and disk ≥ 20 Gi. Dual-platform
    “one Core bugfix on desktop+iOS” is not claimed. Do not start P5.
    Do not claim P4 engine ready. Do not invent S38. The
    operator-approved feature-lane merge to `main` landed in #991;

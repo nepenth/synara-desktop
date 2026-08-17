@@ -419,9 +419,8 @@ The exact bounded iOS evidence is:
   last-message previews, Settings devices, presence, and sticker-pack
   UI call Core. Desktop live timeline media uses `synara-media://`
   handle resolve. Leftover recover/media-bytes/raw-send/pusher/avatar
-  I/O stay fail-closed (decision 15). Not iOS-on-engine. Apple
-  generate still required for new UniFFI fields. Live homeserver
-  proof paused.
+  I/O stay fail-closed (decision 15). Not iOS-on-engine. Live
+  homeserver proof paused.
 - #1005: leftover `downloadMatrixMedia` routes `synara-media://` /
   `timeline-media-*` and leftover `mxc://` through
   `matrix_media_download`. Not `Core::command`.
@@ -430,6 +429,13 @@ The exact bounded iOS evidence is:
   is a stub; leftover encrypted `mxc://` fail-closes. Leftover avatar
   `<img src=mxc://>` display remains. Quality green (iOS skipped).
   Not Apple generate. Not dual-platform proof. Not P4 engine ready.
+- Local Apple UniFFI generate on Darwin at `dd62d24d` for the
+  S30–S35 fields (room-list `is_encrypted` / `notification_mode`,
+  timeline media handle / `timeline_media_bytes`, device snapshot
+  display names, last-message preview). Generated `synara_core.swift`
+  and the XCFramework remain gitignored. Checked-in `SynaraCore.swift`
+  remains the bootstrap stub. Not iOS-on-engine. Not P4 acceptance.
+  Not dual-platform proof.
 
 #708 and #710 add no Core command route. #931/#933/#935 add UniFFI probes /
 construction / vault only. Later P4 slices add typed wrappers; they do
@@ -441,10 +447,11 @@ lifecycle ownership no longer go through a product
 product adapters. Leftover recover/media-bytes/raw-send/pusher/avatar
 I/O still fail closed without a live homeserver (decision 15).
 SharedCore can start an already-attached SyncService (S12). This is
-not iOS-on-engine. Local Apple generate has been run for earlier
-fields; new S30–S35 UniFFI fields still need Apple generate.
+not iOS-on-engine. Local Apple generate has been run on Darwin for
+the S30–S35 UniFFI fields (`dd62d24d`).
 Generated `synara_core.swift` and the XCFramework remain gitignored.
-Checked-in `SynaraCore.swift` remains the bootstrap stub. UniFFI
+Checked-in `SynaraCore.swift` remains the bootstrap stub. This is not
+P4 acceptance and not dual-platform proof. UniFFI
 constructors are unchanged (`SharedCore()` / `newWithSecretStore`).
 Hosted iOS CI is paused (#1003). Product `MatrixRustSDK` callers are
 retired; comments may remain. P4 is not accepted. Live homeserver
@@ -567,8 +574,8 @@ for any of those gates.
    #990 union-preserves `main` store recovery. #992 raises the rustc
    recursion limit.    #991 merges SNC onto `main`. #1000 records ADR 0004. #1002 adds
    the Long-running recipe. #1003 pauses hosted iOS CI. #1001 lands
-   P4-S12–S37. Local Apple UniFFI generate has been run for earlier
-   fields; new S30–S35 fields still need Apple generate. Generated
+   P4-S12–S37. Local Apple UniFFI generate has been run on Darwin for
+   the S30–S35 fields (`dd62d24d`). Generated
    sources remain gitignored. Checked-in `SynaraCore.swift` remains
    the bootstrap stub. Live homeserver proof is paused. Do not
    start P5. Dual-platform Core bugfix proof is not claimed.
