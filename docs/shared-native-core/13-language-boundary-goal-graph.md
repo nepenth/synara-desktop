@@ -58,6 +58,7 @@ flowchart TD
   s21[S21_product_typing]
   s22[S22_product_room_details]
   s23[S23_product_foreground_resume]
+  s24[S24_product_read_markers]
   media[desktop_native_media_cutover]
   done[p4_engine_ready]
   p5[P5_operator_gated]
@@ -74,7 +75,8 @@ flowchart TD
   s20 --> s21
   s21 --> s22
   s22 --> s23
-  s23 --> done
+  s23 --> s24
+  s24 --> done
   s15 --> done
   media --> done
   done --> p5
@@ -95,6 +97,7 @@ flowchart TD
 | P4-S21 product typing live | `in-pr` #1001 | required | `typing` family on the S17 owner queue (room id only). Product `typingUsers` re-fetches snapshot. |
 | P4-S22 product room details | `in-pr` #1001 | required | Product `roomDetails` maps list / members / power / join-rule / invite snapshots. No media bytes. |
 | P4-S23 product foreground resume | `in-pr` #1001 | required | `resumeFromForeground` uses the S13 bootstrap. Second start is a restart. No NSE. |
+| P4-S24 product read markers | `in-pr` #1001 | required | Product mark-as-read uses `timeline_set_read_state`. No HTTP access token. |
 | Desktop native media cutover | `blocked` | required | Both shells do not yet get bytes from a native owner. iOS leftover media stays fail-closed (decision 15). Bytes must not cross `Core::command`. Do not register `matrix_send_attachment`. |
 | P4 engine ready | pending | gate | Session + sync + room list + timeline + crypto product paths call Core on iOS. Not claimed. |
 | P5 | `blocked` | operator | Do not start. Apple/TestFlight/physical-device. |
@@ -103,10 +106,10 @@ flowchart TD
 
 ## Current pointer
 
-**S12–S23 are on #1001.** Session, sync, room list, timeline,
-verification, typing, room-details, and foreground-resume product
-paths call Core. Media cutover stays **blocked** (decision 15). Do
-not start P5. Do not claim P4 engine ready. Stop if only
+**S12–S24 are on #1001.** Session, sync, room list, timeline,
+verification, typing, room-details, foreground-resume, and read-marker
+product paths call Core. Media cutover stays **blocked** (decision
+15). Do not start P5. Do not claim P4 engine ready. Stop if only
 media/P5/Apple remain.
 
 ---

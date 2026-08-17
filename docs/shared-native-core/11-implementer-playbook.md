@@ -454,6 +454,9 @@ P4-S22 product room details           stacked on S12–S21
 P4-S23 product foreground resume      stacked on S12–S22
        Product resumeFromForeground uses the S13 bootstrap.
        Second start is a restart. No pause command. No NSE.
+P4-S24 product read markers           stacked on S12–S23
+       Product mark-as-read uses timeline set_read_state.
+       No HTTP access token. No media bytes. No UDL.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -909,6 +912,24 @@ iOS-on-engine or P4 acceptance.
 
 **Tests:** without a session, resume stays `.stopped` with no token
 echo.
+
+### 9.19 P4-S24 — product read markers
+
+S9-19 typed set-read-state exists. Product mark-as-read still used
+homeserver HTTP with the empty SharedCore access token, so the live
+path could not acknowledge. `clearMarkedUnread` was a no-op.
+
+**Lands:** product `SharedCoreRoomReadMarkerService` opens a live
+view, calls `mark_read`, and maps `own_read_event_id` (else the last
+ackable row). Helper + XCTest. Temporary stream is closed. HTTP
+Bearer leftovers stay unused on the live path.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+UDL changes; starting sync in NSE; P5; claiming iOS-on-engine or
+P4 acceptance.
+
+**Tests:** mapper prefers own-read and skips `$local` / `$pending`;
+without a session mark/read stay nil with no token echo.
 
 ---
 

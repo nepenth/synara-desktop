@@ -1146,24 +1146,64 @@ final class SharedCorePusherService: MatrixPusherServicing {
     }
 }
 
-final class SharedCoreReadMarkerStore: RoomReadMarkerClientStoring {
+final class SharedCoreRoomReadMarkerService: RoomReadMarkerServicing {
     private let host: SharedCoreProductHost
 
     init(host: SharedCoreProductHost) {
         self.host = host
     }
 
-    func latestEventID(roomID: String, session: AuthenticatedSession) async throws -> String? {
-        _ = session
-        let readback = try await SharedCoreTimelineReadState.timelineEventReadback(
-            core: host.core,
-            roomId: roomID,
-            eventId: ""
-        )
-        return readback.item.eventId
+    func fullyReadEventID(roomID: String) async -> String? {
+        await withOpenLive(roomID: roomID) { opened in
+            SharedCoreReadMarkers.acknowledgedEventID(
+                ownReadEventID: opened.snapshot.ownReadEventId,
+                rowEventIDs: opened.snapshot.rows.map(\.eventId)
+            )
+        }
     }
 
-    func clearMarkedUnread(roomID: String, session: AuthenticatedSession) async throws {
-        _ = (roomID, session)
+    func markFullyRead(roomID: String, eventID: String) async -> Bool {
+        guard MatrixServerEventIDPolicy.canAcknowledge(eventID) else {
+            return false
+        }
+        return await markRoomAsRead(roomID: roomID) != nil
+    }
+
+    func markRoomAsRead(roomID: String) async -> String? {
+        await withOpenLive(roomID: roomID) { opened in
+            let readback = try? await SharedCoreTimelineReadState.timelineSetReadState(
+                core: host.core,
+                streamId: opened.streamId,
+                action: "mark_read"
+            )
+            return SharedCoreReadMarkers.acknowledgedEventID(
+                ownReadEventID: readback?.snapshot.ownReadEventId ?? opened.snapshot.ownReadEventId,
+                rowEventIDs: (readback?.snapshot.rows ?? opened.snapshot.rows).map(\.eventId)
+            )
+        }
+    }
+
+    private func withOpenLive<T>(
+        roomID: String,
+        body: (TimelineOpenDto) async -> T?
+    ) async -> T? {
+        let position = TimelineOpenPositionDto(
+            kind: "live",
+            atBottom: true,
+            restoredAnchorEventId: nil,
+            liveTailEventId: nil,
+            updatedAtMs: nil,
+            eventId: nil
+        )
+        guard let opened = try? await SharedCoreTimeline.timelineOpen(
+            core: host.core,
+            roomId: roomID,
+            position: position
+        ) else {
+            return nil
+        }
+        let result = await body(opened)
+        _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: opened.streamId)
+        return result
     }
 }

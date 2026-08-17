@@ -524,6 +524,42 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(batches, [[]])
     }
 
+    func testSharedCoreReadMarkersPrefersOwnReadWithoutEcho() {
+        let acknowledged = SharedCoreReadMarkers.acknowledgedEventID(
+            ownReadEventID: "$s24-own:example.org",
+            rowEventIDs: ["$local-1", "$s24-row:example.org"]
+        )
+        XCTAssertEqual(acknowledged, "$s24-own:example.org")
+        XCTAssertEqual(
+            SharedCoreReadMarkers.acknowledgedEventID(
+                ownReadEventID: "$pending-1",
+                rowEventIDs: ["$local-1", "$s24-row:example.org"]
+            ),
+            "$s24-row:example.org"
+        )
+        let publicError = String(describing: acknowledged)
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreReadMarkersWithoutSessionStayEmptyWithoutEcho() async {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreRoomReadMarkerService(host: host)
+        let marked = await service.markRoomAsRead(roomID: "!s24:example.org")
+        let fullyRead = await service.fullyReadEventID(roomID: "!s24:example.org")
+        XCTAssertNil(marked)
+        XCTAssertNil(fullyRead)
+        let publicError = String(describing: (marked, fullyRead))
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
     func testSharedCoreRoomDetailsMapsSnapshotsWithoutEcho() {
         let powerJSON = """
         {"users_default":0,"events_default":0,"state_default":50,"invite":50,"kick":50,"ban":50,"redact":50,"events":{"m.room.name":50,"m.room.topic":50,"m.room.avatar":50,"m.room.canonical_alias":50},"users":{"@alice:example.org":100}}
@@ -584,6 +620,42 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(details?.canInvite, false)
         XCTAssertNil(details?.powerLevels)
         let publicError = String(describing: details)
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreReadMarkersPrefersOwnReadWithoutEcho() {
+        let acknowledged = SharedCoreReadMarkers.acknowledgedEventID(
+            ownReadEventID: "$s24-own:example.org",
+            rowEventIDs: ["$local-1", "$s24-row:example.org"]
+        )
+        XCTAssertEqual(acknowledged, "$s24-own:example.org")
+        XCTAssertEqual(
+            SharedCoreReadMarkers.acknowledgedEventID(
+                ownReadEventID: "$pending-1",
+                rowEventIDs: ["$local-1", "$s24-row:example.org"]
+            ),
+            "$s24-row:example.org"
+        )
+        let publicError = String(describing: acknowledged)
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreReadMarkersWithoutSessionStayEmptyWithoutEcho() async {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreRoomReadMarkerService(host: host)
+        let marked = await service.markRoomAsRead(roomID: "!s24:example.org")
+        let fullyRead = await service.fullyReadEventID(roomID: "!s24:example.org")
+        XCTAssertNil(marked)
+        XCTAssertNil(fullyRead)
+        let publicError = String(describing: (marked, fullyRead))
         for forbidden in ["password", "syt_", "token"] {
             XCTAssertFalse(publicError.contains(forbidden))
         }
