@@ -1,6 +1,6 @@
-import type { EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
+import type { EncryptedAttachmentInfo } from '../../types/matrix/common';
 import { invokeDesktopWithAvailability } from '../utils/desktop';
-import { decryptFile, downloadEncryptedMedia, downloadMedia, mxcUrlToHttp } from '../utils/matrix';
+import { mxcUrlToHttp } from '../utils/matrix';
 
 const TIMELINE_MEDIA_HANDLE_PREFIX = 'timeline-media-';
 
@@ -88,16 +88,13 @@ export function resolveMatrixThumbnailUrl(
   }
 }
 
-async function downloadNativeTimelineMedia(contentUri: string, mimeType: string): Promise<Blob> {
-  const handle = timelineMediaHandleFromUri(contentUri);
-  if (!handle) {
-    throw new Error('Invalid native timeline media handle');
-  }
+async function downloadNativeMedia(contentUri: string, mimeType: string): Promise<Blob> {
+  const resolved = timelineMediaHandleFromUri(contentUri) ?? contentUri.trim();
   const result = await invokeDesktopWithAvailability<{ bytes?: unknown }>('matrix_media_download', {
-    contentUri: handle,
+    contentUri: resolved,
   });
   if (!result.available || !result.value || !Array.isArray(result.value.bytes)) {
-    throw new Error('Native timeline media download failed');
+    throw new Error('Native media download failed');
   }
   const bytes = Uint8Array.from(result.value.bytes.map((b) => (typeof b === 'number' ? b : 0)));
   return new Blob([bytes], { type: mimeType });
@@ -108,18 +105,16 @@ export async function downloadMatrixMedia(
   mxcUrl: string,
   options: MatrixMediaDownloadOptions
 ): Promise<Blob> {
-  // Live timeline media is a native handle. Do not JS-decrypt or fetch mxc.
-  if (timelineMediaHandleFromUri(mxcUrl)) {
-    return downloadNativeTimelineMedia(mxcUrl, options.mimeType);
+  void mx;
+  const handle = timelineMediaHandleFromUri(mxcUrl);
+  if (options.encryptedInfo && !handle) {
+    throw new Error('Leftover encrypted media requires a native handle');
   }
-  const mediaUrl = resolveMatrixMediaUrl(mx, mxcUrl, options);
-  if (options.encryptedInfo) {
-    const encryptedInfo = options.encryptedInfo;
-    return downloadEncryptedMedia(mediaUrl, (encryptedBuffer) =>
-      decryptFile(encryptedBuffer, options.mimeType, encryptedInfo)
-    );
+  const trimmed = mxcUrl.trim();
+  if (handle || trimmed.startsWith('mxc://')) {
+    return downloadNativeMedia(mxcUrl, options.mimeType);
   }
-  return downloadMedia(mediaUrl);
+  throw new Error('Invalid Matrix media URL');
 }
 
 export async function createMatrixMediaObjectUrl(

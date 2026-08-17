@@ -1,7 +1,7 @@
 import { atom } from 'jotai';
 import { atomFamily } from 'jotai/utils';
 import { Descendant } from 'slate';
-import { EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
+import { EncryptedAttachmentInfo } from '../../../types/matrix/common';
 import { createUploadAtomFamily } from '../upload';
 import { TUploadContent } from '../../utils/matrix';
 import { createListAtom } from '../list';

@@ -71,7 +71,7 @@ import {
 } from '../../components/editor';
 import { EmojiBoard, EmojiBoardTab } from '../../components/emoji-board';
 import { UseStateProvider } from '../../components/UseStateProvider';
-import { TUploadContent, encryptFile, getImageInfo, getMxIdLocalPart } from '../../utils/matrix';
+import { TUploadContent, getImageInfo, getMxIdLocalPart } from '../../utils/matrix';
 import { useTypingStatusUpdater } from '../../hooks/useTypingStatusUpdater';
 import { useFilePicker } from '../../hooks/useFilePicker';
 import { useFileDropZone } from '../../hooks/useFileDrop';
@@ -104,15 +104,8 @@ import {
   loadImageElement,
 } from '../../utils/dom';
 import { safeFile } from '../../utils/mimeTypes';
-import { fulfilledPromiseSettledResult } from '../../utils/common';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
-import {
-  getAudioMsgContent,
-  getFileMsgContent,
-  getImageMsgContent,
-  getVideoMsgContent,
-} from './msgContent';
 import { getMemberDisplayName, getMentionContent, trimReplyFromBody } from '../../utils/room';
 import { CommandAutocomplete } from './CommandAutocomplete';
 import { Command, SHRUG, TABLEFLIP, UNFLIP, useCommands } from '../../hooks/useCommands';
@@ -262,43 +255,28 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         setUploadBoard(true);
         const safeFiles = files.map(safeFile);
         const fileItems: TUploadItem[] = [];
-        // Native Rust encrypts in e2e rooms; do not dual-encrypt via JS.
+        // Native Rust encrypts in e2e rooms. JS encrypt is retired.
         const nativeReady = await nativeComposerAttachmentReady();
         setNativeComposerSend(nativeReady);
-
-        if (
-          !nativeReady &&
-          (room as unknown as { hasEncryptionStateEvent(): boolean }).hasEncryptionStateEvent()
-        ) {
-          const encryptFiles = fulfilledPromiseSettledResult(
-            await Promise.allSettled(safeFiles.map((f) => encryptFile(f)))
-          );
-          encryptFiles.forEach((ef) =>
-            fileItems.push({
-              ...ef,
-              metadata: {
-                markedAsSpoiler: false,
-              },
-            })
-          );
-        } else {
-          safeFiles.forEach((f) =>
-            fileItems.push({
-              file: f,
-              originalFile: f,
-              encInfo: undefined,
-              metadata: {
-                markedAsSpoiler: false,
-              },
-            })
-          );
+        if (!nativeReady) {
+          throw new Error('Native Matrix attachment send is unavailable.');
         }
+        safeFiles.forEach((f) =>
+          fileItems.push({
+            file: f,
+            originalFile: f,
+            encInfo: undefined,
+            metadata: {
+              markedAsSpoiler: false,
+            },
+          })
+        );
         setSelectedFiles({
           type: 'PUT',
           item: fileItems,
         });
       },
-      [setSelectedFiles, room]
+      [setSelectedFiles]
     );
     const pickFile = useFilePicker(handleFiles, true);
     const handleNativeClipboardImage = useCallback(async () => {
@@ -566,36 +544,12 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         replyTo,
         threadRoot
       );
-      if (owner === 'native') {
-        handleCancelUpload(uploads);
-        if (nativeFiles.length > 0) {
-          setReplyDraft(undefined);
-        }
-        return;
+      if (owner !== 'native') {
+        throw new Error('Native Matrix attachment send is unavailable.');
       }
-
-      const contentsPromises = uploads.map(async (upload) => {
-        const fileItem = selectedFiles.find((f) => f.file === upload.file);
-        if (!fileItem) throw new Error('Broken upload');
-
-        if (fileItem.file.type.startsWith('image')) {
-          return getImageMsgContent(fileItem, upload.mxc);
-        }
-        if (fileItem.file.type.startsWith('video')) {
-          return getVideoMsgContent(fileItem, upload.mxc);
-        }
-        if (fileItem.file.type.startsWith('audio')) {
-          return getAudioMsgContent(fileItem, upload.mxc);
-        }
-        return getFileMsgContent(fileItem, upload.mxc);
-      });
       handleCancelUpload(uploads);
-      const contents = fulfilledPromiseSettledResult(await Promise.allSettled(contentsPromises));
-      contents.forEach((content) =>
-        mx.sendMessage(roomId, addReplyRelationToContent(content) as any)
-      );
-      if (contents.length > 0) {
-        clearReplyDraft();
+      if (nativeFiles.length > 0) {
+        setReplyDraft(undefined);
       }
     };
 

@@ -61,14 +61,17 @@ Current honesty (update if the graph has moved):
 - Hosted iOS CI stays paused (#1003). Live homeserver proof stays paused
   until an environment can launch the app.
 - Desktop live timeline media uses `synara-media://` + handle resolve.
-  Leftover `mxc://` is avatar/pack only. JS `browser-encrypt-attachment`
-  remains the leftover send fallback. iOS leftover media I/O stays
-  fail-closed (decision 15). Do not register `matrix_send_attachment`.
+  Composer send is native-only. JS `browser-encrypt-attachment` is
+  retired. `sw.ts` is a stub. Leftover encrypted `mxc://` fail-closes.
+  Leftover avatar `<img src=mxc://>` display remains. iOS leftover
+  media I/O stays fail-closed (decision 15). Do not register
+  `matrix_send_attachment`.
 - Do not invent a byte channel. Do not start P5. Do not claim
   iOS-on-engine or P4 engine ready.
-- Remaining non-P5 work: docs honesty, Apple generate for new UniFFI
-  fields, leftover JS media retire when both shells take bytes from the
-  native owner, then live proof after the app can launch.
+- Remaining non-P5 work that needs a Mac or a live app: Apple generate
+  for new UniFFI fields, dual-platform Core bugfix proof, live
+  homeserver proof after the app can launch. Optional later: leftover
+  avatar display via native blob URLs.
 
 Propose a plan first. Wait for approval. Then execute.
 ```
@@ -78,5 +81,5 @@ Propose a plan first. Wait for approval. Then execute.
 - Enable the team setting for you.
 - Merge already-landed #1000 / #1001 / #1002 / #1003 again.
 - Start P5 or TestFlight.
-- Retire `browser-encrypt-attachment` / shrink `synara/src/sw.ts` until
-  both shells have a native byte channel that is not `Core::command`.
+- Hand-edit generated Swift or invent a no-bindgen Apple generate path.
+- Invent a dual-platform Core bugfix proof that did not run on iOS.

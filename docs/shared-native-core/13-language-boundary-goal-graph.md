@@ -71,6 +71,7 @@ flowchart TD
   s36[S36_desktop_media_cutover]
   s37[S37_presence_sticker_ui]
   media[desktop_native_media_cutover]
+  jsMedia[desktop_js_media_retire]
   done[p4_engine_ready]
   p5[P5_operator_gated]
 
@@ -101,8 +102,9 @@ flowchart TD
   s37 --> done
   s33 --> media
   s36 --> media
+  media --> jsMedia
   s15 --> done
-  media --> done
+  jsMedia --> done
   done --> p5
 ```
 
@@ -133,7 +135,8 @@ flowchart TD
 | P4-S35 last-message preview | `landed` #1001 | required | Core/UniFFI project a privacy-safe last-message preview. Product room lists consume it. |
 | P4-S36 desktop media handle cutover | `landed` #1001 | required | Leftover `matrix_media_download` resolves `timeline-media-*` through the native owner. Not `Core.command`. |
 | P4-S37 presence + sticker pack UI | `landed` #1001 | required | Settings/room details consume presence. Composer lists image-pack names and sends via `SharedCoreSendSticker`. |
-| Desktop native media cutover | `landed` #1001 | required | Live timeline uses `synara-media://` + handle resolve. Leftover `mxc://` is avatar/pack only. JS encrypt remains the leftover send fallback. |
+| Desktop native media cutover | `landed` #1001 | required | Live timeline uses `synara-media://` + handle resolve. Leftover `mxc://` is avatar/pack only. |
+| Desktop JS media retire | `in-pr` | required | Composer send is native-only. `browser-encrypt-attachment` removed. `sw.ts` is a stub. Leftover encrypted `mxc://` fail-closes. Leftover avatar `<img src=mxc://>` display remains. Not Apple generate. Not dual-platform proof. |
 | P4 engine ready | pending | gate | Product paths call Core. Not claimed: Apple generate, paused iOS CI (#1003), and paused live homeserver proof still sit in front of the gate. |
 | P5 | `blocked` | operator | Do not start. Apple/TestFlight/physical-device. |
 
@@ -148,9 +151,10 @@ Settings devices, presence, and sticker-pack UI call Core. Desktop
 live media uses the handle owner. Hosted iOS CI stays paused (#1003).
 Live homeserver proof is paused until an environment can launch the
 app. Do not start P5. Do not claim P4 engine ready. Apple generate
-is required for the new UniFFI fields. JS `browser-encrypt-attachment`
-remains for leftover send fallback and leftover `mxc://` avatar/pack
-decrypt; do not register byte commands on `Core::command`.
+is required for the new UniFFI fields. Desktop JS encrypt/decrypt is
+retired; leftover encrypted `mxc://` fail-closes. Leftover avatar
+`<img src=mxc://>` display remains. Dual-platform Core bugfix proof
+is not claimed. Do not register byte commands on `Core::command`.
 
 ---
 

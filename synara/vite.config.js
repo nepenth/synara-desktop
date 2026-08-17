@@ -86,7 +86,7 @@ export default defineConfig({
     vanillaExtractPlugin(),
     wasm(),
     react(),
-    // Bundles the Matrix media service worker only; app manifest/install support is disabled.
+    // Bundles a stub worker so injectManifest still has an entry; app manifest/install support is disabled.
     VitePWA({
       srcDir: 'src',
       filename: 'sw.ts',
