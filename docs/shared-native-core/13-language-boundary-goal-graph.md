@@ -63,6 +63,7 @@ flowchart TD
   s26[S26_product_room_list_unread]
   s27[S27_product_session_crypto]
   s28[S28_product_room_crypto]
+  s29[S29_product_timeline_non_message]
   media[desktop_native_media_cutover]
   done[p4_engine_ready]
   p5[P5_operator_gated]
@@ -84,7 +85,8 @@ flowchart TD
   s25 --> s26
   s26 --> s27
   s27 --> s28
-  s28 --> done
+  s28 --> s29
+  s29 --> done
   s15 --> done
   media --> done
   done --> p5
@@ -110,6 +112,7 @@ flowchart TD
 | P4-S26 product room-list unread lookup | `in-pr` #1001 | required | Product `hasUnreadMessages` uses the cached snapshot. Agent rooms stay false. |
 | P4-S27 product session crypto status | `in-pr` #1001 | required | Product `sessionStatus` maps leftover backup/crypto and secret-storage. No recovery keys. |
 | P4-S28 product room crypto status | `in-pr` #1001 | required | Product `roomStatus` reuses the S27 mapper plus invite encryption. Joined-room encryption stays unknown. |
+| P4-S29 product timeline non-message rows | `in-pr` #1001 | required | Poll / membership / state / call bodies already on the row DTO map to text. No media bytes. |
 | Desktop native media cutover | `blocked` | required | Both shells do not yet get bytes from a native owner. iOS leftover media stays fail-closed (decision 15). Bytes must not cross `Core::command`. Do not register `matrix_send_attachment`. |
 | P4 engine ready | pending | gate | Session + sync + room list + timeline + crypto product paths call Core on iOS. Not claimed. |
 | P5 | `blocked` | operator | Do not start. Apple/TestFlight/physical-device. |
@@ -118,12 +121,12 @@ flowchart TD
 
 ## Current pointer
 
-**S12–S28 are on #1001.** Session, sync, room list, timeline,
+**S12–S29 are on #1001.** Session, sync, room list, timeline,
 verification, typing, room-details, foreground-resume, read-marker,
-room-list space/invite/unread, and session/room-crypto product paths
-call Core. Media cutover stays **blocked** (decision 15). Do not
-start P5. Do not claim P4 engine ready. Stop if only media/P5/Apple
-remain.
+room-list space/invite/unread, session/room-crypto, and non-message
+timeline bodies call Core. Media cutover stays **blocked**
+(decision 15). Do not start P5. Do not claim P4 engine ready.
+Stop if only media/P5/Apple remain.
 
 ---
 

@@ -469,6 +469,9 @@ P4-S27 product session crypto status  stacked on S12–S26
 P4-S28 product room crypto status     stacked on S12–S27
        Product roomStatus reuses the S27 mapper plus invite
        encryption. Joined-room encryption stays unknown. No UDL.
+P4-S29 product timeline non-message rows stacked on S12–S28
+       Poll / membership / state / call / other bodies already
+       on the row DTO map to text. No media bytes. No UDL.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -1020,6 +1023,25 @@ claiming iOS-on-engine or P4 acceptance.
 
 **Tests:** mapper fills invite encryption and session recovery
 without token echo; without a session `roomStatus` is unknown.
+
+### 9.24 P4-S29 — product timeline non-message row bodies
+
+S16 mapped message / redacted / encrypted rows. Core already puts
+poll questions and membership / state / call summaries in `body`,
+but the product mapper showed `Unsupported event: poll`.
+
+**Lands:** `SharedCoreTimelineRows.displayKind` maps poll /
+membership / state / call / other / sticker to `.text` when body
+is non-empty. Empty sticker stays unknown. Virtual kinds still
+skip. No media bytes. No mxc invention. Helper + XCTest.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+UDL changes; media placeholders without a URL; P5; claiming
+iOS-on-engine or P4 acceptance.
+
+**Tests:** poll / membership / state / call map to text; empty
+sticker stays unknown; date separators stay skipped; no token or
+mxc echo.
 
 ---
 

@@ -377,6 +377,72 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(SharedCoreTimelineRows.outcome(from: []), .empty)
     }
 
+    func testSharedCoreTimelineRowsMapsNonMessageBodiesWithoutEcho() {
+        XCTAssertEqual(
+            SharedCoreTimelineRows.displayKind(
+                rowKind: "poll",
+                body: "Lunch?",
+                formattedBody: nil
+            ),
+            .text("Lunch?")
+        )
+        XCTAssertEqual(
+            SharedCoreTimelineRows.displayKind(
+                rowKind: "membership",
+                body: "@alex joined",
+                formattedBody: nil
+            ),
+            .text("@alex joined")
+        )
+        XCTAssertEqual(
+            SharedCoreTimelineRows.displayKind(
+                rowKind: "state",
+                body: "Topic changed",
+                formattedBody: nil
+            ),
+            .text("Topic changed")
+        )
+        XCTAssertEqual(
+            SharedCoreTimelineRows.displayKind(
+                rowKind: "call",
+                body: "voice",
+                formattedBody: nil
+            ),
+            .text("voice")
+        )
+        XCTAssertEqual(
+            SharedCoreTimelineRows.displayKind(
+                rowKind: "sticker",
+                body: "",
+                formattedBody: nil
+            ),
+            .unknown(type: "sticker")
+        )
+        XCTAssertNil(
+            SharedCoreTimelineRows.displayKind(
+                rowKind: "date_separator",
+                body: "",
+                formattedBody: nil
+            )
+        )
+        XCTAssertEqual(
+            SharedCoreTimelineRows.displayKind(
+                rowKind: "encrypted",
+                body: "unable_to_decrypt",
+                formattedBody: nil
+            ),
+            .encryptedPlaceholder
+        )
+        let publicError = String(describing: SharedCoreTimelineRows.displayKind(
+            rowKind: "poll",
+            body: "Lunch?",
+            formattedBody: nil
+        ))
+        for forbidden in ["password", "syt_", "token", "mxc://"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
     func testSharedCoreTimelineLiveRefreshMatchesRoomAndStream() {
         XCTAssertTrue(
             SharedCoreTimelineLiveRefresh.shouldRefresh(
