@@ -9651,13 +9651,21 @@ fn leftover_status_envelope_payload(
 fn map_leftover_status_core_error(error: MatrixIpcError) -> LeftoverCommandError {
     match error.diagnostic_id.as_deref() {
         Some(code)
+            if code.ends_with("-no-session")
+                || code.contains("requires-session")
+                || code.contains("-session-missing") =>
+        {
+            leftover_failed(code, LEFTOVER_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
             if code.starts_with("p2-backup-status-")
                 || code.starts_with("p2-crypto-status-")
                 || code.starts_with("p2-cross-signing-status-")
                 || code.starts_with("p2-room-key-transfer-status-")
-                || code.starts_with("v-crypto.2-") =>
+                || code.starts_with("v-crypto.2-")
+                || code.starts_with("v-crypto.3-") =>
         {
-            leftover_failed(code, LEFTOVER_NO_SESSION_DESCRIPTION)
+            leftover_failed(code, LEFTOVER_UNAVAILABLE_DESCRIPTION)
         }
         _ => leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION),
     }

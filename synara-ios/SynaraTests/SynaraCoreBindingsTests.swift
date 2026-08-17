@@ -23,6 +23,32 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertNotNil(core)
     }
 
+    func testSharedCoreLeftoverStatusWithoutAttachFailsClosed() async {
+        let core = SharedCore()
+
+        do {
+            _ = try await SharedCoreLeftovers.backupStatus(core: core)
+            XCTFail("Fail-closed SharedCore must not read leftover backup status without attach")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-backup-status-no-session"))
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreLeftovers.roomKeyTransferStatus(core: core)
+            XCTFail("Fail-closed SharedCore must not read leftover room-key status without attach")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-key-transfer-status-no-session"))
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testSharedCoreLeftoversWithoutSessionFailClosed() async {
         let core = SharedCore.newWithSecretStore(store: InMemoryIosSecretVault())
         let recoveryKey = "s10-secret-recovery-key"

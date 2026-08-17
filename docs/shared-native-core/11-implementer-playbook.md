@@ -116,6 +116,8 @@ These are numbered owner calls. Do not re-litigate them in a slice PR.
 | 11 | No release until shared core is program-done and P5 gates pass. #991 is not a release. |
 | 12 | Apple proof stays operator-gated. |
 | 13 | DeepSeek paused. Grok does the routes. |
+| 14 | Language boundaries: [ADR 0004](../adr/0004-rust-language-boundaries.md). UI, Keychain, APNs, NSE lifecycle, and Node scripts stay put. Do not start a Slint/Dioxus/egui rewrite or Tauri iOS. |
+| 15 | Leftover recover, raw-send, notification-mode, media bytes, room-avatar bytes, and pusher I/O stay fail-closed without a live homeserver. Do not invent a Core recover command or a byte/secret envelope. Leftover **status** that already has a Core owner (backup, room-key transfer) is the live leftover path. Crypto/cross-signing status stay on `Platform` (`IosFailClosedPlatform` remains fail-closed). |
 
 ---
 
@@ -422,6 +424,10 @@ P4-S13 restore bootstrap              stacked on S12
 P4-S14 emit sinks                     stacked on S12/S13
        Timeline view-delta poll queue only. Summaries, not row
        bodies. NSE still cannot poll. Not Platform::emit.
+P4-S15 leftover I/O live              stacked on S12–S14
+       Owner leftover status after attach. Homeserver leftover
+       I/O stays fail-closed (decision 15). No byte/secret
+       envelopes.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -709,6 +715,29 @@ Do not change NSE methods to poll.
 **Tests:** UDL surface; poll empty without attach; NSE forbids poll;
 enqueue then poll is privacy-safe with no token, user id, or URL echo.
 Failed errors stay static.
+
+### 9.10 P4-S15 — leftover I/O that already has a Core owner
+
+S10 authorized leftover UniFFI. Status wrappers already call Core
+commands. After S13 attach, leftover **status** that lives on
+`NativeDeviceOwner` can return a privacy-safe DTO without a homeserver.
+Leftover recover/raw-send/media/pusher still need live I/O.
+
+**Lands:** planted attach then `room_key_transfer_status` is live and
+privacy-safe. Owner no-session leftover status stays static. Recover,
+raw send, and media after attach stay `p4-s10-leftover-unavailable`.
+Owner decision 15. Helper already exists (`SharedCoreLeftovers`).
+XCTest fail-closed leftover status without attach.
+
+**Must not land:** leftover registration on `Core::command`; byte/secret
+envelopes; implementing recover/media against a live homeserver;
+starting leftover I/O in NSE; P5; claiming iOS-on-engine or P4
+acceptance.
+
+**Tests:** leftover backup/room-key status without attach is
+`p2-*-no-session` with no token/user/URL echo. After planted
+attach+start, room-key status is a DTO; recover/raw-send/media stay
+unavailable and never echo secrets.
 
 ---
 
