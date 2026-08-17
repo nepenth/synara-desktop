@@ -212,6 +212,21 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreStartSyncWithoutAttachFailsClosed() async {
+        let core = SharedCore()
+
+        do {
+            _ = try await SharedCoreSyncStart.startSync(core: core)
+            XCTFail("Fail-closed SharedCore must not start sync without attach")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p4-s12-sync-not-attached"))
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testSharedCoreRoomListWithoutSessionFailsClosed() async {
         let core = SharedCore()
 

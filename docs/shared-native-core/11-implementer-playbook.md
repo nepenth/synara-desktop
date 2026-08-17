@@ -411,6 +411,9 @@ P4-S10 retire MatrixRustSDKService / RoomListService / TimelineService
        homeserver; SyncService not started)
 P4-S11 NSE read-only store API        LANDED #984
        (never boot sync in NSE; helper + XCTest; not a product NSE swap)
+P4-S12 start attached SyncService     this slice
+       SharedCore.start_sync only. NSE still cannot start sync.
+       Not P4 acceptance. Do not start P5.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -629,10 +632,33 @@ not iOS-on-engine and not P4 acceptance. The spike under
 
 **Remaining honesty:** `SessionLoginDto` is identity-only (no access
 token, by design). Product `AuthenticatedSession` still stores an
-empty access token after SharedCore login. SharedCore attach does not
-start SyncService. Product event emit sinks are no-op. Desktop
-twenty-one leftovers stay unregistered on `Core::command`. iOS CI
-is re-enabled (#988). Do not start P5.
+empty access token after SharedCore login. SharedCore attach still
+does not start SyncService; P4-S12 adds a separate `start_sync`.
+Product event emit sinks are no-op. Desktop twenty-one leftovers stay
+unregistered on `Core::command`. iOS CI is re-enabled (#988). Do not
+start P5. This is not iOS-on-engine.
+
+### 9.7 P4-S12 — start attached SyncService
+
+S10 retired product `MatrixRustSDK` callers. The S3d reason for leaving
+SyncService unstarted (no dual live sync) is gone. This slice starts
+the already-attached owner only.
+
+**Lands:** `SharedCore.start_sync` FFI. Helper + XCTest. Product login
+attach may call start. `SharedCoreMatrixClientService.start` may call
+start. NSE still fail-closes.
+
+**Must not land:** leftover registration; byte/secret envelopes; starting
+sync in NSE; P5; claiming iOS-on-engine or P4 acceptance; a generic
+`Core.command` FFI; emit-sink product events.
+
+**UDL:** adds `start_sync` on `SharedCore`. Section 9.2 disk gate
+applies. Implement in `crates/synara-core/src/shared_core_ffi.rs`.
+Do not change NSE methods to start sync.
+
+**Tests:** no-attach fail-closed; NSE forbids start; planted attach then
+start returns a privacy-safe readiness DTO with no tokens, user id, or
+URL. Failed errors stay static.
 
 ---
 

@@ -1543,6 +1543,18 @@ impl Core {
         }
     }
 
+    /// Start the already-attached SyncService. Does not attach owners.
+    /// Missing owner is `p4-s12-sync-not-attached`. Start failures stay
+    /// `p4-s12-sync-start-failed` and never echo SDK text.
+    pub async fn start_attached_sync(&self) -> Result<SyncReadinessSnapshot, &'static str> {
+        let owner = self
+            .state
+            .sync_owner()
+            .map_err(|_| "p4-s12-sync-start-failed")?
+            .ok_or("p4-s12-sync-not-attached")?;
+        owner.start().await.map_err(|_| "p4-s12-sync-start-failed")
+    }
+
     pub fn registered_commands(&self) -> Vec<String> {
         self.registry.command_names()
     }

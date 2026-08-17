@@ -203,6 +203,21 @@ interface SessionAttachError {
   Failed(string code, string description);
 };
 
+// Privacy-safe start of the already-attached SyncService. No tokens, URLs,
+// or SDK error text. `started` is true only for running/offline readiness.
+dictionary SyncStartDto {
+  string readiness;
+  u64 session_generation;
+  boolean started;
+  boolean offline_mode_enabled;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface SyncStartError {
+  Failed(string code, string description);
+};
+
 // Privacy-safe room-list row. No tokens or password.
 dictionary RoomListRoomDto {
   string room_id;
@@ -1226,6 +1241,8 @@ interface InviteActionError {
 // looks up a local event preview. It never starts SyncService, never
 // attaches owners, and never boots leftover Client sync. Failed errors
 // stay static and must not echo room id, event id, user id, or tokens.
+// P4-S12 adds start_sync for the already-attached SyncService only.
+// NSE still cannot start sync. This is not P4 acceptance or iOS-on-engine.
 // Password is a method argument only: not stored, not in the DTO, never echoed.
 // Still no generic command FFI, leftover registration, or APNs surface.
 interface SharedCore {
@@ -1250,6 +1267,9 @@ interface SharedCore {
 
   [Async, Throws=SessionAttachError]
   SessionAttachDto attach_session_owners();
+
+  [Async, Throws=SyncStartError]
+  SyncStartDto start_sync();
 
   [Async, Throws=RoomListSnapshotError]
   RoomListSnapshotDto room_list_snapshot();

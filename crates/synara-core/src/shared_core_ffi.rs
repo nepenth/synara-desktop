@@ -10,6 +10,8 @@
 //! never registered as `matrix_login_password`. The password is not stored,
 //! not copied into a DTO, never echoed, and is zeroized on drop.
 //! P4-S3d adds `attach_session_owners` for the desktop owner set.
+//! P4-S12 adds `start_sync` for that already-attached SyncService. NSE
+//! still cannot start sync. This is not iOS-on-engine.
 //! P4-S4 adds a typed `room_list_snapshot` wrapper that calls the
 //! already-registered `matrix_room_list_snapshot` Core command only.
 //! P4-S5 adds a typed `invites_snapshot` wrapper that calls the
@@ -178,7 +180,7 @@ use crate::app::store::{
     get_or_create_store_key, AccountIdentity, StoreKeyId, StoreKeyMaterial, StoreKeyVault,
     StoreKeyVaultError, STORE_KEY_LEN,
 };
-use crate::app::sync::{build_sync_service, SyncServiceConfig};
+use crate::app::sync::{build_sync_service, SyncReadiness, SyncServiceConfig};
 use crate::app::timeline::{
     NativeComposerReplyDraft, NativeDecryptionState, NativeReactionMutation,
     NativeReactionMutationResult, NativeTimelineDirection, NativeTimelineEventReadback,
@@ -235,6 +237,12 @@ const NSE_PAYLOAD_OVERSIZE_DESCRIPTION: &str = "The NSE store request exceeds th
 const NSE_FORBIDS_ATTACH_CODE: &str = "p4-s11-nse-read-only-forbids-attach";
 const NSE_FORBIDS_ATTACH_DESCRIPTION: &str =
     "The NSE read-only store cannot attach session owners.";
+const NSE_FORBIDS_START_CODE: &str = "p4-s12-nse-forbids-start";
+const NSE_FORBIDS_START_DESCRIPTION: &str = "The NSE read-only store cannot start SyncService.";
+const SYNC_NOT_ATTACHED_CODE: &str = "p4-s12-sync-not-attached";
+const SYNC_NOT_ATTACHED_DESCRIPTION: &str = "Session owners are not attached.";
+const SYNC_START_FAILED_CODE: &str = "p4-s12-sync-start-failed";
+const SYNC_START_FAILED_DESCRIPTION: &str = "SyncService could not be started.";
 const NSE_OWNERS_ATTACHED_CODE: &str = "p4-s11-nse-owners-already-attached";
 const NSE_OWNERS_ATTACHED_DESCRIPTION: &str =
     "The NSE read-only store cannot open after owners attach.";
@@ -816,6 +824,38 @@ impl std::error::Error for SessionAttachError {}
 
 fn attach_failed(code: &'static str, description: &'static str) -> SessionAttachError {
     SessionAttachError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+/// Privacy-safe start outcome. No tokens, URLs, or SDK error text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncStartDto {
+    pub readiness: String,
+    pub session_generation: u64,
+    pub started: bool,
+    pub offline_mode_enabled: bool,
+}
+
+/// Static fail-closed start error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SyncStartError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for SyncStartError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for SyncStartError {}
+
+fn sync_start_failed(code: &'static str, description: &'static str) -> SyncStartError {
+    SyncStartError::Failed {
         code: code.to_owned(),
         description: description.to_owned(),
     }
@@ -2436,9 +2476,9 @@ impl SharedCore {
     /// Attach the desktop owner set on the retained Client. No Core.command.
     ///
     /// Builds owners with no-op emit sinks (Platform::emit stays a later
-    /// slice). SyncService is attached but not started so iOS does not run a
-    /// second live sync while MatrixRustSDK still owns product room list.
-    /// Fail-closed if no Client is retained or owners are already attached.
+    /// slice). SyncService is attached but not started; P4-S12
+    /// `start_sync` starts it. Fail-closed if no Client is retained or
+    /// owners are already attached.
     pub async fn attach_session_owners(&self) -> Result<SessionAttachDto, SessionAttachError> {
         if self.is_nse_read_only() {
             return Err(attach_failed(
@@ -2543,6 +2583,43 @@ impl SharedCore {
                 .iter()
                 .map(|name| (*name).to_owned())
                 .collect(),
+        })
+    }
+
+    /// Start the already-attached SyncService. Not `Core.command`.
+    ///
+    /// NSE forbids this. Missing attach fail-closes. Start failures stay
+    /// static and never echo user id, homeserver, device id, or tokens.
+    /// A second start is a restart of the same owner. This is not
+    /// iOS-on-engine and not P4 acceptance.
+    pub async fn start_sync(&self) -> Result<SyncStartDto, SyncStartError> {
+        if self.is_nse_read_only() {
+            return Err(sync_start_failed(
+                NSE_FORBIDS_START_CODE,
+                NSE_FORBIDS_START_DESCRIPTION,
+            ));
+        }
+        if !self.owners_attached() {
+            return Err(sync_start_failed(
+                SYNC_NOT_ATTACHED_CODE,
+                SYNC_NOT_ATTACHED_DESCRIPTION,
+            ));
+        }
+        let snapshot = self.core.start_attached_sync().await.map_err(|code| {
+            if code == SYNC_NOT_ATTACHED_CODE {
+                sync_start_failed(SYNC_NOT_ATTACHED_CODE, SYNC_NOT_ATTACHED_DESCRIPTION)
+            } else {
+                sync_start_failed(SYNC_START_FAILED_CODE, SYNC_START_FAILED_DESCRIPTION)
+            }
+        })?;
+        Ok(SyncStartDto {
+            readiness: snapshot.readiness.as_str().to_owned(),
+            session_generation: snapshot.session_generation,
+            started: matches!(
+                snapshot.readiness,
+                SyncReadiness::Running | SyncReadiness::Offline
+            ),
+            offline_mode_enabled: snapshot.offline_mode_enabled,
         })
     }
 

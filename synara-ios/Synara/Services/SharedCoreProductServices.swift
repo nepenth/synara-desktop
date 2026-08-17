@@ -49,6 +49,7 @@ struct SharedCoreAuthService: AuthServicing {
                 core: host.core
             )
             _ = try? await SharedCoreSessionAttach.attachSessionOwners(core: host.core)
+            _ = try? await SharedCoreSyncStart.startSync(core: host.core)
             return AuthenticatedSession(
                 userID: dto.userId,
                 deviceID: dto.deviceId,
@@ -74,8 +75,14 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     }
 
     func start(session: AuthenticatedSession) async {
-        syncStatus = .stopped
+        syncStatus = .starting
         _ = session
+        do {
+            let dto = try await SharedCoreSyncStart.startSync(core: host.core)
+            syncStatus = dto.started ? .syncing : .starting
+        } catch {
+            syncStatus = .stopped
+        }
     }
 
     func warmSync(session: AuthenticatedSession) async {
