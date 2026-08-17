@@ -75,6 +75,8 @@ is on `main` via #991. It is not a release.
 
 How to implement the remaining gap without confusion:
 [11-implementer-playbook.md](11-implementer-playbook.md).
+What may be written in Rust, and what must stay put:
+[ADR 0004](../adr/0004-rust-language-boundaries.md).
 
 ## Success criteria
 

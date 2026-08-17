@@ -15,6 +15,7 @@
 - iOS NSE: `synara-ios/SynaraNotificationService`, `synara-ios/SynaraShared`
 - iOS decisions: `docs/adr/0001-ios-repository-layout.md`,
   `docs/adr/0002-ios-architecture.md`, `docs/adr/0003-shared-native-rust-core.md`
+- Rust language boundaries: `docs/adr/0004-rust-language-boundaries.md`
 - iOS feasibility spikes: `synara-ios/docs/tauri-ios-feasibility-spike.md`,
   `synara-ios/docs/matrix-sdk-feasibility-spike.md`
 - iOS release gaps: `synara-ios/docs/device-readiness.md`,
