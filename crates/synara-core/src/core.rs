@@ -1548,6 +1548,11 @@ impl Core {
         self.state.sync_owner().ok().flatten()
     }
 
+    /// Attached timeline owner, if any. Does not open a view.
+    pub(crate) fn attached_timeline_owner(&self) -> Option<Arc<NativeTimelineOwner>> {
+        self.state.timeline_owner().ok().flatten()
+    }
+
     /// Start the already-attached SyncService. Does not attach owners.
     /// Missing owner is `p4-s12-sync-not-attached`. Start failures stay
     /// `p4-s12-sync-start-failed` and never echo SDK text.

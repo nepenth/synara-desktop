@@ -62,14 +62,15 @@ pub use shared_core_ffi::{
     SpaceChildrenSnapshotDto, SpaceCommandError, SpaceHierarchyRoomDto, SpaceHierarchySnapshotDto,
     SpaceParentEntryDto, SpaceParentsSnapshotDto, SyncStartDto, SyncStartError, SyncStatusDto,
     TimelineError, TimelineEventItemDto, TimelineEventReadbackDto, TimelineForwardDto,
-    TimelineForwardError, TimelineMutateDto, TimelineMutateError, TimelineOpenDto,
-    TimelineOpenPositionDto, TimelinePinDto, TimelinePinError, TimelineReactionDto,
-    TimelineReactionError, TimelineReactionMutationDto, TimelineReactionSenderDto,
-    TimelineReadStateDto, TimelineReadStateError, TimelineSnapshotDto, TimelineViewPositionDto,
-    TimelineViewRowDto, TimelineViewUpdateDto, TimelineViewUpdateError, TimelineVoteDeclineDto,
-    TimelineVoteDeclineError, TypingCommandError, TypingRoomDto, TypingSnapshotDto,
-    UserImagePackSnapshotDto, VerificationEmojiDto, VerificationInboxDto, VerificationListError,
-    VerificationRequestDto, VerificationSasDto, VerificationSasError,
+    TimelineForwardError, TimelineMediaError, TimelineMutateDto, TimelineMutateError,
+    TimelineOpenDto, TimelineOpenPositionDto, TimelinePinDto, TimelinePinError,
+    TimelineReactionDto, TimelineReactionError, TimelineReactionMutationDto,
+    TimelineReactionSenderDto, TimelineReadStateDto, TimelineReadStateError, TimelineSnapshotDto,
+    TimelineViewPositionDto, TimelineViewReactionDto, TimelineViewRowDto, TimelineViewUpdateDto,
+    TimelineViewUpdateError, TimelineVoteDeclineDto, TimelineVoteDeclineError, TypingCommandError,
+    TypingRoomDto, TypingSnapshotDto, UserImagePackSnapshotDto, VerificationEmojiDto,
+    VerificationInboxDto, VerificationListError, VerificationRequestDto, VerificationSasDto,
+    VerificationSasError,
 };
 
 mod core;

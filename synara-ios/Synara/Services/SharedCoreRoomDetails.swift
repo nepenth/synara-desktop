@@ -29,7 +29,8 @@ enum SharedCoreRoomDetails {
         powerLevelsJSON: String?,
         joinRule: String?,
         topic: String?,
-        isEncrypted: Bool
+        isEncrypted: Bool,
+        notificationMode: SynaraRoomNotificationMode = .allMessages
     ) -> RoomDetails {
         let power = powerSummary(
             ownUserID: ownUserID,
@@ -57,9 +58,20 @@ enum SharedCoreRoomDetails {
                 powerLevelsJSON: powerLevelsJSON
             ),
             powerLevels: power,
-            notificationMode: .allMessages,
+            notificationMode: notificationMode,
             avatarURL: room?.avatarUrl
         )
+    }
+
+    static func notificationMode(_ raw: String?) -> SynaraRoomNotificationMode {
+        switch raw {
+        case "mentions":
+            return .mentionsOnly
+        case "mute":
+            return .mute
+        default:
+            return .allMessages
+        }
     }
 
     static func powerSummary(

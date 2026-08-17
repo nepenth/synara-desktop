@@ -472,6 +472,16 @@ P4-S28 product room crypto status     stacked on S12–S27
 P4-S29 product timeline non-message rows stacked on S12–S28
        Poll / membership / state / call / other bodies already
        on the row DTO map to text. No media bytes. No UDL.
+P4-S30 room-list encryption + notify mode stacked on S12–S29
+       UniFFI room-list DTO keeps is_encrypted and notification_mode
+       already on the Core snapshot. Product roomStatus / details
+       consume them. No last-message invention.
+P4-S31/S32/S33 timeline reactions + media handle
+       Row DTO keeps reaction counts and opaque media handles.
+       SharedCore.timeline_media_bytes is a dedicated UniFFI byte
+       channel (ADR 0005). Not Core.command. NSE cannot download.
+P4-S34 product device list              stacked
+       Settings lists leftover-safe device snapshot rows. No keys.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -1042,6 +1052,26 @@ iOS-on-engine or P4 acceptance.
 **Tests:** poll / membership / state / call map to text; empty
 sticker stays unknown; date separators stay skipped; no token or
 mxc echo.
+
+### 9.25 P4-S30–S34 — room encryption, reactions, media handle, devices
+
+Core already projected joined-room encryption, notification mode,
+timeline reactions, and opaque media handles. UniFFI dropped them.
+Settings had no device list despite `device_snapshot`.
+
+**Lands:** room-list DTO `is_encrypted` / `notification_mode`;
+timeline row reactions + media handle metadata; `timeline_media_bytes`
+dedicated UniFFI channel (ADR 0005); Settings device rows from the
+existing snapshot. No `mxc://` on the row DTO. No leftover
+registration. NSE cannot download.
+
+**Must not land:** `matrix_send_attachment` on Core; byte/secret
+envelopes; last-message invention; P5; claiming iOS-on-engine or
+P4 acceptance.
+
+**Tests:** UDL has the new fields and `timeline_media_bytes`; without
+a session media fail-closes with no handle/mxc/token echo; Swift
+mappers cover notify mode, reactions, handle URL, and device name.
 
 ---
 

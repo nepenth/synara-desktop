@@ -336,6 +336,13 @@ protocol CryptoStatusServicing {
     func declineVerification() async -> CryptoActionResult
     func cancelVerification() async -> CryptoActionResult
     func recover(recoveryKey: String) async -> CryptoActionResult
+    func sessionDevices() async -> [SharedCoreSessionDevice]
+}
+
+extension CryptoStatusServicing {
+    func sessionDevices() async -> [SharedCoreSessionDevice] {
+        []
+    }
 }
 
 enum SynaraRoomVisibility: String, CaseIterable, Identifiable, Equatable {

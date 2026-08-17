@@ -433,6 +433,32 @@ final class SynaraCoreBindingsTests: XCTestCase {
             ),
             .encryptedPlaceholder
         )
+        XCTAssertEqual(
+            SharedCoreTimelineRows.reactionCounts([("👍", 2), ("🎉", 1)]),
+            ["👍": 2, "🎉": 1]
+        )
+        if case let .mediaPlaceholder(resource) = SharedCoreTimelineRows.displayKind(
+            rowKind: "message",
+            body: "photo.jpg",
+            formattedBody: nil,
+            messageType: "image",
+            mediaHandleId: "timeline-media-s32",
+            mediaMimeType: "image/jpeg"
+        ) {
+            XCTAssertEqual(resource.filename, "photo.jpg")
+            XCTAssertEqual(SharedCoreTimelineMedia.handleId(from: resource.authenticatedURL), "timeline-media-s32")
+        } else {
+            XCTFail("Image rows with a handle must map to a media placeholder")
+        }
+        XCTAssertEqual(
+            SharedCoreDevicesLive.devices(
+                deviceId: "DEVICE1",
+                displayName: "iPhone",
+                isCurrent: true,
+                trust: "verified"
+            ).displayName,
+            "iPhone"
+        )
         let publicError = String(describing: SharedCoreTimelineRows.displayKind(
             rowKind: "poll",
             body: "Lunch?",
@@ -663,6 +689,12 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(details.memberCount, 1)
         XCTAssertEqual(details.isPublic, true)
         XCTAssertEqual(details.isEncrypted, true)
+        XCTAssertEqual(
+            SharedCoreRoomDetails.notificationMode("mentions"),
+            .mentionsOnly
+        )
+        XCTAssertEqual(SharedCoreRoomDetails.notificationMode("mute"), .mute)
+        XCTAssertEqual(SharedCoreRoomDetails.notificationMode("all"), .allMessages)
         XCTAssertEqual(details.canInvite, true)
         XCTAssertEqual(details.canEditName, true)
         XCTAssertEqual(details.canEditAliases, true)

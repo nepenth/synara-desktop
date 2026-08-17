@@ -20,7 +20,10 @@ enum SharedCoreTimelineRows {
         guard let kind = displayKind(
             rowKind: row.kind,
             body: row.body,
-            formattedBody: row.formattedBody
+            formattedBody: row.formattedBody,
+            messageType: row.messageType,
+            mediaHandleId: row.mediaHandleId,
+            mediaMimeType: row.mediaMimeType
         ) else {
             return nil
         }
@@ -34,7 +37,7 @@ enum SharedCoreTimelineRows {
             kind: kind,
             replyToEventID: row.replyToEventId,
             isEdited: row.edited,
-            reactions: [:],
+            reactions: reactions(from: row.reactions),
             isEncrypted: row.kind == "encrypted"
         )
     }
@@ -42,8 +45,20 @@ enum SharedCoreTimelineRows {
     static func displayKind(
         rowKind: String,
         body: String,
-        formattedBody: String?
+        formattedBody: String?,
+        messageType: String? = nil,
+        mediaHandleId: String? = nil,
+        mediaMimeType: String? = nil
     ) -> TimelineItem.Kind? {
+        if let media = mediaPlaceholder(
+            rowKind: rowKind,
+            body: body,
+            messageType: messageType,
+            mediaHandleId: mediaHandleId,
+            mediaMimeType: mediaMimeType
+        ) {
+            return .mediaPlaceholder(media)
+        }
         switch rowKind {
         case "date_separator", "read_marker", "unread_marker", "timeline_start", "pagination":
             return nil
@@ -65,5 +80,40 @@ enum SharedCoreTimelineRows {
         default:
             return .unknown(type: rowKind)
         }
+    }
+
+    static func reactions(from rows: [TimelineViewReactionDto]) -> [String: Int] {
+        reactionCounts(rows.map { ($0.key, $0.count) })
+    }
+
+    static func reactionCounts(_ rows: [(key: String, count: UInt32)]) -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for row in rows where row.key.isEmpty == false {
+            counts[row.key] = Int(row.count)
+        }
+        return counts
+    }
+
+    static func mediaPlaceholder(
+        rowKind: String,
+        body: String,
+        messageType: String?,
+        mediaHandleId: String?,
+        mediaMimeType: String?
+    ) -> MediaResource? {
+        guard let handle = mediaHandleId?.trimmingCharacters(in: .whitespacesAndNewlines),
+              handle.isEmpty == false,
+              let url = URL(string: "synara-timeline-media://\(handle)") else {
+            return nil
+        }
+        let filename = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        return MediaResource(
+            id: handle,
+            filename: filename.isEmpty ? (messageType ?? rowKind) : filename,
+            authenticatedURL: url,
+            requiresAuthentication: true,
+            isEncrypted: false,
+            mimeType: mediaMimeType
+        )
     }
 }

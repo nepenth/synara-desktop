@@ -125,6 +125,34 @@ impl NativeTimelineOwner {
         self.registry.lock().await
     }
 
+    /// Download bytes for an opaque timeline media handle. Not `Core.command`.
+    ///
+    /// The handle never includes an `mxc://` URI. Fail-closed codes stay
+    /// static. The product cap is 32 MiB.
+    pub async fn media_bytes(&self, handle_id: &str) -> Result<Vec<u8>, &'static str> {
+        let source = self
+            .registry
+            .lock()
+            .await
+            .resolve_media(handle_id)
+            .await
+            .ok_or("p4-s33-media-unknown-handle")?;
+        let request = matrix_sdk::media::MediaRequestParameters {
+            source: source.source,
+            format: matrix_sdk::media::MediaFormat::File,
+        };
+        let bytes = self
+            .client
+            .media()
+            .get_media_content(&request, true)
+            .await
+            .map_err(|_| "p4-s33-media-failed")?;
+        if bytes.len() > 32 * 1024 * 1024 {
+            return Err("p4-s33-media-too-large");
+        }
+        Ok(bytes)
+    }
+
     pub async fn event_readback(
         &self,
         room_id: &str,

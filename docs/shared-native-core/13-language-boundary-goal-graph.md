@@ -64,6 +64,9 @@ flowchart TD
   s27[S27_product_session_crypto]
   s28[S28_product_room_crypto]
   s29[S29_product_timeline_non_message]
+  s30[S30_room_list_encryption]
+  s33[S33_native_media_handle]
+  s34[S34_product_devices]
   media[desktop_native_media_cutover]
   done[p4_engine_ready]
   p5[P5_operator_gated]
@@ -86,7 +89,11 @@ flowchart TD
   s26 --> s27
   s27 --> s28
   s28 --> s29
-  s29 --> done
+  s29 --> s30
+  s30 --> s33
+  s33 --> s34
+  s34 --> done
+  s33 --> media
   s15 --> done
   media --> done
   done --> p5
@@ -113,7 +120,10 @@ flowchart TD
 | P4-S27 product session crypto status | `in-pr` #1001 | required | Product `sessionStatus` maps leftover backup/crypto and secret-storage. No recovery keys. |
 | P4-S28 product room crypto status | `in-pr` #1001 | required | Product `roomStatus` reuses the S27 mapper plus invite encryption. Joined-room encryption stays unknown. |
 | P4-S29 product timeline non-message rows | `in-pr` #1001 | required | Poll / membership / state / call bodies already on the row DTO map to text. No media bytes. |
-| Desktop native media cutover | `blocked` | required | Both shells do not yet get bytes from a native owner. iOS leftover media stays fail-closed (decision 15). Bytes must not cross `Core::command`. Do not register `matrix_send_attachment`. |
+| P4-S30 room-list encryption + notify mode | `in-pr` #1001 | required | UniFFI keeps Core `is_encrypted` / `notification_mode`. Product roomStatus / details consume them. |
+| P4-S31–S33 reactions + media handle | `in-pr` #1001 | required | Row DTO keeps reaction counts and opaque handles. `timeline_media_bytes` is UniFFI bytes, not `Core.command`. |
+| P4-S34 product device list | `in-pr` #1001 | required | Settings lists device snapshot display names. No keys. |
+| Desktop native media cutover | `blocked` | required | Desktop still downloads via leftover `mxc://` Tauri command. iOS handle channel is S33. Do not register `matrix_send_attachment`. |
 | P4 engine ready | pending | gate | Session + sync + room list + timeline + crypto product paths call Core on iOS. Not claimed. |
 | P5 | `blocked` | operator | Do not start. Apple/TestFlight/physical-device. |
 
@@ -121,12 +131,12 @@ flowchart TD
 
 ## Current pointer
 
-**S12–S29 are on #1001.** Session, sync, room list, timeline,
-verification, typing, room-details, foreground-resume, read-marker,
-room-list space/invite/unread, session/room-crypto, and non-message
-timeline bodies call Core. Media cutover stays **blocked**
-(decision 15). Do not start P5. Do not claim P4 engine ready.
-Stop if only media/P5/Apple remain.
+**S12–S34 are on #1001.** Session, sync, room list, timeline,
+verification, typing, room-details, read-marker, crypto, reactions,
+opaque media handles, and Settings devices call Core. Desktop
+leftover `mxc://` download stays **blocked** for cutover. Do not
+start P5. Do not claim P4 engine ready. Apple generate is required
+for the new UniFFI fields.
 
 ---
 

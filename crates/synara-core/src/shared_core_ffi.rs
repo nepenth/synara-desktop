@@ -191,8 +191,9 @@ use crate::app::timeline::{
     NativeTimelineItem, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
     NativeTimelineOwner, NativeTimelineReaction, NativeTimelineReactionSender,
     NativeTimelineReadAction, NativeTimelineReadStateReadback, NativeTimelineViewportHint,
-    TimelinePageState, TimelineViewDeltaBatch, TimelineViewPosition, TimelineViewRow,
-    TimelineViewSnapshot, TimelineViewUpdateEmit, TIMELINE_VIEW_SCHEMA_VERSION,
+    TimelineMediaHandle, TimelinePageState, TimelineReaction, TimelineViewDeltaBatch,
+    TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot, TimelineViewUpdateEmit,
+    TIMELINE_VIEW_SCHEMA_VERSION,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot, NativeTypingUpdateSignal};
 use crate::app::verification::{
@@ -244,6 +245,17 @@ const NSE_FORBIDS_ATTACH_DESCRIPTION: &str =
     "The NSE read-only store cannot attach session owners.";
 const NSE_FORBIDS_START_CODE: &str = "p4-s12-nse-forbids-start";
 const NSE_FORBIDS_START_DESCRIPTION: &str = "The NSE read-only store cannot start SyncService.";
+const NSE_FORBIDS_MEDIA_CODE: &str = "p4-s33-nse-forbids-media";
+const NSE_FORBIDS_MEDIA_DESCRIPTION: &str =
+    "The NSE read-only store cannot download timeline media.";
+const TIMELINE_MEDIA_NO_SESSION_CODE: &str = "p4-s33-media-no-session";
+const TIMELINE_MEDIA_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
+const TIMELINE_MEDIA_UNKNOWN_HANDLE_CODE: &str = "p4-s33-media-unknown-handle";
+const TIMELINE_MEDIA_UNKNOWN_HANDLE_DESCRIPTION: &str = "The timeline media handle is unknown.";
+const TIMELINE_MEDIA_TOO_LARGE_CODE: &str = "p4-s33-media-too-large";
+const TIMELINE_MEDIA_TOO_LARGE_DESCRIPTION: &str = "The timeline media exceeds the size limit.";
+const TIMELINE_MEDIA_FAILED_CODE: &str = "p4-s33-media-failed";
+const TIMELINE_MEDIA_FAILED_DESCRIPTION: &str = "Timeline media could not be downloaded.";
 const SYNC_NOT_ATTACHED_CODE: &str = "p4-s12-sync-not-attached";
 const SYNC_NOT_ATTACHED_DESCRIPTION: &str = "Session owners are not attached.";
 const SYNC_START_FAILED_CODE: &str = "p4-s12-sync-start-failed";
@@ -1047,6 +1059,8 @@ pub struct RoomListRoomDto {
     pub highlight_count: u32,
     pub marked_unread: bool,
     pub last_activity_ts: Option<u64>,
+    pub is_encrypted: bool,
+    pub notification_mode: Option<String>,
 }
 
 /// Static fail-closed room-list error. Fields are source constants only.
@@ -1228,6 +1242,20 @@ pub struct TimelineViewRowDto {
     pub decryption_state: Option<String>,
     pub message_type: Option<String>,
     pub formatted_body: Option<String>,
+    pub reactions: Vec<TimelineViewReactionDto>,
+    pub media_handle_id: Option<String>,
+    pub media_mime_type: Option<String>,
+    pub media_width: Option<u32>,
+    pub media_height: Option<u32>,
+    pub media_duration_ms: Option<u64>,
+}
+
+/// Privacy-safe reaction count on a view row. No user ids.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineViewReactionDto {
+    pub key: String,
+    pub count: u32,
+    pub own: Option<bool>,
 }
 
 /// Privacy-safe timeline open readback. No tokens or password.
@@ -1804,6 +1832,29 @@ fn timeline_failed(code: &'static str, description: &'static str) -> TimelineErr
     }
 }
 
+/// Static fail-closed native media-handle error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TimelineMediaError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for TimelineMediaError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for TimelineMediaError {}
+
+fn timeline_media_failed(code: &'static str, description: &'static str) -> TimelineMediaError {
+    TimelineMediaError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
 fn map_timeline_open_core_error(error: MatrixIpcError) -> TimelineError {
     match error.diagnostic_id.as_deref() {
         Some("p2-timeline-open-no-session") => timeline_failed(
@@ -1958,34 +2009,86 @@ fn timeline_snapshot_dto(snapshot: TimelineViewSnapshot) -> TimelineSnapshotDto 
     }
 }
 
+fn view_reaction_dtos(reactions: Vec<TimelineReaction>) -> Vec<TimelineViewReactionDto> {
+    reactions
+        .into_iter()
+        .map(|reaction| TimelineViewReactionDto {
+            key: reaction.key,
+            count: reaction.count,
+            own: reaction.own,
+        })
+        .collect()
+}
+
+fn view_media_fields(
+    media: Option<TimelineMediaHandle>,
+) -> (
+    Option<String>,
+    Option<String>,
+    Option<u32>,
+    Option<u32>,
+    Option<u64>,
+) {
+    match media {
+        Some(handle) => (
+            Some(handle.handle_id),
+            handle.mime_type,
+            handle.width,
+            handle.height,
+            handle.duration_ms,
+        ),
+        None => (None, None, None, None, None),
+    }
+}
+
 fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
     match row {
-        TimelineViewRow::Message(message) => TimelineViewRowDto {
-            kind: "message".to_owned(),
-            item_id: message.event.item_id,
-            event_id: message.event.event_id.unwrap_or_default(),
-            sender: message.event.sender_id,
-            body: message.body,
-            origin_server_ts: message.event.origin_server_ts,
-            edited: message.edited,
-            reply_to_event_id: message.reply.map(|preview| preview.event_id),
-            decryption_state: None,
-            message_type: message.message_type,
-            formatted_body: message.formatted_body,
-        },
-        TimelineViewRow::Sticker { event, media: _ } => TimelineViewRowDto {
-            kind: "sticker".to_owned(),
-            item_id: event.item_id,
-            event_id: event.event_id.unwrap_or_default(),
-            sender: event.sender_id,
-            body: String::new(),
-            origin_server_ts: event.origin_server_ts,
-            edited: false,
-            reply_to_event_id: None,
-            decryption_state: None,
-            message_type: Some("m.sticker".to_owned()),
-            formatted_body: None,
-        },
+        TimelineViewRow::Message(message) => {
+            let (media_handle_id, media_mime_type, media_width, media_height, media_duration_ms) =
+                view_media_fields(message.media);
+            TimelineViewRowDto {
+                kind: "message".to_owned(),
+                item_id: message.event.item_id,
+                event_id: message.event.event_id.unwrap_or_default(),
+                sender: message.event.sender_id,
+                body: message.body,
+                origin_server_ts: message.event.origin_server_ts,
+                edited: message.edited,
+                reply_to_event_id: message.reply.map(|preview| preview.event_id),
+                decryption_state: None,
+                message_type: message.message_type,
+                formatted_body: message.formatted_body,
+                reactions: view_reaction_dtos(message.reactions),
+                media_handle_id,
+                media_mime_type,
+                media_width,
+                media_height,
+                media_duration_ms,
+            }
+        }
+        TimelineViewRow::Sticker { event, media } => {
+            let (media_handle_id, media_mime_type, media_width, media_height, media_duration_ms) =
+                view_media_fields(Some(media));
+            TimelineViewRowDto {
+                kind: "sticker".to_owned(),
+                item_id: event.item_id,
+                event_id: event.event_id.unwrap_or_default(),
+                sender: event.sender_id,
+                body: String::new(),
+                origin_server_ts: event.origin_server_ts,
+                edited: false,
+                reply_to_event_id: None,
+                decryption_state: None,
+                message_type: Some("m.sticker".to_owned()),
+                formatted_body: None,
+                reactions: Vec::new(),
+                media_handle_id,
+                media_mime_type,
+                media_width,
+                media_height,
+                media_duration_ms,
+            }
+        }
         TimelineViewRow::Poll(poll) => TimelineViewRowDto {
             kind: "poll".to_owned(),
             item_id: poll.event.item_id,
@@ -1998,6 +2101,12 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             decryption_state: None,
             message_type: None,
             formatted_body: None,
+            reactions: Vec::new(),
+            media_handle_id: None,
+            media_mime_type: None,
+            media_width: None,
+            media_height: None,
+            media_duration_ms: None,
         },
         TimelineViewRow::Membership(membership) => TimelineViewRowDto {
             kind: "membership".to_owned(),
@@ -2011,6 +2120,12 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             decryption_state: None,
             message_type: None,
             formatted_body: None,
+            reactions: Vec::new(),
+            media_handle_id: None,
+            media_mime_type: None,
+            media_width: None,
+            media_height: None,
+            media_duration_ms: None,
         },
         TimelineViewRow::State(state) => TimelineViewRowDto {
             kind: "state".to_owned(),
@@ -2024,6 +2139,12 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             decryption_state: None,
             message_type: Some(state.state_type),
             formatted_body: None,
+            reactions: Vec::new(),
+            media_handle_id: None,
+            media_mime_type: None,
+            media_width: None,
+            media_height: None,
+            media_duration_ms: None,
         },
         TimelineViewRow::Call(call) => TimelineViewRowDto {
             kind: "call".to_owned(),
@@ -2037,6 +2158,12 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             decryption_state: None,
             message_type: None,
             formatted_body: None,
+            reactions: Vec::new(),
+            media_handle_id: None,
+            media_mime_type: None,
+            media_width: None,
+            media_height: None,
+            media_duration_ms: None,
         },
         TimelineViewRow::Redacted(redacted) => TimelineViewRowDto {
             kind: "redacted".to_owned(),
@@ -2050,6 +2177,12 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             decryption_state: None,
             message_type: None,
             formatted_body: None,
+            reactions: Vec::new(),
+            media_handle_id: None,
+            media_mime_type: None,
+            media_width: None,
+            media_height: None,
+            media_duration_ms: None,
         },
         TimelineViewRow::EncryptedUnavailable(encrypted) => TimelineViewRowDto {
             kind: "encrypted".to_owned(),
@@ -2063,6 +2196,12 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             decryption_state: Some(encrypted.reason_code),
             message_type: None,
             formatted_body: None,
+            reactions: Vec::new(),
+            media_handle_id: None,
+            media_mime_type: None,
+            media_width: None,
+            media_height: None,
+            media_duration_ms: None,
         },
         TimelineViewRow::Other(other) => TimelineViewRowDto {
             kind: "other".to_owned(),
@@ -2076,6 +2215,12 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             decryption_state: None,
             message_type: other.event_type,
             formatted_body: None,
+            reactions: Vec::new(),
+            media_handle_id: None,
+            media_mime_type: None,
+            media_width: None,
+            media_height: None,
+            media_duration_ms: None,
         },
         TimelineViewRow::DateSeparator {
             item_id,
@@ -2092,6 +2237,12 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             decryption_state: None,
             message_type: None,
             formatted_body: None,
+            reactions: Vec::new(),
+            media_handle_id: None,
+            media_mime_type: None,
+            media_width: None,
+            media_height: None,
+            media_duration_ms: None,
         },
         TimelineViewRow::ReadMarker { item_id } => virtual_row_dto("read_marker", item_id),
         TimelineViewRow::UnreadMarker { item_id } => virtual_row_dto("unread_marker", item_id),
@@ -2113,6 +2264,12 @@ fn virtual_row_dto(kind: &str, item_id: String) -> TimelineViewRowDto {
         decryption_state: None,
         message_type: None,
         formatted_body: None,
+        reactions: Vec::new(),
+        media_handle_id: None,
+        media_mime_type: None,
+        media_width: None,
+        media_height: None,
+        media_duration_ms: None,
     }
 }
 
@@ -3208,6 +3365,8 @@ impl SharedCore {
                     highlight_count: room.highlight_count,
                     marked_unread: room.marked_unread,
                     last_activity_ts: room.last_activity_ts,
+                    is_encrypted: room.is_encrypted,
+                    notification_mode: room.notification_mode.map(|mode| mode.as_str().to_owned()),
                 })
                 .collect(),
         })
@@ -5270,6 +5429,44 @@ impl SharedCore {
             LEFTOVER_UNAVAILABLE_CODE,
             LEFTOVER_UNAVAILABLE_DESCRIPTION,
         ))
+    }
+
+    /// Download bytes for an opaque timeline media handle.
+    ///
+    /// Dedicated UniFFI bytes, not a `Core.command` envelope. NSE cannot
+    /// download. Unknown handles and missing owners fail closed without
+    /// echoing the handle, mxc, or tokens.
+    pub async fn timeline_media_bytes(
+        &self,
+        handle_id: String,
+    ) -> Result<LeftoverBytesDto, TimelineMediaError> {
+        if self.is_nse_read_only() {
+            return Err(timeline_media_failed(
+                NSE_FORBIDS_MEDIA_CODE,
+                NSE_FORBIDS_MEDIA_DESCRIPTION,
+            ));
+        }
+        let Some(owner) = self.core.attached_timeline_owner() else {
+            return Err(timeline_media_failed(
+                TIMELINE_MEDIA_NO_SESSION_CODE,
+                TIMELINE_MEDIA_NO_SESSION_DESCRIPTION,
+            ));
+        };
+        match owner.media_bytes(&handle_id).await {
+            Ok(payload) => Ok(LeftoverBytesDto { payload }),
+            Err("p4-s33-media-unknown-handle") => Err(timeline_media_failed(
+                TIMELINE_MEDIA_UNKNOWN_HANDLE_CODE,
+                TIMELINE_MEDIA_UNKNOWN_HANDLE_DESCRIPTION,
+            )),
+            Err("p4-s33-media-too-large") => Err(timeline_media_failed(
+                TIMELINE_MEDIA_TOO_LARGE_CODE,
+                TIMELINE_MEDIA_TOO_LARGE_DESCRIPTION,
+            )),
+            Err(_) => Err(timeline_media_failed(
+                TIMELINE_MEDIA_FAILED_CODE,
+                TIMELINE_MEDIA_FAILED_DESCRIPTION,
+            )),
+        }
     }
 
     pub async fn media_download(
@@ -10722,6 +10919,8 @@ mod tests {
         assert_eq!(dto.event_id, "$evt:example.org");
         assert_eq!(dto.body, "hello");
         assert_eq!(dto.message_type.as_deref(), Some("m.text"));
+        assert!(dto.reactions.is_empty());
+        assert!(dto.media_handle_id.is_none());
         let text = format!("{dto:?}");
         assert!(!text.contains("syt_"));
         assert!(!text.contains("password"));

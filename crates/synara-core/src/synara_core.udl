@@ -275,6 +275,8 @@ dictionary RoomListRoomDto {
   u32 highlight_count;
   boolean marked_unread;
   u64? last_activity_ts;
+  boolean is_encrypted;
+  string? notification_mode;
 };
 
 // Privacy-safe room-list snapshot from the registered Core command.
@@ -336,7 +338,15 @@ dictionary TimelineViewPositionDto {
   string? event_id;
 };
 
-// Privacy-safe timeline view row. Message text only; no media bytes or tokens.
+// Privacy-safe reaction count on a view row. Key and count only; no user ids.
+dictionary TimelineViewReactionDto {
+  string key;
+  u32 count;
+  boolean? own;
+};
+
+// Privacy-safe timeline view row. Message text and opaque media handles
+// only; no media bytes, mxc URIs, or tokens.
 dictionary TimelineViewRowDto {
   string kind;
   string item_id;
@@ -349,6 +359,12 @@ dictionary TimelineViewRowDto {
   string? decryption_state;
   string? message_type;
   string? formatted_body;
+  sequence<TimelineViewReactionDto> reactions;
+  string? media_handle_id;
+  string? media_mime_type;
+  u32? media_width;
+  u32? media_height;
+  u64? media_duration_ms;
 };
 
 // Privacy-safe timeline snapshot from the registered Core command.
@@ -409,6 +425,12 @@ dictionary TimelineReadStateDto {
 // Static source constants only. Never echo user id, URL, path, token, or password.
 [Error]
 interface TimelineError {
+  Failed(string code, string description);
+};
+
+// Static source constants only. Never echo handle id, mxc, token, or password.
+[Error]
+interface TimelineMediaError {
   Failed(string code, string description);
 };
 
@@ -1715,5 +1737,10 @@ interface SharedCore {
 
   [Async, Throws=LeftoverCommandError]
   LeftoverAckDto pusher_delete(string push_key, string app_id);
+
+  // Native media handle channel. Bytes are a dedicated UniFFI argument,
+  // not a Core::command envelope. NSE cannot download. No mxc on the wire.
+  [Async, Throws=TimelineMediaError]
+  LeftoverBytesDto timeline_media_bytes(string handle_id);
 
 };

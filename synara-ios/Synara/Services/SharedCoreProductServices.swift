@@ -665,12 +665,14 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
 
     func roomStatus(roomID: String) async -> RoomCryptoStatus {
         let session = await sessionStatus()
+        let listEncrypted = await listEncryption(roomID: roomID)
         let inviteEncrypted = await inviteEncryption(roomID: roomID)
-        guard session != .unknown || inviteEncrypted != nil else {
+        let isEncrypted = listEncrypted ?? inviteEncrypted
+        guard session != .unknown || isEncrypted != nil else {
             return .unknown
         }
         return SharedCoreSessionCrypto.roomStatus(
-            isEncrypted: inviteEncrypted,
+            isEncrypted: isEncrypted,
             session: session
         )
     }
@@ -787,6 +789,27 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         } catch {
             return .failed("Recovery is unavailable.")
         }
+    }
+
+    func sessionDevices() async -> [SharedCoreSessionDevice] {
+        guard let snapshot = try? await SharedCoreDevices.deviceSnapshot(core: host.core) else {
+            return []
+        }
+        return snapshot.devices.map {
+            SharedCoreDevicesLive.devices(
+                deviceId: $0.deviceId,
+                displayName: $0.displayName,
+                isCurrent: $0.isCurrent,
+                trust: $0.trust
+            )
+        }
+    }
+
+    private func listEncryption(roomID: String) async -> Bool? {
+        guard let rooms = try? await SharedCoreRoomList.roomListSnapshot(core: host.core) else {
+            return nil
+        }
+        return rooms.rooms.first { $0.roomId == roomID }?.isEncrypted
     }
 
     private func inviteEncryption(roomID: String) async -> Bool? {
@@ -1010,7 +1033,8 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
             powerLevelsJSON: power?.contentJson,
             joinRule: join?.joinRule,
             topic: invite?.roomTopic,
-            isEncrypted: invite?.isEncrypted ?? false
+            isEncrypted: room?.isEncrypted ?? invite?.isEncrypted ?? false,
+            notificationMode: SharedCoreRoomDetails.notificationMode(room?.notificationMode)
         )
     }
 
@@ -1069,6 +1093,9 @@ final class SharedCoreMediaLoader: MediaLoading {
         guard resource.isEncrypted == false else {
             return .failed("Encrypted media requires recovered keys before it can be opened.")
         }
+        if SharedCoreTimelineMedia.handleId(from: resource.authenticatedURL) != nil {
+            return .thumbnail(resource)
+        }
         guard let url = resource.authenticatedURL else {
             return .failed("Media is unavailable.")
         }
@@ -1086,21 +1113,18 @@ final class SharedCoreMediaLoader: MediaLoading {
     }
 
     func loadThumbnailData(for resource: MediaResource, width: UInt64, height: UInt64) async -> Data? {
-        guard resource.isEncrypted == false,
-              let url = resource.authenticatedURL else {
-            return nil
-        }
-        return try? await SharedCoreLeftovers.mediaThumbnail(
-            core: host.core,
-            mxc: url.absoluteString,
-            width: width,
-            height: height
-        ).payload
+        _ = (width, height)
+        return await loadMediaData(for: resource)
     }
 
     func loadMediaData(for resource: MediaResource) async -> Data? {
-        guard resource.isEncrypted == false,
-              let url = resource.authenticatedURL else {
+        guard resource.isEncrypted == false else {
+            return nil
+        }
+        if let handle = SharedCoreTimelineMedia.handleId(from: resource.authenticatedURL) {
+            return try? await SharedCoreTimelineMedia.mediaBytes(core: host.core, handleId: handle)
+        }
+        guard let url = resource.authenticatedURL else {
             return nil
         }
         return try? await SharedCoreLeftovers.mediaDownload(

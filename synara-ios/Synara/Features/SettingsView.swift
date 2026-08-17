@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var isRegisteringPush = false
     @State private var isLogoutConfirmationPresented = false
     @State private var sessionCryptoStatus: SessionCryptoStatus = .unknown
+    @State private var sessionDevices: [SharedCoreSessionDevice] = []
     @State private var coreSessionIdentity: CoreSessionIdentity?
     @State private var recoveryKey = ""
     @State private var cryptoActionMessage: String?
@@ -169,6 +170,17 @@ struct SettingsView: View {
                     .accessibilityIdentifier("SecurityLogoutWipeRow")
             }
 
+            if sessionDevices.isEmpty == false {
+                Section("Sessions") {
+                    ForEach(sessionDevices) { device in
+                        SettingsInfoRow(
+                            title: device.isCurrent ? "This device" : "Device",
+                            value: device.displayName
+                        )
+                    }
+                }
+            }
+
             Section("About") {
                 NavigationLink {
                     AboutSettingsView()
@@ -243,6 +255,7 @@ struct SettingsView: View {
             )
             await refreshNotificationStatus()
             await refreshCryptoStatus()
+            await refreshDevices()
             await refreshCoreSessionIdentity()
         }
     }
@@ -291,6 +304,13 @@ struct SettingsView: View {
         let status = await environment.crypto.sessionStatus()
         await MainActor.run {
             sessionCryptoStatus = status
+        }
+    }
+
+    private func refreshDevices() async {
+        let devices = await environment.crypto.sessionDevices()
+        await MainActor.run {
+            sessionDevices = devices
         }
     }
 
