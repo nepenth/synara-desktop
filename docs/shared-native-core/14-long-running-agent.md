@@ -38,7 +38,7 @@ merge. P5 stays operator-gated.
 Continue the synara-desktop language-boundary / shared-native-core program.
 
 Read, in order:
-1. AGENTS.md
+1. docs/shared-native-core/14-long-running-agent.md (this file)
 2. docs/shared-native-core/11-implementer-playbook.md (§5 then §9)
 3. docs/shared-native-core/13-language-boundary-goal-graph.md if present
 4. docs/adr/0004-rust-language-boundaries.md if present (else PR #1000)
