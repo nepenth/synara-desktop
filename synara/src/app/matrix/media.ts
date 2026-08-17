@@ -93,10 +93,9 @@ async function downloadNativeTimelineMedia(contentUri: string, mimeType: string)
   if (!handle) {
     throw new Error('Invalid native timeline media handle');
   }
-  const result = await invokeDesktopWithAvailability<{ bytes?: unknown }>(
-    'matrix_media_download',
-    { contentUri: handle }
-  );
+  const result = await invokeDesktopWithAvailability<{ bytes?: unknown }>('matrix_media_download', {
+    contentUri: handle,
+  });
   if (!result.available || !result.value || !Array.isArray(result.value.bytes)) {
     throw new Error('Native timeline media download failed');
   }
