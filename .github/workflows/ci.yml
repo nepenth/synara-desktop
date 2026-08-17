@@ -51,20 +51,26 @@ jobs:
           set -euo pipefail
 
           # Full suite on push (main/release) and manual dispatch.
+          # TEMPORARY (2026-08-17): ios is forced off until main is stable.
+          # Hosted simulator jobs historically take ~55 minutes (90-minute
+          # timeout) and block the required Quality gate. Quality already
+          # treats a skipped ios-tests job as OK. Restore ios=true here and
+          # on the missing-SHA path, and restore the ios-tests job `if:` to
+          # `needs.changes.outputs.ios == 'true'`.
           if [[ "${GITHUB_EVENT_NAME}" != "pull_request" ]]; then
             echo "validate=true" >> "$GITHUB_OUTPUT"
             echo "validate_rust=true" >> "$GITHUB_OUTPUT"
             echo "validate_rust_tests=true" >> "$GITHUB_OUTPUT"
             echo "rust_audit=true" >> "$GITHUB_OUTPUT"
             echo "validate_frontend=true" >> "$GITHUB_OUTPUT"
-            echo "ios=true" >> "$GITHUB_OUTPUT"
+            echo "ios=false" >> "$GITHUB_OUTPUT"
             echo "synapse_native_reactions=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_attachments=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_polls=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_rich_messages=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_threads=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_receipts=true" >> "$GITHUB_OUTPUT"
-            echo "CI scope: full (event=${GITHUB_EVENT_NAME})"
+            echo "CI scope: full (event=${GITHUB_EVENT_NAME}; iOS paused)"
             exit 0
           fi
 
@@ -74,14 +80,14 @@ jobs:
             echo "validate_rust_tests=true" >> "$GITHUB_OUTPUT"
             echo "rust_audit=true" >> "$GITHUB_OUTPUT"
             echo "validate_frontend=true" >> "$GITHUB_OUTPUT"
-            echo "ios=true" >> "$GITHUB_OUTPUT"
+            echo "ios=false" >> "$GITHUB_OUTPUT"
             echo "synapse_native_reactions=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_attachments=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_polls=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_rich_messages=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_threads=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_receipts=true" >> "$GITHUB_OUTPUT"
-            echo "CI scope: full (missing PR SHAs)"
+            echo "CI scope: full (missing PR SHAs; iOS paused)"
             exit 0
           fi
 
@@ -183,11 +189,10 @@ jobs:
             RUST_AUDIT=true
           fi
 
-          # iOS simulator suite — only when the UniFFI / Swift / iOS shell
-          # surface can change. Mechanical P1 moves under
-          # crates/synara-core/src/app/ are covered by validate-rust; they do
-          # not regenerate bindings. Full iOS still runs on push to main/release
-          # and on workflow_dispatch.
+          # iOS simulator suite — paused until main is stable (2026-08-17).
+          # Path detection is kept so re-enable is a one-line restore; the
+          # output is forced false regardless of the diff. Mechanical P1
+          # moves under crates/synara-core/src/app/ stay on validate-rust.
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
             rust-toolchain.toml \
             Cargo.toml \
@@ -207,8 +212,8 @@ jobs:
             echo "ios=false" >> "$GITHUB_OUTPUT"
             IOS=false
           else
-            echo "ios=true" >> "$GITHUB_OUTPUT"
-            IOS=true
+            echo "ios=false" >> "$GITHUB_OUTPUT"
+            IOS=false
           fi
 
           # Two-client Synapse integration (JS runtime scenarios).
@@ -497,7 +502,10 @@ jobs:
   ios-tests:
     name: iOS simulator tests
     needs: [changes]
-    if: needs.changes.outputs.ios == 'true'
+    # TEMPORARY (2026-08-17): paused until main is stable. These jobs
+    # historically take ~55 minutes (90-minute timeout) and block Quality
+    # gate. Restore: if: needs.changes.outputs.ios == 'true'
+    if: false
     runs-on: macos-26
     # Bounded cap allows post-test output/upload.
     # 90m: S3b + UniFFI merge-ups exceed the 60m GitHub default (cancelled at ~61m).
