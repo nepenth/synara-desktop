@@ -61,6 +61,7 @@ flowchart TD
   s24[S24_product_read_markers]
   s25[S25_product_room_list_spaces]
   s26[S26_product_room_list_unread]
+  s27[S27_product_session_crypto]
   media[desktop_native_media_cutover]
   done[p4_engine_ready]
   p5[P5_operator_gated]
@@ -80,7 +81,8 @@ flowchart TD
   s23 --> s24
   s24 --> s25
   s25 --> s26
-  s26 --> done
+  s26 --> s27
+  s27 --> done
   s15 --> done
   media --> done
   done --> p5
@@ -104,6 +106,7 @@ flowchart TD
 | P4-S24 product read markers | `in-pr` #1001 | required | Product mark-as-read uses `timeline_set_read_state`. No HTTP access token. |
 | P4-S25 product room-list spaces/invites | `in-pr` #1001 | required | Product `loadRooms` maps space parents and invite previews. Joined last-message stays empty. |
 | P4-S26 product room-list unread lookup | `in-pr` #1001 | required | Product `hasUnreadMessages` uses the cached snapshot. Agent rooms stay false. |
+| P4-S27 product session crypto status | `in-pr` #1001 | required | Product `sessionStatus` maps leftover backup/crypto and secret-storage. No recovery keys. |
 | Desktop native media cutover | `blocked` | required | Both shells do not yet get bytes from a native owner. iOS leftover media stays fail-closed (decision 15). Bytes must not cross `Core::command`. Do not register `matrix_send_attachment`. |
 | P4 engine ready | pending | gate | Session + sync + room list + timeline + crypto product paths call Core on iOS. Not claimed. |
 | P5 | `blocked` | operator | Do not start. Apple/TestFlight/physical-device. |
@@ -112,11 +115,12 @@ flowchart TD
 
 ## Current pointer
 
-**S12–S26 are on #1001.** Session, sync, room list, timeline,
+**S12–S27 are on #1001.** Session, sync, room list, timeline,
 verification, typing, room-details, foreground-resume, read-marker,
-and room-list space/invite/unread product paths call Core. Media
-cutover stays **blocked** (decision 15). Do not start P5. Do not
-claim P4 engine ready. Stop if only media/P5/Apple remain.
+room-list space/invite/unread, and session-crypto product paths
+call Core. Media cutover stays **blocked** (decision 15). Do not
+start P5. Do not claim P4 engine ready. Stop if only media/P5/Apple
+remain.
 
 ---
 

@@ -463,6 +463,9 @@ P4-S25 product room-list spaces/invites stacked on S12–S24
 P4-S26 product room-list unread lookup stacked on S12–S25
        Product hasUnreadMessages uses the cached snapshot.
        Agent rooms stay false without Core agent cards.
+P4-S27 product session crypto status  stacked on S12–S26
+       Product sessionStatus maps leftover backup / crypto and
+       secret-storage status. No recovery keys. No UDL.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -973,6 +976,28 @@ P4 acceptance.
 
 **Tests:** unread helper is true for count or highlight; without a
 cached snapshot the product lookup is false with no token echo.
+
+### 9.22 P4-S27 — product session crypto status
+
+Settings already shows Device Verification, Key Recovery, and Key
+Backup from `sessionStatus()`, but the SharedCore impl hardcoded
+recovery as unknown and mapped backup from `encryptionEnabled`.
+Decision 15 leftover **status** already has Core owners for backup
+and secret-storage.
+
+**Lands:** product `SharedCoreCryptoStatusService.sessionStatus`
+composes leftover crypto/backup plus `secret_storage_status` through
+`SharedCoreSessionCrypto`. Recovery keys and missing-secret lists
+never appear on the product status. `roomStatus` / `retryDecryption`
+stay fail-closed. Helper + XCTest.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+UDL changes; mapping recover I/O as live; P5; claiming iOS-on-engine
+or P4 acceptance.
+
+**Tests:** mapper covers ready / incomplete / missing / secret-storage
+fallback without token or recovery-key echo; without a session
+`sessionStatus` is unknown.
 
 ---
 

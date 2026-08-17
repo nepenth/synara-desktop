@@ -745,6 +745,79 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreSessionCryptoMapsLeftoverStatusWithoutEcho() {
+        let ready = SharedCoreSessionCrypto.status(
+            crossSigningState: "ready",
+            backupEnabled: true,
+            backupAvailability: "available",
+            backupDeviceState: "ready",
+            recoveryState: "ready",
+            secretStorageState: "ready"
+        )
+        XCTAssertEqual(ready.verification, .verified)
+        XCTAssertEqual(ready.recovery, .enabled)
+        XCTAssertEqual(ready.backup, .enabled)
+        XCTAssertNil(ready.hasDevicesToVerifyAgainst)
+        XCTAssertNil(ready.isLastDevice)
+        XCTAssertEqual(ready.unableToDecryptCount, 0)
+
+        let attention = SharedCoreSessionCrypto.status(
+            crossSigningState: "not_set_up",
+            backupEnabled: false,
+            backupAvailability: "available",
+            backupDeviceState: "downloading",
+            recoveryState: "incomplete",
+            secretStorageState: "locked"
+        )
+        XCTAssertEqual(attention.verification, .unverified)
+        XCTAssertEqual(attention.recovery, .incomplete)
+        XCTAssertEqual(attention.backup, .syncing)
+
+        let missing = SharedCoreSessionCrypto.status(
+            crossSigningState: "unavailable",
+            backupEnabled: false,
+            backupAvailability: "missing",
+            backupDeviceState: "unavailable",
+            recoveryState: "not_set_up",
+            secretStorageState: "unavailable"
+        )
+        XCTAssertEqual(missing.verification, .unverified)
+        XCTAssertEqual(missing.recovery, .disabled)
+        XCTAssertEqual(missing.backup, .unavailable)
+
+        let secretStorageFallback = SharedCoreSessionCrypto.status(
+            crossSigningState: nil,
+            backupEnabled: nil,
+            backupAvailability: nil,
+            backupDeviceState: nil,
+            recoveryState: nil,
+            secretStorageState: "locked"
+        )
+        XCTAssertEqual(secretStorageFallback.verification, .unknown)
+        XCTAssertEqual(secretStorageFallback.recovery, .incomplete)
+        XCTAssertEqual(secretStorageFallback.backup, .unknown)
+
+        let publicError = String(describing: ready)
+        for forbidden in ["password", "syt_", "token", "missing_secrets", "recovery_key"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
+    func testSharedCoreSessionStatusWithoutSessionIsUnknownWithoutEcho() async {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreCryptoStatusService(host: host)
+        let status = await service.sessionStatus()
+        XCTAssertEqual(status, .unknown)
+        let publicError = String(describing: status)
+        for forbidden in ["password", "syt_", "token", "missing_secrets", "recovery_key"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
     func testSharedCoreTypingPresenceWithoutSessionFailsClosed() async {
         let core = SharedCore()
 

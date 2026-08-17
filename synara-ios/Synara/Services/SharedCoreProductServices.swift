@@ -669,17 +669,20 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     }
 
     func sessionStatus() async -> SessionCryptoStatus {
-        if let status = try? await SharedCoreLeftovers.cryptoStatus(core: host.core) {
-            return SessionCryptoStatus(
-                verification: status.crossSigningState == "ready" ? .verified : .unknown,
-                recovery: .unknown,
-                backup: status.encryptionEnabled ? .enabled : .unknown,
-                hasDevicesToVerifyAgainst: nil,
-                isLastDevice: nil,
-                unableToDecryptCount: 0
-            )
+        let crypto = try? await SharedCoreLeftovers.cryptoStatus(core: host.core)
+        let backup = try? await SharedCoreLeftovers.backupStatus(core: host.core)
+        let secretStorage = try? await SharedCoreSessionStatus.secretStorageStatus(core: host.core)
+        guard crypto != nil || backup != nil || secretStorage != nil else {
+            return .unknown
         }
-        return .unknown
+        return SharedCoreSessionCrypto.status(
+            crossSigningState: crypto?.crossSigningState,
+            backupEnabled: backup?.enabled,
+            backupAvailability: backup?.availability,
+            backupDeviceState: backup?.deviceState,
+            recoveryState: backup?.recoveryState,
+            secretStorageState: secretStorage?.state
+        )
     }
 
     func verificationUpdates() -> AsyncStream<CryptoVerificationState> {
