@@ -4,7 +4,8 @@ This file is the operating manual for finishing the shared native core.
 Read it before editing product code. If this file and an older plan
 paragraph disagree, this file plus `10-current-handoff.md` win for
 *what to do next*; ADR-0003 plus `01-context-and-goals.md` win for
-*what done means*.
+*what done means*. The language-boundary loop operator is
+[13-language-boundary-goal-graph.md](13-language-boundary-goal-graph.md).
 
 Older “144 `Core::command` handlers” sentences in `03-target-architecture.md`
 and `06-migration-phases.md` are stale. Do not register the 21 leftovers in
@@ -414,6 +415,10 @@ P4-S11 NSE read-only store API        LANDED #984
 P4-S12 start attached SyncService     this slice
        SharedCore.start_sync only. NSE still cannot start sync.
        Not P4 acceptance. Do not start P5.
+P4-S13 restore bootstrap              stacked on S12
+       Cold-start restore → attach → start on a fresh SharedCore.
+       Product `SharedCoreMatrixClientService.start` is the one path.
+       NSE still cannot start sync. Not P4 acceptance.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -634,6 +639,7 @@ not iOS-on-engine and not P4 acceptance. The spike under
 token, by design). Product `AuthenticatedSession` still stores an
 empty access token after SharedCore login. SharedCore attach still
 does not start SyncService; P4-S12 adds a separate `start_sync`.
+P4-S13 product `start(session:)` restores, attaches, then starts.
 Product event emit sinks are no-op. Desktop twenty-one leftovers stay
 unregistered on `Core::command`. iOS CI is re-enabled (#988). Do not
 start P5. This is not iOS-on-engine.
@@ -644,9 +650,8 @@ S10 retired product `MatrixRustSDK` callers. The S3d reason for leaving
 SyncService unstarted (no dual live sync) is gone. This slice starts
 the already-attached owner only.
 
-**Lands:** `SharedCore.start_sync` FFI. Helper + XCTest. Product login
-attach may call start. `SharedCoreMatrixClientService.start` may call
-start. NSE still fail-closes.
+**Lands:** `SharedCore.start_sync` FFI. Helper + XCTest. NSE still
+fail-closes. Product login no longer starts sync; S13 bootstrap does.
 
 **Must not land:** leftover registration; byte/secret envelopes; starting
 sync in NSE; P5; claiming iOS-on-engine or P4 acceptance; a generic
@@ -659,6 +664,21 @@ Do not change NSE methods to start sync.
 **Tests:** no-attach fail-closed; NSE forbids start; planted attach then
 start returns a privacy-safe readiness DTO with no tokens, user id, or
 URL. Failed errors stay static.
+
+### 9.8 P4-S13 — restore bootstrap
+
+S12 starts an already-attached owner. Cold launch still only restored
+the Keychain `AuthenticatedSession` and never called SharedCore
+restore, so `start_sync` fail-closed.
+
+**Lands:** `SharedCoreSessionBootstrap.prepareLiveSession` runs restore
+→ attach → start, each fail-closed. Product `start(session:)` uses that
+one path. Login no longer attaches or starts on its own. Rust proof:
+planted persist on core A, restore+attach+start on core B with the same
+vault.
+
+**Must not land:** leftover registration; byte/secret envelopes; starting
+sync in NSE; P5; claiming iOS-on-engine; emit-sink product events (S14).
 
 ---
 

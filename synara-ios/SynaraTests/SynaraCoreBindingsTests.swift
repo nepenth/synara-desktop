@@ -212,6 +212,30 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreSessionBootstrapWithoutSessionDoesNotStart() async {
+        let core = SharedCore()
+        let storeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("synara-s13-no-session", isDirectory: true)
+        let userID = "@alice:example.org"
+        let homeserver = "https://matrix.example.org"
+
+        let outcome = await SharedCoreSessionBootstrap.prepareLiveSession(
+            userID: userID,
+            homeserverURL: homeserver,
+            storeRoot: storeRoot,
+            core: core
+        )
+
+        XCTAssertFalse(outcome.restored)
+        XCTAssertFalse(outcome.attached)
+        XCTAssertFalse(outcome.started)
+        XCTAssertNil(outcome.readiness)
+        let publicError = String(describing: outcome)
+        for forbidden in ["password", "syt_", userID, "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
     func testSharedCoreStartSyncWithoutAttachFailsClosed() async {
         let core = SharedCore()
 
