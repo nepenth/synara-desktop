@@ -65,7 +65,7 @@ pub use shared_core_ffi::{
     TimelineOpenPositionDto, TimelinePinDto, TimelinePinError, TimelineReactionDto,
     TimelineReactionError, TimelineReactionMutationDto, TimelineReactionSenderDto,
     TimelineReadStateDto, TimelineReadStateError, TimelineSnapshotDto, TimelineViewPositionDto,
-    TimelineViewUpdateDto, TimelineViewUpdateError, TimelineVoteDeclineDto,
+    TimelineViewRowDto, TimelineViewUpdateDto, TimelineViewUpdateError, TimelineVoteDeclineDto,
     TimelineVoteDeclineError, TypingCommandError, TypingRoomDto, TypingSnapshotDto,
     UserImagePackSnapshotDto, VerificationEmojiDto, VerificationInboxDto, VerificationListError,
     VerificationRequestDto, VerificationSasDto, VerificationSasError,

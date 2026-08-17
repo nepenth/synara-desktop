@@ -322,6 +322,10 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreTimelineRowsWithoutItemsAreEmpty() {
+        XCTAssertEqual(SharedCoreTimelineRows.outcome(from: []), .empty)
+    }
+
     func testSharedCoreTimelineWithoutSessionFailsClosed() async {
         let core = SharedCore()
         let position = TimelineOpenPositionDto(

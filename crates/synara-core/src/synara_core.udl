@@ -310,6 +310,21 @@ dictionary TimelineViewPositionDto {
   string? event_id;
 };
 
+// Privacy-safe timeline view row. Message text only; no media bytes or tokens.
+dictionary TimelineViewRowDto {
+  string kind;
+  string item_id;
+  string event_id;
+  string sender;
+  string body;
+  u64 origin_server_ts;
+  boolean edited;
+  string? reply_to_event_id;
+  string? decryption_state;
+  string? message_type;
+  string? formatted_body;
+};
+
 // Privacy-safe timeline snapshot from the registered Core command.
 dictionary TimelineSnapshotDto {
   u32 schema_version;
@@ -328,6 +343,7 @@ dictionary TimelineSnapshotDto {
   boolean mark_unread;
   boolean paginate_backward;
   boolean paginate_forward;
+  sequence<TimelineViewRowDto> rows;
 };
 
 // Privacy-safe timeline open readback. No tokens or password.

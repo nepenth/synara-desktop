@@ -428,6 +428,9 @@ P4-S15 leftover I/O live              stacked on S12–S14
        Owner leftover status after attach. Homeserver leftover
        I/O stays fail-closed (decision 15). No byte/secret
        envelopes.
+P4-S16 product timeline rows          stacked on S12–S15
+       Snapshot DTO keeps privacy-safe row bodies. Product
+       SharedCoreTimelineService maps them. No media bytes.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -738,6 +741,23 @@ acceptance.
 `p2-*-no-session` with no token/user/URL echo. After planted
 attach+start, room-key status is a DTO; recover/raw-send/media stay
 unavailable and never echo secrets.
+
+### 9.11 P4-S16 — product timeline rows
+
+S6 open/paginate returned a Core snapshot but the UniFFI DTO kept only
+`row_count`. Product `SharedCoreTimelineService` always returned
+`.empty`, and it opened with kind `live` which the FFI rejected.
+
+**Lands:** `TimelineSnapshotDto.rows` as privacy-safe
+`TimelineViewRowDto` (kind, ids, sender, body, timestamp). `live` is
+an alias for `live_bottom`. Product maps rows to `TimelineItem` and
+keeps the stream for paginate. No media bytes.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+`Platform::emit`; P5; claiming iOS-on-engine or P4 acceptance.
+
+**Tests:** UDL has `rows`; `live` open without session is still
+`p2-timeline-open-no-session`; mapper unit test has no token echo.
 
 ---
 

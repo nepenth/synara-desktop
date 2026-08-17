@@ -212,6 +212,7 @@ final class SharedCoreRoomMembershipService: RoomMembershipServicing {
 
 final class SharedCoreTimelineService: TimelineServicing {
     private let host: SharedCoreProductHost
+    private var streams: [String: String] = [:]
 
     init(host: SharedCoreProductHost) {
         self.host = host
@@ -219,6 +220,9 @@ final class SharedCoreTimelineService: TimelineServicing {
 
     func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
         do {
+            if let previous = streams.removeValue(forKey: roomID) {
+                _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: previous)
+            }
             let position = TimelineOpenPositionDto(
                 kind: focusedEventID == nil ? "live" : "focused",
                 atBottom: focusedEventID == nil,
@@ -232,19 +236,39 @@ final class SharedCoreTimelineService: TimelineServicing {
                 roomId: roomID,
                 position: position
             )
-            _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: opened.streamId)
-            return opened.snapshot.rowCount == 0 ? .empty : .empty
+            streams[roomID] = opened.streamId
+            return SharedCoreTimelineRows.outcome(from: opened.snapshot.rows)
         } catch {
             return .empty
         }
     }
 
     func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome {
-        _ = (roomID, eventID)
-        return .empty
+        _ = eventID
+        guard let streamId = streams[roomID] else {
+            return .empty
+        }
+        do {
+            let snapshot = try await SharedCoreTimeline.timelinePaginate(
+                core: host.core,
+                streamId: streamId,
+                direction: "backwards"
+            )
+            return SharedCoreTimelineRows.outcome(from: snapshot.rows)
+        } catch {
+            return .empty
+        }
     }
 
-    func clearSessionCaches() {}
+    func clearSessionCaches() {
+        let streamIds = Array(streams.values)
+        streams.removeAll()
+        Task {
+            for streamId in streamIds {
+                _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: streamId)
+            }
+        }
+    }
 }
 
 final class SharedCoreLaterService: LaterServicing {

@@ -50,6 +50,7 @@ flowchart TD
   s13[S13_restore_bootstrap]
   s14[S14_emit_sinks]
   s15[S15_live_leftover_io]
+  s16[S16_product_timeline_rows]
   media[desktop_native_media_cutover]
   done[p4_engine_ready]
   p5[P5_operator_gated]
@@ -58,7 +59,8 @@ flowchart TD
   s12 --> s13
   s13 --> s14
   s13 --> s15
-  s14 --> done
+  s14 --> s16
+  s16 --> done
   s15 --> done
   media --> done
   done --> p5
@@ -71,6 +73,7 @@ flowchart TD
 | P4-S13 restore bootstrap | `in-pr` #1001 | required | Cold-start: restore vault session → attach → start. One product path with login. |
 | P4-S14 emit sinks | `in-pr` #1001 | required | Timeline view-delta poll queue. Summaries only. NSE cannot poll. Other product emits stay no-op. |
 | P4-S15 leftover I/O live | `in-pr` #1001 | required | Owner leftover status after attach. Recover/media/raw-send stay fail-closed (decision 15). No byte/secret envelopes. |
+| P4-S16 product timeline rows | `in-pr` #1001 | required | Snapshot DTO keeps privacy-safe row bodies. Product maps them. No media bytes. |
 | Desktop native media cutover | `blocked` | required | Both shells do not yet get bytes from a native owner. iOS leftover media stays fail-closed (decision 15). Bytes must not cross `Core::command`. Do not register `matrix_send_attachment`. |
 | P4 engine ready | pending | gate | Session + sync + room list + timeline + crypto product paths call Core on iOS. Not claimed. |
 | P5 | `blocked` | operator | Do not start. Apple/TestFlight/physical-device. |
@@ -79,12 +82,10 @@ flowchart TD
 
 ## Current pointer
 
-**S12–S15 are on #1001.** The next required node is desktop native
-media cutover, and it is **blocked**: iOS leftover media stays
-fail-closed (decision 15), and bytes must not cross `Core::command`.
-Do not start P5. Do not claim P4 engine ready. Stop the loop here
-until an owner decision defines a native byte channel that is not
-`Core::command`.
+**S12–S16 are on #1001.** Product timeline rows are the unblocked
+engine-ready gap while media cutover stays **blocked** (decision 15).
+Do not start P5. Do not claim P4 engine ready. After S16: remaining
+no-op emit families, or stop if only media/P5/Apple remain.
 
 ---
 

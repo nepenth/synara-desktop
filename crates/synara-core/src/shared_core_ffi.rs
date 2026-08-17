@@ -187,8 +187,8 @@ use crate::app::timeline::{
     NativeTimelineItem, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
     NativeTimelineOwner, NativeTimelineReaction, NativeTimelineReactionSender,
     NativeTimelineReadAction, NativeTimelineReadStateReadback, NativeTimelineViewportHint,
-    TimelinePageState, TimelineViewDeltaBatch, TimelineViewPosition, TimelineViewSnapshot,
-    TimelineViewUpdateEmit, TIMELINE_VIEW_SCHEMA_VERSION,
+    TimelinePageState, TimelineViewDeltaBatch, TimelineViewPosition, TimelineViewRow,
+    TimelineViewSnapshot, TimelineViewUpdateEmit, TIMELINE_VIEW_SCHEMA_VERSION,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::app::verification::{
@@ -1103,6 +1103,23 @@ pub struct TimelineSnapshotDto {
     pub mark_unread: bool,
     pub paginate_backward: bool,
     pub paginate_forward: bool,
+    pub rows: Vec<TimelineViewRowDto>,
+}
+
+/// Privacy-safe timeline view row. Message text only; no media bytes or tokens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineViewRowDto {
+    pub kind: String,
+    pub item_id: String,
+    pub event_id: String,
+    pub sender: String,
+    pub body: String,
+    pub origin_server_ts: u64,
+    pub edited: bool,
+    pub reply_to_event_id: Option<String>,
+    pub decryption_state: Option<String>,
+    pub message_type: Option<String>,
+    pub formatted_body: Option<String>,
 }
 
 /// Privacy-safe timeline open readback. No tokens or password.
@@ -1739,7 +1756,7 @@ fn open_position_from_dto(
     position: TimelineOpenPositionDto,
 ) -> Result<NativeTimelineOpenPosition, TimelineError> {
     match position.kind.as_str() {
-        "live_bottom" => Ok(NativeTimelineOpenPosition::LiveBottom),
+        "live" | "live_bottom" => Ok(NativeTimelineOpenPosition::LiveBottom),
         "unread" => Ok(NativeTimelineOpenPosition::Unread),
         "focused" => {
             let event_id = position
@@ -1825,6 +1842,169 @@ fn timeline_snapshot_dto(snapshot: TimelineViewSnapshot) -> TimelineSnapshotDto 
         mark_unread: snapshot.capabilities.mark_unread,
         paginate_backward: snapshot.capabilities.paginate_backward,
         paginate_forward: snapshot.capabilities.paginate_forward,
+        rows: snapshot
+            .rows
+            .into_iter()
+            .map(timeline_view_row_dto)
+            .collect(),
+    }
+}
+
+fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
+    match row {
+        TimelineViewRow::Message(message) => TimelineViewRowDto {
+            kind: "message".to_owned(),
+            item_id: message.event.item_id,
+            event_id: message.event.event_id.unwrap_or_default(),
+            sender: message.event.sender_id,
+            body: message.body,
+            origin_server_ts: message.event.origin_server_ts,
+            edited: message.edited,
+            reply_to_event_id: message.reply.map(|preview| preview.event_id),
+            decryption_state: None,
+            message_type: message.message_type,
+            formatted_body: message.formatted_body,
+        },
+        TimelineViewRow::Sticker { event, media: _ } => TimelineViewRowDto {
+            kind: "sticker".to_owned(),
+            item_id: event.item_id,
+            event_id: event.event_id.unwrap_or_default(),
+            sender: event.sender_id,
+            body: String::new(),
+            origin_server_ts: event.origin_server_ts,
+            edited: false,
+            reply_to_event_id: None,
+            decryption_state: None,
+            message_type: Some("m.sticker".to_owned()),
+            formatted_body: None,
+        },
+        TimelineViewRow::Poll(poll) => TimelineViewRowDto {
+            kind: "poll".to_owned(),
+            item_id: poll.event.item_id,
+            event_id: poll.event.event_id.unwrap_or_default(),
+            sender: poll.event.sender_id,
+            body: poll.question,
+            origin_server_ts: poll.event.origin_server_ts,
+            edited: false,
+            reply_to_event_id: None,
+            decryption_state: None,
+            message_type: None,
+            formatted_body: None,
+        },
+        TimelineViewRow::Membership(membership) => TimelineViewRowDto {
+            kind: "membership".to_owned(),
+            item_id: membership.event.item_id,
+            event_id: membership.event.event_id.unwrap_or_default(),
+            sender: membership.event.sender_id,
+            body: membership.summary,
+            origin_server_ts: membership.event.origin_server_ts,
+            edited: false,
+            reply_to_event_id: None,
+            decryption_state: None,
+            message_type: None,
+            formatted_body: None,
+        },
+        TimelineViewRow::State(state) => TimelineViewRowDto {
+            kind: "state".to_owned(),
+            item_id: state.event.item_id,
+            event_id: state.event.event_id.unwrap_or_default(),
+            sender: state.event.sender_id,
+            body: state.summary,
+            origin_server_ts: state.event.origin_server_ts,
+            edited: false,
+            reply_to_event_id: None,
+            decryption_state: None,
+            message_type: Some(state.state_type),
+            formatted_body: None,
+        },
+        TimelineViewRow::Call(call) => TimelineViewRowDto {
+            kind: "call".to_owned(),
+            item_id: call.event.item_id,
+            event_id: call.event.event_id.unwrap_or_default(),
+            sender: call.event.sender_id,
+            body: call.call_kind,
+            origin_server_ts: call.event.origin_server_ts,
+            edited: false,
+            reply_to_event_id: None,
+            decryption_state: None,
+            message_type: None,
+            formatted_body: None,
+        },
+        TimelineViewRow::Redacted(redacted) => TimelineViewRowDto {
+            kind: "redacted".to_owned(),
+            item_id: redacted.item_id,
+            event_id: redacted.event_id,
+            sender: String::new(),
+            body: redacted.summary,
+            origin_server_ts: 0,
+            edited: false,
+            reply_to_event_id: None,
+            decryption_state: None,
+            message_type: None,
+            formatted_body: None,
+        },
+        TimelineViewRow::EncryptedUnavailable(encrypted) => TimelineViewRowDto {
+            kind: "encrypted".to_owned(),
+            item_id: encrypted.item_id,
+            event_id: encrypted.event_id,
+            sender: String::new(),
+            body: encrypted.reason_code.clone(),
+            origin_server_ts: 0,
+            edited: false,
+            reply_to_event_id: None,
+            decryption_state: Some(encrypted.reason_code),
+            message_type: None,
+            formatted_body: None,
+        },
+        TimelineViewRow::Other(other) => TimelineViewRowDto {
+            kind: "other".to_owned(),
+            item_id: other.item_id,
+            event_id: other.event_id.unwrap_or_default(),
+            sender: String::new(),
+            body: other.summary,
+            origin_server_ts: 0,
+            edited: false,
+            reply_to_event_id: None,
+            decryption_state: None,
+            message_type: other.event_type,
+            formatted_body: None,
+        },
+        TimelineViewRow::DateSeparator {
+            item_id,
+            timestamp_ms,
+        } => TimelineViewRowDto {
+            kind: "date_separator".to_owned(),
+            item_id,
+            event_id: String::new(),
+            sender: String::new(),
+            body: String::new(),
+            origin_server_ts: timestamp_ms,
+            edited: false,
+            reply_to_event_id: None,
+            decryption_state: None,
+            message_type: None,
+            formatted_body: None,
+        },
+        TimelineViewRow::ReadMarker { item_id } => virtual_row_dto("read_marker", item_id),
+        TimelineViewRow::UnreadMarker { item_id } => virtual_row_dto("unread_marker", item_id),
+        TimelineViewRow::TimelineStart { item_id } => virtual_row_dto("timeline_start", item_id),
+        TimelineViewRow::Pagination { item_id, .. } => virtual_row_dto("pagination", item_id),
+    }
+}
+
+fn virtual_row_dto(kind: &str, item_id: String) -> TimelineViewRowDto {
+    TimelineViewRowDto {
+        kind: kind.to_owned(),
+        item_id,
+        event_id: String::new(),
+        sender: String::new(),
+        body: String::new(),
+        origin_server_ts: 0,
+        edited: false,
+        reply_to_event_id: None,
+        decryption_state: None,
+        message_type: None,
+        formatted_body: None,
     }
 }
 
@@ -10252,5 +10432,50 @@ mod tests {
             .expect("validated leftover wipe");
         assert_eq!(ack.status, "wiped");
         assert!(!root.exists());
+    }
+
+    #[test]
+    fn timeline_view_row_dto_maps_message_without_token_echo() {
+        use crate::app::timeline::{
+            TimelineEventRowBase, TimelineMessageRow, TimelineRowCapabilities,
+        };
+        let row = TimelineViewRow::Message(Box::new(TimelineMessageRow {
+            event: TimelineEventRowBase {
+                item_id: "item-1".to_owned(),
+                event_id: Some("$evt:example.org".to_owned()),
+                sender_id: "@alice:example.org".to_owned(),
+                sender_name: "@alice:example.org".to_owned(),
+                origin_server_ts: 1_700_000_000_000,
+                capabilities: TimelineRowCapabilities {
+                    react: true,
+                    reply: true,
+                    edit: false,
+                    redact: true,
+                    report: true,
+                    pin: true,
+                    forward: true,
+                    vote: false,
+                    decline_call: false,
+                },
+            },
+            body: "hello".to_owned(),
+            formatted_body: None,
+            message_type: Some("m.text".to_owned()),
+            edited: false,
+            reply: None,
+            thread: None,
+            reactions: Vec::new(),
+            media: None,
+        }));
+        let dto = timeline_view_row_dto(row);
+        assert_eq!(dto.kind, "message");
+        assert_eq!(dto.item_id, "item-1");
+        assert_eq!(dto.event_id, "$evt:example.org");
+        assert_eq!(dto.body, "hello");
+        assert_eq!(dto.message_type.as_deref(), Some("m.text"));
+        let text = format!("{dto:?}");
+        assert!(!text.contains("syt_"));
+        assert!(!text.contains("password"));
+        assert!(!text.contains("mxc://"));
     }
 }
