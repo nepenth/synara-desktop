@@ -727,6 +727,24 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreRoomListUnreadLookupUsesSnapshotWithoutEcho() {
+        XCTAssertTrue(SharedCoreRoomListRows.hasUnreadMessages(unreadCount: 2, hasHighlight: false))
+        XCTAssertTrue(SharedCoreRoomListRows.hasUnreadMessages(unreadCount: 0, hasHighlight: true))
+        XCTAssertFalse(SharedCoreRoomListRows.hasUnreadMessages(unreadCount: 0, hasHighlight: false))
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreRoomListService(host: host)
+        XCTAssertFalse(service.hasUnreadMessages(roomID: "!s26:example.org"))
+        XCTAssertFalse(service.isAgentRoom(roomID: "!s26:example.org"))
+        let publicError = String(describing: service.hasUnreadMessages(roomID: "!s26:example.org"))
+        for forbidden in ["password", "syt_", "token"] {
+            XCTAssertFalse(publicError.contains(forbidden))
+        }
+    }
+
     func testSharedCoreTypingPresenceWithoutSessionFailsClosed() async {
         let core = SharedCore()
 

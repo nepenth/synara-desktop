@@ -1,7 +1,8 @@
 import Foundation
 
 /// P4-S25 map of privacy-safe SharedCore room-list, invite, and space-parent
-/// snapshots to product room rows.
+/// snapshots to product room rows. P4-S26 adds unread lookup from that
+/// mapped snapshot.
 ///
 /// Joined-room last-message text is not on the list DTO and stays empty.
 /// Invite preview uses sender name / topic / reason from the invite
@@ -88,5 +89,9 @@ enum SharedCoreRoomListRows {
         parentIds.filter { $0.isEmpty == false }.map { parentID in
             SpaceSummary(id: parentID, name: namesByID[parentID] ?? parentID)
         }
+    }
+
+    static func hasUnreadMessages(unreadCount: Int, hasHighlight: Bool) -> Bool {
+        unreadCount > 0 || hasHighlight
     }
 }

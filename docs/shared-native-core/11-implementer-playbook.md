@@ -460,6 +460,9 @@ P4-S24 product read markers           stacked on S12–S23
 P4-S25 product room-list spaces/invites stacked on S12–S24
        Product loadRooms maps space parents and invite
        previews. Joined last-message stays empty. No UDL.
+P4-S26 product room-list unread lookup stacked on S12–S25
+       Product hasUnreadMessages uses the cached snapshot.
+       Agent rooms stay false without Core agent cards.
 ```
 
 Apple-only stays Swift the whole way: SwiftUI, Keychain UI, APNs
@@ -952,6 +955,24 @@ P4 acceptance.
 
 **Tests:** mapper fills invite preview and parent space without
 token echo; without a session `loadRooms` is empty.
+
+### 9.21 P4-S26 — product room-list unread lookup
+
+S25 mapped unread counts onto `RoomSummary`, but product
+`hasUnreadMessages` still used the protocol default `false`. Timeline
+focus already calls that method to decide whether to load a fully-read
+marker.
+
+**Lands:** `SharedCoreRoomListService` caches the last snapshot and
+answers unread from `unreadCount` / `hasHighlight`. Agent rooms stay
+false unless a mapped row already has agent activity. Helper + XCTest.
+
+**Must not land:** leftover registration; byte/secret envelopes;
+UDL changes; inventing agent cards; P5; claiming iOS-on-engine or
+P4 acceptance.
+
+**Tests:** unread helper is true for count or highlight; without a
+cached snapshot the product lookup is false with no token echo.
 
 ---
 

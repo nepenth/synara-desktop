@@ -153,6 +153,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
 final class SharedCoreRoomListService: RoomListServicing {
     private let host: SharedCoreProductHost
     private var cachedNames: [String: String] = [:]
+    private var cachedRooms: [String: RoomSummary] = [:]
 
     init(host: SharedCoreProductHost) {
         self.host = host
@@ -194,6 +195,7 @@ final class SharedCoreRoomListService: RoomListServicing {
                 }
             )
             cachedNames = Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, $0.name) })
+            cachedRooms = Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, $0) })
             return rooms.isEmpty ? .empty : .loaded(rooms)
         } catch {
             return .empty
@@ -204,8 +206,23 @@ final class SharedCoreRoomListService: RoomListServicing {
         cachedNames[roomID]
     }
 
+    func isAgentRoom(roomID: String) -> Bool {
+        cachedRooms[roomID]?.isAgentRoom ?? false
+    }
+
+    func hasUnreadMessages(roomID: String) -> Bool {
+        guard let room = cachedRooms[roomID] else {
+            return false
+        }
+        return SharedCoreRoomListRows.hasUnreadMessages(
+            unreadCount: room.unreadCount,
+            hasHighlight: room.hasHighlight
+        )
+    }
+
     func clearCache() {
         cachedNames.removeAll()
+        cachedRooms.removeAll()
     }
 
     func roomUpdates() -> AsyncStream<RoomListState> {
