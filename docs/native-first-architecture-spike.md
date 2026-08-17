@@ -4,6 +4,10 @@ Reviewed: 2026-05-25
 
 Status: accepted for planning
 
+Language-boundary follow-up (what may be written in Rust, including the
+continued rejection of a Slint/Dioxus/egui desktop rewrite):
+[ADR 0004](adr/0004-rust-language-boundaries.md).
+
 ## Decision
 
 Keep Tauri as the internal macOS/Linux runtime while building the first native

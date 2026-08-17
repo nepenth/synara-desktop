@@ -16,6 +16,8 @@ Authoritative planning documents:
 - [iOS App Store plan](../synara/docs/synara-ios-app-store-plan.md)
 - [iOS repository layout ADR](../docs/adr/0001-ios-repository-layout.md)
 - [iOS architecture ADR](../docs/adr/0002-ios-architecture.md)
+- [Shared native Rust core ADR](../docs/adr/0003-shared-native-rust-core.md)
+- [Rust language boundaries ADR](../docs/adr/0004-rust-language-boundaries.md)
 - [Apple Developer enrollment checklist](docs/apple-developer-enrollment-checklist.md)
 - [License inventory](docs/license-inventory.md)
 - [Release checklist](docs/release-checklist.md)
