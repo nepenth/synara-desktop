@@ -57,8 +57,9 @@ pub fn last_message_preview_from_event_json(value: &JsonValue) -> Option<String>
         "m.room.message" => preview_from_room_message(content),
         "m.sticker" => Some("Sticker".to_owned()),
         "m.room.encrypted" => Some("Encrypted message".to_owned()),
-        "m.poll.start" | "org.matrix.msc3381.poll.start" => preview_from_poll(content)
-            .or_else(|| Some("Poll".to_owned())),
+        "m.poll.start" | "org.matrix.msc3381.poll.start" => {
+            preview_from_poll(content).or_else(|| Some("Poll".to_owned()))
+        }
         "m.room.member" => preview_from_membership(value, content),
         "m.call.invite" | "m.call.notify" => Some("Call".to_owned()),
         "m.room.topic" => content
@@ -76,6 +77,9 @@ pub fn last_message_preview_from_event_json(value: &JsonValue) -> Option<String>
 }
 
 fn preview_from_room_message(content: &JsonValue) -> Option<String> {
+    if let Some(preview) = agent_workflow_preview(content) {
+        return Some(preview);
+    }
     match content.get("msgtype").and_then(JsonValue::as_str) {
         Some("m.image") => Some("Image".to_owned()),
         Some("m.video") => Some("Video".to_owned()),
@@ -88,6 +92,40 @@ fn preview_from_room_message(content: &JsonValue) -> Option<String> {
             .and_then(sanitize_last_message_preview)
             .or_else(|| Some("Message".to_owned())),
     }
+}
+
+fn agent_workflow_preview(content: &JsonValue) -> Option<String> {
+    const AGENT_KEYS: [&str; 4] = [
+        "org.hermes.agent",
+        "io.hermes.agent",
+        "in.synara.agent",
+        "m.custom.agent",
+    ];
+
+    let direct = AGENT_KEYS.iter().find_map(|key| content.get(*key));
+    let body = content
+        .get("body")
+        .and_then(JsonValue::as_str)
+        .and_then(|body| serde_json::from_str::<JsonValue>(body).ok());
+    let payload = direct.or_else(|| {
+        let body = body.as_ref()?;
+        AGENT_KEYS
+            .iter()
+            .find_map(|key| body.get(*key))
+            .or_else(|| {
+                (body.get("hermes").and_then(JsonValue::as_bool) == Some(true))
+                    .then(|| body.get("payload").or_else(|| body.get("agent")))
+                    .flatten()
+            })
+    })?;
+
+    let title = payload
+        .get("title")
+        .and_then(JsonValue::as_str)
+        .and_then(sanitize_last_message_preview);
+    title
+        .and_then(|title| sanitize_last_message_preview(&format!("Agent workflow: {title}")))
+        .or_else(|| Some("Agent workflow".to_owned()))
 }
 
 fn preview_from_poll(content: &JsonValue) -> Option<String> {
@@ -194,6 +232,19 @@ mod tests {
             .as_deref(),
             Some("Encrypted message")
         );
+    }
+
+    #[test]
+    fn agent_payload_body_uses_product_preview_instead_of_serialized_json() {
+        let preview = last_message_preview_from_event_json(&json!({
+            "type": "m.room.message",
+            "content": {
+                "msgtype": "m.text",
+                "body": r#"{"hermes":true,"payload":{"title":"Deploy approval"}}"#
+            }
+        }));
+        assert_eq!(preview.as_deref(), Some("Agent workflow: Deploy approval"));
+        assert!(!preview.unwrap().contains("hermes"));
     }
 
     #[test]

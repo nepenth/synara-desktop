@@ -11,6 +11,7 @@ use matrix_sdk::ruma::{
     MxcUri, OwnedEventId, OwnedMxcUri, UInt,
 };
 
+#[allow(clippy::too_many_arguments)] // Mirrors the fixed m.sticker content and relation fields.
 pub fn sticker_content(
     body: String,
     mxc: String,

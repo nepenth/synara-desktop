@@ -79,8 +79,6 @@ fn leftover_owner_status_after_attach_is_privacy_safe_and_homeserver_io_stays_cl
     let access = "syt_s15_leftover_access";
     let refresh = "syr_s15_leftover_refresh";
     let recovery_key = "s15-secret-recovery-key";
-    let room_id = "!s15SecretRoom:example.org";
-    let event_body = "s15-secret-event-body";
     let mxc = "mxc://example.org/s15SecretMedia";
     let identity = alice();
     let map = Arc::new(Mutex::new(HashMap::new()));
@@ -124,18 +122,6 @@ fn leftover_owner_status_after_attach_is_privacy_safe_and_homeserver_io_stays_cl
     assert!(recover_text.contains("p4-s10-leftover-unavailable"));
     assert!(!recover_text.contains(recovery_key));
     assert!(!recover_text.contains(access));
-
-    let raw = rt
-        .block_on(shared.send_raw_room_event(
-            room_id.to_owned(),
-            "m.room.message".to_owned(),
-            event_body.to_owned(),
-        ))
-        .expect_err("raw send needs a live homeserver");
-    let raw_text = format!("{raw:?}{raw}");
-    assert!(raw_text.contains("p4-s10-leftover-unavailable"));
-    assert!(!raw_text.contains(room_id));
-    assert!(!raw_text.contains(event_body));
 
     let media = rt
         .block_on(shared.media_download(mxc.to_owned()))

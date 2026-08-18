@@ -211,11 +211,9 @@ fn composer_reply_draft_family_without_started_sync_returns_handler_result_witho
         .expect("planted set must fail on invalid event id without a live server");
     let planted_get_readback = planted_get
         .as_ref()
-        .ok()
         .expect("planted get of a valid room returns the empty readback without a live server");
     let planted_clear_readback = planted_clear
         .as_ref()
-        .ok()
         .expect("planted clear of a valid room returns the cleared readback without a live server");
     let invalid_room_get_text = invalid_room_get
         .as_ref()

@@ -360,6 +360,17 @@ mod tests {
         server.await.expect("loopback task");
     }
 
+    #[tokio::test]
+    #[ignore = "requires SYNARA_LIVE_HOMESERVER"]
+    async fn live_login_flows_facade_discovers_password_login() {
+        let homeserver = std::env::var("SYNARA_LIVE_HOMESERVER")
+            .expect("SYNARA_LIVE_HOMESERVER must be set for the ignored live test");
+        let flows = login_flows(homeserver)
+            .await
+            .expect("live homeserver login-flow discovery must succeed");
+        assert!(flows.iter().any(|flow| flow.kind == "password"));
+    }
+
     #[test]
     fn ffi_errors_expose_only_static_privacy_safe_values() {
         let error = LoginFlowsError::from(AuthError::Connectivity {

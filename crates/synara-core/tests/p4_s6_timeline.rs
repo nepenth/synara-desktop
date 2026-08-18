@@ -1,4 +1,4 @@
-//! P4-S6: typed SharedCore consume of timeline open/close/paginate only.
+//! P4-S6: typed SharedCore consume of timeline open/close/snapshot/paginate.
 //!
 //! Calls the already-registered Core handlers. Does not start SyncService.
 
@@ -62,10 +62,11 @@ fn live_bottom() -> TimelineOpenPositionDto {
 }
 
 #[test]
-fn timeline_surface_exposes_only_open_close_paginate() {
+fn timeline_surface_exposes_open_close_snapshot_paginate() {
     let udl = include_str!("../src/synara_core.udl");
     assert!(udl.contains("timeline_open"));
     assert!(udl.contains("timeline_close"));
+    assert!(udl.contains("timeline_snapshot"));
     assert!(udl.contains("timeline_paginate"));
     assert!(!udl.contains("matrix_send_sticker"));
     assert!(!udl.contains("matrix_send_poll"));
@@ -80,6 +81,7 @@ fn timeline_surface_exposes_only_open_close_paginate() {
         .expect("SharedCore");
     assert!(shared_core.contains("timeline_open"));
     assert!(shared_core.contains("timeline_close"));
+    assert!(shared_core.contains("timeline_snapshot"));
     assert!(shared_core.contains("timeline_paginate"));
     assert!(shared_core.contains("invites_snapshot"));
     assert!(!shared_core.contains("command("));
@@ -98,10 +100,15 @@ fn timeline_without_session_fails_closed_without_echo() {
     let paginate = rt
         .block_on(shared.timeline_paginate("view-1".to_owned(), "backwards".to_owned()))
         .expect_err("no attached timeline owner");
-    let text = format!("{open:?}{open}{close:?}{close}{paginate:?}{paginate}");
+    let snapshot = rt
+        .block_on(shared.timeline_snapshot("view-1".to_owned()))
+        .expect_err("no attached timeline owner");
+    let text =
+        format!("{open:?}{open}{close:?}{close}{snapshot:?}{snapshot}{paginate:?}{paginate}");
     assert!(text.contains("p2-timeline-open-no-session"));
     assert!(text.contains("p2-timeline-close-no-session"));
     assert!(text.contains("p2-timeline-paginate-no-session"));
+    assert!(text.contains("p2-timeline-snapshot-no-session"));
     assert!(!text.contains("password"));
     assert!(!text.contains("syt_"));
     assert!(!text.contains("@alice"));
@@ -153,6 +160,16 @@ fn timeline_without_started_sync_returns_handler_result_without_echo() {
     assert!(!paginate_text.contains(refresh));
     assert!(!paginate_text.contains("password"));
     assert!(!paginate_text.contains("syt_"));
+
+    let snapshot = rt
+        .block_on(shared.timeline_snapshot("view-missing".to_owned()))
+        .expect_err("snapshot of an unknown stream uses the registered handler");
+    let snapshot_text = format!("{snapshot:?}{snapshot}");
+    assert!(snapshot_text.contains("v-timeline-view-not-open"));
+    assert!(!snapshot_text.contains(access));
+    assert!(!snapshot_text.contains(refresh));
+    assert!(!snapshot_text.contains("password"));
+    assert!(!snapshot_text.contains("syt_"));
 
     drop(shared);
     drop(_enter);

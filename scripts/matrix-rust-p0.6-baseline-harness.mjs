@@ -108,14 +108,17 @@ export const runTimelineBaseline = ({
       assert.equal(typeof sample.lastEventRow, 'number');
       assert.equal(sample.renderedEvents, MAX_RENDERED_EVENTS);
       assert.ok(sample.rows <= MAX_RENDERED_EVENTS + 3);
-      assert.ok(
-        sample.durationMs < budgetMs,
-        `timeline harness too slow for ${eventCount}: ${sample.durationMs.toFixed(2)}ms (budget ${budgetMs}ms)`
-      );
       durations.push(sample.durationMs);
       last = sample;
     }
     const stats = summarizeDurations(durations);
+    // A single wall-clock sample can include scheduler preemption, especially
+    // when CI runs Rust and Node jobs concurrently. Gate the median so a real
+    // sustained regression still fails without making host contention flaky.
+    assert.ok(
+      stats.p50_ms < budgetMs,
+      `timeline harness median too slow for ${eventCount}: ${stats.p50_ms.toFixed(2)}ms (budget ${budgetMs}ms)`
+    );
     scenarioResults.push({
       metric_id: `M-TIMELINE-MAP-${eventCount}`,
       label: `synthetic timeline row map (${eventCount} events, rendered window ${MAX_RENDERED_EVENTS})`,

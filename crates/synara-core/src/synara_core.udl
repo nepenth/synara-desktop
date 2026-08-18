@@ -5,6 +5,11 @@
 namespace synara_core {
   string binding_scaffold_version();
 
+  // Convert supported Markdown to Matrix-compatible HTML using Ruma's
+  // canonical parser. Plain text returns null so callers do not attach a
+  // redundant formatted_body.
+  string? markdown_to_html(string body);
+
   // P4-2: credential-free, read-only Matrix login-flow discovery. The
   // homeserver URL is normalized by the shared core before its bounded,
   // redirect-free request is assembled.
@@ -360,6 +365,8 @@ dictionary TimelineViewRowDto {
   string? decryption_state;
   string? message_type;
   string? formatted_body;
+  // Recognized, size-bounded Synara/Hermes card payload only; never raw event JSON.
+  string? agent_card_json;
   sequence<TimelineViewReactionDto> reactions;
   string? media_handle_id;
   string? media_mime_type;
@@ -499,6 +506,18 @@ dictionary SendTextDto {
   string event_id;
   string local_txn_id;
   string status;
+};
+
+// Privacy-safe typed agent-approval acknowledgement.
+dictionary AgentApprovalSendDto {
+  string event_id;
+  string status;
+};
+
+// Static source constants only. Never echo room/event/action data or credentials.
+[Error]
+interface AgentApprovalSendError {
+  Failed(string code, string description);
 };
 
 // Static source constants only. Never echo body, room id, token, or password.
@@ -1382,6 +1401,9 @@ interface SharedCore {
   boolean timeline_close(string stream_id);
 
   [Async, Throws=TimelineError]
+  TimelineSnapshotDto timeline_snapshot(string stream_id);
+
+  [Async, Throws=TimelineError]
   TimelineSnapshotDto timeline_paginate(string stream_id, string direction);
 
   [Async, Throws=TypingCommandError]
@@ -1630,6 +1652,9 @@ interface SharedCore {
   [Async, Throws=SendTextError]
   SendTextDto send_text(string room_id, string body, string? msg_type, string? formatted_body, sequence<string>? mention_user_ids, boolean? mention_room, string? reply_to, string? thread_root, string? txn_id);
 
+  [Async, Throws=AgentApprovalSendError]
+  AgentApprovalSendDto send_agent_approval(string room_id, string action_id, string action_title, string decision, string? source_event_id, u64 created_at);
+
   [Async, Throws=SendStickerError]
   SendStickerDto send_sticker(string room_id, string body, string mxc, u64? width, u64? height, string? mimetype, u64? size, string? reply_to, string? thread_root);
 
@@ -1714,9 +1739,6 @@ interface SharedCore {
 
   [Async, Throws=LeftoverCommandError]
   LeftoverAckDto recover(string recovery_key);
-
-  [Async, Throws=LeftoverCommandError]
-  LeftoverAckDto send_raw_room_event(string room_id, string event_type, string content_json);
 
   [Async, Throws=LeftoverCommandError]
   LeftoverAckDto set_notification_mode(string room_id, string mode);

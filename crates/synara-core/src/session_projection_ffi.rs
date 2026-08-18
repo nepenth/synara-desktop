@@ -291,6 +291,12 @@ pub struct SessionProjectionCore {
     core: Core,
 }
 
+impl Default for SessionProjectionCore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SessionProjectionCore {
     pub fn new() -> Self {
         Self {

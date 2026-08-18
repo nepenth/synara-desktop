@@ -257,12 +257,10 @@ fn spaces_family_without_started_sync_returns_handler_result_without_echo() {
 
     let parents_ok = parents
         .as_ref()
-        .ok()
         .expect("planted parents snapshot is a local joined-room walk");
     assert!(parents_ok.entries.is_empty());
     let children_ok = children
         .as_ref()
-        .ok()
         .expect("planted children snapshot is a local joined-room walk");
     assert!(children_ok.edges.is_empty());
 

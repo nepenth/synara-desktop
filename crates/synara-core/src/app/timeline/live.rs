@@ -255,6 +255,15 @@ impl NativeTimelineOwner {
             .await
     }
 
+    pub async fn snapshot(&self, stream_id: &str) -> Result<TimelineViewSnapshot, &'static str> {
+        self.registry
+            .lock()
+            .await
+            .view_snapshot_for_stream(&self.client, stream_id)
+            .await
+    }
+
+    #[allow(clippy::too_many_arguments)] // Host boundary mirrors the typed Matrix send contract.
     pub async fn send_text(
         &self,
         room_id: String,
@@ -310,6 +319,7 @@ impl NativeTimelineOwner {
         })
     }
 
+    #[allow(clippy::too_many_arguments)] // Host boundary mirrors the typed m.sticker contract.
     pub async fn send_sticker(
         &self,
         room_id: String,
@@ -406,6 +416,7 @@ impl NativeTimelineOwner {
         })
     }
 
+    #[allow(clippy::too_many_arguments)] // Host boundary mirrors the typed Matrix edit contract.
     pub async fn edit_message(
         &self,
         room_id: String,
@@ -1281,7 +1292,7 @@ impl NativeTimelineRegistry {
         })
     }
 
-    async fn view_snapshot_for_stream(
+    pub async fn view_snapshot_for_stream(
         &self,
         client: &Client,
         stream_id: &str,

@@ -23,6 +23,7 @@ use matrix_sdk_ui::timeline::{
     TimelineItem as SdkTimelineItem, TimelineItemContent, VirtualTimelineItem,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 
 use crate::dto::{EventId, RoomId, TimelineItemId, UserId};
 
@@ -30,6 +31,13 @@ use super::TimelineMediaRegistry;
 
 pub const TIMELINE_VIEW_SCHEMA_VERSION: u32 = 1;
 pub const NATIVE_TIMELINE_VIEW_UPDATED_EVENT: &str = "matrix-timeline-view-updated";
+const MAX_AGENT_CARD_JSON_BYTES: usize = 200_000;
+const AGENT_CARD_CONTENT_KEYS: [&str; 4] = [
+    "org.hermes.agent",
+    "io.hermes.agent",
+    "in.synara.agent",
+    "m.custom.agent",
+];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -225,6 +233,7 @@ fn project_event_row_for_user(
                     event: base,
                     body: message.body().to_owned(),
                     formatted_body: project_formatted_body(msgtype),
+                    agent_card_json: project_agent_card_json(event, message.body()),
                     message_type,
                     edited: message.is_edited(),
                     reply: project_reply(content),
@@ -368,6 +377,56 @@ pub fn project_formatted_body(msgtype: &MessageType) -> Option<String> {
         return None;
     }
     Some(html.to_owned())
+}
+
+/// Project only the recognized structured agent-card object from a message.
+///
+/// The native boundary intentionally does not expose arbitrary Matrix event
+/// JSON. Direct custom-content fields are preferred; the body wrapper remains
+/// supported for compatibility with existing Hermes agents and encrypted
+/// messages whose decrypted custom content is represented by the SDK body.
+fn project_agent_card_json(event: &EventTimelineItem, body: &str) -> Option<String> {
+    let direct = event
+        .latest_json()
+        .filter(|raw| raw.json().get().len() <= MAX_AGENT_CARD_JSON_BYTES * 2)
+        .and_then(|raw| serde_json::from_str::<JsonValue>(raw.json().get()).ok())
+        .and_then(|event| event.get("content").cloned())
+        .and_then(|content| agent_card_payload_from_content(&content));
+
+    direct
+        .or_else(|| agent_card_payload_from_body(body))
+        .and_then(|payload| serialize_bounded_agent_card(&payload))
+}
+
+fn agent_card_payload_from_content(content: &JsonValue) -> Option<JsonValue> {
+    let object = content.as_object()?;
+    AGENT_CARD_CONTENT_KEYS
+        .iter()
+        .find_map(|key| object.get(*key).filter(|value| value.is_object()).cloned())
+}
+
+fn agent_card_payload_from_body(body: &str) -> Option<JsonValue> {
+    if body.len() > MAX_AGENT_CARD_JSON_BYTES {
+        return None;
+    }
+    let parsed = serde_json::from_str::<JsonValue>(body).ok()?;
+    if let Some(payload) = agent_card_payload_from_content(&parsed) {
+        return Some(payload);
+    }
+    let object = parsed.as_object()?;
+    if object.get("hermes").and_then(JsonValue::as_bool) != Some(true) {
+        return None;
+    }
+    object
+        .get("payload")
+        .or_else(|| object.get("agent"))
+        .filter(|value| value.is_object())
+        .cloned()
+}
+
+fn serialize_bounded_agent_card(payload: &JsonValue) -> Option<String> {
+    let encoded = serde_json::to_string(payload).ok()?;
+    (encoded.len() <= MAX_AGENT_CARD_JSON_BYTES).then_some(encoded)
 }
 
 pub fn project_message_type_and_media(
@@ -678,6 +737,10 @@ pub struct TimelineMessageRow {
     /// Already-sanitized rendering markup; never raw event content.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub formatted_body: Option<String>,
+    /// Recognized, size-bounded Synara/Hermes card payload only. This is never
+    /// the complete raw Matrix event or content object.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_card_json: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message_type: Option<String>,
     pub edited: bool,
@@ -985,6 +1048,42 @@ mod tests {
     }
 
     #[test]
+    fn agent_card_body_projection_accepts_only_recognized_bounded_objects() {
+        let payload = agent_card_payload_from_body(
+            r#"{"hermes":true,"payload":{"title":"Approval required","status":"pending"}}"#,
+        )
+        .expect("recognized Hermes card");
+        assert_eq!(payload["title"], "Approval required");
+
+        let direct = agent_card_payload_from_body(
+            r#"{"in.synara.agent":{"title":"Direct card","status":"complete"}}"#,
+        )
+        .expect("recognized direct card");
+        assert_eq!(direct["title"], "Direct card");
+
+        assert!(
+            agent_card_payload_from_body(r#"{"payload":{"title":"missing marker"}}"#).is_none()
+        );
+        assert!(agent_card_payload_from_body("ordinary message").is_none());
+        assert!(agent_card_payload_from_body(&"x".repeat(MAX_AGENT_CARD_JSON_BYTES + 1)).is_none());
+    }
+
+    #[test]
+    fn agent_card_content_projection_does_not_expose_unrecognized_event_content() {
+        let content = serde_json::json!({
+            "msgtype": "m.notice",
+            "body": "safe fallback",
+            "in.synara.agent": {"title": "Review", "status": "pending"},
+            "access_token": "must-not-cross-boundary"
+        });
+        let payload = agent_card_payload_from_content(&content).expect("recognized direct card");
+        let encoded = serialize_bounded_agent_card(&payload).expect("bounded payload");
+        assert!(encoded.contains("Review"));
+        assert!(!encoded.contains("access_token"));
+        assert!(!encoded.contains("safe fallback"));
+    }
+
+    #[test]
     fn message_type_labels_cover_text_notice_and_emote() {
         assert_eq!(
             project_message_type_and_media(
@@ -1127,6 +1226,7 @@ mod tests {
             },
             body: "Reply body".into(),
             formatted_body: None,
+            agent_card_json: None,
             message_type: Some("text".into()),
             edited: false,
             reply: Some(reply),

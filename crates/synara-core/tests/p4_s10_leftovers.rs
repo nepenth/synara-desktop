@@ -75,7 +75,7 @@ fn leftover_surface_exposes_the_authorized_family() {
     assert!(shared_core.contains("wipe_persisted_stores("));
     assert!(shared_core.contains("logout("));
     assert!(shared_core.contains("recover("));
-    assert!(shared_core.contains("send_raw_room_event("));
+    assert!(!shared_core.contains("send_raw_room_event("));
     assert!(shared_core.contains("set_notification_mode("));
     assert!(shared_core.contains("media_download("));
     assert!(shared_core.contains("media_thumbnail("));
@@ -96,7 +96,7 @@ fn leftover_commands_without_session_fail_closed_without_echo() {
     let rt = test_runtime();
     let recovery_key = "s10-it-recovery-key";
     let room_id = "!s10ItRoom:example.org";
-    let event_body = "s10-it-secret-body";
+    let action_title = "s10-it-secret-action";
     let mxc = "mxc://example.org/s10ItMedia";
     let push_key = "s10-it-push-key";
 
@@ -107,17 +107,20 @@ fn leftover_commands_without_session_fail_closed_without_echo() {
     assert!(recover_text.contains("p4-s10-leftover-unavailable"));
     assert!(!recover_text.contains(recovery_key));
 
-    let raw = rt
-        .block_on(shared.send_raw_room_event(
+    let approval = rt
+        .block_on(shared.send_agent_approval(
             room_id.to_owned(),
-            "m.room.message".to_owned(),
-            event_body.to_owned(),
+            "approve-s10".to_owned(),
+            action_title.to_owned(),
+            "approve".to_owned(),
+            Some("$source:example.org".to_owned()),
+            1,
         ))
-        .expect_err("raw send");
-    let raw_text = error_text(&raw);
-    assert!(raw_text.contains("p4-s10-leftover-no-session"));
-    assert!(!raw_text.contains(room_id));
-    assert!(!raw_text.contains(event_body));
+        .expect_err("agent approval");
+    let approval_text = format!("{approval:?}{approval}");
+    assert!(approval_text.contains("p4-s34-agent-approval-no-session"));
+    assert!(!approval_text.contains(room_id));
+    assert!(!approval_text.contains(action_title));
 
     let media = rt
         .block_on(shared.media_download(mxc.to_owned()))

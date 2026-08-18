@@ -40,7 +40,12 @@ done
 
 work_dir="$(mktemp -d "${TMPDIR:-/tmp}/synara-core-uniffi.XXXXXX")"
 trap 'rm -rf "$work_dir"' EXIT
-cargo_target_dir="$work_dir/target"
+# Keep target output stable so local reruns and the repository's `target/`
+# Actions cache can reuse the expensive four-architecture Matrix SDK build.
+# Temporary assembly/output still lives under work_dir and is atomically
+# published only after every target succeeds.
+cargo_target_dir="${SYNARA_CORE_APPLE_TARGET_DIR:-$repo_root/target/synara-core-apple}"
+mkdir -p "$cargo_target_dir"
 
 # Match the Swift package deployment floors. Without these, current Xcode C
 # dependencies may compile for the host's newest SDK while Rust links the iOS

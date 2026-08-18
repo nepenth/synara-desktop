@@ -70,6 +70,13 @@ fn room_list_surface_exposes_only_the_registered_snapshot_command() {
 }
 
 #[test]
+fn room_list_activity_uses_event_wall_clock_time_not_recency_ordering() {
+    let live_projection = include_str!("../src/app/room_list/live.rs");
+    assert!(live_projection.contains("latest_event_timestamp()"));
+    assert!(!live_projection.contains(".recency_stamp()"));
+}
+
+#[test]
 fn room_list_without_session_fails_closed_without_echo() {
     let shared = SharedCore::new();
     let error = test_runtime()

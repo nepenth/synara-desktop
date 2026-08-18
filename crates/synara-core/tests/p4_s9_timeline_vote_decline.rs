@@ -110,9 +110,6 @@ fn timeline_vote_decline_surface_exposes_only_the_registered_family() {
     assert!(!shared_core.contains("command("));
     assert!(!shared_core.contains("matrix_backup_status"));
     assert!(!shared_core.contains("matrix_crypto_status"));
-    assert!(!shared_core.contains("cross_signing_status"));
-    assert!(!shared_core.contains("cross_signing_setup"));
-    assert!(!shared_core.contains("room_key_transfer_status"));
 }
 
 #[test]

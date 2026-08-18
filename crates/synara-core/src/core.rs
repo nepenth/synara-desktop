@@ -705,6 +705,13 @@ struct MatrixTimelineOpenRequest {
     position: NativeTimelineOpenPosition,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_timeline_snapshot`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixTimelineSnapshotRequest {
+    stream_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_timeline_jump_latest`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1900,6 +1907,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_timeline_open", matrix_timeline_open)
         .expect("built-in matrix_timeline_open must remain in the command census");
     registry
+        .register("matrix_timeline_snapshot", matrix_timeline_snapshot)
+        .expect("built-in matrix_timeline_snapshot must remain in the command census");
+    registry
         .register("matrix_timeline_jump_latest", matrix_timeline_jump_latest)
         .expect("built-in matrix_timeline_jump_latest must remain in the command census");
     registry
@@ -2024,6 +2034,13 @@ fn matrix_timeline_open(state: Arc<CoreState>, request: CommandEnvelope) -> Comm
     Box::pin(async move {
         let payload: MatrixTimelineOpenRequest = serde_json::from_value(request.payload)
             .map_err(|_| core_state_error("p2-timeline-open-invalid-payload"))?;
+        let room_id = ruma::RoomId::parse(&payload.room_id).map_err(|_| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
+                .with_diagnostic("d0.3-timeline-invalid-room-id")
+        })?;
+        if let Some(sync_owner) = state.sync_owner()? {
+            sync_owner.subscribe_to_room(&room_id).await;
+        }
         let owner = state.timeline_owner()?.ok_or_else(|| {
             MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
                 .with_diagnostic("p2-timeline-open-no-session")
@@ -2056,6 +2073,23 @@ fn matrix_timeline_jump_latest(state: Arc<CoreState>, request: CommandEnvelope) 
             .map_err(timeline_open_owner_error)?;
         serde_json::to_value(readback)
             .map_err(|_| core_state_error("p2-timeline-jump-latest-serialization-failed"))
+    })
+}
+
+fn matrix_timeline_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelineSnapshotRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-timeline-snapshot-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-snapshot-no-session")
+        })?;
+        let snapshot = owner
+            .snapshot(&payload.stream_id)
+            .await
+            .map_err(timeline_open_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-timeline-snapshot-serialization-failed"))
     })
 }
 
@@ -4365,10 +4399,9 @@ fn matrix_session_snapshot(state: Arc<CoreState>, _request: CommandEnvelope) -> 
 /// `p4.1-sync-service-error` value from the closed failure enum, then validates
 /// the full DTO contract before it can be serialized.
 fn public_sync_status(status: PlatformSyncStatus) -> Result<SyncReadinessSnapshot, MatrixIpcError> {
-    let failure_diagnostic_id = match status.failure() {
-        None => None,
-        Some(PlatformSyncFailure::SyncService) => Some(SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID),
-    };
+    let failure_diagnostic_id = status
+        .failure()
+        .map(|PlatformSyncFailure::SyncService| SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID);
     let snapshot = SyncReadinessSnapshot {
         readiness: status.readiness(),
         session_generation: status.session_generation(),
@@ -5063,6 +5096,7 @@ mod tests {
                 "matrix_timeline_redact",
                 "matrix_timeline_report",
                 "matrix_timeline_set_read_state",
+                "matrix_timeline_snapshot",
                 "matrix_timeline_unpin",
                 "matrix_typing_set",
                 "matrix_typing_snapshot",
@@ -7763,6 +7797,44 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-timeline-jump-latest-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"streamId":"view-1"}),
+            })
+            .await
+            .expect_err("timeline snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_snapshot_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"streamId":"view-1","token":"no"}),
+            })
+            .await
+            .expect_err("timeline snapshot must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-snapshot-invalid-payload")
         );
     }
 

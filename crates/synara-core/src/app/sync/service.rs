@@ -9,6 +9,8 @@ use std::sync::Arc;
 
 use matrix_sdk::Client;
 use matrix_sdk_ui::sync_service::{State as SdkSyncState, SyncService};
+use ruma::{OwnedRoomId, RoomId};
+use tokio::sync::Mutex;
 
 use super::capability::probe_sliding_sync;
 use super::error::SyncError;
@@ -38,6 +40,13 @@ pub struct SyncServiceOwner {
     offline_mode_enabled: bool,
     /// Best-effort preflight verdict for server sliding-sync support.
     sliding_sync_capable: Option<bool>,
+    room_subscriptions: Mutex<RoomSubscriptions>,
+}
+
+#[derive(Default)]
+struct RoomSubscriptions {
+    viewport: Vec<OwnedRoomId>,
+    active: Option<OwnedRoomId>,
 }
 
 impl SyncServiceOwner {
@@ -95,6 +104,54 @@ impl SyncServiceOwner {
     pub fn room_list_service(&self) -> Arc<matrix_sdk_ui::RoomListService> {
         self.service.room_list_service()
     }
+
+    /// Keep the SDK's latest-event calculation active for the current room-list
+    /// viewport. The SDK replaces the complete subscription set on each call,
+    /// so this is coordinated with the active-room subscription below.
+    pub async fn subscribe_to_room_list(&self, room_ids: &[OwnedRoomId]) {
+        let mut subscriptions = self.room_subscriptions.lock().await;
+        if subscriptions.viewport == room_ids {
+            return;
+        }
+        subscriptions.viewport = room_ids.to_vec();
+        self.apply_room_subscriptions(&subscriptions).await;
+    }
+
+    /// Promote the active room from the room-list preview to the SDK's full
+    /// room subscription before its Timeline is opened without dropping the
+    /// visible room-list subscriptions.
+    pub async fn subscribe_to_room(&self, room_id: &RoomId) {
+        let mut subscriptions = self.room_subscriptions.lock().await;
+        if subscriptions.active.as_deref() == Some(room_id) {
+            return;
+        }
+        subscriptions.active = Some(room_id.to_owned());
+        self.apply_room_subscriptions(&subscriptions).await;
+    }
+
+    async fn apply_room_subscriptions(&self, subscriptions: &RoomSubscriptions) {
+        let room_ids = coordinated_room_subscriptions(subscriptions);
+        let room_id_refs = room_ids.iter().map(OwnedRoomId::as_ref).collect::<Vec<_>>();
+        self.service
+            .room_list_service()
+            .subscribe_to_rooms(&room_id_refs)
+            .await;
+    }
+}
+
+fn coordinated_room_subscriptions(subscriptions: &RoomSubscriptions) -> Vec<OwnedRoomId> {
+    let mut room_ids = Vec::with_capacity(subscriptions.viewport.len() + 1);
+    if let Some(active) = &subscriptions.active {
+        room_ids.push(active.clone());
+    }
+    room_ids.extend(
+        subscriptions
+            .viewport
+            .iter()
+            .filter(|room_id| Some(room_id.as_ref()) != subscriptions.active.as_deref())
+            .cloned(),
+    );
+    room_ids
 }
 
 /// Build a SyncService for an **authenticated** client.
@@ -126,6 +183,7 @@ pub async fn build_sync_service(
         session_generation,
         offline_mode_enabled: config.offline_mode,
         sliding_sync_capable,
+        room_subscriptions: Mutex::new(RoomSubscriptions::default()),
     })
 }
 
@@ -174,3 +232,23 @@ fn map_build_error(err: matrix_sdk_ui::sync_service::Error) -> SyncError {
 }
 
 use crate::transport::MatrixIpcErrorCategory;
+
+#[cfg(test)]
+mod subscription_tests {
+    use super::*;
+
+    #[test]
+    fn active_room_is_prioritized_without_dropping_or_duplicating_viewport_rooms() {
+        let active: OwnedRoomId = "!active:example.org".try_into().unwrap();
+        let other: OwnedRoomId = "!other:example.org".try_into().unwrap();
+        let subscriptions = RoomSubscriptions {
+            viewport: vec![other.clone(), active.clone()],
+            active: Some(active.clone()),
+        };
+
+        assert_eq!(
+            coordinated_room_subscriptions(&subscriptions),
+            vec![active, other]
+        );
+    }
+}
