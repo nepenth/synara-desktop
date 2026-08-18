@@ -58,6 +58,14 @@ pub async fn matrix_timeline_paginate(
 }
 
 #[tauri::command]
+pub async fn matrix_timeline_snapshot(
+    core: State<'_, Arc<synara_core::Core>>,
+    stream_id: String,
+) -> Result<crate::matrix::timeline::TimelineViewSnapshot, MatrixAuthCommandError> {
+    crate::bridge::timeline_snapshot::timeline_snapshot(core.inner().as_ref(), stream_id).await
+}
+
+#[tauri::command]
 pub async fn matrix_timeline_set_read_state(
     core: State<'_, Arc<synara_core::Core>>,
     request: NativeTimelineReadStateRequest,

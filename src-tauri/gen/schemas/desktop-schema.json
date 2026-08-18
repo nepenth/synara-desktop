@@ -1269,6 +1269,12 @@
           "markdownDescription": "Enables the matrix_timeline_set_read_state command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_timeline_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-timeline-snapshot",
+          "markdownDescription": "Enables the matrix_timeline_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_timeline_unpin command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-timeline-unpin",
@@ -2263,6 +2269,12 @@
           "type": "string",
           "const": "deny-matrix-timeline-set-read-state",
           "markdownDescription": "Denies the matrix_timeline_set_read_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_timeline_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-timeline-snapshot",
+          "markdownDescription": "Denies the matrix_timeline_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_timeline_unpin command without any pre-configured scope.",

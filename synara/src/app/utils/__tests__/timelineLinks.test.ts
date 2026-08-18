@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { EventTimelineReading, TimelineEventReading } from '../timelineLinks';
-import type { RoomReading } from '../timelineLinks';
 // Direction literals are the probed js-sdk values 'b'/'f'; event/room shapes are stubbed below.
 import {
+  type EventTimelineReading,
+  type RoomReading,
+  type TimelineEventReading,
   getEventTimeline,
   getEventIdAbsoluteIndex,
   getFirstLinkedTimeline,

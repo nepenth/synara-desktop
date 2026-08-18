@@ -1166,6 +1166,7 @@ mod view_pure {
             thread: Some(thread),
             reactions: Vec::new(),
             media: None,
+            agent_card_json: None,
         };
         let json = serde_json::to_string(&message).unwrap();
         assert!(json.contains("\"eventId\":\"$parent:example.org\""));
