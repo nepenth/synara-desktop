@@ -68,7 +68,7 @@ fn endpoint_url(
         url.query_pairs_mut()
             .append_pair("width", &settings.width.to_string())
             .append_pair("height", &settings.height.to_string())
-            .append_pair("method", &settings.method.to_string())
+            .append_pair("method", settings.method.as_ref())
             .append_pair("animated", if settings.animated { "true" } else { "false" });
     }
     Ok(url)
