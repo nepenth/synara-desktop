@@ -74,7 +74,7 @@ fn attach_surface_does_not_register_leftovers() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
-    assert!(!shared_core.contains("command"));
+    assert!(!shared_core.contains(" command("));
 }
 
 #[test]

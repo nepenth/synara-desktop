@@ -68,6 +68,7 @@ impl Drop for NativeRoomListOwner {
 }
 
 const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(5);
+const ROOM_LIST_SUBSCRIPTION_LIMIT: usize = 20;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -103,6 +104,13 @@ pub async fn snapshot_from_sync_owner(
         })
         .ok_or("d0.2-room-list-reset-missing")?;
 
+    let viewport_room_ids = values
+        .iter()
+        .take(ROOM_LIST_SUBSCRIPTION_LIMIT)
+        .map(|room| room.room_id().to_owned())
+        .collect::<Vec<_>>();
+    owner.subscribe_to_room_list(&viewport_room_ids).await;
+
     let mut ordered_room_ids = Vec::with_capacity(values.len());
     let mut rooms = Vec::with_capacity(values.len());
     for item in values {
@@ -119,10 +127,11 @@ pub async fn snapshot_from_sync_owner(
 
 async fn project_room(room: &Room) -> RoomSummary {
     let counts = room.unread_notification_counts();
+    // `recency_stamp` is an opaque ordering value, not wall-clock time. Only
+    // expose a timestamp when the SDK has an actual latest-event timestamp.
     let last_activity_ts = room
         .latest_event_timestamp()
-        .map(|timestamp| timestamp.get().into())
-        .or_else(|| room.recency_stamp().map(Into::into));
+        .map(|timestamp| timestamp.get().into());
     let notification_mode = match room.cached_user_defined_notification_mode() {
         Some(mode) => Some(map_notification_mode(mode)),
         None => room.notification_mode().await.map(map_notification_mode),

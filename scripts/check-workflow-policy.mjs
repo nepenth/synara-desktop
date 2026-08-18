@@ -217,6 +217,13 @@ export function inspectWorkflowPolicy({
   for (const [label, command] of [
     ["formatting", "cargo fmt --check"],
     ["lint", "cargo clippy --locked --all-targets -- -D warnings"],
+    ["shared workspace formatting", "cargo fmt --all -- --check"],
+    [
+      "shared workspace lint",
+      "cargo clippy --locked --workspace --all-targets -- -D warnings",
+    ],
+    ["shared workspace check", "cargo check --locked --workspace"],
+    ["shared workspace tests", "cargo test --locked --workspace"],
   ]) {
     if (!ciValidationContract.includes(command)) {
       errors.push(`CI must retain strict Rust ${label}: ${command}.`);
@@ -240,6 +247,21 @@ export function inspectWorkflowPolicy({
   const guardCount = releaseWorkflow.split(releaseVersionGuard).length - 1;
   const releaseJobs = parseJobs(releaseWorkflow);
   const releaseValidate = (releaseJobs.get("validate") ?? []).join("\n");
+  const exactTagDesktopQuality = (
+    releaseJobs.get("exact-tag-desktop-quality") ?? []
+  ).join("\n");
+  for (const command of [
+    "cargo fmt --all -- --check",
+    "cargo clippy --locked --workspace --all-targets -- -D warnings",
+    "cargo check --locked --workspace",
+    "cargo test --locked --workspace",
+  ]) {
+    if (!exactTagDesktopQuality.includes(command)) {
+      errors.push(
+        `Exact-tag desktop quality must validate the shared Rust workspace: ${command}.`
+      );
+    }
+  }
   const releasePublish = (releaseJobs.get("publish-gh-release") ?? []).join(
     "\n"
   );

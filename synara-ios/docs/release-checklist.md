@@ -1,8 +1,14 @@
 # iOS Release Checklist
 
-Reviewed: 2026-05-26
+Reviewed: 2026-08-17
 
 Status: draft release gate checklist.
+
+The 2026-08-17 local proof closed the previously pending simulator execution
+gate: the exact CI script passed 436 unit tests and 49 UI tests with only
+intentional gated skips, and a signed live suite passed 7 of 7 Matrix scenarios
+without retries. This does not close physical-device, APNs, legal, privacy URL,
+or external App Store release gates.
 
 ## Phase 0 Gates
 

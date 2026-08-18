@@ -23,6 +23,15 @@ enum SharedCoreTimelineLiveRefresh {
     }
 }
 
+/// A live timeline needs one readback after its signal listener is registered.
+/// This catches SDK updates that landed between the initial open and listener
+/// attachment without replacing the native timeline stream.
+enum SharedCoreTimelineUpdateBootstrap {
+    static func shouldRefreshOpenStream(focusedEventID: String?) -> Bool {
+        focusedEventID == nil
+    }
+}
+
 /// One SharedCore poller so two open rooms cannot steal each other's S14
 /// summaries. Starts only while a timeline stream is listening. NSE still
 /// cannot poll (the Core method fail-closes).

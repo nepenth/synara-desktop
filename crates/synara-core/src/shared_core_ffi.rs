@@ -293,6 +293,12 @@ const LEFTOVER_UNAVAILABLE_CODE: &str = "p4-s10-leftover-unavailable";
 const LEFTOVER_UNAVAILABLE_DESCRIPTION: &str = "The leftover command is unavailable.";
 const LEFTOVER_STORE_ROOT_INVALID_CODE: &str = "p4-s10-leftover-store-root-invalid";
 const LEFTOVER_STORE_ROOT_INVALID_DESCRIPTION: &str = "The leftover store root is invalid.";
+const AGENT_APPROVAL_NO_SESSION_CODE: &str = "p4-s34-agent-approval-no-session";
+const AGENT_APPROVAL_NO_SESSION_DESCRIPTION: &str = "No agent approval session is available.";
+const AGENT_APPROVAL_INVALID_CODE: &str = "p4-s34-agent-approval-invalid";
+const AGENT_APPROVAL_INVALID_DESCRIPTION: &str = "The agent approval request is invalid.";
+const AGENT_APPROVAL_FAILED_CODE: &str = "p4-s34-agent-approval-failed";
+const AGENT_APPROVAL_FAILED_DESCRIPTION: &str = "The agent approval could not be sent.";
 const BACKUP_STATUS_COMMAND: &str = "matrix_backup_status";
 const CRYPTO_STATUS_COMMAND: &str = "matrix_crypto_status";
 const CROSS_SIGNING_STATUS_COMMAND: &str = "matrix_cross_signing_status";
@@ -326,9 +332,11 @@ const TIMELINE_READ_ONLY_GENERATION: u64 = 0;
 const TIMELINE_OPEN_COMMAND: &str = "matrix_timeline_open";
 const TIMELINE_CLOSE_COMMAND: &str = "matrix_timeline_close";
 const TIMELINE_PAGINATE_COMMAND: &str = "matrix_timeline_paginate";
+const TIMELINE_SNAPSHOT_COMMAND: &str = "matrix_timeline_snapshot";
 const TIMELINE_OPEN_NO_SESSION_CODE: &str = "p2-timeline-open-no-session";
 const TIMELINE_CLOSE_NO_SESSION_CODE: &str = "p2-timeline-close-no-session";
 const TIMELINE_PAGINATE_NO_SESSION_CODE: &str = "p2-timeline-paginate-no-session";
+const TIMELINE_SNAPSHOT_NO_SESSION_CODE: &str = "p2-timeline-snapshot-no-session";
 const TIMELINE_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
 const TIMELINE_OPEN_FAILED_CODE: &str = "p4-s6-open-failed";
 const TIMELINE_OPEN_FAILED_DESCRIPTION: &str = "The timeline could not be opened.";
@@ -1243,6 +1251,7 @@ pub struct TimelineViewRowDto {
     pub decryption_state: Option<String>,
     pub message_type: Option<String>,
     pub formatted_body: Option<String>,
+    pub agent_card_json: Option<String>,
     pub reactions: Vec<TimelineViewReactionDto>,
     pub media_handle_id: Option<String>,
     pub media_mime_type: Option<String>,
@@ -1398,6 +1407,29 @@ pub struct SendTextDto {
     pub local_txn_id: String,
     pub status: String,
 }
+
+/// Privacy-safe agent-approval write acknowledgement.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentApprovalSendDto {
+    pub event_id: String,
+    pub status: String,
+}
+
+/// Static fail-closed agent-approval error. Input values are never echoed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AgentApprovalSendError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for AgentApprovalSendError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for AgentApprovalSendError {}
 
 /// Static fail-closed send-text error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1912,6 +1944,20 @@ fn map_timeline_paginate_core_error(error: MatrixIpcError) -> TimelineError {
     }
 }
 
+fn map_timeline_snapshot_core_error(error: MatrixIpcError) -> TimelineError {
+    match error.diagnostic_id.as_deref() {
+        Some("p2-timeline-snapshot-no-session") => timeline_failed(
+            TIMELINE_SNAPSHOT_NO_SESSION_CODE,
+            TIMELINE_NO_SESSION_DESCRIPTION,
+        ),
+        Some("v-timeline-view-not-open") => timeline_failed(
+            TIMELINE_VIEW_NOT_OPEN_CODE,
+            TIMELINE_VIEW_NOT_OPEN_DESCRIPTION,
+        ),
+        _ => timeline_failed(TIMELINE_OPEN_FAILED_CODE, TIMELINE_OPEN_FAILED_DESCRIPTION),
+    }
+}
+
 fn open_position_from_dto(
     position: TimelineOpenPositionDto,
 ) -> Result<NativeTimelineOpenPosition, TimelineError> {
@@ -2021,15 +2067,15 @@ fn view_reaction_dtos(reactions: Vec<TimelineReaction>) -> Vec<TimelineViewReact
         .collect()
 }
 
-fn view_media_fields(
-    media: Option<TimelineMediaHandle>,
-) -> (
+type ViewMediaFields = (
     Option<String>,
     Option<String>,
     Option<u32>,
     Option<u32>,
     Option<u64>,
-) {
+);
+
+fn view_media_fields(media: Option<TimelineMediaHandle>) -> ViewMediaFields {
     match media {
         Some(handle) => (
             Some(handle.handle_id),
@@ -2059,6 +2105,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
                 decryption_state: None,
                 message_type: message.message_type,
                 formatted_body: message.formatted_body,
+                agent_card_json: message.agent_card_json,
                 reactions: view_reaction_dtos(message.reactions),
                 media_handle_id,
                 media_mime_type,
@@ -2082,6 +2129,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
                 decryption_state: None,
                 message_type: Some("m.sticker".to_owned()),
                 formatted_body: None,
+                agent_card_json: None,
                 reactions: Vec::new(),
                 media_handle_id,
                 media_mime_type,
@@ -2102,6 +2150,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             decryption_state: None,
             message_type: None,
             formatted_body: None,
+            agent_card_json: None,
             reactions: Vec::new(),
             media_handle_id: None,
             media_mime_type: None,
@@ -2121,6 +2170,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             decryption_state: None,
             message_type: None,
             formatted_body: None,
+            agent_card_json: None,
             reactions: Vec::new(),
             media_handle_id: None,
             media_mime_type: None,
@@ -2140,6 +2190,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             decryption_state: None,
             message_type: Some(state.state_type),
             formatted_body: None,
+            agent_card_json: None,
             reactions: Vec::new(),
             media_handle_id: None,
             media_mime_type: None,
@@ -2159,6 +2210,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             decryption_state: None,
             message_type: None,
             formatted_body: None,
+            agent_card_json: None,
             reactions: Vec::new(),
             media_handle_id: None,
             media_mime_type: None,
@@ -2178,6 +2230,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             decryption_state: None,
             message_type: None,
             formatted_body: None,
+            agent_card_json: None,
             reactions: Vec::new(),
             media_handle_id: None,
             media_mime_type: None,
@@ -2197,6 +2250,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             decryption_state: Some(encrypted.reason_code),
             message_type: None,
             formatted_body: None,
+            agent_card_json: None,
             reactions: Vec::new(),
             media_handle_id: None,
             media_mime_type: None,
@@ -2216,6 +2270,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             decryption_state: None,
             message_type: other.event_type,
             formatted_body: None,
+            agent_card_json: None,
             reactions: Vec::new(),
             media_handle_id: None,
             media_mime_type: None,
@@ -2238,6 +2293,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             decryption_state: None,
             message_type: None,
             formatted_body: None,
+            agent_card_json: None,
             reactions: Vec::new(),
             media_handle_id: None,
             media_mime_type: None,
@@ -2265,6 +2321,7 @@ fn virtual_row_dto(kind: &str, item_id: String) -> TimelineViewRowDto {
         decryption_state: None,
         message_type: None,
         formatted_body: None,
+        agent_card_json: None,
         reactions: Vec::new(),
         media_handle_id: None,
         media_mime_type: None,
@@ -2679,6 +2736,12 @@ pub struct SharedCore {
     room_list_live: Arc<Mutex<Option<NativeRoomListOwner>>>,
 }
 
+impl Default for SharedCore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SharedCore {
     /// Construct a real Core with the fail-closed iOS Platform.
     pub fn new() -> Self {
@@ -2865,16 +2928,8 @@ impl SharedCore {
         if live_identity != identity {
             return Err(login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION));
         }
-        self.persist_open_and_retain(
-            client,
-            &live_identity,
-            &vault,
-            claim,
-            outcome.user_id,
-            outcome.device_id,
-            outcome.homeserver_url,
-        )
-        .await
+        self.persist_open_and_retain(client, &live_identity, &vault, claim, outcome.device_id)
+            .await
     }
 
     /// Test-only persist+open+retain through the production login path.
@@ -2934,16 +2989,8 @@ impl SharedCore {
         restore_session_onto_client(&client, &identity, &material)
             .await
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
-        self.persist_open_and_retain(
-            client,
-            &identity,
-            &vault,
-            claim,
-            identity.user_id().to_owned(),
-            device_id,
-            identity.homeserver_url().to_owned(),
-        )
-        .await
+        self.persist_open_and_retain(client, &identity, &vault, claim, device_id)
+            .await
     }
 
     async fn persist_open_and_retain(
@@ -2952,18 +2999,16 @@ impl SharedCore {
         identity: &AccountIdentity,
         vault: &SecretStoreSessionVault,
         claim: RestoreClaim<'_>,
-        user_id: String,
         device_id: String,
-        homeserver_url: String,
     ) -> Result<SessionLoginDto, SessionLoginError> {
         persist_session_after_login(&client, identity, vault)
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
 
         let snapshot = SessionSnapshot {
             session_generation: 1,
-            user_id: user_id.clone(),
+            user_id: identity.user_id().to_owned(),
             device_id: device_id.clone(),
-            homeserver_url: homeserver_url.clone(),
+            homeserver_url: identity.homeserver_url().to_owned(),
             display_name: None,
             avatar_url: None,
             lifecycle: SessionLifecycle::Ready,
@@ -2980,9 +3025,9 @@ impl SharedCore {
         }
 
         Ok(SessionLoginDto {
-            user_id,
+            user_id: identity.user_id().to_owned(),
             device_id,
-            homeserver_url,
+            homeserver_url: identity.homeserver_url().to_owned(),
         })
     }
 
@@ -3443,6 +3488,27 @@ impl SharedCore {
         })
     }
 
+    pub async fn timeline_snapshot(
+        &self,
+        stream_id: String,
+    ) -> Result<TimelineSnapshotDto, TimelineError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: TIMELINE_SNAPSHOT_COMMAND.to_owned(),
+                session_generation: TIMELINE_READ_ONLY_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "streamId": stream_id }),
+            })
+            .await
+            .map_err(map_timeline_snapshot_core_error)?;
+        let snapshot: TimelineViewSnapshot =
+            serde_json::from_value(response.payload).map_err(|_| {
+                timeline_failed(TIMELINE_OPEN_FAILED_CODE, TIMELINE_OPEN_FAILED_DESCRIPTION)
+            })?;
+        Ok(timeline_snapshot_dto(snapshot))
+    }
+
     pub async fn timeline_paginate(
         &self,
         stream_id: String,
@@ -3817,7 +3883,7 @@ impl SharedCore {
                 }),
             })
             .await
-            .map_err(|error| map_join_rule_core_error(error))?;
+            .map_err(map_join_rule_core_error)?;
         let snapshot: MatrixRoomJoinRuleSnapshot = serde_json::from_value(response.payload)
             .map_err(|_| join_rule_failed(JOIN_RULE_FAILED_CODE, JOIN_RULE_FAILED_DESCRIPTION))?;
         Ok(RoomJoinRuleSnapshotDto {
@@ -4306,6 +4372,7 @@ impl SharedCore {
         room_directory_protocols_dto(response.payload)
     }
 
+    #[allow(clippy::too_many_arguments)] // UniFFI preserves the typed Matrix directory query fields.
     pub async fn room_directory_search(
         &self,
         session_generation: u64,
@@ -5396,23 +5463,81 @@ impl SharedCore {
         ))
     }
 
-    pub async fn send_raw_room_event(
+    pub async fn send_agent_approval(
         &self,
         room_id: String,
-        event_type: String,
-        content_json: String,
-    ) -> Result<LeftoverAckDto, LeftoverCommandError> {
-        leftover_reject_oversize(room_id.len() + event_type.len() + content_json.len())?;
-        if !self.has_retained_client() {
-            return Err(leftover_failed(
-                LEFTOVER_NO_SESSION_CODE,
-                LEFTOVER_NO_SESSION_DESCRIPTION,
+        action_id: String,
+        action_title: String,
+        decision: String,
+        source_event_id: Option<String>,
+        created_at: u64,
+    ) -> Result<AgentApprovalSendDto, AgentApprovalSendError> {
+        let size = room_id.len()
+            + action_id.len()
+            + action_title.len()
+            + decision.len()
+            + source_event_id.as_deref().map(str::len).unwrap_or_default();
+        if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES
+            || action_id.trim().is_empty()
+            || action_title.trim().is_empty()
+            || !matches!(decision.as_str(), "approve" | "reject")
+        {
+            return Err(agent_approval_failed(
+                AGENT_APPROVAL_INVALID_CODE,
+                AGENT_APPROVAL_INVALID_DESCRIPTION,
             ));
         }
-        Err(leftover_failed(
-            LEFTOVER_UNAVAILABLE_CODE,
-            LEFTOVER_UNAVAILABLE_DESCRIPTION,
-        ))
+        let room_id = matrix_sdk::ruma::OwnedRoomId::try_from(room_id.trim()).map_err(|_| {
+            agent_approval_failed(
+                AGENT_APPROVAL_INVALID_CODE,
+                AGENT_APPROVAL_INVALID_DESCRIPTION,
+            )
+        })?;
+        if let Some(event_id) = source_event_id.as_deref() {
+            matrix_sdk::ruma::OwnedEventId::try_from(event_id.trim()).map_err(|_| {
+                agent_approval_failed(
+                    AGENT_APPROVAL_INVALID_CODE,
+                    AGENT_APPROVAL_INVALID_DESCRIPTION,
+                )
+            })?;
+        }
+        let client = self.retained_client().map_err(|_| {
+            agent_approval_failed(
+                AGENT_APPROVAL_NO_SESSION_CODE,
+                AGENT_APPROVAL_NO_SESSION_DESCRIPTION,
+            )
+        })?;
+        let room = client.get_room(&room_id).ok_or_else(|| {
+            agent_approval_failed(
+                AGENT_APPROVAL_FAILED_CODE,
+                AGENT_APPROVAL_FAILED_DESCRIPTION,
+            )
+        })?;
+        let content = serde_json::json!({
+            "msgtype": "m.notice",
+            "body": format!("{} agent action: {}", if decision == "approve" { "Approved" } else { "Rejected" }, action_title),
+            "in.synara.agent.action": {
+                "version": 1,
+                "action_id": action_id,
+                "action_title": action_title,
+                "decision": decision,
+                "source_event_id": source_event_id,
+                "created_at": created_at,
+            }
+        });
+        let response = room
+            .send_raw("m.room.message", content)
+            .await
+            .map_err(|_| {
+                agent_approval_failed(
+                    AGENT_APPROVAL_FAILED_CODE,
+                    AGENT_APPROVAL_FAILED_DESCRIPTION,
+                )
+            })?;
+        Ok(AgentApprovalSendDto {
+            event_id: response.response.event_id.to_string(),
+            status: "sent".to_owned(),
+        })
     }
 
     pub async fn set_notification_mode(
@@ -8905,6 +9030,13 @@ fn send_text_failed(code: &str, description: &'static str) -> SendTextError {
     }
 }
 
+fn agent_approval_failed(code: &str, description: &'static str) -> AgentApprovalSendError {
+    AgentApprovalSendError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
 fn map_send_text_core_error(no_session: &'static str, error: MatrixIpcError) -> SendTextError {
     match error.diagnostic_id.as_deref() {
         Some(code) if code == no_session => {
@@ -10829,7 +10961,7 @@ mod tests {
         let rt = test_runtime();
         let recovery_key = "s10-secret-recovery-key";
         let room_id = "!s10SecretRoom:example.org";
-        let event_body = "s10-secret-event-body";
+        let action_title = "s10-secret-action-title";
         let mxc = "mxc://example.org/s10SecretMedia";
 
         let recover = rt
@@ -10839,17 +10971,20 @@ mod tests {
         assert!(recover_text.contains(LEFTOVER_UNAVAILABLE_CODE));
         assert!(!recover_text.contains(recovery_key));
 
-        let raw = rt
-            .block_on(shared.send_raw_room_event(
+        let approval = rt
+            .block_on(shared.send_agent_approval(
                 room_id.to_owned(),
-                "m.room.message".to_owned(),
-                event_body.to_owned(),
+                "approve-s10".to_owned(),
+                action_title.to_owned(),
+                "approve".to_owned(),
+                Some("$source:example.org".to_owned()),
+                1,
             ))
-            .expect_err("raw send must fail closed");
-        let raw_text = format!("{raw:?}{raw}");
-        assert!(raw_text.contains(LEFTOVER_NO_SESSION_CODE));
-        assert!(!raw_text.contains(room_id));
-        assert!(!raw_text.contains(event_body));
+            .expect_err("agent approval must fail closed");
+        let approval_text = format!("{approval:?}{approval}");
+        assert!(approval_text.contains(AGENT_APPROVAL_NO_SESSION_CODE));
+        assert!(!approval_text.contains(room_id));
+        assert!(!approval_text.contains(action_title));
 
         let media = rt
             .block_on(shared.media_download(mxc.to_owned()))
@@ -10908,6 +11043,7 @@ mod tests {
             },
             body: "hello".to_owned(),
             formatted_body: None,
+            agent_card_json: Some(r#"{"title":"Approval"}"#.to_owned()),
             message_type: Some("m.text".to_owned()),
             edited: false,
             reply: None,
@@ -10921,6 +11057,10 @@ mod tests {
         assert_eq!(dto.event_id, "$evt:example.org");
         assert_eq!(dto.body, "hello");
         assert_eq!(dto.message_type.as_deref(), Some("m.text"));
+        assert_eq!(
+            dto.agent_card_json.as_deref(),
+            Some(r#"{"title":"Approval"}"#)
+        );
         assert!(dto.reactions.is_empty());
         assert!(dto.media_handle_id.is_none());
         let text = format!("{dto:?}");

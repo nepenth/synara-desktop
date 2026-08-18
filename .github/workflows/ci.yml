@@ -52,25 +52,20 @@ jobs:
 
           # Full suite on push (main/release) and manual dispatch.
           # TEMPORARY (2026-08-17): ios is forced off until main is stable.
-          # Hosted simulator jobs historically take ~55 minutes (90-minute
-          # timeout) and block the required Quality gate. Quality already
-          # treats a skipped ios-tests job as OK. Restore ios=true here and
-          # on the missing-SHA path, and restore the ios-tests job `if:` to
-          # `needs.changes.outputs.ios == 'true'`.
           if [[ "${GITHUB_EVENT_NAME}" != "pull_request" ]]; then
             echo "validate=true" >> "$GITHUB_OUTPUT"
             echo "validate_rust=true" >> "$GITHUB_OUTPUT"
             echo "validate_rust_tests=true" >> "$GITHUB_OUTPUT"
             echo "rust_audit=true" >> "$GITHUB_OUTPUT"
             echo "validate_frontend=true" >> "$GITHUB_OUTPUT"
-            echo "ios=false" >> "$GITHUB_OUTPUT"
+            echo "ios=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_reactions=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_attachments=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_polls=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_rich_messages=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_threads=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_receipts=true" >> "$GITHUB_OUTPUT"
-            echo "CI scope: full (event=${GITHUB_EVENT_NAME}; iOS paused)"
+            echo "CI scope: full (event=${GITHUB_EVENT_NAME})"
             exit 0
           fi
 
@@ -80,14 +75,14 @@ jobs:
             echo "validate_rust_tests=true" >> "$GITHUB_OUTPUT"
             echo "rust_audit=true" >> "$GITHUB_OUTPUT"
             echo "validate_frontend=true" >> "$GITHUB_OUTPUT"
-            echo "ios=false" >> "$GITHUB_OUTPUT"
+            echo "ios=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_reactions=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_attachments=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_polls=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_rich_messages=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_threads=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_receipts=true" >> "$GITHUB_OUTPUT"
-            echo "CI scope: full (missing PR SHAs; iOS paused)"
+            echo "CI scope: full (missing PR SHAs)"
             exit 0
           fi
 
@@ -189,10 +184,8 @@ jobs:
             RUST_AUDIT=true
           fi
 
-          # iOS simulator suite — paused until main is stable (2026-08-17).
-          # Path detection is kept so re-enable is a one-line restore; the
-          # output is forced false regardless of the diff. Mechanical P1
-          # moves under crates/synara-core/src/app/ stay on validate-rust.
+          # iOS simulator suite. Mechanical P1 moves under
+          # crates/synara-core/src/app/ stay on validate-rust.
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
             rust-toolchain.toml \
             Cargo.toml \
@@ -212,8 +205,8 @@ jobs:
             echo "ios=false" >> "$GITHUB_OUTPUT"
             IOS=false
           else
-            echo "ios=false" >> "$GITHUB_OUTPUT"
-            IOS=false
+            echo "ios=true" >> "$GITHUB_OUTPUT"
+            IOS=true
           fi
 
           # Two-client Synapse integration (JS runtime scenarios).
@@ -354,7 +347,9 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
         with:
-          workspaces: src-tauri -> target
+          workspaces: |
+            . -> target
+            src-tauri -> target
           shared-key: validate-rust-desktop
 
       - name: Install Linux Tauri dependencies
@@ -371,18 +366,31 @@ jobs:
         run: cargo fmt --check
         working-directory: src-tauri
 
+      - name: Check shared Rust workspace formatting
+        run: cargo fmt --all -- --check
+
       - name: Lint Rust desktop shell
         run: cargo clippy --locked --all-targets -- -D warnings
         working-directory: src-tauri
+
+      - name: Lint shared Rust workspace
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
       - name: Check Rust desktop shell
         run: cargo check --locked
         working-directory: src-tauri
 
+      - name: Check shared Rust workspace
+        run: cargo check --locked --workspace
+
       - name: Test Rust desktop shell
         if: needs.changes.outputs.validate_rust_tests == 'true'
         run: cargo test --locked
         working-directory: src-tauri
+
+      - name: Test shared Rust workspace
+        if: needs.changes.outputs.validate_rust_tests == 'true'
+        run: cargo test --locked --workspace
 
       - name: Check Matrix integration boundaries
         # Runs on any src-tauri diff (the Node job only fires on frontend changes);
@@ -412,6 +420,9 @@ jobs:
       - name: Audit Rust dependencies (RustSec advisory DB)
         run: cargo audit
         working-directory: src-tauri
+
+      - name: Audit shared Rust workspace dependencies (RustSec advisory DB)
+        run: cargo audit
   validate-frontend:
     name: Validate Node desktop runtime
     needs: [changes]
@@ -502,10 +513,7 @@ jobs:
   ios-tests:
     name: iOS simulator tests
     needs: [changes]
-    # TEMPORARY (2026-08-17): paused until main is stable. These jobs
-    # historically take ~55 minutes (90-minute timeout) and block Quality
-    # gate. Restore: if: needs.changes.outputs.ios == 'true'
-    if: false
+    if: needs.changes.outputs.ios == 'true'
     runs-on: macos-26
     # Bounded cap allows post-test output/upload.
     # 90m: S3b + UniFFI merge-ups exceed the 60m GitHub default (cancelled at ~61m).

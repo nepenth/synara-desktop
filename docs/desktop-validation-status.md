@@ -4,6 +4,36 @@
 > `docs/production-smoke-checklist.md`. This file preserves the older MIP1
 > desktop validation snapshot and platform notes.
 
+## 2026-08-17 Main Hardening Proof
+
+Validation branch: `codex/main-proof-hardening-20260817`, based on
+`origin/main` at `e2ef9bd252e9179978ca2acc6326368490a4f931`.
+
+- Full frontend quality, contract, delivery, Playwright timeline, ESLint,
+  Prettier, high-severity npm audit, and production build gates passed. Delivery
+  script coverage was 224 of 224.
+- Shared Rust workspace formatting, clippy with warnings denied, check, and all
+  703 library tests plus integration/doc tests passed; one explicitly ignored
+  live gate remained intentional.
+- Desktop Rust formatting, clippy with warnings denied, check, and 454 tests
+  plus doc tests passed.
+- Root and desktop `cargo audit` passed with only the repository's documented
+  allowed advisories.
+- Synara `2.0.6` built as an arm64 macOS application. The local smoke copy was
+  ad-hoc signed, passed strict code-signature verification, launched as a
+  foreground process, served its internal runtime over loopback, returned HTTP
+  200 for the generated JavaScript, stylesheet, and icon, and emitted no macOS
+  error/fault log entries during the launch window.
+- Interactive macOS clicks could not be automated because this Codex process
+  lacks Accessibility and Screen Recording permission. Login/send/formatting
+  behavior was instead covered through shared Rust tests, deterministic desktop
+  frontend tests, and the signed iOS live Matrix suite. A human macOS GUI smoke
+  is still required before merge/release.
+
+Linux package and interactive desktop validation were not rerun on this macOS
+host. Cross-platform Rust/frontend gates passed, but Linux packaging and desktop
+integration remain platform-specific release checks.
+
 Reviewed: 2026-06-11
 Desktop version: **1.2.3** (`npm run check:versions`)
 Branch: `maturity_improvement_plan1` (rebased on `main` with iOS UX maturity)

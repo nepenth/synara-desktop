@@ -11,16 +11,11 @@
 //! captcha response) are never stored on the coordinator and never appear in
 //! diagnostic ids or Display text. No dual-backend.
 
-use super::{
-    has_unsupported_only_register_flows, RegisterFlowsProbe, RegisterUiaFlow,
-    SUPPORTED_REGISTER_STAGES,
-};
+use super::{has_unsupported_only_register_flows, RegisterUiaFlow};
 use matrix_sdk::ruma::{
     api::client::{
         account::{register, request_registration_token_via_email},
-        uiaa::{
-            AuthData, AuthFlow, AuthType, Dummy, ReCaptcha, RegistrationToken, Terms, UiaaInfo,
-        },
+        uiaa::{AuthData, AuthFlow, Dummy, ReCaptcha, RegistrationToken, Terms, UiaaInfo},
     },
     assign, ClientSecret, OwnedClientSecret, OwnedSessionId, UInt,
 };
@@ -481,6 +476,8 @@ fn parse_session_id(raw: &str) -> Result<OwnedSessionId, AuthError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::auth::{RegisterFlowsProbe, SUPPORTED_REGISTER_STAGES};
+    use matrix_sdk::ruma::api::client::uiaa::AuthType;
 
     #[test]
     fn validates_register_inputs() {

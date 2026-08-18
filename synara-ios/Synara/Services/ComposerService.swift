@@ -3,8 +3,23 @@ import Foundation
 struct MessageSendRequest: Equatable {
     let roomID: String
     let body: String
+    let formattedBody: String?
     let replyToEventID: String?
     let editEventID: String?
+
+    init(
+        roomID: String,
+        body: String,
+        formattedBody: String? = nil,
+        replyToEventID: String?,
+        editEventID: String?
+    ) {
+        self.roomID = roomID
+        self.body = body
+        self.formattedBody = formattedBody
+        self.replyToEventID = replyToEventID
+        self.editEventID = editEventID
+    }
 }
 
 enum MessageSendError: LocalizedError, Equatable {
@@ -78,7 +93,7 @@ struct MockMessageSendService: MessageSending {
             eventID: eventID,
             senderID: "@local:matrix.org",
             timestamp: Date(),
-            kind: .text(body),
+            kind: request.formattedBody.map { .formattedText(body: body, html: $0) } ?? .text(body),
             replyToEventID: request.replyToEventID,
             isEdited: request.editEventID != nil,
             reactions: [:]

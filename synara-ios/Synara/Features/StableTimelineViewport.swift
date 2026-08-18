@@ -268,11 +268,15 @@ import SwiftUI
             }
 
             func bottomPinnedChanged(routeID: String, generation: UInt64, isPinned: Bool, newestEventID: String?) {
-                parent.onBottomPinnedChanged(routeID, generation, isPinned, newestEventID)
+                DispatchQueue.main.async { [weak self] in
+                    self?.parent.onBottomPinnedChanged(routeID, generation, isPinned, newestEventID)
+                }
             }
 
             func userInteractionChanged(routeID: String, generation: UInt64, isInteracting: Bool) {
-                parent.onUserInteractionChanged(routeID, generation, isInteracting)
+                DispatchQueue.main.async { [weak self] in
+                    self?.parent.onUserInteractionChanged(routeID, generation, isInteracting)
+                }
             }
 
             func paginationThresholdReached(routeID: String, generation: UInt64, anchorEventID: String?) -> Bool {
@@ -286,7 +290,9 @@ import SwiftUI
                 success: Bool,
                 targetEventID: String?
             ) {
-                parent.onCommandCompleted(routeID, generation, command, success, targetEventID)
+                DispatchQueue.main.async { [weak self] in
+                    self?.parent.onCommandCompleted(routeID, generation, command, success, targetEventID)
+                }
             }
         }
     }

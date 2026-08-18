@@ -21,6 +21,7 @@ enum SharedCoreTimelineRows {
             rowKind: row.kind,
             body: row.body,
             formattedBody: row.formattedBody,
+            agentCardJSON: row.agentCardJson,
             messageType: row.messageType,
             mediaHandleId: row.mediaHandleId,
             mediaMimeType: row.mediaMimeType
@@ -46,10 +47,14 @@ enum SharedCoreTimelineRows {
         rowKind: String,
         body: String,
         formattedBody: String?,
+        agentCardJSON: String? = nil,
         messageType: String? = nil,
         mediaHandleId: String? = nil,
         mediaMimeType: String? = nil
     ) -> TimelineItem.Kind? {
+        if let agentCard = SynaraAgentCardPayloadParser.parse(payloadJSON: agentCardJSON) {
+            return .agentCard(agentCard)
+        }
         if let media = mediaPlaceholder(
             rowKind: rowKind,
             body: body,

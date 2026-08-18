@@ -1,6 +1,25 @@
 import SwiftUI
 import SynaraCore
 
+enum SharedCoreLaunchReset {
+    static func resetStoreRootIfRequested(
+        _ storeRoot: URL,
+        environment: [String: String]
+    ) throws -> Bool {
+        guard environment["SYNARA_RESET_SESSION_ON_LAUNCH"] == "1" else {
+            return false
+        }
+        if FileManager.default.fileExists(atPath: storeRoot.path) {
+            try FileManager.default.removeItem(at: storeRoot)
+        }
+        try FileManager.default.createDirectory(
+            at: storeRoot,
+            withIntermediateDirectories: true
+        )
+        return true
+    }
+}
+
 struct AppEnvironment {
     let session: AppSessionStore
     let matrix: MatrixClientServicing
@@ -33,16 +52,13 @@ struct AppEnvironment {
         let logger = AppLogger()
         let secureStore = KeychainSecureSessionStore()
         let storeRoot = SharedCoreProductHost.liveStoreRoot()
-        let core = SharedCore.newWithSecretStore(store: KeychainIosSecretVault())
-        if ProcessInfo.processInfo.environment["SYNARA_RESET_SESSION_ON_LAUNCH"] == "1" {
+        if (try? SharedCoreLaunchReset.resetStoreRootIfRequested(
+            storeRoot,
+            environment: ProcessInfo.processInfo.environment
+        )) == true {
             try? secureStore.delete()
-            Task {
-                _ = try? await SharedCoreLeftovers.wipePersistedStores(
-                    core: core,
-                    storeRoot: storeRoot.path
-                )
-            }
         }
+        let core = SharedCore.newWithSecretStore(store: KeychainIosSecretVault())
         let session = AppSessionStore(
             secureStore: secureStore,
             restorePersistedSession: true

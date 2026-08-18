@@ -664,6 +664,20 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(card.actions.first?.kind, "approve")
     }
 
+    func testAgentCardPayloadParserReadsBoundedProjectedPayload() throws {
+        let payload = #"{"title":"Projected approval","status":"pending","summary":"Review","actions":[]}"#
+        let card = try XCTUnwrap(SynaraAgentCardPayloadParser.parse(payloadJSON: payload))
+
+        XCTAssertEqual(card.title, "Projected approval")
+        XCTAssertEqual(card.status, "pending")
+        XCTAssertNil(SynaraAgentCardPayloadParser.parse(payloadJSON: "ordinary text"))
+        XCTAssertNil(
+            SynaraAgentCardPayloadParser.parse(
+                payloadJSON: String(repeating: "x", count: 200_001)
+            )
+        )
+    }
+
     func testMapperMapsAgentCardKind() {
         let card = try! SynaraAgentCard(
             title: "Agent summary",

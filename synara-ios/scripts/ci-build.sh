@@ -11,6 +11,8 @@ CLONED_SOURCE_PACKAGES_DIR_PATH="${IOS_CLONED_SOURCE_PACKAGES_DIR_PATH:-}"
 export CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-/private/tmp/synara-ios-module-cache}"
 export SWIFTPM_MODULECACHE_OVERRIDE="${SWIFTPM_MODULECACHE_OVERRIDE:-/private/tmp/synara-ios-swiftpm-module-cache}"
 export CFFIXED_USER_HOME="${CFFIXED_USER_HOME:-/private/tmp/synara-ios-home}"
+PACKAGE_RESOLVED_PATH="Synara.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+PACKAGE_RESOLVED_BACKUP=""
 UNSIGNED_BUILD_ARGS=(
   CODE_SIGNING_ALLOWED=NO
   CODE_SIGNING_REQUIRED=NO
@@ -32,6 +34,13 @@ if [[ -n "$CLONED_SOURCE_PACKAGES_DIR_PATH" ]]; then
 fi
 
 cd "$(dirname "$0")/.."
+
+cleanup() {
+  if [[ -n "$PACKAGE_RESOLVED_BACKUP" ]]; then
+    rm -f "$PACKAGE_RESOLVED_BACKUP"
+  fi
+}
+trap cleanup EXIT
 
 repo_root="$(cd .. && pwd)"
 checker="$repo_root/scripts/check-synara-core-swift-scaffold.mjs"
@@ -90,7 +99,18 @@ if ! command -v xcodegen >/dev/null 2>&1; then
   exit 127
 fi
 
+# XcodeGen replaces the generated project directory, including the committed
+# Swift package lock. Preserve the lock so -onlyUsePackageVersionsFromResolvedFile
+# actually operates on the reviewed package revision and checksum.
+if [[ ! -f "$PACKAGE_RESOLVED_PATH" ]]; then
+  echo "Committed Swift package lock is required: $PACKAGE_RESOLVED_PATH" >&2
+  exit 1
+fi
+PACKAGE_RESOLVED_BACKUP="$(mktemp "${TMPDIR:-/tmp}/synara-package-resolved.XXXXXX")"
+cp "$PACKAGE_RESOLVED_PATH" "$PACKAGE_RESOLVED_BACKUP"
 xcodegen generate --spec project.yml
+mkdir -p "$(dirname "$PACKAGE_RESOLVED_PATH")"
+cp "$PACKAGE_RESOLVED_BACKUP" "$PACKAGE_RESOLVED_PATH"
 
 xcodebuild \
   -project Synara.xcodeproj \
@@ -121,9 +141,7 @@ if [[ "${RUN_IOS_TESTS:-0}" == "1" ]]; then
     -resultBundlePath "$RESULT_BUNDLE_DIR/test-$RESULT_STAMP.xcresult" \
     -parallel-testing-enabled NO \
     -maximum-concurrent-test-simulator-destinations 1 \
-    -retry-tests-on-failure \
-    -test-iterations 2 \
     "${PACKAGE_ARGS[@]}" \
-    test \
+    test-without-building \
     "${UNSIGNED_BUILD_ARGS[@]}"
 fi

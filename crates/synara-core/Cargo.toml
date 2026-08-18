@@ -26,16 +26,21 @@ tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time", 
 # SNC-P1-5a + live client open: sync and Client::builder live in this crate.
 # Pins match src-tauri (=0.18.0, default-features=false). sqlite + bundled-sqlite
 # are required here because build_unauthenticated_client opens the product store.
-# markdown/qrcode remain desktop-only extras via src-tauri feature unification.
-# e2e-encryption still arrives via matrix-sdk-ui.
+# Markdown is shared for Matrix-compatible rich composer output. QR remains a
+# desktop-only extra via src-tauri feature unification. E2E encryption still
+# arrives via matrix-sdk-ui.
 matrix-sdk = { version = "=0.18.0", default-features = false, features = [
   "sqlite",
   "bundled-sqlite",
+  "markdown",
 ] }
 matrix-sdk-ui = { version = "=0.18.0", default-features = false }
 # Live NativeTimelineRegistry maps UTD causes from the crypto crate.
 # Pin matches src-tauri (`=0.18.0`, default-features=false).
 matrix-sdk-crypto = { version = "=0.18.0", default-features = false }
+# Feature-unifies Ruma's Matrix-spec HTML sanitizer with the SDK re-export.
+# Outbound composer Markdown is parsed and sanitized in one shared boundary.
+ruma = { version = "=0.16.0", features = ["html", "markdown"] }
 # SNC-P1-5b: room_list (moved from src-tauri/matrix/room_list) — live.rs streams
 # room-list vector diffs (eyeball-im) asynchronously (futures-util). Pins are
 # EXACTLY what src-tauri uses (eyeball-im 0.8, futures-util 0.3).
@@ -47,7 +52,7 @@ futures-util = "0.3"
 getrandom = "0.3"
 # P4-1 binding metadata/runtime. The version is pinned so the UDL scaffolding,
 # generated Swift, and Apple libraries are produced by one reproducible toolchain.
-uniffi = { version = "=0.28.3" }
+uniffi = { version = "=0.28.3", features = ["tokio"] }
 # Store identity fingerprints directory names (moved from desktop store/identity.rs).
 # Pin matches src-tauri (`sha2 = "0.10"`).
 sha2 = "0.10"

@@ -59,9 +59,7 @@ enum SharedCoreRoomListRows {
                 hasHighlight: room.highlightCount > 0 || room.markedUnread,
                 kind: room.isDirect ? .directMessage : .room,
                 membership: isInvited(room.membership) ? .invited : .joined,
-                lastActivityAt: room.lastActivityTs.map {
-                    Date(timeIntervalSince1970: TimeInterval($0) / 1000)
-                } ?? Date(timeIntervalSince1970: 0),
+                lastActivityAt: activityDate(millisecondsSince1970: room.lastActivityTs),
                 parentSpaces: parentSpaces(
                     parentIds: parentsByID[room.roomId] ?? [],
                     namesByID: namesByID
@@ -69,6 +67,13 @@ enum SharedCoreRoomListRows {
                 avatarURL: room.avatarUrl.flatMap(URL.init(string:))
             )
         }
+    }
+
+    private static func activityDate(millisecondsSince1970 timestamp: UInt64?) -> Date {
+        guard let timestamp, timestamp > 0 else {
+            return .distantPast
+        }
+        return Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000)
     }
 
     static func preview(

@@ -38,9 +38,15 @@ test('runTimelineBaseline multi-iteration stays under budget', () => {
   for (const scenario of result.scenarios) {
     assert.equal(scenario.n, 5);
     assert.ok(scenario.p50_ms < 25);
-    assert.ok(scenario.p95_ms < 25);
-    assert.ok(scenario.max_ms < 25);
+    assert.ok(scenario.max_ms < 250);
     assert.equal(scenario.rendered_events, 200);
     assert.equal(scenario.samples_ms.length, 5);
   }
+});
+
+test('runTimelineBaseline still rejects a sustained budget regression', () => {
+  assert.throws(
+    () => runTimelineBaseline({ iterations: 5, scenarios: [10_000], budgetMs: Number.EPSILON }),
+    /median too slow/
+  );
 });

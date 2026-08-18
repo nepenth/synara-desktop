@@ -1,6 +1,6 @@
 # iOS E2EE Validation
 
-Reviewed: 2026-05-27
+Reviewed: 2026-08-17
 
 Status: Matrix Rust SDK live E2EE probe and app-level live encrypted-room UI
 smoke validated against a disposable encrypted room. The iOS app target now
@@ -110,6 +110,16 @@ Validation result:
   re-opened the room without re-login.
 - The sent message rendered after relaunch.
 - No visible undecrypted placeholder appeared on the smoke path.
+
+### 2026-08-17 Revalidation
+
+The signed app-level encrypted-room test passed again as part of the
+seven-scenario consolidated live simulator suite. It covered password login,
+encrypted room open, encrypted send, app termination/relaunch, secure session
+and crypto-store restore, sent-message visibility after relaunch, and no visible
+unexpected unable-to-decrypt placeholder. The run used disposable credentials
+provided out of band, disabled XCTest retries, and did not write credentials or
+tokens to the repository or result summary.
 
 ## Required Production Work
 

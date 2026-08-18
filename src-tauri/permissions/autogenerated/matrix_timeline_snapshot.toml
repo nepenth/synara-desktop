@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-matrix-timeline-snapshot"
+description = "Enables the matrix_timeline_snapshot command without any pre-configured scope."
+commands.allow = ["matrix_timeline_snapshot"]
+
+[[permission]]
+identifier = "deny-matrix-timeline-snapshot"
+description = "Denies the matrix_timeline_snapshot command without any pre-configured scope."
+commands.deny = ["matrix_timeline_snapshot"]

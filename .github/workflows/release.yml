@@ -109,8 +109,17 @@ jobs:
           npm run check:release-updater
           node --test scripts/__tests__/*.test.mjs
 
+      - name: Check and test shared Rust workspace
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --locked --workspace --all-targets -- -D warnings
+          cargo check --locked --workspace
+          cargo test --locked --workspace
+
       - name: Check and test Rust desktop shell
         run: |
+          cargo fmt --check
+          cargo clippy --locked --all-targets -- -D warnings
           cargo check --locked
           cargo test --locked
         working-directory: src-tauri

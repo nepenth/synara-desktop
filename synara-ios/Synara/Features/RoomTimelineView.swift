@@ -299,6 +299,8 @@ struct RoomTimelineView: View {
             TimelineHeader(
                 title: roomTitle ?? "Room",
                 subtitle: timelineSubtitle,
+                cryptoLabel: cryptoStatus.roomHeaderLabel,
+                cryptoSystemImage: cryptoStatus.roomHeaderSystemImage,
                 onSearch: { isTimelineSearchPresented = true },
                 onDetails: { isRoomDetailsPresented = true },
                 onBack: {
@@ -398,6 +400,7 @@ struct RoomTimelineView: View {
             startTypingUpdates()
             startVerificationAutoRetry()
             await loadTimeline()
+            _ = await loadCryptoStatus()
         }
         .onDisappear {
             dismissKeyboard()
@@ -1535,6 +1538,7 @@ struct RoomTimelineView: View {
         let request = MessageSendRequest(
             roomID: roomID,
             body: body,
+            formattedBody: ComposerMatrixFormatting.formattedBody(for: body),
             replyToEventID: replyToEventID,
             editEventID: editEventID
         )
@@ -1545,6 +1549,7 @@ struct RoomTimelineView: View {
             let pendingItem = TimelineItem.pendingMessage(
                 localID: failedItem?.id ?? "$pending-\(UUID().uuidString)",
                 body: body,
+                formattedBody: request.formattedBody,
                 senderID: currentUserID,
                 replyToEventID: replyToEventID,
                 deliveryStatus: .sending,
@@ -2518,6 +2523,8 @@ private struct JumpToLatestButton: View {
 private struct TimelineHeader: View {
     let title: String
     let subtitle: String
+    let cryptoLabel: String?
+    let cryptoSystemImage: String
     let onSearch: () -> Void
     let onDetails: () -> Void
     let onBack: () -> Void
@@ -2541,9 +2548,21 @@ private struct TimelineHeader: View {
                         .foregroundStyle(SynaraColor.primaryText)
                         .lineLimit(1)
                 }
-                Text(subtitle)
-                    .font(SynaraTypography.messageMeta)
-                    .foregroundStyle(SynaraColor.secondaryText)
+                HStack(spacing: SynaraSpacing.small) {
+                    Text(subtitle)
+                    if let cryptoLabel {
+                        Label(cryptoLabel, systemImage: cryptoSystemImage)
+                            .foregroundStyle(
+                                cryptoLabel == "Encrypted"
+                                    ? SynaraColor.secondaryText
+                                    : SynaraColor.warning
+                            )
+                            .accessibilityIdentifier("RoomEncryptionStatus")
+                    }
+                }
+                .font(SynaraTypography.messageMeta)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .lineLimit(1)
             }
 
             Spacer()
@@ -2841,6 +2860,7 @@ struct ThreadTimelineView: View {
                     MessageSendRequest(
                         roomID: roomID,
                         body: body,
+                        formattedBody: ComposerMatrixFormatting.formattedBody(for: body),
                         replyToEventID: rootEventID,
                         editEventID: nil
                     )
@@ -4965,6 +4985,7 @@ private struct ComposerView: View {
     #endif
     @State private var isFormattingBarVisible = false
     @State private var composerSelection = ComposerTextSelection.empty
+    @State private var formattingRevision = 0
     @State private var composerFieldHeight: CGFloat = {
         #if canImport(UIKit)
             ComposerTextMetrics.singleLineHeight(font: UIFont.preferredFont(forTextStyle: .callout))
@@ -5196,28 +5217,30 @@ private struct ComposerView: View {
 
     @ViewBuilder
     private var composerField: some View {
-        TextField(placeholder, text: $text, axis: .vertical)
-            .font(SynaraTypography.body)
-            .foregroundStyle(SynaraColor.primaryText)
-            .tint(SynaraColor.accent)
-            .focused($isComposerFocused)
-            .lineLimit(1 ... 5)
-            .submitLabel(.send)
-            .onSubmit {
-                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                    submitMessage()
+        #if canImport(UIKit)
+            ComposerTextView(
+                text: $text,
+                selection: $composerSelection,
+                height: $composerFieldHeight,
+                placeholder: placeholder,
+                formattingRevision: formattingRevision,
+                isFocused: $isComposerFocused
+            )
+            .frame(height: composerFieldHeight)
+        #else
+            TextField(placeholder, text: $text, axis: .vertical)
+                .font(SynaraTypography.body)
+                .focused($isComposerFocused)
+                .lineLimit(1 ... 5)
+                .frame(minHeight: composerFieldHeight)
+                .accessibilityIdentifier("ComposerTextField")
+                .onChange(of: text) { _ in
+                    updateComposerFieldHeight()
                 }
-            }
-            .frame(minHeight: composerFieldHeight)
-            .accessibilityLabel("Message")
-            .accessibilityHint("Enter a message for this room")
-            .accessibilityIdentifier("ComposerTextField")
-            .onChange(of: text) { _ in
-                updateComposerFieldHeight()
-            }
-            .onChange(of: isComposerFocused) { _ in
-                updateComposerFieldHeight()
-            }
+                .onChange(of: isComposerFocused) { _ in
+                    updateComposerFieldHeight()
+                }
+        #endif
     }
 
     private func updateComposerFieldHeight() {
@@ -5246,10 +5269,14 @@ private struct ComposerView: View {
         let result = ComposerMarkdown.apply(format, to: text, selection: composerSelection)
         text = result.text
         composerSelection = result.selection
+        formattingRevision += 1
         isComposerFocused = true
     }
 
     private func submitMessage() {
+        #if canImport(UIKit)
+            ComposerTextInputRegistry.dismissKeyboard()
+        #endif
         isComposerFocused = false
         let messageBody = text
         text = messageBody

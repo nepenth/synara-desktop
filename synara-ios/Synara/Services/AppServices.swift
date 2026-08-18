@@ -232,6 +232,28 @@ struct RoomCryptoStatus: Equatable {
             || unableToDecryptCount > 0
             || recovery == .incomplete
     }
+
+    var roomHeaderLabel: String? {
+        guard isEncrypted else {
+            return encryption == .unavailable ? "Encryption Unavailable" : nil
+        }
+        if unableToDecryptCount > 0 || recovery == .incomplete || recovery == .disabled {
+            return "Recovery Needed"
+        }
+        if backup == .unavailable {
+            return "No Key Backup"
+        }
+        if verification == .unverified {
+            return "Unverified"
+        }
+        return "Encrypted"
+    }
+
+    var roomHeaderSystemImage: String {
+        needsCryptoActionBanner || needsRecoveryAttention
+            ? "lock.trianglebadge.exclamationmark"
+            : "lock.fill"
+    }
 }
 
 struct SessionCryptoStatus: Equatable {

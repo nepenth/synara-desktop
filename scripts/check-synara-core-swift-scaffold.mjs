@@ -50,6 +50,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreSpaces.swift",
   "synara-ios/Synara/Services/SharedCoreInviteActions.swift",
   "synara-ios/Synara/Services/SharedCoreTimelineReadState.swift",
+  "synara-ios/Synara/Services/SharedCoreAgentApprovals.swift",
   "synara-ios/Synara/Services/SharedCoreNseStore.swift",
   "synara-ios/Synara/Services/SharedCoreLeftovers.swift",
   "synara-ios/Synara/Services/SharedCoreProductServices.swift",
@@ -197,6 +198,10 @@ const sharedCoreTimelineReactions = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreTimelineReactions.swift"),
   "utf8"
 );
+const sharedCoreAgentApprovals = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreAgentApprovals.swift"),
+  "utf8"
+);
 const sharedCoreComposerReplyDraft = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreComposerReplyDraft.swift"),
   "utf8"
@@ -267,7 +272,7 @@ const ciWorkflow = readFileSync(resolve(root, ".github/workflows/ci.yml"), "utf8
 
 const assertions = [
   [cargo, 'crate-type = ["lib", "staticlib", "cdylib"]', "Apple library crate types"],
-  [cargo, 'uniffi = { version = "=0.28.3" }', "pinned UniFFI runtime"],
+  [cargo, 'uniffi = { version = "=0.28.3", features = ["tokio"] }', "pinned Tokio-aware UniFFI runtime"],
   [readFileSync(resolve(root, "crates/synara-core-bindgen/Cargo.toml"), "utf8"), 'uniffi = { version = "=0.28.3", features = ["cli"] }', "pinned project-owned UniFFI generator"],
   [cargo, 'features = ["build"]', "UniFFI build scaffolding"],
   [udl, "namespace synara_core", "project-owned UniFFI namespace"],
@@ -380,15 +385,18 @@ const assertions = [
   [sharedCoreFfi, "timeline_open", "P4-S6 typed timeline-open FFI"],
   [sharedCoreFfi, "matrix_timeline_open", "P4-S6 calls the registered open command"],
   [sharedCoreFfi, "matrix_timeline_close", "P4-S6 calls the registered close command"],
+  [sharedCoreFfi, "matrix_timeline_snapshot", "P4-S6 calls the registered snapshot command"],
   [sharedCoreFfi, "matrix_timeline_paginate", "P4-S6 calls the registered paginate command"],
   [udl, "TimelineOpenDto timeline_open(", "P4-S6 SharedCore timeline-open operation"],
   [udl, "boolean timeline_close(", "P4-S6 SharedCore timeline-close operation"],
+  [udl, "TimelineSnapshotDto timeline_snapshot(", "P4-S6 SharedCore timeline-snapshot operation"],
   [udl, "TimelineSnapshotDto timeline_paginate(", "P4-S6 SharedCore timeline-paginate operation"],
   [udl, "dictionary TimelineOpenDto", "P4-S6 privacy-safe timeline-open DTO"],
   [udl, "interface TimelineError", "P4-S6 static timeline error"],
   [swiftBindingsTests, "testSharedCoreTimelineWithoutSessionFailsClosed", "Swift P4-S6 fail-closed timeline test"],
   [sharedCoreTimeline, "timelineOpen", "P4-S6 product timeline-open helper"],
   [sharedCoreTimeline, "timelineClose", "P4-S6 product timeline-close helper"],
+  [sharedCoreTimeline, "timelineSnapshot", "P4-S6 product timeline-snapshot helper"],
   [sharedCoreTimeline, "timelinePaginate", "P4-S6 product timeline-paginate helper"],
   [sharedCoreTimeline, "core: SharedCore", "P4-S6 helper takes an already-constructed SharedCore"],
   [sharedCoreTimeline, "core.timelineOpen", "P4-S6 helper opens on the caller-owned instance"],
@@ -911,17 +919,18 @@ const assertions = [
   [sharedCoreFfi, "backup_status", "P4-S10 leftover backup-status FFI"],
   [sharedCoreFfi, "crypto_status", "P4-S10 leftover crypto-status FFI"],
   [sharedCoreFfi, "wipe_persisted_stores", "P4-S10 leftover wipe FFI"],
-  [sharedCoreFfi, "send_raw_room_event", "P4-S10 leftover raw-send FFI"],
+  [sharedCoreFfi, "send_agent_approval", "P4-S34 typed agent-approval FFI"],
   [sharedCoreFfi, "p4-s10-leftover-no-session", "P4-S10 leftover no-session diagnostic"],
   [udl, "BackupStatusDto backup_status()", "P4-S10 SharedCore leftover backup status"],
   [udl, "CryptoStatusDto crypto_status()", "P4-S10 SharedCore leftover crypto status"],
   [udl, "LeftoverAckDto recover(", "P4-S10 SharedCore leftover recover"],
-  [udl, "LeftoverAckDto send_raw_room_event(", "P4-S10 SharedCore leftover raw send"],
+  [udl, "AgentApprovalSendDto send_agent_approval(", "P4-S34 SharedCore typed agent approval"],
   [udl, "interface LeftoverCommandError", "P4-S10 static leftover error"],
   [swiftBindingsTests, "testSharedCoreLeftoversWithoutSessionFailClosed", "Swift P4-S10 fail-closed leftover test"],
   [sharedCoreLeftovers, "backupStatus", "P4-S10 leftover backup-status helper"],
   [sharedCoreLeftovers, "recover", "P4-S10 leftover recover helper"],
-  [sharedCoreLeftovers, "sendRawRoomEvent", "P4-S10 leftover raw-send helper"],
+  [sharedCoreAgentApprovals, "sendAgentApproval", "P4-S34 typed agent-approval helper"],
+  [sharedCoreAgentApprovals, "core: SharedCore", "P4-S34 helper takes an already-constructed SharedCore"],
   [sharedCoreLeftovers, "core: SharedCore", "P4-S10 leftover helper takes an already-constructed SharedCore"],
   [sharedCoreProductServices, "SharedCoreAuthService", "P4-S10 product auth uses SharedCore"],
   [sharedCoreProductServices, "SharedCoreRoomListService", "P4-S10 product room list uses SharedCore"],
@@ -956,6 +965,7 @@ const assertions = [
   [generator, "xcrun lipo -create", "combined generic simulator library"],
   [generator, "aarch64-apple-darwin", "Apple macOS target"],
   [generator, "cargo build --locked --release --package synara-core", "locked Rust build"],
+  [generator, "SYNARA_CORE_APPLE_TARGET_DIR", "cacheable Apple Rust target directory"],
   [generator, "cargo run --locked --package synara-core-bindgen", "project-owned locked bindgen invocation"],
   [generator, "-- generate", "project-owned bindgen command"],
   [generator, "--no-format", "source-preserving bindgen invocation"],
@@ -964,6 +974,16 @@ const assertions = [
   [generator, '-headers "$headers_tmp"', "XCFramework generated C header inclusion"],
   [generator, "xcodebuild -create-xcframework", "XCFramework assembly"],
 ];
+
+for (const [source, forbidden, label] of [
+  [sharedCoreFfi, "send_raw_room_event", "raw event FFI"],
+  [udl, "send_raw_room_event", "raw event UDL"],
+  [sharedCoreLeftovers, "sendRawRoomEvent", "raw event Swift helper"],
+]) {
+  if (source.includes(forbidden)) {
+    throw new Error(`retired ${label} must stay absent`);
+  }
+}
 for (const [text, needle, label] of assertions) {
   if (!text.includes(needle)) throw new Error(`missing ${label}: ${needle}`);
 }
@@ -1620,6 +1640,18 @@ if (
   ciBuildCheckerIndex > ciBuildXcodebuildIndex
 ) {
   throw new Error("P4-4 iOS CI build must retain the Core Swift scaffold guard before xcodebuild");
+}
+if (!iosCiBuild.includes("test-without-building")) {
+  throw new Error("iOS CI must test the exact build-for-testing artifacts");
+}
+if (iosCiBuild.includes("-retry-tests-on-failure") || iosCiBuild.includes("-test-iterations")) {
+  throw new Error("iOS CI must not mask first-attempt failures with automatic retries");
+}
+if (
+  !iosCiBuild.includes("PACKAGE_RESOLVED_PATH") ||
+  !iosCiBuild.includes('cp "$PACKAGE_RESOLVED_BACKUP" "$PACKAGE_RESOLVED_PATH"')
+) {
+  throw new Error("iOS CI must preserve the committed Swift package lock across XcodeGen");
 }
 
 // P4-3 is a deliberately closed session projection, not a second Matrix

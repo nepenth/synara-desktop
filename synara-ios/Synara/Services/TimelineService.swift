@@ -149,6 +149,7 @@ struct TimelineItem: Identifiable, Equatable {
     static func pendingMessage(
         localID: String = "$pending-\(UUID().uuidString)",
         body: String,
+        formattedBody: String? = nil,
         senderID: String,
         senderAvatarURL: URL? = nil,
         replyToEventID: String?,
@@ -162,7 +163,7 @@ struct TimelineItem: Identifiable, Equatable {
             senderID: senderID,
             senderAvatarURL: senderAvatarURL,
             timestamp: timestamp,
-            kind: .text(body),
+            kind: formattedBody.map { .formattedText(body: body, html: $0) } ?? .text(body),
             replyToEventID: replyToEventID,
             isEdited: false,
             reactions: [:],
@@ -531,6 +532,16 @@ enum SynaraAgentCardPayloadParser {
         }
 
         return extractAgentCard(from: parsedBody["payload"]) ?? extractAgentCard(from: parsedBody["agent"])
+    }
+
+    static func parse(payloadJSON: String?) -> SynaraAgentCard? {
+        guard let payloadJSON,
+              payloadJSON.utf8.count <= 200_000,
+              let data = payloadJSON.data(using: .utf8)
+        else {
+            return nil
+        }
+        return try? JSONDecoder().decode(SynaraAgentCard.self, from: data)
     }
 
     private static func extractAgentCard(from rawValue: Any?) -> SynaraAgentCard? {

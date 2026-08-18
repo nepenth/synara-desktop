@@ -1,8 +1,14 @@
 # iOS TestFlight Readiness
 
-Reviewed: 2026-05-27
+Reviewed: 2026-08-17
 
-Status: internal-readiness draft. Archive/upload cannot be completed autonomously until Apple Developer enrollment, signing, App Store Connect, privacy, and legal gates are closed.
+Status: internal TestFlight delivery is operational: Apple Developer enrollment,
+bundle identifiers, signing, App Store Connect, API-key upload, and internal
+tester assignment have been exercised by prior builds. The 2026-08-17 branch
+proof covers simulator build, deterministic tests, and signed live Matrix tests;
+it does not claim a new archive or upload from this unmerged branch. External
+TestFlight and App Store release remain gated by the legal, privacy, push, E2EE,
+and physical-device requirements below.
 
 ## Internal Tester Instructions
 
@@ -25,12 +31,16 @@ Status: internal-readiness draft. Archive/upload cannot be completed autonomousl
 - Final support URL and privacy policy URL are placeholders until approved.
 - App Store legal review is still required for AGPL/App Store distribution.
 - Production push gateway setup is not complete.
-- Internal archive requires an Apple Developer team and signing identity.
+- Physical-device push, memory, performance, and upgrade testing must be rerun
+  against the exact release candidate.
 
-## Required Commands Once Signing Exists
+## Release Candidate Command
 
 ```sh
 xcodebuild -project Synara.xcodeproj -scheme Synara -configuration Release archive
 ```
 
-The archive must be validated in Xcode Organizer or App Store Connect before external testers are invited.
+The archive must be validated in Xcode Organizer or App Store Connect before
+external testers are invited. Prefer the repository release workflow for an
+actual candidate so versioning, desktop artifacts, TestFlight upload, and
+provenance stay on the same immutable commit.

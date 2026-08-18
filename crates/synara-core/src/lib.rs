@@ -21,6 +21,62 @@ pub fn binding_scaffold_version() -> String {
     env!("CARGO_PKG_VERSION").to_owned()
 }
 
+/// Converts supported Markdown to Matrix-compatible HTML using Ruma's parser.
+/// Plain text deliberately returns `None` so clients omit a redundant
+/// `formatted_body` field.
+pub fn markdown_to_html(body: String) -> Option<String> {
+    use matrix_sdk::ruma::{
+        events::room::message::FormattedBody,
+        html::{HtmlSanitizerMode, RemoveReplyFallback},
+    };
+
+    let mut formatted = FormattedBody::markdown(body)?;
+    formatted.sanitize_html(HtmlSanitizerMode::Strict, RemoveReplyFallback::No);
+    Some(formatted.body)
+}
+
+#[cfg(test)]
+mod markdown_tests {
+    use super::markdown_to_html;
+
+    #[test]
+    fn plain_text_does_not_emit_redundant_html() {
+        assert_eq!(markdown_to_html("hello world".into()), None);
+    }
+
+    #[test]
+    fn rich_markdown_emits_matrix_html() {
+        let html = markdown_to_html("- **Ship it**\n- `verify`".into()).expect("formatted body");
+        assert!(html.contains("<ul>"));
+        assert!(html.contains("<strong>Ship it</strong>"));
+        assert!(html.contains("<code>verify</code>"));
+    }
+
+    #[test]
+    fn markdown_html_is_sanitized_to_the_matrix_allowlist() {
+        let html =
+            markdown_to_html("**safe** <script>alert(1)</script>".into()).expect("formatted body");
+        assert!(html.contains("<strong>safe</strong>"));
+        assert!(!html.contains("<script>"));
+    }
+}
+
+#[cfg(test)]
+mod generated_binding_tests {
+    #[test]
+    fn every_async_udl_export_uses_the_tokio_bridge() {
+        let udl = include_str!("synara_core.udl");
+        let scaffolding = include_str!(concat!(env!("OUT_DIR"), "/synara_core.uniffi.rs"));
+        let async_declarations = udl.matches("[Async").count();
+        let bridged_exports = scaffolding
+            .matches("#[::uniffi::export_for_udl(async_runtime = \"tokio\")]")
+            .count();
+
+        assert!(async_declarations > 0);
+        assert_eq!(bridged_exports, async_declarations);
+    }
+}
+
 mod ffi;
 pub use ffi::{
     login_flows, register_flows, LoginFlowDto, LoginFlowsError, RegisterFlowsDto,
@@ -34,19 +90,19 @@ pub use session_projection_ffi::{
 
 mod shared_core_ffi;
 pub use shared_core_ffi::{
-    BackupStatusDto, ComposerReplyDraftDto, ComposerReplyDraftError, ComposerReplyDraftPreviewDto,
-    CrossSigningStatusDto, CryptoStatusDto, DeviceCommandError, DeviceDeleteChallengeDto,
-    DeviceDeleteDto, DeviceSnapshotDto, DeviceSummaryDto, DirectorySearchCommandError,
-    DirectoryVisibilityCommandError, EditMessageDto, EditMessageError, GlobalImagePacksSnapshotDto,
-    ImagePackCommandError, ImagePackDto, ImagePackWriteDto, InviteActionError, InviteDto,
-    InviteSnapshotDto, InviteSnapshotError, IosSecretVault, IosSecretVaultError,
-    JoinRuleCommandError, LaterCommandError, LaterItemDto, LaterSnapshotDto, LeftoverAckDto,
-    LeftoverBytesDto, LeftoverCommandError, MDirectCommandError, MDirectMutationDto,
-    MDirectSnapshotDto, MediaConfigDto, NseEventPreviewDto, NseStoreDto, NseStoreError,
-    OwnProfileCommandError, OwnProfileWriteDto, OwnerUpdateDto, OwnerUpdateError, PollRespondDto,
-    PollRespondError, PresenceCommandError, PresenceSnapshotDto, PresenceSubscriptionDto,
-    RestrictedJoinReparentDto, RoomCreateCommandError, RoomCreateDto, RoomCreateRequestDto,
-    RoomCreatorsSnapshotDto, RoomDirectoryHitDto, RoomDirectoryPageDto,
+    AgentApprovalSendDto, AgentApprovalSendError, BackupStatusDto, ComposerReplyDraftDto,
+    ComposerReplyDraftError, ComposerReplyDraftPreviewDto, CrossSigningStatusDto, CryptoStatusDto,
+    DeviceCommandError, DeviceDeleteChallengeDto, DeviceDeleteDto, DeviceSnapshotDto,
+    DeviceSummaryDto, DirectorySearchCommandError, DirectoryVisibilityCommandError, EditMessageDto,
+    EditMessageError, GlobalImagePacksSnapshotDto, ImagePackCommandError, ImagePackDto,
+    ImagePackWriteDto, InviteActionError, InviteDto, InviteSnapshotDto, InviteSnapshotError,
+    IosSecretVault, IosSecretVaultError, JoinRuleCommandError, LaterCommandError, LaterItemDto,
+    LaterSnapshotDto, LeftoverAckDto, LeftoverBytesDto, LeftoverCommandError, MDirectCommandError,
+    MDirectMutationDto, MDirectSnapshotDto, MediaConfigDto, NseEventPreviewDto, NseStoreDto,
+    NseStoreError, OwnProfileCommandError, OwnProfileWriteDto, OwnerUpdateDto, OwnerUpdateError,
+    PollRespondDto, PollRespondError, PresenceCommandError, PresenceSnapshotDto,
+    PresenceSubscriptionDto, RestrictedJoinReparentDto, RoomCreateCommandError, RoomCreateDto,
+    RoomCreateRequestDto, RoomCreatorsSnapshotDto, RoomDirectoryHitDto, RoomDirectoryPageDto,
     RoomDirectoryProtocolInstanceDto, RoomDirectoryProtocolsDto, RoomDirectorySearchDto,
     RoomDirectoryVisibilityDto, RoomDirectoryVisibilityWriteDto, RoomImagePacksSnapshotDto,
     RoomJoinRuleSnapshotDto, RoomKeyTransferStatusDto, RoomListRoomDto, RoomListSnapshotDto,
