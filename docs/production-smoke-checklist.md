@@ -11,10 +11,33 @@ is preserved as regression history; it does not override newer evidence.
 
 The latest consolidated automated, simulator, signed-live, and local macOS
 proof is [the 2026-08-17 shared-core proof](shared-native-core/15-2026-08-17-local-proof.md).
-Human macOS interaction, Linux package/install interaction, and physical-device
-iOS checks remain release-candidate gates where that proof says they remain.
+The core macOS Matrix path now also has Xcode-driven interactive evidence dated
+2026-08-18 in [desktop validation status](desktop-validation-status.md). Linux
+package/install interaction, physical-device iOS checks, and the unexercised
+macOS platform-integration cases remain release-candidate gates.
 
 ## Latest Smoke Feedback
+
+2026-08-18 automated interactive macOS smoke:
+
+- A local release app with an isolated bundle/Keychain identity completed fresh
+  login, joined-room load, encrypted timeline decrypt, room-member display,
+  formatted composer input, encrypted send, termination/relaunch, secure
+  session restore, and exact message readback. Xcode reported one UI test and
+  zero failures.
+- The release-profile shared-core matrix passed 704 library tests with one
+  intentional live gate ignored and all integration binaries passing. The
+  focused desktop SDK session-rotation/logout test passed as well.
+- The room read state is now one context-aware overflow action. Timeline
+  pagination is edge-triggered with progress indicators, and jump-to-latest is
+  a compact icon control; persistent read/unread and textual load buttons were
+  removed.
+- The pass fixed SDK refresh-token persistence, member-list fallback, timeline
+  row field serialization, safe unsupported-event handling, structured agent
+  card rendering, and full-URL homeserver login input.
+- The run did not exercise system-browser links, native spellcheck, file
+  drop/paste, OS notifications, tray, shortcuts, updater installation, or
+  signed/notarized packaging. Their existing open statuses remain accurate.
 
 2026-06-30 human smoke feedback:
 
@@ -216,7 +239,7 @@ Cases:
 | Section                     |                         Required Before Release | Status                                                                                                 | Evidence Link           |
 | --------------------------- | ----------------------------------------------: | ------------------------------------------------------------------------------------------------------ | ----------------------- |
 | Common preflight            |                                             Yes | Pending                                                                                                |                         |
-| macOS desktop smoke         |                                             Yes | Failed link/open, paste/drop, and spellcheck smoke; packaged-localhost capability fix pending re-smoke | 2026-07-07 human report |
+| macOS desktop smoke         |                                             Yes | Core Matrix interaction passed 2026-08-18; link/open, paste/drop, spellcheck, notification, tray, shortcut, updater, and signed-package cases remain | `docs/desktop-validation-status.md` |
 | Linux desktop smoke         |                                             Yes | Failed link/open, paste/drop, and spellcheck smoke; packaged-localhost capability fix pending re-smoke | 2026-07-07 human report |
 | Timeline Resurrection smoke |                                             Yes | Much improved, but visible initial-load repositioning remains; diagnostics/formal evidence pending     | 2026-07-07 human report |
 | iOS tool-bound smoke        | Yes for iOS release and shared Timeline signoff | Pending                                                                                                |                         |
