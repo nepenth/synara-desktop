@@ -29,7 +29,25 @@ import {
   subscribeDesktopTrayDndToggle,
   type DesktopTrayState,
 } from '../desktop';
-import { clearDesktopDiagnostics, getDesktopDiagnosticEntries } from '../desktopDiagnostics';
+import {
+  clearDesktopDiagnostics,
+  getDesktopDiagnosticEntries,
+  sanitizeDiagnosticDetail,
+} from '../desktopDiagnostics';
+
+test('desktop diagnostics redact credential values, not only field names', () => {
+  const secret = 'syt_super_secret_value';
+  for (const detail of [
+    `access_token=${secret}`,
+    `{"refreshToken":"${secret}"}`,
+    `Authorization: Bearer ${secret}`,
+    `password: ${secret}`,
+  ]) {
+    const sanitized = sanitizeDiagnosticDetail(detail);
+    assert.equal(sanitized.includes(secret), false);
+    assert.equal(sanitized.includes('[redacted]'), true);
+  }
+});
 
 type DesktopActionCallArgs = {
   action?: {

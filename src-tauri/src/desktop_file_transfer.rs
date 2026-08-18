@@ -9,6 +9,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub(crate) const DESKTOP_FILE_IPC_INLINE_THRESHOLD: usize = 8 * 1024 * 1024;
 pub(crate) const DESKTOP_FILE_IPC_CHUNK_SIZE: usize = 1024 * 1024;
+pub(crate) const MAX_SAVE_FILE_BYTES: u64 = 300 * 1024 * 1024;
+const MAX_ACTIVE_SAVE_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum DroppedFileReadMode {
@@ -143,7 +145,7 @@ pub struct DesktopDroppedFilePayload {
     pub size: Option<u64>,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopSaveFileBeginResult {
     pub session_id: String,
@@ -206,8 +208,31 @@ fn register_save_session(session: SaveFileSession) -> Result<String, String> {
     if sessions.len() >= MAX_ACTIVE_FILE_TRANSFERS {
         return Err("Too many active file save transfers".to_owned());
     }
+    let active_bytes = sessions
+        .values()
+        .try_fold(0_u64, |total, active| {
+            total.checked_add(active.expected_size)
+        })
+        .ok_or_else(|| "Active file save transfers exceed the size limit".to_owned())?;
+    if active_bytes
+        .checked_add(session.expected_size)
+        .is_none_or(|total| total > MAX_ACTIVE_SAVE_TOTAL_BYTES)
+    {
+        return Err("Active file save transfers exceed the size limit".to_owned());
+    }
     sessions.insert(session_id.clone(), session);
     Ok(session_id)
+}
+
+fn create_private_temp_file(path: &Path) -> Result<File, std::io::Error> {
+    let mut options = OpenOptions::new();
+    options.create_new(true).read(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)
 }
 
 fn save_session_is_stale(session: &SaveFileSession, now: Instant) -> bool {
@@ -306,10 +331,14 @@ pub fn desktop_save_file_begin(
     if !should_stream_file_ipc(total_size) {
         return Err("File is small enough for inline save".to_owned());
     }
+    if total_size > MAX_SAVE_FILE_BYTES {
+        return Err("File exceeds the maximum save size".to_owned());
+    }
 
     let safe_filename = sanitize_download_filename(&filename);
     let temp_path = std::env::temp_dir().join(new_file_transfer_id("save-temp"));
-    File::create(&temp_path).map_err(|err| format!("Unable to create temp save file: {err}"))?;
+    create_private_temp_file(&temp_path)
+        .map_err(|err| format!("Unable to create temp save file: {err}"))?;
 
     let session = SaveFileSession {
         temp_path: temp_path.clone(),
@@ -856,6 +885,17 @@ mod command_tests {
         assert!(result
             .expect_err("inline save should fail")
             .contains("streaming save commands"));
+    }
+
+    #[test]
+    fn desktop_save_file_begin_rejects_unbounded_declared_sizes() {
+        let result = desktop_save_file_begin(
+            "too-large.bin".to_owned(),
+            MAX_SAVE_FILE_BYTES.saturating_add(1),
+        );
+        assert!(result
+            .expect_err("oversized streaming save should fail")
+            .contains("maximum save size"));
     }
 
     #[test]

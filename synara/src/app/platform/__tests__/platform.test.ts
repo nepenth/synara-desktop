@@ -391,7 +391,7 @@ test('platform secret-store capability sync advertises persistence only when pro
   }
 });
 
-test('platform session store reads normalized desktop sessions when available', async () => {
+test('platform session store restores only identity metadata from native', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
   const originalWindow = globalThis.window;
   (globalThis as any).window = {
@@ -404,14 +404,9 @@ test('platform session store reads normalized desktop sessions when available', 
           return { available: true, backend: 'macos-keychain', canPersistSession: true };
         }
         return {
-          baseUrl: ' https://matrix.example.org ',
+          homeserverUrl: ' https://matrix.example.org ',
           userId: ' @alice:example.org ',
           deviceId: ' DEVICEID ',
-          accessToken: ' access-token ',
-          sessionGeneration: ' generation-1 ',
-          refreshToken: ' refresh-token ',
-          expiresInMs: 1234,
-          storedAtMs: 9_876_543,
         };
       },
     },
@@ -422,22 +417,18 @@ test('platform session store reads normalized desktop sessions when available', 
       baseUrl: 'https://matrix.example.org',
       userId: '@alice:example.org',
       deviceId: 'DEVICEID',
-      accessToken: 'access-token',
-      sessionGeneration: 'generation-1',
-      refreshToken: 'refresh-token',
-      expiresInMs: 1234,
-      storedAtMs: 9_876_543,
+      accessToken: '',
     });
     assert.deepEqual(
       calls.map((call) => call.command),
-      ['desktop_secret_store_status', 'desktop_get_session']
+      ['desktop_secret_store_status', 'matrix_restore_session']
     );
   } finally {
     (globalThis as any).window = originalWindow;
   }
 });
 
-test('platform session store strips fallback-only fields before desktop persistence', async () => {
+test('platform session store refuses renderer-to-host credential writes', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
   const originalWindow = globalThis.window;
   (globalThis as any).window = {
@@ -467,32 +458,15 @@ test('platform session store strips fallback-only fields before desktop persiste
         refreshToken: 'refresh-token',
         fallbackSdkStores: true,
       }),
-      true
+      false
     );
-    assert.deepEqual(calls, [
-      { command: 'desktop_secret_store_status', args: undefined },
-      {
-        command: 'desktop_set_session',
-        args: {
-          session: {
-            baseUrl: 'https://matrix.example.org',
-            userId: '@alice:example.org',
-            deviceId: 'DEVICEID',
-            accessToken: 'access-token',
-            sessionGeneration: 'generation-1',
-            refreshToken: 'refresh-token',
-            expiresInMs: 3_600_000,
-            storedAtMs: 1_700_000_000_000,
-          },
-        },
-      },
-    ]);
+    assert.deepEqual(calls, []);
   } finally {
     (globalThis as any).window = originalWindow;
   }
 });
 
-test('platform session store removes desktop sessions when available', async () => {
+test('platform session removal cannot bypass the native logout owner', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
   const originalWindow = globalThis.window;
   (globalThis as any).window = {
@@ -510,11 +484,8 @@ test('platform session store removes desktop sessions when available', async () 
   };
 
   try {
-    assert.equal(await platformSessionStore.removeSession(), true);
-    assert.deepEqual(calls, [
-      { command: 'desktop_secret_store_status', args: undefined },
-      { command: 'desktop_remove_session', args: undefined },
-    ]);
+    assert.equal(await platformSessionStore.removeSession(), false);
+    assert.deepEqual(calls, []);
   } finally {
     (globalThis as any).window = originalWindow;
   }

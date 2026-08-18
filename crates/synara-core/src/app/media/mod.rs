@@ -11,11 +11,13 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+mod bounded;
 mod download_queue;
 mod error;
 mod ipc;
 mod upload_queue;
 
+pub use bounded::{download_media_bounded, BoundedMediaError};
 pub use download_queue::{
     DownloadId, DownloadJob, DownloadKind, DownloadQueue, DownloadState, MAX_ACTIVE_DOWNLOADS,
     MAX_MEDIA_ID_CHARS, MAX_TRACKED_DOWNLOADS,

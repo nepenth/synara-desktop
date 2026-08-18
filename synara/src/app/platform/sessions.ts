@@ -15,7 +15,7 @@ export type PlatformSessionStore = {
   removeSession: () => Promise<boolean>;
 };
 
-const readString = (record: Record<string, unknown>, key: keyof Session): string | undefined => {
+const readString = (record: Record<string, unknown>, key: string): string | undefined => {
   const value = record[key];
   if (typeof value !== 'string') return undefined;
   const normalized = value.trim();
@@ -25,54 +25,23 @@ const readString = (record: Record<string, unknown>, key: keyof Session): string
 export const normalizePlatformSession = (value: unknown): Session | undefined => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const record = value as Record<string, unknown>;
-  const baseUrl = readString(record, 'baseUrl');
+  const baseUrl = readString(record, 'homeserverUrl');
   const userId = readString(record, 'userId');
   const deviceId = readString(record, 'deviceId');
-  const accessToken = readString(record, 'accessToken');
-
-  if (!baseUrl || !userId || !deviceId || !accessToken) return undefined;
-
-  const expiresInMs = record.expiresInMs;
-  const storedAtMs = record.storedAtMs;
-  const refreshToken = readString(record, 'refreshToken');
-  const sessionGeneration = readString(record, 'sessionGeneration');
+  if (!baseUrl || !userId || !deviceId) return undefined;
 
   return {
     baseUrl,
     userId,
     deviceId,
-    accessToken,
-    refreshToken,
-    ...(sessionGeneration ? { sessionGeneration } : {}),
-    expiresInMs:
-      typeof expiresInMs === 'number' && Number.isFinite(expiresInMs) ? expiresInMs : undefined,
-    storedAtMs:
-      typeof storedAtMs === 'number' && Number.isFinite(storedAtMs) ? storedAtMs : undefined,
+    // Native Matrix credentials never cross IPC. This identity-only marker
+    // preserves the legacy Session shape while the facade owns every request.
+    accessToken: '',
   };
 };
 
 const canUsePlatformSessionStore = (status: PlatformSecretStoreStatus): boolean =>
   status.available && status.canPersistSession;
-
-const serializePlatformSession = (session: Session) => {
-  const envelope: Omit<Session, 'fallbackSdkStores'> = {
-    baseUrl: session.baseUrl,
-    userId: session.userId,
-    deviceId: session.deviceId,
-    accessToken: session.accessToken,
-  };
-
-  if (session.refreshToken) envelope.refreshToken = session.refreshToken;
-  if (session.sessionGeneration) envelope.sessionGeneration = session.sessionGeneration;
-  if (typeof session.expiresInMs === 'number' && Number.isFinite(session.expiresInMs)) {
-    envelope.expiresInMs = session.expiresInMs;
-  }
-  if (typeof session.storedAtMs === 'number' && Number.isFinite(session.storedAtMs)) {
-    envelope.storedAtMs = session.storedAtMs;
-  }
-
-  return envelope;
-};
 
 const unavailableDesktopSecretStoreStatus = (): PlatformSecretStoreStatus => ({
   available: false,
@@ -147,7 +116,7 @@ export const platformSessionStore: PlatformSessionStore = {
       return undefined;
     }
     try {
-      const invokeResult = await invokeDesktopWithAvailability<unknown>('desktop_get_session');
+      const invokeResult = await invokeDesktopWithAvailability<unknown>('matrix_restore_session');
       if (!invokeResult.available) {
         recordClientDiagnostic('session', 'platform-store.read-completed', {
           outcome: 'bridge-unavailable',
@@ -161,8 +130,7 @@ export const platformSessionStore: PlatformSessionStore = {
         outcome: session ? 'found' : 'missing',
         backend: status.backend,
         durationMs: performance.now() - startedAtMs,
-        hasRefreshToken: Boolean(session?.refreshToken),
-        hasExpiryMetadata: typeof session?.expiresInMs === 'number',
+        persistence: 'host-only',
       });
       return session;
     } catch (error) {
@@ -176,91 +144,22 @@ export const platformSessionStore: PlatformSessionStore = {
     }
   },
 
-  setSession: async (session) => {
+  setSession: async () => {
     const startedAtMs = performance.now();
-    const status = await platformSessionStore.getStatus();
-    if (!canUsePlatformSessionStore(status)) {
-      recordClientDiagnostic('session', 'platform-store.write-completed', {
-        outcome: 'store-unavailable',
-        backend: status.backend,
-        durationMs: performance.now() - startedAtMs,
-      });
-      return false;
-    }
-
-    if (!isDesktopBridgeAvailable()) {
-      recordClientDiagnostic('session', 'platform-store.write-completed', {
-        outcome: 'bridge-unavailable',
-        backend: status.backend,
-        durationMs: performance.now() - startedAtMs,
-      });
-      return false;
-    }
-    try {
-      const invokeResult = await invokeDesktopWithAvailability<boolean>('desktop_set_session', {
-        session: serializePlatformSession(session),
-      });
-      const persisted = invokeResult.available && invokeResult.value === true;
-      recordClientDiagnostic('session', 'platform-store.write-completed', {
-        outcome: persisted
-          ? 'persisted'
-          : invokeResult.available
-          ? 'unavailable'
-          : 'bridge-unavailable',
-        backend: status.backend,
-        durationMs: performance.now() - startedAtMs,
-        hasRefreshToken: Boolean(session.refreshToken),
-        hasExpiryMetadata: typeof session.expiresInMs === 'number',
-      });
-      return persisted;
-    } catch (error) {
-      recordClientDiagnostic('session', 'platform-store.write-completed', {
-        outcome: 'error',
-        backend: status.backend,
-        durationMs: performance.now() - startedAtMs,
-        errorType: error instanceof Error ? error.name : typeof error,
-      });
-      throw error;
-    }
+    recordClientDiagnostic('session', 'platform-store.write-completed', {
+      outcome: 'host-owned',
+      durationMs: performance.now() - startedAtMs,
+      persistence: 'disabled',
+    });
+    return false;
   },
 
   removeSession: async () => {
     const startedAtMs = performance.now();
-    const status = await platformSessionStore.getStatus();
-    if (!canUsePlatformSessionStore(status)) {
-      recordClientDiagnostic('session', 'platform-store.remove-completed', {
-        outcome: 'store-unavailable',
-        backend: status.backend,
-        durationMs: performance.now() - startedAtMs,
-      });
-      return false;
-    }
-
-    if (!isDesktopBridgeAvailable()) {
-      recordClientDiagnostic('session', 'platform-store.remove-completed', {
-        outcome: 'bridge-unavailable',
-        backend: status.backend,
-        durationMs: performance.now() - startedAtMs,
-      });
-      return false;
-    }
-    try {
-      const invokeResult = await invokeDesktopWithAvailability<boolean>('desktop_remove_session');
-      const removed = invokeResult.available && invokeResult.value === true;
-      recordClientDiagnostic('session', 'platform-store.remove-completed', {
-        outcome: removed ? 'removed' : invokeResult.available ? 'missing' : 'bridge-unavailable',
-        backend: status.backend,
-        durationMs: performance.now() - startedAtMs,
-      });
-      return removed;
-    } catch (error) {
-      recordClientDiagnostic('session', 'platform-store.remove-completed', {
-        outcome: 'error',
-        backend: status.backend,
-        durationMs: performance.now() - startedAtMs,
-        errorType: error instanceof Error ? error.name : typeof error,
-      });
-      throw error;
-    }
+    recordClientDiagnostic('session', 'platform-store.remove-completed', {
+      outcome: 'host-owned',
+      durationMs: performance.now() - startedAtMs,
+    });
+    return false;
   },
 };

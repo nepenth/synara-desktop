@@ -11,11 +11,6 @@ use crate::desktop_secret_store::{bridge_supports_secure_secret_store, DesktopSe
 use crate::desktop_secret_store::{
     unavailable_secret_store_status, DESKTOP_SECRET_STORE_BACKEND_NONE,
 };
-use crate::desktop_session::DesktopSessionEnvelope;
-use crate::desktop_session_store::{
-    desktop_get_session_from_store, desktop_remove_session_from_store,
-    desktop_set_session_in_store, DesktopSessionSecretStore, KeyringDesktopSessionSecretStore,
-};
 use crate::desktop_shortcuts::{
     desktop_set_shortcuts as apply_desktop_shortcuts_command, DesktopShortcutApplyResult,
     DesktopShortcutConfig,
@@ -134,27 +129,12 @@ pub fn desktop_set_shortcuts(
 }
 
 pub fn desktop_bridge_supports_secure_secret_store() -> bool {
-    bridge_supports_secure_secret_store(&KeyringDesktopSessionSecretStore.status())
+    bridge_supports_secure_secret_store(&crate::desktop_secret_store::platform_secret_store_status())
 }
 
 #[tauri::command]
 pub fn desktop_secret_store_status() -> DesktopSecretStoreStatus {
-    KeyringDesktopSessionSecretStore.status()
-}
-
-#[tauri::command]
-pub fn desktop_get_session() -> Result<Option<DesktopSessionEnvelope>, String> {
-    desktop_get_session_from_store(&KeyringDesktopSessionSecretStore)
-}
-
-#[tauri::command]
-pub fn desktop_set_session(session: DesktopSessionEnvelope) -> Result<bool, String> {
-    desktop_set_session_in_store(&KeyringDesktopSessionSecretStore, session)
-}
-
-#[tauri::command]
-pub fn desktop_remove_session() -> Result<bool, String> {
-    desktop_remove_session_from_store(&KeyringDesktopSessionSecretStore)
+    crate::desktop_secret_store::platform_secret_store_status()
 }
 
 #[tauri::command]

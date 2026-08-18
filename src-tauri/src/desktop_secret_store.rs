@@ -48,14 +48,7 @@ pub(crate) const DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_ACCESS_DENIED: &str =
 pub(crate) const DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_UNAVAILABLE: &str =
     "macos-keychain-unavailable";
 
-pub(crate) const DESKTOP_SECRET_STORE_OPERATION_LOCKED: &str = "desktop-secret-store-locked";
-pub(crate) const DESKTOP_SECRET_STORE_OPERATION_UNAVAILABLE: &str =
-    "desktop-secret-store-unavailable";
-pub(crate) const DESKTOP_SECRET_STORE_OPERATION_DENIED: &str = "desktop-secret-store-denied";
-
 pub(crate) const DESKTOP_SESSION_CREDENTIAL_SERVICE: &str = "com.whylandcreative.synara.desktop";
-pub(crate) const DESKTOP_SESSION_LEGACY_CREDENTIAL_SERVICE: &str = "app.synara.desktop";
-pub(crate) const DESKTOP_SESSION_CREDENTIAL_ACCOUNT: &str = "matrix-session";
 #[cfg(target_os = "macos")]
 const DESKTOP_SESSION_KEYCHAIN_PROBE_ACCOUNT: &str = "matrix-session-probe";
 #[cfg(target_os = "linux")]
@@ -111,60 +104,6 @@ fn macos_keychain_error_indicates_access_denied(
     }
 
     false
-}
-
-#[cfg(any(target_os = "macos", test))]
-fn secret_store_error_indicates_access_denied(
-    err: &(dyn std::error::Error + Send + Sync + 'static),
-) -> bool {
-    if macos_keychain_error_indicates_access_denied(err) {
-        return true;
-    }
-
-    #[cfg(test)]
-    {
-        let message = err.to_string();
-        if message.starts_with("test secret store error denied") {
-            return true;
-        }
-    }
-
-    let message = err.to_string().to_lowercase();
-    message.contains("access denied")
-        || message.contains("permission denied")
-        || message.contains("not authorized")
-        || message.contains("auth denied")
-}
-
-#[cfg(not(any(target_os = "macos", test)))]
-fn secret_store_error_indicates_access_denied(
-    err: &(dyn std::error::Error + Send + Sync + 'static),
-) -> bool {
-    let message = err.to_string().to_lowercase();
-    message.contains("access denied")
-        || message.contains("permission denied")
-        || message.contains("not authorized")
-        || message.contains("auth denied")
-}
-
-pub(crate) fn secret_store_operation_error_code(error: &KeyringError) -> &'static str {
-    match error {
-        KeyringError::NoStorageAccess(err) => {
-            if secret_store_error_indicates_access_denied(err.as_ref()) {
-                DESKTOP_SECRET_STORE_OPERATION_DENIED
-            } else {
-                DESKTOP_SECRET_STORE_OPERATION_LOCKED
-            }
-        }
-        KeyringError::PlatformFailure(err) => {
-            if secret_store_error_indicates_access_denied(err.as_ref()) {
-                DESKTOP_SECRET_STORE_OPERATION_DENIED
-            } else {
-                DESKTOP_SECRET_STORE_OPERATION_UNAVAILABLE
-            }
-        }
-        _ => DESKTOP_SECRET_STORE_OPERATION_UNAVAILABLE,
-    }
 }
 
 #[cfg(any(target_os = "macos", test))]
@@ -619,30 +558,6 @@ mod tests {
         assert!(bridge_supports_secure_secret_store(&persistent));
         assert!(!bridge_supports_secure_secret_store(&session_scoped));
         assert!(!bridge_supports_secure_secret_store(&unavailable));
-    }
-
-    #[test]
-    fn map_secret_store_operation_errors_to_stable_codes_without_payloads() {
-        assert_eq!(
-            secret_store_operation_error_code(&KeyringError::NoStorageAccess(Box::new(
-                std::io::Error::new(std::io::ErrorKind::PermissionDenied, "keychain locked"),
-            ))),
-            DESKTOP_SECRET_STORE_OPERATION_LOCKED
-        );
-        assert_eq!(
-            secret_store_operation_error_code(&KeyringError::NoStorageAccess(Box::new(
-                std::io::Error::other("test secret store error denied by ACL"),
-            ))),
-            DESKTOP_SECRET_STORE_OPERATION_DENIED
-        );
-        assert_eq!(
-            secret_store_operation_error_code(&KeyringError::PlatformFailure(Box::new(
-                std::io::Error::other(
-                    r#"secret service failed for {"accessToken":"super-secret-token"}"#,
-                ),
-            ))),
-            DESKTOP_SECRET_STORE_OPERATION_UNAVAILABLE
-        );
     }
 
     #[test]

@@ -116,6 +116,7 @@ private struct NotificationSessionStore {
 }
 
 private struct MatrixNotificationPreviewResolver {
+    private static let maximumEventResponseBytes = 256 * 1024
     private let sessionStore: NotificationSessionStore
     private let urlSession: URLSession
 
@@ -144,11 +145,25 @@ private struct MatrixNotificationPreviewResolver {
         request.timeoutInterval = 12
 
         do {
-            let (data, response) = try await urlSession.data(for: request)
+            let (bytes, response) = try await urlSession.bytes(for: request)
             guard Task.isCancelled == false,
                   let httpResponse = response as? HTTPURLResponse,
-                  (200..<300).contains(httpResponse.statusCode) else {
+                  (200..<300).contains(httpResponse.statusCode),
+                  httpResponse.expectedContentLength < 0 ||
+                    httpResponse.expectedContentLength <= Int64(Self.maximumEventResponseBytes) else {
                 return nil
+            }
+
+            var data = Data()
+            data.reserveCapacity(
+                min(max(0, Int(httpResponse.expectedContentLength)), Self.maximumEventResponseBytes)
+            )
+            for try await byte in bytes {
+                guard Task.isCancelled == false,
+                      data.count < Self.maximumEventResponseBytes else {
+                    return nil
+                }
+                data.append(byte)
             }
 
             let event = try JSONDecoder().decode(MatrixEventResponse.self, from: data)
