@@ -14,6 +14,7 @@ NOTIFICATION_SERVICE_PROVISIONING_PROFILE="${SYNARA_IOS_NOTIFICATION_SERVICE_PRO
 PUSH_GATEWAY_URL="${SYNARA_PUSH_GATEWAY_URL:-}"
 ARCHIVE_ROOT="${SYNARA_IOS_ARCHIVE_ROOT:-/tmp}"
 DIAGNOSTICS_DIR="${SYNARA_IOS_DIAGNOSTICS_DIR:-${RUNNER_TEMP:-$ARCHIVE_ROOT}/synara-ios-testflight-diagnostics}"
+PACKAGE_CACHE_PATH="${SYNARA_IOS_PACKAGE_CACHE_PATH:-}"
 
 require_env() {
   local name="$1"
@@ -59,13 +60,24 @@ run_xcodebuild() {
   xcodebuild "$@"
 }
 
+run_project_xcodebuild() {
+  local package_args=(
+    -onlyUsePackageVersionsFromResolvedFile
+    -skipPackageUpdates
+  )
+  if [[ -n "$PACKAGE_CACHE_PATH" ]]; then
+    package_args+=( -packageCachePath "$PACKAGE_CACHE_PATH" )
+  fi
+  run_xcodebuild "$@" "${package_args[@]}"
+}
+
 read_build_setting() {
   local key="$1"
   awk -F '= ' -v setting="$key" '$1 ~ setting"[[:space:]]*$" { print $2; exit }'
 }
 
 build_settings="$(
-  xcodebuild \
+  run_project_xcodebuild \
     -project "$PROJECT_DIR/Synara.xcodeproj" \
     -scheme "$SCHEME" \
     -configuration "$CONFIGURATION" \
@@ -137,7 +149,7 @@ PLIST
 
 echo "Archiving Synara ${marketing_version} (${build_number}) to ${archive_path}"
 set +e
-run_xcodebuild \
+run_project_xcodebuild \
   -project "$PROJECT_DIR/Synara.xcodeproj" \
   -scheme "$SCHEME" \
   -configuration "$CONFIGURATION" \
