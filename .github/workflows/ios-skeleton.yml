@@ -13,9 +13,6 @@ permissions:
 jobs:
   test:
     name: Unsigned simulator build and tests
-    # TEMPORARY (2026-08-17): paused until main is stable. Manual dispatch
-    # still exists; the job is skipped. Restore by removing this if.
-    if: false
     runs-on: macos-26
     # Bounded cap allows post-test output/upload.
     timeout-minutes: 60

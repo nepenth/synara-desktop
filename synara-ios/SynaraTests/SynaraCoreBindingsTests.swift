@@ -53,7 +53,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         let core = SharedCore.newWithSecretStore(store: InMemoryIosSecretVault())
         let recoveryKey = "s10-secret-recovery-key"
         let roomId = "!s10SecretRoom:example.org"
-        let eventBody = "s10-secret-event-body"
+        let actionTitle = "s10-secret-action-title"
         let mxc = "mxc://example.org/s10SecretMedia"
 
         do {
@@ -68,17 +68,20 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
 
         do {
-            _ = try await SharedCoreLeftovers.sendRawRoomEvent(
+            _ = try await SharedCoreAgentApprovals.send(
                 core: core,
                 roomId: roomId,
-                eventType: "m.room.message",
-                contentJson: eventBody
+                actionId: "approve-s10",
+                actionTitle: actionTitle,
+                decision: "approve",
+                sourceEventId: "$source:example.org",
+                createdAt: 1
             )
-            XCTFail("Fail-closed SharedCore must not send a leftover raw event without a session")
+            XCTFail("Fail-closed SharedCore must not send an agent approval without a session")
         } catch {
             let publicError = String(reflecting: error)
-            XCTAssertTrue(publicError.contains("p4-s10-leftover-no-session"))
-            for forbidden in ["syt_", "token", roomId, eventBody] {
+            XCTAssertTrue(publicError.contains("p4-s34-agent-approval-no-session"))
+            for forbidden in ["syt_", "token", roomId, actionTitle] {
                 XCTAssertFalse(publicError.contains(forbidden))
             }
         }
@@ -433,6 +436,18 @@ final class SynaraCoreBindingsTests: XCTestCase {
             ),
             .encryptedPlaceholder
         )
+        let projectedAgentJSON = #"{"title":"Approval required","status":"pending","summary":"Review","actions":[]}"#
+        if case let .agentCard(card) = SharedCoreTimelineRows.displayKind(
+            rowKind: "message",
+            body: "fallback",
+            formattedBody: nil,
+            agentCardJSON: projectedAgentJSON
+        ) {
+            XCTAssertEqual(card.title, "Approval required")
+            XCTAssertEqual(card.status, "pending")
+        } else {
+            XCTFail("Recognized SharedCore agent payload must map to an agent card")
+        }
         XCTAssertEqual(
             SharedCoreTimelineRows.reactionCounts([("👍", 2), ("🎉", 1)]),
             ["👍": 2, "🎉": 1]
@@ -521,6 +536,17 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
     }
 
+    func testSharedCoreTimelineUpdateBootstrapRefreshesOnlyLiveStream() {
+        XCTAssertTrue(
+            SharedCoreTimelineUpdateBootstrap.shouldRefreshOpenStream(focusedEventID: nil)
+        )
+        XCTAssertFalse(
+            SharedCoreTimelineUpdateBootstrap.shouldRefreshOpenStream(
+                focusedEventID: "$event:example.org"
+            )
+        )
+    }
+
     func testSharedCoreTimelineUpdatesWithoutSessionYieldsEmptyWithoutEcho() async {
         let host = SharedCoreProductHost(
             core: SharedCore(),
@@ -572,6 +598,17 @@ final class SynaraCoreBindingsTests: XCTestCase {
         } catch {
             let publicError = String(reflecting: error)
             XCTAssertTrue(publicError.contains("p2-timeline-close-no-session"))
+            for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreTimeline.timelineSnapshot(core: core, streamId: "view-1")
+            XCTFail("Fail-closed SharedCore must not snapshot a timeline without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-timeline-snapshot-no-session"))
             for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
                 XCTAssertFalse(publicError.contains(forbidden))
             }
@@ -741,42 +778,6 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
-    func testSharedCoreReadMarkersPrefersOwnReadWithoutEcho() {
-        let acknowledged = SharedCoreReadMarkers.acknowledgedEventID(
-            ownReadEventID: "$s24-own:example.org",
-            rowEventIDs: ["$local-1", "$s24-row:example.org"]
-        )
-        XCTAssertEqual(acknowledged, "$s24-own:example.org")
-        XCTAssertEqual(
-            SharedCoreReadMarkers.acknowledgedEventID(
-                ownReadEventID: "$pending-1",
-                rowEventIDs: ["$local-1", "$s24-row:example.org"]
-            ),
-            "$s24-row:example.org"
-        )
-        let publicError = String(describing: acknowledged)
-        for forbidden in ["password", "syt_", "token"] {
-            XCTAssertFalse(publicError.contains(forbidden))
-        }
-    }
-
-    func testSharedCoreReadMarkersWithoutSessionStayEmptyWithoutEcho() async {
-        let host = SharedCoreProductHost(
-            core: SharedCore(),
-            storeRoot: FileManager.default.temporaryDirectory,
-            sessionStore: AppSessionStore()
-        )
-        let service = SharedCoreRoomReadMarkerService(host: host)
-        let marked = await service.markRoomAsRead(roomID: "!s24:example.org")
-        let fullyRead = await service.fullyReadEventID(roomID: "!s24:example.org")
-        XCTAssertNil(marked)
-        XCTAssertNil(fullyRead)
-        let publicError = String(describing: (marked, fullyRead))
-        for forbidden in ["password", "syt_", "token"] {
-            XCTAssertFalse(publicError.contains(forbidden))
-        }
-    }
-
     func testSharedCoreRoomListRowsMapsInviteAndSpaceWithoutEcho() {
         let rooms = SharedCoreRoomListRows.rooms(
             rooms: [
@@ -801,7 +802,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     unreadCount: 0,
                     highlightCount: 0,
                     markedUnread: false,
-                    lastActivityTs: nil,
+                    lastActivityTs: 0,
                     lastMessagePreview: "Hello from Alice"
                 ),
             ],
@@ -825,6 +826,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(rooms.last?.lastMessagePreview, "Hello from Alice")
         XCTAssertEqual(rooms.first?.parentSpaces, [SpaceSummary(id: "!space:example.org", name: "Team")])
         XCTAssertEqual(rooms.first?.membership, .invited)
+        XCTAssertEqual(rooms.last?.lastActivityAt, .distantPast)
         let publicError = String(describing: rooms)
         for forbidden in ["password", "syt_", "token"] {
             XCTAssertFalse(publicError.contains(forbidden))

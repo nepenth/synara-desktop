@@ -7,26 +7,48 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0096DA204BC202DA4265462E /* SharedCoreLeftovers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CFA937424129A02D9E070E2 /* SharedCoreLeftovers.swift */; };
+		01A6E712EA43DAB8B20DFDF9 /* SharedCoreTimelineRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96EA34ED92FCEDC17A0165E /* SharedCoreTimelineRows.swift */; };
+		04418881C702E78099FD8C3E /* SharedCoreRoomModeration.swift in Sources */ = {isa = PBXBuildFile; fileRef = C408B6E0676EC23636BCA7DA /* SharedCoreRoomModeration.swift */; };
+		058E7F68F18D322AB72708D5 /* SharedCoreTimelineVoteDecline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42126A72CC2D0DA8584940FB /* SharedCoreTimelineVoteDecline.swift */; };
+		063D02A03BEC53708A6EFC33 /* SharedCoreJoinRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1C49F665331463EF9670F9 /* SharedCoreJoinRules.swift */; };
 		0729CE3EC35C32CEC12026B1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C3035383FA98B774B4F47C39 /* Assets.xcassets */; };
 		0B6FED64AA988069902712C4 /* ComposerTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69B679E7F5741D45B587B578 /* ComposerTextView.swift */; };
+		0CEC6C2ECD3CB67613855AC6 /* SharedCoreSyncStart.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0B2E02F6DD074EAA3074D5 /* SharedCoreSyncStart.swift */; };
+		0DA9A023F9B28FCA7E028F08 /* SharedCoreVerificationList.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEDE301E07E86206EF5E3745 /* SharedCoreVerificationList.swift */; };
 		0E68BDED62692800912DE41C /* LocalWipeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5077C08931AFE23ABB6EBFB /* LocalWipeService.swift */; };
+		0F83781A780E53A7EE444F3C /* SharedCoreTypingPresence.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9D54A583885BB081BFF3B5C /* SharedCoreTypingPresence.swift */; };
+		13974B028BA48477756A97D4 /* SharedCoreDevicesLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83CCF21D15E845BE04F4BB26 /* SharedCoreDevicesLive.swift */; };
 		1794B11F45DC4ACBA302F956 /* SynaraUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D0A5EA751CC5D570C324084 /* SynaraUITests.swift */; };
+		17EDA26AA8C46075FC6DE175 /* SharedCoreOwnProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48D83E5662BD400632FEC41E /* SharedCoreOwnProfile.swift */; };
+		1867ACA6870E401966F18FD2 /* SharedCoreTimelineReactions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD07810C1973F59A6A4E719E /* SharedCoreTimelineReactions.swift */; };
 		195E1F1A887EF41A86A02A3A /* PerformanceFixtureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4697063405B601DC0FE6F086 /* PerformanceFixtureTests.swift */; };
+		1A1AB9123DF5F5FD7A8658D8 /* SharedCoreTimelineViewUpdates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B446B03C1BB4057C12E560B /* SharedCoreTimelineViewUpdates.swift */; };
 		1A25A4B89F510B78AED4E8C6 /* AppLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C94FF43A1B1DDDCF8067FB1 /* AppLogging.swift */; };
+		1BB9888030B3687336DE5A44 /* SharedCoreSpaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0B665F3BD49873F6C4732FF /* SharedCoreSpaces.swift */; };
 		1DB7278B67BE35BB7DC62210 /* AgentActionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80584058D243DE7197CF3096 /* AgentActionService.swift */; };
 		1DF4C901D18BA2FDFE0754D2 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34B7F1719CBFE6CC6BD8166C /* NotificationService.swift */; };
 		1F2AE40317C7704B4ADD16F8 /* StableTimelineViewportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 311E5731825808ADC48C05B4 /* StableTimelineViewportTests.swift */; };
 		234379800D455B5D292AB67E /* MatrixRustSDK in Frameworks */ = {isa = PBXBuildFile; productRef = 04B49FA4F6E9D7346F1EDC97 /* MatrixRustSDK */; };
+		276F320443969E9B55369092 /* SharedCoreDevices.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAFBA65E1252F324C84B028E /* SharedCoreDevices.swift */; };
 		27F8472586C8C97BFB42B087 /* NotificationPermissionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0394B6246C8637014BEDC20 /* NotificationPermissionCoordinator.swift */; };
+		28FA102ECDF140A3E9CFB356 /* SharedCoreRoomDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = A144E94571B336790791A07D /* SharedCoreRoomDetails.swift */; };
+		2A9A7DE188F58BEEE2EE24AC /* ComposerMatrixFormattingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F236CF25261D2657C9A2FB0F /* ComposerMatrixFormattingTests.swift */; };
 		2AEC9CA069983AED2A534D47 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C830BF9B8F7ED001CA8AC317 /* AuthService.swift */; };
 		2F7828F754C6D475F5E161B4 /* RoomListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 417DD4194803886BB803C6A6 /* RoomListView.swift */; };
 		30173F84FF6440BD2EE8E5CC /* SynaraNotificationPreviewSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 141CF4920753EE324F1B3AF0 /* SynaraNotificationPreviewSupport.swift */; };
+		30ADD2995785584629AC7AF0 /* SharedCoreImagePacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C5A1A5A848D9C043A64F128 /* SharedCoreImagePacks.swift */; };
+		320624F61BB768C4B7C9E705 /* SharedCoreRoomMembersSnapshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D8498844FC0DE506B3E82D0 /* SharedCoreRoomMembersSnapshots.swift */; };
 		3321B54F4A9FFE147A737368 /* SignedInSessionReadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF389D46848BA1444F7035D0 /* SignedInSessionReadiness.swift */; };
 		3397141E30A00168F395FC72 /* NotificationPreviewSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB7C256708A8C6C4189DA5AB /* NotificationPreviewSupportTests.swift */; };
+		37B02657CA5E5B7386BEA95B /* SharedCorePresenceLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CC5B538D759B0BA4E412935 /* SharedCorePresenceLive.swift */; };
 		37E0DABCD7B044B59F2C5545 /* BoundedLRUCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43B4D9CA1CA01FA1D72EA05F /* BoundedLRUCache.swift */; };
+		39B5E998542AA8CB615845E4 /* SharedCoreTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D92DF2B3F4F467F73E3C9D /* SharedCoreTimeline.swift */; };
 		3AB84959BA0C8A2EB98CF309 /* ComposerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A9908B77A7CB8F4A4CC55A /* ComposerService.swift */; };
 		3C76DA11CB749760025BAB3F /* SynaraCore in Frameworks */ = {isa = PBXBuildFile; productRef = 49B5C4AB6642E35F27BCCB5C /* SynaraCore */; };
 		3CF0BDAD36854DC8962393D4 /* LogRedactorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15DF14E92067B54B5BF14404 /* LogRedactorTests.swift */; };
+		416DCE40A4B48A841121026B /* SharedCoreTimelinePin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F84F97D77A9A566CA405225 /* SharedCoreTimelinePin.swift */; };
+		4188B91C5108402CD1DFF64D /* SharedCoreImagePackRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3137E06580A1581467F3167 /* SharedCoreImagePackRows.swift */; };
 		41FC7B292DE64AD0C485C6E3 /* SynaraMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDBE1E4A32C918309E6AA85A /* SynaraMotion.swift */; };
 		45DB0A08CF868FFA984A3B0D /* SecureSessionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0070A890F80B56DD756D02 /* SecureSessionStoreTests.swift */; };
 		46D1B37442FA446C39C64390 /* SynaraMessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = A250FE1A7BB064F16F28C795 /* SynaraMessageBubble.swift */; };
@@ -36,22 +58,33 @@
 		4A014306BFF1ADF7E1444027 /* NotificationPermissionCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C10DC4BB2D6146CF070DDC8 /* NotificationPermissionCoordinatorTests.swift */; };
 		4A665A8695E281B0E96F0A54 /* TimelineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFDD334C6EF890B453477E1 /* TimelineService.swift */; };
 		4C0DF38E441C5250941FE911 /* HomeserverDiscoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12329DB928DC3AB27731C926 /* HomeserverDiscoveryTests.swift */; };
+		4FC4F37BA082A43570C836AF /* SharedCoreReadMarkers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EE498A23839D0BB8FD5AA3B /* SharedCoreReadMarkers.swift */; };
+		502195675B8E4299D9D998AE /* SharedCoreInviteActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E062711DFC1EC46B1A8411D1 /* SharedCoreInviteActions.swift */; };
 		504E908432E2659D05DE87F8 /* SynaraContractsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE92B48EA7FF49B2D9FED1FE /* SynaraContractsTests.swift */; };
 		53A86DD39FD62D232711EB70 /* HomeserverDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = B41D9817A0F821E67BCD9C00 /* HomeserverDiscovery.swift */; };
 		53A96EF2B937BE57AE02A15C /* PushService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A602AD446A2DD4C7C3A476ED /* PushService.swift */; };
+		540CB21AF670CA22B5C0888F /* SharedCoreRoomNotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB28D7FCF2A9E0531DCF97BF /* SharedCoreRoomNotes.swift */; };
 		56E15BC20C25F32A6D25BA18 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB040EB752E246AD052AC7E7 /* AppEnvironment.swift */; };
+		5A36E29F3977C4EC325B3449 /* SharedCoreEditMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7F1E8B46A978F812C97EE0D /* SharedCoreEditMessage.swift */; };
 		5B00A849754CCEB409B6544E /* SynaraCoreBindingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54B5B55419769DE9EA2EE1F9 /* SynaraCoreBindingsTests.swift */; };
+		5CD57F32E8A5C70A06AF5877 /* SharedCoreDirectoryVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE57C952A0B60F23459D8883 /* SharedCoreDirectoryVisibility.swift */; };
+		5E3BB592850C098A87A159B5 /* SharedCoreRoomLeaveJoin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E4908118613950CF3162D88 /* SharedCoreRoomLeaveJoin.swift */; };
+		5E3FD90EE6250575D8926C38 /* SharedCoreDirectorySearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F331E5FF94D7423E1E23C82 /* SharedCoreDirectorySearch.swift */; };
 		6022C473D59F944208C3E79D /* EventActionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8CE546B97B6AE15795C6E76 /* EventActionServiceTests.swift */; };
 		652C81E69C2C1B922B4BE789 /* RoomTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A460B0098799FF6C79F0756E /* RoomTimelineView.swift */; };
 		6565433C651603C659B39B26 /* SynaraNotificationPreviewSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 141CF4920753EE324F1B3AF0 /* SynaraNotificationPreviewSupport.swift */; };
 		6CCD8DBF4D4A6682D58FD5B1 /* AgentApprovalServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45436B56CDB7CBBD40303484 /* AgentApprovalServiceTests.swift */; };
 		6E2FFEA9F5B858D1289C0C00 /* StableTimelineViewport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D1561F09029D684B9548B0F /* StableTimelineViewport.swift */; };
+		6FD1D217B1A66835264330D3 /* SharedCoreTimelineMutate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE8F1D905F272FF864B20E6D /* SharedCoreTimelineMutate.swift */; };
 		70328744CB4C90A1526E9E28 /* TimelineServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 633F1D9CBE601BF3E42E4B1B /* TimelineServiceTests.swift */; };
 		7247DDD14FE03A17AEC96541 /* SessionCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26D5EAB60408E1F01AB36535 /* SessionCoordinatorTests.swift */; };
 		76AE72648BA28AFF732BB8F6 /* RoomListServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D42B2D11968F0B23193A4ED /* RoomListServiceTests.swift */; };
 		7BD7C2DB346D071A5121FC36 /* AppRouteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55BBDF32970A214C2829B1B /* AppRouteTests.swift */; };
 		7D325777FCB71B71B460A30F /* RoomUnreadPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 643AFA2D05F02E0DB1C2B849 /* RoomUnreadPresentationTests.swift */; };
+		7DAF60D7071DFEF42CDE68AC /* SharedCoreTimelineLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8E9AB178A8E40E8BE4EFA42 /* SharedCoreTimelineLive.swift */; };
+		80E8CD3DA5A371B6F03CCCA8 /* SharedCoreProductServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A860C00E403D76C0D37ABD /* SharedCoreProductServices.swift */; };
 		828A1EF26C245C22F21B95EF /* CameraImagePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B32ACB6B0CEC48C00B0D21 /* CameraImagePicker.swift */; };
+		83BD03F3B55BE91C49304E5D /* SharedCoreSessionBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 264191FB968D9C701815BEDB /* SharedCoreSessionBootstrap.swift */; };
 		88AAAD208C97C1A9EFF8AFE5 /* PushServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40037D97F31F787EA20BD7AE /* PushServiceTests.swift */; };
 		89761685411B7F9D7FCCD863 /* HomeserverSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C52EDC986E0B57231E77F695 /* HomeserverSelectionView.swift */; };
 		8B42041876057A9091D2F463 /* PerformanceInstrumentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00D51C4E0E89D32C8D99CC22 /* PerformanceInstrumentation.swift */; };
@@ -61,94 +94,64 @@
 		90B73234B5A1DC142783A451 /* AppTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD86C72DEE3F411D1FABB6B /* AppTab.swift */; };
 		9105AE3CB60343D07B999895 /* RoomReadMarkerServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA398093E16277847EDB79DB /* RoomReadMarkerServiceTests.swift */; };
 		919BCCE1F8A9D3525404023E /* SynaraRoomAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3823216AA8763374F18EB0D0 /* SynaraRoomAvatar.swift */; };
+		92740DC7B8F8A2D02D741027 /* SharedCoreVerificationSas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 740E5CB751CAF56D84A66023 /* SharedCoreVerificationSas.swift */; };
 		94C8E8F56034DCA1284A9A13 /* TimelineReplyPreviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90A203B905E3CBD0DC7BD126 /* TimelineReplyPreviewTests.swift */; };
+		95EDCBB44F7C1975D7EE2B06 /* SharedCoreRoomListRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB0A6ED03055F6B933AD36A6 /* SharedCoreRoomListRows.swift */; };
 		969D33C61DAE6C1B12C9BCDB /* AgentActionResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DA6E8858D607B040754AF0E /* AgentActionResolverTests.swift */; };
 		97901F6C1B589C2271A4975D /* AuthServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 017B2EBED1FF4FF0EC25CB24 /* AuthServiceTests.swift */; };
 		98DDD34A1A8A4A63C23D8401 /* SynaraNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 4B42BC8DD2D2505F14EE1B6D /* SynaraNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		9B792F2B4073B7792ED943D8 /* MediaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3ECC92EE34CCE4DB57A5D3E /* MediaService.swift */; };
 		9D70F473C1C1E8971224F0B0 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 184EF5364268AFF19F35E66B /* PrivacyInfo.xcprivacy */; };
 		9DA561CC126EB87B8410D7C7 /* RootShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57076E7E82206F1492033846 /* RootShellView.swift */; };
+		9E45177E84B77E2D4CC34FBC /* IosSecretVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F818AC6C01E58C4E7BACF38 /* IosSecretVault.swift */; };
 		9F74223A8F55C5CF1DBAE27B /* SynaraContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14082967A84F18C386D01EFB /* SynaraContracts.swift */; };
 		A4B52FFB382C8BD8FFFDF5F9 /* SecureSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDD7517A55AC0E513E708AA0 /* SecureSessionStore.swift */; };
 		A72441DA6F04ED38E6AFA5FD /* RoomListService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6E7399D69CF6418A4206407 /* RoomListService.swift */; };
+		A9F8B2208642E92DDCDFCFA9 /* SharedCoreSessionStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = A346A6C213E92D2E71A5D4B4 /* SharedCoreSessionStatus.swift */; };
+		AC0F8F007E34C9AD632B2FA6 /* SharedCoreSessionLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0913C89133240B496A0103CB /* SharedCoreSessionLogin.swift */; };
+		ACCC5DFE2A8070A623048280 /* SharedCoreOwnerUpdates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D6CA89BB7B9529C53D2776 /* SharedCoreOwnerUpdates.swift */; };
+		B08602C331A289B0E6288264 /* SharedCoreTimelineForward.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14AA7CF73C18244203BB0744 /* SharedCoreTimelineForward.swift */; };
+		B168772BB20CCA4CBEFEB88F /* SharedCoreRoomCreate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8748C7ACF87406A7CABAFF67 /* SharedCoreRoomCreate.swift */; };
+		B8885E152FFECEAEC09B77B1 /* SharedCoreLater.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1689B3F4DF0713A4E355BA4 /* SharedCoreLater.swift */; };
+		B9E323A9FA09B7910E6F11C3 /* SharedCoreTimelineMedia.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8AFDF08C8140FD041C9DD20 /* SharedCoreTimelineMedia.swift */; };
 		BE33F8C817E797AB7182C4C0 /* SynaraDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E13415F14EC8A65D465380C /* SynaraDesign.swift */; };
 		BFD957777F3C28C1ED7C69AD /* MatrixLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CBE437294BD93B48D7CDF75 /* MatrixLifecycleTests.swift */; };
+		C1B843F245435F156EA81AEB /* SharedCoreRoomListUpdates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03AC3AA739D0F212EB229563 /* SharedCoreRoomListUpdates.swift */; };
 		C6EA1FD3F81C8AEB782893D7 /* SynaraNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8809AE831952D397FC6221F3 /* SynaraNavigation.swift */; };
+		C86351E1582E760A653031D1 /* SharedCoreTimelineReadState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45728DABC3F492DFCAA5DA94 /* SharedCoreTimelineReadState.swift */; };
 		C8BCA6C5B2041510969B6EBC /* TimelineReplyPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2F0DA8C678C322C53FF89A0 /* TimelineReplyPreview.swift */; };
+		C8F99ABAA3FD519459C33F27 /* SharedCoreAgentApprovals.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EDD2A18920864F8AED4F9BF /* SharedCoreAgentApprovals.swift */; };
+		C8FDBAA953D5E12F8F652402 /* SharedCoreSendText.swift in Sources */ = {isa = PBXBuildFile; fileRef = C22C543BA91811DCAA8CFCCF /* SharedCoreSendText.swift */; };
+		C9695CFF98CCEB0221B26C26 /* SharedCoreMDirect.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A2B39D7BED6B716A48BEA2 /* SharedCoreMDirect.swift */; };
+		C9A8D01FAF508C192F75F9B7 /* SharedCoreTypingLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9412F741C7E9E08EEA44E0BC /* SharedCoreTypingLive.swift */; };
+		CAE7630DBBA1747729F7F85E /* SharedCoreRoomProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8A673CF71EFDD2DCB998C8C /* SharedCoreRoomProfile.swift */; };
 		CC89EE97042280F04BD29498 /* SynaraApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2E4F1A7ADF247942C6D0059 /* SynaraApp.swift */; };
+		CDCDCDD2EFC9D72CA218D821 /* MatrixClientPolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05E9804A6FB5F292C398A0FC /* MatrixClientPolicies.swift */; };
+		D08F97130C56008BF1101E20 /* SharedCoreRoomPowerLevels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE9ED2F14657EAEB22A05533 /* SharedCoreRoomPowerLevels.swift */; };
 		D0F9ECDAFC0C1996B350149B /* MatrixSessionProjectionMirror.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80766F42BBCF758CD7C7F4F /* MatrixSessionProjectionMirror.swift */; };
-		1F6B9D2E4A7083C5B1D7E9A0 /* SharedCoreSessionRestore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3E1A7B94D0526F1E8A0C4D /* SharedCoreSessionRestore.swift */; };
-		6C9E0F1A2B3C4D5E6F708192 /* SharedCoreSessionLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B8D4E6A1C3059F7E0A1B3C5 /* SharedCoreSessionLogin.swift */; };
-		7D0F1A2B3C4D5E6F708192A3 /* SharedCoreSessionAttach.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C9E5F7B2D4160A8F1B2C4D6 /* SharedCoreSessionAttach.swift */; };
-		1B2C3D4E5F60718293A4B5C6 /* SharedCoreSyncStart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1B2C3D4E5F60718293A4B5 /* SharedCoreSyncStart.swift */; };
-		2C3D4E5F60718293A4B5C6D7 /* SharedCoreSessionBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C2D3E4F60718293A4B5C6D7 /* SharedCoreSessionBootstrap.swift */; };
-		3E4F60718293A4B5C6D7E8F9 /* SharedCoreTimelineViewUpdates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D3E4F60718293A4B5C6D7E8 /* SharedCoreTimelineViewUpdates.swift */; };
-		5A718293A4B5C6D7E8F90A1B /* SharedCoreTimelineRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F60718293A4B5C6D7E8F90A /* SharedCoreTimelineRows.swift */; };
-		718293A4B5C6D7E8F90A1B2C /* SharedCoreOwnerUpdates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60718293A4B5C6D7E8F90A1B /* SharedCoreOwnerUpdates.swift */; };
-		93A4B5C6D7E8F90A1B2C3D4E /* SharedCoreTimelineLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8293A4B5C6D7E8F90A1B2C3D /* SharedCoreTimelineLive.swift */; };
-		C6D7E8F90A1B2C3D4E5F6071 /* SharedCoreRoomListUpdates.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C6D7E8F90A1B2C3D4E5F60 /* SharedCoreRoomListUpdates.swift */; };
-		E8F90A1B2C3D4E5F60718293 /* SharedCoreVerificationLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E8F90A1B2C3D4E5F607182 /* SharedCoreVerificationLive.swift */; };
-		0B2C3D4E5F60718293A4B5C7 /* SharedCoreTypingLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = F91A2B3C4D5E6F708192A3B4 /* SharedCoreTypingLive.swift */; };
-		F1A2B3C4D5E6F708192A3B5D /* SharedCoreRoomDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0F1A2B3C4D5E6F708192A4C /* SharedCoreRoomDetails.swift */; };
-		B3C4D5E6F708192A3B4C5D6E /* SharedCoreReadMarkers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B3C4D5E6F708192A3B4C5D /* SharedCoreReadMarkers.swift */; };
-		D5E6F708192A3B4C5D6E7F80 /* SharedCoreRoomListRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4D5E6F708192A3B4C5D6E7F /* SharedCoreRoomListRows.swift */; };
-		F708192A3B4C5D6E7F8091A2 /* SharedCoreSessionCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6F708192A3B4C5D6E7F8091 /* SharedCoreSessionCrypto.swift */; };
-		B8192A3B4C5D6E7F8091A2C3 /* SharedCoreTimelineMedia.swift in Sources */ = {isa = PBXBuildFile; fileRef = A708192A3B4C5D6E7F8091B3 /* SharedCoreTimelineMedia.swift */; };
-		C92A3B4C5D6E7F8091A2B3D4 /* SharedCoreDevicesLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8192A3B4C5D6E7F8091C4 /* SharedCoreDevicesLive.swift */; };
-		E14C5D6E7F8091F708192A3B /* SharedCorePresenceLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = C92A3B4C5D6E7F8091D5E6F7 /* SharedCorePresenceLive.swift */; };
-		F25D6E7F8091A8192A3B4C5D /* SharedCoreImagePackRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = D03B4C5D6E7F8091E6F70819 /* SharedCoreImagePackRows.swift */; };
-		8E1A2B3C4D5E6F708192A4B5 /* SharedCoreRoomList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D0A6E8C3E5271B902C3D5E7 /* SharedCoreRoomList.swift */; };
-		9F2B3C4D5E6F708192A5B6C7 /* SharedCoreInvites.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1B7F9D4F6382C013D4E6F8 /* SharedCoreInvites.swift */; };
-		A03C4D5E6F708192A6B7C8D9 /* SharedCoreTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F2C8A0E507493D124E5F7A9 /* SharedCoreTimeline.swift */; };
-		B14D5E6F708192A7B8C9D0E1 /* SharedCoreTypingPresence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3D9B1F6185A4E235F608B0 /* SharedCoreTypingPresence.swift */; };
-		C25E6F708192A8B9C0D1E2F3 /* SharedCoreVerificationList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B4E0C207296B5F3460719C1 /* SharedCoreVerificationList.swift */; };
-		D36F708192A9C0D1E2F30415 /* SharedCoreVerificationSas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C5F1D3183A7C6E4571820D2 /* SharedCoreVerificationSas.swift */; };
-		E47F8192A0B1D2E3F4051627 /* SharedCoreDevices.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD6F2E4294B8D7F5682931E3 /* SharedCoreDevices.swift */; };
-		F58A92A3B1C2E4F516273849 /* SharedCoreJoinRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7A3F53A5C9E8F6793A2B40 /* SharedCoreJoinRules.swift */; };
-		069BA3B4C2D3F62738495A50 /* SharedCoreImagePacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF8B4064B6D0F9A78A4B3C51 /* SharedCoreImagePacks.swift */; };
-		17ACB4C5D3E4F738495A61B2 /* SharedCoreLater.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09C5175C7E10A89B5B4C4D2 /* SharedCoreLater.swift */; };
-		28BDC5D6E4F508495A62C3D4 /* SharedCoreMDirect.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1AD6286D8F21B9AC6C5D5E3 /* SharedCoreMDirect.swift */; };
-		39CED6E7F516195A73D4E5F5 /* SharedCoreRoomNotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2BE7397E9A32C0BD7D6E6F4 /* SharedCoreRoomNotes.swift */; };
-		4ADFE8F917283B7C95F60716 /* SharedCoreOwnProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03CF84A80B754D2CE8E7F705 /* SharedCoreOwnProfile.swift */; };
-		5BE0F90A28394C8DA6071827 /* SharedCoreRoomProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14D095B91C865E3DF9F71816 /* SharedCoreRoomProfile.swift */; };
-		6CF10A1B394A5D9EB7182938 /* SharedCoreDirectoryVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E1A6CA2D976F4E0A082927 /* SharedCoreDirectoryVisibility.swift */; };
-		7D021B2C4A5B6E0FC8293A49 /* SharedCoreDirectorySearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36F2B7DB3E08705F1B193038 /* SharedCoreDirectorySearch.swift */; };
-		8E132C3D5B6C7F10D93A4B5A /* SharedCoreRoomLeaveJoin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47A3C8EC4F198162C2041490 /* SharedCoreRoomLeaveJoin.swift */; };
-		9F243D4E6C7D8011EA4B5C6B /* SharedCoreRoomModeration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58B4D9FD5E2A9273D3152501 /* SharedCoreRoomModeration.swift */; };
-		A0354E5F7D8E9122FB5C6D7C /* SharedCoreRoomPowerLevels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69C5E0AE6F3B0384E4263612 /* SharedCoreRoomPowerLevels.swift */; };
-		B1465F608E9FA2330C6D7E8D /* SharedCoreRoomCreate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AD6F1BF70414A4955374723 /* SharedCoreRoomCreate.swift */; };
-		C25760619FA0B3441D7E8F9E /* SharedCoreRoomMembersSnapshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE802C081525B5A66485834 /* SharedCoreRoomMembersSnapshots.swift */; };
-		D3687172A0B1C4552E8F9A0F /* SharedCoreSpaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CF913D192636C6B77596945 /* SharedCoreSpaces.swift */; };
-		E4798283B1C2D5663F9A0B10 /* SharedCoreInviteActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADE024E2A3747D7C886A7A56 /* SharedCoreInviteActions.swift */; };
-		F58A9394C2D3E67740AB1C21 /* SharedCoreTimelineReadState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF135F3B4858E8D997B8B67 /* SharedCoreTimelineReadState.swift */; };
-		10BD26C7F50619AA73DE4F54 /* SharedCoreTimelineReactions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2146826E7B8B1B0CCAEBE9A /* SharedCoreTimelineReactions.swift */; };
-		21CE37D861720BB84EF7C650 /* SharedCoreComposerReplyDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3257937C8C9D1A0B1E2F304 /* SharedCoreComposerReplyDraft.swift */; };
-		32DF48E972831CC95F08D761 /* SharedCoreSendText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04368048D9DAE2B1C2F30415 /* SharedCoreSendText.swift */; };
-		43E059F083942DD0619E8728 /* SharedCoreSendSticker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15479159E0EB3C2D3F405267 /* SharedCoreSendSticker.swift */; };
-		54F16A0194A53EE1720F9839 /* SharedCoreSendPoll.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2658A26AF1FC4D3E40537878 /* SharedCoreSendPoll.swift */; };
-		65027B12A5644FF28310A94A /* SharedCoreEditMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3769B37B20FD5E4F51648989 /* SharedCoreEditMessage.swift */; };
-		76138C23B67550039421BA5B /* SharedCorePollRespond.swift in Sources */ = {isa = PBXBuildFile; fileRef = 487AC48C310F6F5062759A9A /* SharedCorePollRespond.swift */; };
-		87249D34C7866114A532CB6C /* SharedCoreTimelineMutate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 598BD59D42107F617386AB0B /* SharedCoreTimelineMutate.swift */; };
-		9835AE45D8977225B643DC7D /* SharedCoreTimelinePin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A9CE6AE532190728497BC1C /* SharedCoreTimelinePin.swift */; };
-		A946BF56E9A88336C754ED8E /* SharedCoreTimelineVoteDecline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BADE7BF6432A18395A8CD2D /* SharedCoreTimelineVoteDecline.swift */; };
-		BA57C067F0B99447D865FE9F /* SharedCoreTimelineForward.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CBEF8C07543B294A6B9DE3E /* SharedCoreTimelineForward.swift */; };
-		CB68D17801CA0558E9760FA0 /* SharedCoreSessionStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DC0F9D18654C3A5B7C0EF4F /* SharedCoreSessionStatus.swift */; };
-		DC79E28912DB1669FA8710B1 /* SharedCoreNseStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1D0AE29765D4B6C8D1F160 /* SharedCoreNseStore.swift */; };
-		E15B4E26D1A98F70113D4E5F /* SharedCoreLeftovers.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF2E1BF3A8765C4D9E0A1B2C /* SharedCoreLeftovers.swift */; };
-		F26C5F37E2BA9081224E5F60 /* SharedCoreProductServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF3F2C04B9876D5E0F1B2C3D /* SharedCoreProductServices.swift */; };
-		037D6048F3CB0192335F6071 /* MatrixClientPolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = D04A3D15C0987E6F102C3D4E /* MatrixClientPolicies.swift */; };
-		4D8B1F6A2C9037E5B0D4A7C1 /* IosSecretVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2E9C1D4B6805F3E8A1C0D2 /* IosSecretVault.swift */; };
+		D1B8D797C6809F800D240352 /* SharedCoreSendSticker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99A959A786C9EE1E90F326F6 /* SharedCoreSendSticker.swift */; };
 		D21F2D94FEAEE8E93F3E2A6A /* RoomReadMarkerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B44B25CB0277A9BAD73943 /* RoomReadMarkerService.swift */; };
+		D2BF89CF0953CCA2D0B7C630 /* SharedCorePollRespond.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34EE9125219D71BE97B3B2E8 /* SharedCorePollRespond.swift */; };
 		D46F130EFA2B2D58B79B605D /* AppServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A4D48D89C01C70901919CAB /* AppServices.swift */; };
+		D47B51D8E747B028B21D8DD0 /* ComposerMatrixFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A2EA7250A5E48B4331075A1 /* ComposerMatrixFormatting.swift */; };
+		D77D1D7A498AFD4EE234FA8F /* SharedCoreSessionAttach.swift in Sources */ = {isa = PBXBuildFile; fileRef = E78FEA7A3A5DCB37BE38BEF7 /* SharedCoreSessionAttach.swift */; };
+		D8374F63F8465BD4917F14F3 /* SharedCoreComposerReplyDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34064BA2D401DE01569CC3CB /* SharedCoreComposerReplyDraft.swift */; };
 		DD21E3D8ABB385F61B3E008F /* MediaServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAB0B1FDD47555E50BE466B2 /* MediaServiceTests.swift */; };
 		DDE289AE310A6D880C9CDBC8 /* MatrixStoreLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CC3097C5F2157B0C1B6E975 /* MatrixStoreLifecycleTests.swift */; };
+		E2080809FCE254F98A9C920A /* SharedCoreRoomList.swift in Sources */ = {isa = PBXBuildFile; fileRef = B69B72BA313FA7259ACCB7E4 /* SharedCoreRoomList.swift */; };
 		E41A0F4331E1F46B7474286D /* ComposerMarkdownTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72E9B9C1E874AD8B6B90D9C3 /* ComposerMarkdownTests.swift */; };
+		E703168D08D6AE663962D928 /* SharedCoreNseStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A646829F440AA1729EE8F21 /* SharedCoreNseStore.swift */; };
 		E9028170C931CDFE77B89713 /* EventActionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A856EC4E030E1E38C04CBE4B /* EventActionService.swift */; };
 		ECCF8209D63C8A3CD581CF75 /* LocalWipeServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C261C2AFA98091E546B19E90 /* LocalWipeServiceTests.swift */; };
 		EE7410A9C8E4EB56072632D8 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FBB16EA6FF93511B2EE8F0 /* SettingsView.swift */; };
 		EFAE66D8EA286E31E189C876 /* LaterListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5BE26F02C5C59C8ED097BF8 /* LaterListView.swift */; };
+		F10C6F8F9CD9732E05B6BEF6 /* SharedCoreSessionCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2B54408155EBFFC58189185 /* SharedCoreSessionCrypto.swift */; };
 		F2A315907EC47F18BB54CC1C /* AppEnvironmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FF241378CB1601D3575AF03 /* AppEnvironmentTests.swift */; };
+		F2CDC879D2E12D150E5C090C /* SharedCoreSendPoll.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD24CB3706C2E72EC1C0A070 /* SharedCoreSendPoll.swift */; };
+		F606D4778ECF8726CB3C3301 /* SharedCoreSessionRestore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C1C8509BC43E2E11002D4B /* SharedCoreSessionRestore.swift */; };
 		FA245616FD7A5D32D22AC4E7 /* SynaraHaptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5160F29A03489EC72ED66FE4 /* SynaraHaptics.swift */; };
+		FBF56C36E9D9A47F51C129D0 /* SharedCoreInvites.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2FD208944F0952872B6F80B /* SharedCoreInvites.swift */; };
+		FC16E5DBC53F5B0897C4903C /* SharedCoreVerificationLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F8019C260DF3717FB9275E3 /* SharedCoreVerificationLive.swift */; };
 		FFB6A97B5F18519D154EAC9C /* AppRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE2FB3D6ADFFA295C9B956F /* AppRouter.swift */; };
 /* End PBXBuildFile section */
 
@@ -193,55 +196,89 @@
 /* Begin PBXFileReference section */
 		00D51C4E0E89D32C8D99CC22 /* PerformanceInstrumentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceInstrumentation.swift; sourceTree = "<group>"; };
 		017B2EBED1FF4FF0EC25CB24 /* AuthServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthServiceTests.swift; sourceTree = "<group>"; };
+		03AC3AA739D0F212EB229563 /* SharedCoreRoomListUpdates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomListUpdates.swift; sourceTree = "<group>"; };
 		03ECE8FDA43404E53231A280 /* SynaraUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SynaraUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		05E9804A6FB5F292C398A0FC /* MatrixClientPolicies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixClientPolicies.swift; sourceTree = "<group>"; };
+		0913C89133240B496A0103CB /* SharedCoreSessionLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionLogin.swift; sourceTree = "<group>"; };
 		0CC3097C5F2157B0C1B6E975 /* MatrixStoreLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixStoreLifecycleTests.swift; sourceTree = "<group>"; };
 		0D42B2D11968F0B23193A4ED /* RoomListServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomListServiceTests.swift; sourceTree = "<group>"; };
 		12329DB928DC3AB27731C926 /* HomeserverDiscoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeserverDiscoveryTests.swift; sourceTree = "<group>"; };
 		14082967A84F18C386D01EFB /* SynaraContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraContracts.swift; sourceTree = "<group>"; };
 		141CF4920753EE324F1B3AF0 /* SynaraNotificationPreviewSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraNotificationPreviewSupport.swift; sourceTree = "<group>"; };
+		14AA7CF73C18244203BB0744 /* SharedCoreTimelineForward.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineForward.swift; sourceTree = "<group>"; };
 		15DF14E92067B54B5BF14404 /* LogRedactorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogRedactorTests.swift; sourceTree = "<group>"; };
 		184EF5364268AFF19F35E66B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		1B446B03C1BB4057C12E560B /* SharedCoreTimelineViewUpdates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineViewUpdates.swift; sourceTree = "<group>"; };
 		1C0070A890F80B56DD756D02 /* SecureSessionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureSessionStoreTests.swift; sourceTree = "<group>"; };
 		1C10DC4BB2D6146CF070DDC8 /* NotificationPermissionCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPermissionCoordinatorTests.swift; sourceTree = "<group>"; };
 		2515972271FDB4E4717F0CEE /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		253AA6941119C1C9D4F2DE3D /* AppRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRoute.swift; sourceTree = "<group>"; };
+		264191FB968D9C701815BEDB /* SharedCoreSessionBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionBootstrap.swift; sourceTree = "<group>"; };
 		26D5EAB60408E1F01AB36535 /* SessionCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionCoordinatorTests.swift; sourceTree = "<group>"; };
 		275642FB89913A7B3E8AD14A /* ComposerMarkdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerMarkdown.swift; sourceTree = "<group>"; };
 		28004193A008B4EDFF0E6E18 /* ComposerServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerServiceTests.swift; sourceTree = "<group>"; };
 		2CBE437294BD93B48D7CDF75 /* MatrixLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixLifecycleTests.swift; sourceTree = "<group>"; };
+		2EE498A23839D0BB8FD5AA3B /* SharedCoreReadMarkers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreReadMarkers.swift; sourceTree = "<group>"; };
 		311E5731825808ADC48C05B4 /* StableTimelineViewportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StableTimelineViewportTests.swift; sourceTree = "<group>"; };
+		34064BA2D401DE01569CC3CB /* SharedCoreComposerReplyDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreComposerReplyDraft.swift; sourceTree = "<group>"; };
 		34B7F1719CBFE6CC6BD8166C /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		34EE9125219D71BE97B3B2E8 /* SharedCorePollRespond.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCorePollRespond.swift; sourceTree = "<group>"; };
 		3823216AA8763374F18EB0D0 /* SynaraRoomAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraRoomAvatar.swift; sourceTree = "<group>"; };
+		3A2EA7250A5E48B4331075A1 /* ComposerMatrixFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerMatrixFormatting.swift; sourceTree = "<group>"; };
 		3C94FF43A1B1DDDCF8067FB1 /* AppLogging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogging.swift; sourceTree = "<group>"; };
 		3FF241378CB1601D3575AF03 /* AppEnvironmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironmentTests.swift; sourceTree = "<group>"; };
 		40037D97F31F787EA20BD7AE /* PushServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushServiceTests.swift; sourceTree = "<group>"; };
 		417DD4194803886BB803C6A6 /* RoomListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomListView.swift; sourceTree = "<group>"; };
+		42126A72CC2D0DA8584940FB /* SharedCoreTimelineVoteDecline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineVoteDecline.swift; sourceTree = "<group>"; };
 		43B4D9CA1CA01FA1D72EA05F /* BoundedLRUCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoundedLRUCache.swift; sourceTree = "<group>"; };
 		45436B56CDB7CBBD40303484 /* AgentApprovalServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentApprovalServiceTests.swift; sourceTree = "<group>"; };
+		45728DABC3F492DFCAA5DA94 /* SharedCoreTimelineReadState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineReadState.swift; sourceTree = "<group>"; };
 		4697063405B601DC0FE6F086 /* PerformanceFixtureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceFixtureTests.swift; sourceTree = "<group>"; };
+		48D83E5662BD400632FEC41E /* SharedCoreOwnProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreOwnProfile.swift; sourceTree = "<group>"; };
 		4B42BC8DD2D2505F14EE1B6D /* SynaraNotificationService.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SynaraNotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		4E13415F14EC8A65D465380C /* SynaraDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraDesign.swift; sourceTree = "<group>"; };
+		4E4908118613950CF3162D88 /* SharedCoreRoomLeaveJoin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomLeaveJoin.swift; sourceTree = "<group>"; };
+		4F818AC6C01E58C4E7BACF38 /* IosSecretVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosSecretVault.swift; sourceTree = "<group>"; };
+		4F84F97D77A9A566CA405225 /* SharedCoreTimelinePin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelinePin.swift; sourceTree = "<group>"; };
 		5160F29A03489EC72ED66FE4 /* SynaraHaptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraHaptics.swift; sourceTree = "<group>"; };
 		54B5B55419769DE9EA2EE1F9 /* SynaraCoreBindingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraCoreBindingsTests.swift; sourceTree = "<group>"; };
 		57076E7E82206F1492033846 /* RootShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootShellView.swift; sourceTree = "<group>"; };
+		5C5A1A5A848D9C043A64F128 /* SharedCoreImagePacks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreImagePacks.swift; sourceTree = "<group>"; };
 		5DE2FB3D6ADFFA295C9B956F /* AppRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouter.swift; sourceTree = "<group>"; };
+		5EDD2A18920864F8AED4F9BF /* SharedCoreAgentApprovals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreAgentApprovals.swift; sourceTree = "<group>"; };
 		6304D522C7CD81922807C269 /* SynaraNotificationService.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SynaraNotificationService.entitlements; sourceTree = "<group>"; };
 		633F1D9CBE601BF3E42E4B1B /* TimelineServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineServiceTests.swift; sourceTree = "<group>"; };
 		643AFA2D05F02E0DB1C2B849 /* RoomUnreadPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomUnreadPresentationTests.swift; sourceTree = "<group>"; };
 		69B679E7F5741D45B587B578 /* ComposerTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerTextView.swift; sourceTree = "<group>"; };
+		6A646829F440AA1729EE8F21 /* SharedCoreNseStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreNseStore.swift; sourceTree = "<group>"; };
 		6D1561F09029D684B9548B0F /* StableTimelineViewport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StableTimelineViewport.swift; sourceTree = "<group>"; };
 		72E9B9C1E874AD8B6B90D9C3 /* ComposerMarkdownTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerMarkdownTests.swift; sourceTree = "<group>"; };
+		740E5CB751CAF56D84A66023 /* SharedCoreVerificationSas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreVerificationSas.swift; sourceTree = "<group>"; };
 		75DD7BEECD59D41C5461C892 /* SessionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionCoordinator.swift; sourceTree = "<group>"; };
+		7A1C49F665331463EF9670F9 /* SharedCoreJoinRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreJoinRules.swift; sourceTree = "<group>"; };
+		7CC5B538D759B0BA4E412935 /* SharedCorePresenceLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCorePresenceLive.swift; sourceTree = "<group>"; };
+		7D8498844FC0DE506B3E82D0 /* SharedCoreRoomMembersSnapshots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomMembersSnapshots.swift; sourceTree = "<group>"; };
+		7F8019C260DF3717FB9275E3 /* SharedCoreVerificationLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreVerificationLive.swift; sourceTree = "<group>"; };
 		80584058D243DE7197CF3096 /* AgentActionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActionService.swift; sourceTree = "<group>"; };
+		83CCF21D15E845BE04F4BB26 /* SharedCoreDevicesLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreDevicesLive.swift; sourceTree = "<group>"; };
 		86A2688BEAABC5E3684A7C77 /* SynaraCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SynaraCore; path = SynaraCore; sourceTree = SOURCE_ROOT; };
+		8748C7ACF87406A7CABAFF67 /* SharedCoreRoomCreate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomCreate.swift; sourceTree = "<group>"; };
 		8809AE831952D397FC6221F3 /* SynaraNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraNavigation.swift; sourceTree = "<group>"; };
+		88D6CA89BB7B9529C53D2776 /* SharedCoreOwnerUpdates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreOwnerUpdates.swift; sourceTree = "<group>"; };
 		8A4D48D89C01C70901919CAB /* AppServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppServices.swift; sourceTree = "<group>"; };
 		8A5CC96CDA94EE562BDBA416 /* Synara.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Synara.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8CFA937424129A02D9E070E2 /* SharedCoreLeftovers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreLeftovers.swift; sourceTree = "<group>"; };
 		90A203B905E3CBD0DC7BD126 /* TimelineReplyPreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineReplyPreviewTests.swift; sourceTree = "<group>"; };
+		9412F741C7E9E08EEA44E0BC /* SharedCoreTypingLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTypingLive.swift; sourceTree = "<group>"; };
+		99A959A786C9EE1E90F326F6 /* SharedCoreSendSticker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSendSticker.swift; sourceTree = "<group>"; };
 		9D0A5EA751CC5D570C324084 /* SynaraUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraUITests.swift; sourceTree = "<group>"; };
 		9DA6E8858D607B040754AF0E /* AgentActionResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActionResolverTests.swift; sourceTree = "<group>"; };
+		9F331E5FF94D7423E1E23C82 /* SharedCoreDirectorySearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreDirectorySearch.swift; sourceTree = "<group>"; };
+		A0B665F3BD49873F6C4732FF /* SharedCoreSpaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSpaces.swift; sourceTree = "<group>"; };
+		A144E94571B336790791A07D /* SharedCoreRoomDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomDetails.swift; sourceTree = "<group>"; };
 		A250FE1A7BB064F16F28C795 /* SynaraMessageBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraMessageBubble.swift; sourceTree = "<group>"; };
 		A2B32ACB6B0CEC48C00B0D21 /* CameraImagePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraImagePicker.swift; sourceTree = "<group>"; };
+		A346A6C213E92D2E71A5D4B4 /* SharedCoreSessionStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionStatus.swift; sourceTree = "<group>"; };
 		A460B0098799FF6C79F0756E /* RoomTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomTimelineView.swift; sourceTree = "<group>"; };
 		A4B44B25CB0277A9BAD73943 /* RoomReadMarkerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomReadMarkerService.swift; sourceTree = "<group>"; };
 		A5077C08931AFE23ABB6EBFB /* LocalWipeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalWipeService.swift; sourceTree = "<group>"; };
@@ -250,95 +287,64 @@
 		A856EC4E030E1E38C04CBE4B /* EventActionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventActionService.swift; sourceTree = "<group>"; };
 		AA155782137A4B5F84513EE1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		AA398093E16277847EDB79DB /* RoomReadMarkerServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomReadMarkerServiceTests.swift; sourceTree = "<group>"; };
+		AD07810C1973F59A6A4E719E /* SharedCoreTimelineReactions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineReactions.swift; sourceTree = "<group>"; };
+		AD24CB3706C2E72EC1C0A070 /* SharedCoreSendPoll.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSendPoll.swift; sourceTree = "<group>"; };
+		AE57C952A0B60F23459D8883 /* SharedCoreDirectoryVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreDirectoryVisibility.swift; sourceTree = "<group>"; };
 		B10EE99838CAB266CBA8416E /* Synara.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Synara.entitlements; sourceTree = "<group>"; };
+		B2B54408155EBFFC58189185 /* SharedCoreSessionCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionCrypto.swift; sourceTree = "<group>"; };
 		B2E4F1A7ADF247942C6D0059 /* SynaraApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraApp.swift; sourceTree = "<group>"; };
 		B3ECC92EE34CCE4DB57A5D3E /* MediaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaService.swift; sourceTree = "<group>"; };
 		B41D9817A0F821E67BCD9C00 /* HomeserverDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeserverDiscovery.swift; sourceTree = "<group>"; };
 		B5BE26F02C5C59C8ED097BF8 /* LaterListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaterListView.swift; sourceTree = "<group>"; };
+		B69B72BA313FA7259ACCB7E4 /* SharedCoreRoomList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomList.swift; sourceTree = "<group>"; };
 		B6E7399D69CF6418A4206407 /* RoomListService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomListService.swift; sourceTree = "<group>"; };
+		B8E9AB178A8E40E8BE4EFA42 /* SharedCoreTimelineLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineLive.swift; sourceTree = "<group>"; };
+		BAFBA65E1252F324C84B028E /* SharedCoreDevices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreDevices.swift; sourceTree = "<group>"; };
+		BB28D7FCF2A9E0531DCF97BF /* SharedCoreRoomNotes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomNotes.swift; sourceTree = "<group>"; };
+		BE8F1D905F272FF864B20E6D /* SharedCoreTimelineMutate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineMutate.swift; sourceTree = "<group>"; };
+		BE9ED2F14657EAEB22A05533 /* SharedCoreRoomPowerLevels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomPowerLevels.swift; sourceTree = "<group>"; };
 		C0FBB16EA6FF93511B2EE8F0 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		C1689B3F4DF0713A4E355BA4 /* SharedCoreLater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreLater.swift; sourceTree = "<group>"; };
+		C22C543BA91811DCAA8CFCCF /* SharedCoreSendText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSendText.swift; sourceTree = "<group>"; };
 		C261C2AFA98091E546B19E90 /* LocalWipeServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalWipeServiceTests.swift; sourceTree = "<group>"; };
 		C3035383FA98B774B4F47C39 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		C408B6E0676EC23636BCA7DA /* SharedCoreRoomModeration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomModeration.swift; sourceTree = "<group>"; };
 		C52EDC986E0B57231E77F695 /* HomeserverSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeserverSelectionView.swift; sourceTree = "<group>"; };
 		C830BF9B8F7ED001CA8AC317 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
+		C96EA34ED92FCEDC17A0165E /* SharedCoreTimelineRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineRows.swift; sourceTree = "<group>"; };
 		CAB0B1FDD47555E50BE466B2 /* MediaServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaServiceTests.swift; sourceTree = "<group>"; };
 		CB040EB752E246AD052AC7E7 /* AppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
 		CDD7517A55AC0E513E708AA0 /* SecureSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureSessionStore.swift; sourceTree = "<group>"; };
 		CF389D46848BA1444F7035D0 /* SignedInSessionReadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignedInSessionReadiness.swift; sourceTree = "<group>"; };
 		D0394B6246C8637014BEDC20 /* NotificationPermissionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPermissionCoordinator.swift; sourceTree = "<group>"; };
+		D3137E06580A1581467F3167 /* SharedCoreImagePackRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreImagePackRows.swift; sourceTree = "<group>"; };
 		D3219D555ED36F65BF9FE332 /* SynaraTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SynaraTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D3439FF6669F8DA8737528CD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		D8AFDF08C8140FD041C9DD20 /* SharedCoreTimelineMedia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineMedia.swift; sourceTree = "<group>"; };
+		DB0A6ED03055F6B933AD36A6 /* SharedCoreRoomListRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomListRows.swift; sourceTree = "<group>"; };
 		DB7C256708A8C6C4189DA5AB /* NotificationPreviewSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPreviewSupportTests.swift; sourceTree = "<group>"; };
 		DCD86C72DEE3F411D1FABB6B /* AppTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTab.swift; sourceTree = "<group>"; };
 		DDBE1E4A32C918309E6AA85A /* SynaraMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraMotion.swift; sourceTree = "<group>"; };
+		E062711DFC1EC46B1A8411D1 /* SharedCoreInviteActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreInviteActions.swift; sourceTree = "<group>"; };
+		E1C1C8509BC43E2E11002D4B /* SharedCoreSessionRestore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionRestore.swift; sourceTree = "<group>"; };
 		E23CEDAB04604A54EF7EAF9B /* PlaceholderScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderScreen.swift; sourceTree = "<group>"; };
+		E2FD208944F0952872B6F80B /* SharedCoreInvites.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreInvites.swift; sourceTree = "<group>"; };
+		E5D92DF2B3F4F467F73E3C9D /* SharedCoreTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimeline.swift; sourceTree = "<group>"; };
+		E78FEA7A3A5DCB37BE38BEF7 /* SharedCoreSessionAttach.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionAttach.swift; sourceTree = "<group>"; };
 		E8CE546B97B6AE15795C6E76 /* EventActionServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventActionServiceTests.swift; sourceTree = "<group>"; };
 		EDFDD334C6EF890B453477E1 /* TimelineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineService.swift; sourceTree = "<group>"; };
 		EE92B48EA7FF49B2D9FED1FE /* SynaraContractsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraContractsTests.swift; sourceTree = "<group>"; };
+		EEDE301E07E86206EF5E3745 /* SharedCoreVerificationList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreVerificationList.swift; sourceTree = "<group>"; };
+		F236CF25261D2657C9A2FB0F /* ComposerMatrixFormattingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerMatrixFormattingTests.swift; sourceTree = "<group>"; };
 		F2F0DA8C678C322C53FF89A0 /* TimelineReplyPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineReplyPreview.swift; sourceTree = "<group>"; };
+		F4A860C00E403D76C0D37ABD /* SharedCoreProductServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreProductServices.swift; sourceTree = "<group>"; };
 		F55BBDF32970A214C2829B1B /* AppRouteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouteTests.swift; sourceTree = "<group>"; };
+		F7A2B39D7BED6B716A48BEA2 /* SharedCoreMDirect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreMDirect.swift; sourceTree = "<group>"; };
+		F7F1E8B46A978F812C97EE0D /* SharedCoreEditMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreEditMessage.swift; sourceTree = "<group>"; };
 		F80766F42BBCF758CD7C7F4F /* MatrixSessionProjectionMirror.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixSessionProjectionMirror.swift; sourceTree = "<group>"; };
-		8C3E1A7B94D0526F1E8A0C4D /* SharedCoreSessionRestore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionRestore.swift; sourceTree = "<group>"; };
-		2B8D4E6A1C3059F7E0A1B3C5 /* SharedCoreSessionLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionLogin.swift; sourceTree = "<group>"; };
-		3C9E5F7B2D4160A8F1B2C4D6 /* SharedCoreSessionAttach.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionAttach.swift; sourceTree = "<group>"; };
-		0A1B2C3D4E5F60718293A4B5 /* SharedCoreSyncStart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSyncStart.swift; sourceTree = "<group>"; };
-		1C2D3E4F60718293A4B5C6D7 /* SharedCoreSessionBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionBootstrap.swift; sourceTree = "<group>"; };
-		2D3E4F60718293A4B5C6D7E8 /* SharedCoreTimelineViewUpdates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineViewUpdates.swift; sourceTree = "<group>"; };
-		4F60718293A4B5C6D7E8F90A /* SharedCoreTimelineRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineRows.swift; sourceTree = "<group>"; };
-		60718293A4B5C6D7E8F90A1B /* SharedCoreOwnerUpdates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreOwnerUpdates.swift; sourceTree = "<group>"; };
-		8293A4B5C6D7E8F90A1B2C3D /* SharedCoreTimelineLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineLive.swift; sourceTree = "<group>"; };
-		B5C6D7E8F90A1B2C3D4E5F60 /* SharedCoreRoomListUpdates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomListUpdates.swift; sourceTree = "<group>"; };
-		D7E8F90A1B2C3D4E5F607182 /* SharedCoreVerificationLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreVerificationLive.swift; sourceTree = "<group>"; };
-		F91A2B3C4D5E6F708192A3B4 /* SharedCoreTypingLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTypingLive.swift; sourceTree = "<group>"; };
-		E0F1A2B3C4D5E6F708192A4C /* SharedCoreRoomDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomDetails.swift; sourceTree = "<group>"; };
-		A2B3C4D5E6F708192A3B4C5D /* SharedCoreReadMarkers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreReadMarkers.swift; sourceTree = "<group>"; };
-		C4D5E6F708192A3B4C5D6E7F /* SharedCoreRoomListRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomListRows.swift; sourceTree = "<group>"; };
-		E6F708192A3B4C5D6E7F8091 /* SharedCoreSessionCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionCrypto.swift; sourceTree = "<group>"; };
-		A708192A3B4C5D6E7F8091B3 /* SharedCoreTimelineMedia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineMedia.swift; sourceTree = "<group>"; };
-		B8192A3B4C5D6E7F8091C4 /* SharedCoreDevicesLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreDevicesLive.swift; sourceTree = "<group>"; };
-		C92A3B4C5D6E7F8091D5E6F7 /* SharedCorePresenceLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCorePresenceLive.swift; sourceTree = "<group>"; };
-		D03B4C5D6E7F8091E6F70819 /* SharedCoreImagePackRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreImagePackRows.swift; sourceTree = "<group>"; };
-		4D0A6E8C3E5271B902C3D5E7 /* SharedCoreRoomList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomList.swift; sourceTree = "<group>"; };
-		5E1B7F9D4F6382C013D4E6F8 /* SharedCoreInvites.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreInvites.swift; sourceTree = "<group>"; };
-		6F2C8A0E507493D124E5F7A9 /* SharedCoreTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimeline.swift; sourceTree = "<group>"; };
-		7A3D9B1F6185A4E235F608B0 /* SharedCoreTypingPresence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTypingPresence.swift; sourceTree = "<group>"; };
-		8B4E0C207296B5F3460719C1 /* SharedCoreVerificationList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreVerificationList.swift; sourceTree = "<group>"; };
-		9C5F1D3183A7C6E4571820D2 /* SharedCoreVerificationSas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreVerificationSas.swift; sourceTree = "<group>"; };
-		AD6F2E4294B8D7F5682931E3 /* SharedCoreDevices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreDevices.swift; sourceTree = "<group>"; };
-		BE7A3F53A5C9E8F6793A2B40 /* SharedCoreJoinRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreJoinRules.swift; sourceTree = "<group>"; };
-		CF8B4064B6D0F9A78A4B3C51 /* SharedCoreImagePacks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreImagePacks.swift; sourceTree = "<group>"; };
-		D09C5175C7E10A89B5B4C4D2 /* SharedCoreLater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreLater.swift; sourceTree = "<group>"; };
-		E1AD6286D8F21B9AC6C5D5E3 /* SharedCoreMDirect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreMDirect.swift; sourceTree = "<group>"; };
-		F2BE7397E9A32C0BD7D6E6F4 /* SharedCoreRoomNotes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomNotes.swift; sourceTree = "<group>"; };
-		03CF84A80B754D2CE8E7F705 /* SharedCoreOwnProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreOwnProfile.swift; sourceTree = "<group>"; };
-		14D095B91C865E3DF9F71816 /* SharedCoreRoomProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomProfile.swift; sourceTree = "<group>"; };
-		25E1A6CA2D976F4E0A082927 /* SharedCoreDirectoryVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreDirectoryVisibility.swift; sourceTree = "<group>"; };
-		36F2B7DB3E08705F1B193038 /* SharedCoreDirectorySearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreDirectorySearch.swift; sourceTree = "<group>"; };
-		47A3C8EC4F198162C2041490 /* SharedCoreRoomLeaveJoin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomLeaveJoin.swift; sourceTree = "<group>"; };
-		58B4D9FD5E2A9273D3152501 /* SharedCoreRoomModeration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomModeration.swift; sourceTree = "<group>"; };
-		69C5E0AE6F3B0384E4263612 /* SharedCoreRoomPowerLevels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomPowerLevels.swift; sourceTree = "<group>"; };
-		7AD6F1BF70414A4955374723 /* SharedCoreRoomCreate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomCreate.swift; sourceTree = "<group>"; };
-		8BE802C081525B5A66485834 /* SharedCoreRoomMembersSnapshots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomMembersSnapshots.swift; sourceTree = "<group>"; };
-		9CF913D192636C6B77596945 /* SharedCoreSpaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSpaces.swift; sourceTree = "<group>"; };
-		ADE024E2A3747D7C886A7A56 /* SharedCoreInviteActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreInviteActions.swift; sourceTree = "<group>"; };
-		BEF135F3B4858E8D997B8B67 /* SharedCoreTimelineReadState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineReadState.swift; sourceTree = "<group>"; };
-		E2146826E7B8B1B0CCAEBE9A /* SharedCoreTimelineReactions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineReactions.swift; sourceTree = "<group>"; };
-		F3257937C8C9D1A0B1E2F304 /* SharedCoreComposerReplyDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreComposerReplyDraft.swift; sourceTree = "<group>"; };
-		04368048D9DAE2B1C2F30415 /* SharedCoreSendText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSendText.swift; sourceTree = "<group>"; };
-		15479159E0EB3C2D3F405267 /* SharedCoreSendSticker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSendSticker.swift; sourceTree = "<group>"; };
-		2658A26AF1FC4D3E40537878 /* SharedCoreSendPoll.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSendPoll.swift; sourceTree = "<group>"; };
-		3769B37B20FD5E4F51648989 /* SharedCoreEditMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreEditMessage.swift; sourceTree = "<group>"; };
-		487AC48C310F6F5062759A9A /* SharedCorePollRespond.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCorePollRespond.swift; sourceTree = "<group>"; };
-		598BD59D42107F617386AB0B /* SharedCoreTimelineMutate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineMutate.swift; sourceTree = "<group>"; };
-		6A9CE6AE532190728497BC1C /* SharedCoreTimelinePin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelinePin.swift; sourceTree = "<group>"; };
-		7BADE7BF6432A18395A8CD2D /* SharedCoreTimelineVoteDecline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineVoteDecline.swift; sourceTree = "<group>"; };
-		8CBEF8C07543B294A6B9DE3E /* SharedCoreTimelineForward.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelineForward.swift; sourceTree = "<group>"; };
-		9DC0F9D18654C3A5B7C0EF4F /* SharedCoreSessionStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionStatus.swift; sourceTree = "<group>"; };
-		AE1D0AE29765D4B6C8D1F160 /* SharedCoreNseStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreNseStore.swift; sourceTree = "<group>"; };
-		BF2E1BF3A8765C4D9E0A1B2C /* SharedCoreLeftovers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreLeftovers.swift; sourceTree = "<group>"; };
-		CF3F2C04B9876D5E0F1B2C3D /* SharedCoreProductServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreProductServices.swift; sourceTree = "<group>"; };
-		D04A3D15C0987E6F102C3D4E /* MatrixClientPolicies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixClientPolicies.swift; sourceTree = "<group>"; };
-		7A2E9C1D4B6805F3E8A1C0D2 /* IosSecretVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosSecretVault.swift; sourceTree = "<group>"; };
+		F8A673CF71EFDD2DCB998C8C /* SharedCoreRoomProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomProfile.swift; sourceTree = "<group>"; };
+		F9D54A583885BB081BFF3B5C /* SharedCoreTypingPresence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTypingPresence.swift; sourceTree = "<group>"; };
+		FF0B2E02F6DD074EAA3074D5 /* SharedCoreSyncStart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSyncStart.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -454,6 +460,7 @@
 			children = (
 				A2B32ACB6B0CEC48C00B0D21 /* CameraImagePicker.swift */,
 				275642FB89913A7B3E8AD14A /* ComposerMarkdown.swift */,
+				3A2EA7250A5E48B4331075A1 /* ComposerMatrixFormatting.swift */,
 				69B679E7F5741D45B587B578 /* ComposerTextView.swift */,
 			);
 			path = Composer;
@@ -471,69 +478,10 @@
 				A7A9908B77A7CB8F4A4CC55A /* ComposerService.swift */,
 				A856EC4E030E1E38C04CBE4B /* EventActionService.swift */,
 				B41D9817A0F821E67BCD9C00 /* HomeserverDiscovery.swift */,
+				4F818AC6C01E58C4E7BACF38 /* IosSecretVault.swift */,
 				A5077C08931AFE23ABB6EBFB /* LocalWipeService.swift */,
+				05E9804A6FB5F292C398A0FC /* MatrixClientPolicies.swift */,
 				F80766F42BBCF758CD7C7F4F /* MatrixSessionProjectionMirror.swift */,
-				7A2E9C1D4B6805F3E8A1C0D2 /* IosSecretVault.swift */,
-				8C3E1A7B94D0526F1E8A0C4D /* SharedCoreSessionRestore.swift */,
-				2B8D4E6A1C3059F7E0A1B3C5 /* SharedCoreSessionLogin.swift */,
-				3C9E5F7B2D4160A8F1B2C4D6 /* SharedCoreSessionAttach.swift */,
-				0A1B2C3D4E5F60718293A4B5 /* SharedCoreSyncStart.swift */,
-				1C2D3E4F60718293A4B5C6D7 /* SharedCoreSessionBootstrap.swift */,
-				2D3E4F60718293A4B5C6D7E8 /* SharedCoreTimelineViewUpdates.swift */,
-				4F60718293A4B5C6D7E8F90A /* SharedCoreTimelineRows.swift */,
-				60718293A4B5C6D7E8F90A1B /* SharedCoreOwnerUpdates.swift */,
-				8293A4B5C6D7E8F90A1B2C3D /* SharedCoreTimelineLive.swift */,
-				B5C6D7E8F90A1B2C3D4E5F60 /* SharedCoreRoomListUpdates.swift */,
-				D7E8F90A1B2C3D4E5F607182 /* SharedCoreVerificationLive.swift */,
-				F91A2B3C4D5E6F708192A3B4 /* SharedCoreTypingLive.swift */,
-				E0F1A2B3C4D5E6F708192A4C /* SharedCoreRoomDetails.swift */,
-				A2B3C4D5E6F708192A3B4C5D /* SharedCoreReadMarkers.swift */,
-				C4D5E6F708192A3B4C5D6E7F /* SharedCoreRoomListRows.swift */,
-				E6F708192A3B4C5D6E7F8091 /* SharedCoreSessionCrypto.swift */,
-				A708192A3B4C5D6E7F8091B3 /* SharedCoreTimelineMedia.swift */,
-				B8192A3B4C5D6E7F8091C4 /* SharedCoreDevicesLive.swift */,
-				C92A3B4C5D6E7F8091D5E6F7 /* SharedCorePresenceLive.swift */,
-				D03B4C5D6E7F8091E6F70819 /* SharedCoreImagePackRows.swift */,
-				4D0A6E8C3E5271B902C3D5E7 /* SharedCoreRoomList.swift */,
-				5E1B7F9D4F6382C013D4E6F8 /* SharedCoreInvites.swift */,
-				6F2C8A0E507493D124E5F7A9 /* SharedCoreTimeline.swift */,
-				7A3D9B1F6185A4E235F608B0 /* SharedCoreTypingPresence.swift */,
-				8B4E0C207296B5F3460719C1 /* SharedCoreVerificationList.swift */,
-				9C5F1D3183A7C6E4571820D2 /* SharedCoreVerificationSas.swift */,
-				AD6F2E4294B8D7F5682931E3 /* SharedCoreDevices.swift */,
-				BE7A3F53A5C9E8F6793A2B40 /* SharedCoreJoinRules.swift */,
-				CF8B4064B6D0F9A78A4B3C51 /* SharedCoreImagePacks.swift */,
-				D09C5175C7E10A89B5B4C4D2 /* SharedCoreLater.swift */,
-				E1AD6286D8F21B9AC6C5D5E3 /* SharedCoreMDirect.swift */,
-				F2BE7397E9A32C0BD7D6E6F4 /* SharedCoreRoomNotes.swift */,
-				03CF84A80B754D2CE8E7F705 /* SharedCoreOwnProfile.swift */,
-				14D095B91C865E3DF9F71816 /* SharedCoreRoomProfile.swift */,
-				25E1A6CA2D976F4E0A082927 /* SharedCoreDirectoryVisibility.swift */,
-				36F2B7DB3E08705F1B193038 /* SharedCoreDirectorySearch.swift */,
-				47A3C8EC4F198162C2041490 /* SharedCoreRoomLeaveJoin.swift */,
-				58B4D9FD5E2A9273D3152501 /* SharedCoreRoomModeration.swift */,
-				69C5E0AE6F3B0384E4263612 /* SharedCoreRoomPowerLevels.swift */,
-				7AD6F1BF70414A4955374723 /* SharedCoreRoomCreate.swift */,
-				8BE802C081525B5A66485834 /* SharedCoreRoomMembersSnapshots.swift */,
-				9CF913D192636C6B77596945 /* SharedCoreSpaces.swift */,
-				ADE024E2A3747D7C886A7A56 /* SharedCoreInviteActions.swift */,
-				BEF135F3B4858E8D997B8B67 /* SharedCoreTimelineReadState.swift */,
-				E2146826E7B8B1B0CCAEBE9A /* SharedCoreTimelineReactions.swift */,
-				F3257937C8C9D1A0B1E2F304 /* SharedCoreComposerReplyDraft.swift */,
-				04368048D9DAE2B1C2F30415 /* SharedCoreSendText.swift */,
-				15479159E0EB3C2D3F405267 /* SharedCoreSendSticker.swift */,
-				2658A26AF1FC4D3E40537878 /* SharedCoreSendPoll.swift */,
-				3769B37B20FD5E4F51648989 /* SharedCoreEditMessage.swift */,
-				487AC48C310F6F5062759A9A /* SharedCorePollRespond.swift */,
-				598BD59D42107F617386AB0B /* SharedCoreTimelineMutate.swift */,
-				6A9CE6AE532190728497BC1C /* SharedCoreTimelinePin.swift */,
-				7BADE7BF6432A18395A8CD2D /* SharedCoreTimelineVoteDecline.swift */,
-				8CBEF8C07543B294A6B9DE3E /* SharedCoreTimelineForward.swift */,
-				9DC0F9D18654C3A5B7C0EF4F /* SharedCoreSessionStatus.swift */,
-				AE1D0AE29765D4B6C8D1F160 /* SharedCoreNseStore.swift */,
-				BF2E1BF3A8765C4D9E0A1B2C /* SharedCoreLeftovers.swift */,
-				CF3F2C04B9876D5E0F1B2C3D /* SharedCoreProductServices.swift */,
-				D04A3D15C0987E6F102C3D4E /* MatrixClientPolicies.swift */,
 				B3ECC92EE34CCE4DB57A5D3E /* MediaService.swift */,
 				D0394B6246C8637014BEDC20 /* NotificationPermissionCoordinator.swift */,
 				00D51C4E0E89D32C8D99CC22 /* PerformanceInstrumentation.swift */,
@@ -542,6 +490,66 @@
 				A4B44B25CB0277A9BAD73943 /* RoomReadMarkerService.swift */,
 				CDD7517A55AC0E513E708AA0 /* SecureSessionStore.swift */,
 				75DD7BEECD59D41C5461C892 /* SessionCoordinator.swift */,
+				5EDD2A18920864F8AED4F9BF /* SharedCoreAgentApprovals.swift */,
+				34064BA2D401DE01569CC3CB /* SharedCoreComposerReplyDraft.swift */,
+				BAFBA65E1252F324C84B028E /* SharedCoreDevices.swift */,
+				83CCF21D15E845BE04F4BB26 /* SharedCoreDevicesLive.swift */,
+				9F331E5FF94D7423E1E23C82 /* SharedCoreDirectorySearch.swift */,
+				AE57C952A0B60F23459D8883 /* SharedCoreDirectoryVisibility.swift */,
+				F7F1E8B46A978F812C97EE0D /* SharedCoreEditMessage.swift */,
+				D3137E06580A1581467F3167 /* SharedCoreImagePackRows.swift */,
+				5C5A1A5A848D9C043A64F128 /* SharedCoreImagePacks.swift */,
+				E062711DFC1EC46B1A8411D1 /* SharedCoreInviteActions.swift */,
+				E2FD208944F0952872B6F80B /* SharedCoreInvites.swift */,
+				7A1C49F665331463EF9670F9 /* SharedCoreJoinRules.swift */,
+				C1689B3F4DF0713A4E355BA4 /* SharedCoreLater.swift */,
+				8CFA937424129A02D9E070E2 /* SharedCoreLeftovers.swift */,
+				F7A2B39D7BED6B716A48BEA2 /* SharedCoreMDirect.swift */,
+				6A646829F440AA1729EE8F21 /* SharedCoreNseStore.swift */,
+				88D6CA89BB7B9529C53D2776 /* SharedCoreOwnerUpdates.swift */,
+				48D83E5662BD400632FEC41E /* SharedCoreOwnProfile.swift */,
+				34EE9125219D71BE97B3B2E8 /* SharedCorePollRespond.swift */,
+				7CC5B538D759B0BA4E412935 /* SharedCorePresenceLive.swift */,
+				F4A860C00E403D76C0D37ABD /* SharedCoreProductServices.swift */,
+				2EE498A23839D0BB8FD5AA3B /* SharedCoreReadMarkers.swift */,
+				8748C7ACF87406A7CABAFF67 /* SharedCoreRoomCreate.swift */,
+				A144E94571B336790791A07D /* SharedCoreRoomDetails.swift */,
+				4E4908118613950CF3162D88 /* SharedCoreRoomLeaveJoin.swift */,
+				B69B72BA313FA7259ACCB7E4 /* SharedCoreRoomList.swift */,
+				DB0A6ED03055F6B933AD36A6 /* SharedCoreRoomListRows.swift */,
+				03AC3AA739D0F212EB229563 /* SharedCoreRoomListUpdates.swift */,
+				7D8498844FC0DE506B3E82D0 /* SharedCoreRoomMembersSnapshots.swift */,
+				C408B6E0676EC23636BCA7DA /* SharedCoreRoomModeration.swift */,
+				BB28D7FCF2A9E0531DCF97BF /* SharedCoreRoomNotes.swift */,
+				BE9ED2F14657EAEB22A05533 /* SharedCoreRoomPowerLevels.swift */,
+				F8A673CF71EFDD2DCB998C8C /* SharedCoreRoomProfile.swift */,
+				AD24CB3706C2E72EC1C0A070 /* SharedCoreSendPoll.swift */,
+				99A959A786C9EE1E90F326F6 /* SharedCoreSendSticker.swift */,
+				C22C543BA91811DCAA8CFCCF /* SharedCoreSendText.swift */,
+				E78FEA7A3A5DCB37BE38BEF7 /* SharedCoreSessionAttach.swift */,
+				264191FB968D9C701815BEDB /* SharedCoreSessionBootstrap.swift */,
+				B2B54408155EBFFC58189185 /* SharedCoreSessionCrypto.swift */,
+				0913C89133240B496A0103CB /* SharedCoreSessionLogin.swift */,
+				E1C1C8509BC43E2E11002D4B /* SharedCoreSessionRestore.swift */,
+				A346A6C213E92D2E71A5D4B4 /* SharedCoreSessionStatus.swift */,
+				A0B665F3BD49873F6C4732FF /* SharedCoreSpaces.swift */,
+				FF0B2E02F6DD074EAA3074D5 /* SharedCoreSyncStart.swift */,
+				E5D92DF2B3F4F467F73E3C9D /* SharedCoreTimeline.swift */,
+				14AA7CF73C18244203BB0744 /* SharedCoreTimelineForward.swift */,
+				B8E9AB178A8E40E8BE4EFA42 /* SharedCoreTimelineLive.swift */,
+				D8AFDF08C8140FD041C9DD20 /* SharedCoreTimelineMedia.swift */,
+				BE8F1D905F272FF864B20E6D /* SharedCoreTimelineMutate.swift */,
+				4F84F97D77A9A566CA405225 /* SharedCoreTimelinePin.swift */,
+				AD07810C1973F59A6A4E719E /* SharedCoreTimelineReactions.swift */,
+				45728DABC3F492DFCAA5DA94 /* SharedCoreTimelineReadState.swift */,
+				C96EA34ED92FCEDC17A0165E /* SharedCoreTimelineRows.swift */,
+				1B446B03C1BB4057C12E560B /* SharedCoreTimelineViewUpdates.swift */,
+				42126A72CC2D0DA8584940FB /* SharedCoreTimelineVoteDecline.swift */,
+				9412F741C7E9E08EEA44E0BC /* SharedCoreTypingLive.swift */,
+				F9D54A583885BB081BFF3B5C /* SharedCoreTypingPresence.swift */,
+				EEDE301E07E86206EF5E3745 /* SharedCoreVerificationList.swift */,
+				7F8019C260DF3717FB9275E3 /* SharedCoreVerificationLive.swift */,
+				740E5CB751CAF56D84A66023 /* SharedCoreVerificationSas.swift */,
 				CF389D46848BA1444F7035D0 /* SignedInSessionReadiness.swift */,
 				F2F0DA8C678C322C53FF89A0 /* TimelineReplyPreview.swift */,
 				EDFDD334C6EF890B453477E1 /* TimelineService.swift */,
@@ -589,6 +597,7 @@
 				F55BBDF32970A214C2829B1B /* AppRouteTests.swift */,
 				017B2EBED1FF4FF0EC25CB24 /* AuthServiceTests.swift */,
 				72E9B9C1E874AD8B6B90D9C3 /* ComposerMarkdownTests.swift */,
+				F236CF25261D2657C9A2FB0F /* ComposerMatrixFormattingTests.swift */,
 				28004193A008B4EDFF0E6E18 /* ComposerServiceTests.swift */,
 				E8CE546B97B6AE15795C6E76 /* EventActionServiceTests.swift */,
 				12329DB928DC3AB27731C926 /* HomeserverDiscoveryTests.swift */,
@@ -774,6 +783,7 @@
 				7BD7C2DB346D071A5121FC36 /* AppRouteTests.swift in Sources */,
 				97901F6C1B589C2271A4975D /* AuthServiceTests.swift in Sources */,
 				E41A0F4331E1F46B7474286D /* ComposerMarkdownTests.swift in Sources */,
+				2A9A7DE188F58BEEE2EE24AC /* ComposerMatrixFormattingTests.swift in Sources */,
 				480BE3E7090674BEB4144D36 /* ComposerServiceTests.swift in Sources */,
 				6022C473D59F944208C3E79D /* EventActionServiceTests.swift in Sources */,
 				4C0DF38E441C5250941FE911 /* HomeserverDiscoveryTests.swift in Sources */,
@@ -814,76 +824,18 @@
 				37E0DABCD7B044B59F2C5545 /* BoundedLRUCache.swift in Sources */,
 				828A1EF26C245C22F21B95EF /* CameraImagePicker.swift in Sources */,
 				49A35E5B574613614328D6E4 /* ComposerMarkdown.swift in Sources */,
+				D47B51D8E747B028B21D8DD0 /* ComposerMatrixFormatting.swift in Sources */,
 				3AB84959BA0C8A2EB98CF309 /* ComposerService.swift in Sources */,
 				0B6FED64AA988069902712C4 /* ComposerTextView.swift in Sources */,
 				E9028170C931CDFE77B89713 /* EventActionService.swift in Sources */,
 				53A86DD39FD62D232711EB70 /* HomeserverDiscovery.swift in Sources */,
 				89761685411B7F9D7FCCD863 /* HomeserverSelectionView.swift in Sources */,
+				9E45177E84B77E2D4CC34FBC /* IosSecretVault.swift in Sources */,
 				EFAE66D8EA286E31E189C876 /* LaterListView.swift in Sources */,
 				0E68BDED62692800912DE41C /* LocalWipeService.swift in Sources */,
 				8C497BFC6D2B9A3048BB2852 /* LoginView.swift in Sources */,
+				CDCDCDD2EFC9D72CA218D821 /* MatrixClientPolicies.swift in Sources */,
 				D0F9ECDAFC0C1996B350149B /* MatrixSessionProjectionMirror.swift in Sources */,
-				4D8B1F6A2C9037E5B0D4A7C1 /* IosSecretVault.swift in Sources */,
-				1F6B9D2E4A7083C5B1D7E9A0 /* SharedCoreSessionRestore.swift in Sources */,
-				6C9E0F1A2B3C4D5E6F708192 /* SharedCoreSessionLogin.swift in Sources */,
-				7D0F1A2B3C4D5E6F708192A3 /* SharedCoreSessionAttach.swift in Sources */,
-				1B2C3D4E5F60718293A4B5C6 /* SharedCoreSyncStart.swift in Sources */,
-				2C3D4E5F60718293A4B5C6D7 /* SharedCoreSessionBootstrap.swift in Sources */,
-				3E4F60718293A4B5C6D7E8F9 /* SharedCoreTimelineViewUpdates.swift in Sources */,
-				5A718293A4B5C6D7E8F90A1B /* SharedCoreTimelineRows.swift in Sources */,
-				718293A4B5C6D7E8F90A1B2C /* SharedCoreOwnerUpdates.swift in Sources */,
-				93A4B5C6D7E8F90A1B2C3D4E /* SharedCoreTimelineLive.swift in Sources */,
-				C6D7E8F90A1B2C3D4E5F6071 /* SharedCoreRoomListUpdates.swift in Sources */,
-				E8F90A1B2C3D4E5F60718293 /* SharedCoreVerificationLive.swift in Sources */,
-				0B2C3D4E5F60718293A4B5C7 /* SharedCoreTypingLive.swift in Sources */,
-				F1A2B3C4D5E6F708192A3B5D /* SharedCoreRoomDetails.swift in Sources */,
-				B3C4D5E6F708192A3B4C5D6E /* SharedCoreReadMarkers.swift in Sources */,
-				D5E6F708192A3B4C5D6E7F80 /* SharedCoreRoomListRows.swift in Sources */,
-				F708192A3B4C5D6E7F8091A2 /* SharedCoreSessionCrypto.swift in Sources */,
-				B8192A3B4C5D6E7F8091A2C3 /* SharedCoreTimelineMedia.swift in Sources */,
-				C92A3B4C5D6E7F8091A2B3D4 /* SharedCoreDevicesLive.swift in Sources */,
-				E14C5D6E7F8091F708192A3B /* SharedCorePresenceLive.swift in Sources */,
-				F25D6E7F8091A8192A3B4C5D /* SharedCoreImagePackRows.swift in Sources */,
-				8E1A2B3C4D5E6F708192A4B5 /* SharedCoreRoomList.swift in Sources */,
-				9F2B3C4D5E6F708192A5B6C7 /* SharedCoreInvites.swift in Sources */,
-				A03C4D5E6F708192A6B7C8D9 /* SharedCoreTimeline.swift in Sources */,
-				B14D5E6F708192A7B8C9D0E1 /* SharedCoreTypingPresence.swift in Sources */,
-				C25E6F708192A8B9C0D1E2F3 /* SharedCoreVerificationList.swift in Sources */,
-				D36F708192A9C0D1E2F30415 /* SharedCoreVerificationSas.swift in Sources */,
-				E47F8192A0B1D2E3F4051627 /* SharedCoreDevices.swift in Sources */,
-				F58A92A3B1C2E4F516273849 /* SharedCoreJoinRules.swift in Sources */,
-				069BA3B4C2D3F62738495A50 /* SharedCoreImagePacks.swift in Sources */,
-				17ACB4C5D3E4F738495A61B2 /* SharedCoreLater.swift in Sources */,
-				28BDC5D6E4F508495A62C3D4 /* SharedCoreMDirect.swift in Sources */,
-				39CED6E7F516195A73D4E5F5 /* SharedCoreRoomNotes.swift in Sources */,
-				4ADFE8F917283B7C95F60716 /* SharedCoreOwnProfile.swift in Sources */,
-				5BE0F90A28394C8DA6071827 /* SharedCoreRoomProfile.swift in Sources */,
-				6CF10A1B394A5D9EB7182938 /* SharedCoreDirectoryVisibility.swift in Sources */,
-				7D021B2C4A5B6E0FC8293A49 /* SharedCoreDirectorySearch.swift in Sources */,
-				8E132C3D5B6C7F10D93A4B5A /* SharedCoreRoomLeaveJoin.swift in Sources */,
-				9F243D4E6C7D8011EA4B5C6B /* SharedCoreRoomModeration.swift in Sources */,
-				A0354E5F7D8E9122FB5C6D7C /* SharedCoreRoomPowerLevels.swift in Sources */,
-				B1465F608E9FA2330C6D7E8D /* SharedCoreRoomCreate.swift in Sources */,
-				C25760619FA0B3441D7E8F9E /* SharedCoreRoomMembersSnapshots.swift in Sources */,
-				D3687172A0B1C4552E8F9A0F /* SharedCoreSpaces.swift in Sources */,
-				E4798283B1C2D5663F9A0B10 /* SharedCoreInviteActions.swift in Sources */,
-				F58A9394C2D3E67740AB1C21 /* SharedCoreTimelineReadState.swift in Sources */,
-				10BD26C7F50619AA73DE4F54 /* SharedCoreTimelineReactions.swift in Sources */,
-				21CE37D861720BB84EF7C650 /* SharedCoreComposerReplyDraft.swift in Sources */,
-				32DF48E972831CC95F08D761 /* SharedCoreSendText.swift in Sources */,
-				43E059F083942DD0619E8728 /* SharedCoreSendSticker.swift in Sources */,
-				54F16A0194A53EE1720F9839 /* SharedCoreSendPoll.swift in Sources */,
-				65027B12A5644FF28310A94A /* SharedCoreEditMessage.swift in Sources */,
-				76138C23B67550039421BA5B /* SharedCorePollRespond.swift in Sources */,
-				87249D34C7866114A532CB6C /* SharedCoreTimelineMutate.swift in Sources */,
-				9835AE45D8977225B643DC7D /* SharedCoreTimelinePin.swift in Sources */,
-				A946BF56E9A88336C754ED8E /* SharedCoreTimelineVoteDecline.swift in Sources */,
-				BA57C067F0B99447D865FE9F /* SharedCoreTimelineForward.swift in Sources */,
-				CB68D17801CA0558E9760FA0 /* SharedCoreSessionStatus.swift in Sources */,
-				DC79E28912DB1669FA8710B1 /* SharedCoreNseStore.swift in Sources */,
-				E15B4E26D1A98F70113D4E5F /* SharedCoreLeftovers.swift in Sources */,
-				F26C5F37E2BA9081224E5F60 /* SharedCoreProductServices.swift in Sources */,
-				037D6048F3CB0192335F6071 /* MatrixClientPolicies.swift in Sources */,
 				9B792F2B4073B7792ED943D8 /* MediaService.swift in Sources */,
 				27F8472586C8C97BFB42B087 /* NotificationPermissionCoordinator.swift in Sources */,
 				8B42041876057A9091D2F463 /* PerformanceInstrumentation.swift in Sources */,
@@ -897,6 +849,66 @@
 				A4B52FFB382C8BD8FFFDF5F9 /* SecureSessionStore.swift in Sources */,
 				901EB2CE7F90AED37B5827E0 /* SessionCoordinator.swift in Sources */,
 				EE7410A9C8E4EB56072632D8 /* SettingsView.swift in Sources */,
+				C8F99ABAA3FD519459C33F27 /* SharedCoreAgentApprovals.swift in Sources */,
+				D8374F63F8465BD4917F14F3 /* SharedCoreComposerReplyDraft.swift in Sources */,
+				276F320443969E9B55369092 /* SharedCoreDevices.swift in Sources */,
+				13974B028BA48477756A97D4 /* SharedCoreDevicesLive.swift in Sources */,
+				5E3FD90EE6250575D8926C38 /* SharedCoreDirectorySearch.swift in Sources */,
+				5CD57F32E8A5C70A06AF5877 /* SharedCoreDirectoryVisibility.swift in Sources */,
+				5A36E29F3977C4EC325B3449 /* SharedCoreEditMessage.swift in Sources */,
+				4188B91C5108402CD1DFF64D /* SharedCoreImagePackRows.swift in Sources */,
+				30ADD2995785584629AC7AF0 /* SharedCoreImagePacks.swift in Sources */,
+				502195675B8E4299D9D998AE /* SharedCoreInviteActions.swift in Sources */,
+				FBF56C36E9D9A47F51C129D0 /* SharedCoreInvites.swift in Sources */,
+				063D02A03BEC53708A6EFC33 /* SharedCoreJoinRules.swift in Sources */,
+				B8885E152FFECEAEC09B77B1 /* SharedCoreLater.swift in Sources */,
+				0096DA204BC202DA4265462E /* SharedCoreLeftovers.swift in Sources */,
+				C9695CFF98CCEB0221B26C26 /* SharedCoreMDirect.swift in Sources */,
+				E703168D08D6AE663962D928 /* SharedCoreNseStore.swift in Sources */,
+				17EDA26AA8C46075FC6DE175 /* SharedCoreOwnProfile.swift in Sources */,
+				ACCC5DFE2A8070A623048280 /* SharedCoreOwnerUpdates.swift in Sources */,
+				D2BF89CF0953CCA2D0B7C630 /* SharedCorePollRespond.swift in Sources */,
+				37B02657CA5E5B7386BEA95B /* SharedCorePresenceLive.swift in Sources */,
+				80E8CD3DA5A371B6F03CCCA8 /* SharedCoreProductServices.swift in Sources */,
+				4FC4F37BA082A43570C836AF /* SharedCoreReadMarkers.swift in Sources */,
+				B168772BB20CCA4CBEFEB88F /* SharedCoreRoomCreate.swift in Sources */,
+				28FA102ECDF140A3E9CFB356 /* SharedCoreRoomDetails.swift in Sources */,
+				5E3BB592850C098A87A159B5 /* SharedCoreRoomLeaveJoin.swift in Sources */,
+				E2080809FCE254F98A9C920A /* SharedCoreRoomList.swift in Sources */,
+				95EDCBB44F7C1975D7EE2B06 /* SharedCoreRoomListRows.swift in Sources */,
+				C1B843F245435F156EA81AEB /* SharedCoreRoomListUpdates.swift in Sources */,
+				320624F61BB768C4B7C9E705 /* SharedCoreRoomMembersSnapshots.swift in Sources */,
+				04418881C702E78099FD8C3E /* SharedCoreRoomModeration.swift in Sources */,
+				540CB21AF670CA22B5C0888F /* SharedCoreRoomNotes.swift in Sources */,
+				D08F97130C56008BF1101E20 /* SharedCoreRoomPowerLevels.swift in Sources */,
+				CAE7630DBBA1747729F7F85E /* SharedCoreRoomProfile.swift in Sources */,
+				F2CDC879D2E12D150E5C090C /* SharedCoreSendPoll.swift in Sources */,
+				D1B8D797C6809F800D240352 /* SharedCoreSendSticker.swift in Sources */,
+				C8FDBAA953D5E12F8F652402 /* SharedCoreSendText.swift in Sources */,
+				D77D1D7A498AFD4EE234FA8F /* SharedCoreSessionAttach.swift in Sources */,
+				83BD03F3B55BE91C49304E5D /* SharedCoreSessionBootstrap.swift in Sources */,
+				F10C6F8F9CD9732E05B6BEF6 /* SharedCoreSessionCrypto.swift in Sources */,
+				AC0F8F007E34C9AD632B2FA6 /* SharedCoreSessionLogin.swift in Sources */,
+				F606D4778ECF8726CB3C3301 /* SharedCoreSessionRestore.swift in Sources */,
+				A9F8B2208642E92DDCDFCFA9 /* SharedCoreSessionStatus.swift in Sources */,
+				1BB9888030B3687336DE5A44 /* SharedCoreSpaces.swift in Sources */,
+				0CEC6C2ECD3CB67613855AC6 /* SharedCoreSyncStart.swift in Sources */,
+				39B5E998542AA8CB615845E4 /* SharedCoreTimeline.swift in Sources */,
+				B08602C331A289B0E6288264 /* SharedCoreTimelineForward.swift in Sources */,
+				7DAF60D7071DFEF42CDE68AC /* SharedCoreTimelineLive.swift in Sources */,
+				B9E323A9FA09B7910E6F11C3 /* SharedCoreTimelineMedia.swift in Sources */,
+				6FD1D217B1A66835264330D3 /* SharedCoreTimelineMutate.swift in Sources */,
+				416DCE40A4B48A841121026B /* SharedCoreTimelinePin.swift in Sources */,
+				1867ACA6870E401966F18FD2 /* SharedCoreTimelineReactions.swift in Sources */,
+				C86351E1582E760A653031D1 /* SharedCoreTimelineReadState.swift in Sources */,
+				01A6E712EA43DAB8B20DFDF9 /* SharedCoreTimelineRows.swift in Sources */,
+				1A1AB9123DF5F5FD7A8658D8 /* SharedCoreTimelineViewUpdates.swift in Sources */,
+				058E7F68F18D322AB72708D5 /* SharedCoreTimelineVoteDecline.swift in Sources */,
+				C9A8D01FAF508C192F75F9B7 /* SharedCoreTypingLive.swift in Sources */,
+				0F83781A780E53A7EE444F3C /* SharedCoreTypingPresence.swift in Sources */,
+				0DA9A023F9B28FCA7E028F08 /* SharedCoreVerificationList.swift in Sources */,
+				FC16E5DBC53F5B0897C4903C /* SharedCoreVerificationLive.swift in Sources */,
+				92740DC7B8F8A2D02D741027 /* SharedCoreVerificationSas.swift in Sources */,
 				3321B54F4A9FFE147A737368 /* SignedInSessionReadiness.swift in Sources */,
 				6E2FFEA9F5B858D1289C0C00 /* StableTimelineViewport.swift in Sources */,
 				CC89EE97042280F04BD29498 /* SynaraApp.swift in Sources */,

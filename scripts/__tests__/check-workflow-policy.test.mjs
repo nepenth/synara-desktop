@@ -128,10 +128,17 @@ test("rejects weakened package change detection", () => {
   assert.match(noDiff.errors.join("\n"), /PR diff-based package change/);
 });
 
-test("requires strict Rust formatting and lint in CI", () => {
+test("requires strict desktop-shell and shared-workspace Rust gates in CI", () => {
   for (const [command, expected] of [
     ["cargo fmt --check", /strict Rust formatting/],
     ["cargo clippy --locked --all-targets -- -D warnings", /strict Rust lint/],
+    ["cargo fmt --all -- --check", /shared workspace formatting/],
+    [
+      "cargo clippy --locked --workspace --all-targets -- -D warnings",
+      /shared workspace lint/,
+    ],
+    ["cargo check --locked --workspace", /shared workspace check/],
+    ["cargo test --locked --workspace", /shared workspace tests/],
   ]) {
     const result = inspect("ci.yml", (workflow) =>
       workflow.replace(command, "cargo --version")
@@ -139,6 +146,20 @@ test("requires strict Rust formatting and lint in CI", () => {
     assert.equal(result.ok, false, command);
     assert.match(result.errors.join("\n"), expected, command);
   }
+});
+
+test("requires exact-tag shared Rust workspace validation", () => {
+  const result = inspect("release.yml", (workflow) =>
+    workflow.replace(
+      "          cargo test --locked --workspace",
+      "          cargo --version"
+    )
+  );
+  assert.equal(result.ok, false);
+  assert.match(
+    result.errors.join("\n"),
+    /Exact-tag desktop quality must validate the shared Rust workspace/
+  );
 });
 
 test("rejects per-tag production release concurrency", () => {

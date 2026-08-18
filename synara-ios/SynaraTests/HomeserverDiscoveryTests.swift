@@ -21,6 +21,29 @@ private enum LoginFlowProbeFailure: Error {
 }
 
 final class HomeserverDiscoveryTests: XCTestCase {
+    func testLiveCoreLoginFlowProbeWhenConfigured() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["SYNARA_LIVE_DISCOVERY_SMOKE"] == "1"
+            || environment["TEST_RUNNER_SYNARA_LIVE_DISCOVERY_SMOKE"] == "1"
+        else {
+            throw XCTSkip("Set SYNARA_LIVE_DISCOVERY_SMOKE=1 for live shared-core discovery.")
+        }
+        guard let homeserver = environment["SYNARA_LIVE_HOMESERVER"]
+            ?? environment["TEST_RUNNER_SYNARA_LIVE_HOMESERVER"],
+            let url = URL(string: homeserver)
+        else {
+            XCTFail("Live discovery requires a valid homeserver environment variable.")
+            return
+        }
+
+        do {
+            let flows = try await CoreLoginFlowProbe().loginFlows(homeserverURL: url)
+            XCTAssertTrue(flows.contains(where: { $0.kind == "password" }))
+        } catch {
+            XCTFail("Shared-core discovery failed: \(String(reflecting: error))")
+        }
+    }
+
     func testNormalizerAddsHttpsAndLowercasesHost() throws {
         let url = try HomeserverAddressNormalizer.normalize(" Matrix.ORG ")
 

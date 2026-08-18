@@ -1,6 +1,37 @@
 # iOS Validation Status
 
-Reviewed: 2026-05-28
+Reviewed: 2026-08-17
+
+## 2026-08-17 Shared-Core Validation
+
+The post-migration app was validated from branch
+`codex/main-proof-hardening-20260817`, based on `origin/main` at
+`e2ef9bd252e9179978ca2acc6326368490a4f931`.
+
+- The exact unsigned CI path completed `build`, `build-for-testing`, and
+  `test-without-building` against an iPhone 17 simulator on iOS 26.5.
+- `SynaraTests` executed 436 tests with 434 passes, 2 intentional gated skips,
+  and 0 failures.
+- `SynaraUITests` executed 49 tests with 39 passes, 10 intentional live-gated
+  skips, and 0 failures. Automatic test retries were disabled.
+- A separate signed live suite passed 7 of 7 scenarios on the first attempt:
+  login/send, encrypted send and relaunch restore, rich formatted send plus
+  server HTML verification, room create/details/invite/leave, agent approval,
+  stale-cache external-event convergence, and visual room/timeline checks.
+- The signed live room-list check verified that an externally sent event
+  updates the visible last-message preview through the SharedCore room
+  subscription stream.
+- After final review removed a global composer-text lookup, focused UI tests for
+  plain typing/send and formatted typing/render/send both passed without retry.
+- Result bundles are retained locally under
+  `/private/tmp/synara-ios-results/`; the consolidated live result is
+  `live-consolidated-signed-20260817.xcresult` and the deterministic result is
+  `test-local-final-20260817.xcresult`.
+
+The Xcode `DebuggerVersionStore.StoreError` / `no debugger version` diagnostic
+still appears while launching UI tests, but the suite no longer hangs and the
+diagnostic is non-fatal on this workstation. Signed simulator execution remains
+required for Keychain-backed live session proof.
 
 Status: Phase 1 shell/foundation, Phase 2 auth/session/sync/room-list/logout,
 Phase 3 core messaging, Phase 5 agent workflows, Phase 6 internal
@@ -76,11 +107,7 @@ xcodebuild -project Synara.xcodeproj -scheme Synara -configuration Debug \
   -only-testing:SynaraUITests test
 ```
 
-Results:
-
-- `SynaraTests`: 141 tests, 0 failures.
-- `SynaraUITests`: 30 tests, 0 failures; 26 passed, 4 skipped gated live-smoke
-  tests.
+The historical May result below is superseded by the 2026-08-17 result above.
 
 Deterministic UI tests launch the app with `SYNARA_UI_TESTS=1`, which forces
 mock services instead of live Keychain, auth, and Matrix dependencies. The

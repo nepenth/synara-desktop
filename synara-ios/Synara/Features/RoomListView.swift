@@ -1269,7 +1269,7 @@ private extension RoomSummary {
     }
 
     var relativeActivity: String {
-        guard lastActivityAt > .distantPast else {
+        guard lastActivityAt.timeIntervalSince1970 > 0 else {
             return ""
         }
 

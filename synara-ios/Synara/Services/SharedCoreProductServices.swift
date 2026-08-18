@@ -28,6 +28,22 @@ final class SharedCoreProductHost {
     }
 }
 
+enum SharedCoreLoginErrorMapping {
+    static func loginError(for error: Error) -> LoginError {
+        guard case let SessionLoginError.Failed(code, _) = error else {
+            return .invalidCredentials
+        }
+        switch code {
+        case "p4-s3c-secret-vault-unavailable", "p4-s3c-store-root-invalid":
+            return .sessionPersistenceFailed
+        case "p4-s3c-identity-invalid":
+            return .unsupported
+        default:
+            return .invalidCredentials
+        }
+    }
+}
+
 struct SharedCoreAuthService: AuthServicing {
     let host: SharedCoreProductHost
 
@@ -57,7 +73,7 @@ struct SharedCoreAuthService: AuthServicing {
                 accessToken: ""
             )
         } catch {
-            throw LoginError.invalidCredentials
+            throw SharedCoreLoginErrorMapping.loginError(for: error)
         }
     }
 }
@@ -335,11 +351,19 @@ final class SharedCoreTimelineService: TimelineServicing {
     }
 
     func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome> {
-        AsyncStream { continuation in
+        // Register before the task begins so an SDK update cannot be lost
+        // between the initial snapshot and the first live readback.
+        let signals = host.livePoller.timelineSignals(roomId: roomID)
+        return AsyncStream { continuation in
             let task = Task {
-                let initial = await loadInitialTimeline(roomID: roomID, focusedEventID: focusedEventID)
-                continuation.yield(initial)
-                for await update in host.livePoller.timelineSignals(roomId: roomID) {
+                if SharedCoreTimelineUpdateBootstrap.shouldRefreshOpenStream(
+                    focusedEventID: focusedEventID
+                ) {
+                    continuation.yield(
+                        await refreshOpenTimeline(roomID: roomID, focusedEventID: focusedEventID)
+                    )
+                }
+                for await update in signals {
                     guard Task.isCancelled == false else {
                         break
                     }
@@ -398,14 +422,13 @@ final class SharedCoreTimelineService: TimelineServicing {
     }
 
     private func refreshOpenTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
-        if focusedEventID == nil, let streamId = stream(for: roomID) {
+        if let streamId = stream(for: roomID) {
             do {
-                let opened = try await SharedCoreTimelineReadState.timelineJumpLatest(
+                let snapshot = try await SharedCoreTimeline.timelineSnapshot(
                     core: host.core,
                     streamId: streamId
                 )
-                storeStream(opened.streamId, for: roomID)
-                return SharedCoreTimelineRows.outcome(from: opened.snapshot.rows)
+                return SharedCoreTimelineRows.outcome(from: snapshot.rows)
             } catch {
                 return await loadInitialTimeline(roomID: roomID, focusedEventID: focusedEventID)
             }
@@ -512,7 +535,7 @@ final class SharedCoreMessageSendService: MessageSending {
                     eventId: editEventID,
                     body: body,
                     msgType: nil,
-                    formattedBody: nil,
+                    formattedBody: request.formattedBody,
                     mentionUserIds: nil,
                     mentionRoom: nil,
                     txnId: nil
@@ -523,7 +546,7 @@ final class SharedCoreMessageSendService: MessageSending {
                     roomId: request.roomID,
                     body: body,
                     msgType: nil,
-                    formattedBody: nil,
+                    formattedBody: request.formattedBody,
                     mentionUserIds: nil,
                     mentionRoom: nil,
                     replyTo: request.replyToEventID,
@@ -536,7 +559,7 @@ final class SharedCoreMessageSendService: MessageSending {
                 eventID: request.editEventID ?? "$local-\(UUID().uuidString)",
                 senderID: signedInUserID(),
                 timestamp: Date(),
-                kind: .text(body),
+                kind: request.formattedBody.map { .formattedText(body: body, html: $0) } ?? .text(body),
                 replyToEventID: request.replyToEventID,
                 isEdited: request.editEventID != nil,
                 reactions: [:]
@@ -639,11 +662,9 @@ final class SharedCoreEventActionService: EventActionServicing {
 
 final class SharedCoreAgentApprovalService: AgentApprovalServicing {
     private let host: SharedCoreProductHost
-    private let jsonEncoder: JSONEncoder
 
-    init(host: SharedCoreProductHost, jsonEncoder: JSONEncoder = JSONEncoder()) {
+    init(host: SharedCoreProductHost) {
         self.host = host
-        self.jsonEncoder = jsonEncoder
     }
 
     func submit(_ request: SynaraAgentApprovalRequest) async throws {
@@ -654,15 +675,14 @@ final class SharedCoreAgentApprovalService: AgentApprovalServicing {
             throw SynaraAgentApprovalError.unsupportedAction
         }
         do {
-            let data = try encodeAgentApprovalMatrixEvent(request, jsonEncoder: jsonEncoder)
-            guard let content = String(data: data, encoding: .utf8) else {
-                throw SynaraAgentApprovalError.failed
-            }
-            _ = try await SharedCoreLeftovers.sendRawRoomEvent(
+            _ = try await SharedCoreAgentApprovals.send(
                 core: host.core,
                 roomId: request.roomID,
-                eventType: "m.room.message",
-                contentJson: content
+                actionId: request.action.id,
+                actionTitle: request.action.title,
+                decision: request.decision.rawValue,
+                sourceEventId: request.sourceEventID,
+                createdAt: UInt64(max(0, Date().timeIntervalSince1970 * 1000))
             )
         } catch let error as SynaraAgentApprovalError {
             throw error
@@ -674,11 +694,9 @@ final class SharedCoreAgentApprovalService: AgentApprovalServicing {
 
 final class SharedCoreAgentApprovalReactionService: AgentApprovalReactionServicing {
     private let host: SharedCoreProductHost
-    private let jsonEncoder: JSONEncoder
 
-    init(host: SharedCoreProductHost, jsonEncoder: JSONEncoder = JSONEncoder()) {
+    init(host: SharedCoreProductHost) {
         self.host = host
-        self.jsonEncoder = jsonEncoder
     }
 
     func submitReaction(_ request: SynaraAgentApprovalReactionRequest) async throws {
@@ -686,15 +704,11 @@ final class SharedCoreAgentApprovalReactionService: AgentApprovalReactionServici
             throw SynaraAgentApprovalError.signedOut
         }
         do {
-            let data = try encodeAgentApprovalReactionMatrixEvent(request, jsonEncoder: jsonEncoder)
-            guard let content = String(data: data, encoding: .utf8) else {
-                throw SynaraAgentApprovalError.failed
-            }
-            _ = try await SharedCoreLeftovers.sendRawRoomEvent(
+            _ = try await SharedCoreTimelineReactions.reactionEnsure(
                 core: host.core,
                 roomId: request.roomID,
-                eventType: "m.reaction",
-                contentJson: content
+                eventId: request.sourceEventID,
+                key: request.reactionKey
             )
         } catch let error as SynaraAgentApprovalError {
             throw error

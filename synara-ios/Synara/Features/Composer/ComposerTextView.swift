@@ -20,10 +20,6 @@ enum ComposerTextInputRegistry {
         activeTextView = textView
     }
 
-    static func currentText() -> String? {
-        activeTextView?.text
-    }
-
     static func dismissKeyboard() {
         activeTextView?.resignFirstResponder()
         UIApplication.shared.sendAction(
@@ -41,7 +37,6 @@ struct ComposerTextView: UIViewRepresentable {
     @Binding var height: CGFloat
     var placeholder: String
     var formattingRevision: Int
-    var flushToken: Int
     var isFocused: FocusState<Bool>.Binding
 
     func makeCoordinator() -> Coordinator {
@@ -51,7 +46,6 @@ struct ComposerTextView: UIViewRepresentable {
     func makeUIView(context: Context) -> ComposerTextContainer {
         let container = ComposerTextContainer()
         let textView = container.textView
-        textView.delegate = context.coordinator
         textView.backgroundColor = .clear
         textView.font = .preferredFont(forTextStyle: .callout)
         textView.adjustsFontForContentSizeCategory = true
@@ -68,6 +62,12 @@ struct ComposerTextView: UIViewRepresentable {
         container.placeholderLabel.font = textView.font
         container.placeholderLabel.textColor = .placeholderText
         context.coordinator.container = container
+        context.coordinator.lastFormattingRevision = formattingRevision
+        context.coordinator.performProgrammaticUpdate {
+            textView.text = text
+            applySelection(to: textView)
+        }
+        textView.delegate = context.coordinator
         container.onWidthChange = { [weak coordinator = context.coordinator] in
             guard let coordinator, let textView = coordinator.container?.textView else {
                 return
@@ -83,29 +83,26 @@ struct ComposerTextView: UIViewRepresentable {
     func updateUIView(_ uiView: ComposerTextContainer, context: Context) {
         let textView = uiView.textView
         context.coordinator.parent = self
-        uiView.placeholderLabel.text = placeholder
-        applyTextAppearance(to: textView)
-        uiView.placeholderLabel.font = textView.font
-        uiView.placeholderLabel.textColor = .placeholderText
+        context.coordinator.performProgrammaticUpdate {
+            uiView.placeholderLabel.text = placeholder
+            applyTextAppearance(to: textView)
+            uiView.placeholderLabel.font = textView.font
+            uiView.placeholderLabel.textColor = .placeholderText
 
-        if context.coordinator.lastFlushToken != flushToken {
-            context.coordinator.lastFlushToken = flushToken
-            context.coordinator.publishContent(from: textView)
-        } else if context.coordinator.lastFormattingRevision != formattingRevision {
-            context.coordinator.lastFormattingRevision = formattingRevision
-            textView.text = text
-            applySelection(to: textView)
-            context.coordinator.syncPlaceholder()
-        } else if textView.isFirstResponder == false, textView.text != text {
-            textView.text = text
-            applySelection(to: textView)
-            context.coordinator.syncPlaceholder()
+            if context.coordinator.lastFormattingRevision != formattingRevision {
+                context.coordinator.lastFormattingRevision = formattingRevision
+                textView.text = text
+                applySelection(to: textView)
+                context.coordinator.syncPlaceholder()
+            } else if textView.isFirstResponder == false, textView.text != text {
+                textView.text = text
+                applySelection(to: textView)
+                context.coordinator.syncPlaceholder()
+            }
         }
 
         if isFocused.wrappedValue, textView.isFirstResponder == false {
             textView.becomeFirstResponder()
-        } else if isFocused.wrappedValue == false, textView.isFirstResponder {
-            textView.resignFirstResponder()
         }
 
         context.coordinator.syncPlaceholder()
@@ -150,7 +147,7 @@ struct ComposerTextView: UIViewRepresentable {
         var parent: ComposerTextView
         weak var container: ComposerTextContainer?
         var lastFormattingRevision = -1
-        var lastFlushToken = -1
+        private var isApplyingProgrammaticState = false
 
         init(parent: ComposerTextView) {
             self.parent = parent
@@ -163,26 +160,42 @@ struct ComposerTextView: UIViewRepresentable {
         }
 
         func textViewDidChange(_ textView: UITextView) {
+            guard isApplyingProgrammaticState == false else {
+                return
+            }
             publishContent(from: textView)
             updateHeight(for: textView)
         }
 
         func textViewDidChangeSelection(_ textView: UITextView) {
+            guard isApplyingProgrammaticState == false else {
+                return
+            }
             updateSelection(from: textView)
         }
 
         func textViewDidBeginEditing(_ textView: UITextView) {
-            parent.isFocused.wrappedValue = true
+            if parent.isFocused.wrappedValue == false {
+                parent.isFocused.wrappedValue = true
+            }
             syncPlaceholder()
             updateHeight(for: textView)
         }
 
         func textViewDidEndEditing(_ textView: UITextView) {
-            parent.isFocused.wrappedValue = false
+            if parent.isFocused.wrappedValue {
+                parent.isFocused.wrappedValue = false
+            }
             parent.text = textView.text
             updateSelection(from: textView)
             syncPlaceholder()
             updateHeight(for: textView)
+        }
+
+        func performProgrammaticUpdate(_ update: () -> Void) {
+            isApplyingProgrammaticState = true
+            update()
+            isApplyingProgrammaticState = false
         }
 
         func updateHeight(for textView: UITextView) {

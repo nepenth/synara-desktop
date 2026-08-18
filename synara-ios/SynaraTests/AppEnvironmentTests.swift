@@ -1,5 +1,6 @@
 import XCTest
 import UserNotifications
+import SynaraCore
 @testable import Synara
 
 final class AppEnvironmentTests: XCTestCase {
@@ -67,6 +68,40 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertTrue(AppEnvironment.makeLiveHomeserverDiscovery() is CoreHomeserverDiscoveryService)
     }
 
+    func testSharedCoreLaunchResetCompletesBeforeCoreConstruction() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("synara-launch-reset-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let staleFile = root.appendingPathComponent("stale-store-marker")
+        try Data("stale".utf8).write(to: staleFile)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        XCTAssertTrue(try SharedCoreLaunchReset.resetStoreRootIfRequested(
+            root,
+            environment: ["SYNARA_RESET_SESSION_ON_LAUNCH": "1"]
+        ))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: root.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: staleFile.path))
+        XCTAssertFalse(try SharedCoreLaunchReset.resetStoreRootIfRequested(root, environment: [:]))
+    }
+
+    func testSharedCoreLoginErrorMappingDoesNotMislabelVaultFailureAsBadCredentials() {
+        XCTAssertEqual(
+            SharedCoreLoginErrorMapping.loginError(for: SessionLoginError.Failed(
+                code: "p4-s3c-secret-vault-unavailable",
+                description: "The secret store is unavailable."
+            )),
+            .sessionPersistenceFailed
+        )
+        XCTAssertEqual(
+            SharedCoreLoginErrorMapping.loginError(for: SessionLoginError.Failed(
+                code: "p4-s3c-login-failed",
+                description: "The session could not be authenticated."
+            )),
+            .invalidCredentials
+        )
+    }
+
     @MainActor
     func testLiveEnvironmentUsesSharedCoreServices() {
         let environment = AppEnvironment.live()
@@ -95,6 +130,8 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertTrue(status.isEncrypted)
         XCTAssertTrue(status.needsRecoveryAttention)
         XCTAssertTrue(status.needsCryptoActionBanner)
+        XCTAssertEqual(status.roomHeaderLabel, "Recovery Needed")
+        XCTAssertEqual(status.roomHeaderSystemImage, "lock.trianglebadge.exclamationmark")
     }
 
     func testRoomCryptoStatusOmitsCryptoActionBannerWhenHealthy() {
@@ -107,6 +144,8 @@ final class AppEnvironmentTests: XCTestCase {
         )
 
         XCTAssertFalse(status.needsCryptoActionBanner)
+        XCTAssertEqual(status.roomHeaderLabel, "Encrypted")
+        XCTAssertEqual(status.roomHeaderSystemImage, "lock.fill")
     }
 
     func testMockCryptoRecoverRejectsEmptyRecoveryKey() async {

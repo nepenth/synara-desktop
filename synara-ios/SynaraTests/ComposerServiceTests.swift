@@ -44,4 +44,19 @@ final class ComposerServiceTests: XCTestCase {
         XCTAssertFalse(item.isEdited)
     }
 
+    func testSendCreatesFormattedLocalEchoWhenMatrixHTMLIsPresent() async throws {
+        let service = MockMessageSendService()
+        let request = MessageSendRequest(
+            roomID: "!room:matrix.org",
+            body: "**ship it**",
+            formattedBody: "<strong>ship it</strong>",
+            replyToEventID: nil,
+            editEventID: nil
+        )
+
+        let item = try await service.send(request)
+
+        XCTAssertEqual(item.kind, .formattedText(body: "**ship it**", html: "<strong>ship it</strong>"))
+    }
+
 }

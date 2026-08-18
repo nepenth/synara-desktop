@@ -344,6 +344,24 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(sentMessage.waitForExistence(timeout: 5))
     }
 
+    func testComposerFormattingToolbarSendsRenderedMessage() {
+        let app = launchRoomApp()
+
+        tap(app.buttons["ComposerFormattingToggle"])
+        XCTAssertTrue(app.scrollViews["ComposerFormattingBar"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["ComposerFormat-bold"].exists)
+        XCTAssertTrue(app.buttons["ComposerFormat-bulletList"].exists)
+
+        tap(app.buttons["ComposerFormat-bold"])
+        let composer = composerField(in: app)
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        XCTAssertEqual(composer.value as? String, "**bold text**")
+
+        tap(app.buttons["ComposerSendButton"])
+        XCTAssertTrue(app.staticTexts["bold text"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["**bold text**"].exists)
+    }
+
     func testMediaUploadAddsAttachmentPlaceholder() {
         let app = launchRoomApp()
 
@@ -645,6 +663,62 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(waitForTimelineElement(app.staticTexts[message], app: app, timeout: 60))
     }
 
+    func testLiveRichFormattingSmokeWhenConfigured() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard liveEnvironmentValue("SYNARA_LIVE_RICH_TEXT_SMOKE", in: environment) == "1" else {
+            throw XCTSkip("Set SYNARA_LIVE_RICH_TEXT_SMOKE=1 for live rich-text simulator smoke.")
+        }
+        guard let homeserver = liveEnvironmentValue("SYNARA_LIVE_HOMESERVER", in: environment),
+              let username = liveEnvironmentValue("SYNARA_LIVE_USERNAME", in: environment),
+              let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment)
+        else {
+            throw XCTSkip("Live rich-text smoke needs homeserver, username, and password environment variables.")
+        }
+
+        let liveClient = try MatrixLiveTestClient.login(
+            homeserver: homeserver,
+            username: username,
+            password: password
+        )
+        try liveClient.cleanupDisposableRooms(namePrefixes: ["Synara Rich Text Smoke "])
+        let timestamp = Int(Date().timeIntervalSince1970)
+        let roomID = try liveClient.createPrivateRoom(name: "Synara Rich Text Smoke \(timestamp)")
+        defer {
+            try? liveClient.leaveRoom(roomID: roomID)
+            try? liveClient.cleanupDisposableRooms(namePrefixes: ["Synara Rich Text Smoke "])
+        }
+
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
+        app.launchEnvironment["SYNARA_AUTO_OPEN_ROOM_ID"] = roomID
+        launch(app)
+
+        if app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5) {
+            loginLive(app: app, homeserver: homeserver, username: username, password: password)
+            dismissPasswordSavePromptIfPresent(app: app)
+        }
+
+        let composer = composerField(in: app)
+        XCTAssertTrue(composer.waitForExistence(timeout: 90))
+        composer.tap()
+        let prefix = "Synara rich smoke \(timestamp) "
+        composer.typeText(prefix)
+        tap(app.buttons["ComposerFormattingToggle"], timeout: 10)
+        XCTAssertTrue(app.buttons["ComposerFormat-bold"].waitForExistence(timeout: 5))
+        tap(app.buttons["ComposerFormat-bold"])
+        tap(app.buttons["ComposerSendButton"], timeout: 10)
+
+        let body = "\(prefix)**bold text**"
+        guard let content = liveClient.waitForMessageContent(roomID: roomID, body: body, timeout: 60) else {
+            XCTFail("Formatted message did not reach the homeserver.")
+            return
+        }
+        XCTAssertEqual(content["format"] as? String, "org.matrix.custom.html")
+        XCTAssertTrue((content["formatted_body"] as? String)?.contains("<strong>bold text</strong>") == true)
+        XCTAssertTrue(waitForTimelineElement(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "bold text")).firstMatch, app: app, timeout: 30))
+        XCTAssertFalse(app.staticTexts[body].exists)
+    }
+
     func testLiveAgentApprovalSmokeWhenConfigured() throws {
         let environment = ProcessInfo.processInfo.environment
         guard liveEnvironmentValue("SYNARA_LIVE_AGENT_SMOKE", in: environment) == "1" else {
@@ -741,7 +815,16 @@ final class SynaraUITests: XCTestCase {
         tap(app.buttons["ComposerSendButton"], timeout: 10)
 
         XCTAssertTrue(waitForTimelineElement(app.staticTexts[message], app: app, timeout: 90))
-        XCTAssertFalse(app.staticTexts["Encrypted content unavailable. Actions and media downloads are blocked until keys are available."].exists)
+        XCTAssertFalse(
+            app.staticTexts.matching(
+                NSPredicate(format: "label CONTAINS %@", "m.room.encrypted")
+            ).firstMatch.exists
+        )
+        XCTAssertFalse(
+            app.staticTexts.matching(
+                NSPredicate(format: "label CONTAINS %@", "\"ciphertext\"")
+            ).firstMatch.exists
+        )
 
         app.terminate()
         app.launchEnvironment.removeValue(forKey: "SYNARA_RESET_SESSION_ON_LAUNCH")
@@ -774,6 +857,15 @@ final class SynaraUITests: XCTestCase {
 
         let inviteUserID = liveEnvironmentValue("SYNARA_LIVE_INVITE_USER_ID", in: environment)
         let roomName = "Synara UI Room \(Int(Date().timeIntervalSince1970))"
+        let liveClient = try MatrixLiveTestClient.login(
+            homeserver: homeserver,
+            username: username,
+            password: password
+        )
+        try liveClient.cleanupDisposableRooms(namePrefixes: ["Synara UI Room "])
+        defer {
+            try? liveClient.cleanupDisposableRooms(namePrefixes: ["Synara UI Room "])
+        }
 
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
@@ -845,6 +937,20 @@ final class SynaraUITests: XCTestCase {
 
         let roomID = liveEnvironmentValue("SYNARA_LIVE_ROOM_ID", in: environment)
         let roomName = liveEnvironmentValue("SYNARA_LIVE_ROOM_NAME", in: environment) ?? "Alerts"
+        let liveClient = try MatrixLiveTestClient.login(
+            homeserver: homeserver,
+            username: username,
+            password: password
+        )
+        try liveClient.cleanupDisposableRooms(
+            namePrefixes: [
+                "Synara Rich Text Smoke ",
+                "Synara UI Room ",
+                "Synara Live Smoke ",
+                "Prism integration",
+                "Prism dual-user test",
+            ]
+        )
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
         launch(app)
@@ -855,6 +961,14 @@ final class SynaraUITests: XCTestCase {
         }
 
         XCTAssertTrue(app.collectionViews["RoomList"].waitForExistence(timeout: 60))
+        if let roomID {
+            let preview = "Synara room-list preview smoke \(Int(Date().timeIntervalSince1970))"
+            _ = try liveClient.sendRoomMessage(roomID: roomID, body: preview)
+            XCTAssertTrue(
+                app.staticTexts[preview].waitForExistence(timeout: 60),
+                "A newly streamed event must update the visible room preview."
+            )
+        }
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "01-live-room-list")
 
         if let roomID {
@@ -1189,11 +1303,9 @@ final class SynaraUITests: XCTestCase {
     }
 
     private func composerField(in app: XCUIApplication) -> XCUIElement {
-        let textView = app.textViews["ComposerTextField"]
-        if textView.exists {
-            return textView
-        }
-        return app.textFields["ComposerTextField"]
+        app.descendants(matching: .any)
+            .matching(identifier: "ComposerTextField")
+            .firstMatch
     }
 
     private func tap(_ element: XCUIElement, timeout: TimeInterval = 5) {
@@ -1503,6 +1615,103 @@ private final class MatrixLiveTestClient {
             throw LiveMatrixError.invalidResponse
         }
         return eventID
+    }
+
+    func createPrivateRoom(name: String) throws -> String {
+        let response = try authenticatedRequest(
+            method: "POST",
+            path: ["client", "v3", "createRoom"],
+            body: [
+                "name": name,
+                "preset": "private_chat",
+                "visibility": "private",
+            ]
+        )
+        guard let object = try JSONSerialization.jsonObject(with: response.data) as? [String: Any],
+              let roomID = object["room_id"] as? String
+        else {
+            throw LiveMatrixError.invalidResponse
+        }
+        return roomID
+    }
+
+    func leaveRoom(roomID: String) throws {
+        _ = try authenticatedRequest(
+            method: "POST",
+            path: ["client", "v3", "rooms", roomID, "leave"],
+            body: [:]
+        )
+    }
+
+    func cleanupDisposableRooms(namePrefixes: [String]) throws {
+        guard namePrefixes.isEmpty == false else {
+            return
+        }
+
+        let response = try authenticatedRequest(
+            method: "GET",
+            path: ["client", "v3", "joined_rooms"],
+            body: nil
+        )
+        guard let object = try JSONSerialization.jsonObject(with: response.data) as? [String: Any],
+              let roomIDs = object["joined_rooms"] as? [String]
+        else {
+            throw LiveMatrixError.invalidResponse
+        }
+
+        for roomID in roomIDs {
+            guard let roomName = try? joinedRoomName(roomID: roomID),
+                  namePrefixes.contains(where: roomName.hasPrefix)
+            else {
+                continue
+            }
+            try leaveRoom(roomID: roomID)
+        }
+    }
+
+    private func joinedRoomName(roomID: String) throws -> String {
+        let response = try authenticatedRequest(
+            method: "GET",
+            path: ["client", "v3", "rooms", roomID, "state", "m.room.name"],
+            body: nil
+        )
+        guard let object = try JSONSerialization.jsonObject(with: response.data) as? [String: Any],
+              let roomName = object["name"] as? String
+        else {
+            throw LiveMatrixError.invalidResponse
+        }
+        return roomName
+    }
+
+    func waitForMessageContent(roomID: String, body: String, timeout: TimeInterval) -> [String: Any]? {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let content = try? messageContent(roomID: roomID, body: body) {
+                return content
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(1))
+        }
+        return try? messageContent(roomID: roomID, body: body)
+    }
+
+    private func messageContent(roomID: String, body: String) throws -> [String: Any]? {
+        let response = try authenticatedRequest(
+            method: "GET",
+            path: ["client", "v3", "rooms", roomID, "messages"],
+            queryItems: [
+                URLQueryItem(name: "dir", value: "b"),
+                URLQueryItem(name: "limit", value: "40"),
+            ],
+            body: nil
+        )
+        guard let object = try JSONSerialization.jsonObject(with: response.data) as? [String: Any],
+              let chunk = object["chunk"] as? [[String: Any]]
+        else {
+            throw LiveMatrixError.invalidResponse
+        }
+        return chunk.compactMap { $0["content"] as? [String: Any] }.first { content in
+            content["body"] as? String == body
+        }
     }
 
     func seedAgentApprovalCard(roomID: String, title: String, actionID: String) throws -> String {

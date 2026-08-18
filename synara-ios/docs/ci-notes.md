@@ -62,17 +62,18 @@ If the DerivedData hash changes, locate the active checkout with:
 find "$HOME/Library/Developer/Xcode/DerivedData" -path '*Synara*/SourcePackages' -type d
 ```
 
-The script pins package resolution to `Package.resolved`, skips package updates,
-uses the system SCM provider, and writes timestamped `.xcresult` bundles under
+The script preserves the committed `Package.resolved` across XcodeGen project
+replacement, pins package resolution to that lock, skips package updates, uses
+the system SCM provider, and writes timestamped `.xcresult` bundles under
 `IOS_RESULT_BUNDLE_DIR`.
 
-## Codex Sandbox Limitation
+## Local Automation Requirements
 
-Codex can syntax-check this script, but it is not a reliable place to complete
-iOS Xcode verification. Xcode and SwiftPM require access to CoreSimulator and
-SwiftPM state under `~/Library`, and SwiftPM invokes Apple's `sandbox-exec`
-during package resolution. Inside Codex's existing filesystem sandbox, that
-nested sandbox application can fail even when cache paths are redirected.
+Codex completed the exact build/test path successfully on 2026-08-17 after
+Xcode, CoreSimulator, and simulator automation permissions were available. The
+runner still needs access to CoreSimulator and SwiftPM state under `~/Library`;
+restricted execution environments may fail when SwiftPM invokes Apple's
+`sandbox-exec` during package resolution.
 
 The known failure signature is:
 
@@ -80,9 +81,8 @@ The known failure signature is:
 sandbox-exec: sandbox_apply: Operation not permitted
 ```
 
-If that appears while parsing the Swift package manifest, stop trying to tune
-cache flags inside Codex and run the same script from a normal macOS Terminal or
-macOS CI runner.
+If that appears while parsing the Swift package manifest, run the same script
+from a normal macOS Terminal or macOS CI runner with CoreSimulator access.
 
 The release gate is therefore:
 
@@ -94,6 +94,6 @@ The release gate is therefore:
 
 Signed simulator builds do not require App Store distribution credentials on a
 local Mac, but they do need normal simulator code signing. Signed device builds,
-TestFlight archives, and App Store uploads are future release-lane work. They
-will require Apple Developer Program membership, a registered bundle identifier,
-signing assets, and App Store Connect API credentials stored as CI secrets.
+TestFlight archives, and App Store uploads use the configured Apple Developer
+team, registered bundle identifiers, signing assets, and App Store Connect API
+credentials stored outside the repository or as CI secrets.

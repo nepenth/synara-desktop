@@ -39,19 +39,6 @@ enum SharedCoreLeftovers {
         try await core.recover(recoveryKey: recoveryKey)
     }
 
-    static func sendRawRoomEvent(
-        core: SharedCore,
-        roomId: String,
-        eventType: String,
-        contentJson: String
-    ) async throws -> LeftoverAckDto {
-        try await core.sendRawRoomEvent(
-            roomId: roomId,
-            eventType: eventType,
-            contentJson: contentJson
-        )
-    }
-
     static func setNotificationMode(
         core: SharedCore,
         roomId: String,
