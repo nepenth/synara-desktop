@@ -2405,6 +2405,53 @@ fn v_auth_native_session_envelope_host_dual_write_is_wired() {
 }
 
 #[test]
+fn product_client_persists_rotated_sdk_tokens_and_logout_cannot_be_blocked_remotely() {
+    let build_client = AUTH_PRODUCT_COMMANDS_SOURCE
+        .split("pub(super) async fn build_client")
+        .nth(1)
+        .and_then(|source| source.split("pub(super) async fn build_password_reset_client").next())
+        .expect("build_client body");
+    assert!(
+        build_client.contains("install_session_rotation_callbacks(&client, identity)"),
+        "every product Matrix client must install secure token-rotation callbacks"
+    );
+
+    let callbacks = AUTH_PRODUCT_COMMANDS_SOURCE
+        .split("fn install_session_rotation_callbacks")
+        .nth(1)
+        .and_then(|source| source.split("pub(super) async fn build_password_reset_client").next())
+        .expect("session rotation callback body");
+    for required in [
+        "set_session_callbacks",
+        "load_session_material",
+        "matrix_session_from_host_secrets",
+        "persist_session_after_login",
+        "persist_frontend_session_envelope",
+    ] {
+        assert!(
+            callbacks.contains(required),
+            "session rotation callback must retain {required}"
+        );
+    }
+
+    let logout = AUTH_PRODUCT_COMMANDS_SOURCE
+        .split("pub async fn matrix_logout")
+        .nth(1)
+        .and_then(|source| source.split("pub async fn matrix_restore_session").next())
+        .expect("matrix_logout body");
+    assert!(
+        logout.contains("matrix_auth().logout().await.is_ok()"),
+        "remote logout must remain best-effort"
+    );
+    assert!(
+        logout.contains("clear_session_material")
+            && logout.contains("remove_active_identity")
+            && logout.contains("clear_frontend_session_envelope"),
+        "local logout must clear every persisted session surface"
+    );
+}
+
+#[test]
 fn media_config_and_download_use_exact_wire_shapes() {
     let request = MatrixMediaDownloadRequest {
         content_uri: "mxc://example.org/media".to_owned(),

@@ -107,7 +107,53 @@ pub async fn send_message_to_room(
     };
     result
         .map(|result| result.response.event_id.to_string())
-        .map_err(|_| "d0.4-send-sdk-failed")
+        .map_err(|error| send_message_error_diagnostic(&error))
+}
+
+fn send_message_error_diagnostic(error: &matrix_sdk::Error) -> &'static str {
+    match error {
+        matrix_sdk::Error::Http(error) => send_http_error_diagnostic(error),
+        matrix_sdk::Error::AuthenticationRequired => "d0.4-send-sdk-auth-required",
+        matrix_sdk::Error::InsufficientData => "d0.4-send-sdk-insufficient-data",
+        matrix_sdk::Error::BadCryptoStoreState => "d0.4-send-sdk-crypto-store-state",
+        matrix_sdk::Error::NoOlmMachine => "d0.4-send-sdk-no-olm-machine",
+        matrix_sdk::Error::CryptoStoreError(_) => "d0.4-send-sdk-crypto-store-failed",
+        matrix_sdk::Error::OlmError(_) => "d0.4-send-sdk-olm-failed",
+        matrix_sdk::Error::MegolmError(_) => "d0.4-send-sdk-megolm-failed",
+        matrix_sdk::Error::StateStore(_) => "d0.4-send-sdk-state-store-failed",
+        matrix_sdk::Error::WrongRoomState(_) => "d0.4-send-sdk-wrong-room-state",
+        matrix_sdk::Error::ConcurrentRequestFailed => "d0.4-send-sdk-concurrent-request-failed",
+        _ => "d0.4-send-sdk-failed",
+    }
+}
+
+fn send_http_error_diagnostic(error: &matrix_sdk::HttpError) -> &'static str {
+    use matrix_sdk::ruma::api::error::ErrorKind;
+    use matrix_sdk::HttpError;
+
+    match error {
+        HttpError::Reqwest(_) => "d0.4-send-sdk-http-network-failed",
+        HttpError::IntoHttp(_) => "d0.4-send-sdk-http-request-failed",
+        HttpError::RefreshToken(_) => "d0.4-send-sdk-http-refresh-failed",
+        HttpError::Cached(error) => send_http_error_diagnostic(error),
+        HttpError::Api(_) => match error.client_api_error_kind() {
+            Some(ErrorKind::Forbidden | ErrorKind::GuestAccessForbidden) => {
+                "d0.4-send-sdk-http-forbidden"
+            }
+            Some(ErrorKind::MissingToken | ErrorKind::UnknownToken(_)) => {
+                "d0.4-send-sdk-http-auth-failed"
+            }
+            Some(ErrorKind::LimitExceeded(_)) => "d0.4-send-sdk-http-rate-limited",
+            Some(
+                ErrorKind::BadJson
+                | ErrorKind::InvalidParam
+                | ErrorKind::MissingParam
+                | ErrorKind::NotJson,
+            ) => "d0.4-send-sdk-http-invalid-request",
+            Some(ErrorKind::NotFound) => "d0.4-send-sdk-http-not-found",
+            Some(_) | None => "d0.4-send-sdk-http-api-failed",
+        },
+    }
 }
 
 pub fn parse_edit_event_id(event_id: &str) -> Result<OwnedEventId, &'static str> {

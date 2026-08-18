@@ -832,7 +832,11 @@ pub struct TimelineOtherRow {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum TimelineViewRow {
     Message(Box<TimelineMessageRow>),
     Sticker {
@@ -1022,6 +1026,20 @@ mod tests {
     use matrix_sdk::ruma::events::room::message::{
         EmoteMessageEventContent, NoticeMessageEventContent, TextMessageEventContent,
     };
+
+    #[test]
+    fn virtual_timeline_rows_serialize_camel_case_fields() {
+        let row = TimelineViewRow::DateSeparator {
+            item_id: "date-1".to_owned(),
+            timestamp_ms: 1_700_000_000_000,
+        };
+        let json = serde_json::to_value(row).expect("date separator should serialize");
+        assert_eq!(json["kind"], "date_separator");
+        assert_eq!(json["itemId"], "date-1");
+        assert_eq!(json["timestampMs"], 1_700_000_000_000_u64);
+        assert!(json.get("item_id").is_none());
+        assert!(json.get("timestamp_ms").is_none());
+    }
 
     #[test]
     fn formatted_body_projects_distinct_html_only() {

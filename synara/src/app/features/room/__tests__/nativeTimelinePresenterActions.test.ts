@@ -49,3 +49,25 @@ test('native timeline rows retain hover/focus action access without restoring th
   assert.doesNotMatch(presenter, /from ['"][^'"]*message\/Message['"]/);
   assert.doesNotMatch(presenter, /from ['"][^'"]*RoomTimeline['"]/);
 });
+
+test('native timeline navigation uses contextual controls and edge pagination', () => {
+  assert.match(presenter, /scrollEl\.scrollTop <= 96/);
+  assert.match(presenter, /distanceFromBottom <= 96/);
+  assert.match(presenter, /aria-label="Jump to latest"/);
+  assert.match(presenter, /Icons\.ChevronBottom/);
+  assert.match(presenter, /aria-label="Loading older messages"/);
+  assert.match(presenter, /aria-label="Loading newer messages"/);
+
+  assert.doesNotMatch(presenter, />\s*Mark read\s*</);
+  assert.doesNotMatch(presenter, />\s*Mark unread\s*</);
+  assert.doesNotMatch(presenter, />\s*Load older messages\s*</);
+  assert.doesNotMatch(presenter, />\s*Load newer messages\s*</);
+});
+
+test('room read state stays a single contextual overflow action', () => {
+  const header = readFileSync('src/app/features/room/RoomViewHeader.tsx', 'utf8');
+
+  assert.match(header, /aria-label="More Options"/);
+  assert.match(header, /unread \? 'Mark as Read' : 'Mark as Unread'/);
+  assert.match(header, /unread \? Icons\.CheckTwice : Icons\.MessageUnread/);
+});

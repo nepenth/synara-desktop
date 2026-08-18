@@ -8,6 +8,7 @@ import {
   DESKTOP_TRAY_DND_TOGGLE_EVENT,
   DESKTOP_TRAY_STATE_DEBOUNCE_MS,
   enableDesktopSpellcheck,
+  formatDesktopInvokeError,
   flushPendingDesktopTrayStateUpdate,
   getDesktopIntegrationStatus,
   getDesktopNotificationCount,
@@ -415,6 +416,23 @@ test('desktop invoke never persists raw native rejection fields', async () => {
     (globalThis as any).window = originalWindow;
     clearDesktopDiagnostics();
   }
+});
+
+test('desktop invoke records only explicitly allowlisted native diagnostics', async () => {
+  assert.equal(
+    formatDesktopInvokeError({
+      message: 'private server response',
+      diagnosticId: 'd0.4-send-sdk-no-olm-machine',
+    }),
+    'native command rejected (d0.4-send-sdk-no-olm-machine)'
+  );
+  assert.equal(
+    formatDesktopInvokeError({
+      message: 'private server response',
+      diagnosticId: 'd0.4-send-sdk-no-olm-machine-secret-suffix',
+    }),
+    'native command rejected'
+  );
 });
 
 test('desktop shortcut failures are recorded in diagnostics', async () => {

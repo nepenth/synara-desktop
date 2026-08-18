@@ -87,11 +87,12 @@ export function Members({ requestClose }: MembersProps) {
   const memberSnapshot = useRoomMembers(mx, room.roomId, nativeSession);
   const members = memberSnapshot ?? EMPTY_ROOM_MEMBERS;
   const joinedMemberCount = nativeSession
-    ? members.filter((member) => member.membership === Membership.Join).length
+    ? memberSnapshot?.filter((member) => member.membership === Membership.Join).length
     : room.getJoinedMemberCount();
   const fetchingMembers = nativeSession
     ? memberSnapshot === null
-    : members.length < joinedMemberCount;
+    : members.length < (joinedMemberCount ?? 0);
+  const membersUnavailable = nativeSession && memberSnapshot === undefined;
   const openProfile = useOpenUserRoomProfile();
   const profileUser = useUserRoomProfileState();
   const space = useSpaceOptionally();
@@ -173,7 +174,7 @@ export function Members({ requestClose }: MembersProps) {
         <Box grow="Yes" gap="200">
           <Box grow="Yes" alignItems="Center" gap="200">
             <Text size="H3" truncate>
-              {joinedMemberCount} Members
+              {typeof joinedMemberCount === 'number' ? `${joinedMemberCount} Members` : 'Members'}
             </Text>
           </Box>
           <Box shrink="No">
@@ -311,7 +312,9 @@ export function Members({ requestClose }: MembersProps) {
 
               {!fetchingMembers && !result && flattenTagMembers.length === 0 && (
                 <Text style={{ padding: config.space.S300 }} align="Center">
-                  {`No "${membershipFilter.name}" Members`}
+                  {membersUnavailable
+                    ? 'Members are temporarily unavailable.'
+                    : `No "${membershipFilter.name}" Members`}
                 </Text>
               )}
 

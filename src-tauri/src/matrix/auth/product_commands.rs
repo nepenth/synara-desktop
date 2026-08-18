@@ -638,13 +638,9 @@ pub async fn matrix_logout(
         return Ok(MatrixSessionSnapshot::LoggedOut);
     };
 
-    active.client.matrix_auth().logout().await.map_err(|_| {
-        MatrixAuthCommandError::new(
-            "Unknown",
-            "The Matrix homeserver rejected logout.",
-            "d0.1-remote-logout-failed",
-        )
-    })?;
+    // Remote logout is best-effort. An expired/revoked token must never trap a
+    // user in a locally authenticated state or prevent secure local cleanup.
+    let _remote_logout_succeeded = active.client.matrix_auth().logout().await.is_ok();
     active.join_rules.retire();
     active
         .sync
@@ -1008,11 +1004,79 @@ pub(super) async fn build_client(
     // SQLite. A corrupt/ahead/missing migration chain is a reset *decision*,
     // never an automatic wipe; only the static safe diagnostic crosses IPC.
     migrate_store_to_current(&store_paths).map_err(map_store_migration_error)?;
-    let config = ClientBuildConfig::product_default(app_data_root, identity, Some(store_key))
+    let config = ClientBuildConfig::product_default(app_data_root, identity.clone(), Some(store_key))
         .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed"))?;
-    build_unauthenticated_client(&config)
+    let client = build_unauthenticated_client(&config)
         .await
-        .map_err(map_store_client_build_error)
+        .map_err(map_store_client_build_error)?;
+    install_session_rotation_callbacks(&client, identity)?;
+    Ok(client)
+}
+
+#[derive(Debug)]
+struct SessionRotationCallbackError(&'static str);
+
+impl std::fmt::Display for SessionRotationCallbackError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.0)
+    }
+}
+
+impl std::error::Error for SessionRotationCallbackError {}
+
+fn install_session_rotation_callbacks(
+    client: &Client,
+    identity: AccountIdentity,
+) -> Result<(), MatrixAuthCommandError> {
+    let reload_identity = identity.clone();
+    let save_identity = identity;
+    client
+        .set_session_callbacks(
+            Box::new(move |_| {
+                let material = load_session_material(
+                    &KeyringSessionMaterialVault::new(),
+                    &reload_identity,
+                )
+                .map_err(|_| SessionRotationCallbackError("d0.1-session-reload-read-failed"))?
+                .ok_or(SessionRotationCallbackError(
+                    "d0.1-session-reload-material-missing",
+                ))?;
+                let secrets = material
+                    .decode_host_secrets()
+                    .map_err(|_| SessionRotationCallbackError("d0.1-session-reload-decode-failed"))?;
+                let session = matrix_session_from_host_secrets(&reload_identity, &secrets)
+                    .map_err(|_| SessionRotationCallbackError("d0.1-session-reload-invalid"))?;
+                Ok(session.tokens)
+            }),
+            Box::new(move |client| {
+                persist_session_after_login(
+                    &client,
+                    &save_identity,
+                    &KeyringSessionMaterialVault::new(),
+                )
+                .map_err(|_| SessionRotationCallbackError("d0.1-session-rotation-persist-failed"))?;
+
+                let session = client.session().ok_or(SessionRotationCallbackError(
+                    "d0.1-session-rotation-session-missing",
+                ))?;
+                let AuthSession::Matrix(matrix) = &session else {
+                    return Err(SessionRotationCallbackError(
+                        "d0.1-session-rotation-kind-unsupported",
+                    )
+                    .into());
+                };
+                let identity = MatrixLoginIdentity {
+                    user_id: matrix.meta.user_id.as_str().to_owned(),
+                    device_id: matrix.meta.device_id.as_str().to_owned(),
+                    homeserver_url: save_identity.homeserver_url().to_owned(),
+                };
+                persist_frontend_session_envelope(&client, &identity).map_err(|_| {
+                    SessionRotationCallbackError("d0.1-desktop-session-rotation-persist-failed")
+                })?;
+                Ok(())
+            }),
+        )
+        .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-session-callback-install-failed"))
 }
 
 /// Ephemeral unauthenticated client for password-reset (no product session, no keyring key).

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useFocusWithin, useHover } from 'react-aria';
 import FocusTrap from 'focus-trap-react';
+import { ErrorBoundary } from 'react-error-boundary';
 import {
   Box,
   Button,
@@ -13,7 +14,10 @@ import {
   PopOut,
   RectCords,
   Scroll,
+  Spinner,
   Text,
+  Tooltip,
+  TooltipProvider,
   config,
 } from 'folds';
 import { EmojiBoard } from '../../components/emoji-board';
@@ -47,6 +51,7 @@ import {
   nativeThreadFocusEventId,
   nativeTimelineMediaSrc,
   needsNativeForwardEncryptionConfirm,
+  parseNativeTimelineAgentCard,
   shouldAttachFormattedBody,
   type NativeTimelineMediaHandle,
   type NativeTimelineRowCapabilities,
@@ -56,6 +61,12 @@ import {
 import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { stopPropagation } from '../../utils/keyboard';
+
+const HermesAgentCard = React.lazy(() =>
+  import('../../components/hermes/HermesAgentCard').then((module) => ({
+    default: module.HermesAgentCard,
+  }))
+);
 
 type NativeTimelinePresenterProps = {
   roomId: string;
@@ -785,6 +796,7 @@ const NativeTimelineRow = ({
     case 'message': {
       const isEmote = row.messageType === 'emote';
       const threadFocus = nativeThreadFocusEventId(row.thread);
+      const agentPayload = parseNativeTimelineAgentCard(row.agentCardJson);
       return (
         <NativeTimelineRowActionSurface
           actionProps={{
@@ -842,7 +854,13 @@ const NativeTimelineRow = ({
                 </Text>
               </Box>
             )}
-            {row.formattedBody ? (
+            {agentPayload ? (
+              <ErrorBoundary fallback={<Text size="T300">Agent output unavailable</Text>}>
+                <React.Suspense fallback={<Spinner size="200" aria-label="Loading agent output" />}>
+                  <HermesAgentCard payload={agentPayload} />
+                </React.Suspense>
+              </ErrorBoundary>
+            ) : row.formattedBody ? (
               <div
                 // Defense in depth: re-sanitize Matrix HTML before the native presenter renders it.
                 // eslint-disable-next-line react/no-danger
@@ -953,11 +971,11 @@ const NativeTimelineRow = ({
         </Box>
       );
     case 'date_separator':
-      return (
+      return row.timestampMs && Number.isFinite(row.timestampMs) ? (
         <Box style={{ padding: `${config.space.S300} ${config.space.S400}` }}>
-          <Text size="T300">{new Date(row.timestampMs ?? 0).toLocaleDateString()}</Text>
+          <Text size="T300">{new Date(row.timestampMs).toLocaleDateString()}</Text>
         </Box>
-      );
+      ) : null;
     case 'read_marker':
       return (
         <Box style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
@@ -977,13 +995,19 @@ const NativeTimelineRow = ({
         </Box>
       );
     case 'redacted':
-    case 'encrypted_unavailable':
-    case 'other':
       return (
         <Box style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
-          <Text size="T300">{row.summary ?? 'Unsupported timeline event'}</Text>
+          <Text size="T300">{row.summary ?? 'Message removed'}</Text>
         </Box>
       );
+    case 'encrypted_unavailable':
+      return (
+        <Box style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
+          <Text size="T300">This encrypted message is not available on this device.</Text>
+        </Box>
+      );
+    case 'other':
+      return null;
     case 'sticker': {
       return (
         <NativeTimelineRowActionSurface
@@ -1016,11 +1040,13 @@ const NativeTimelineRow = ({
       );
     }
     case 'pagination':
-      return (
+      return row.state === 'loading' ? (
         <Box style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
-          <Text size="T300">{row.state === 'loading' ? 'Loading messages…' : 'More messages'}</Text>
+          <Box justifyContent="Center">
+            <Spinner size="200" aria-label="Loading messages" />
+          </Box>
         </Box>
-      );
+      ) : null;
     default:
       return null;
   }
@@ -1063,6 +1089,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   const roomList = useNativeRoomListSnapshot();
   const sourceEncrypted = roomList.rooms.find((room) => room.roomId === roomId)?.isEncrypted;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const paginationInFlightRef = useRef<'backwards' | 'forwards' | undefined>(undefined);
   const rows = useMemo(() => readyState?.snapshot.rows ?? [], [readyState?.snapshot.rows]);
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: rows.length,
@@ -1118,14 +1145,47 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     if (!readyState) return undefined;
     const scrollEl = scrollRef.current;
     if (!scrollEl) return undefined;
-    const onScroll = () => saveViewport();
+    const paginateAtEdge = () => {
+      if (paginationInFlightRef.current) return;
+      const { snapshot } = readyState;
+      const distanceFromBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
+      const direction =
+        scrollEl.scrollTop <= 96 &&
+        snapshot.capabilities.paginateBackward &&
+        snapshot.pagination.backward === 'available'
+          ? 'backwards'
+          : distanceFromBottom <= 96 &&
+            snapshot.capabilities.paginateForward &&
+            snapshot.pagination.forward === 'available'
+          ? 'forwards'
+          : undefined;
+      if (!direction) return;
+
+      paginationInFlightRef.current = direction;
+      setActionError(undefined);
+      void controller
+        .paginate(direction)
+        .catch((error) => {
+          setActionError(
+            error instanceof Error ? error.message : 'Native timeline pagination failed.'
+          );
+        })
+        .finally(() => {
+          paginationInFlightRef.current = undefined;
+        });
+    };
+    const onScroll = () => {
+      saveViewport();
+      paginateAtEdge();
+    };
     scrollEl.addEventListener('scroll', onScroll, { passive: true });
     saveViewport();
+    paginateAtEdge();
     return () => {
       scrollEl.removeEventListener('scroll', onScroll);
       saveViewport();
     };
-  }, [readyState, saveViewport]);
+  }, [controller, readyState, saveViewport]);
 
   useLayoutEffect(() => {
     if (!readyState || rows.length === 0) return undefined;
@@ -1196,26 +1256,6 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
 
   return (
     <Box grow="Yes" direction="Column" style={{ minHeight: 0 }}>
-      <Box gap="200" style={{ padding: config.space.S200 }}>
-        {snapshot.capabilities.markRead && (
-          <Button size="300" onClick={() => runAction(() => controller.setReadState('mark_read'))}>
-            Mark read
-          </Button>
-        )}
-        {snapshot.capabilities.markUnread && (
-          <Button
-            size="300"
-            onClick={() => runAction(() => controller.setReadState('mark_unread'))}
-          >
-            Mark unread
-          </Button>
-        )}
-        {snapshot.position.kind !== 'live_bottom' && (
-          <Button size="300" onClick={() => runAction(() => controller.jumpLatest())}>
-            Jump to latest
-          </Button>
-        )}
-      </Box>
       {replyDraft && (
         <Box
           direction="Column"
@@ -1251,50 +1291,81 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
         </Box>
       )}
       {actionError && <Text size="T300">{actionError}</Text>}
-      {snapshot.capabilities.paginateBackward && snapshot.pagination.backward !== 'exhausted' && (
-        <Button size="300" onClick={() => runAction(() => controller.paginate('backwards'))}>
-          Load older messages
-        </Button>
-      )}
-      <Scroll ref={scrollRef} visibility="Hover">
-        <div style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
-          {virtualizer.getVirtualItems().map((virtualItem) => {
-            const row = rows[virtualItem.index];
-            if (!row) return null;
-            return (
-              <div
-                key={virtualItem.key}
-                ref={virtualizer.measureElement}
-                data-index={virtualItem.index}
-                data-native-timeline-row-kind={row.kind}
-                data-native-timeline-event-id={rowEventId(row)}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  transform: `translateY(${virtualItem.start}px)`,
-                  width: '100%',
-                }}
-              >
-                <NativeTimelineRow
-                  row={row}
-                  roomId={roomId}
-                  pinnedEventIds={snapshot.pinnedEventIds}
-                  sourceEncrypted={sourceEncrypted}
-                  onActionError={setActionError}
-                  onReplyDraftChanged={refreshReplyDraft}
-                  onFocusEvent={onFocusEvent}
-                />
-              </div>
-            );
-          })}
-        </div>
-      </Scroll>
-      {snapshot.capabilities.paginateForward && snapshot.pagination.forward !== 'exhausted' && (
-        <Button size="300" onClick={() => runAction(() => controller.paginate('forwards'))}>
-          Load newer messages
-        </Button>
-      )}
+      <Box grow="Yes" style={{ minHeight: 0, position: 'relative' }}>
+        <Scroll ref={scrollRef} visibility="Hover" style={{ height: '100%' }}>
+          {snapshot.pagination.backward === 'loading' && (
+            <Box justifyContent="Center" style={{ padding: config.space.S200 }}>
+              <Spinner size="200" aria-label="Loading older messages" />
+            </Box>
+          )}
+          <div style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
+            {virtualizer.getVirtualItems().map((virtualItem) => {
+              const row = rows[virtualItem.index];
+              if (!row) return null;
+              return (
+                <div
+                  key={virtualItem.key}
+                  ref={virtualizer.measureElement}
+                  data-index={virtualItem.index}
+                  data-native-timeline-row-kind={row.kind}
+                  data-native-timeline-event-id={rowEventId(row)}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    transform: `translateY(${virtualItem.start}px)`,
+                    width: '100%',
+                  }}
+                >
+                  <NativeTimelineRow
+                    row={row}
+                    roomId={roomId}
+                    pinnedEventIds={snapshot.pinnedEventIds}
+                    sourceEncrypted={sourceEncrypted}
+                    onActionError={setActionError}
+                    onReplyDraftChanged={refreshReplyDraft}
+                    onFocusEvent={onFocusEvent}
+                  />
+                </div>
+              );
+            })}
+          </div>
+          {snapshot.pagination.forward === 'loading' && (
+            <Box justifyContent="Center" style={{ padding: config.space.S200 }}>
+              <Spinner size="200" aria-label="Loading newer messages" />
+            </Box>
+          )}
+        </Scroll>
+        {snapshot.position.kind !== 'live_bottom' && (
+          <Box
+            style={{ position: 'absolute', right: config.space.S400, bottom: config.space.S300 }}
+          >
+            <TooltipProvider
+              position="Top"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>Jump to latest</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton
+                  ref={triggerRef}
+                  variant="SurfaceVariant"
+                  radii="Pill"
+                  outlined
+                  size="300"
+                  aria-label="Jump to latest"
+                  onClick={() => runAction(() => controller.jumpLatest())}
+                >
+                  <Icon src={Icons.ChevronBottom} size="300" />
+                </IconButton>
+              )}
+            </TooltipProvider>
+          </Box>
+        )}
+      </Box>
     </Box>
   );
 }

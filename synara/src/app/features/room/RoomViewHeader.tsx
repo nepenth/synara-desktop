@@ -574,7 +574,14 @@ export function RoomViewHeader({
               }
             >
               {(triggerRef) => (
-                <IconButton fill="None" ref={triggerRef} onClick={handleMemberToggle}>
+                <IconButton
+                  fill="None"
+                  ref={triggerRef}
+                  aria-label={
+                    activeSidePanel === 'members' || peopleDrawer ? 'Hide Members' : 'Show Members'
+                  }
+                  onClick={handleMemberToggle}
+                >
                   <Icon size="400" src={Icons.User} />
                 </IconButton>
               )}
@@ -596,6 +603,7 @@ export function RoomViewHeader({
                 fill="None"
                 onClick={handleOpenMenu}
                 ref={triggerRef}
+                aria-label="More Options"
                 aria-pressed={!!menuAnchor}
               >
                 <Icon size="400" src={Icons.VerticalDots} filled={!!menuAnchor} />

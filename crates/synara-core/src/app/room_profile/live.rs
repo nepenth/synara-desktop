@@ -16,7 +16,9 @@ use matrix_sdk::{
     deserialized_responses::RawSyncOrStrippedState,
     event_handler::EventHandlerDropGuard,
     ruma::{
-        api::client::{room::Visibility, state::get_state_event_for_key},
+        api::client::{
+            membership::joined_members, room::Visibility, state::get_state_event_for_key,
+        },
         events::{
             room::join_rules::{RoomJoinRulesEventContent, SyncRoomJoinRulesEvent},
             StateEventType,
@@ -43,6 +45,7 @@ use crate::app::spaces::{
     NativeSpaceParentsSnapshot,
 };
 use crate::app::user_profile::MatrixProfileWriteResult;
+use crate::dto::{Membership, RoomMember as ProductRoomMember};
 
 use super::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
@@ -691,16 +694,93 @@ impl NativeRoomJoinRuleOwner {
         let room_id = room.room_id().to_owned();
         let is_direct = room.is_direct().await.unwrap_or(false);
         let current_user = self.client.user_id();
-        let sdk_members = room
-            .members(RoomMemberships::empty())
+        let cached_members = room
+            .members_no_sync(RoomMemberships::empty())
             .await
             .map_err(|_| "v-rooms-members-read-members-failed")?;
-        let is_two_party_direct = is_direct && sdk_members.len() == 2;
+        let cached_joined_count = cached_members
+            .iter()
+            .filter(|member| {
+                matches!(
+                    member.membership(),
+                    matrix_sdk::ruma::events::room::member::MembershipState::Join
+                )
+            })
+            .count() as u64;
+        if room.joined_members_count() > 0 && cached_joined_count >= room.joined_members_count() {
+            return self.project_members_snapshot(
+                room_id,
+                is_direct,
+                current_user,
+                &cached_members,
+            );
+        }
+        let sdk_members = match room.members(RoomMemberships::empty()).await {
+            Ok(members) => members,
+            Err(_) => {
+                return self
+                    .joined_members_snapshot_fallback(&room, is_direct, current_user)
+                    .await;
+            }
+        };
+        self.project_members_snapshot(room_id, is_direct, current_user, &sdk_members)
+    }
 
+    fn project_members_snapshot(
+        &self,
+        room_id: matrix_sdk::ruma::OwnedRoomId,
+        is_direct: bool,
+        current_user: Option<&matrix_sdk::ruma::UserId>,
+        sdk_members: &[matrix_sdk::room::RoomMember],
+    ) -> Result<NativeRoomMembersSnapshot, &'static str> {
+        let is_two_party_direct = is_direct && sdk_members.len() == 2;
         let mut members = sdk_members
             .iter()
             .map(|member| project_room_member(&room_id, member, is_two_party_direct, current_user))
             .collect::<Result<Vec<_>, _>>()?;
+        members.sort_by(|left, right| left.user_id.cmp(&right.user_id));
+
+        Ok(NativeRoomMembersSnapshot {
+            session_generation: self.session_generation,
+            room_id: room_id.to_string(),
+            members,
+        })
+    }
+
+    async fn joined_members_snapshot_fallback(
+        &self,
+        room: &Room,
+        is_direct: bool,
+        current_user: Option<&matrix_sdk::ruma::UserId>,
+    ) -> Result<NativeRoomMembersSnapshot, &'static str> {
+        let room_id = room.room_id().to_owned();
+        let response = self
+            .client
+            .send(joined_members::v3::Request::new(room_id.clone()))
+            .await
+            .map_err(|_| "v-rooms-members-read-members-failed")?;
+        let is_two_party_direct = is_direct && response.joined.len() == 2;
+        let mut members = Vec::with_capacity(response.joined.len());
+
+        for (user_id, member) in response.joined {
+            let projected = match room.get_member_no_sync(&user_id).await {
+                Ok(Some(cached)) => {
+                    project_room_member(&room_id, &cached, is_two_party_direct, current_user)?
+                }
+                _ => ProductRoomMember {
+                    room_id: room_id.to_string(),
+                    user_id: user_id.to_string(),
+                    display_name: member.display_name,
+                    avatar_url: member.avatar_url.map(|url| url.to_string()),
+                    membership: Membership::Join,
+                    power_level: 0,
+                    is_direct_target: is_two_party_direct.then(|| {
+                        current_user.is_some_and(|current| current.as_str() != user_id.as_str())
+                    }),
+                },
+            };
+            members.push(projected);
+        }
         members.sort_by(|left, right| left.user_id.cmp(&right.user_id));
 
         Ok(NativeRoomMembersSnapshot {

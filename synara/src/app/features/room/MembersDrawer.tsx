@@ -68,17 +68,19 @@ import { getSessionBootstrapResult } from '../../state/sessionBootstrap';
 import { isSynaraDesktop } from '../../utils/desktop';
 
 type MemberDrawerHeaderProps = {
-  joinedMemberCount: number;
+  joinedMemberCount?: number;
 };
 function MemberDrawerHeader({ joinedMemberCount }: MemberDrawerHeaderProps) {
   const setPeopleDrawer = useSetSetting(settingsAtom, 'isPeopleDrawer');
+  const title =
+    typeof joinedMemberCount === 'number' ? `${millify(joinedMemberCount)} Members` : 'Members';
 
   return (
     <Header className={css.MembersDrawerHeader} variant="Background" size="600">
       <Box grow="Yes" alignItems="Center" gap="200">
         <Box grow="Yes" alignItems="Center" gap="200">
-          <Text title={`${joinedMemberCount} Members`} size="H5" truncate>
-            {`${millify(joinedMemberCount)} Members`}
+          <Text title={title} size="H5" truncate>
+            {title}
           </Text>
         </Box>
         <Box shrink="No" alignItems="Center">
@@ -194,7 +196,7 @@ export function MembersDrawer({ room }: MembersDrawerProps) {
   const memberSnapshot = useRoomMembers(mx, room.roomId, nativeSession);
   const members = memberSnapshot ?? EMPTY_ROOM_MEMBERS;
   const joinedMemberCount = nativeSession
-    ? members.filter((member) => member.membership === Membership.Join).length
+    ? memberSnapshot?.filter((member) => member.membership === Membership.Join).length
     : room.getJoinedMemberCount();
   const scrollRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -206,7 +208,8 @@ export function MembersDrawer({ room }: MembersDrawerProps) {
 
   const fetchingMembers = nativeSession
     ? memberSnapshot === null
-    : members.length < joinedMemberCount;
+    : members.length < (joinedMemberCount ?? 0);
+  const membersUnavailable = nativeSession && memberSnapshot === undefined;
   const openUserRoomProfile = useOpenUserRoomProfile();
   const space = useSpaceOptionally();
   const openProfileUserId = useUserRoomProfileState()?.userId;
@@ -395,7 +398,9 @@ export function MembersDrawer({ room }: MembersDrawerProps) {
 
             {!fetchingMembers && !result && processMembers.length === 0 && (
               <Text style={{ padding: config.space.S300 }} align="Center">
-                {`No "${membershipFilter.name}" Members`}
+                {membersUnavailable
+                  ? 'Members are temporarily unavailable.'
+                  : `No "${membershipFilter.name}" Members`}
               </Text>
             )}
 
