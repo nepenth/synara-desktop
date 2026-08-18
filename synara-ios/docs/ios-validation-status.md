@@ -1,32 +1,42 @@
 # iOS Validation Status
 
-Reviewed: 2026-08-17
+Reviewed: 2026-08-18
 
 ## 2026-08-17 Shared-Core Validation
 
-The post-migration app was validated from branch
-`codex/main-proof-hardening-20260817`, based on `origin/main` at
-`e2ef9bd252e9179978ca2acc6326368490a4f931`.
+The release candidate was validated from branch
+`release/runtime-assets-2.0.7`, based on `origin/main` at
+`e3d8a45414d0a6438c216ffe4c638d4c108df928`.
 
 - The exact unsigned CI path completed `build`, `build-for-testing`, and
   `test-without-building` against an iPhone 17 simulator on iOS 26.5.
-- `SynaraTests` executed 436 tests with 434 passes, 2 intentional gated skips,
+- `SynaraTests` executed 437 tests with 435 passes, 2 intentional gated skips,
   and 0 failures.
-- `SynaraUITests` executed 49 tests with 39 passes, 10 intentional live-gated
-  skips, and 0 failures. Automatic test retries were disabled.
-- A separate signed live suite passed 7 of 7 scenarios on the first attempt:
+- `SynaraUITests` executed 51 tests with 40 passes, 11 intentional live/visual
+  gated skips, and 0 failures. Automatic test retries were disabled.
+- A separate signed live/visual suite passed 11 of 11 scenarios without retry:
   login/send, encrypted send and relaunch restore, rich formatted send plus
   server HTML verification, room create/details/invite/leave, agent approval,
-  stale-cache external-event convergence, and visual room/timeline checks.
+  stale-cache external-event convergence, live room/timeline/composer/
+  attachment checks, live Settings traversal, and mock room/thread/agent
+  visual checks.
 - The signed live room-list check verified that an externally sent event
   updates the visible last-message preview through the SharedCore room
-  subscription stream.
+  subscription stream in approximately one second.
+- Room-list consumers now share one ordered snapshot publisher instead of
+  independently racing full snapshot reads after the same SDK signal. The
+  default service stream also emits its initial snapshot; both behaviors have
+  regression coverage.
+- Settings is split into focused Account, Notifications, Appearance, Security
+  & Recovery, and About screens. Signed light- and dark-mode traversals passed,
+  including an explicit check that Logout is visible and tappable above the
+  floating tab bar.
 - After final review removed a global composer-text lookup, focused UI tests for
   plain typing/send and formatted typing/render/send both passed without retry.
-- Result bundles are retained locally under
-  `/private/tmp/synara-ios-results/`; the consolidated live result is
-  `live-consolidated-signed-20260817.xcresult` and the deterministic result is
-  `test-local-final-20260817.xcresult`.
+- Result bundles are retained locally under `/private/tmp/synara-ios-results/`;
+  final live screenshots are under
+  `/private/tmp/synara-ios-final-live-proof-2.0.7/` and final dark Settings
+  screenshots are under `/private/tmp/synara-ios-live-settings-dark-2.0.7/`.
 
 The Xcode `DebuggerVersionStore.StoreError` / `no debugger version` diagnostic
 still appears while launching UI tests, but the suite no longer hangs and the

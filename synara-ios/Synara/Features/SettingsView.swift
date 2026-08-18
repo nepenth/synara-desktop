@@ -3,40 +3,23 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.appEnvironment) private var environment
     @State private var state: SettingsState = .idle
-    @State private var notificationStatus: NotificationPermissionStatus = .unavailable
-    @State private var isRequestingNotifications = false
-    @State private var isRegisteringPush = false
     @State private var isLogoutConfirmationPresented = false
-    @State private var sessionCryptoStatus: SessionCryptoStatus = .unknown
-    @State private var sessionDevices: [SharedCoreSessionDevice] = []
-    @State private var ownPresence: SharedCorePresence?
-    @State private var coreSessionIdentity: CoreSessionIdentity?
-    @State private var recoveryKey = ""
-    @State private var cryptoActionMessage: String?
-    @State private var isRunningCryptoAction = false
-    @State private var showLockScreenMessagePreviews = SynaraSharedConstants.defaultLockScreenMessagePreviews
 
     var body: some View {
         Form {
-            Section("Account") {
+            Section {
                 switch environment.session.currentState {
                 case .signedIn(let session):
-                    let displayIdentity = SettingsAccountIdentitySelection.matchingCoreIdentity(
-                        coreSessionIdentity,
-                        for: session
-                    )
-                    SettingsInfoRow(title: "User", value: displayIdentity?.userID ?? session.userID)
-                        .accessibilityIdentifier("SettingsAccountUser")
-                    SettingsInfoRow(title: "Device", value: displayIdentity?.deviceID ?? session.deviceID)
-                        .accessibilityIdentifier("SettingsAccountDevice")
-                    SettingsInfoRow(
-                        title: "Homeserver",
-                        value: SettingsAccountIdentitySelection.homeserverDisplayValue(
-                            for: displayIdentity,
-                            fallback: session.homeserverURL
+                    NavigationLink {
+                        AccountSettingsView(session: session)
+                    } label: {
+                        SettingsSummaryRow(
+                            title: session.userID,
+                            subtitle: session.homeserverURL.host ?? session.homeserverURL.absoluteString,
+                            systemImage: "person.crop.circle.fill"
                         )
-                    )
-                    .accessibilityIdentifier("SettingsAccountHomeserver")
+                    }
+                    .accessibilityIdentifier("AccountSettingsLink")
                 case .signedOut:
                     Text("Not signed in")
                         .foregroundStyle(SynaraColor.secondaryText)
@@ -44,153 +27,27 @@ struct SettingsView: View {
                 }
             }
 
-            if let ownPresence {
-                Section("Presence") {
-                    SettingsInfoRow(title: "Status", value: ownPresence.displayName)
-                        .accessibilityIdentifier("SettingsPresenceStatus")
-                    if let status = ownPresence.statusMessage, status.isEmpty == false {
-                        SettingsInfoRow(title: "Message", value: status)
-                            .accessibilityIdentifier("SettingsPresenceMessage")
-                    }
-                }
-            }
-
-            Section("Notifications") {
-                VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-                    Text(notificationStatus.displayName)
-                        .font(SynaraTypography.body)
-                    Text(notificationStatus.detail)
-                        .font(SynaraTypography.supporting)
-                        .foregroundStyle(SynaraColor.secondaryText)
-                }
-                .accessibilityIdentifier("NotificationPermissionStatus")
-
-                Button {
-                    requestNotifications()
+            Section("Preferences") {
+                NavigationLink {
+                    NotificationSettingsView()
                 } label: {
-                    if isRequestingNotifications {
-                        ProgressView()
-                    } else {
-                        Text(notificationStatus == .notDetermined ? "Enable Notifications" : "Refresh Notification Status")
-                    }
+                    SettingsNavigationRow(title: "Notifications", systemImage: "bell")
                 }
-                    .disabled(isRequestingNotifications)
-                    .accessibilityIdentifier("NotificationPermissionButton")
+                .accessibilityIdentifier("NotificationSettingsLink")
 
-                VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-                    Text(environment.push.registrationStateDescription)
-                        .font(SynaraTypography.supporting)
-                    if let gatewayURL = environment.push.pushGatewayURL {
-                        Text("Gateway: \(gatewayURL)")
-                            .font(.caption)
-                            .foregroundStyle(SynaraColor.secondaryText)
-                    } else {
-                        Text("Gateway: not configured")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                    }
-                    if let tokenSnippet = environment.push.tokenSnippet {
-                        Text("APNs token: \(tokenSnippet)")
-                            .font(.caption)
-                            .foregroundStyle(SynaraColor.secondaryText)
-                    }
-
-                    Button {
-                        registerForPush()
-                    } label: {
-                        if isRegisteringPush {
-                            ProgressView()
-                        } else {
-                            Text(environment.push.isRegistered ? "Re-register Push" : "Register Push")
-                        }
-                    }
-                    .disabled(isRegisteringPush || environment.push.isRegistrationAvailable == false)
-                    .accessibilityIdentifier("PushRegistrationButton")
+                NavigationLink {
+                    AppearanceSettingsView()
+                } label: {
+                    SettingsNavigationRow(title: "Appearance", systemImage: "textformat.size")
                 }
-                .font(SynaraTypography.body)
+                .accessibilityIdentifier("AppearanceSettingsLink")
 
-                Toggle("Show message previews on lock screen", isOn: $showLockScreenMessagePreviews)
-                    .accessibilityIdentifier("LockScreenMessagePreviewsToggle")
-                    .onChange(of: showLockScreenMessagePreviews) { value in
-                        environment.settings.set(
-                            value,
-                            for: SynaraSharedConstants.lockScreenMessagePreviewsKey
-                        )
-                    }
-
-                Text("Message content is looked up on this device and is not sent through the push gateway.")
-                    .font(SynaraTypography.supporting)
-                    .foregroundStyle(SynaraColor.secondaryText)
-                    .accessibilityIdentifier("LockScreenMessagePreviewsHelp")
-            }
-
-            Section("Appearance") {
-                SettingsInfoRow(title: "Theme", value: "System")
-                    .accessibilityIdentifier("AppearanceThemeRow")
-                SettingsInfoRow(title: "Text Size", value: "Uses iOS Dynamic Type")
-                    .accessibilityIdentifier("AppearanceTextSizeRow")
-            }
-
-            Section("Security") {
-                SettingsInfoRow(title: "Session Storage", value: "Keychain")
-                    .accessibilityIdentifier("SecuritySessionStorageRow")
-                SettingsInfoRow(title: "Message Security", value: "Matrix Rust SDK")
-                    .accessibilityIdentifier("SecurityMatrixSDKRow")
-                SettingsInfoRow(title: "Device Verification", value: sessionCryptoStatus.verification.settingsDisplayName)
-                    .accessibilityIdentifier("SecurityDeviceVerificationRow")
-                SettingsInfoRow(title: "Key Recovery", value: sessionCryptoStatus.recovery.settingsDisplayName)
-                    .accessibilityIdentifier("SecurityKeyRecoveryRow")
-                SettingsInfoRow(title: "Key Backup", value: sessionCryptoStatus.backup.settingsDisplayName)
-                    .accessibilityIdentifier("SecurityKeyBackupRow")
-                SettingsInfoRow(title: "Decryption Issues", value: sessionCryptoStatus.unableToDecryptCount == 0 ? "None" : "\(sessionCryptoStatus.unableToDecryptCount)")
-                    .accessibilityIdentifier("SecurityDecryptionIssuesRow")
-
-                if sessionCryptoStatus.hasDevicesToVerifyAgainst == true {
-                    Button {
-                        requestDeviceVerification()
-                    } label: {
-                        cryptoActionLabel("Verify This Device")
-                    }
-                    .disabled(isRunningCryptoAction)
-                    .accessibilityIdentifier("RequestDeviceVerificationButton")
+                NavigationLink {
+                    SecuritySettingsView()
+                } label: {
+                    SettingsNavigationRow(title: "Security & Recovery", systemImage: "lock.shield")
                 }
-
-                VStack(alignment: .leading, spacing: SynaraSpacing.small) {
-                    SecureField("Recovery key", text: $recoveryKey)
-                        .textContentType(.oneTimeCode)
-                        .accessibilityIdentifier("RecoveryKeyField")
-                    Button {
-                        recoverKeys()
-                    } label: {
-                        cryptoActionLabel("Recover Keys")
-                    }
-                    .disabled(isRunningCryptoAction || recoveryKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .accessibilityIdentifier("RecoverKeysButton")
-                    Text("Recovery keys are used only for this request and are not stored by Synara.")
-                        .font(SynaraTypography.supporting)
-                        .foregroundStyle(SynaraColor.secondaryText)
-                }
-
-                if let cryptoActionMessage {
-                    Text(cryptoActionMessage)
-                        .font(SynaraTypography.supporting)
-                        .foregroundStyle(SynaraColor.secondaryText)
-                        .accessibilityIdentifier("CryptoActionMessage")
-                }
-
-                SettingsInfoRow(title: "Logout", value: "Clears local session, sync state, rooms, and push registration")
-                    .accessibilityIdentifier("SecurityLogoutWipeRow")
-            }
-
-            if sessionDevices.isEmpty == false {
-                Section("Sessions") {
-                    ForEach(sessionDevices) { device in
-                        SettingsInfoRow(
-                            title: device.isCurrent ? "This device" : "Device",
-                            value: device.displayName
-                        )
-                    }
-                }
+                .accessibilityIdentifier("SecuritySettingsLink")
             }
 
             Section("About") {
@@ -259,133 +116,9 @@ struct SettingsView: View {
                 }
             }
         }
+        .settingsTabBarClearance()
         .navigationTitle("Settings")
         .accessibilityIdentifier("SettingsScreen")
-        .task {
-            showLockScreenMessagePreviews = environment.settings.bool(
-                for: SynaraSharedConstants.lockScreenMessagePreviewsKey
-            )
-            await refreshNotificationStatus()
-            await refreshCryptoStatus()
-            await refreshDevices()
-            await refreshCoreSessionIdentity()
-            await refreshOwnPresence()
-        }
-    }
-
-    private func refreshCoreSessionIdentity() async {
-        let identity = await environment.matrix.coreSessionIdentity()
-        await MainActor.run {
-            coreSessionIdentity = identity
-        }
-    }
-
-    private func refreshNotificationStatus() async {
-        let status = await environment.notificationPermission.currentStatus()
-        await MainActor.run {
-            notificationStatus = status
-        }
-    }
-
-    private func requestNotifications() {
-        isRequestingNotifications = true
-
-        Task {
-            let status = await environment.notificationPermission.requestAuthorization()
-            await MainActor.run {
-                notificationStatus = status
-                isRequestingNotifications = false
-                environment.logger.info("Notification permission status refreshed", category: .push)
-                if status.allowsPushRegistration {
-                    environment.push.beginRegistration()
-                }
-            }
-        }
-    }
-
-    private func registerForPush() {
-        isRegisteringPush = true
-        Task {
-            await MainActor.run {
-                environment.push.beginRegistration()
-                isRegisteringPush = false
-            }
-        }
-    }
-
-    private func refreshCryptoStatus() async {
-        let status = await environment.crypto.sessionStatus()
-        await MainActor.run {
-            sessionCryptoStatus = status
-        }
-    }
-
-    private func refreshDevices() async {
-        let devices = await environment.crypto.sessionDevices()
-        await MainActor.run {
-            sessionDevices = devices
-        }
-    }
-
-    private func refreshOwnPresence() async {
-        let userID: String?
-        if case .signedIn(let session) = environment.session.currentState {
-            userID = session.userID
-        } else {
-            userID = nil
-        }
-        let presence: SharedCorePresence?
-        if let userID {
-            presence = await environment.matrix.presence(userID: userID)
-        } else {
-            presence = nil
-        }
-        await MainActor.run {
-            ownPresence = presence
-        }
-    }
-
-    @ViewBuilder
-    private func cryptoActionLabel(_ title: String) -> some View {
-        if isRunningCryptoAction {
-            ProgressView()
-        } else {
-            Text(title)
-        }
-    }
-
-    private func requestDeviceVerification() {
-        runCryptoAction {
-            await environment.crypto.requestDeviceVerification()
-        }
-    }
-
-    private func recoverKeys() {
-        let key = recoveryKey
-        runCryptoAction {
-            await environment.crypto.recover(recoveryKey: key)
-        } onComplete: {
-            recoveryKey = ""
-        }
-    }
-
-    private func runCryptoAction(
-        _ action: @escaping () async -> CryptoActionResult,
-        onComplete: @escaping @MainActor () -> Void = {}
-    ) {
-        isRunningCryptoAction = true
-        cryptoActionMessage = nil
-
-        Task {
-            let result = await action()
-            let status = await environment.crypto.sessionStatus()
-            await MainActor.run {
-                sessionCryptoStatus = status
-                cryptoActionMessage = result.message
-                isRunningCryptoAction = false
-                onComplete()
-            }
-        }
     }
 
     private func logout() {
@@ -408,6 +141,300 @@ struct SettingsView: View {
     }
 }
 
+private struct AccountSettingsView: View {
+    @Environment(\.appEnvironment) private var environment
+    let session: AuthenticatedSession
+    @State private var sessionDevices: [SharedCoreSessionDevice] = []
+    @State private var ownPresence: SharedCorePresence?
+    @State private var coreSessionIdentity: CoreSessionIdentity?
+
+    var body: some View {
+        Form {
+            Section("Account") {
+                let displayIdentity = SettingsAccountIdentitySelection.matchingCoreIdentity(
+                    coreSessionIdentity,
+                    for: session
+                )
+                SettingsInfoRow(title: "User", value: displayIdentity?.userID ?? session.userID)
+                    .accessibilityIdentifier("SettingsAccountUser")
+                SettingsInfoRow(title: "Device", value: displayIdentity?.deviceID ?? session.deviceID)
+                    .accessibilityIdentifier("SettingsAccountDevice")
+                SettingsInfoRow(
+                    title: "Homeserver",
+                    value: SettingsAccountIdentitySelection.homeserverDisplayValue(
+                        for: displayIdentity,
+                        fallback: session.homeserverURL
+                    )
+                )
+                .accessibilityIdentifier("SettingsAccountHomeserver")
+            }
+
+            if let ownPresence,
+               ownPresence.displayName != "Unknown" || ownPresence.statusMessage?.isEmpty == false
+            {
+                Section("Presence") {
+                    SettingsInfoRow(title: "Status", value: ownPresence.displayName)
+                        .accessibilityIdentifier("SettingsPresenceStatus")
+                    if let status = ownPresence.statusMessage, status.isEmpty == false {
+                        SettingsInfoRow(title: "Message", value: status)
+                            .accessibilityIdentifier("SettingsPresenceMessage")
+                    }
+                }
+            }
+
+            if sessionDevices.isEmpty == false {
+                Section("Sessions") {
+                    ForEach(sessionDevices) { device in
+                        SettingsInfoRow(
+                            title: device.isCurrent ? "This device" : "Device",
+                            value: device.displayName
+                        )
+                    }
+                }
+            }
+        }
+        .settingsTabBarClearance()
+        .navigationTitle("Account")
+        .accessibilityIdentifier("AccountSettingsScreen")
+        .task {
+            await refreshCoreSessionIdentity()
+            let presence = await environment.matrix.presence(userID: session.userID)
+            let devices = await environment.crypto.sessionDevices()
+            await MainActor.run {
+                ownPresence = presence
+                sessionDevices = devices
+            }
+        }
+    }
+
+    private func refreshCoreSessionIdentity() async {
+        let identity = await environment.matrix.coreSessionIdentity()
+        await MainActor.run {
+            coreSessionIdentity = identity
+        }
+    }
+}
+
+private struct NotificationSettingsView: View {
+    @Environment(\.appEnvironment) private var environment
+    @State private var notificationStatus: NotificationPermissionStatus = .unavailable
+    @State private var isRequestingNotifications = false
+    @State private var isRegisteringPush = false
+    @State private var showLockScreenMessagePreviews = SynaraSharedConstants.defaultLockScreenMessagePreviews
+
+    var body: some View {
+        Form {
+            Section("Permission") {
+                VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                    Text(notificationStatus.displayName)
+                        .font(SynaraTypography.body)
+                    Text(notificationStatus.detail)
+                        .font(SynaraTypography.supporting)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                }
+                .accessibilityIdentifier("NotificationPermissionStatus")
+
+                Button {
+                    requestNotifications()
+                } label: {
+                    if isRequestingNotifications {
+                        ProgressView()
+                    } else {
+                        Text(notificationStatus == .notDetermined ? "Enable Notifications" : "Refresh Notification Status")
+                    }
+                }
+                .disabled(isRequestingNotifications)
+                .accessibilityIdentifier("NotificationPermissionButton")
+            }
+
+            Section {
+                SettingsInfoRow(title: "Status", value: environment.push.registrationStateDescription)
+                Button {
+                    isRegisteringPush = true
+                    environment.push.beginRegistration()
+                    isRegisteringPush = false
+                } label: {
+                    if isRegisteringPush {
+                        ProgressView()
+                    } else {
+                        Text(environment.push.isRegistered ? "Re-register Push" : "Register Push")
+                    }
+                }
+                .disabled(isRegisteringPush || environment.push.isRegistrationAvailable == false)
+                .accessibilityIdentifier("PushRegistrationButton")
+            } header: {
+                Text("Delivery")
+            } footer: {
+                Text(environment.push.pushGatewayURL == nil ? "Push delivery is unavailable in this build." : "Push delivery is configured for this build.")
+            }
+
+            Section {
+                Toggle("Show message previews on lock screen", isOn: $showLockScreenMessagePreviews)
+                    .accessibilityIdentifier("LockScreenMessagePreviewsToggle")
+                    .onChange(of: showLockScreenMessagePreviews) { value in
+                        environment.settings.set(value, for: SynaraSharedConstants.lockScreenMessagePreviewsKey)
+                    }
+            } header: {
+                Text("Privacy")
+            } footer: {
+                Text("Message content is looked up on this device and is not sent through the push gateway.")
+                    .accessibilityIdentifier("LockScreenMessagePreviewsHelp")
+            }
+        }
+        .settingsTabBarClearance()
+        .navigationTitle("Notifications")
+        .accessibilityIdentifier("NotificationSettingsScreen")
+        .task {
+            showLockScreenMessagePreviews = environment.settings.bool(
+                for: SynaraSharedConstants.lockScreenMessagePreviewsKey
+            )
+            notificationStatus = await environment.notificationPermission.currentStatus()
+        }
+    }
+
+    private func requestNotifications() {
+        isRequestingNotifications = true
+        Task {
+            let status = await environment.notificationPermission.requestAuthorization()
+            await MainActor.run {
+                notificationStatus = status
+                isRequestingNotifications = false
+                environment.logger.info("Notification permission status refreshed", category: .push)
+                if status.allowsPushRegistration {
+                    environment.push.beginRegistration()
+                }
+            }
+        }
+    }
+}
+
+private struct AppearanceSettingsView: View {
+    var body: some View {
+        Form {
+            Section("Theme") {
+                SettingsInfoRow(title: "Appearance", value: "System")
+                    .accessibilityIdentifier("AppearanceThemeRow")
+            }
+            Section {
+                SettingsInfoRow(title: "Text Size", value: "Uses iOS Dynamic Type")
+                    .accessibilityIdentifier("AppearanceTextSizeRow")
+            } header: {
+                Text("Text")
+            } footer: {
+                Text("Adjust text size in iOS Settings. Synara follows your system accessibility preferences.")
+            }
+        }
+        .settingsTabBarClearance()
+        .navigationTitle("Appearance")
+        .accessibilityIdentifier("AppearanceSettingsScreen")
+    }
+}
+
+private struct SecuritySettingsView: View {
+    @Environment(\.appEnvironment) private var environment
+    @State private var sessionCryptoStatus: SessionCryptoStatus = .unknown
+    @State private var recoveryKey = ""
+    @State private var cryptoActionMessage: String?
+    @State private var isRunningCryptoAction = false
+
+    var body: some View {
+        Form {
+            Section("Protection") {
+                SettingsInfoRow(title: "Session Storage", value: "Keychain")
+                    .accessibilityIdentifier("SecuritySessionStorageRow")
+                SettingsInfoRow(title: "Message Security", value: "Matrix Rust SDK")
+                    .accessibilityIdentifier("SecurityMatrixSDKRow")
+                SettingsInfoRow(title: "Device Verification", value: sessionCryptoStatus.verification.settingsDisplayName)
+                    .accessibilityIdentifier("SecurityDeviceVerificationRow")
+                SettingsInfoRow(title: "Key Recovery", value: sessionCryptoStatus.recovery.settingsDisplayName)
+                    .accessibilityIdentifier("SecurityKeyRecoveryRow")
+                SettingsInfoRow(title: "Key Backup", value: sessionCryptoStatus.backup.settingsDisplayName)
+                    .accessibilityIdentifier("SecurityKeyBackupRow")
+                SettingsInfoRow(title: "Decryption Issues", value: sessionCryptoStatus.unableToDecryptCount == 0 ? "None" : "\(sessionCryptoStatus.unableToDecryptCount)")
+                    .accessibilityIdentifier("SecurityDecryptionIssuesRow")
+            }
+
+            if sessionCryptoStatus.hasDevicesToVerifyAgainst == true {
+                Section {
+                    Button {
+                        runCryptoAction {
+                            await environment.crypto.requestDeviceVerification()
+                        }
+                    } label: {
+                        cryptoActionLabel("Verify This Device")
+                    }
+                    .disabled(isRunningCryptoAction)
+                    .accessibilityIdentifier("RequestDeviceVerificationButton")
+                }
+            }
+
+            Section {
+                SecureField("Recovery key", text: $recoveryKey)
+                    .textContentType(.oneTimeCode)
+                    .accessibilityIdentifier("RecoveryKeyField")
+                Button {
+                    let key = recoveryKey
+                    runCryptoAction {
+                        await environment.crypto.recover(recoveryKey: key)
+                    } onComplete: {
+                        recoveryKey = ""
+                    }
+                } label: {
+                    cryptoActionLabel("Recover Keys")
+                }
+                .disabled(isRunningCryptoAction || recoveryKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityIdentifier("RecoverKeysButton")
+            } header: {
+                Text("Recovery")
+            } footer: {
+                Text("Recovery keys are used only for this request and are not stored by Synara.")
+            }
+
+            if let cryptoActionMessage {
+                Section {
+                    Text(cryptoActionMessage)
+                        .font(SynaraTypography.supporting)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .accessibilityIdentifier("CryptoActionMessage")
+                }
+            }
+        }
+        .settingsTabBarClearance()
+        .navigationTitle("Security")
+        .accessibilityIdentifier("SecuritySettingsScreen")
+        .task {
+            sessionCryptoStatus = await environment.crypto.sessionStatus()
+        }
+    }
+
+    @ViewBuilder
+    private func cryptoActionLabel(_ title: String) -> some View {
+        if isRunningCryptoAction {
+            ProgressView()
+        } else {
+            Text(title)
+        }
+    }
+
+    private func runCryptoAction(
+        _ action: @escaping () async -> CryptoActionResult,
+        onComplete: @escaping @MainActor () -> Void = {}
+    ) {
+        isRunningCryptoAction = true
+        cryptoActionMessage = nil
+        Task {
+            let result = await action()
+            let status = await environment.crypto.sessionStatus()
+            await MainActor.run {
+                sessionCryptoStatus = status
+                cryptoActionMessage = result.message
+                isRunningCryptoAction = false
+                onComplete()
+            }
+        }
+    }
+}
+
 private struct SettingsInfoRow: View {
     let title: String
     let value: String
@@ -424,6 +451,32 @@ private struct SettingsInfoRow: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title), \(value)")
+    }
+}
+
+private struct SettingsSummaryRow: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(spacing: SynaraSpacing.medium) {
+            Image(systemName: systemImage)
+                .font(.title2)
+                .foregroundStyle(SynaraColor.accent)
+                .frame(width: 32, height: 32)
+            VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                Text(title)
+                    .font(SynaraTypography.body)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text(subtitle)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.vertical, SynaraSpacing.xSmall)
     }
 }
 
@@ -516,6 +569,7 @@ private struct AboutSettingsView: View {
                 .accessibilityIdentifier("AboutSupportLink")
             }
         }
+        .settingsTabBarClearance()
         .navigationTitle("About")
         .accessibilityIdentifier("AboutSettingsScreen")
     }
@@ -533,6 +587,7 @@ private struct LicensesSettingsView: View {
                 LicenseRow(name: "Apple SwiftUI and iOS SDK", license: "Apple platform SDK", note: "Provided by Xcode and iOS.")
             }
         }
+        .settingsTabBarClearance()
         .navigationTitle("Licenses")
         .accessibilityIdentifier("LicensesSettingsScreen")
     }
@@ -576,6 +631,7 @@ private struct PrivacyPolicySettingsView: View {
                 DataInventoryRow(title: "Diagnostics", detail: "No analytics or crash SDK is enabled. Logs are local and redacted.")
             }
         }
+        .settingsTabBarClearance()
         .navigationTitle("Privacy")
         .accessibilityIdentifier("PrivacyPolicySettingsScreen")
     }
@@ -598,6 +654,7 @@ private struct SupportSettingsView: View {
                 SettingsInfoRow(title: "Bundle", value: AppBuildInfo.bundleIdentifier)
             }
         }
+        .settingsTabBarClearance()
         .navigationTitle("Support")
         .accessibilityIdentifier("SupportSettingsScreen")
     }
@@ -616,6 +673,16 @@ private struct DataInventoryRow: View {
                 .foregroundStyle(SynaraColor.secondaryText)
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+private extension View {
+    func settingsTabBarClearance() -> some View {
+        safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear
+                .frame(height: 72)
+                .accessibilityHidden(true)
+        }
     }
 }
 

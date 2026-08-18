@@ -81,6 +81,19 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(state, .empty)
     }
 
+    func testDefaultRoomUpdatesStreamYieldsInitialSnapshot() async {
+        let service = MockInviteTransitionService()
+        var updates = service.roomUpdates().makeAsyncIterator()
+
+        let state = await updates.next()
+
+        guard case let .loaded(rooms) = state else {
+            XCTFail("Expected the default update stream to emit the initial room snapshot")
+            return
+        }
+        XCTAssertEqual(rooms.map(\.id), ["!alerts:matrix.org"])
+    }
+
     func testSearchFilterExcludesNonMatchingInvites() {
         let invite = RoomSummary(
             id: "!alerts:matrix.org",

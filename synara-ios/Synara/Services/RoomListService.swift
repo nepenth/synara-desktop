@@ -217,7 +217,13 @@ protocol RoomListServicing: AnyObject {
 extension RoomListServicing {
     func roomUpdates() -> AsyncStream<RoomListState> {
         AsyncStream { continuation in
-            continuation.finish()
+            let task = Task {
+                continuation.yield(await loadRooms())
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
         }
     }
 

@@ -183,8 +183,12 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
 
 final class SharedCoreRoomListService: RoomListServicing {
     private let host: SharedCoreProductHost
+    private let stateLock = NSLock()
     private var cachedNames: [String: String] = [:]
     private var cachedRooms: [String: RoomSummary] = [:]
+    private var latestState: RoomListState?
+    private var updateContinuations: [UUID: AsyncStream<RoomListState>.Continuation] = [:]
+    private var updatesTask: Task<Void, Never>?
 
     init(host: SharedCoreProductHost) {
         self.host = host
@@ -226,50 +230,109 @@ final class SharedCoreRoomListService: RoomListServicing {
                     )
                 }
             )
-            cachedNames = Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, $0.name) })
-            cachedRooms = Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, $0) })
-            return rooms.isEmpty ? .empty : .loaded(rooms)
+            let state: RoomListState = rooms.isEmpty ? .empty : .loaded(rooms)
+            stateLock.withLock {
+                cachedNames = Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, $0.name) })
+                cachedRooms = Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, $0) })
+                latestState = state
+            }
+            return state
         } catch {
             return .empty
         }
     }
 
     func roomDisplayName(roomID: String) -> String? {
-        cachedNames[roomID]
+        stateLock.withLock {
+            cachedNames[roomID]
+        }
     }
 
     func isAgentRoom(roomID: String) -> Bool {
-        cachedRooms[roomID]?.isAgentRoom ?? false
+        stateLock.withLock {
+            cachedRooms[roomID]?.isAgentRoom ?? false
+        }
     }
 
     func hasUnreadMessages(roomID: String) -> Bool {
-        guard let room = cachedRooms[roomID] else {
-            return false
+        stateLock.withLock {
+            guard let room = cachedRooms[roomID] else {
+                return false
+            }
+            return SharedCoreRoomListRows.hasUnreadMessages(
+                unreadCount: room.unreadCount,
+                hasHighlight: room.hasHighlight
+            )
         }
-        return SharedCoreRoomListRows.hasUnreadMessages(
-            unreadCount: room.unreadCount,
-            hasHighlight: room.hasHighlight
-        )
     }
 
     func clearCache() {
-        cachedNames.removeAll()
-        cachedRooms.removeAll()
+        let reset = stateLock.withLock {
+            cachedNames.removeAll()
+            cachedRooms.removeAll()
+            latestState = nil
+            let task = updatesTask
+            let continuations = Array(updateContinuations.values)
+            updatesTask = nil
+            updateContinuations.removeAll()
+            return (task, continuations)
+        }
+        reset.0?.cancel()
+        for continuation in reset.1 {
+            continuation.finish()
+        }
     }
 
     func roomUpdates() -> AsyncStream<RoomListState> {
         AsyncStream { continuation in
-            let task = Task {
-                for await _ in host.livePoller.roomListSignals() {
-                    guard Task.isCancelled == false else {
-                        break
+            let id = UUID()
+            let initialState: RoomListState? = stateLock.withLock {
+                updateContinuations[id] = continuation
+                if updatesTask == nil {
+                    updatesTask = Task { [weak self] in
+                        await self?.publishRoomUpdates()
                     }
-                    continuation.yield(await loadRooms())
                 }
-                continuation.finish()
+                return latestState
             }
-            continuation.onTermination = { _ in
-                task.cancel()
+            if let initialState {
+                continuation.yield(initialState)
+            }
+            continuation.onTermination = { [weak self] _ in
+                self?.removeRoomUpdateContinuation(id)
+            }
+        }
+    }
+
+    private func publishRoomUpdates() async {
+        await refreshAndPublishRoomList()
+        for await _ in host.livePoller.roomListSignals() {
+            guard Task.isCancelled == false else {
+                break
+            }
+            await refreshAndPublishRoomList()
+        }
+    }
+
+    private func refreshAndPublishRoomList() async {
+        let state = await loadRooms()
+        guard Task.isCancelled == false else {
+            return
+        }
+        let continuations = stateLock.withLock {
+            Array(updateContinuations.values)
+        }
+        for continuation in continuations {
+            continuation.yield(state)
+        }
+    }
+
+    private func removeRoomUpdateContinuation(_ id: UUID) {
+        stateLock.withLock {
+            updateContinuations.removeValue(forKey: id)
+            if updateContinuations.isEmpty {
+                updatesTask?.cancel()
+                updatesTask = nil
             }
         }
     }

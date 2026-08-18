@@ -49,7 +49,7 @@
   },
   "productName": "Synara",
   "mainBinaryName": "synara",
-  "version": "2.0.7",
+  "version": "2.0.8",
   "identifier": "com.whylandcreative.synara.desktop",
   "app": {
     "security": {
