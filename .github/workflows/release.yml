@@ -79,14 +79,7 @@ jobs:
           toolchain: 1.93
 
       - name: Install Linux Tauri dependencies
-        run: |
-          sudo rm -f /etc/apt/sources.list.d/azure-cli.list /etc/apt/sources.list.d/microsoft-prod.list
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            patchelf
+        run: scripts/install-linux-tauri-dependencies.sh
 
       - name: Install desktop dependencies
         run: npm ci
@@ -219,14 +212,7 @@ jobs:
           toolchain: 1.93
 
       - name: Install Linux Tauri dependencies
-        run: |
-          sudo rm -f /etc/apt/sources.list.d/azure-cli.list /etc/apt/sources.list.d/microsoft-prod.list
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            patchelf
+        run: scripts/install-linux-tauri-dependencies.sh
 
       - name: Install desktop dependencies
         run: npm ci
