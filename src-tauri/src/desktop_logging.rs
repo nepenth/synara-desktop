@@ -1,10 +1,11 @@
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::fs::{create_dir_all, metadata, remove_file, rename, File, OpenOptions, Permissions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager, Runtime};
 
@@ -255,13 +256,24 @@ fn rotate_file_if_needed(log_path: &Path, max_bytes: u64, incoming_bytes: u64) {
 }
 
 fn sanitize_log_field(value: &str) -> String {
-    value
+    static SECRET_VALUE: OnceLock<Regex> = OnceLock::new();
+    static BEARER_VALUE: OnceLock<Regex> = OnceLock::new();
+    let secret_value = SECRET_VALUE.get_or_init(|| {
+        Regex::new(
+            r#"(?i)(access[_-]?token|refresh[_-]?token|authorization|password)([\"']?\s*[:=]\s*)(?:bearer\s+[a-z0-9._~+/=-]+|\"[^\"]*\"|'[^']*'|[^\s,;}]+)"#,
+        )
+        .expect("static secret-value redaction regex")
+    });
+    let bearer_value = BEARER_VALUE.get_or_init(|| {
+        Regex::new(r"(?i)\bbearer\s+[a-z0-9._~+/=-]+").expect("static bearer redaction regex")
+    });
+    let normalized = value
         .replace(['\n', '\r'], " ")
-        .replace("access_token", "[redacted]")
-        .replace("refresh_token", "[redacted]")
-        .chars()
-        .take(MAX_LOG_FIELD_LEN)
-        .collect()
+        .replace("\\\"", "\"")
+        .replace("\\'", "'");
+    let redacted = secret_value.replace_all(&normalized, "$1$2[redacted]");
+    let redacted = bearer_value.replace_all(&redacted, "Bearer [redacted]");
+    redacted.chars().take(MAX_LOG_FIELD_LEN).collect()
 }
 
 fn timestamp_ms() -> u64 {
@@ -759,6 +771,21 @@ pub fn desktop_clear_diagnostics(app: AppHandle) -> bool {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn generic_log_redaction_removes_secret_values_and_bearer_credentials() {
+        let secret = "syt_super_secret_value";
+        for input in [
+            format!("access_token={secret}"),
+            format!(r#"{{\"refreshToken\":\"{secret}\"}}"#),
+            format!("Authorization: Bearer {secret}"),
+            format!("password: {secret}"),
+        ] {
+            let sanitized = sanitize_log_field(&input);
+            assert!(!sanitized.contains(secret));
+            assert!(sanitized.contains("[redacted]"));
+        }
+    }
 
     fn temp_log_dir(label: &str) -> PathBuf {
         let unique = SystemTime::now()

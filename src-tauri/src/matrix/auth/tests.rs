@@ -41,6 +41,9 @@ fn invalid_homeserver_url_rejected() {
     assert!(normalize_homeserver_url("ftp://example.org").is_err());
     assert!(normalize_homeserver_url("https://").is_err());
     assert!(normalize_homeserver_url("https://example.org/../evil").is_err());
+    assert!(normalize_homeserver_url("http://matrix.example.org").is_err());
+    assert!(normalize_homeserver_url("http://localhost:8008").is_ok());
+    assert!(normalize_homeserver_url("http://127.0.0.1:8008").is_ok());
 
     let err = normalize_homeserver_url("").unwrap_err();
     assert_eq!(err.category(), MatrixIpcErrorCategory::SdkInvariant);

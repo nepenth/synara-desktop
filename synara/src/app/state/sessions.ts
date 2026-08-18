@@ -2,13 +2,8 @@ export type Session = {
   baseUrl: string;
   userId: string;
   deviceId: string;
-  accessToken: string;
-  /** Opaque identifier for one successful login-created session/device bootstrap. */
+  /** Host-owned generation marker when one is available. */
   sessionGeneration?: string;
-  expiresInMs?: number;
-  storedAtMs?: number;
-  refreshToken?: string;
-  fallbackSdkStores?: boolean;
 };
 
 export type SessionStorage = {
@@ -16,16 +11,7 @@ export type SessionStorage = {
   setItem: (key: string, value: string) => void;
   removeItem: (key: string) => void;
 };
-export type FallbackSessionInput = Pick<
-  Session,
-  'accessToken' | 'baseUrl' | 'deviceId' | 'userId' | 'sessionGeneration'
->;
-export type SessionStore = {
-  setFallbackSession: (session: FallbackSessionInput) => void;
-  removeFallbackSession: () => void;
-  getFallbackSession: () => Session | undefined;
-};
-
+/** Retired renderer-session keys retained only for one-way cleanup. */
 export const FALLBACK_SESSION_KEYS = {
   accessToken: 'synara_access_token',
   deviceId: 'synara_device_id',
@@ -64,89 +50,15 @@ export type SessionLocalStorage = SessionStorage & {
   key?: (index: number) => string | null;
 };
 
-/**
- * Single-session fallback storage for Synara.
- *
- * Used only when the native secret store cannot persist sessions. Tokens live in
- * localStorage, which is weaker than OS keychain storage under XSS. Settings
- * surfaces `nativeStoreError` when this path is active; fallback keys are cleared
- * on logout via `performLogout`.
- */
-export const createLocalStorageSessionStore = (storage: SessionStorage): SessionStore => ({
-  setFallbackSession: (session) => {
-    storage.setItem(FALLBACK_SESSION_KEYS.accessToken, session.accessToken);
-    storage.setItem(FALLBACK_SESSION_KEYS.deviceId, session.deviceId);
-    storage.setItem(FALLBACK_SESSION_KEYS.userId, session.userId);
-    storage.setItem(FALLBACK_SESSION_KEYS.baseUrl, session.baseUrl);
-    if (session.sessionGeneration) {
-      storage.setItem(FALLBACK_SESSION_KEYS.sessionGeneration, session.sessionGeneration);
-    } else {
-      storage.removeItem(FALLBACK_SESSION_KEYS.sessionGeneration);
-    }
-  },
-  removeFallbackSession: () => {
-    storage.removeItem(FALLBACK_SESSION_KEYS.baseUrl);
-    storage.removeItem(FALLBACK_SESSION_KEYS.userId);
-    storage.removeItem(FALLBACK_SESSION_KEYS.deviceId);
-    storage.removeItem(FALLBACK_SESSION_KEYS.accessToken);
-    storage.removeItem(FALLBACK_SESSION_KEYS.sessionGeneration);
-  },
-  getFallbackSession: () => {
-    const baseUrl = storage.getItem(FALLBACK_SESSION_KEYS.baseUrl);
-    const userId = storage.getItem(FALLBACK_SESSION_KEYS.userId);
-    const deviceId = storage.getItem(FALLBACK_SESSION_KEYS.deviceId);
-    const accessToken = storage.getItem(FALLBACK_SESSION_KEYS.accessToken);
-    const sessionGeneration = storage.getItem(FALLBACK_SESSION_KEYS.sessionGeneration) ?? undefined;
-
-    if (baseUrl && userId && deviceId && accessToken) {
-      return {
-        baseUrl,
-        userId,
-        deviceId,
-        accessToken,
-        ...(sessionGeneration ? { sessionGeneration } : {}),
-        fallbackSdkStores: true,
-      };
-    }
-
-    return undefined;
-  },
-});
-
 const getDefaultSessionStorage = (): SessionStorage | undefined =>
   typeof localStorage === 'undefined' ? undefined : localStorage;
 
-export const fallbackSessionStore: SessionStore = {
-  setFallbackSession: (session) => {
-    const storage = getDefaultSessionStorage();
-    if (!storage) return;
-    createLocalStorageSessionStore(storage).setFallbackSession(session);
-  },
-  removeFallbackSession: () => {
-    const storage = getDefaultSessionStorage();
-    if (!storage) return;
-    createLocalStorageSessionStore(storage).removeFallbackSession();
-  },
-  getFallbackSession: () => {
-    const storage = getDefaultSessionStorage();
-    if (!storage) return undefined;
-    return createLocalStorageSessionStore(storage).getFallbackSession();
-  },
-};
-
-export function setFallbackSession(
-  accessToken: string,
-  deviceId: string,
-  userId: string,
-  baseUrl: string
-) {
-  fallbackSessionStore.setFallbackSession({ accessToken, deviceId, userId, baseUrl });
-}
-export const removeFallbackSession = () => {
-  fallbackSessionStore.removeFallbackSession();
-};
-export const getFallbackSession = (): Session | undefined => {
-  return fallbackSessionStore.getFallbackSession();
+/** Remove only retired renderer credential-envelope keys during bootstrap. */
+export const clearLegacyRendererSessionCredentials = (
+  storage: SessionStorage = getDefaultSessionStorage() as SessionStorage
+): void => {
+  if (!storage) return;
+  Object.values(FALLBACK_SESSION_KEYS).forEach((key) => storage.removeItem(key));
 };
 
 const removePrefixedSessionKeys = (storage: SessionLocalStorage, prefix: string): void => {
@@ -173,6 +85,3 @@ export const clearSessionLocalStorage = (
   SESSION_LOCAL_STORAGE_EXACT_KEYS.forEach((key) => storage.removeItem(key));
   SESSION_LOCAL_STORAGE_PREFIXES.forEach((prefix) => removePrefixedSessionKeys(storage, prefix));
 };
-/**
- * End of single-session fallback storage.
- */

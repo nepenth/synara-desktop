@@ -4,7 +4,7 @@ enum SynaraSharedConstants {
     static let appGroupIdentifier = "group.com.whylandcreative.synara"
     static let keychainAccessGroupInfoKey = "SynaraKeychainAccessGroup"
     static let lockScreenMessagePreviewsKey = "synara.settings.lockScreenMessagePreviews"
-    static let defaultLockScreenMessagePreviews = true
+    static let defaultLockScreenMessagePreviews = false
 
     static var registeredUserDefaults: [String: Any] {
         [

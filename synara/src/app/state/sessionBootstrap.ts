@@ -1,4 +1,4 @@
-import { fallbackSessionStore, type Session, type SessionStore } from './sessions';
+import { clearLegacyRendererSessionCredentials, type Session } from './sessions';
 import { recordClientDiagnostic } from '../utils/clientDiagnostics';
 
 export type AsyncSessionStore = {
@@ -7,7 +7,7 @@ export type AsyncSessionStore = {
   removeSession?: () => Promise<boolean>;
 };
 
-export type SessionBootstrapSource = 'native' | 'legacy-fallback' | 'none';
+export type SessionBootstrapSource = 'native' | 'none';
 
 export const NATIVE_SESSION_STORE_ERROR = 'native-session-store-error' as const;
 
@@ -21,7 +21,6 @@ export type SessionBootstrapResult = {
 
 export type SessionBootstrapOptions = {
   nativeSessionStore?: AsyncSessionStore;
-  fallbackStore?: Pick<SessionStore, 'getFallbackSession'>;
 };
 
 let activeSession: Session | undefined;
@@ -31,7 +30,6 @@ let activeBootstrapPromise: Promise<SessionBootstrapResult> | undefined;
 
 export const resolveSessionBootstrap = async ({
   nativeSessionStore,
-  fallbackStore = fallbackSessionStore,
 }: SessionBootstrapOptions = {}): Promise<SessionBootstrapResult> => {
   const bootstrapStartedAtMs = performance.now();
   let nativeStoreError: SessionBootstrapResult['nativeStoreError'];
@@ -39,6 +37,7 @@ export const resolveSessionBootstrap = async ({
   recordClientDiagnostic('session', 'bootstrap.started', {
     nativeStoreConfigured: Boolean(nativeSessionStore),
   });
+  clearLegacyRendererSessionCredentials();
 
   if (nativeSessionStore) {
     const nativeReadStartedAtMs = performance.now();
@@ -47,8 +46,7 @@ export const resolveSessionBootstrap = async ({
       recordClientDiagnostic('session', 'bootstrap.native-read-completed', {
         outcome: nativeSession ? 'found' : 'missing',
         durationMs: performance.now() - nativeReadStartedAtMs,
-        hasRefreshToken: Boolean(nativeSession?.refreshToken),
-        hasExpiryMetadata: typeof nativeSession?.expiresInMs === 'number',
+        identityOnly: true,
       });
       if (nativeSession) {
         recordClientDiagnostic('session', 'bootstrap.completed', {
@@ -65,20 +63,6 @@ export const resolveSessionBootstrap = async ({
         errorType: error instanceof Error ? error.name : typeof error,
       });
     }
-  }
-
-  const fallbackSession = fallbackStore.getFallbackSession();
-  if (fallbackSession) {
-    recordClientDiagnostic('session', 'bootstrap.completed', {
-      source: 'legacy-fallback',
-      durationMs: performance.now() - bootstrapStartedAtMs,
-      nativeStoreError: Boolean(nativeStoreError),
-    });
-    return {
-      session: fallbackSession,
-      source: 'legacy-fallback',
-      nativeStoreError,
-    };
   }
 
   recordClientDiagnostic('session', 'bootstrap.completed', {
@@ -112,8 +96,7 @@ export const initializeSessionBootstrap = (
   return activeBootstrapPromise;
 };
 
-export const getActiveSession = (): Session | undefined =>
-  activeSession ?? fallbackSessionStore.getFallbackSession();
+export const getActiveSession = (): Session | undefined => activeSession;
 
 export const getSessionBootstrapResult = (): SessionBootstrapResult => ({
   session: activeSession,
@@ -127,7 +110,7 @@ export const shouldSurfaceNativeStoreErrorWarning = (
 ): boolean => isDesktop && nativeStoreError === NATIVE_SESSION_STORE_ERROR;
 
 export const getNativeStoreErrorWarningMessage = (): string =>
-  'The native credential store could not be used. Your session is stored using legacy browser storage instead. Restart the app or sign in again to retry native storage.';
+  'The native credential store could not be used. Synara did not restore a session; unlock native credential storage and sign in again.';
 
 export const setSessionBootstrapResult = (
   result: SessionBootstrapResult

@@ -1,9 +1,5 @@
 use url::Url;
 
-fn is_loopback_session_host(host: &str) -> bool {
-    host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1"
-}
-
 fn normalize_url_host(host: &str) -> String {
     host.trim_matches(|character| character == '[' || character == ']')
         .trim_end_matches('.')
@@ -111,25 +107,6 @@ pub(crate) fn is_safe_external_url(value: &str) -> bool {
     }
 }
 
-pub(crate) fn is_allowed_session_base_url(value: &str) -> bool {
-    let Ok(url) = Url::parse(value) else {
-        return false;
-    };
-
-    if url.host_str().is_none() || !url.username().is_empty() || url.password().is_some() {
-        return false;
-    }
-
-    match url.scheme() {
-        "https" => true,
-        "http" => url
-            .host_str()
-            .map(is_loopback_session_host)
-            .unwrap_or(false),
-        _ => false,
-    }
-}
-
 pub(crate) fn is_safe_agent_url(value: &str) -> bool {
     let Ok(url) = Url::parse(value) else {
         return false;
@@ -146,7 +123,7 @@ pub(crate) fn is_safe_agent_url(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_allowed_session_base_url, is_safe_agent_url, is_safe_external_url};
+    use super::{is_safe_agent_url, is_safe_external_url};
 
     #[test]
     fn external_urls_allow_user_clicked_web_mail_and_matrix_links() {
@@ -160,19 +137,6 @@ mod tests {
         assert!(!is_safe_external_url("https://user:pass@example.org/"));
         assert!(!is_safe_external_url("mailto:not-an-email"));
         assert!(!is_safe_external_url("matrix:"));
-    }
-
-    #[test]
-    fn session_base_urls_allow_https_and_loopback_http_only() {
-        assert!(is_allowed_session_base_url("https://matrix.example.org"));
-        assert!(is_allowed_session_base_url("http://localhost:8080"));
-        assert!(is_allowed_session_base_url("http://127.0.0.1:8080"));
-
-        assert!(!is_allowed_session_base_url("http://matrix.example.org"));
-        assert!(!is_allowed_session_base_url(
-            "https://user:pass@example.org"
-        ));
-        assert!(!is_allowed_session_base_url("file:///tmp/session.json"));
     }
 
     #[test]

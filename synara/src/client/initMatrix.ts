@@ -3,7 +3,6 @@ import {
   type NativeMatrixClient,
 } from '../app/features/native-client/nativeClientFacade';
 import { clearNavToActivePathStore } from '../app/state/navToActivePath';
-import { pushSessionToSW } from '../sw-session';
 import {
   clearPendingFreshLoginIdentity,
   clearPersistedSessions,
@@ -150,16 +149,18 @@ export const clearCacheAndReload = async (mx: MatrixClient) => {
 
 export type PerformLogoutDeps = {
   clearPersistedSessions: (options?: SessionPersistenceOptions) => Promise<void>;
-  pushSessionToSW: typeof pushSessionToSW;
   clearSessionLocalStorage: typeof clearSessionLocalStorage;
+  logoutNativeSession: () => Promise<void>;
   nativeSessionStore: SessionPersistenceOptions['nativeSessionStore'];
   reload: () => void;
 };
 
 const defaultPerformLogoutDeps = (): PerformLogoutDeps => ({
   clearPersistedSessions,
-  pushSessionToSW,
   clearSessionLocalStorage,
+  logoutNativeSession: async () => {
+    await invokeDesktopWithAvailability('matrix_logout');
+  },
   nativeSessionStore: platformSessionStore,
   reload: () => (typeof window !== 'undefined' ? window.location.reload() : undefined),
 });
@@ -177,10 +178,15 @@ export const performLogout = async (
     } catch {
       // ignore if failed to logout
     }
+  } else {
+    try {
+      await deps.logoutNativeSession();
+    } catch {
+      // Renderer cleanup and reload still run if native cleanup reports an error.
+    }
   }
 
   await deps.clearPersistedSessions({ nativeSessionStore: deps.nativeSessionStore });
-  deps.pushSessionToSW();
 
   deps.clearSessionLocalStorage(storage);
   clearNotificationCaches();

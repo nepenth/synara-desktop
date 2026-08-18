@@ -98,6 +98,7 @@ pub const REACT_MATRIX_COMMAND_CENSUS: &[&str] = &[
     "matrix_send_poll",
     "matrix_send_sticker",
     "matrix_send_text",
+    "matrix_session_identity",
     "matrix_session_snapshot",
     "matrix_set_global_image_packs",
     "matrix_set_own_avatar",

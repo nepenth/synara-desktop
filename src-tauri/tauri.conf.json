@@ -49,11 +49,11 @@
   },
   "productName": "Synara",
   "mainBinaryName": "synara",
-  "version": "2.0.8",
+  "version": "2.1.0",
   "identifier": "com.whylandcreative.synara.desktop",
   "app": {
     "security": {
-      "csp": "default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: filesystem: http: https: synara-media:; font-src 'self' data:; media-src 'self' data: blob: http: https:; connect-src 'self' blob: ipc: ws: wss: http: https: http://ipc.localhost; worker-src 'self' blob:; frame-src 'self' blob:; form-action 'none'"
+      "csp": "default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: filesystem: https: synara-media:; font-src 'self' data:; media-src 'self' data: blob: https:; connect-src 'self' blob: ipc: https: wss: http://ipc.localhost http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:* http://[::1]:* ws://[::1]:*; worker-src 'self' blob:; frame-src 'self' blob:; form-action 'none'"
     }
   }
 }

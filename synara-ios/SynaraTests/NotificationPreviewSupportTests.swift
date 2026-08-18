@@ -23,18 +23,18 @@ final class NotificationPreviewSupportTests: XCTestCase {
         XCTAssertTrue(payload.isAgentApproval)
     }
 
-    func testPreviewPreferenceDefaultsOnAndPersistsOptOut() {
+    func testPreviewPreferenceDefaultsOffAndPersistsOptIn() {
         let suiteName = "synara.notification-preview.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer {
             defaults.removePersistentDomain(forName: suiteName)
         }
 
-        XCTAssertTrue(SynaraNotificationPreviewPreference.isEnabled(defaults: defaults))
-
-        defaults.set(false, forKey: SynaraSharedConstants.lockScreenMessagePreviewsKey)
-
         XCTAssertFalse(SynaraNotificationPreviewPreference.isEnabled(defaults: defaults))
+
+        defaults.set(true, forKey: SynaraSharedConstants.lockScreenMessagePreviewsKey)
+
+        XCTAssertTrue(SynaraNotificationPreviewPreference.isEnabled(defaults: defaults))
     }
 
     func testPreviewComposerBuildsBoundedCleartextPreview() throws {

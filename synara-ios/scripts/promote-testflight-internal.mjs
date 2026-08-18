@@ -259,6 +259,52 @@ async function resolveInternalGroups(client, appId, configuredGroupIds) {
   });
 }
 
+export async function upsertBetaBuildLocalization(
+  client,
+  { buildId, locale = "en-US", whatsNew }
+) {
+  const normalized = whatsNew?.trim();
+  if (!normalized) return undefined;
+  if (normalized.length > 4000) {
+    throw new Error("TestFlight What's New text must not exceed 4000 characters.");
+  }
+
+  const document = await client.request(
+    `/v1/builds/${buildId}/betaBuildLocalizations`,
+    { query: { limit: 200 } }
+  );
+  const existing = (document.data ?? []).find(
+    (localization) => localization.attributes?.locale === locale
+  );
+  if (existing) {
+    await client.request(`/v1/betaBuildLocalizations/${existing.id}`, {
+      method: "PATCH",
+      body: {
+        data: {
+          type: "betaBuildLocalizations",
+          id: existing.id,
+          attributes: { whatsNew: normalized },
+        },
+      },
+    });
+    return existing.id;
+  }
+
+  const created = await client.request("/v1/betaBuildLocalizations", {
+    method: "POST",
+    body: {
+      data: {
+        type: "betaBuildLocalizations",
+        attributes: { locale, whatsNew: normalized },
+        relationships: {
+          build: { data: { type: "builds", id: buildId } },
+        },
+      },
+    },
+  });
+  return created.data?.id;
+}
+
 async function findExactBuildUpload(
   client,
   { appId, marketingVersion, buildNumber }
@@ -394,6 +440,8 @@ export async function waitForInternalTestFlightAvailability({
   marketingVersion,
   buildNumber,
   internalGroupIds,
+  whatsNew,
+  whatsNewLocale = "en-US",
   diagnosticsDirectory,
   timeoutMilliseconds = 2_400_000,
   pollIntervalMilliseconds = 15_000,
@@ -406,6 +454,7 @@ export async function waitForInternalTestFlightAvailability({
   const deadline = now() + timeoutMilliseconds;
   let lastDescription;
   let promotionAttempted = false;
+  let localizationPublished = false;
   let failedUploadObservations = 0;
 
   while (now() <= deadline) {
@@ -493,6 +542,16 @@ export async function waitForInternalTestFlightAvailability({
       }
       if (exactBuild.build.attributes?.usesNonExemptEncryption !== false) {
         throw new Error("The uploaded build has unresolved export compliance.");
+      }
+
+      if (whatsNew && !localizationPublished) {
+        await upsertBetaBuildLocalization(client, {
+          buildId: exactBuild.build.id,
+          locale: whatsNewLocale,
+          whatsNew,
+        });
+        localizationPublished = true;
+        logger.log(`Published ${whatsNewLocale} TestFlight release notes.`);
       }
 
       const assignedGroupIds = new Set(
@@ -592,6 +651,9 @@ export async function main(environment = process.env) {
     keyId: requireValue("SYNARA_ASC_KEY_ID", environment.SYNARA_ASC_KEY_ID),
     privateKey: await readFile(privateKeyPath, "utf8"),
   });
+  const whatsNew = environment.SYNARA_TESTFLIGHT_WHATS_NEW_PATH
+    ? await readFile(environment.SYNARA_TESTFLIGHT_WHATS_NEW_PATH, "utf8")
+    : undefined;
   return waitForInternalTestFlightAvailability({
     client,
     bundleId: environment.SYNARA_IOS_BUNDLE_ID ?? "com.whylandcreative.synara",
@@ -604,6 +666,8 @@ export async function main(environment = process.env) {
       environment.SYNARA_IOS_BUILD_NUMBER
     ),
     internalGroupIds: groupIds,
+    whatsNew,
+    whatsNewLocale: environment.SYNARA_TESTFLIGHT_WHATS_NEW_LOCALE ?? "en-US",
     diagnosticsDirectory: environment.SYNARA_IOS_DIAGNOSTICS_DIR,
     timeoutMilliseconds:
       parsePositiveNumber(

@@ -141,16 +141,12 @@ impl NativeTimelineOwner {
             source: source.source,
             format: matrix_sdk::media::MediaFormat::File,
         };
-        let bytes = self
-            .client
-            .media()
-            .get_media_content(&request, true)
+        super::super::media::download_media_bounded(&self.client, &request, 32 * 1024 * 1024)
             .await
-            .map_err(|_| "p4-s33-media-failed")?;
-        if bytes.len() > 32 * 1024 * 1024 {
-            return Err("p4-s33-media-too-large");
-        }
-        Ok(bytes)
+            .map_err(|error| match error {
+                super::super::media::BoundedMediaError::TooLarge => "p4-s33-media-too-large",
+                _ => "p4-s33-media-failed",
+            })
     }
 
     pub async fn event_readback(

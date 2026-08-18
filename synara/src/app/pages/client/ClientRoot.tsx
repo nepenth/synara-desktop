@@ -47,8 +47,6 @@ import { SyncStatus } from './SyncStatus';
 import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
 import { getActiveSession, getSessionBootstrapResult } from '../../state/sessionBootstrap';
 import { AutoDiscovery } from './AutoDiscovery';
-import { platformSessionStore } from '../../platform';
-import { migrateLegacySessionToNativeAfterClientInit } from '../../state/sessionPersistence';
 import { shouldRetrySyncOnResume } from '../../utils/syncLifecycle';
 import {
   formatSyncSplashStatus,
@@ -239,9 +237,6 @@ export function ClientRoot({ children }: ClientRootProps) {
           }
         }
         const client = await initClient(session);
-        await migrateLegacySessionToNativeAfterClientInit({
-          nativeSessionStore: platformSessionStore,
-        });
         return client;
       })();
     }, [])

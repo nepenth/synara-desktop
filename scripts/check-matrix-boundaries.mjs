@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,14 +18,22 @@ const trackedFiles = execFileSync("git", ["ls-files"], {
   .split("\n")
   .filter(Boolean);
 
-const untrackedFiles = execFileSync("git", ["ls-files", "--others", "--exclude-standard"], {
-  cwd: root,
-  encoding: "utf8",
-})
+const untrackedFiles = execFileSync(
+  "git",
+  ["ls-files", "--others", "--exclude-standard"],
+  {
+    cwd: root,
+    encoding: "utf8",
+  }
+)
   .split("\n")
   .filter(Boolean);
 
-const repositoryFiles = [...new Set([...trackedFiles, ...untrackedFiles])];
+// `git ls-files` retains unstaged deletions. Boundary checks should inspect the
+// working tree that will be validated, not try to read paths already removed.
+const repositoryFiles = [
+  ...new Set([...trackedFiles, ...untrackedFiles]),
+].filter((path) => existsSync(resolve(root, path)));
 
 const IOS_ALLOWED_DIRECT_MATRIX_PATHS = new Map([
   [
@@ -63,7 +71,9 @@ const DOCS_ALLOWLIST = [
 ];
 
 function isDocumentation(path) {
-  return DOCS_ALLOWLIST.some((prefix) => path === prefix || path.startsWith(prefix));
+  return DOCS_ALLOWLIST.some(
+    (prefix) => path === prefix || path.startsWith(prefix)
+  );
 }
 
 function lineHits(path, patterns) {

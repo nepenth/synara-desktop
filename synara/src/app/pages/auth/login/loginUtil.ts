@@ -22,8 +22,6 @@ import {
   setSessionBootstrapResult,
   type AsyncSessionStore,
 } from '../../../state/sessionBootstrap';
-import { persistAuthenticatedSession } from '../../../state/sessionPersistence';
-import { pushSessionToSW } from '../../../../sw-session';
 import { recordClientDiagnostic } from '../../../utils/clientDiagnostics';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../../utils/desktop';
 import { recordDesktopDiagnostic } from '../../../utils/desktopDiagnostics';
@@ -82,20 +80,6 @@ export class PasswordLoginError extends Error {
     this.diagnosticId = diagnosticId;
   }
 }
-
-/** Local session fields used by completeAuthenticatedLogin (no matrix-js-sdk types). */
-export type SessionLoginResponse = {
-  access_token: string;
-  device_id: string;
-  user_id: string;
-  refresh_token?: string;
-  expires_in_ms?: number;
-};
-
-export type CustomLoginResponse = {
-  baseUrl: string;
-  response: SessionLoginResponse;
-};
 
 export type NativeLoginIdentity = {
   userId: string;
@@ -392,43 +376,9 @@ export const loginPassword = async (
   }
 };
 
-export type CompleteAuthenticatedLoginDeps = {
-  persistAuthenticatedSession: typeof persistAuthenticatedSession;
-  pushSessionToSW: typeof pushSessionToSW;
-  nativeSessionStore: typeof platformSessionStore;
-};
-
-export const completeAuthenticatedLogin = async (
-  data: CustomLoginResponse,
-  {
-    persistAuthenticatedSession: persistSession,
-    pushSessionToSW: pushSession,
-    nativeSessionStore,
-  }: CompleteAuthenticatedLoginDeps = {
-    persistAuthenticatedSession,
-    pushSessionToSW,
-    nativeSessionStore: platformSessionStore,
-  }
-) => {
-  const { response: loginRes, baseUrl: loginBaseUrl } = data;
-  const session = {
-    accessToken: loginRes.access_token,
-    deviceId: loginRes.device_id,
-    userId: loginRes.user_id,
-    baseUrl: loginBaseUrl,
-    ...(loginRes.refresh_token ? { refreshToken: loginRes.refresh_token } : {}),
-    ...(typeof loginRes.expires_in_ms === 'number' ? { expiresInMs: loginRes.expires_in_ms } : {}),
-  };
-
-  await persistSession(session, { nativeSessionStore, freshLogin: true });
-  pushSession(loginBaseUrl, loginRes.access_token);
-};
-
 /**
- * Rehydrate the frontend bootstrap from the host-side desktop session envelope
- * after a native password login / register. The login IPC never returns tokens;
- * route guards and ClientRoot gate on this in-memory bootstrap (`source:
- * 'native'`). Fail-closed: a missing envelope throws (no JS session fallback).
+ * Rehydrate the frontend bootstrap from host-owned identity metadata after a
+ * native password login or registration. Credentials never cross IPC.
  */
 export const completeNativeLoginBootstrap = async (
   nativeSessionStore: AsyncSessionStore = platformSessionStore
@@ -442,7 +392,7 @@ export const completeNativeLoginBootstrap = async (
     });
     throw new PasswordLoginError(
       LoginError.Unknown,
-      'Native login succeeded but the desktop session envelope is missing.'
+      'Native login succeeded but the desktop session identity is missing.'
     );
   }
   setSessionBootstrapResult({
@@ -452,7 +402,7 @@ export const completeNativeLoginBootstrap = async (
   });
 };
 
-export const useLoginComplete = (data?: CustomLoginResponse | NativeLoginResponse) => {
+export const useLoginComplete = (data?: NativeLoginResponse) => {
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -460,15 +410,9 @@ export const useLoginComplete = (data?: CustomLoginResponse | NativeLoginRespons
 
     let active = true;
     const persistAndNavigate = async () => {
-      // Native password login already persists the session host-side (vault +
-      // desktop session envelope). Rehydrate the frontend bootstrap from the
-      // envelope so route guards / ClientRoot see the active native session
-      // (tokens never return on the login IPC).
-      if ('native' in data) {
-        await completeNativeLoginBootstrap();
-      } else {
-        await completeAuthenticatedLogin(data);
-      }
+      // Native password login persists credentials host-side. Rehydrate only
+      // identity metadata so route guards can enter the client.
+      await completeNativeLoginBootstrap();
       if (!active) return;
       const afterLoginRedirectUrl = getAfterLoginRedirectPath();
       deleteAfterLoginRedirectPath();

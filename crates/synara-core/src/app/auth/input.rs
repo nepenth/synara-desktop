@@ -37,7 +37,7 @@ impl DiscoveryInputKind {
     }
 }
 
-/// Normalized, validated homeserver base URL (no trailing slash; http(s) only).
+/// Normalized, validated homeserver base URL (HTTPS, or HTTP loopback for development).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NormalizedHomeserverUrl {
     url: String,
@@ -73,7 +73,7 @@ impl NormalizedServerName {
 ///
 /// - Trims whitespace
 /// - Strips a single trailing `/`
-/// - Requires `http://` or `https://`
+/// - Requires `https://`, except `http://` is permitted for loopback development
 /// - Rejects whitespace, NUL, `..`, empty host
 pub fn normalize_homeserver_url(raw: &str) -> Result<NormalizedHomeserverUrl, AuthError> {
     let trimmed = raw.trim().trim_end_matches('/');
@@ -86,7 +86,7 @@ pub fn normalize_homeserver_url(raw: &str) -> Result<NormalizedHomeserverUrl, Au
     if !is_plausible_homeserver_url(trimmed) {
         return Err(AuthError::InvalidInput {
             diagnostic_id: "p3.1-invalid-homeserver-url",
-            reason: "homeserver url is not a valid http(s) base url",
+            reason: "homeserver url must use https (http is loopback-only)",
         });
     }
     Ok(NormalizedHomeserverUrl {
@@ -236,6 +236,14 @@ fn is_plausible_homeserver_url(url: &str) -> bool {
         return false;
     }
 
+    if parsed.scheme() == "http"
+        && !parsed
+            .host_str()
+            .is_some_and(|host| matches!(host, "localhost" | "127.0.0.1" | "::1" | "[::1]"))
+    {
+        return false;
+    }
+
     // A homeserver base may include a deployment path, but never a dot path
     // segment that could alter the appended Client-Server endpoint.
     parsed
@@ -258,6 +266,15 @@ mod unit_tests {
         assert!(normalize_homeserver_url("").is_err());
         assert!(normalize_homeserver_url("example.org").is_err());
         assert!(normalize_homeserver_url("ftp://example.org").is_err());
+    }
+
+    #[test]
+    fn normalize_url_requires_tls_except_for_exact_loopback_hosts() {
+        assert!(normalize_homeserver_url("http://matrix.example.org").is_err());
+        assert!(normalize_homeserver_url("http://192.168.1.20:8008").is_err());
+        assert!(normalize_homeserver_url("http://localhost:8008").is_ok());
+        assert!(normalize_homeserver_url("http://127.0.0.1:8008").is_ok());
+        assert!(normalize_homeserver_url("http://[::1]:8008").is_ok());
     }
 
     #[test]

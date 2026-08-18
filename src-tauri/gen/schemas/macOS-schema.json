@@ -393,12 +393,6 @@
           "markdownDescription": "Enables the desktop_get_performance_capabilities command without any pre-configured scope."
         },
         {
-          "description": "Enables the desktop_get_session command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-desktop-get-session",
-          "markdownDescription": "Enables the desktop_get_session command without any pre-configured scope."
-        },
-        {
           "description": "Enables the desktop_hide command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-hide",
@@ -459,12 +453,6 @@
           "markdownDescription": "Enables the desktop_record_diagnostic command without any pre-configured scope."
         },
         {
-          "description": "Enables the desktop_remove_session command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-desktop-remove-session",
-          "markdownDescription": "Enables the desktop_remove_session command without any pre-configured scope."
-        },
-        {
           "description": "Enables the desktop_request_notification_permission command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-request-notification-permission",
@@ -511,12 +499,6 @@
           "type": "string",
           "const": "allow-desktop-set-badge-count",
           "markdownDescription": "Enables the desktop_set_badge_count command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the desktop_set_session command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-desktop-set-session",
-          "markdownDescription": "Enables the desktop_set_session command without any pre-configured scope."
         },
         {
           "description": "Enables the desktop_set_shortcuts command without any pre-configured scope.",
@@ -1071,6 +1053,12 @@
           "markdownDescription": "Enables the matrix_send_text command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_session_identity command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-session-identity",
+          "markdownDescription": "Enables the matrix_session_identity command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_session_snapshot command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-session-snapshot",
@@ -1395,12 +1383,6 @@
           "markdownDescription": "Denies the desktop_get_performance_capabilities command without any pre-configured scope."
         },
         {
-          "description": "Denies the desktop_get_session command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-desktop-get-session",
-          "markdownDescription": "Denies the desktop_get_session command without any pre-configured scope."
-        },
-        {
           "description": "Denies the desktop_hide command without any pre-configured scope.",
           "type": "string",
           "const": "deny-desktop-hide",
@@ -1461,12 +1443,6 @@
           "markdownDescription": "Denies the desktop_record_diagnostic command without any pre-configured scope."
         },
         {
-          "description": "Denies the desktop_remove_session command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-desktop-remove-session",
-          "markdownDescription": "Denies the desktop_remove_session command without any pre-configured scope."
-        },
-        {
           "description": "Denies the desktop_request_notification_permission command without any pre-configured scope.",
           "type": "string",
           "const": "deny-desktop-request-notification-permission",
@@ -1513,12 +1489,6 @@
           "type": "string",
           "const": "deny-desktop-set-badge-count",
           "markdownDescription": "Denies the desktop_set_badge_count command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the desktop_set_session command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-desktop-set-session",
-          "markdownDescription": "Denies the desktop_set_session command without any pre-configured scope."
         },
         {
           "description": "Denies the desktop_set_shortcuts command without any pre-configured scope.",
@@ -2071,6 +2041,12 @@
           "type": "string",
           "const": "deny-matrix-send-text",
           "markdownDescription": "Denies the matrix_send_text command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_session_identity command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-session-identity",
+          "markdownDescription": "Denies the matrix_session_identity command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_session_snapshot command without any pre-configured scope.",

@@ -2335,61 +2335,29 @@ fn power_level_commands_are_registered_and_have_no_bulk_single_user_loop() {
 }
 
 #[test]
-fn v_auth_native_session_envelope_host_dual_write_is_wired() {
+fn v_auth_native_session_credentials_never_cross_renderer_ipc() {
     let product_prod = AUTH_PRODUCT_COMMANDS_SOURCE
         .split("#[cfg(test)]")
         .next()
         .expect("product production section");
 
-    // The hybrid desktop session envelope is the frontend bootstrap's native
-    // rehydration source (desktop_get_session). It must be dual-written
-    // host-side on native session install (password login + register) and
-    // cleared on logout so tokens never need to appear on the login/register
-    // IPC return paths.
+    // The native vault is the only credential owner. No parallel frontend
+    // envelope or token-bearing session command may be reintroduced.
     for marker in [
         "DesktopSessionEnvelope",
         "desktop_set_session_in_store",
         "persist_frontend_session_envelope",
         "clear_frontend_session_envelope",
+        "desktop_get_session",
+        "desktop_set_session",
     ] {
         assert!(
-            product_prod.contains(marker),
-            "auth product module must wire {marker}"
+            !product_prod.contains(marker),
+            "auth product module must not expose {marker}"
         );
     }
 
-    let login_fn = product_prod
-        .split("pub async fn matrix_login_password")
-        .nth(1)
-        .and_then(|rest| rest.split("pub async fn ").next())
-        .expect("matrix_login_password body");
-    assert!(
-        login_fn.contains("persist_frontend_session_envelope(&client, &identity)"),
-        "password login must dual-write the desktop session envelope"
-    );
-
-    let register_install_fn = product_prod
-        .split("pub(super) async fn install_session_from_register_secrets")
-        .nth(1)
-        .and_then(|rest| rest.split("pub async fn ").next())
-        .expect("install_session_from_register_secrets body");
-    assert!(
-        register_install_fn.contains("persist_frontend_session_envelope(&client, &identity)"),
-        "register session install must dual-write the desktop session envelope"
-    );
-
-    let logout_fn = product_prod
-        .split("pub async fn matrix_logout")
-        .nth(1)
-        .and_then(|rest| rest.split("pub async fn ").next())
-        .expect("matrix_logout body");
-    assert!(
-        logout_fn.contains("clear_frontend_session_envelope()"),
-        "logout must clear the desktop session envelope"
-    );
-
-    // The login identity DTO must never carry tokens to the frontend; the
-    // host-side envelope is the only token transport.
+    // The identity-only bootstrap DTO must never carry tokens to the frontend.
     let product_source = include_str!("product.rs");
     let identity_fn = product_source
         .split("pub struct MatrixLoginIdentity {")
@@ -2405,7 +2373,49 @@ fn v_auth_native_session_envelope_host_dual_write_is_wired() {
 }
 
 #[test]
-fn product_client_persists_rotated_sdk_tokens_and_logout_cannot_be_blocked_remotely() {
+fn v_auth_bootstrap_identity_is_token_free_and_does_not_start_sdk_restore() {
+    let identity = AUTH_PRODUCT_COMMANDS_SOURCE
+        .split("pub async fn matrix_session_identity")
+        .nth(1)
+        .and_then(|source| source.split("pub async fn matrix_sync_status").next())
+        .expect("matrix_session_identity body");
+
+    assert!(identity.contains("active.identity.clone()"));
+    assert!(identity.contains("read_active_identity(&root).map(Some)"));
+    for forbidden in [
+        "access_token",
+        "refresh_token",
+        "build_client(",
+        "restore_session_from_vault",
+        "start_sync_owner",
+    ] {
+        assert!(
+            !identity.contains(forbidden),
+            "identity bootstrap must not contain {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn v_auth_logout_clears_orphaned_native_identity_when_restore_never_installed_a_client() {
+    let logout = AUTH_PRODUCT_COMMANDS_SOURCE
+        .split("pub async fn matrix_logout")
+        .nth(1)
+        .and_then(|source| source.split("pub async fn matrix_restore_session").next())
+        .expect("matrix_logout body");
+
+    let no_active_session = logout
+        .split("let Some(active) = session.as_ref() else {")
+        .nth(1)
+        .and_then(|source| source.split("// Remote logout is best-effort").next())
+        .expect("matrix_logout missing-session branch");
+    assert!(no_active_session.contains("read_active_identity"));
+    assert!(no_active_session.contains("clear_session_material"));
+    assert!(no_active_session.contains("remove_active_identity"));
+}
+
+#[test]
+fn product_client_persists_rotated_sdk_tokens_in_native_vault_and_logout_is_local_first() {
     let build_client = AUTH_PRODUCT_COMMANDS_SOURCE
         .split("pub(super) async fn build_client")
         .nth(1)
@@ -2434,13 +2444,16 @@ fn product_client_persists_rotated_sdk_tokens_and_logout_cannot_be_blocked_remot
         "load_session_material",
         "matrix_session_from_host_secrets",
         "persist_session_after_login",
-        "persist_frontend_session_envelope",
     ] {
         assert!(
             callbacks.contains(required),
             "session rotation callback must retain {required}"
         );
     }
+    assert!(
+        !callbacks.contains("persist_frontend_session_envelope"),
+        "session rotation must not duplicate credentials into a renderer-facing envelope"
+    );
 
     let logout = AUTH_PRODUCT_COMMANDS_SOURCE
         .split("pub async fn matrix_logout")
@@ -2452,10 +2465,12 @@ fn product_client_persists_rotated_sdk_tokens_and_logout_cannot_be_blocked_remot
         "remote logout must remain best-effort"
     );
     assert!(
-        logout.contains("clear_session_material")
-            && logout.contains("remove_active_identity")
-            && logout.contains("clear_frontend_session_envelope"),
-        "local logout must clear every persisted session surface"
+        logout.contains("clear_session_material") && logout.contains("remove_active_identity"),
+        "local logout must clear native session material and identity"
+    );
+    assert!(
+        !logout.contains("clear_frontend_session_envelope"),
+        "logout must not depend on a renderer-facing credential store"
     );
 }
 
@@ -2598,7 +2613,8 @@ async fn media_config_desktop_owner_keeps_the_live_client_and_closed_no_session_
     assert!(download.contains("is_timeline_media_handle"));
     assert!(download.contains("resolve_timeline_media"));
     assert!(download.contains("MediaFormat::File"));
-    assert!(download.contains("get_media_content(&media_request, true)"));
+    assert!(download.contains("download_media_bounded("));
+    assert!(download.contains("MAX_MEDIA_DOWNLOAD_BYTES"));
     assert!(!download.contains("Thumbnail"));
     assert!(!download.contains("mxcUrlToHttp"));
     assert!(!download.contains("Core::command"));

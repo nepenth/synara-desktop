@@ -44,7 +44,6 @@ test('native via-server population uses the injected native owner and never read
       baseUrl: 'https://matrix.example.org',
       userId: '@alice:example.org',
       deviceId: 'DEVICE',
-      accessToken: 'token',
     },
   });
   publishNativeRoomCreatorsProjection(roomId, 7, ['@owner:power.example']);

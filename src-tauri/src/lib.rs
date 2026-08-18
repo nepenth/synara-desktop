@@ -14,8 +14,6 @@ mod desktop_notifications;
 mod desktop_platform;
 mod desktop_sanitize;
 mod desktop_secret_store;
-mod desktop_session;
-mod desktop_session_store;
 mod desktop_shortcuts;
 mod desktop_spellcheck;
 mod desktop_tray;
@@ -149,7 +147,13 @@ fn register_synara_media_protocol<R: tauri::Runtime>(
                         source: source.source,
                         format: matrix_sdk::media::MediaFormat::File,
                     };
-                    let Ok(bytes) = client.media().get_media_content(&request, false).await else {
+                    let Ok(bytes) = synara_core::app::media::download_media_bounded(
+                        &client,
+                        &request,
+                        TIMELINE_MEDIA_MAX_BYTES,
+                    )
+                    .await
+                    else {
                         responder.respond(synara_media_response(
                             tauri::http::StatusCode::NOT_FOUND,
                             Vec::new(),
@@ -157,14 +161,8 @@ fn register_synara_media_protocol<R: tauri::Runtime>(
                         ));
                         return;
                     };
-                    let Some(content_type) = (bytes.len() <= TIMELINE_MEDIA_MAX_BYTES)
-                        .then(|| {
-                            timeline_media_content_type(
-                                &bytes,
-                                source.declared_mime_type.as_deref(),
-                            )
-                        })
-                        .flatten()
+                    let Some(content_type) =
+                        timeline_media_content_type(&bytes, source.declared_mime_type.as_deref())
                     else {
                         responder.respond(synara_media_response(
                             tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
@@ -205,7 +203,13 @@ fn register_synara_media_protocol<R: tauri::Runtime>(
                         ),
                     ),
                 };
-                let Ok(bytes) = client.media().get_media_content(&request, false).await else {
+                let Ok(bytes) = synara_core::app::media::download_media_bounded(
+                    &client,
+                    &request,
+                    INVITE_AVATAR_MAX_BYTES,
+                )
+                .await
+                else {
                     responder.respond(synara_media_response(
                         tauri::http::StatusCode::NOT_FOUND,
                         Vec::new(),
@@ -213,10 +217,7 @@ fn register_synara_media_protocol<R: tauri::Runtime>(
                     ));
                     return;
                 };
-                let Some(content_type) = (bytes.len() <= INVITE_AVATAR_MAX_BYTES)
-                    .then(|| image_content_type(&bytes))
-                    .flatten()
-                else {
+                let Some(content_type) = image_content_type(&bytes) else {
                     responder.respond(synara_media_response(
                         tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
                         Vec::new(),
@@ -334,9 +335,6 @@ pub fn run() {
             desktop::desktop_set_badge_count,
             desktop::desktop_set_shortcuts,
             desktop::desktop_secret_store_status,
-            desktop::desktop_get_session,
-            desktop::desktop_set_session,
-            desktop::desktop_remove_session,
             desktop_integration::desktop_get_integration_status,
             desktop::desktop_update_tray_state,
             desktop_notifications::desktop_get_notification_permission,
@@ -369,6 +367,7 @@ pub fn run() {
             matrix::auth::product::matrix_register_flows,
             matrix::auth::product::matrix_register_request_email_token,
             matrix::auth::product::matrix_register,
+            matrix::auth::product::matrix_session_identity,
             matrix::auth::product::matrix_session_snapshot,
             matrix::auth::product::matrix_sync_status,
             matrix::auth::product::matrix_crypto_status,

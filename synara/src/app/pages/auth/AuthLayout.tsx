@@ -101,7 +101,7 @@ export function AuthLayout() {
     if (!urlEncodedServer || tryDecodeURIComponent(urlEncodedServer) !== server) {
       navigate(
         generatePath(currentAuthPath(location.pathname), {
-          server: encodeURIComponent(server),
+          server,
         }),
         { replace: true }
       );
@@ -119,7 +119,7 @@ export function AuthLayout() {
       }
       navigate(
         generatePath(currentAuthPath(location.pathname), {
-          server: encodeURIComponent(normalizedServer),
+          server: normalizedServer,
         })
       );
     },

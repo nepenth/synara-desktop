@@ -9,11 +9,9 @@ import {
 import type { Session } from '../../../../state/sessions';
 
 const nativeSession: Session = {
-  accessToken: 'syt-session-access',
   deviceId: 'DEVICEID',
   userId: '@alice:example.org',
   baseUrl: 'https://matrix.example.org',
-  refreshToken: 'syt-session-refresh',
 };
 
 const storeFor = (session: Session | undefined): AsyncSessionStore => ({
@@ -24,25 +22,23 @@ test.beforeEach(() => {
   resetSessionBootstrapForTests();
 });
 
-test('completeNativeLoginBootstrap rehydrates bootstrap (source native) when envelope present', async () => {
+test('completeNativeLoginBootstrap rehydrates identity-only native bootstrap', async () => {
   await completeNativeLoginBootstrap(storeFor(nativeSession));
 
   const result = getSessionBootstrapResult();
   assert.equal(result.source, 'native');
-  assert.equal(result.session?.accessToken, 'syt-session-access');
-  assert.equal(result.session?.refreshToken, 'syt-session-refresh');
   assert.equal(result.session?.userId, '@alice:example.org');
   assert.equal(result.session?.baseUrl, 'https://matrix.example.org');
   assert.equal(result.nativeStoreError, undefined);
 });
 
-test('completeNativeLoginBootstrap fails closed when desktop session envelope missing', async () => {
+test('completeNativeLoginBootstrap fails closed when desktop session identity is missing', async () => {
   await assert.rejects(
     () => completeNativeLoginBootstrap(storeFor(undefined)),
     (err: unknown) => {
       assert.ok(err instanceof PasswordLoginError);
       assert.equal(err.errcode, LoginError.Unknown);
-      assert.match(err.message, /desktop session envelope is missing/i);
+      assert.match(err.message, /desktop session identity is missing/i);
       return true;
     }
   );

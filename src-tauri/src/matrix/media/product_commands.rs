@@ -95,12 +95,18 @@ pub async fn matrix_media_download(
         let session = state.session.lock().await;
         require_session(session.as_ref())?.client.clone()
     };
-    let bytes = client
-        .media()
-        .get_media_content(&media_request, true)
-        .await
-        .map_err(|_| map_media_download_error("v-send.r-media-download-sdk-failed"))?;
-    validate_media_download_size(bytes.len())?;
+    let bytes = synara_core::app::media::download_media_bounded(
+        &client,
+        &media_request,
+        MAX_MEDIA_DOWNLOAD_BYTES,
+    )
+    .await
+    .map_err(|error| match error {
+        synara_core::app::media::BoundedMediaError::TooLarge => {
+            map_media_download_error("v-send.r-media-download-too-large")
+        }
+        _ => map_media_download_error("v-send.r-media-download-sdk-failed"),
+    })?;
 
     Ok(MatrixMediaDownloadResult { bytes })
 }
@@ -116,12 +122,18 @@ async fn download_timeline_media_handle(
         source: source.source,
         format: MediaFormat::File,
     };
-    let bytes = client
-        .media()
-        .get_media_content(&media_request, true)
-        .await
-        .map_err(|_| map_media_download_error("v-send.r-media-download-sdk-failed"))?;
-    validate_media_download_size(bytes.len())?;
+    let bytes = synara_core::app::media::download_media_bounded(
+        &client,
+        &media_request,
+        MAX_MEDIA_DOWNLOAD_BYTES,
+    )
+    .await
+    .map_err(|error| match error {
+        synara_core::app::media::BoundedMediaError::TooLarge => {
+            map_media_download_error("v-send.r-media-download-too-large")
+        }
+        _ => map_media_download_error("v-send.r-media-download-sdk-failed"),
+    })?;
     Ok(MatrixMediaDownloadResult { bytes })
 }
 

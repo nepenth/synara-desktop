@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2.1.0 - 2026-08-18
+
+- Hardened native credential custody, remote transport policy, bounded media
+  and file operations, diagnostic redaction, and notification privacy across
+  iOS, macOS, and Linux.
+- Removed retired renderer session credentials and repaired startup recovery
+  so an unrestorable native session can be cleared without an insecure fallback.
+- Added versioned GitHub and TestFlight release notes for coordinated client
+  releases. See [`docs/releases/v2.1.0.md`](docs/releases/v2.1.0.md) for details.
+
 - Bumped coordinated macOS, Linux, and iOS release metadata to `1.2.59` after
   the `1.2.58` iOS build was promoted to internal TestFlight testing.
 - Added opt-in, privacy-filtered desktop diagnostics for performance, session

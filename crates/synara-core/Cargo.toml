@@ -19,7 +19,7 @@ serde_json = "1.0.109"
 # URL parser for fail-closed homeserver base validation.
 url = "2"
 # Credential-free login-flow discovery transport (moved from desktop auth).
-reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2", "stream"] }
 # SNC-P1-4: task registry (moved from src-tauri/matrix/tasks) supervises async
 # work — tokio spawn/JoinHandle at runtime and the test macro for its unit tests.
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time", "net", "io-util"] }
