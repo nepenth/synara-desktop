@@ -111,6 +111,7 @@ pub async fn matrix_login_password(
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
         .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-session-persist-failed"))?;
+    crate::desktop_secret_store::clear_legacy_renderer_session_credentials();
 
     let identity = MatrixLoginIdentity {
         user_id: result.user_id,
@@ -525,6 +526,7 @@ pub(super) async fn install_session_from_register_secrets(
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
         .map_err(|_| MatrixAuthCommandError::unavailable("v-auth.4b-session-persist-failed"))?;
+    crate::desktop_secret_store::clear_legacy_renderer_session_credentials();
 
     let identity = MatrixLoginIdentity {
         user_id: secrets.user_id.clone(),
@@ -575,6 +577,27 @@ pub async fn matrix_session_snapshot(
     crate::bridge::session_lifecycle::session_snapshot(core.inner().as_ref()).await
 }
 
+/// Return only the persisted account identity used to decide whether the
+/// native client route should mount. This deliberately does not restore the
+/// SDK client, start sync, or expose session credentials.
+#[tauri::command]
+pub async fn matrix_session_identity(
+    app: AppHandle,
+    state: State<'_, MatrixAuthState>,
+) -> Result<Option<MatrixLoginIdentity>, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    if let Some(active) = session.as_ref() {
+        return Ok(Some(active.identity.clone()));
+    }
+    drop(session);
+
+    let root = app_data_root(&app)?;
+    if !active_identity_path(&root).is_file() {
+        return Ok(None);
+    }
+    read_active_identity(&root).map(Some)
+}
+
 /// SNC-P3.3 — keep the existing payload-free sync-status command while
 /// routing its exact DTO through the managed Core registry. The desktop
 /// Platform remains the sole owner of the live SDK sync owner.
@@ -607,6 +630,8 @@ pub async fn matrix_logout(
     // Pending/AwaitingConfirmation recovery capability must never outlive it.
     state.clear_store_recovery().await;
     let Some(active) = session.as_ref() else {
+        let app_data_root = app_data_root(&app)?;
+
         // A repeated logout must also clear any stale Core projection left by
         // a prior partial lifecycle failure. Release the desktop mutex first.
         drop(session);
@@ -614,6 +639,25 @@ pub async fn matrix_logout(
             core.inner().as_ref(),
         )
         .await?;
+
+        // A failed restore can leave native identity and keychain material
+        // without a live SDK client. Logout must still remove both so the user
+        // can recover to the login route instead of entering a retry loop.
+        let orphan_cleanup_outcome = if active_identity_path(&app_data_root).is_file() {
+            read_active_identity(&app_data_root)
+                .and_then(|identity| account_identity(&identity))
+                .and_then(|identity| {
+                    clear_session_material(&KeyringSessionMaterialVault::new(), &identity).map_err(
+                        |_| MatrixAuthCommandError::unavailable("d0.1-session-clear-failed"),
+                    )
+                })
+                .map(|_| ())
+        } else {
+            Ok(())
+        };
+        let remove_result = remove_active_identity(&app_data_root);
+        orphan_cleanup_outcome?;
+        remove_result?;
         return Ok(MatrixSessionSnapshot::LoggedOut);
     };
 
@@ -675,6 +719,7 @@ pub async fn matrix_restore_session(
             "d0.1-restored-device-mismatch",
         ));
     }
+    crate::desktop_secret_store::clear_legacy_renderer_session_credentials();
 
     ensure_crypto_ready(&client).await?;
     let session_generation = state.next_generation();

@@ -6,6 +6,7 @@ import {
   AppStoreConnectClient,
   AppStoreConnectError,
   createAppStoreConnectToken,
+  upsertBetaBuildLocalization,
   waitForInternalTestFlightAvailability,
 } from "../../synara-ios/scripts/promote-testflight-internal.mjs";
 
@@ -209,6 +210,48 @@ test("creates a standards-compliant short-lived ES256 App Store Connect token", 
     ),
     true
   );
+});
+
+test("creates and updates localized TestFlight What's New text", async () => {
+  const calls = [];
+  const createClient = (existing = []) => ({
+    async request(resourcePath, options = {}) {
+      calls.push({ resourcePath, options });
+      if (resourcePath.endsWith("/betaBuildLocalizations") && !options.method) {
+        return { data: existing };
+      }
+      return { data: { id: existing[0]?.id ?? "localization-new" } };
+    },
+  });
+
+  await upsertBetaBuildLocalization(createClient(), {
+    buildId: "build-1",
+    locale: "en-US",
+    whatsNew: "  Test secure session restore.  ",
+  });
+  assert.equal(calls[1].resourcePath, "/v1/betaBuildLocalizations");
+  assert.equal(calls[1].options.method, "POST");
+  assert.equal(
+    calls[1].options.body.data.attributes.whatsNew,
+    "Test secure session restore."
+  );
+
+  calls.length = 0;
+  await upsertBetaBuildLocalization(
+    createClient([
+      {
+        type: "betaBuildLocalizations",
+        id: "localization-1",
+        attributes: { locale: "en-US" },
+      },
+    ]),
+    { buildId: "build-1", locale: "en-US", whatsNew: "Updated notes" }
+  );
+  assert.equal(
+    calls[1].resourcePath,
+    "/v1/betaBuildLocalizations/localization-1"
+  );
+  assert.equal(calls[1].options.method, "PATCH");
 });
 
 test("retries retryable non-JSON responses before parsing a successful response", async () => {

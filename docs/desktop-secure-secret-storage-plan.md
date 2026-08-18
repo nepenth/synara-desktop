@@ -67,12 +67,11 @@ stored, rotated, and recovered.
 
 ### Option C: Rust Native Credential Store
 
-Accepted.
+Accepted, then superseded by the native-only credential boundary in 2.1.0.
 
-The desktop shell should expose scoped commands implemented in Rust, backed by
-native credential APIs. The frontend should not get arbitrary key/value secret
-access. It should only be able to persist, read, and clear Synara's Matrix
-session envelope.
+The desktop shell uses native credential APIs, but the renderer no longer has
+any credential read, write, or clear command. Matrix access and refresh tokens
+are owned exclusively by the per-account native session vault.
 
 The Rust `keyring` 3.x crate is the adapter because it connects to native
 credential stores and exposes platform-specific backends such as Apple Keychain
@@ -80,21 +79,24 @@ and Linux Secret Service/keyutils stores. The repo pins the 3.x API line because
 the latest 4.x crate has reorganized away from the simple `Entry` API this
 adapter needs.
 
-## Proposed Command Surface
+## Current Command Surface
 
-Add only session-scoped commands:
+The renderer can probe storage capability and read non-secret identity only:
 
 ```text
 desktop_secret_store_status() -> DesktopSecretStoreStatus
-desktop_get_session() -> Option<DesktopSessionEnvelope>
-desktop_set_session(session: DesktopSessionEnvelope) -> Result<bool, String>
-desktop_remove_session() -> Result<bool, String>
+matrix_session_identity() -> Option<MatrixLoginIdentity>
 ```
 
 Do not expose generic commands such as `get_secret(key)` or `set_secret(key,
 value)` to the WebView.
 
-Status: command surface and native adapter implemented. macOS uses Keychain.
+The former `desktop_get_session`, `desktop_set_session`, and
+`desktop_remove_session` commands were removed in 2.1.0. Legacy renderer
+credential envelopes are deleted after a successful native login or restore,
+and retired localStorage credential keys are purged during bootstrap.
+
+Status: native adapter implemented. macOS uses Keychain.
 Linux treats Secret Service as the persistent backend and reports keyutils as a
 session-scoped capability until we explicitly decide to accept non-persistent
 Linux session restore semantics.

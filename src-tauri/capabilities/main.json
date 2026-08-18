@@ -72,6 +72,7 @@
     "allow-matrix-register-flows",
     "allow-matrix-register-request-email-token",
     "allow-matrix-register",
+    "allow-matrix-session-identity",
     "allow-matrix-session-snapshot",
     "allow-matrix-sync-status",
     "allow-matrix-crypto-status",

@@ -1,21 +1,10 @@
 import {
   clearSessionBootstrap,
-  getSessionBootstrapResult,
-  NATIVE_SESSION_STORE_ERROR,
-  setSessionBootstrapResult,
   type AsyncSessionStore,
   type NativeSessionStoreError,
-  type SessionBootstrapResult,
 } from './sessionBootstrap';
 import { clearMatrixLocalStores } from '../../client/matrixLocalStores';
-import {
-  fallbackSessionStore,
-  PENDING_FRESH_LOGIN_IDENTITY_KEY,
-  type FallbackSessionInput,
-  type Session,
-  type SessionStorage,
-  type SessionStore,
-} from './sessions';
+import { PENDING_FRESH_LOGIN_IDENTITY_KEY, type Session, type SessionStorage } from './sessions';
 import { recordClientDiagnostic } from '../utils/clientDiagnostics';
 
 export type { NativeSessionStoreError };
@@ -245,267 +234,17 @@ export const clearMatrixStoresForIdentityChange = async (
   return true;
 };
 
-export type PersistedSessionResult = {
-  session: Session;
-  source: 'native' | 'legacy-fallback';
-  nativeStoreError?: NativeSessionStoreError;
-};
-
-export type LegacySessionMigrationResult =
-  | { status: 'skipped' }
-  | { status: 'migrated'; session: Session }
-  | { status: 'native-unavailable'; session: Session }
-  | { status: 'failed'; session: Session; nativeStoreError: NativeSessionStoreError };
-
 export type SessionPersistenceOptions = {
-  nativeSessionStore?: Pick<AsyncSessionStore, 'setSession' | 'removeSession'>;
-  fallbackStore?: Pick<SessionStore, 'setFallbackSession' | 'removeFallbackSession'>;
-  storage?: SessionStorage;
-  /** Set only after a successful Matrix login/registration that created this device. */
-  freshLogin?: boolean;
-};
-
-export type LegacySessionMigrationOptions = SessionPersistenceOptions & {
-  bootstrapResult?: SessionBootstrapResult;
-};
-
-export const SESSION_EXPIRY_CLOCK_SKEW_TOLERANCE_MS = 60_000;
-
-export const isPersistedSessionExpired = (session: Session, nowMs = Date.now()): boolean => {
-  const { expiresInMs, storedAtMs } = session;
-  if (typeof expiresInMs !== 'number' || !Number.isFinite(expiresInMs)) {
-    return false;
-  }
-  if (typeof storedAtMs !== 'number' || !Number.isFinite(storedAtMs)) {
-    return false;
-  }
-
-  return nowMs > storedAtMs + expiresInMs + SESSION_EXPIRY_CLOCK_SKEW_TOLERANCE_MS;
-};
-
-const toFallbackSessionInput = (session: Session): FallbackSessionInput => ({
-  accessToken: session.accessToken,
-  baseUrl: session.baseUrl,
-  deviceId: session.deviceId,
-  userId: session.userId,
-  ...(session.sessionGeneration ? { sessionGeneration: session.sessionGeneration } : {}),
-});
-
-const toNativeSession = (session: Session): Session => {
-  const nativeSession: Session = {
-    accessToken: session.accessToken,
-    baseUrl: session.baseUrl,
-    deviceId: session.deviceId,
-    userId: session.userId,
-  };
-
-  if (session.refreshToken) nativeSession.refreshToken = session.refreshToken;
-  if (session.sessionGeneration) nativeSession.sessionGeneration = session.sessionGeneration;
-  if (typeof session.expiresInMs === 'number' && Number.isFinite(session.expiresInMs)) {
-    nativeSession.expiresInMs = session.expiresInMs;
-  }
-  nativeSession.storedAtMs = Date.now();
-
-  return nativeSession;
-};
-
-const toLegacyFallbackSession = (session: Session): Session => ({
-  ...toFallbackSessionInput(session),
-  fallbackSdkStores: true,
-});
-
-export const persistAuthenticatedSession = async (
-  session: Session,
-  {
-    nativeSessionStore,
-    fallbackStore = fallbackSessionStore,
-    storage = getDefaultSessionStorage(),
-    freshLogin = false,
-  }: SessionPersistenceOptions = {}
-): Promise<PersistedSessionResult> => {
-  const persistenceStartedAtMs = performance.now();
-  const nativeSession = toNativeSession(
-    freshLogin && !session.sessionGeneration
-      ? { ...session, sessionGeneration: createFreshLoginSessionGeneration() }
-      : session
-  );
-  let nativeStoreError: NativeSessionStoreError | undefined;
-  const persistedIdentity = {
-    userId: nativeSession.userId,
-    deviceId: nativeSession.deviceId,
-    baseUrl: nativeSession.baseUrl,
-    sessionGeneration: nativeSession.sessionGeneration,
-  };
-
-  recordClientDiagnostic('session', 'persistence.started', {
-    freshLogin,
-    nativeStoreConfigured: Boolean(nativeSessionStore?.setSession),
-    hasRefreshToken: Boolean(nativeSession.refreshToken),
-    hasExpiryMetadata: typeof nativeSession.expiresInMs === 'number',
-  });
-
-  if (nativeSessionStore?.setSession) {
-    const nativeWriteStartedAtMs = performance.now();
-    try {
-      if (await nativeSessionStore.setSession(nativeSession)) {
-        fallbackStore.removeFallbackSession();
-        setSessionBootstrapResult({ session: nativeSession, source: 'native' });
-        setLastPersistedMatrixIdentity(persistedIdentity, storage);
-        if (freshLogin) markPendingFreshLoginIdentity(persistedIdentity, storage);
-        recordClientDiagnostic('session', 'persistence.completed', {
-          source: 'native',
-          durationMs: performance.now() - persistenceStartedAtMs,
-          nativeWriteDurationMs: performance.now() - nativeWriteStartedAtMs,
-        });
-        return {
-          session: nativeSession,
-          source: 'native',
-        };
-      }
-      recordClientDiagnostic('session', 'persistence.native-write-completed', {
-        outcome: 'unavailable',
-        durationMs: performance.now() - nativeWriteStartedAtMs,
-      });
-    } catch (error) {
-      nativeStoreError = NATIVE_SESSION_STORE_ERROR;
-      recordClientDiagnostic('session', 'persistence.native-write-completed', {
-        outcome: 'error',
-        durationMs: performance.now() - nativeWriteStartedAtMs,
-        errorType: error instanceof Error ? error.name : typeof error,
-      });
-    }
-  }
-
-  fallbackStore.setFallbackSession(toFallbackSessionInput(nativeSession));
-  const fallbackSession = toLegacyFallbackSession(nativeSession);
-  setSessionBootstrapResult({
-    session: fallbackSession,
-    source: 'legacy-fallback',
-    nativeStoreError,
-  });
-  setLastPersistedMatrixIdentity(persistedIdentity, storage);
-  if (freshLogin) markPendingFreshLoginIdentity(persistedIdentity, storage);
-
-  recordClientDiagnostic('session', 'persistence.completed', {
-    source: 'legacy-fallback',
-    durationMs: performance.now() - persistenceStartedAtMs,
-    nativeStoreError: Boolean(nativeStoreError),
-  });
-
-  return {
-    session: fallbackSession,
-    source: 'legacy-fallback',
-    nativeStoreError,
-  };
-};
-
-export const migrateLegacySessionToNativeAfterClientInit = async ({
-  nativeSessionStore,
-  fallbackStore = fallbackSessionStore,
-  bootstrapResult = getSessionBootstrapResult(),
-}: LegacySessionMigrationOptions = {}): Promise<LegacySessionMigrationResult> => {
-  const migrationStartedAtMs = performance.now();
-  if (bootstrapResult.source !== 'legacy-fallback' || !bootstrapResult.session) {
-    recordClientDiagnostic('session', 'migration.completed', {
-      outcome: 'skipped',
-      durationMs: performance.now() - migrationStartedAtMs,
-    });
-    return { status: 'skipped' };
-  }
-
-  const nativeSession = toNativeSession(bootstrapResult.session);
-  if (!nativeSessionStore?.setSession) {
-    recordClientDiagnostic('session', 'migration.completed', {
-      outcome: 'native-unavailable',
-      durationMs: performance.now() - migrationStartedAtMs,
-    });
-    return { status: 'native-unavailable', session: bootstrapResult.session };
-  }
-
-  try {
-    if (!(await nativeSessionStore.setSession(nativeSession))) {
-      recordClientDiagnostic('session', 'migration.completed', {
-        outcome: 'native-unavailable',
-        durationMs: performance.now() - migrationStartedAtMs,
-      });
-      return { status: 'native-unavailable', session: bootstrapResult.session };
-    }
-  } catch (error) {
-    recordClientDiagnostic('session', 'migration.completed', {
-      outcome: 'failed',
-      durationMs: performance.now() - migrationStartedAtMs,
-      errorType: error instanceof Error ? error.name : typeof error,
-    });
-    return {
-      status: 'failed',
-      session: bootstrapResult.session,
-      nativeStoreError: NATIVE_SESSION_STORE_ERROR,
-    };
-  }
-
-  fallbackStore.removeFallbackSession();
-  setSessionBootstrapResult({ session: nativeSession, source: 'native' });
-  recordClientDiagnostic('session', 'migration.completed', {
-    outcome: 'migrated',
-    durationMs: performance.now() - migrationStartedAtMs,
-  });
-  return { status: 'migrated', session: nativeSession };
-};
-
-export const reconcileExpiredPersistedSession = async (
-  options: SessionPersistenceOptions = {}
-): Promise<SessionBootstrapResult> => {
-  const reconciliationStartedAtMs = performance.now();
-  const bootstrap = getSessionBootstrapResult();
-  const expired = Boolean(bootstrap.session && isPersistedSessionExpired(bootstrap.session));
-  if (!expired) {
-    recordClientDiagnostic('session', 'expired-session.reconciliation-completed', {
-      outcome: bootstrap.session ? 'not-expired' : 'no-session',
-      durationMs: performance.now() - reconciliationStartedAtMs,
-      hasSession: Boolean(bootstrap.session),
-      expired,
-    });
-    return bootstrap;
-  }
-
-  try {
-    await clearPersistedSessions(options);
-    recordClientDiagnostic('session', 'expired-session.reconciliation-completed', {
-      outcome: 'expired-cleared',
-      durationMs: performance.now() - reconciliationStartedAtMs,
-      hasSession: true,
-      expired,
-    });
-    return { source: 'none' };
-  } catch (error) {
-    recordClientDiagnostic('session', 'expired-session.reconciliation-completed', {
-      outcome: 'error',
-      durationMs: performance.now() - reconciliationStartedAtMs,
-      hasSession: true,
-      expired,
-      errorType: error instanceof Error ? error.name : typeof error,
-    });
-    throw error;
-  }
+  nativeSessionStore?: Pick<AsyncSessionStore, never>;
 };
 
 export const clearPersistedSessions = async ({
-  nativeSessionStore,
-  fallbackStore = fallbackSessionStore,
+  nativeSessionStore: _nativeSessionStore,
 }: SessionPersistenceOptions = {}): Promise<void> => {
   const clearStartedAtMs = performance.now();
-  let nativeRemovalError = false;
   let matrixStoreClearSuccess = false;
   clearSessionBootstrap();
 
-  try {
-    await nativeSessionStore?.removeSession?.();
-  } catch {
-    nativeRemovalError = true;
-    // Logout and local data reset must continue even if the native store is unavailable.
-  }
-
-  fallbackStore.removeFallbackSession();
   try {
     await clearMatrixLocalStores();
     matrixStoreClearSuccess = true;
@@ -516,8 +255,7 @@ export const clearPersistedSessions = async ({
   recordClientDiagnostic('session', 'persisted-session-clear.completed', {
     outcome: 'completed',
     durationMs: performance.now() - clearStartedAtMs,
-    nativeStoreConfigured: Boolean(nativeSessionStore?.removeSession),
-    nativeRemovalError,
+    nativeStoreConfigured: Boolean(_nativeSessionStore),
     matrixStoreClearSuccess,
   });
 };

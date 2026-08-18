@@ -106,7 +106,6 @@ const tests = [
   'src/app/state/__tests__/mDirectList.test.ts',
   'src/app/state/__tests__/typingMembers.test.ts',
   'src/app/components/editor/__tests__/richText.test.ts',
-  'src/app/pages/auth/login/__tests__/loginUtil.test.ts',
   'src/app/pages/auth/login/__tests__/nativeLoginFlows.test.ts',
   'src/app/pages/auth/reset-password/__tests__/nativePasswordReset.test.ts',
   'src/app/pages/auth/register/__tests__/nativeRegister.test.ts',
@@ -114,7 +113,6 @@ const tests = [
   'src/app/pages/auth/login/__tests__/loginUiaStageAbsence.test.ts',
   'src/app/pages/auth/login/__tests__/desktopPasswordLoginNativeOnly.test.ts',
   'src/app/pages/auth/login/__tests__/nativeLoginBootstrap.test.ts',
-  'src/app/state/__tests__/sw-session.test.ts',
 ];
 
 const outdir = await mkdtemp(join(tmpdir(), 'synara-modernization-tests-'));

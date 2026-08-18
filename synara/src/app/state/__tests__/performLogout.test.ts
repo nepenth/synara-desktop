@@ -52,29 +52,34 @@ const createMockMatrixClient = () => {
 
 const createLogoutDeps = () => {
   const clearPersistedCalls: Array<Record<string, unknown>> = [];
-  const pushCalls: Array<[string | undefined, string | undefined]> = [];
+  let nativeLogoutCalls = 0;
   let reloaded = false;
 
   const deps = {
     clearPersistedSessions: async (options?: Record<string, unknown>) => {
       clearPersistedCalls.push(options ?? {});
     },
-    pushSessionToSW: (baseUrl?: string, accessToken?: string) => {
-      pushCalls.push([baseUrl, accessToken]);
-    },
     clearSessionLocalStorage: () => undefined,
-    nativeSessionStore: { removeSession: async () => true },
+    logoutNativeSession: async () => {
+      nativeLogoutCalls += 1;
+    },
+    nativeSessionStore: {},
     reload: () => {
       reloaded = true;
     },
   };
 
-  return { deps, clearPersistedCalls, pushCalls, getReloaded: () => reloaded };
+  return {
+    deps,
+    clearPersistedCalls,
+    getNativeLogoutCalls: () => nativeLogoutCalls,
+    getReloaded: () => reloaded,
+  };
 };
 
 test('performLogout with matrix client stops client, clears stores, and reloads', async () => {
   const { mx, calls } = createMockMatrixClient();
-  const { deps, clearPersistedCalls, pushCalls, getReloaded } = createLogoutDeps();
+  const { deps, clearPersistedCalls, getReloaded } = createLogoutDeps();
 
   await performLogout(mx, {
     ...deps,
@@ -87,38 +92,17 @@ test('performLogout with matrix client stops client, clears stores, and reloads'
   assert.deepEqual(calls, ['stopClient', 'logout', 'clearPersistedSessions']);
   assert.equal(clearPersistedCalls.length, 1);
   assert.deepEqual(clearPersistedCalls[0], { nativeSessionStore: deps.nativeSessionStore });
-  assert.equal(pushCalls.length, 1);
-  assert.deepEqual(pushCalls[0], [undefined, undefined]);
   assert.equal(getReloaded(), true);
 });
 
-test('performLogout without matrix client still clears persisted session and reloads', async () => {
-  const { deps, clearPersistedCalls, pushCalls, getReloaded } = createLogoutDeps();
+test('performLogout without matrix client clears the native and renderer sessions', async () => {
+  const { deps, clearPersistedCalls, getNativeLogoutCalls, getReloaded } = createLogoutDeps();
 
   await performLogout(undefined, deps);
 
   assert.equal(clearPersistedCalls.length, 1);
-  assert.equal(pushCalls.length, 1);
-  assert.deepEqual(pushCalls[0], [undefined, undefined]);
+  assert.equal(getNativeLogoutCalls(), 1);
   assert.equal(getReloaded(), true);
-});
-
-test('performLogout pushes session to service worker with and without matrix client', async () => {
-  const pushCalls: Array<[string | undefined, string | undefined]> = [];
-  const deps = {
-    ...createLogoutDeps().deps,
-    pushSessionToSW: (baseUrl?: string, accessToken?: string) => {
-      pushCalls.push([baseUrl, accessToken]);
-    },
-  };
-  const { mx } = createMockMatrixClient();
-
-  await performLogout(mx, deps);
-  await performLogout(undefined, deps);
-
-  assert.equal(pushCalls.length, 2);
-  assert.deepEqual(pushCalls[0], [undefined, undefined]);
-  assert.deepEqual(pushCalls[1], [undefined, undefined]);
 });
 
 test('performLogout clears bounded notification caches', async () => {

@@ -14,8 +14,8 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |            0 |                2 |                   3 |
-| test       |            0 |                6 |                  27 |
+| production |            0 |                1 |                   1 |
+| test       |            0 |                6 |                  25 |
 | tooling    |            2 |                2 |                   5 |
 | **total**  |        **2** |                  |                     |
 
@@ -49,7 +49,7 @@ Expected **220** production and **12** test import files.
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 0. Files with any finding: 2.
+Scope: **production only**. Import files: 0. Files with any finding: 1.
 
 ### Imported modules
 
@@ -69,8 +69,7 @@ _None._
 
 | Category                   | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
 | -------------------------- | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
-| `authenticated_media`      |     1 |                 0 |                   0 |                      0 |          0 |
-| `direct_matrix_networking` |     2 |                 0 |                   0 |                      0 |          3 |
+| `direct_matrix_networking` |     1 |                 0 |                   0 |                      0 |          1 |
 
 ### Top method-name candidates (not type-proven)
 
@@ -78,11 +77,9 @@ _None._
 
 ### Direct Matrix networking findings
 
-| Path                       | Line | Kind                      | Indicator                            |
-| -------------------------- | ---: | ------------------------- | ------------------------------------ |
-| `synara/src/app/cs-api.ts` |  117 | `matrix_cs_path_template` | `/_matrix/client/versions`           |
-| `synara/src/sw.ts`         |  107 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`  |
-| `synara/src/sw.ts`         |  107 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/thumbnail` |
+| Path                       | Line | Kind                      | Indicator                  |
+| -------------------------- | ---: | ------------------------- | -------------------------- |
+| `synara/src/app/cs-api.ts` |  181 | `matrix_cs_path_template` | `/_matrix/client/versions` |
 
 ## Aggregates: test
 
@@ -107,7 +104,7 @@ _None._
 | Category                   | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
 | -------------------------- | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
 | `authenticated_media`      |     1 |                 0 |                   0 |                      0 |          0 |
-| `direct_matrix_networking` |     6 |                 0 |                   0 |                      0 |         27 |
+| `direct_matrix_networking` |     6 |                 0 |                   0 |                      0 |         25 |
 
 ### Top method-name candidates (not type-proven)
 
@@ -137,12 +134,10 @@ _None._
 | `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  298 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
 | `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  324 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
 | `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  324 | `matrix_cs_path_template` | `/_matrix/client/v3/sync`                    |
-| `synara/src/app/matrix/__tests__/media.test.ts`               |   14 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
-| `synara/src/app/matrix/__tests__/media.test.ts`               |   27 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
-| `synara/src/app/matrix/__tests__/media.test.ts`               |   48 | `matrix_cs_path_literal`  | `/_matrix/media/v3/thumbnail/example/avatar` |
-| `synara/src/app/matrix/__tests__/media.test.ts`               |   56 | `matrix_cs_path_literal`  | `/_matrix/media/v3/thumbnail/example/avatar` |
-| `synara/src/app/matrix/__tests__/media.test.ts`               |   71 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
-| `synara/src/app/matrix/__tests__/media.test.ts`               |   84 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
+| `synara/src/app/matrix/__tests__/media.test.ts`               |   30 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
+| `synara/src/app/matrix/__tests__/media.test.ts`               |   43 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
+| `synara/src/app/matrix/__tests__/media.test.ts`               |   64 | `matrix_cs_path_literal`  | `/_matrix/media/v3/thumbnail/example/avatar` |
+| `synara/src/app/matrix/__tests__/media.test.ts`               |   72 | `matrix_cs_path_literal`  | `/_matrix/media/v3/thumbnail/example/avatar` |
 | `synara/src/app/utils/__tests__/remoteContent.test.ts`        |   37 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
 
 ## Aggregates: tooling
@@ -208,7 +203,6 @@ Scope: **tooling only**. Import files: 2. Files with any finding: 4.
 | `synara/src/app/cs-api.ts`                                                                                                    | production | yes     | app-other      | —            | —               |
 | `synara/src/app/matrix/__tests__/media.test.ts`                                                                               | test       | yes     | media-boundary | —            | —               |
 | `synara/src/app/utils/__tests__/remoteContent.test.ts`                                                                        | test       | yes     | utility        | —            | —               |
-| `synara/src/sw.ts`                                                                                                            | production | yes     | service-worker | —            | —               |
 
 ## Scope notes
 

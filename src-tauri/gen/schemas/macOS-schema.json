@@ -1053,6 +1053,12 @@
           "markdownDescription": "Enables the matrix_send_text command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_session_identity command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-session-identity",
+          "markdownDescription": "Enables the matrix_session_identity command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_session_snapshot command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-session-snapshot",
@@ -2035,6 +2041,12 @@
           "type": "string",
           "const": "deny-matrix-send-text",
           "markdownDescription": "Denies the matrix_send_text command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_session_identity command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-session-identity",
+          "markdownDescription": "Denies the matrix_session_identity command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_session_snapshot command without any pre-configured scope.",

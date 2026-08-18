@@ -367,6 +367,7 @@ pub fn run() {
             matrix::auth::product::matrix_register_flows,
             matrix::auth::product::matrix_register_request_email_token,
             matrix::auth::product::matrix_register,
+            matrix::auth::product::matrix_session_identity,
             matrix::auth::product::matrix_session_snapshot,
             matrix::auth::product::matrix_sync_status,
             matrix::auth::product::matrix_crypto_status,

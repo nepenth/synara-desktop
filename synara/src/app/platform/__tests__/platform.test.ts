@@ -417,75 +417,11 @@ test('platform session store restores only identity metadata from native', async
       baseUrl: 'https://matrix.example.org',
       userId: '@alice:example.org',
       deviceId: 'DEVICEID',
-      accessToken: '',
     });
     assert.deepEqual(
       calls.map((call) => call.command),
-      ['desktop_secret_store_status', 'matrix_restore_session']
+      ['desktop_secret_store_status', 'matrix_session_identity']
     );
-  } finally {
-    (globalThis as any).window = originalWindow;
-  }
-});
-
-test('platform session store refuses renderer-to-host credential writes', async () => {
-  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
-  const originalWindow = globalThis.window;
-  (globalThis as any).window = {
-    __SYNARA_DESKTOP__: {
-      platform: 'tauri',
-      supportsSecureSecretStore: true,
-      invoke: async (command: string, args?: Record<string, unknown>) => {
-        calls.push({ command, args });
-        if (command === 'desktop_secret_store_status') {
-          return { available: true, backend: 'macos-keychain', canPersistSession: true };
-        }
-        return true;
-      },
-    },
-  };
-
-  try {
-    assert.equal(
-      await platformSessionStore.setSession({
-        baseUrl: 'https://matrix.example.org',
-        userId: '@alice:example.org',
-        deviceId: 'DEVICEID',
-        accessToken: 'access-token',
-        sessionGeneration: 'generation-1',
-        storedAtMs: 1_700_000_000_000,
-        expiresInMs: 3_600_000,
-        refreshToken: 'refresh-token',
-        fallbackSdkStores: true,
-      }),
-      false
-    );
-    assert.deepEqual(calls, []);
-  } finally {
-    (globalThis as any).window = originalWindow;
-  }
-});
-
-test('platform session removal cannot bypass the native logout owner', async () => {
-  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
-  const originalWindow = globalThis.window;
-  (globalThis as any).window = {
-    __SYNARA_DESKTOP__: {
-      platform: 'tauri',
-      supportsSecureSecretStore: true,
-      invoke: async (command: string, args?: Record<string, unknown>) => {
-        calls.push({ command, args });
-        if (command === 'desktop_secret_store_status') {
-          return { available: true, backend: 'macos-keychain', canPersistSession: true };
-        }
-        return true;
-      },
-    },
-  };
-
-  try {
-    assert.equal(await platformSessionStore.removeSession(), false);
-    assert.deepEqual(calls, []);
   } finally {
     (globalThis as any).window = originalWindow;
   }

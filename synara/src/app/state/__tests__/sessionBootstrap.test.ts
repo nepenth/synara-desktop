@@ -11,123 +11,55 @@ import {
   shouldSurfaceNativeStoreErrorWarning,
   type AsyncSessionStore,
 } from '../sessionBootstrap';
-import { type SessionStore } from '../sessions';
 
 const nativeSession = {
-  accessToken: 'native-token',
   deviceId: 'NATIVE',
   userId: '@native:example.org',
   baseUrl: 'https://native.example.org',
 };
 
-const fallbackSession = {
-  accessToken: 'legacy-token',
-  deviceId: 'LEGACY',
-  userId: '@legacy:example.org',
-  baseUrl: 'https://legacy.example.org',
-  fallbackSdkStores: true,
-};
-
-const createFallbackStore = (
-  session: ReturnType<SessionStore['getFallbackSession']>
-): Pick<SessionStore, 'getFallbackSession'> => ({
-  getFallbackSession: () => session,
+test('session bootstrap accepts identity only from the native owner', async () => {
+  const nativeStore: AsyncSessionStore = { getSession: async () => nativeSession };
+  assert.deepEqual(await resolveSessionBootstrap({ nativeSessionStore: nativeStore }), {
+    session: nativeSession,
+    source: 'native',
+  });
 });
 
-test('session bootstrap prefers native sessions over legacy fallback storage', async () => {
-  const nativeStore: AsyncSessionStore = {
-    getSession: async () => nativeSession,
-  };
-
-  assert.deepEqual(
-    await resolveSessionBootstrap({
-      nativeSessionStore: nativeStore,
-      fallbackStore: createFallbackStore(fallbackSession),
-    }),
-    {
-      session: nativeSession,
-      source: 'native',
-    }
-  );
+test('session bootstrap fails closed when native identity is absent', async () => {
+  const nativeStore: AsyncSessionStore = { getSession: async () => undefined };
+  assert.deepEqual(await resolveSessionBootstrap({ nativeSessionStore: nativeStore }), {
+    source: 'none',
+    nativeStoreError: undefined,
+  });
 });
 
-test('session bootstrap reads legacy fallback when native storage is empty', async () => {
-  const nativeStore: AsyncSessionStore = {
-    getSession: async () => undefined,
-  };
-
-  assert.deepEqual(
-    await resolveSessionBootstrap({
-      nativeSessionStore: nativeStore,
-      fallbackStore: createFallbackStore(fallbackSession),
-    }),
-    {
-      session: fallbackSession,
-      source: 'legacy-fallback',
-      nativeStoreError: undefined,
-    }
-  );
-});
-
-test('session bootstrap keeps legacy fallback when native storage fails', async () => {
+test('session bootstrap fails closed and records native store errors', async () => {
   const nativeStore: AsyncSessionStore = {
     getSession: async () => {
       throw new Error('backend unavailable');
     },
   };
-
-  assert.deepEqual(
-    await resolveSessionBootstrap({
-      nativeSessionStore: nativeStore,
-      fallbackStore: createFallbackStore(fallbackSession),
-    }),
-    {
-      session: fallbackSession,
-      source: 'legacy-fallback',
-      nativeStoreError: 'native-session-store-error',
-    }
-  );
+  assert.deepEqual(await resolveSessionBootstrap({ nativeSessionStore: nativeStore }), {
+    source: 'none',
+    nativeStoreError: NATIVE_SESSION_STORE_ERROR,
+  });
 });
 
-test('session bootstrap returns none when no storage source has a session', async () => {
-  assert.deepEqual(
-    await resolveSessionBootstrap({
-      fallbackStore: createFallbackStore(undefined),
-    }),
-    {
-      source: 'none',
-      nativeStoreError: undefined,
-    }
-  );
-});
-
-test('shouldSurfaceNativeStoreErrorWarning is shown only on desktop when native store fails', () => {
+test('native store warning explains fail-closed behavior without mentioning tokens', () => {
   assert.equal(shouldSurfaceNativeStoreErrorWarning(NATIVE_SESSION_STORE_ERROR, true), true);
   assert.equal(shouldSurfaceNativeStoreErrorWarning(NATIVE_SESSION_STORE_ERROR, false), false);
-  assert.equal(shouldSurfaceNativeStoreErrorWarning(undefined, true), false);
-});
-
-test('getNativeStoreErrorWarningMessage explains legacy fallback without exposing tokens', () => {
   const message = getNativeStoreErrorWarningMessage();
-
-  assert.match(message, /legacy browser storage/i);
+  assert.match(message, /did not restore a session/i);
   assert.doesNotMatch(message, /token/i);
-  assert.doesNotMatch(message, /access/i);
 });
 
-test('initializeSessionBootstrap caches resolved sessions for synchronous consumers', async () => {
+test('initializeSessionBootstrap caches native identity for synchronous consumers', async () => {
   resetSessionBootstrapForTests();
-
-  const nativeStore: AsyncSessionStore = {
-    getSession: async () => nativeSession,
-  };
-
   try {
     await initializeSessionBootstrap({
-      nativeSessionStore: nativeStore,
-      fallbackStore: createFallbackStore(undefined),
+      nativeSessionStore: { getSession: async () => nativeSession },
     });
-
     assert.deepEqual(getActiveSession(), nativeSession);
     assert.deepEqual(getSessionBootstrapResult(), {
       session: nativeSession,

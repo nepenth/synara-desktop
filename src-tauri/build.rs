@@ -38,6 +38,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_register_flows",
     "matrix_register_request_email_token",
     "matrix_register",
+    "matrix_session_identity",
     "matrix_cross_signing_status",
     "matrix_cross_signing_setup",
     "matrix_cross_signing_setup_password",

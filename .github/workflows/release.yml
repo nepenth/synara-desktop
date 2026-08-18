@@ -35,7 +35,8 @@ jobs:
       - name: Require tag to match the shared version
         shell: bash
         run: |
-          expected_tag="v$(node -p "require('./package.json').version")"
+          release_version="$(node -p "require('./package.json').version")"
+          expected_tag="v${release_version}"
           if [[ "$GITHUB_REF_NAME" != "$expected_tag" ]]; then
             echo "Release tag $GITHUB_REF_NAME does not match shared version $expected_tag." >&2
             exit 1
@@ -865,6 +866,8 @@ jobs:
           SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS: ${{ vars.SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS }}
           SYNARA_TESTFLIGHT_PROCESSING_TIMEOUT_SECONDS: "2400"
           SYNARA_TESTFLIGHT_POLL_INTERVAL_SECONDS: "15"
+          SYNARA_TESTFLIGHT_WHATS_NEW_PATH: synara-ios/release-notes/${{ github.ref_name }}-en-US.txt
+          SYNARA_TESTFLIGHT_WHATS_NEW_LOCALE: en-US
           SYNARA_IOS_DIAGNOSTICS_DIR: ${{ runner.temp }}/synara-ios-testflight-diagnostics
         run: node synara-ios/scripts/promote-testflight-internal.mjs
 
@@ -942,6 +945,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Synara ${{ github.ref_name }}
           generate_release_notes: true
+          body_path: docs/releases/${{ github.ref_name }}.md
           make_latest: true
           draft: false
           prerelease: false

@@ -1,0 +1,12 @@
+Synara 2.1.0 focuses on security, reliability, and cross-client parity.
+
+What to test:
+- Upgrade from the previous build and confirm your session restores without another login.
+- Open encrypted and unencrypted rooms, send formatted messages, react, reply, and use threads.
+- Send and open image or file attachments, including encrypted media.
+- Exercise room read/unread actions, pagination, and jump-to-latest behavior.
+- Review agent activity and approval cards.
+- Confirm notifications remain generic by default, then opt into message previews in Settings and test again.
+- Sign out, relaunch, and sign in again; no stale session or startup retry loop should remain.
+
+Please report the room type, action, and approximate time for any sync, rendering, notification, or session-restoration issue. Do not include access tokens or recovery keys.

@@ -49,6 +49,10 @@ pub(crate) const DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_UNAVAILABLE: &str =
     "macos-keychain-unavailable";
 
 pub(crate) const DESKTOP_SESSION_CREDENTIAL_SERVICE: &str = "com.whylandcreative.synara.desktop";
+const LEGACY_RENDERER_SESSION_CREDENTIALS: [(&str, &str); 2] = [
+    (DESKTOP_SESSION_CREDENTIAL_SERVICE, "matrix-session"),
+    ("app.synara.desktop", "matrix-session"),
+];
 #[cfg(target_os = "macos")]
 const DESKTOP_SESSION_KEYCHAIN_PROBE_ACCOUNT: &str = "matrix-session-probe";
 #[cfg(target_os = "linux")]
@@ -259,6 +263,28 @@ fn macos_keychain_probe() -> Result<(), KeyringError> {
         Err(error) => Err(error),
     }
 }
+
+/// Delete credential envelopes used by the retired renderer session API.
+/// The native per-account vault uses a distinct service and remains the only
+/// credential owner. Cleanup is retried after each proven login or restore.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub(crate) fn clear_legacy_renderer_session_credentials() {
+    for (service, account) in LEGACY_RENDERER_SESSION_CREDENTIALS {
+        let Ok(entry) = Entry::new(service, account) else {
+            continue;
+        };
+        match entry.delete_credential() {
+            Ok(()) | Err(KeyringError::NoEntry) => {}
+            Err(_) => {
+                // Never expose platform errors or invalidate a native session
+                // that has already been persisted successfully.
+            }
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+pub(crate) fn clear_legacy_renderer_session_credentials() {}
 
 pub(crate) fn platform_secret_store_status() -> DesktopSecretStoreStatus {
     #[cfg(target_os = "macos")]

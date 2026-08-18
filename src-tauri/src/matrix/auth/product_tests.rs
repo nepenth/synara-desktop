@@ -2373,6 +2373,48 @@ fn v_auth_native_session_credentials_never_cross_renderer_ipc() {
 }
 
 #[test]
+fn v_auth_bootstrap_identity_is_token_free_and_does_not_start_sdk_restore() {
+    let identity = AUTH_PRODUCT_COMMANDS_SOURCE
+        .split("pub async fn matrix_session_identity")
+        .nth(1)
+        .and_then(|source| source.split("pub async fn matrix_sync_status").next())
+        .expect("matrix_session_identity body");
+
+    assert!(identity.contains("active.identity.clone()"));
+    assert!(identity.contains("read_active_identity(&root).map(Some)"));
+    for forbidden in [
+        "access_token",
+        "refresh_token",
+        "build_client(",
+        "restore_session_from_vault",
+        "start_sync_owner",
+    ] {
+        assert!(
+            !identity.contains(forbidden),
+            "identity bootstrap must not contain {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn v_auth_logout_clears_orphaned_native_identity_when_restore_never_installed_a_client() {
+    let logout = AUTH_PRODUCT_COMMANDS_SOURCE
+        .split("pub async fn matrix_logout")
+        .nth(1)
+        .and_then(|source| source.split("pub async fn matrix_restore_session").next())
+        .expect("matrix_logout body");
+
+    let no_active_session = logout
+        .split("let Some(active) = session.as_ref() else {")
+        .nth(1)
+        .and_then(|source| source.split("// Remote logout is best-effort").next())
+        .expect("matrix_logout missing-session branch");
+    assert!(no_active_session.contains("read_active_identity"));
+    assert!(no_active_session.contains("clear_session_material"));
+    assert!(no_active_session.contains("remove_active_identity"));
+}
+
+#[test]
 fn product_client_persists_rotated_sdk_tokens_in_native_vault_and_logout_is_local_first() {
     let build_client = AUTH_PRODUCT_COMMANDS_SOURCE
         .split("pub(super) async fn build_client")

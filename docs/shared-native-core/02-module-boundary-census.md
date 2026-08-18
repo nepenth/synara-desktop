@@ -80,8 +80,7 @@ nonclaim record.
 Sibling desktop modules outside `matrix/` (platform/OS layer, KEEP in src-tauri):
 `desktop.rs`, `desktop_agent_actions.rs`, `desktop_file_transfer.rs`,
 `desktop_integration.rs`, `desktop_logging.rs`, `desktop_notifications.rs`,
-`desktop_sanitize.rs`, `desktop_secret_store.rs`, `desktop_session.rs`,
-`desktop_session_store.rs`, `desktop_shortcuts.rs`, `desktop_spellcheck.rs`,
+`desktop_sanitize.rs`, `desktop_secret_store.rs`, `desktop_shortcuts.rs`, `desktop_spellcheck.rs`,
 `desktop_tray.rs`, `desktop_url.rs`, `build_info.rs`, `main.rs`, `lib.rs`,
 `menu.rs`, `matrix_sdk_link_smoke.rs`.
 

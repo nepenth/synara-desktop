@@ -15,9 +15,8 @@ import App from './app/pages/App';
 
 // import i18n (needs to be bundled ;))
 import './app/i18n';
-import { pushActiveSessionToSW } from './sw-session';
 import { platformSessionStore } from './app/platform';
-import { getActiveSession, initializeSessionBootstrap } from './app/state/sessionBootstrap';
+import { initializeSessionBootstrap } from './app/state/sessionBootstrap';
 
 document.body.classList.add(configClass, varsClass);
 
@@ -29,18 +28,7 @@ const registerServiceWorker = () => {
       ? `${trimTrailingSlash(import.meta.env.BASE_URL)}/sw.js`
       : `/dev-sw.js?dev-sw`;
 
-  const sendSessionToSW = () => pushActiveSessionToSW(getActiveSession);
-
-  navigator.serviceWorker.register(swUrl).then(sendSessionToSW);
-  navigator.serviceWorker.ready.then(sendSessionToSW);
-
-  navigator.serviceWorker.addEventListener('message', (ev) => {
-    const { type } = ev.data ?? {};
-
-    if (type === 'requestSession') {
-      sendSessionToSW();
-    }
-  });
+  void navigator.serviceWorker.register(swUrl);
 };
 
 const mountApp = () => {

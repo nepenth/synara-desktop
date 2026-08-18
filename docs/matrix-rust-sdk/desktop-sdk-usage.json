@@ -11,7 +11,7 @@
         },
         "authenticated_media": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 1,
+          "fileCount": 0,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -46,10 +46,10 @@
         },
         "direct_matrix_networking": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 2,
+          "fileCount": 1,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
-          "networkingOccurrences": 3
+          "networkingOccurrences": 1
         },
         "event_emitters_listeners": {
           "constructorCandidateOccurrences": 0,
@@ -150,7 +150,7 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 2,
+      "fileCount": 1,
       "importFileCount": 0,
       "methodCandidateFrequencies": [],
       "modelCoupling": {
@@ -216,24 +216,12 @@
         {
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_template",
-          "line": 117,
+          "line": 181,
           "path": "synara/src/app/cs-api.ts"
-        },
-        {
-          "indicator": "/_matrix/client/v1/media/download",
-          "kind": "matrix_cs_path_literal",
-          "line": 107,
-          "path": "synara/src/sw.ts"
-        },
-        {
-          "indicator": "/_matrix/client/v1/media/thumbnail",
-          "kind": "matrix_cs_path_literal",
-          "line": 107,
-          "path": "synara/src/sw.ts"
         }
       ],
-      "networkingFileCount": 2,
-      "networkingFindingCount": 3,
+      "networkingFileCount": 1,
+      "networkingFindingCount": 1,
       "role": "production",
       "scope": "role",
       "symbols": []
@@ -287,7 +275,7 @@
           "fileCount": 6,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
-          "networkingOccurrences": 27
+          "networkingOccurrences": 25
         },
         "event_emitters_listeners": {
           "constructorCandidateOccurrences": 0,
@@ -574,37 +562,25 @@
         {
           "indicator": "/_matrix/media/v3/download/example/media",
           "kind": "matrix_cs_path_literal",
-          "line": 14,
+          "line": 30,
           "path": "synara/src/app/matrix/__tests__/media.test.ts"
         },
         {
           "indicator": "/_matrix/media/v3/download/example/media",
           "kind": "matrix_cs_path_literal",
-          "line": 27,
+          "line": 43,
           "path": "synara/src/app/matrix/__tests__/media.test.ts"
         },
         {
           "indicator": "/_matrix/media/v3/thumbnail/example/avatar",
           "kind": "matrix_cs_path_literal",
-          "line": 48,
+          "line": 64,
           "path": "synara/src/app/matrix/__tests__/media.test.ts"
         },
         {
           "indicator": "/_matrix/media/v3/thumbnail/example/avatar",
           "kind": "matrix_cs_path_literal",
-          "line": 56,
-          "path": "synara/src/app/matrix/__tests__/media.test.ts"
-        },
-        {
-          "indicator": "/_matrix/media/v3/download/example/media",
-          "kind": "matrix_cs_path_literal",
-          "line": 71,
-          "path": "synara/src/app/matrix/__tests__/media.test.ts"
-        },
-        {
-          "indicator": "/_matrix/media/v3/download/example/media",
-          "kind": "matrix_cs_path_literal",
-          "line": 84,
+          "line": 72,
           "path": "synara/src/app/matrix/__tests__/media.test.ts"
         },
         {
@@ -615,7 +591,7 @@
         }
       ],
       "networkingFileCount": 6,
-      "networkingFindingCount": 27,
+      "networkingFindingCount": 25,
       "role": "test",
       "scope": "role",
       "symbols": []
@@ -1212,7 +1188,7 @@
           "description": "Template literal containing a /_matrix/ client-server or media path",
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_template",
-          "line": 117
+          "line": 181
         }
       ],
       "path": "synara/src/app/cs-api.ts",
@@ -1232,37 +1208,25 @@
           "description": "String literal containing a /_matrix/ client-server or media path",
           "indicator": "/_matrix/media/v3/download/example/media",
           "kind": "matrix_cs_path_literal",
-          "line": 14
+          "line": 30
         },
         {
           "description": "String literal containing a /_matrix/ client-server or media path",
           "indicator": "/_matrix/media/v3/download/example/media",
           "kind": "matrix_cs_path_literal",
-          "line": 27
+          "line": 43
         },
         {
           "description": "String literal containing a /_matrix/ client-server or media path",
           "indicator": "/_matrix/media/v3/thumbnail/example/avatar",
           "kind": "matrix_cs_path_literal",
-          "line": 48
+          "line": 64
         },
         {
           "description": "String literal containing a /_matrix/ client-server or media path",
           "indicator": "/_matrix/media/v3/thumbnail/example/avatar",
           "kind": "matrix_cs_path_literal",
-          "line": 56
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/media/v3/download/example/media",
-          "kind": "matrix_cs_path_literal",
-          "line": 71
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/media/v3/download/example/media",
-          "kind": "matrix_cs_path_literal",
-          "line": 84
+          "line": 72
         }
       ],
       "path": "synara/src/app/matrix/__tests__/media.test.ts",
@@ -1287,32 +1251,6 @@
       ],
       "path": "synara/src/app/utils/__tests__/remoteContent.test.ts",
       "role": "test"
-    },
-    {
-      "bucket": "service-worker",
-      "categories": ["authenticated_media", "direct_matrix_networking"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v1/media/download",
-          "kind": "matrix_cs_path_literal",
-          "line": 107
-        },
-        {
-          "description": "String literal containing a /_matrix/ client-server or media path",
-          "indicator": "/_matrix/client/v1/media/thumbnail",
-          "kind": "matrix_cs_path_literal",
-          "line": 107
-        }
-      ],
-      "path": "synara/src/sw.ts",
-      "role": "production"
     }
   ],
   "schemaVersion": 2,
@@ -1351,11 +1289,11 @@
     },
     "repositoryWide": {
       "productionImportFiles": 0,
-      "productionNetworkingFiles": 2,
-      "productionNetworkingFindings": 3,
+      "productionNetworkingFiles": 1,
+      "productionNetworkingFindings": 1,
       "testImportFiles": 0,
       "testNetworkingFiles": 6,
-      "testNetworkingFindings": 27,
+      "testNetworkingFindings": 25,
       "toolingImportFiles": 2,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,

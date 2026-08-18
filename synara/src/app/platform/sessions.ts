@@ -11,8 +11,6 @@ import { recordClientDiagnostic } from '../utils/clientDiagnostics';
 export type PlatformSessionStore = {
   getStatus: () => Promise<PlatformSecretStoreStatus>;
   getSession: () => Promise<Session | undefined>;
-  setSession: (session: Session) => Promise<boolean>;
-  removeSession: () => Promise<boolean>;
 };
 
 const readString = (record: Record<string, unknown>, key: string): string | undefined => {
@@ -34,9 +32,6 @@ export const normalizePlatformSession = (value: unknown): Session | undefined =>
     baseUrl,
     userId,
     deviceId,
-    // Native Matrix credentials never cross IPC. This identity-only marker
-    // preserves the legacy Session shape while the facade owns every request.
-    accessToken: '',
   };
 };
 
@@ -116,7 +111,7 @@ export const platformSessionStore: PlatformSessionStore = {
       return undefined;
     }
     try {
-      const invokeResult = await invokeDesktopWithAvailability<unknown>('matrix_restore_session');
+      const invokeResult = await invokeDesktopWithAvailability<unknown>('matrix_session_identity');
       if (!invokeResult.available) {
         recordClientDiagnostic('session', 'platform-store.read-completed', {
           outcome: 'bridge-unavailable',
@@ -142,24 +137,5 @@ export const platformSessionStore: PlatformSessionStore = {
       });
       throw error;
     }
-  },
-
-  setSession: async () => {
-    const startedAtMs = performance.now();
-    recordClientDiagnostic('session', 'platform-store.write-completed', {
-      outcome: 'host-owned',
-      durationMs: performance.now() - startedAtMs,
-      persistence: 'disabled',
-    });
-    return false;
-  },
-
-  removeSession: async () => {
-    const startedAtMs = performance.now();
-    recordClientDiagnostic('session', 'platform-store.remove-completed', {
-      outcome: 'host-owned',
-      durationMs: performance.now() - startedAtMs,
-    });
-    return false;
   },
 };

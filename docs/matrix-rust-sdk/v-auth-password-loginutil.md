@@ -48,18 +48,18 @@ cannot remain a live fallback on desktop.
 - Native command unavailable → `PasswordLoginError`
 - **No** dual_backend / createClient fallback on desktop
 
-## Native desktop-session bootstrap (envelope dual-write) — DONE
+## Native desktop-session bootstrap (identity-only IPC) — DONE
 
-The native password-login / register session now rehydrates the frontend
-bootstrap from the host-side desktop session envelope, so route guards and
-ClientRoot see an active **native** session after login/register without any
-token appearing on the login/register IPC return path.
+Native password login and registration persist credentials only in the
+per-account host vault. The renderer rehydrates route state through an
+identity-only command; SDK restore and sync start after the client loading UI
+mounts. Retired renderer envelopes and localStorage credentials are purged.
 
 | Layer          | Change                                                                                                                                                                                                                                                                                                                                                          |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Rust host      | `matrix_login_password` + register session install dual-write the hybrid `DesktopSessionEnvelope` (access/refresh tokens) into the OS credential store via `desktop_set_session_in_store`; `matrix_logout` clears it. `MatrixLoginIdentity` stays token-free. Fail-closed: an unusable store rolls the login back.                                              |
-| TS             | `completeNativeLoginBootstrap` re-reads `desktop_get_session` and sets `sessionBootstrap` (`source: 'native'`) after native login (`useLoginComplete`) and register (`PasswordRegisterForm` complete branch). Missing envelope → fail-closed (no navigation, no JS fallback). `desktop.ts` gained `formatDesktopInvokeError` for structured invoke diagnostics. |
-| Tests          | Rust: `envelope_from_auth_session_*` + `v_auth_native_session_envelope_host_dual_write_is_wired`; TS: `nativeLoginBootstrap.test.ts` + `nativeRegister.test.ts` source guard                                                                                                                                                                                    |
-| Gates          | `cargo test --lib` **835** green; `npm run test:modernization` **695** green; typecheck + eslint + prettier + clippy `-D warnings` green; p1.6 allowlist **114** unchanged (no importer delta)                                                                                                                                                                  |
+| Rust host      | `matrix_login_password`, registration, refresh rotation, restore, and logout own all credentials through the native per-account vault. `matrix_session_identity` returns only user, device, and homeserver identity and does not build or restore an SDK client. |
+| TS             | `completeNativeLoginBootstrap` reads `matrix_session_identity`; missing identity fails closed. No renderer credential write, localStorage fallback, service-worker token channel, or JS login fallback remains. |
+| Tests          | Rust source guards prove identity bootstrap cannot restore SDK state or contain tokens; TS bootstrap and storage tests prove native-only identity and one-way legacy credential cleanup. |
+| Gates          | Covered by the repository Rust, renderer modernization, boundary, and release validation suites. |
 | UX/UI          | **No visual change** — bootstrap/route-gate only; rendering, layout, copy untouched                                                                                                                                                                                                                                                                             |
 | Public hygiene | No real secrets in fixtures/tests; token values are placeholders                                                                                                                                                                                                                                                                                                |
