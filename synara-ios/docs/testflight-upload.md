@@ -30,8 +30,14 @@ Optional environment variables:
 
 ```sh
 SYNARA_IOS_ARCHIVE_ROOT=/tmp \
+SYNARA_IOS_PACKAGE_CACHE_PATH=/path/to/swift-package-cache \
 synara-ios/scripts/upload-testflight-internal.sh
 ```
+
+Project build operations always honor the committed `Package.resolved` and
+skip dependency updates. `SYNARA_IOS_PACKAGE_CACHE_PATH` can point Xcode at an
+existing package cache for deterministic local releases without a redundant
+network refresh. Archive export does not receive project-only package flags.
 
 For unattended App Store Connect authentication, create an API key in App Store
 Connect and store the `.p8` outside this repository, for example:
