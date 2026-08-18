@@ -6,6 +6,7 @@ import {
   listen,
   type DesktopUnlisten,
 } from '../../utils/desktop';
+import { parseHermesAgentPayload, type HermesAgentPayload } from '../../utils/hermes';
 
 const NATIVE_TIMELINE_VIEW_UPDATED_EVENT = 'matrix-timeline-view-updated';
 const TIMELINE_VIEW_SCHEMA_VERSION = 1;
@@ -55,6 +56,7 @@ type NativeTimelineMessageRow = NativeTimelineEventRowBase & {
   kind: 'message';
   body: string;
   formattedBody?: string;
+  agentCardJson?: string;
   messageType?: string;
   edited: boolean;
   /** Parent preview when this row is an in-reply message. */
@@ -63,6 +65,17 @@ type NativeTimelineMessageRow = NativeTimelineEventRowBase & {
   thread?: NativeTimelineThreadSummary;
   reactions?: Array<{ key: string; count: number; own?: boolean }>;
   media?: NativeTimelineMediaHandle;
+};
+
+export const parseNativeTimelineAgentCard = (
+  agentCardJson: string | undefined
+): HermesAgentPayload | undefined => {
+  if (!agentCardJson) return undefined;
+  try {
+    return parseHermesAgentPayload({ 'in.synara.agent': JSON.parse(agentCardJson) });
+  } catch {
+    return undefined;
+  }
 };
 
 export type NativeTimelineMediaHandle = {

@@ -24,6 +24,9 @@ test('native room-member hook branch is fail-closed before the JS room read', ()
 
   assert.ok(nativeBranch, 'expected a separate nativeSession hook branch');
   assert.match(nativeBranch[1], /readRoomMembersWithNativeOwner\(roomId, true\)/);
+  assert.match(nativeBranch[1], /setNativeMembers\(null\)/);
+  assert.match(nativeBranch[1], /setNativeMembers\(undefined\)/);
+  assert.doesNotMatch(nativeBranch[1], /setNativeMembers\(\[\]\)/);
   assert.doesNotMatch(nativeBranch[1], /mx\.getRoom\(roomId\)/);
 });
 

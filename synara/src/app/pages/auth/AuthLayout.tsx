@@ -30,6 +30,7 @@ import { AuthFlowsLoader } from '../../components/AuthFlowsLoader';
 import { AuthFlowsProvider } from '../../hooks/useAuthFlows';
 import { AuthServerProvider } from '../../hooks/useAuthServer';
 import { tryDecodeURIComponent } from '../../utils/dom';
+import { normalizeAuthServerInput } from './authServerInput';
 
 const currentAuthPath = (pathname: string): string => {
   if (matchPath(LOGIN_PATH, pathname)) {
@@ -73,7 +74,9 @@ export function AuthLayout() {
   const clientConfig = useClientConfig();
 
   const defaultServer = clientDefaultServer(clientConfig);
-  let server: string = urlEncodedServer ? tryDecodeURIComponent(urlEncodedServer) : defaultServer;
+  let server = normalizeAuthServerInput(
+    urlEncodedServer ? tryDecodeURIComponent(urlEncodedServer) : defaultServer
+  );
 
   if (!clientAllowedServer(clientConfig, server)) {
     server = defaultServer;
@@ -107,13 +110,17 @@ export function AuthLayout() {
 
   const selectServer = useCallback(
     (newServer: string) => {
-      if (newServer === server) {
+      const normalizedServer = normalizeAuthServerInput(newServer);
+      if (!normalizedServer) return;
+      if (normalizedServer === server) {
         if (discoveryState.status === AsyncStatus.Loading) return;
         discoverServer(server);
         return;
       }
       navigate(
-        generatePath(currentAuthPath(location.pathname), { server: encodeURIComponent(newServer) })
+        generatePath(currentAuthPath(location.pathname), {
+          server: encodeURIComponent(normalizedServer),
+        })
       );
     },
     [navigate, location, discoveryState, server, discoverServer]

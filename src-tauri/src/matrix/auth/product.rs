@@ -76,8 +76,9 @@ use crate::matrix::client_builder::{
 use crate::matrix::cross_signing::live::{NativeCrossSigningSetupResult, NativeCrossSigningStatus};
 use crate::matrix::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot};
 use crate::matrix::lifecycle::{
-    clear_session_material, persist_session_after_login, restore_session_from_vault,
-    restore_session_onto_client, KeyringSessionMaterialVault, SessionMaterial,
+    clear_session_material, load_session_material, matrix_session_from_host_secrets,
+    persist_session_after_login, restore_session_from_vault, restore_session_onto_client,
+    KeyringSessionMaterialVault, SessionMaterial,
 };
 use crate::matrix::presence::NativePresenceOwner;
 use crate::matrix::room_keys::{

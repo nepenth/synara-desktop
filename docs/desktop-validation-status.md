@@ -4,6 +4,48 @@
 > `docs/production-smoke-checklist.md`. This file preserves the older MIP1
 > desktop validation snapshot and platform notes.
 
+## 2026-08-18 Interactive macOS Matrix Smoke
+
+Validation candidate: local release application based on `origin/main` at
+`b1bbf89780c4e8831f0122f32bb006f543d981f8`, with the fixes described below.
+Host: Apple silicon, macOS 26.5.2. Account class: disposable Matrix test
+account in an encrypted test room. The smoke build used an isolated bundle
+identity and isolated Keychain service so it could not read or modify the
+installed app's session.
+
+- An Xcode-driven UI test launched the release application, completed a fresh
+  password login, loaded the joined-room list, opened an encrypted room, and
+  displayed its decrypted timeline.
+- The room header exposed member and overflow icon controls. The room read
+  action appeared once in the overflow menu; persistent `Mark read`,
+  `Mark unread`, `Load older messages`, and `Load newer messages` buttons were
+  absent. Edge pagination used progress indicators, and jump-to-latest used a
+  compact down-arrow control.
+- The room member drawer showed the two joined members. Timeline dates no
+  longer fell back to 1969, generic SDK timeline entries did not surface as
+  unsupported-event noise, and agent payloads rendered as structured cards.
+- The test entered formatted text through the real composer and sent it to the
+  encrypted room. After terminating and relaunching the application, Keychain
+  session restore succeeded and the exact sent marker reappeared in decrypted
+  room state.
+- Xcode reported one UI test executed with zero failures. Frontend typecheck,
+  all 758 modernization/contract tests, runtime-asset consistency, Rust
+  formatting, and `cargo check -p synara-core` also passed on the candidate.
+  The release-profile shared-core matrix passed 704 library tests with one
+  intentionally gated live test ignored, followed by every integration-test
+  binary. The focused desktop session-rotation/logout test also passed.
+
+This pass found and fixed missing Matrix SDK session-rotation callbacks. The
+SDK can rotate access/refresh tokens; the desktop client now persists each
+rotation to the account-scoped Matrix vault and desktop session envelope.
+Remote logout is best-effort so an expired server token cannot prevent local
+Keychain and in-memory cleanup.
+
+Not covered by this UI run: OS notification delivery/click routing, tray and
+global-shortcut interaction, clipboard/drop attachments, system-browser link
+surfaces, signed installer/notarization, updater installation, or Linux
+desktop integration. Those remain explicit release-candidate checks.
+
 ## 2026-08-17 Main Hardening Proof
 
 Validation candidate: `release/runtime-assets-2.0.7`, based on
@@ -26,12 +68,9 @@ Validation candidate: `release/runtime-assets-2.0.7`, based on
   foreground process, served its internal runtime over loopback, returned HTTP
   200 for the generated JavaScript, stylesheet, and icon, and emitted no macOS
   error/fault log entries during the launch window.
-- Interactive macOS clicks could not be automated because this Codex process
-  still lacks Accessibility and Screen Recording permission after a fresh
-  isolated-bundle retry. Login/send/formatting behavior was instead covered
-  through shared Rust tests, deterministic desktop frontend tests, and the
-  signed iOS live Matrix suite using the same SharedCore and disposable Matrix
-  account. A human macOS GUI smoke remains required for visual acceptance.
+- Interactive macOS clicks were unavailable during this dated pass. A later
+  Xcode-driven application smoke is recorded above and supersedes that tooling
+  limitation for the core login/room/timeline/composer/session path.
 
 Linux package and interactive desktop validation were not rerun on this macOS
 host. Cross-platform Rust/frontend gates passed, but Linux packaging and desktop
@@ -93,19 +132,22 @@ Status: complete on `main` (merged `feature/ios-ux-maturity`).
 
 ## macOS
 
-Status: **CI package-validated; interactive smoke pending (merge gate).**
+Status: **core interactive Matrix smoke passed; platform-integration smoke is
+partial.**
 
 Validated:
 
 - `cargo check` / `cargo test --lib` passing on branch tip.
 - Release hardening: DevTools denied in release builds (`build.rs` + `release-hardening` capability).
 - GitHub `Desktop Package Smoke` expected to pass after Tauri alignment.
+- Fresh login, encrypted-room load, formatted send, relaunch restore, and
+  decrypted message readback passed in the isolated 2026-08-18 Xcode smoke.
 
-### macOS interactive smoke checklist (required before merge)
+### Remaining macOS interactive release checklist
 
 Execute on a logged-in macOS session with the branch tip build:
 
-- [ ] Launch app, login, confirm session persists across restart (Keychain).
+- [x] Launch app, login, confirm session persists across restart (Keychain).
 - [ ] Logout clears session; re-login succeeds without crypto store mismatch.
 - [ ] Global shortcuts: register, trigger navigation, permission-denied messaging.
 - [ ] Notification: show + click navigates to sanitized internal route.
@@ -145,4 +187,6 @@ Record pass/fail and build revision in this file when complete.
 
 ## Merge readiness
 
-Automated gates must be green on CI before merge. Interactive macOS/Linux smoke and user review remain required merge gates per MIP1 Phase 4.
+Automated gates must be green before merge. The core interactive macOS Matrix
+path is now proven; the untested macOS platform-integration cases above and the
+Linux interactive checklist remain release-candidate gates.

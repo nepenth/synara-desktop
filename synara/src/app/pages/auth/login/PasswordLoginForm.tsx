@@ -324,7 +324,7 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
           )}
           <Box grow="Yes" shrink="No" justifyContent="End">
             <Text as="span" size="T200" priority="400" align="Right">
-              <Link to={getResetPasswordPath(server)}>Automationt Password?</Link>
+              <Link to={getResetPasswordPath(server)}>Forgot Password?</Link>
             </Text>
           </Box>
         </Box>

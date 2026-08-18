@@ -483,13 +483,41 @@ export type DesktopInvokeOptions = {
   suppressErrorDiagnostic?: boolean;
 };
 
+const SAFE_NATIVE_DIAGNOSTIC_IDS = new Set([
+  'd0.4-send-sdk-http-failed',
+  'd0.4-send-sdk-http-network-failed',
+  'd0.4-send-sdk-http-request-failed',
+  'd0.4-send-sdk-http-refresh-failed',
+  'd0.4-send-sdk-http-forbidden',
+  'd0.4-send-sdk-http-auth-failed',
+  'd0.4-send-sdk-http-rate-limited',
+  'd0.4-send-sdk-http-invalid-request',
+  'd0.4-send-sdk-http-not-found',
+  'd0.4-send-sdk-http-api-failed',
+  'd0.4-send-sdk-auth-required',
+  'd0.4-send-sdk-insufficient-data',
+  'd0.4-send-sdk-crypto-store-state',
+  'd0.4-send-sdk-no-olm-machine',
+  'd0.4-send-sdk-crypto-store-failed',
+  'd0.4-send-sdk-olm-failed',
+  'd0.4-send-sdk-megolm-failed',
+  'd0.4-send-sdk-state-store-failed',
+  'd0.4-send-sdk-wrong-room-state',
+  'd0.4-send-sdk-concurrent-request-failed',
+  'd0.4-send-sdk-failed',
+]);
+
 /**
  * Tauri/native rejection values are untrusted: a server body, URL, credential,
  * or token can be embedded in any of their fields. Never log their contents.
  */
 export const formatDesktopInvokeError = (error: unknown): string => {
-  // Explicitly consume the value without inspecting it: any field may be secret.
-  void error;
+  if (error && typeof error === 'object' && !Array.isArray(error)) {
+    const diagnosticId = (error as Record<string, unknown>).diagnosticId;
+    if (typeof diagnosticId === 'string' && SAFE_NATIVE_DIAGNOSTIC_IDS.has(diagnosticId)) {
+      return `native command rejected (${diagnosticId})`;
+    }
+  }
   return 'native command rejected';
 };
 

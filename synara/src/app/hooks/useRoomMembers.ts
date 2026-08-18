@@ -19,15 +19,15 @@ export function useRoomMembers(
   mx: MatrixClientReading,
   roomId: string,
   nativeSession: boolean
-): RoomMemberListItem[] | null;
+): RoomMemberListItem[] | null | undefined;
 
 export function useRoomMembers(
   mx: MatrixClientReading,
   roomId: string,
   nativeSession = false
-): RoomMemberListItem[] | null {
+): RoomMemberListItem[] | null | undefined {
   const [members, setMembers] = useState<JsRoomMemberReading[]>([]);
-  const [nativeMembers, setNativeMembers] = useState<NativeRoomMember[] | null>(null);
+  const [nativeMembers, setNativeMembers] = useState<NativeRoomMember[] | null | undefined>(null);
   const eventedClient = mx as unknown as {
     on(event: string, listener: (...args: any[]) => void): void;
     removeListener(event: string, listener: (...args: any[]) => void): void;
@@ -36,15 +36,15 @@ export function useRoomMembers(
   useEffect(() => {
     if (nativeSession) {
       let disposed = false;
-      setNativeMembers([]);
+      setNativeMembers(null);
       void readRoomMembersWithNativeOwner(roomId, true)
         .then((nextMembers) => {
-          if (!disposed && nextMembers) setNativeMembers(nextMembers);
+          if (!disposed) setNativeMembers(nextMembers ?? undefined);
         })
         .catch(() => {
-          // Native ownership is fail-closed. Keep the list empty instead of
-          // falling through to mx.getRoom().getMembers().
-          if (!disposed) setNativeMembers([]);
+          // Native ownership is fail-closed. Expose an unavailable state instead
+          // of presenting a failed request as an authoritative empty room.
+          if (!disposed) setNativeMembers(undefined);
         });
 
       return () => {
