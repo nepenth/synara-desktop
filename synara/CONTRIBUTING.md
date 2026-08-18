@@ -1,45 +1,53 @@
-# Contributing to Synara
+# Contributing To Synara
 
-First off, thanks for taking the time to contribute!
+Use descriptive issue and pull-request titles, search for existing reports,
+and keep each change focused enough to review and validate. Discuss substantial
+new product scope with the maintainers before implementation.
 
-All types of contributions are encouraged and valued. Please make sure to read the relevant section before making your contribution.
+## Legal
 
-> And if you like the project, but just don't have time to contribute, that's fine. There are other easy ways to support the project and show your appreciation, which we would also be very happy about:
->
-> - Star the project
-> - Refer this project in your project's readme
-> - Mention the project at local meetups and tell your friends/colleagues
+By contributing, you confirm that you authored the contribution or have the
+necessary rights to submit it under the repository's AGPL-3.0-only license.
+Preserve required copyright, license, and attribution notices.
 
-## Bug reports
+## Architecture
 
-Bug reports and feature suggestions must use descriptive and concise titles and be submitted to [GitHub Issues](https://github.com/nepenth/synara-desktop/issues). Please use the search function to make sure that you are not submitting duplicates, and that a similar report or request has not already been resolved or rejected.
+Read the [codebase knowledge base](../CODEBASE_KNOWLEDGE_BASE.md) and relevant
+ADRs before changing platform or Matrix boundaries.
 
-## Pull requests
+- Matrix lifecycle and domain behavior belongs in the shared Rust core.
+- React owns desktop presentation and reaches native behavior through the
+  platform and Matrix facades.
+- SwiftUI owns iOS presentation and Apple platform integration.
+- Cross-platform behavior changes require contract and fixture updates.
+- The Vite runtime is not a standalone browser product.
+- Do not add credentials, private infrastructure identifiers, personal paths,
+  or live account data to code, fixtures, documentation, logs, or screenshots.
 
-> ### Legal Notice
->
-> When contributing to this project, you must agree that you have authored 100% of the content, that you have the necessary rights to the content and that the content you contribute may be provided under the project license.
+## Validation
 
-**NOTE: If you want to add new features, please discuss with maintainers before coding or opening a pull request.** This is to ensure that we are on same track and following our roadmap.
+Run the gates appropriate to the changed surface. The baseline is:
 
-**Please use clean, concise titles for your pull requests.** We use commit squashing, so the final commit in the dev branch will carry the title of the pull request. For easier sorting in changelog, start your pull request titles using one of the verbs "Add", "Change", "Remove", or "Fix" (present tense).
+```sh
+cd ..
+npm run check:repo-layout
+npm run check:versions
+npm run check:docs
+npm run check:matrix-boundaries
+npm run check:quality-gates
+npm --prefix synara run typecheck
+npm --prefix synara run test:modernization
+npm --prefix synara run check:eslint
+npm --prefix synara run check:prettier
+cargo test --workspace --locked
+```
 
-Example:
+Follow [the build and release runbook](../docs/build-and-release.md) for package,
+simulator, signing, and release validation.
 
-| Not ideal                           | Better                                        |
-| ----------------------------------- | --------------------------------------------- |
-| Fixed markAllAsRead in RoomTimeline | Fix read marker when paginating room timeline |
+## References
 
-It is not always possible to phrase every change in such a manner, but it is desired.
-
-**The smaller the set of changes in the pull request is, the quicker it can be reviewed and merged.** Splitting tasks into multiple smaller pull requests is often preferable.
-
-Also, we use [ESLint](https://eslint.org/) for clean and stylistically consistent code syntax, so make sure your pull request follow it.
-
-**For any query or design discussion, use this repository's issues or discussions.**
-
-## Helpful links
-
-- [BEM methodology](http://getbem.com/introduction/)
-- [Atomic design](https://bradfrost.com/blog/post/atomic-web-design/)
-- [Matrix JavaScript SDK documentation](https://matrix-org.github.io/matrix-js-sdk/index.html)
+- [Matrix Rust SDK](https://github.com/matrix-org/matrix-rust-sdk)
+- [Tauri documentation](https://v2.tauri.app/)
+- [SwiftUI documentation](https://developer.apple.com/documentation/swiftui)
+- [React documentation](https://react.dev/)

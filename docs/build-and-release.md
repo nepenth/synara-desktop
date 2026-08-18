@@ -1,6 +1,6 @@
 # Build And Release Runbook
 
-Reviewed: 2026-07-19
+Reviewed: 2026-08-18
 
 This is the entry point for agents and maintainers preparing Synara builds or
 releases. Read this before changing packaging, signing, updater, TestFlight, or
@@ -39,6 +39,7 @@ Run these before accepting desktop/runtime changes:
 ```bash
 npm run check:repo-layout
 npm run check:versions
+npm run check:docs
 npm run check:matrix-boundaries
 npm run check:quality-gates
 npm run check:synapse-harness
@@ -160,8 +161,11 @@ release-branch CI strategy lives in [../RELEASE_BRANCH_CI_PLAN.md](../RELEASE_BR
 
 ## Required Release Secrets
 
-macOS releases require Apple Developer ID and notarization secrets documented in
-[../README.md](../README.md).
+macOS releases require Apple Developer ID and notarization secrets consumed by
+the protected release workflow. The expected variable names and validation
+rules are documented in
+[the GitHub release updater plan](../GITHUB_RELEASE_UPDATER_PLAN.md); values
+must remain in GitHub Secrets or permission-restricted local storage.
 
 Updater-enabled releases require:
 
@@ -215,12 +219,13 @@ Release CI must own every production repo mutation:
 Maintainers and agents should not manually run `repo-add` for production
 publication. Manual commands are acceptable only for local smoke packages.
 
-## Current Release Constraints
+## Release Constraints
 
-- Desktop external-link opening is a P0 smoke gate for macOS and Linux.
-- Timeline/session-history uses bounded rendering and single-owner placement but
-  still needs daily-use evidence from `docs/timeline-diagnostics.md` before the
-  release candidate is promoted.
-- GitHub-release updater key material is configured. Production workflow proof
-  now splits by platform: macOS uses Tauri updater metadata, while Linux uses
-  the GitHub Release-backed pacman repo.
+- Human macOS and Linux package-install smoke remains required for each release
+  candidate even when automated build and unit gates pass.
+- Physical-device iOS upgrade, performance, APNs, and archive evidence remains
+  a release-candidate responsibility.
+- macOS uses signed Tauri updater metadata; Linux uses the GitHub
+  Release-backed pacman repository; iOS uses TestFlight or the App Store.
+- Production publication is blocked unless the exact-tag workflow validates all
+  configured clients and protected credentials.

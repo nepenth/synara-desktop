@@ -136,27 +136,13 @@ export function About({ requestClose }: AboutProps) {
                   >
                     <li>
                       <Text size="T300">
-                        This app is a derivative work of{' '}
-                        <a
-                          href="https://github.com/cinnyapp/cinny"
-                          rel="noreferrer noopener"
-                          target="_blank"
-                        >
-                          Cinny
-                        </a>{' '}
-                        (AGPL-3.0), © the original Cinny authors. Substantially rewritten for Synara
-                        Desktop.
-                      </Text>
-                    </li>
-                    <li>
-                      <Text size="T300">
                         The{' '}
                         <a
-                          href="https://github.com/matrix-org/matrix-js-sdk"
+                          href="https://github.com/matrix-org/matrix-rust-sdk"
                           rel="noreferrer noopener"
                           target="_blank"
                         >
-                          matrix-js-sdk
+                          Matrix Rust SDK
                         </a>{' '}
                         is ©{' '}
                         <a
@@ -166,13 +152,21 @@ export function About({ requestClose }: AboutProps) {
                         >
                           The Matrix.org Foundation C.I.C
                         </a>{' '}
-                        used under the terms of{' '}
+                        and contributors, used under the terms of{' '}
                         <a
                           href="http://www.apache.org/licenses/LICENSE-2.0"
                           rel="noreferrer noopener"
                           target="_blank"
                         >
                           Apache 2.0
+                        </a>{' '}
+                        or{' '}
+                        <a
+                          href="https://opensource.org/license/mit"
+                          rel="noreferrer noopener"
+                          target="_blank"
+                        >
+                          MIT
                         </a>
                         .
                       </Text>

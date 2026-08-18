@@ -97,7 +97,8 @@ and fail-closed.** Those 21 are intended shell leftovers (section 6).
 
 The owner surface is `origin/main`. Leftover SNC worktrees on disk are
 historical; do not treat a folder name as the tip. Orchestrator notes:
-`/Users/nepenthe/.grok/snc-orchestrator/STATE.md`.
+Store local orchestration state outside the repository in a
+permission-restricted, ignored workspace.
 
 ---
 

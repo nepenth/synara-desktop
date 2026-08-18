@@ -2,6 +2,13 @@
 
 Date: 2026-07-25
 
+> **Historical migration plan.** The replacement has since landed on `main`.
+> The branch, runtime, queue, and acceptance statements below describe the
+> migration program at its recorded snapshots, not the current product. See
+> [the codebase knowledge base](../CODEBASE_KNOWLEDGE_BASE.md) and
+> [the 2026-08-17 local proof](shared-native-core/15-2026-08-17-local-proof.md)
+> for the current architecture and latest consolidated evidence.
+
 Status: approved direction; current delivery, acceptance, and runtime state are
 recorded only in the canonical status ledger below
 

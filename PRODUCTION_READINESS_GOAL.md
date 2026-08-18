@@ -1,5 +1,11 @@
 # Synara Desktop Production Readiness Goal
 
+> **Superseded readiness loop (2026-06/07).** This document is a frozen record
+> of an earlier desktop hardening program. Its active rules, missing-source
+> notices, version baseline, and pending tasks are not current instructions.
+> Use [the codebase knowledge base](CODEBASE_KNOWLEDGE_BASE.md),
+> [documentation guide](docs/README.md), and current validation-status files.
+
 > Living single source of truth for the Codex-Orchestrator-v2 production-readiness loop.
 > Updated after major decisions, accepted changes, validation runs, and release-state changes.
 

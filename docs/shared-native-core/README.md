@@ -1,5 +1,12 @@
 # Shared Native Core (synara-core) — Program
 
+> **Historical program record.** The shared core is now the production Matrix
+> application engine for desktop and iOS. Commit IDs, phase labels, and
+> incomplete-state claims below are retained as dated migration evidence. See
+> [the codebase knowledge base](../../CODEBASE_KNOWLEDGE_BASE.md) and
+> [the 2026-08-17 local proof](15-2026-08-17-local-proof.md) for current
+> architecture and the latest consolidated validation.
+
 A plan to unify the **desktop** (Tauri, macOS and Linux) and **iOS** (SwiftUI)
 clients onto **one transport-agnostic Rust application-logic core** —
 `crates/synara-core` — consumed by both platforms, so sync, room list,

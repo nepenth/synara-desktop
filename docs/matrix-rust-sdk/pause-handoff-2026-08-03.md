@@ -27,7 +27,7 @@ explicit re-enable.
 | Production import files | **114** / baseline **220** (**106** removed, ~**48.2%**) |
 | Allowlist pathCount | **114** (= `paths[]` length) |
 | Inventory source | `docs/matrix-rust-sdk/desktop-sdk-usage.md` **on tip** (never a stale worktree) |
-| Burn board | https://kb.whyland.com/go/synara-matrix-burn |
+| Burn board | Retired; use the repository-local scoreboard and progress log |
 | Open product PRs (base = full-replacement) | **none** after #546 (stale drafts closed) |
 | Desktop Beta packages | **Built** (Actions artifacts, not GitHub Releases) — https://github.com/nepenth/synara-desktop/actions/runs/30821912637 @ `57ab9e64` |
 
@@ -94,7 +94,7 @@ component ~12, utility ~9, page ~7, plugin ~6, state ~4, client-lifecycle ~2.
 1. Always measure inventory from **`origin/feature/matrix-rust-sdk-full-replacement` tip**.
 2. Ratchet **together**: `desktop-sdk-usage.{md,json}`, allowlist `pathCount` **and** `paths[]`, inventory test floors, p1.6 guardrail floors.
 3. Concurrent PRs claiming the same tip floor are **not additive** — serial land + recompute.
-4. Burn board: https://kb.whyland.com/go/synara-matrix-burn — republish after spawn/merge.
+4. Update the repository-local scoreboard after each merge.
 
 ## Resume checklist
 
@@ -105,7 +105,7 @@ component ~12, utility ~9, page ~7, plugin ~6, state ~4, client-lifecycle ~2.
    git show origin/feature/matrix-rust-sdk-full-replacement:docs/matrix-rust-sdk/desktop-sdk-usage.md | grep 'Production import files'
    ```
 2. Re-enable daytime **only** if operator asks (MODEL_ROUTING / BENCH_FILL / matrix-rust-full-vertical).
-3. DeepSeek `deepseek-v4-flash-0731`: max context **393k**; ≤2 concurrent; host spark-1.
+3. DeepSeek `deepseek-v4-flash-0731`: max context **393k**; no more than two concurrent workers on an approved local runner.
 4. Prefer **one** product residual-empty land at a time; serial inventory.
 5. Publish burn board after first spawn / merge.
 6. Do **not** merge main / #39 without explicit approval.

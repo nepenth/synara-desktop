@@ -1,5 +1,10 @@
 # 10 — Current Handoff Ledger (post-#718)
 
+> **Historical handoff snapshot.** “Current” in this file means current at the
+> recorded evidence tip. It is not the repository's present architecture or
+> release status. See [the codebase knowledge base](../../CODEBASE_KNOWLEDGE_BASE.md)
+> and [the 2026-08-17 local proof](15-2026-08-17-local-proof.md).
+
 > **Purpose and scope.** This is the transfer record for the shared-native-core
 > program. It records source, repository, and gate state; it does not authorize
 > a merge, reconciliation, release, tag, Apple action, or claim that a phase is

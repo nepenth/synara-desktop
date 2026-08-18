@@ -1,5 +1,10 @@
 # Synara iOS App Store Plan
 
+> **Historical planning baseline.** Apple enrollment, signing, and internal
+> TestFlight delivery are now operational. Current release gates live in
+> [`synara-ios/docs/release-checklist.md`](../../synara-ios/docs/release-checklist.md)
+> and [`synara-ios/docs/testflight-readiness.md`](../../synara-ios/docs/testflight-readiness.md).
+
 Reviewed: 2026-05-24
 
 Execution spec: [Synara iOS Project Spec](./synara-ios-project-spec.md)

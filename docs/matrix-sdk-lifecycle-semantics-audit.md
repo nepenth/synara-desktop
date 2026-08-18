@@ -2,6 +2,11 @@
 
 Date: 2026-06-22
 
+> **Historical audit with still-relevant behavioral contracts.** SDK ownership
+> has since moved to the shared Rust core. Viewport, receipt, subscription, and
+> lifecycle rules below remain design evidence; current ownership is documented
+> in [the codebase knowledge base](../CODEBASE_KNOWLEDGE_BASE.md).
+
 ## Purpose
 
 This audit covers a class of bugs where Synara uses Matrix SDK APIs directly but

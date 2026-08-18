@@ -1,3 +1,9 @@
+> **Historical execution log.** Entries are append-only evidence from their
+> recorded dates and may describe superseded architecture, versions, branches,
+> blockers, or local tooling. They are not current operating instructions. See
+> [the codebase knowledge base](CODEBASE_KNOWLEDGE_BASE.md) and
+> [documentation guide](docs/README.md).
+
 | Timestamp | Phase | Decision | Files Changed | Evidence | Next Actions | Confidence |
 |---|---|---|---|---|---|---|
 | 2026-07-07T00:00:00-04:00 | Phase 3/4/5 - Desktop smoke regression intake | User provided fresh smoke feedback: link opening still fails on macOS and Linux desktop; Timeline Resurrection is much better but still visibly repositions during initial load; clipboard image paste, attachment drag/drop, and spellcheck still fail on both desktop platforms; macOS updater finalization remains open; Linux package-manager update path works, with app-side update notification policy undecided. | LLM_AGENT_LOG.md | Human smoke evidence supersedes prior pending-smoke assumptions and confirms multiple shared desktop paths remain release blockers. | Inspect current dirty updater work without reverting it; prioritize shared link-opening and native input-handoff diagnosis before broader updater/release work; update living readiness docs with the new evidence after the implementation direction is clear. | High |

@@ -1,5 +1,8 @@
 ## V-CALL deep cut — fully zero-Matrix-JS tree
 
+> Historical pull-request description retained as migration evidence. It is not
+> current branch, merge, or release guidance.
+
 Operator-authorized (option B). Removes the embedded **(V-)CALL** feature and the last
 remaining Matrix JS dependency.
 

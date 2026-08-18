@@ -2,6 +2,11 @@
 
 Reviewed: 2026-07-02
 
+> **Historical implementation plan.** The exact-tag release workflow now owns
+> signed macOS updater metadata, coordinated Linux packages, and internal
+> TestFlight publication. Use [the build and release runbook](docs/build-and-release.md)
+> for current operations. The detail below is retained as design history.
+
 Purpose: park the auto-update work behind a clear plan so the team can resume it
 later without blocking Timeline, link-opening, composer, macOS smoke, or iOS
 validation work.

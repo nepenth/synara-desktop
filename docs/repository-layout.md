@@ -1,32 +1,19 @@
 # Repository Layout
 
-Reviewed: 2026-05-26
+Reviewed: 2026-08-18
 
-The canonical local workspace for desktop client work is:
+This repository owns all supported Synara clients and their shared core:
 
-```text
-synara-desktop
-```
-
-This repository owns both:
-
-- the macOS/Linux Tauri shell in `src-tauri/`
-- the Synara app runtime in `synara/`
+- the shared Rust core in `crates/synara-core/`;
+- the macOS/Linux Tauri shell in `src-tauri/`;
+- the embedded desktop runtime in `synara/`;
+- the native SwiftUI client in `synara-ios/`.
 
 `synara/` is now a normal tracked directory, not a Git submodule. Fresh clones
 of `synara-desktop` do not need `--recursive` or any `git submodule` commands.
-The former standalone GitHub repository `nepenth/synara` was archived on
-2026-05-26 after `synara-desktop` package CI passed without it.
-
-Do not use a sibling checkout beside the canonical repository, for example:
-
-```text
-../synara
-```
-
-That path is not the canonical workspace for this desktop project. If a
-standalone checkout exists for archival or comparison, archive or delete it
-before starting new work so fixes are not split across two local copies.
+The former standalone runtime repository is not required for fresh clones,
+builds, tests, or releases. Do not split product changes into a second runtime
+repository.
 
 Run this before committing repository-structure updates:
 
@@ -42,6 +29,4 @@ Repository layout acceptance criteria:
 - `synara/` is tracked directly by the parent repository.
 - `synara/` does not contain nested Git metadata.
 - `synara/` does not contain nested GitHub workflow automation.
-- No active sibling checkout exists beside the canonical repository.
-- `nepenth/synara` is not required for fresh clones, local builds, or package
-  smoke workflows.
+- Fresh clones, local builds, and CI do not depend on another repository.

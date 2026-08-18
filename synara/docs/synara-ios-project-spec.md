@@ -1,8 +1,12 @@
 # Synara iOS Project Spec
 
-Reviewed: 2026-05-24
+Reviewed: 2026-08-18
 
-Status: Phase 0 execution in progress.
+Status: historical cumulative project specification. The implemented app has
+advanced beyond the early phase labels retained below. Current release and
+validation state is maintained in
+[`synara-ios/docs/ios-validation-status.md`](../../synara-ios/docs/ios-validation-status.md)
+and [`synara-ios/docs/release-checklist.md`](../../synara-ios/docs/release-checklist.md).
 
 Related plan: [Synara iOS App Store Plan](./synara-ios-app-store-plan.md)
 

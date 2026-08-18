@@ -2,6 +2,12 @@
 
 Date: 2026-06-07
 
+> **Historical pre-cutover audit.** The desktop product no longer uses
+> `matrix-js-sdk` as its Matrix runtime. The shared Rust core is the current
+> owner; see [the codebase knowledge base](../CODEBASE_KNOWLEDGE_BASE.md) and
+> [ADR 0004](adr/0004-rust-language-boundaries.md). The details below are
+> retained as migration evidence.
+
 ## Summary
 
 The macOS and Linux desktop apps run the shared `synara/` runtime inside the

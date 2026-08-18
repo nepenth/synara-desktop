@@ -1,17 +1,20 @@
 # ADR 0003: Shared native core (synara-core) for desktop + iOS
 
-Status: accepted and in implementation (2026-08-10; progress recorded 2026-08-16; SNC engineering on `main` via #991).
+Status: accepted and implemented on `main` (consolidated proof 2026-08-17).
 Supersedes the separate Swift service-layer direction implied by ADR-0002 for
 app-logic ownership (ADR-0002's native-SwiftUI UI decision is retained).
 
 **End state:** one Rust core (`synara-core`) that both the desktop Tauri
 app (macOS and Linux) and the iOS app consume, so sync, room list,
-timeline, and crypto are not implemented twice. **That end state has not
-been reached.** SNC engineering is on `main` via #991
-(`05a0961c`). It is not a release. How to finish it:
-`docs/shared-native-core/11-implementer-playbook.md`.
+timeline, and crypto are not implemented twice. That architecture is now the
+production source shape. Consolidated verification is recorded in
+[the 2026-08-17 local proof](../shared-native-core/15-2026-08-17-local-proof.md).
 What may be written in Rust, and what must stay put:
 [ADR 0004](0004-rust-language-boundaries.md).
+
+The source counts, former Swift package ownership, and phase queue below are
+decision-time context. They are intentionally retained as history rather than
+live inventory.
 
 ## Context
 
@@ -62,7 +65,7 @@ app lifecycle, settings/config UI.
   version pinning unified inside synara-core; NSE store-access constraints;
   a phased migration that must never break desktop CI.
 
-## Phase plan (tracked in docs/shared-native-core/PLAN.md)
+## Historical Phase Plan
 
 - P0 — this ADR + plan doc + module-boundary census (DONE).
 - P1 — crate extraction: move matrix/tasks/dto/ipc into `crates/synara-core`
