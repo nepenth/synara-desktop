@@ -1,121 +1,76 @@
 # Desktop Modernization
 
-This desktop branch is the native half of the Synara modernization stack. The
-app runtime owns Matrix state and feature UI; this wrapper owns native shell
-surfaces and exposes a small typed bridge to the runtime.
+Synara's macOS and Linux clients use a Tauri 2 shell around the embedded React
+runtime. Matrix lifecycle and domain behavior are owned by the shared Rust
+core; React owns presentation, routing, composer behavior, and timeline
+virtualization; Tauri owns operating-system integration.
+
+The standalone browser product and JavaScript Matrix backend have been retired.
+The current architecture is documented in
+[the codebase knowledge base](CODEBASE_KNOWLEDGE_BASE.md).
 
 ## Native Scope
 
-- Tray/status-bar menu for Show Synara, Later, Notifications, and Quit.
-- Close-to-tray behavior on desktop platforms.
-- Native notification permissions and click activation.
-- Dock/taskbar badge count updates from unread, notification, and Later
-  summaries supplied by the app runtime.
-- Configurable global shortcuts for Show, Later, and Notifications.
-- macOS camera/microphone permission descriptions for calls.
-- Structured Hermes/agent action bridge for trusted backend integrations.
-- Signed auto-update support is intentionally disabled in this branch until a
-  stable release metadata endpoint is configured and tested for this fork.
+- Application windows, tray/menu behavior, and close-to-tray lifecycle.
+- Native notification permissions, delivery, and click activation.
+- Dock/taskbar badges and configurable global shortcuts.
+- Keychain or Secret Service session persistence.
+- Native file access, downloads, clipboard media, and external URLs.
+- Structured agent-action dispatch with native sanitization.
+- Platform diagnostics, build identity, update checks, and release hardening.
+- Signed macOS update installation; Linux package-manager update guidance.
+
+Feature code reaches native behavior through the platform facade and reaches
+Matrix through the shared-core facade. Direct ad hoc Tauri calls or parallel
+Matrix clients are boundary violations.
+
+## Development
+
+Install both JavaScript dependency trees:
+
+```sh
+npm ci
+npm --prefix synara ci
+```
+
+Run the complete desktop application:
+
+```sh
+npm run tauri dev
+```
+
+Build the embedded runtime or desktop package:
+
+```sh
+npm run build:runtime
+npm run tauri build
+```
+
+For an ad-hoc local macOS application bundle:
+
+```sh
+npm run tauri build -- --bundles app
+```
+
+Production builds use protected Developer ID, notarization, and updater
+credentials through the exact-tag release workflow. Do not add signing values
+to commands, documentation, or tracked configuration.
 
 ## Validation
 
 ```sh
-cargo test --manifest-path src-tauri/Cargo.toml
+npm run check:repo-layout
+npm run check:versions
+npm run check:docs
+npm run check:matrix-boundaries
+npm run check:quality-gates
+npm --prefix synara run typecheck
+npm --prefix synara run test:modernization
+npm --prefix synara run check:eslint
+npm --prefix synara run check:prettier
+cargo test --workspace --locked
+cargo test --manifest-path src-tauri/Cargo.toml --locked
 ```
 
-Full package builds require the paired app-runtime assets in the nested `synara/`
-checkout:
-
-```sh
-cd synara
-npm ci
-npm run build
-cd ..
-npm ci
-npm run tauri build
-```
-
-For local macOS smoke builds without a Developer ID certificate, use an ad-hoc
-signing identity so LaunchServices receives a fully sealed bundle:
-
-```sh
-APPLE_SIGNING_IDENTITY=- npm run tauri build -- --bundles app
-```
-
-Release builds should continue to use the normal certificate/notarization
-environment. The ad-hoc identity is only for private local validation.
-
-Packaged builds expose their identity in the tray menu and About dialog as
-`Build <version> <branch>@<short-sha>`. Use that value to confirm the running
-app matches the PR head you intended to test.
-
-When replacing an existing app bundle locally, move the old bundle aside before
-copying the new one; `cp -R source.app /Applications/Synara.app` can copy the new
-bundle inside the old bundle instead of replacing it.
-
-```sh
-mv /Applications/Synara.app "/Applications/Synara.app.$(date +%Y%m%d%H%M%S).previous"
-cp -R src-tauri/target/release/bundle/macos/Synara.app /Applications/Synara.app
-```
-
-Local `cargo check` and `cargo test` can run with the placeholder app shell, but
-runtime smoke testing should use a real app-runtime `dist/` bundle.
-
-## CI Environment Notes
-
-GitHub Actions uses `ubuntu-22.04` for the main `CI` workflow and the
-`Desktop Package Smoke` `.deb`/macOS bundle jobs. That runner validates Debian
-packaging and the shared Node/Rust gates (`check:versions`, `cargo test`,
-`test:modernization`).
-
-Rolling Arch/CachyOS workstation validation remains manual: WebKitGTK, portals,
-Secret Service, tray, and global-shortcut behavior differ from the Ubuntu CI
-image. Arch `PKGBUILD` changes under `packaging/arch/**` trigger the smoke
-workflow path filter; full pacman packaging is still validated on target
-machines, not in CI today.
-
-## Runtime Smoke Test
-
-Before marking the desktop PR ready for broader review, capture screenshots or
-short clips for these flows:
-
-1. Tray/status-bar menu opens Show, Later, and Notifications.
-2. Closing the main window hides it to the tray and Quit exits the app.
-3. A native notification click focuses Synara and deep-links to a room/event or
-   thread anchor supplied by the app runtime.
-4. Badge counts update when unread/Later/notification summaries change.
-5. Configurable global shortcuts route to Show, Later, and Notifications.
-6. A Hermes/agent action is copied, opened, or emitted through the
-   `synara://agent-action` event with sanitized payload data.
-
-Use test Matrix accounts for review builds and demos. A Matrix client build is
-untrusted client code until merged and served from a trusted release channel.
-
-## Bridge Security
-
-- The injected `window.__SYNARA_DESKTOP__` object only advertises capabilities
-  and forwards explicit Tauri command names.
-- Agent action payloads are sanitized in Rust before any local handling:
-  IDs/titles/prompts are trimmed and capped, markdown is capped, action kinds
-  are allow-listed, and URLs must use HTTPS.
-- Local handling is intentionally narrow: copy actions write bounded text to the
-  clipboard, open actions launch HTTPS URLs through the OS opener, and all other
-  supported actions are emitted as `synara://agent-action` events for a backend
-  integration to handle.
-- The wrapper does not keep a duplicate copy of Matrix room state, Later items,
-  favorites, folders, notification settings, or threads.
-
-## Release Notes
-
-- Releases are signed with the existing Ed25519 release key documented in the
-  README.
-- macOS notarization and hardened runtime settings should be verified as part
-  of the normal Tauri release workflow before distributing outside private fork
-  testing.
-- Linux package behavior should be checked on the target packaging format
-  because tray and notification behavior varies by desktop environment.
-
-## Related Docs
-
-- [Desktop integration contract](docs/desktop-modernization.md)
-- [Native-first architecture spike](docs/native-first-architecture-spike.md)
+Package, signing, updater, and smoke instructions live in
+[the build and release runbook](docs/build-and-release.md).

@@ -33,7 +33,7 @@ pub async fn matrix_send_text(
 /// V-SEND.R-EDIT sole native message-edit owner.
 ///
 /// Sends a replacement (`m.replace`) room message via the live matrix-sdk session.
-/// The new content is built with `m.new_content` semantics matching Element/Cinny
+/// The new content is built with standard Matrix `m.new_content` semantics
 /// (fallback body `* {plain}`; real body/html/mentions live in `m.new_content`).
 /// The JS `mx.sendMessage` edit path is only used when no native session is live;
 /// when a native session is live this command is the sole owner and failures are
@@ -369,8 +369,8 @@ pub(crate) fn message_content(
 ///
 /// The new content is built via `message_content` (msg_type / formatted_body /
 /// mentions), then wrapped with `make_replacement` so the real body/html/mentions
-/// live in `m.new_content` and the fallback body is `* {plain}` (Element/Cinny
-/// style). `make_replacement` strips any reply/thread relation and sets
+/// live in `m.new_content` and the fallback body is `* {plain}`. The
+/// `make_replacement` helper strips any reply/thread relation and sets
 /// `m.relates_to.rel_type == m.replace` with the target `event_id`.
 pub(crate) fn edit_message_content(
     body: String,

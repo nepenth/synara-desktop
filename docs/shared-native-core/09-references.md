@@ -36,7 +36,6 @@
   https://mozilla.github.io/uniffi-rs/
 - Element X (matrix-org's own shared-core product): a working reference for a
   shared matrix-rust-sdk core consumed by Swift (iOS) + other platforms.
-- Cinny (upstream product this repo derives from): https://github.com/cinnyapp/cinny
 - SDK capability review + migration tracking (our engine's authoritative
   design record): `docs/matrix-rust-sdk/0.18.0-capability-dossier.json`,
   `docs/matrix-rust-sdk/SCOREBOARD.md`

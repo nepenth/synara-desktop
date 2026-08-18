@@ -2,9 +2,13 @@
 
 <!-- matrix-rust-program-status-link -->
 
-This directory holds **product and program documentation** for replacing
-desktop Matrix client ownership with the Rust Matrix SDK on branch
-`feature/matrix-rust-sdk-full-replacement`.
+> **Completed migration archive.** This directory records the program that
+> replaced desktop Matrix ownership with the shared Rust core. Branch names,
+> runtime labels, task states, and counts are historical snapshots. Current
+> architecture is documented in
+> [the codebase knowledge base](../../CODEBASE_KNOWLEDGE_BASE.md).
+
+This directory holds product and program evidence from the replacement work.
 
 > ⚠️ **PUBLIC repository.** Everything in this tree is public. Never commit
 > secrets, tokens, keys, credentials, session/recovery material, private

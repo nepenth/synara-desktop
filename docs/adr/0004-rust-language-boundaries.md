@@ -10,8 +10,8 @@ decides **what** may be written in Rust, what must stay platform-side, and
 what must not be rewritten. It does not open a new crate, UI toolkit, or
 parallel migration program.
 
-**How to finish the work this ADR points at:**
-[`docs/shared-native-core/11-implementer-playbook.md`](../shared-native-core/11-implementer-playbook.md).
+Implementation evidence:
+[the 2026-08-17 shared-core proof](../shared-native-core/15-2026-08-17-local-proof.md).
 
 ## Context
 
@@ -39,14 +39,10 @@ Existing decisions this ADR does not reopen:
   do not rewrite the desktop UI in a Rust widget toolkit before iOS ships
   on the shared engine.
 
-The shared-core program is in progress, not done. Desktop routes one
-hundred eleven `matrix_*` commands through Core. Twenty-one secret- or
-byte-sensitive names stay unregistered on purpose. iOS has typed
-`SharedCore` wrappers and P4-S12–S37 product consume on `main` (#1001);
-product `MatrixRustSDK` callers are retired; iOS is not yet on-engine
-(Apple generate, paused hosted iOS CI, and paused live homeserver proof
-still sit in front of that claim; leftover I/O that needs a live
-homeserver stays fail-closed).
+The shared-core cutover has landed. Desktop and iOS consume `synara-core`;
+secret- and byte-sensitive operations intentionally stay on typed platform
+boundaries. The command counts and unfinished migration notes in later sections
+are decision-time evidence, not current inventory.
 
 ## Decision
 
@@ -90,7 +86,7 @@ Leave the current language in place when:
 - A Rust rewrite of Node build, CI, or guardrail scripts.
 - A third Matrix engine in Swift or TypeScript.
 
-## Layer map
+## Decision-Time Layer Map
 
 | Layer | Today | Verdict |
 |---|---|---|
@@ -107,7 +103,11 @@ Leave the current language in place when:
 | Build / CI / guardrail scripts | Node (`scripts/*.mjs`) | Stay Node. |
 | Stale WASM / IndexedDB / js-sdk CSP | Leftover from the former browser client | Delete. Do not rewrite in Rust. |
 
-## Prescribed next Rust work
+## Historical Prescribed Work
+
+The numbered items in this section were the accepted migration queue. They are
+retained to explain the boundary decisions and must not be treated as current
+work without confirming source and current validation status.
 
 This is finish-the-migration work on the existing playbook, not a new
 program. Do not invent routes, crates, or bindgen paths to satisfy this

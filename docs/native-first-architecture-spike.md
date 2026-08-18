@@ -4,6 +4,11 @@ Reviewed: 2026-05-25
 
 Status: accepted for planning
 
+> **Historical decision record.** Its sequencing decision was implemented:
+> desktop retained Tauri/React, iOS shipped as SwiftUI, and both now consume the
+> shared Rust core. Use [the codebase knowledge base](../CODEBASE_KNOWLEDGE_BASE.md)
+> for current architecture; use this spike for the original trade-off analysis.
+
 Language-boundary follow-up (what may be written in Rust, including the
 continued rejection of a Slint/Dioxus/egui desktop rewrite):
 [ADR 0004](adr/0004-rust-language-boundaries.md).

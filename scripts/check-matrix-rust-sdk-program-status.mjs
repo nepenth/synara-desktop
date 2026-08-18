@@ -536,10 +536,11 @@ export function renderProgramStatus(status) {
   );
 
   return `${[
-    "# Matrix Rust SDK replacement — current program status",
+    "# Matrix Rust SDK replacement — historical program status",
     "",
     "> Generated from `program-status.json` by `scripts/check-matrix-rust-sdk-program-status.mjs`.",
-    "> Do not hand-edit. Dated task evidence and the independent review remain historical records.",
+    "> Do not hand-edit. This is a frozen migration-program snapshot, not current product architecture.",
+    "> The replacement has landed; see [the codebase knowledge base](../../CODEBASE_KNOWLEDGE_BASE.md) and [the 2026-08-17 local proof](../shared-native-core/15-2026-08-17-local-proof.md).",
     "",
     `As of: ${status.as_of_date}`,
     "",
@@ -564,7 +565,7 @@ export function renderProgramStatus(status) {
             .join("; ")
     }`,
     "",
-    "## Original-plan inventory and release/main runtime",
+    "## Original-plan inventory and runtime at this snapshot",
     "",
     `- Landed original task artifacts: **${status.original_plan.landed_task_count} / ${status.original_plan.task_count}**`,
     `- Release/main Matrix client: \`${status.product_runtime.matrix_client_sdk}\``,
@@ -572,9 +573,9 @@ export function renderProgramStatus(status) {
     `- Dual backend: \`${status.product_runtime.dual_backend}\``,
     `- Cutover state: \`${status.product_runtime.cutover_state}\``,
     "",
-    "These release/main fields do not describe partial product wiring on the integration branch.",
+    "These fields describe the historical audited snapshot and must not be used as current release/main claims.",
     "",
-    "## Current full-vertical product execution",
+    "## Full-vertical product execution at this snapshot",
     "",
     `- Policy: \`${status.vertical_execution.policy}\``,
     `- Integration product state: \`${status.vertical_execution.integration_product_state}\``,

@@ -128,11 +128,11 @@ test("renderer is deterministic and distinguishes delivery from acceptance", () 
   assert.doesNotMatch(first, /\n\n$/);
 });
 
-test("tracks full-vertical execution and requires per-vertical deletion policy", () => {
+test("preserves historical full-vertical execution and deletion policy", () => {
   const rendered = renderProgramStatus(status);
   const currentInventory =
     status.vertical_execution.matrix_js_sdk_import_inventory.current;
-  assert.match(rendered, /Current full-vertical product execution/);
+  assert.match(rendered, /Full-vertical product execution at this snapshot/);
   assert.match(rendered, /full-vertical-delete-per-vertical/);
   assert.match(rendered, /Wired \/ deletion open/);
   assert.match(

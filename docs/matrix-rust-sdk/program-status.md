@@ -1,7 +1,8 @@
-# Matrix Rust SDK replacement — current program status
+# Matrix Rust SDK replacement — historical program status
 
 > Generated from `program-status.json` by `scripts/check-matrix-rust-sdk-program-status.mjs`.
-> Do not hand-edit. Dated task evidence and the independent review remain historical records.
+> Do not hand-edit. This is a frozen migration-program snapshot, not current product architecture.
+> The replacement has landed; see [the codebase knowledge base](../../CODEBASE_KNOWLEDGE_BASE.md) and [the 2026-08-17 local proof](../shared-native-core/15-2026-08-17-local-proof.md).
 
 As of: 2026-08-08
 
@@ -15,7 +16,7 @@ Audited snapshot: `bf1b565eb6163ded095e413ef88e3b22d7f21c01`
 - Next task: **None**
 - Blocked tasks: None
 
-## Original-plan inventory and release/main runtime
+## Original-plan inventory and runtime at this snapshot
 
 - Landed original task artifacts: **74 / 112**
 - Release/main Matrix client: `matrix-js-sdk-only`
@@ -23,9 +24,9 @@ Audited snapshot: `bf1b565eb6163ded095e413ef88e3b22d7f21c01`
 - Dual backend: `false`
 - Cutover state: `not_started`
 
-These release/main fields do not describe partial product wiring on the integration branch.
+These fields describe the historical audited snapshot and must not be used as current release/main claims.
 
-## Current full-vertical product execution
+## Full-vertical product execution at this snapshot
 
 - Policy: `full-vertical-delete-per-vertical`
 - Integration product state: `between-slices-paused`

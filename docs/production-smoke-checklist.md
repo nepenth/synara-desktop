@@ -1,11 +1,18 @@
 # Production Smoke Checklist
 
-Reviewed: 2026-06-29
+Reviewed: 2026-08-18
 
-This checklist is the release handoff surface for the remaining human-run
-desktop, macOS, and iOS validation gates. Automated gates stay tracked in
-`PRODUCTION_READINESS_GOAL.md`; macOS/iOS tool-bound tasks stay tracked in
-`MACOS_IOS_VALIDATION_QUEUE.md`.
+This checklist is the release handoff surface for human-run desktop and iOS
+validation gates. Automated commands and release sequencing live in
+[the build and release runbook](build-and-release.md). The dated feedback below
+is preserved as regression history; it does not override newer evidence.
+
+## Current Baseline
+
+The latest consolidated automated, simulator, signed-live, and local macOS
+proof is [the 2026-08-17 shared-core proof](shared-native-core/15-2026-08-17-local-proof.md).
+Human macOS interaction, Linux package/install interaction, and physical-device
+iOS checks remain release-candidate gates where that proof says they remain.
 
 ## Latest Smoke Feedback
 
@@ -66,6 +73,7 @@ git status --short --branch
 git rev-parse --short HEAD
 npm run check:versions
 npm run check:repo-layout
+npm run check:docs
 npm run check:matrix-boundaries
 npm run check:quality-gates
 npm run check:synapse-harness

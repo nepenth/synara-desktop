@@ -1,5 +1,11 @@
 # macOS and iOS Validation Queue
 
+> **Historical validation queue.** This file preserves evidence and open items
+> from the 2026-06/07 readiness cycle. Do not treat its pending states as the
+> current project status. Use [the 2026-08-17 consolidated proof](docs/shared-native-core/15-2026-08-17-local-proof.md),
+> [desktop validation status](docs/desktop-validation-status.md), and
+> [iOS validation status](synara-ios/docs/ios-validation-status.md).
+
 > Tracks release-gating checks that require a macOS workstation, Xcode, Swift, or an iOS simulator.
 > Linux-local gates remain tracked in `PRODUCTION_READINESS_GOAL.md`.
 

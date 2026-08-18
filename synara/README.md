@@ -1,41 +1,38 @@
-# Synara App Runtime
+# Synara Desktop Runtime
 
-Synara is a native-app-first Matrix client focused on fast secure conversations,
-desktop polish, Linux support, and agent workflows.
+This package is the React/Vite user interface embedded in Synara's Tauri shell
+for macOS and Linux. It is not a standalone browser product and must not grow a
+browser fallback for native security, persistence, or Matrix operations.
 
-This package contains the React/Vite runtime used by the Synara desktop app. The
-former public browser-client and self-hosting positioning has been retired. The
-app product channels are native packages:
+Matrix lifecycle and domain behavior are owned by the repository's shared Rust
+core. This package consumes that behavior through the platform and Matrix
+facades under `src/app/platform/` and `src/app/matrix/`. Presentation state,
+routing, the Slate composer, and timeline virtualization remain in React.
 
-- macOS and Linux through the Tauri desktop shell in `../`.
-- iOS through the planned native SwiftUI app.
-
-The runtime can still be served locally during development because Tauri uses
-Vite for fast iteration, but standalone browser releases are not supported.
-Browser-only behavior is treated as development-runtime behavior unless it also
-affects packaged native apps.
+The native SwiftUI client lives in `../synara-ios/` and consumes the same shared
+core through generated Swift bindings.
 
 ## Development
 
-Install dependencies from this directory:
+Install package dependencies:
 
 ```sh
 npm ci
 ```
 
-Run the local runtime for desktop-shell development:
+Run Vite for development of the embedded runtime:
 
 ```sh
 npm start
 ```
 
-Build the runtime assets consumed by the desktop shell:
+Build the runtime assets:
 
 ```sh
 npm run build
 ```
 
-Run the paired desktop app from the parent `synara-desktop` project:
+Run the complete desktop application from the repository root:
 
 ```sh
 cd ..
@@ -43,26 +40,29 @@ npm ci
 npm run tauri dev
 ```
 
-## Direction
-
-- [`../CODEBASE_KNOWLEDGE_BASE.md`](../CODEBASE_KNOWLEDGE_BASE.md) is the
-  monorepo onboarding map (architecture, features, contracts, and expansion
-  guidance). Start there for new work in this repository.
-- `docs/synara-namespaces.md` documents Synara Matrix account-data and event
-  metadata contracts.
-- `docs/synara-ios-app-store-plan.md` and
-  `docs/synara-ios-project-spec.md` describe the native iOS direction.
-- `docs/native-first-consolidation-plan.md` tracks the pre-iOS simplification
-  work needed to keep macOS, Linux, and iOS aligned.
+The Vite server is a development transport for Tauri. A successful browser
+render does not establish that a native product flow works.
 
 ## Validation
 
-Focused checks:
-
 ```sh
+npm run typecheck
 npm run test:modernization
-npm run test:timeline-performance
-npm run typecheck:modernization
+npm run test:browser:timeline
+npm run check:eslint
+npm run check:prettier
 ```
 
-Desktop wrapper validation lives in the parent `synara-desktop` repository.
+Repository, Rust, package, and release validation runs from the parent. See the
+[root README](../README.md) and [build and release runbook](../docs/build-and-release.md).
+
+## Documentation
+
+- [Codebase knowledge base](../CODEBASE_KNOWLEDGE_BASE.md)
+- [Shared contracts](docs/synara-contracts.md)
+- [Synara namespaces](docs/synara-namespaces.md)
+- [Documentation index](../docs/README.md)
+
+Plans and audit records under `../docs/matrix-rust-sdk/` describe the completed
+JavaScript-to-Rust Matrix migration. They are historical evidence unless a file
+explicitly identifies itself as a current operating guide.

@@ -2,6 +2,12 @@
 
 Reviewed: 2026-06-30
 
+> **Historical handoff.** The environment limitations and pending queue below
+> describe the original handoff, not the current workstation or release state.
+> Current validation starts with
+> [the 2026-08-17 consolidated proof](docs/shared-native-core/15-2026-08-17-local-proof.md)
+> and [the build and release runbook](docs/build-and-release.md).
+
 Purpose: give a Mac-hosted Codex session or human operator the exact context,
 commands, evidence requirements, and prompt needed to execute the remaining
 macOS, Xcode, Swift, simulator, and signed-runtime validation work.

@@ -2,6 +2,11 @@
 
 Reviewed: 2026-06-30
 
+> **Historical plan, now implemented.** The exact-tag coordinated release model
+> described below is represented by the current workflows. Use
+> [the build and release runbook](docs/build-and-release.md) for operations and
+> treat proposed/current wording below as design history.
+
 Purpose: define the recommended release-branch and client-update path before
 changing GitHub Actions behavior.
 

@@ -1,7 +1,7 @@
-Synara Desktop
+Synara
 Copyright © 2026 Whyland Creative LLC
 
-Synara Desktop is a Tauri-based native desktop Matrix client. It is a
+Synara is a native-first Matrix client for macOS, Linux, and iOS. It is a
 derivative work of Cinny (https://github.com/cinnyapp/cinny), Copyright (c)
 the original Cinny authors.
 
@@ -9,11 +9,13 @@ This project is licensed under the GNU Affero General Public License v3.0
 (SPDX: AGPL-3.0-only). See LICENSE.
 
 The original Cinny authors retain their copyright in the portions this project
-derives from their work. Synara Desktop has been substantially rewritten —
-notably replacing the matrix-js-sdk renderer core with a native
+derives from their work. Synara has been substantially rewritten, notably
+replacing the historical matrix-js-sdk runtime with a native
 matrix-rust-sdk core; see docs/matrix-rust-sdk/ for the full migration record.
 
-Third-party components retain their own copyrights and licenses. Notable:
-  - matrix-js-sdk — Apache-2.0 (The Matrix.org Foundation C.I.C)
+Current notable third-party components retain their copyrights and licenses:
   - matrix-rust-sdk — dual Apache-2.0 / MIT
   - folds — UI component library (Cinny authors)
+
+Historical dependencies and derived portions retain their applicable notices
+and licenses, including matrix-js-sdk under Apache-2.0.
