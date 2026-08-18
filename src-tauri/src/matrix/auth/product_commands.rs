@@ -1004,8 +1004,11 @@ pub(super) async fn build_client(
     // SQLite. A corrupt/ahead/missing migration chain is a reset *decision*,
     // never an automatic wipe; only the static safe diagnostic crosses IPC.
     migrate_store_to_current(&store_paths).map_err(map_store_migration_error)?;
-    let config = ClientBuildConfig::product_default(app_data_root, identity.clone(), Some(store_key))
-        .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed"))?;
+    let config =
+        ClientBuildConfig::product_default(app_data_root, identity.clone(), Some(store_key))
+            .map_err(|_| {
+                MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed")
+            })?;
     let client = build_unauthenticated_client(&config)
         .await
         .map_err(map_store_client_build_error)?;
@@ -1033,17 +1036,17 @@ fn install_session_rotation_callbacks(
     client
         .set_session_callbacks(
             Box::new(move |_| {
-                let material = load_session_material(
-                    &KeyringSessionMaterialVault::new(),
-                    &reload_identity,
-                )
-                .map_err(|_| SessionRotationCallbackError("d0.1-session-reload-read-failed"))?
-                .ok_or(SessionRotationCallbackError(
-                    "d0.1-session-reload-material-missing",
-                ))?;
-                let secrets = material
-                    .decode_host_secrets()
-                    .map_err(|_| SessionRotationCallbackError("d0.1-session-reload-decode-failed"))?;
+                let material =
+                    load_session_material(&KeyringSessionMaterialVault::new(), &reload_identity)
+                        .map_err(|_| {
+                            SessionRotationCallbackError("d0.1-session-reload-read-failed")
+                        })?
+                        .ok_or(SessionRotationCallbackError(
+                            "d0.1-session-reload-material-missing",
+                        ))?;
+                let secrets = material.decode_host_secrets().map_err(|_| {
+                    SessionRotationCallbackError("d0.1-session-reload-decode-failed")
+                })?;
                 let session = matrix_session_from_host_secrets(&reload_identity, &secrets)
                     .map_err(|_| SessionRotationCallbackError("d0.1-session-reload-invalid"))?;
                 Ok(session.tokens)
@@ -1054,7 +1057,9 @@ fn install_session_rotation_callbacks(
                     &save_identity,
                     &KeyringSessionMaterialVault::new(),
                 )
-                .map_err(|_| SessionRotationCallbackError("d0.1-session-rotation-persist-failed"))?;
+                .map_err(|_| {
+                    SessionRotationCallbackError("d0.1-session-rotation-persist-failed")
+                })?;
 
                 let session = client.session().ok_or(SessionRotationCallbackError(
                     "d0.1-session-rotation-session-missing",

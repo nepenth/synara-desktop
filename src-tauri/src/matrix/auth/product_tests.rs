@@ -2409,7 +2409,11 @@ fn product_client_persists_rotated_sdk_tokens_and_logout_cannot_be_blocked_remot
     let build_client = AUTH_PRODUCT_COMMANDS_SOURCE
         .split("pub(super) async fn build_client")
         .nth(1)
-        .and_then(|source| source.split("pub(super) async fn build_password_reset_client").next())
+        .and_then(|source| {
+            source
+                .split("pub(super) async fn build_password_reset_client")
+                .next()
+        })
         .expect("build_client body");
     assert!(
         build_client.contains("install_session_rotation_callbacks(&client, identity)"),
@@ -2419,7 +2423,11 @@ fn product_client_persists_rotated_sdk_tokens_and_logout_cannot_be_blocked_remot
     let callbacks = AUTH_PRODUCT_COMMANDS_SOURCE
         .split("fn install_session_rotation_callbacks")
         .nth(1)
-        .and_then(|source| source.split("pub(super) async fn build_password_reset_client").next())
+        .and_then(|source| {
+            source
+                .split("pub(super) async fn build_password_reset_client")
+                .next()
+        })
         .expect("session rotation callback body");
     for required in [
         "set_session_callbacks",
