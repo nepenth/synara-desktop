@@ -6,12 +6,13 @@
 
 ## 2026-08-17 Main Hardening Proof
 
-Validation branch: `codex/main-proof-hardening-20260817`, based on
-`origin/main` at `e2ef9bd252e9179978ca2acc6326368490a4f931`.
+Validation candidate: `release/runtime-assets-2.0.7`, based on
+`origin/main` at `e3d8a45414d0a6438c216ffe4c638d4c108df928`.
 
 - Full frontend quality, contract, delivery, Playwright timeline, ESLint,
   Prettier, high-severity npm audit, and production build gates passed. Delivery
-  script coverage was 224 of 224.
+  script coverage was 224 of 224. The final candidate reran typecheck, the
+  production runtime build, and all 755 modernization/contract tests.
 - Shared Rust workspace formatting, clippy with warnings denied, check, and all
   703 library tests plus integration/doc tests passed; one explicitly ignored
   live gate remained intentional.
@@ -19,16 +20,18 @@ Validation branch: `codex/main-proof-hardening-20260817`, based on
   plus doc tests passed.
 - Root and desktop `cargo audit` passed with only the repository's documented
   allowed advisories.
-- Synara `2.0.6` built as an arm64 macOS application. The local smoke copy was
+- Synara `2.0.7` built as arm64 and universal macOS applications. The isolated
+  local smoke copy was
   ad-hoc signed, passed strict code-signature verification, launched as a
   foreground process, served its internal runtime over loopback, returned HTTP
   200 for the generated JavaScript, stylesheet, and icon, and emitted no macOS
   error/fault log entries during the launch window.
 - Interactive macOS clicks could not be automated because this Codex process
-  lacks Accessibility and Screen Recording permission. Login/send/formatting
-  behavior was instead covered through shared Rust tests, deterministic desktop
-  frontend tests, and the signed iOS live Matrix suite. A human macOS GUI smoke
-  is still required before merge/release.
+  still lacks Accessibility and Screen Recording permission after a fresh
+  isolated-bundle retry. Login/send/formatting behavior was instead covered
+  through shared Rust tests, deterministic desktop frontend tests, and the
+  signed iOS live Matrix suite using the same SharedCore and disposable Matrix
+  account. A human macOS GUI smoke remains required for visual acceptance.
 
 Linux package and interactive desktop validation were not rerun on this macOS
 host. Cross-platform Rust/frontend gates passed, but Linux packaging and desktop

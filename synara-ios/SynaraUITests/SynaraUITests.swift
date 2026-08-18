@@ -447,22 +447,37 @@ final class SynaraUITests: XCTestCase {
     func testSettingsShowsNotificationSectionsAndReleaseLinks() {
         let app = launchSignedInSettingsApp()
 
+        tapSettingsElement(app.buttons["NotificationSettingsLink"], app: app, timeout: 10)
+        XCTAssertTrue(app.collectionViews["NotificationSettingsScreen"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["NotificationPermissionButton"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["PushRegistrationButton"].exists)
-        XCTAssertTrue(revealSettingsElement(app.staticTexts["Theme"], app: app, timeout: 10))
-        XCTAssertTrue(revealSettingsElement(app.staticTexts["Session Storage"], app: app, timeout: 10))
-        XCTAssertTrue(revealSettingsElement(app.staticTexts["Device Verification"], app: app, timeout: 10))
-        XCTAssertTrue(revealSettingsElement(app.staticTexts["Key Recovery"], app: app, timeout: 10))
-        XCTAssertTrue(revealSettingsElement(app.staticTexts["Key Backup"], app: app, timeout: 10))
-        XCTAssertTrue(revealSettingsElement(app.buttons["AboutSettingsLink"], app: app, timeout: 10))
-        XCTAssertTrue(revealSettingsElement(app.buttons["LicensesSettingsLink"], app: app, timeout: 10))
-        XCTAssertTrue(revealSettingsElement(app.buttons["PrivacyPolicySettingsLink"], app: app, timeout: 10))
-        XCTAssertTrue(revealSettingsElement(app.buttons["SupportSettingsLink"], app: app, timeout: 10))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        tapSettingsElement(app.buttons["AppearanceSettingsLink"], app: app, timeout: 10)
+        XCTAssertTrue(app.collectionViews["AppearanceSettingsScreen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Appearance"].exists)
+        XCTAssertTrue(app.staticTexts["Text Size"].exists)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        tapSettingsElement(app.buttons["SecuritySettingsLink"], app: app, timeout: 10)
+        XCTAssertTrue(app.collectionViews["SecuritySettingsScreen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Session Storage"].exists)
+        XCTAssertTrue(app.staticTexts["Device Verification"].exists)
+        XCTAssertTrue(app.staticTexts["Key Recovery"].exists)
+        XCTAssertTrue(app.staticTexts["Key Backup"].exists)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        XCTAssertTrue(app.buttons["AboutSettingsLink"].exists)
+        XCTAssertTrue(app.buttons["LicensesSettingsLink"].exists)
+        XCTAssertTrue(app.buttons["PrivacyPolicySettingsLink"].exists)
+        XCTAssertTrue(app.buttons["SupportSettingsLink"].exists)
     }
 
     func testSettingsShowsEncryptedRecoveryControlsWhenNeeded() {
         let app = launchEncryptedSettingsApp()
 
+        tapSettingsElement(app.buttons["SecuritySettingsLink"], app: app, timeout: 10)
+        XCTAssertTrue(app.collectionViews["SecuritySettingsScreen"].waitForExistence(timeout: 5))
         XCTAssertTrue(revealSettingsElement(app.staticTexts["Unverified"], app: app, timeout: 10))
         XCTAssertTrue(revealSettingsElement(app.staticTexts["Needs Recovery"], app: app, timeout: 10))
         XCTAssertTrue(revealSettingsElement(app.staticTexts["Unavailable"], app: app, timeout: 10))
@@ -489,6 +504,22 @@ final class SynaraUITests: XCTestCase {
         tapSettingsElement(app.buttons["LicensesSettingsLink"], app: app, timeout: 10)
         XCTAssertTrue(app.collectionViews["LicensesSettingsScreen"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["AGPL-3.0-only"].exists)
+    }
+
+    func testSettingsNavigationDestinationsOpenAndReturn() {
+        let app = launchSignedInSettingsApp()
+
+        tapSettingsElement(app.buttons["PrivacyPolicySettingsLink"], app: app, timeout: 10)
+        XCTAssertTrue(app.collectionViews["PrivacyPolicySettingsScreen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["PrivacyPolicyExternalLink"].exists)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        tapSettingsElement(app.buttons["SupportSettingsLink"], app: app, timeout: 10)
+        XCTAssertTrue(app.collectionViews["SupportSettingsScreen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["SupportExternalLink"].exists)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        XCTAssertTrue(app.collectionViews["SettingsScreen"].waitForExistence(timeout: 5))
     }
 
     func testAcceptInviteTransitionsRowToJoinedRoom() {
@@ -991,6 +1022,68 @@ final class SynaraUITests: XCTestCase {
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "04-live-attachment-sheet")
     }
 
+    func testLiveSettingsVisualScreenshotsWhenConfigured() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard liveEnvironmentValue("SYNARA_LIVE_SETTINGS_SMOKE", in: environment) == "1" else {
+            throw XCTSkip("Set SYNARA_LIVE_SETTINGS_SMOKE=1 for local live Settings screenshots.")
+        }
+        guard let homeserver = liveEnvironmentValue("SYNARA_LIVE_HOMESERVER", in: environment),
+              let username = liveEnvironmentValue("SYNARA_LIVE_USERNAME", in: environment),
+              let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment),
+              let screenshotDirectory = liveEnvironmentValue("SYNARA_SCREENSHOT_DIR", in: environment)
+        else {
+            throw XCTSkip("Live Settings smoke needs homeserver, username, password, and screenshot directory.")
+        }
+
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
+        launch(app)
+
+        if app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5) {
+            loginLive(app: app, homeserver: homeserver, username: username, password: password)
+            dismissPasswordSavePromptIfPresent(app: app)
+        }
+
+        let settingsTab = app.buttons["SettingsTab"]
+        XCTAssertTrue(settingsTab.waitForExistence(timeout: 60))
+        tap(settingsTab)
+        XCTAssertTrue(app.buttons["AccountSettingsLink"].waitForExistence(timeout: 10))
+        try saveScreenshot(app: app, directory: screenshotDirectory, name: "08-live-settings-top")
+
+        tapSettingsElement(app.buttons["AccountSettingsLink"], app: app, timeout: 10)
+        XCTAssertTrue(app.collectionViews["AccountSettingsScreen"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["User"].exists)
+        try saveScreenshot(app: app, directory: screenshotDirectory, name: "09-live-settings-account")
+        navigateBack(app: app)
+
+        tapSettingsElement(app.buttons["NotificationSettingsLink"], app: app, timeout: 10)
+        XCTAssertTrue(app.collectionViews["NotificationSettingsScreen"].waitForExistence(timeout: 10))
+        try saveScreenshot(app: app, directory: screenshotDirectory, name: "10-live-settings-notifications")
+        navigateBack(app: app)
+
+        tapSettingsElement(app.buttons["AppearanceSettingsLink"], app: app, timeout: 10)
+        XCTAssertTrue(app.collectionViews["AppearanceSettingsScreen"].waitForExistence(timeout: 10))
+        try saveScreenshot(app: app, directory: screenshotDirectory, name: "11-live-settings-appearance")
+        navigateBack(app: app)
+
+        tapSettingsElement(app.buttons["SecuritySettingsLink"], app: app, timeout: 10)
+        XCTAssertTrue(app.collectionViews["SecuritySettingsScreen"].waitForExistence(timeout: 10))
+        try saveScreenshot(app: app, directory: screenshotDirectory, name: "12-live-settings-security")
+        navigateBack(app: app)
+
+        XCTAssertTrue(revealSettingsElement(app.buttons["AboutSettingsLink"], app: app, timeout: 15))
+        try saveScreenshot(app: app, directory: screenshotDirectory, name: "13-live-settings-lower")
+
+        tap(app.buttons["AboutSettingsLink"])
+        XCTAssertTrue(app.collectionViews["AboutSettingsScreen"].waitForExistence(timeout: 5))
+        try saveScreenshot(app: app, directory: screenshotDirectory, name: "14-live-settings-about")
+        navigateBack(app: app)
+
+        XCTAssertTrue(revealSettingsElement(app.buttons["LogoutButton"], app: app, timeout: 15))
+        XCTAssertTrue(app.buttons["LogoutButton"].isHittable)
+        try saveScreenshot(app: app, directory: screenshotDirectory, name: "15-live-settings-logout")
+    }
+
     func testMockThreadVisualScreenshotWhenConfigured() throws {
         let environment = ProcessInfo.processInfo.environment
         guard liveEnvironmentValue("SYNARA_MOCK_THREAD_VISUAL_SMOKE", in: environment) == "1" else {
@@ -1343,6 +1436,13 @@ final class SynaraUITests: XCTestCase {
         tap(element, timeout: 1)
     }
 
+    private func navigateBack(app: XCUIApplication) {
+        let backButton = app.navigationBars.buttons.element(boundBy: 0)
+        XCTAssertTrue(backButton.waitForExistence(timeout: 5))
+        backButton.tap()
+        XCTAssertTrue(app.buttons["AccountSettingsLink"].waitForExistence(timeout: 5))
+    }
+
     private enum ScrollDirection {
         case up
         case down
@@ -1386,13 +1486,24 @@ final class SynaraUITests: XCTestCase {
 
     private func dismissPasswordSavePromptIfPresent(app: XCUIApplication) {
         let notNow = app.buttons["Not Now"]
-        if notNow.waitForExistence(timeout: 3) {
+        guard notNow.waitForExistence(timeout: 3) else {
+            return
+        }
+
+        let deadline = Date().addingTimeInterval(10)
+        while notNow.exists && Date() < deadline {
             if notNow.isHittable {
                 notNow.tap()
             } else {
                 notNow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
         }
+
+        XCTAssertFalse(
+            notNow.exists,
+            "The iOS password-save prompt must be fully dismissed before app interactions continue."
+        )
     }
 
     private func dismissKeyboardIfPresent(app: XCUIApplication) {

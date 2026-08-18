@@ -36,6 +36,20 @@ or raw logs that contain secrets.
 The UI test suite includes `testLiveSmokeWhenConfigured`. It is skipped by
 default and can validate a signed simulator session against a disposable room:
 
+When using `scripts/run-ui-tests.sh`, select the signed live-test path explicitly:
+
+```sh
+SYNARA_UI_TEST_SIGNING_MODE=automatic \
+SYNARA_IOS_DEVELOPMENT_TEAM='<apple-team-id>' \
+IOS_UI_TEST_EXECUTION_TIME_ALLOWANCE=180 \
+IOS_PACKAGE_CACHE_PATH=/private/tmp/synara-ios-package-cache \
+scripts/run-ui-tests.sh
+```
+
+The runner defaults to unsigned mode for deterministic mock tests. Unsigned mode
+must not be used as evidence for live login or secure session restoration because
+the app cannot exercise its production Keychain access group without signing.
+
 ```sh
 SYNARA_LIVE_SMOKE=1 \
 SYNARA_LIVE_ROOM_ID='!room-id:example.org' \

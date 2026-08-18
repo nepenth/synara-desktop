@@ -291,7 +291,7 @@ struct RoomListView: View {
             }
             hasStartedInitialLoad = true
             await environment.sessionReadiness.waitUntilPrepared(for: session)
-            loadRooms(startUpdatesAfterLoad: true)
+            startRoomUpdates()
         }
         .onAppear {
             if hasStartedInitialLoad {
