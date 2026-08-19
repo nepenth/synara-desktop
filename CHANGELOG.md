@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 2.1.1 - 2026-08-19
+
+- Reused leftover local crypto devices on password login so a prior interrupted
+  session no longer fails with Olm unavailable on macOS and Linux.
+- Opened unread rooms on the live timeline at the newest receipt instead of a
+  stale fully-read marker, and made Jump to latest follow the live tail.
+- Tightened desktop room-list chips to two-letter initials and a muted palette,
+  and rendered timeline avatars, display names, timestamps, grouped sends, and
+  formatted message bodies.
+- See [`docs/releases/v2.1.1.md`](docs/releases/v2.1.1.md) for details.
+
 ## 2.1.0 - 2026-08-18
 
 - Hardened native credential custody, remote transport policy, bounded media

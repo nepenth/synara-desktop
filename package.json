@@ -1,6 +1,6 @@
 {
   "name": "synara-desktop",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Synara Desktop, a high-performance Matrix client for secure conversations and agent workflows.",
   "main": "index.js",
   "engines": {
