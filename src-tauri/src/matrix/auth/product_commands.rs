@@ -969,8 +969,11 @@ async fn existing_login_device_id(
     let store_key =
         get_or_migrate_store_key(&KeyringStoreKeyVault::new(), identity, key_creation_policy)
             .map_err(map_store_key_vault_error)?;
-    let config = ClientBuildConfig::product_default(app_data_root, identity.clone(), Some(store_key))
-        .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed"))?;
+    let config =
+        ClientBuildConfig::product_default(app_data_root, identity.clone(), Some(store_key))
+            .map_err(|_| {
+                MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed")
+            })?;
     existing_sqlite_crypto_device_id(
         config.state_store_path(),
         config.store_passphrase_hex().as_deref(),
