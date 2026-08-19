@@ -82,6 +82,13 @@ integration. Run a full package smoke manually before release-candidate builds /
 A `src-tauri`-only integration PR still runs **Validate** (~15–20m). Package
 smoke no longer doubles that by default.
 
+Push and pull_request for the same branch share one cancellable concurrency
+lane, so opening a PR does not start a second full suite beside the branch
+push.
+
+CI iOS simulator jobs build only the `aarch64-apple-ios-sim` SynaraCore slice.
+Release/TestFlight still builds the full four-architecture XCFramework.
+
 ## Validate Rust cache
 
 The **Validate desktop and runtime** job restores/saves `src-tauri` Cargo

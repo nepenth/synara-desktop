@@ -117,22 +117,22 @@ export function inspectWorkflowPolicy({
         .map((line) => line.trim())
         .filter(Boolean);
       const group = concurrency.find((line) => line.startsWith("group:")) ?? "";
-      if (!group.includes("github.event_name")) {
-        errors.push(
-          `${filename} concurrency must separate workflow event types.`
-        );
-      }
       if (
-        !group.includes("github.event.pull_request.number") ||
-        !group.includes("github.ref")
+        !group.includes("github.head_ref") ||
+        !group.includes("github.ref_name")
       ) {
         errors.push(
-          `${filename} concurrency must isolate each pull request and retain a ref fallback.`
+          `${filename} concurrency must share one cancellable lane per branch for push and pull_request.`
+        );
+      }
+      if (group.includes("github.event_name")) {
+        errors.push(
+          `${filename} concurrency must not split push and pull_request on the same branch.`
         );
       }
       if (!concurrency.includes("cancel-in-progress: true")) {
         errors.push(
-          `${filename} must cancel obsolete runs only within the same event and pull-request/ref lane.`
+          `${filename} must cancel obsolete runs within the same branch lane.`
         );
       }
     }

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- PR CI builds only the arm64 simulator SynaraCore slice, caches it, skips the
+  extra `xcodebuild build` before `build-for-testing`, and shares one
+  cancellable lane for push and pull_request on the same branch.
+
 ## 2.1.0 - 2026-08-18
 
 - Hardened native credential custody, remote transport policy, bounded media

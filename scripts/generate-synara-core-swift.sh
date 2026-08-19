@@ -12,7 +12,23 @@ package_root="$repo_root/synara-ios/SynaraCore"
 generated_dir="$package_root/Sources/SynaraCore/Generated"
 ffi_include_dir="$package_root/Sources/synara_coreFFI/include"
 artifacts_dir="$package_root/Artifacts"
-targets=(aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-apple-darwin)
+apple_slices="${SYNARA_CORE_APPLE_SLICES:-all}"
+case "$apple_slices" in
+  all)
+    targets=(aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-apple-darwin)
+    ;;
+  simulator)
+    # PR/CI simulator tests on Apple Silicon only need the arm64 sim slice.
+    targets=(aarch64-apple-ios-sim)
+    ;;
+  device)
+    targets=(aarch64-apple-ios)
+    ;;
+  *)
+    printf 'generate-synara-core-swift: SYNARA_CORE_APPLE_SLICES must be all, simulator, or device (got %s)\n' "$apple_slices" >&2
+    exit 1
+    ;;
+esac
 
 fail() {
   printf 'generate-synara-core-swift: %s\n' "$*" >&2
@@ -57,15 +73,6 @@ for target in "${targets[@]}"; do
     cargo build --locked --release --package synara-core --target "$target"
 done
 
-# XCFramework cannot accept two otherwise-identical simulator definitions.
-# Make the required generic simulator slice explicitly fat so both Xcode
-# generic simulator architectures link the same generated C module/library.
-simulator_library="$work_dir/libsynara_core-simulator.a"
-xcrun lipo -create \
-  "$cargo_target_dir/aarch64-apple-ios-sim/release/libsynara_core.a" \
-  "$cargo_target_dir/x86_64-apple-ios/release/libsynara_core.a" \
-  -output "$simulator_library"
-
 swift_tmp="$work_dir/Swift"
 mkdir -p "$swift_tmp"
 # Run the repository's own lockfile-pinned generator, never a user/global tool.
@@ -83,14 +90,38 @@ mv "$swift_tmp"/synara_coreFFI.h "$headers_tmp/synara_coreFFI.h"
 mv "$swift_tmp"/synara_coreFFI.modulemap "$headers_tmp/module.modulemap"
 
 framework_tmp="$work_dir/SynaraCore.xcframework"
-xcodebuild -create-xcframework \
-  -library "$cargo_target_dir/aarch64-apple-ios/release/libsynara_core.a" \
-  -headers "$headers_tmp" \
-  -library "$simulator_library" \
-  -headers "$headers_tmp" \
-  -library "$cargo_target_dir/aarch64-apple-darwin/release/libsynara_core.a" \
-  -headers "$headers_tmp" \
-  -output "$framework_tmp"
+create_xcframework=(xcodebuild -create-xcframework)
+if [[ "$apple_slices" == "all" || "$apple_slices" == "device" ]]; then
+  create_xcframework+=(
+    -library "$cargo_target_dir/aarch64-apple-ios/release/libsynara_core.a"
+    -headers "$headers_tmp"
+  )
+fi
+if [[ "$apple_slices" == "all" || "$apple_slices" == "simulator" ]]; then
+  simulator_library="$cargo_target_dir/aarch64-apple-ios-sim/release/libsynara_core.a"
+  if [[ "$apple_slices" == "all" ]]; then
+    # XCFramework cannot accept two otherwise-identical simulator definitions.
+    # Make the required generic simulator slice explicitly fat so both Xcode
+    # generic simulator architectures link the same generated C module/library.
+    simulator_library="$work_dir/libsynara_core-simulator.a"
+    xcrun lipo -create \
+      "$cargo_target_dir/aarch64-apple-ios-sim/release/libsynara_core.a" \
+      "$cargo_target_dir/x86_64-apple-ios/release/libsynara_core.a" \
+      -output "$simulator_library"
+  fi
+  create_xcframework+=(
+    -library "$simulator_library"
+    -headers "$headers_tmp"
+  )
+fi
+if [[ "$apple_slices" == "all" ]]; then
+  create_xcframework+=(
+    -library "$cargo_target_dir/aarch64-apple-darwin/release/libsynara_core.a"
+    -headers "$headers_tmp"
+  )
+fi
+create_xcframework+=(-output "$framework_tmp")
+"${create_xcframework[@]}"
 
 # Publish only an all-target result. The generated package paths are ignored so
 # source control never mistakes generated output for hand-maintained Swift.
