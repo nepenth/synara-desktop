@@ -6,7 +6,7 @@ const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.ts
 
 test('native timeline rows show timestamps and formatted HTML without the legacy event graph', () => {
   assert.match(presenter, /rowOriginServerTs/);
-  assert.match(presenter, /<Time /);
+  assert.match(presenter, /<Time\s/);
   assert.match(presenter, /htmlCss\.FormattedBody/);
   assert.match(presenter, /htmlCss\.MessageBody/);
   assert.match(presenter, /NativeTimelineSenderAvatar/);
