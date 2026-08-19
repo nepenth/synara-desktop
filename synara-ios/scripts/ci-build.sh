@@ -117,16 +117,6 @@ xcodebuild \
   -scheme Synara \
   -destination "$BUILD_DESTINATION" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
-  -resultBundlePath "$RESULT_BUNDLE_DIR/build-$RESULT_STAMP.xcresult" \
-  "${PACKAGE_ARGS[@]}" \
-  build \
-  "${UNSIGNED_BUILD_ARGS[@]}"
-
-xcodebuild \
-  -project Synara.xcodeproj \
-  -scheme Synara \
-  -destination "$BUILD_DESTINATION" \
-  -derivedDataPath "$DERIVED_DATA_PATH" \
   -resultBundlePath "$RESULT_BUNDLE_DIR/build-for-testing-$RESULT_STAMP.xcresult" \
   "${PACKAGE_ARGS[@]}" \
   build-for-testing \

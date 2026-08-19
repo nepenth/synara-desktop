@@ -4,6 +4,9 @@
 
 - Release reuses a proven `Quality gate` for the tagged SHA instead of always
   rerunning the hour-plus exact-tag desktop and iOS suites before packaging.
+- Version-only bumps skip iOS, Synapse, and `cargo test`. GitHub Release no
+  longer waits on TestFlight promotion. PR CI shares one lane per branch and
+  builds only the simulator UniFFI slice.
 
 ## 2.1.1 - 2026-08-19
 

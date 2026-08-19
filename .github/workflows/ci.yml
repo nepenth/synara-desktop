@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
@@ -45,14 +45,13 @@ jobs:
         id: scope
         shell: bash
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
 
-          # Full suite on push (main/release) and manual dispatch.
-          # TEMPORARY (2026-08-17): ios is forced off until main is stable.
-          if [[ "${GITHUB_EVENT_NAME}" != "pull_request" ]]; then
+          emit_full() {
             echo "validate=true" >> "$GITHUB_OUTPUT"
             echo "validate_rust=true" >> "$GITHUB_OUTPUT"
             echo "validate_rust_tests=true" >> "$GITHUB_OUTPUT"
@@ -65,24 +64,40 @@ jobs:
             echo "synapse_native_rich_messages=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_threads=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_receipts=true" >> "$GITHUB_OUTPUT"
-            echo "CI scope: full (event=${GITHUB_EVENT_NAME})"
+          }
+
+          emit_none() {
+            echo "validate=false" >> "$GITHUB_OUTPUT"
+            echo "validate_rust=false" >> "$GITHUB_OUTPUT"
+            echo "validate_rust_tests=false" >> "$GITHUB_OUTPUT"
+            echo "rust_audit=false" >> "$GITHUB_OUTPUT"
+            echo "validate_frontend=false" >> "$GITHUB_OUTPUT"
+            echo "ios=false" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_reactions=false" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_attachments=false" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_polls=false" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_rich_messages=false" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_threads=false" >> "$GITHUB_OUTPUT"
+            echo "synapse_native_receipts=false" >> "$GITHUB_OUTPUT"
+          }
+
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            emit_full
+            echo "CI scope: full (workflow_dispatch)"
             exit 0
           fi
 
-          if [[ -z "${BASE_SHA:-}" || -z "${HEAD_SHA:-}" ]]; then
-            echo "validate=true" >> "$GITHUB_OUTPUT"
-            echo "validate_rust=true" >> "$GITHUB_OUTPUT"
-            echo "validate_rust_tests=true" >> "$GITHUB_OUTPUT"
-            echo "rust_audit=true" >> "$GITHUB_OUTPUT"
-            echo "validate_frontend=true" >> "$GITHUB_OUTPUT"
-            echo "ios=true" >> "$GITHUB_OUTPUT"
-            echo "synapse_native_reactions=true" >> "$GITHUB_OUTPUT"
-            echo "synapse_native_attachments=true" >> "$GITHUB_OUTPUT"
-            echo "synapse_native_polls=true" >> "$GITHUB_OUTPUT"
-            echo "synapse_native_rich_messages=true" >> "$GITHUB_OUTPUT"
-            echo "synapse_native_threads=true" >> "$GITHUB_OUTPUT"
-            echo "synapse_native_receipts=true" >> "$GITHUB_OUTPUT"
-            echo "CI scope: full (missing PR SHAs)"
+          if [[ -z "${BASE_SHA:-}" || -z "${HEAD_SHA:-}" || "${BASE_SHA}" == "0000000000000000000000000000000000000000" ]]; then
+            emit_full
+            echo "CI scope: full (missing SHAs)"
+            exit 0
+          fi
+
+          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | node scripts/ci-metadata-only.mjs; then
+            emit_none
+            echo "CI scope: metadata-only"
+            node scripts/check-version-consistency.mjs
+            git diff --name-only "$BASE_SHA" "$HEAD_SHA" | head -80 || true
             exit 0
           fi
 
@@ -228,8 +243,6 @@ jobs:
             .github/workflows/ci.yml \
             scripts/synapse-integration.sh \
             integration/synapse \
-            src-tauri/Cargo.toml \
-            src-tauri/Cargo.lock \
             src-tauri/src/matrix/timeline/live.rs \
             src-tauri/src/matrix/timeline/live_synapse_proof \
             src-tauri/src/matrix/timeline/product_commands.rs; then
@@ -245,11 +258,8 @@ jobs:
             .github/workflows/ci.yml \
             scripts/synapse-integration.sh \
             integration/synapse \
-            src-tauri/Cargo.toml \
-            src-tauri/Cargo.lock \
             src-tauri/src/matrix/send/product_commands.rs \
-            src-tauri/src/matrix/send/live_synapse_proof \
-            src-tauri/src/matrix/auth/product.rs; then
+            src-tauri/src/matrix/send/live_synapse_proof; then
             echo "synapse_native_attachments=false" >> "$GITHUB_OUTPUT"
             SYNAPSE_NATIVE_ATTACHMENTS=false
           else
@@ -262,11 +272,8 @@ jobs:
             .github/workflows/ci.yml \
             scripts/synapse-integration.sh \
             integration/synapse \
-            src-tauri/Cargo.toml \
-            src-tauri/Cargo.lock \
             src-tauri/src/matrix/send/product_commands.rs \
-            src-tauri/src/matrix/send/live_synapse_proof \
-            src-tauri/src/matrix/auth/product.rs; then
+            src-tauri/src/matrix/send/live_synapse_proof; then
             echo "synapse_native_polls=false" >> "$GITHUB_OUTPUT"
             SYNAPSE_NATIVE_POLLS=false
           else
@@ -279,10 +286,7 @@ jobs:
             .github/workflows/ci.yml \
             scripts/synapse-integration.sh \
             integration/synapse \
-            src-tauri/Cargo.toml \
-            src-tauri/Cargo.lock \
-            src-tauri/src/matrix/send/live_synapse_proof \
-            src-tauri/src/matrix/auth/product.rs; then
+            src-tauri/src/matrix/send/live_synapse_proof; then
             echo "synapse_native_rich_messages=false" >> "$GITHUB_OUTPUT"
             SYNAPSE_NATIVE_RICH_MESSAGES=false
           else
@@ -295,10 +299,7 @@ jobs:
             .github/workflows/ci.yml \
             scripts/synapse-integration.sh \
             integration/synapse \
-            src-tauri/Cargo.toml \
-            src-tauri/Cargo.lock \
-            src-tauri/src/matrix/send/live_synapse_proof \
-            src-tauri/src/matrix/auth/product.rs; then
+            src-tauri/src/matrix/send/live_synapse_proof; then
             echo "synapse_native_threads=false" >> "$GITHUB_OUTPUT"
             SYNAPSE_NATIVE_THREADS=false
           else
@@ -312,10 +313,7 @@ jobs:
             .github/workflows/ci.yml \
             scripts/synapse-integration.sh \
             integration/synapse \
-            src-tauri/Cargo.toml \
-            src-tauri/Cargo.lock \
-            src-tauri/src/matrix/timeline/live_synapse_proof \
-            src-tauri/src/matrix/auth/product.rs; then
+            src-tauri/src/matrix/timeline/live_synapse_proof; then
             echo "synapse_native_receipts=false" >> "$GITHUB_OUTPUT"
             SYNAPSE_NATIVE_RECEIPTS=false
           else
@@ -475,6 +473,14 @@ jobs:
       - name: Test repository delivery scripts
         run: node --test scripts/__tests__/*.test.mjs
 
+      - name: Check runtime formatting
+        run: npm run check:prettier
+        working-directory: synara
+
+      - name: Check runtime lint
+        run: npm run check:eslint
+        working-directory: synara
+
       - name: Typecheck desktop runtime
         run: npm run typecheck
         working-directory: synara
@@ -489,14 +495,6 @@ jobs:
 
       - name: Test real-layout timeline scrolling
         run: npm run test:browser:timeline
-        working-directory: synara
-
-      - name: Check runtime lint
-        run: npm run check:eslint
-        working-directory: synara
-
-      - name: Check runtime formatting
-        run: npm run check:prettier
         working-directory: synara
 
       - name: Check production dependency advisories
@@ -519,7 +517,13 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
         with:
           toolchain: 1.93
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,aarch64-apple-darwin
+          targets: aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - name: Cache Apple SynaraCore build
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        with:
+          workspaces: ". -> target/synara-core-apple"
+          shared-key: ci-synara-core-apple-simulator
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -532,6 +536,7 @@ jobs:
         working-directory: synara-ios
         env:
           RUN_IOS_TESTS: "1"
+          SYNARA_CORE_APPLE_SLICES: simulator
 
       - name: Upload iOS result bundles
         if: always()

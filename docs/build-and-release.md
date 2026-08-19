@@ -122,29 +122,26 @@ manual workflow branch selector is not a safe release-source selector.
 npm run bump:version -- X.Y.Z --ios-build X.Y.Z
 ```
 
-2. Commit and push the version metadata to `main`.
-3. Wait for the normal `CI / Quality gate` check to pass.
-4. Create and push `vX.Y.Z` at that exact `main` commit.
-5. The `Release` workflow validates that the tag matches the committed shared
+2. Open a metadata-only PR (version files, changelog, release notes). Quality
+   gate should skip iOS, Synapse, and `cargo test`.
+3. Merge when Quality gate is green, then tag `vX.Y.Z` at that `main` commit.
+   Do not wait for a second full suite on the merge push.
+4. The `Release` workflow validates that the tag matches the committed shared
    version and is reachable from `main`. Exact-tag jobs reuse a proven
    `Quality gate` on that SHA (or the incoming PR parent of a merge commit)
    and otherwise rerun full desktop/runtime and iOS simulator tests at the
-   tagged SHA. After that gate, the workflow builds:
+   tagged SHA. After that gate, desktop packaging starts immediately:
    - macOS signed/notarized DMG, macOS updater archive, signatures, and
      `latest.json`.
    - Linux `.deb`.
    - Arch-family `synara-desktop-bin` package plus fixed `pacman-repo` release
      assets (`synara.db`, `synara.files`, and package file).
-   - iOS signed archive uploaded to internal TestFlight, followed by an
-     App Store Connect gate that requires the exact build to be valid and in
-     beta testing for every configured internal group.
-6. Only after every build and verification passes, the workflow creates the
-   versioned GitHub Release and updates the fixed pacman repository through the
-   `production-release` environment approval.
-7. Confirm the workflow's TestFlight state snapshot and hosted macOS
-   `latest.json`. Manual App Store Connect inspection is confirmatory; the
-   workflow already fails unless Apple reports the exact build as
-   `IN_BETA_TESTING`.
+5. GitHub Release publishes those desktop artifacts through the
+   `production-release` environment. It does not wait on TestFlight.
+6. iOS TestFlight upload and internal promotion run in parallel as their own
+   track. Confirm the TestFlight state snapshot; Apple should report the exact
+   build as `IN_BETA_TESTING`.
+7. Confirm hosted macOS `latest.json`.
 8. Verify the fixed pacman repo URL:
 
 ```text
