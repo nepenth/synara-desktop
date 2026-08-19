@@ -126,8 +126,10 @@ npm run bump:version -- X.Y.Z --ios-build X.Y.Z
 3. Wait for the normal `CI / Quality gate` check to pass.
 4. Create and push `vX.Y.Z` at that exact `main` commit.
 5. The `Release` workflow validates that the tag matches the committed shared
-   version and is reachable from `main`, reruns full desktop/runtime and iOS
-   simulator tests at that exact tag SHA, then builds:
+   version and is reachable from `main`. Exact-tag jobs reuse a proven
+   `Quality gate` on that SHA (or the incoming PR parent of a merge commit)
+   and otherwise rerun full desktop/runtime and iOS simulator tests at the
+   tagged SHA. After that gate, the workflow builds:
    - macOS signed/notarized DMG, macOS updater archive, signatures, and
      `latest.json`.
    - Linux `.deb`.
