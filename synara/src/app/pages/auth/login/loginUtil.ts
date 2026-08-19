@@ -148,7 +148,10 @@ type NativeCommandError = {
 // this is the renderer's final privacy boundary before an identifier is displayed.
 const SAFE_NATIVE_LOGIN_DIAGNOSTIC_IDS = new Set([
   'p3.2-device-display-name-too-long',
+  'p3.2-device-id-invalid-chars',
+  'p3.2-device-id-too-long',
   'p3.2-empty-device-display-name',
+  'p3.2-empty-device-id',
   'p3.2-empty-password',
   'p3.2-empty-user-id',
   'p3.2-login-connectivity',

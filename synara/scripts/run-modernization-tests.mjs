@@ -22,6 +22,7 @@ const tests = [
   'src/app/utils/__tests__/later.test.ts',
   'src/app/utils/__tests__/roomNotes.test.ts',
   'src/app/utils/__tests__/roomIcon.test.ts',
+  'src/app/utils/__tests__/common.test.ts',
   'src/app/utils/__tests__/room.test.ts',
   'src/app/utils/__tests__/notifications.test.ts',
   'src/app/utils/__tests__/foundationDiagnostics.test.ts',

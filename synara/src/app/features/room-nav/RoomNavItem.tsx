@@ -20,9 +20,9 @@ import { useFocusWithin, useHover } from 'react-aria';
 import FocusTrap from 'focus-trap-react';
 import { NavItem, NavItemContent, NavItemOptions, NavLink } from '../../components/nav';
 import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
-import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
+import { RoomAvatar } from '../../components/room-avatar';
 import { getDirectRoomAvatarUrl, getRoomAvatarUrl } from '../../utils/room';
-import { nameInitials } from '../../utils/common';
+import { roomAvatarTone, roomNameInitials } from '../../utils/common';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRoomUnread } from '../../state/hooks/unread';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
@@ -52,7 +52,6 @@ import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { useRoomName } from '../../hooks/useRoomMeta';
-import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 
 type RoomNavItemMenuProps = {
   room: EventedRoomReading;
@@ -226,7 +225,7 @@ type RoomNavItemProps = {
 function RoomNavItemImpl({
   room,
   selected,
-  showAvatar,
+  showAvatar = true,
   direct,
   notificationMode,
   linkPath,
@@ -243,6 +242,7 @@ function RoomNavItemImpl({
   );
 
   const roomName = useRoomName(room);
+  const avatarTone = roomAvatarTone(room.roomId);
 
   const handleContextMenu: MouseEventHandler<HTMLElement> = (evt) => {
     evt.preventDefault();
@@ -275,42 +275,33 @@ function RoomNavItemImpl({
         <NavItemContent>
           <Box as="span" grow="Yes" alignItems="Center" gap="200">
             <Avatar size="200" radii="400">
-              {showAvatar ? (
-                <RoomAvatar
-                  roomId={room.roomId}
-                  src={
-                    direct
+              <RoomAvatar
+                roomId={room.roomId}
+                src={
+                  showAvatar
+                    ? direct
                       ? getDirectRoomAvatarUrl(mx, room, 96, useAuthentication)
                       : getRoomAvatarUrl(mx, room, 96, useAuthentication)
-                  }
-                  alt={roomName}
-                  renderFallback={() => (
-                    <Text as="span" size="H6">
-                      {nameInitials(roomName)}
-                    </Text>
-                  )}
-                />
-              ) : (
-                <RoomIcon
-                  style={{
-                    opacity: unread ? config.opacity.P500 : config.opacity.P300,
-                  }}
-                  filled={selected}
-                  size="100"
-                  joinRule={normalizeRoomJoinRulePresentation(room.getJoinRule())}
-                  roomType={room.getType()}
-                />
-              )}
+                    : undefined
+                }
+                alt={roomName}
+                fallbackBackground={avatarTone.background}
+                fallbackColor={avatarTone.color}
+                renderFallback={() => (
+                  <Text
+                    as="span"
+                    size="T200"
+                    style={{ textTransform: 'uppercase', fontWeight: 600 }}
+                  >
+                    {roomNameInitials(roomName)}
+                  </Text>
+                )}
+              />
             </Avatar>
             <Box as="span" grow="Yes" direction="Column">
               <Text priority={unread ? '500' : '300'} as="span" size="Inherit" truncate>
                 {roomName}
               </Text>
-              {room.lastMessagePreview ? (
-                <Text as="span" size="T200" priority="300" truncate>
-                  {room.lastMessagePreview}
-                </Text>
-              ) : null}
             </Box>
             {!optionsVisible && !unread && !selected && typingMember.length > 0 && (
               <Badge size="300" variant="Secondary" fill="Soft" radii="Pill" outlined>

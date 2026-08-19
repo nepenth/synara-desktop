@@ -226,7 +226,7 @@ export function Home() {
   const virtualizer = useVirtualizer({
     count: mainRoomIds.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 38,
+    estimateSize: () => 40,
     overscan: 10,
   });
 
@@ -307,6 +307,7 @@ export function Home() {
                       key={roomId}
                       room={room}
                       selected={selected}
+                      showAvatar
                       linkPath={getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
                       notificationMode={getRoomNotificationMode(
                         notificationPreferences,
@@ -349,6 +350,7 @@ export function Home() {
                       <RoomNavItem
                         room={room}
                         selected={selected}
+                        showAvatar
                         linkPath={getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
                         notificationMode={getRoomNotificationMode(
                           notificationPreferences,

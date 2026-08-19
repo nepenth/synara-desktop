@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { readFileSync } from 'node:fs';
 import {
   applyNativeTimelineViewDelta,
   filterNativeForwardTargets,
@@ -157,4 +158,12 @@ test('pin and forward pure helpers gate native presenter UX', () => {
   assert.equal(needsNativeForwardEncryptionConfirm(true, false), true);
   assert.equal(needsNativeForwardEncryptionConfirm(true, true), false);
   assert.equal(needsNativeForwardEncryptionConfirm(false, false), false);
+});
+
+test('timeline open is not aborted when event listen is unavailable', () => {
+  const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
+  assert.match(source, /listenTauriEvent/);
+  assert.match(source, /matrix_timeline_open/);
+  assert.match(source, /matrix_timeline_snapshot/);
+  assert.doesNotMatch(source, /if \(disposed \|\| !unlisten\)/);
 });

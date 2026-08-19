@@ -38,6 +38,11 @@ matrix-sdk-ui = { version = "=0.18.0", default-features = false }
 # Live NativeTimelineRegistry maps UTD causes from the crypto crate.
 # Pin matches src-tauri (`=0.18.0`, default-features=false).
 matrix-sdk-crypto = { version = "=0.18.0", default-features = false }
+# Password re-login peeks the leftover SQLite crypto account so the next login
+# reuses that device id. Pin and default-features match the SDK workspace.
+matrix-sdk-sqlite = { version = "=0.18.0", default-features = false, features = [
+  "crypto-store",
+] }
 # Feature-unifies Ruma's Matrix-spec HTML sanitizer with the SDK re-export.
 # Outbound composer Markdown is parsed and sanitized in one shared boundary.
 ruma = { version = "=0.16.0", features = ["html", "markdown"] }

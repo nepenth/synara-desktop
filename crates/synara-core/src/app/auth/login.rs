@@ -14,6 +14,7 @@
 //! fields for harness/status. Optional host-side persistence after login is
 //! [`crate::app::lifecycle::persist_session_after_login`] (P3.5).
 
+use matrix_sdk::encryption::{CryptoStoreError, OlmError};
 use matrix_sdk::{Client, Error as MatrixSdkError, HttpError};
 
 use super::error::AuthError;
@@ -57,6 +58,14 @@ pub struct LoginOptions {
     /// Persistence of that token uses
     /// [`crate::app::lifecycle::persist_session_after_login`] (P3.5) after success.
     pub request_refresh_token: bool,
+    /// Existing device id from the leftover local crypto store.
+    ///
+    /// Password login without this id asks the homeserver for a *new* device.
+    /// Logout does not wipe the SQLite crypto account, so a new device collides
+    /// with the leftover Olm account (`CryptoStoreError::MismatchedAccount`)
+    /// and fails closed. Reusing the stored device id is the SDK-supported
+    /// re-login path when the client still holds the matching keys.
+    pub device_id: Option<String>,
 }
 
 impl LoginOptions {
@@ -64,6 +73,7 @@ impl LoginOptions {
         Self {
             device_display_name: Some(platform.device_display_name().to_owned()),
             request_refresh_token: false,
+            device_id: None,
         }
     }
 
@@ -96,6 +106,11 @@ pub async fn login_with_password(
         .matrix_auth()
         .login_username(user.as_str(), password)
         .initial_device_display_name(&device_display_name);
+
+    if let Some(device_id) = options.device_id.as_deref() {
+        let device_id = validate_device_id(device_id)?;
+        builder = builder.device_id(&device_id);
+    }
 
     if options.request_refresh_token {
         builder = builder.request_refresh_token();
@@ -145,6 +160,29 @@ fn validate_password_present(password: &str) -> Result<(), AuthError> {
         });
     }
     Ok(())
+}
+
+fn validate_device_id(raw: &str) -> Result<String, AuthError> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(AuthError::InvalidInput {
+            diagnostic_id: "p3.2-empty-device-id",
+            reason: "device id is empty",
+        });
+    }
+    if trimmed.len() > 255 {
+        return Err(AuthError::InvalidInput {
+            diagnostic_id: "p3.2-device-id-too-long",
+            reason: "device id exceeds length limit",
+        });
+    }
+    if trimmed.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        return Err(AuthError::InvalidInput {
+            diagnostic_id: "p3.2-device-id-invalid-chars",
+            reason: "device id contains whitespace or control characters",
+        });
+    }
+    Ok(trimmed.to_owned())
 }
 
 fn validate_device_display_name(name: &str) -> Result<(), AuthError> {
@@ -218,7 +256,7 @@ fn classify_login_sdk_error_shape(err: &MatrixSdkError) -> Option<AuthError> {
         MatrixSdkError::Url(_) => "p3.2-login-url-parse",
         MatrixSdkError::Timeout => "p3.2-login-sdk-timeout",
         // Sub-classified store failures so a privacy-safe support report can
-        // distinguish the three distinct local failure classes (and their
+        // distinguish the distinct local failure classes (and their
         // remediation) without exposing any raw SDK text:
         // - CrossProcessLockError: another running instance holds the store
         //   lock (macOS users often see this after launching while a prior
@@ -226,12 +264,24 @@ fn classify_login_sdk_error_shape(err: &MatrixSdkError) -> Option<AuthError> {
         // - CryptoStoreError/StateStore/BadCryptoStoreState: local store open,
         //   migration, or schema/cipher failure (e.g. leftover store created by
         //   a different app build or a changed store key).
-        // - NoOlmMachine/OlmError/MegolmError: encryption engine could not be
-        //   initialized; fails closed.
+        // - OlmError wrapping a leftover-store identity/pickle failure: the
+        //   SDK opened the crypto store, then activate() found an Olm account
+        //   for a different device (typical after logout, which does not wipe
+        //   the store) or could not unpickle it. This is a reset candidate.
+        // - NoOlmMachine / other Olm/Megolm errors: encryption engine could
+        //   not be initialized; fails closed.
         MatrixSdkError::CrossProcessLockError(_) => "p3.2-login-store-locked",
+        MatrixSdkError::CryptoStoreError(error)
+            if leftover_crypto_store_requires_reset(error.as_ref()) =>
+        {
+            "p3.2-login-store-reset-required"
+        }
         MatrixSdkError::CryptoStoreError(_)
         | MatrixSdkError::StateStore(_)
         | MatrixSdkError::BadCryptoStoreState => "p3.2-login-store-open-failed",
+        MatrixSdkError::OlmError(error) if leftover_olm_store_requires_reset(error.as_ref()) => {
+            "p3.2-login-store-reset-required"
+        }
         MatrixSdkError::NoOlmMachine
         | MatrixSdkError::OlmError(_)
         | MatrixSdkError::MegolmError(_) => "p3.2-login-olm-unavailable",
@@ -249,6 +299,7 @@ fn classify_login_sdk_error_shape(err: &MatrixSdkError) -> Option<AuthError> {
         },
         "p3.2-login-store-locked"
         | "p3.2-login-store-open-failed"
+        | "p3.2-login-store-reset-required"
         | "p3.2-login-olm-unavailable"
         | "p3.2-login-local-io" => AuthError::SdkInvariant { diagnostic_id },
         _ => AuthError::Unknown { diagnostic_id },
@@ -352,6 +403,23 @@ fn classify_login_message_fallback(message: &str) -> AuthError {
     }
     AuthError::Unknown {
         diagnostic_id: "p3.2-login-unknown",
+    }
+}
+
+fn leftover_crypto_store_requires_reset(error: &CryptoStoreError) -> bool {
+    matches!(
+        error,
+        CryptoStoreError::MismatchedAccount { .. }
+            | CryptoStoreError::UnpicklingError
+            | CryptoStoreError::Pickle(_)
+            | CryptoStoreError::UnsupportedDatabaseVersion(_, _)
+    )
+}
+
+fn leftover_olm_store_requires_reset(error: &OlmError) -> bool {
+    match error {
+        OlmError::Store(store_error) => leftover_crypto_store_requires_reset(store_error),
+        _ => false,
     }
 }
 
@@ -500,5 +568,69 @@ mod tests {
         let err = map_login_sdk_error(MatrixSdkError::NoOlmMachine);
         assert_eq!(err.diagnostic_id(), "p3.2-login-olm-unavailable");
         assert!(err.display_is_privacy_safe(&["syt_token", "olm_session", "refresh_token=rrr"]));
+    }
+
+    #[test]
+    fn leftover_crypto_account_mismatch_is_a_reset_candidate() {
+        // Password login against a leftover Olm account (logout ≠ wipe) wraps
+        // MismatchedAccount as OlmError::Store. That must arm archive recovery,
+        // not the generic "olm unavailable" fail-closed id.
+        let mismatch = OlmError::Store(CryptoStoreError::MismatchedAccount {
+            expected: (
+                ruma::OwnedUserId::try_from("@alice:example.org").expect("test mxid"),
+                ruma::OwnedDeviceId::from("OLDDEV"),
+            ),
+            got: (
+                ruma::OwnedUserId::try_from("@alice:example.org").expect("test mxid"),
+                ruma::OwnedDeviceId::from("NEWDEV"),
+            ),
+        });
+        let err = map_login_sdk_error(MatrixSdkError::OlmError(Box::new(mismatch)));
+        assert_eq!(err.diagnostic_id(), "p3.2-login-store-reset-required");
+        assert!(err.display_is_privacy_safe(&[
+            "@alice:example.org",
+            "OLDDEV",
+            "NEWDEV",
+            "syt_token",
+            "password=hunter2",
+        ]));
+
+        let pickle = map_login_sdk_error(MatrixSdkError::OlmError(Box::new(OlmError::Store(
+            CryptoStoreError::UnpicklingError,
+        ))));
+        assert_eq!(pickle.diagnostic_id(), "p3.2-login-store-reset-required");
+
+        let direct = map_login_sdk_error(MatrixSdkError::CryptoStoreError(Box::new(
+            CryptoStoreError::MismatchedAccount {
+                expected: (
+                    ruma::OwnedUserId::try_from("@alice:example.org").expect("test mxid"),
+                    ruma::OwnedDeviceId::from("OLDDEV"),
+                ),
+                got: (
+                    ruma::OwnedUserId::try_from("@alice:example.org").expect("test mxid"),
+                    ruma::OwnedDeviceId::from("NEWDEV"),
+                ),
+            },
+        )));
+        assert_eq!(direct.diagnostic_id(), "p3.2-login-store-reset-required");
+    }
+
+    #[test]
+    fn rejects_empty_or_oversized_device_id() {
+        assert_eq!(
+            validate_device_id("").unwrap_err().diagnostic_id(),
+            "p3.2-empty-device-id"
+        );
+        assert_eq!(
+            validate_device_id("   ").unwrap_err().diagnostic_id(),
+            "p3.2-empty-device-id"
+        );
+        assert_eq!(
+            validate_device_id(&"A".repeat(256))
+                .unwrap_err()
+                .diagnostic_id(),
+            "p3.2-device-id-too-long"
+        );
+        assert_eq!(validate_device_id("DEVICEID").unwrap(), "DEVICEID");
     }
 }

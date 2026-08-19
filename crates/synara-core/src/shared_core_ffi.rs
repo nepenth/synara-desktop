@@ -158,7 +158,8 @@ use crate::app::account_data::{
     SynaraRoomNoteItemKind,
 };
 use crate::app::auth::{
-    login_with_password as core_login_with_password, DevicePlatform, LoginOptions,
+    existing_sqlite_crypto_device_id, login_with_password as core_login_with_password,
+    DevicePlatform, LoginOptions,
 };
 use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig};
 use crate::app::devices::{
@@ -2909,6 +2910,12 @@ impl SharedCore {
             })?;
         let config = ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        let existing_device_id = existing_sqlite_crypto_device_id(
+            config.state_store_path(),
+            config.store_passphrase_hex().as_deref(),
+        )
+        .await
+        .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let client = build_unauthenticated_client(&config)
             .await
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
@@ -2919,6 +2926,7 @@ impl SharedCore {
             &LoginOptions {
                 request_refresh_token: true,
                 device_display_name: Some(DevicePlatform::Ios.device_display_name().to_owned()),
+                device_id: existing_device_id,
             },
         )
         .await
@@ -11028,6 +11036,7 @@ mod tests {
                 event_id: Some("$evt:example.org".to_owned()),
                 sender_id: "@alice:example.org".to_owned(),
                 sender_name: "@alice:example.org".to_owned(),
+                sender_avatar_url: None,
                 origin_server_ts: 1_700_000_000_000,
                 capabilities: TimelineRowCapabilities {
                     react: true,

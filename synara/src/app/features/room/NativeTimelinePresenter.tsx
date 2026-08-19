@@ -4,6 +4,7 @@ import { useFocusWithin, useHover } from 'react-aria';
 import FocusTrap from 'focus-trap-react';
 import { ErrorBoundary } from 'react-error-boundary';
 import {
+  Avatar,
   Box,
   Button,
   Icon,
@@ -59,8 +60,16 @@ import {
   useNativeTimelineView,
 } from './nativeTimelineView';
 import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
+import { Time } from '../../components/message';
+import { UserAvatar } from '../../components/user-avatar';
+import { useSetting } from '../../state/hooks/settings';
+import { settingsAtom } from '../../state/settings';
+import { getMxIdLocalPart } from '../../utils/matrix';
+import { nameInitials } from '../../utils/common';
+import colorMXID from '../../../util/colorMXID';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { stopPropagation } from '../../utils/keyboard';
+import * as htmlCss from './nativeTimelineHtml.css';
 
 const HermesAgentCard = React.lazy(() =>
   import('../../components/hermes/HermesAgentCard').then((module) => ({
@@ -119,6 +128,50 @@ const rowCapabilities = (row: NativeTimelineViewRow): NativeTimelineRowCapabilit
   return undefined;
 };
 
+const rowOriginServerTs = (row: NativeTimelineViewRow): number | undefined => {
+  if (row.kind === 'sticker') return row.event.originServerTs;
+  if ('originServerTs' in row && typeof row.originServerTs === 'number') return row.originServerTs;
+  return undefined;
+};
+
+const rowSenderId = (row: NativeTimelineViewRow | undefined): string | undefined => {
+  if (!row) return undefined;
+  if (row.kind === 'sticker') return row.event.senderId;
+  if ('senderId' in row) return row.senderId;
+  return undefined;
+};
+
+const rowSenderName = (row: NativeTimelineViewRow): string => {
+  if (row.kind === 'sticker') return row.event.senderName;
+  if ('senderName' in row) return row.senderName;
+  return rowSenderId(row) ?? '';
+};
+
+const rowSenderAvatarUrl = (row: NativeTimelineViewRow): string | undefined => {
+  if (row.kind === 'sticker') return row.event.senderAvatarUrl;
+  if ('senderAvatarUrl' in row) return row.senderAvatarUrl;
+  return undefined;
+};
+
+const displayNameForRow = (row: NativeTimelineViewRow): string => {
+  const name = rowSenderName(row).trim();
+  const senderId = rowSenderId(row) ?? '';
+  if (name && name !== senderId) return name;
+  return getMxIdLocalPart(senderId) ?? name ?? senderId;
+};
+
+const isGroupedWithPrevious = (
+  previous: NativeTimelineViewRow | undefined,
+  row: NativeTimelineViewRow
+): boolean => {
+  const previousId = rowSenderId(previous);
+  const senderId = rowSenderId(row);
+  const previousTs = previous ? rowOriginServerTs(previous) : undefined;
+  const ts = rowOriginServerTs(row);
+  if (!previousId || !senderId || previousId !== senderId || !previousTs || !ts) return false;
+  return Math.abs(ts - previousTs) < 5 * 60 * 1000;
+};
+
 const mediaStyle = (media?: NativeTimelineMediaHandle): React.CSSProperties => {
   const maxWidth = media?.width ? Math.min(media.width, 480) : 480;
   const maxHeight = media?.height ? Math.min(media.height, 480) : 480;
@@ -127,6 +180,7 @@ const mediaStyle = (media?: NativeTimelineMediaHandle): React.CSSProperties => {
 
 type NativeTimelineRowProps = {
   row: NativeTimelineViewRow;
+  grouped: boolean;
   roomId: string;
   pinnedEventIds?: string[];
   sourceEncrypted?: boolean;
@@ -573,7 +627,8 @@ const NativeTimelineRowActionSurface = ({
   const hasActionMenu = Boolean(eventId && capabilities);
   const menuOpen = Boolean(menuAnchor);
   const emojiBoardOpen = Boolean(emojiBoardAnchor);
-  const showActionRail = hasActionMenu && (hovered || focusWithin || menuOpen || emojiBoardOpen);
+  const showActionRail = hasActionMenu;
+  const actionsActive = hovered || focusWithin || menuOpen || emojiBoardOpen;
 
   const closeMenu = () => setMenuAnchor(undefined);
   const openMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -630,7 +685,7 @@ const NativeTimelineRowActionSurface = ({
                   }
                 >
                   <IconButton
-                    variant="SurfaceVariant"
+                    variant={actionsActive ? 'Surface' : 'SurfaceVariant'}
                     size="300"
                     radii="300"
                     title="Add reaction"
@@ -664,7 +719,7 @@ const NativeTimelineRowActionSurface = ({
                 }
               >
                 <IconButton
-                  variant="SurfaceVariant"
+                  variant={actionsActive ? 'Surface' : 'SurfaceVariant'}
                   size="300"
                   radii="300"
                   title="More message actions"
@@ -746,8 +801,28 @@ const NativeTimelineMedia = ({
   return null;
 };
 
+const NativeTimelineSenderAvatar = ({ row }: { row: NativeTimelineViewRow }) => {
+  const senderId = rowSenderId(row) ?? '';
+  const displayName = displayNameForRow(row);
+  return (
+    <Avatar size="300" radii="400">
+      <UserAvatar
+        userId={senderId}
+        src={rowSenderAvatarUrl(row)}
+        alt={displayName}
+        renderFallback={() => (
+          <Text as="span" size="T200" style={{ textTransform: 'uppercase' }}>
+            {nameInitials(displayName)}
+          </Text>
+        )}
+      />
+    </Avatar>
+  );
+};
+
 const NativeTimelineRow = ({
   row,
+  grouped,
   roomId,
   pinnedEventIds,
   sourceEncrypted,
@@ -755,8 +830,11 @@ const NativeTimelineRow = ({
   onReplyDraftChanged,
   onFocusEvent,
 }: NativeTimelineRowProps) => {
+  const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
+  const [dateFormatString] = useSetting(settingsAtom, 'dateFormatString');
   const capabilities = rowCapabilities(row);
   const eventId = rowEventId(row);
+  const originServerTs = rowOriginServerTs(row);
   const pinned = isNativeTimelineEventPinned(pinnedEventIds, eventId);
   const runReaction = (key: string) => {
     if (!eventId || !capabilities?.react) return;
@@ -815,98 +893,136 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
         >
-          <Box
-            direction="Column"
-            gap="100"
-            style={{ padding: `${config.space.S200} ${config.space.S400}` }}
-          >
-            <Box gap="200" alignItems="Center">
-              <Text size="L400">{row.senderName}</Text>
-              {pinned ? (
-                <Text size="T200" style={{ opacity: 0.7 }}>
-                  Pinned
-                </Text>
-              ) : null}
-            </Box>
-            {row.reply && (
-              <Box
-                as="button"
-                direction="Column"
-                gap="100"
-                onClick={() => onFocusEvent(row.reply!.eventId)}
-                style={{
-                  opacity: 0.8,
-                  borderLeft: '2px solid currentColor',
-                  paddingLeft: config.space.S200,
-                  background: 'transparent',
-                  borderTop: 'none',
-                  borderRight: 'none',
-                  borderBottom: 'none',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  color: 'inherit',
-                }}
-                aria-label={`Jump to replied message ${row.reply.eventId}`}
-              >
-                <Text size="T200">{row.reply.senderName}</Text>
-                <Text size="T200" style={{ whiteSpace: 'pre-wrap' }}>
-                  {row.reply.body}
-                </Text>
+          <Box direction="Column" gap="100" className={htmlCss.MessageRow}>
+            <Box gap="300" alignItems="Start">
+              <Box direction="Column" alignItems="Center" style={{ width: 36, flexShrink: 0 }}>
+                {grouped ? (
+                  originServerTs ? (
+                    <Time
+                      compact
+                      ts={originServerTs}
+                      hour24Clock={hour24Clock}
+                      dateFormatString={dateFormatString}
+                    />
+                  ) : null
+                ) : (
+                  <NativeTimelineSenderAvatar row={row} />
+                )}
               </Box>
-            )}
-            {agentPayload ? (
-              <ErrorBoundary fallback={<Text size="T300">Agent output unavailable</Text>}>
-                <React.Suspense fallback={<Spinner size="200" aria-label="Loading agent output" />}>
-                  <HermesAgentCard payload={agentPayload} />
-                </React.Suspense>
-              </ErrorBoundary>
-            ) : row.formattedBody ? (
-              <div
-                // Defense in depth: re-sanitize Matrix HTML before the native presenter renders it.
-                // eslint-disable-next-line react/no-danger
-                dangerouslySetInnerHTML={{ __html: sanitizeCustomHtml(row.formattedBody) }}
-                style={{
-                  whiteSpace: 'pre-wrap',
-                  fontStyle: isEmote ? 'italic' : undefined,
-                  fontSize: 'inherit',
-                }}
-              />
-            ) : (
-              <Text
-                size="T400"
-                style={{ whiteSpace: 'pre-wrap', fontStyle: isEmote ? 'italic' : undefined }}
-              >
-                {isEmote ? `* ${row.body}` : row.body}
-              </Text>
-            )}
-            {row.edited ? (
-              <Text size="T200" style={{ opacity: 0.7 }}>
-                Edited
-              </Text>
-            ) : null}
-            {row.thread && threadFocus ? (
-              <Button size="300" fill="Soft" onClick={() => onFocusEvent(threadFocus)}>
-                Thread · {row.thread.replyCount} {row.thread.replyCount === 1 ? 'reply' : 'replies'}
-                {row.thread.latestEventId ? ' · open latest' : ' · open root'}
-              </Button>
-            ) : null}
-            <NativeTimelineMedia media={row.media} messageType={row.messageType} body={row.body} />
-            {row.reactions?.length ? (
-              <Box gap="100" wrap="Wrap">
-                {row.reactions.map((reaction) => (
-                  <Button
-                    key={reaction.key}
-                    size="300"
-                    variant={reaction.own ? 'Primary' : 'Secondary'}
-                    fill="Soft"
-                    disabled={!capabilities?.react}
-                    onClick={() => runReaction(reaction.key)}
+              <Box direction="Column" gap="100" grow="Yes" style={{ minWidth: 0 }}>
+                {grouped ? null : (
+                  <Box gap="200" alignItems="Baseline">
+                    <Text size="T400" style={{ color: colorMXID(row.senderId), fontWeight: 600 }}>
+                      {displayNameForRow(row)}
+                    </Text>
+                    {originServerTs ? (
+                      <Time
+                        ts={originServerTs}
+                        hour24Clock={hour24Clock}
+                        dateFormatString={dateFormatString}
+                      />
+                    ) : null}
+                    {pinned ? (
+                      <Text size="T200" style={{ opacity: 0.7 }}>
+                        Pinned
+                      </Text>
+                    ) : null}
+                  </Box>
+                )}
+                {row.reply && (
+                  <Box
+                    as="button"
+                    direction="Column"
+                    gap="100"
+                    onClick={() => onFocusEvent(row.reply!.eventId)}
+                    style={{
+                      opacity: 0.8,
+                      borderLeft: '2px solid currentColor',
+                      paddingLeft: config.space.S200,
+                      background: 'transparent',
+                      borderTop: 'none',
+                      borderRight: 'none',
+                      borderBottom: 'none',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: 'inherit',
+                    }}
+                    aria-label={`Jump to replied message ${row.reply.eventId}`}
                   >
-                    {reaction.key} {reaction.count}
+                    <Text size="T200">{row.reply.senderName}</Text>
+                    <Text size="T200" style={{ whiteSpace: 'pre-wrap' }}>
+                      {row.reply.body}
+                    </Text>
+                  </Box>
+                )}
+                {agentPayload ? (
+                  <ErrorBoundary fallback={<Text size="T300">Agent output unavailable</Text>}>
+                    <React.Suspense
+                      fallback={<Spinner size="200" aria-label="Loading agent output" />}
+                    >
+                      <HermesAgentCard payload={agentPayload} />
+                    </React.Suspense>
+                  </ErrorBoundary>
+                ) : (
+                  <div className={htmlCss.MessageBody}>
+                    {row.formattedBody ? (
+                      <div
+                        className={htmlCss.FormattedBody}
+                        // Defense in depth: re-sanitize Matrix HTML before the native presenter renders it.
+                        // eslint-disable-next-line react/no-danger
+                        dangerouslySetInnerHTML={{ __html: sanitizeCustomHtml(row.formattedBody) }}
+                        style={{
+                          fontStyle: isEmote ? 'italic' : undefined,
+                        }}
+                      />
+                    ) : (
+                      <Text
+                        size="T400"
+                        style={{
+                          whiteSpace: 'pre-wrap',
+                          fontStyle: isEmote ? 'italic' : undefined,
+                        }}
+                      >
+                        {isEmote ? `* ${row.body}` : row.body}
+                      </Text>
+                    )}
+                    {row.edited ? (
+                      <Text size="T200" style={{ opacity: 0.7 }}>
+                        Edited
+                      </Text>
+                    ) : null}
+                  </div>
+                )}
+                {row.thread && threadFocus ? (
+                  <Button size="300" fill="Soft" onClick={() => onFocusEvent(threadFocus)}>
+                    Thread · {row.thread.replyCount}{' '}
+                    {row.thread.replyCount === 1 ? 'reply' : 'replies'}
+                    {row.thread.latestEventId ? ' · open latest' : ' · open root'}
                   </Button>
-                ))}
+                ) : null}
+                <NativeTimelineMedia
+                  media={row.media}
+                  messageType={row.messageType}
+                  body={row.body}
+                />
+                {row.reactions?.length ? (
+                  <Box gap="100" wrap="Wrap">
+                    {row.reactions.map((reaction) => (
+                      <Button
+                        key={reaction.key}
+                        size="300"
+                        variant={reaction.own ? 'Primary' : 'Secondary'}
+                        fill="Soft"
+                        disabled={!capabilities?.react}
+                        onClick={() => runReaction(reaction.key)}
+                      >
+                        {reaction.key} {reaction.count}
+                      </Button>
+                    ))}
+                  </Box>
+                ) : null}
               </Box>
-            ) : null}
+            </Box>
           </Box>
         </NativeTimelineRowActionSurface>
       );
@@ -914,7 +1030,7 @@ const NativeTimelineRow = ({
     case 'membership':
     case 'state':
       return (
-        <Box style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
+        <Box className={htmlCss.MessageRow}>
           <Text size="T300">{row.summary}</Text>
         </Box>
       );
@@ -933,11 +1049,14 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
         >
-          <Box
-            direction="Column"
-            gap="100"
-            style={{ padding: `${config.space.S200} ${config.space.S400}` }}
-          >
+          <Box direction="Column" gap="100" className={htmlCss.MessageRow}>
+            {originServerTs ? (
+              <Time
+                ts={originServerTs}
+                hour24Clock={hour24Clock}
+                dateFormatString={dateFormatString}
+              />
+            ) : null}
             <Text size="L400">{row.question}</Text>
             <Text size="T300">{row.closed ? 'Poll closed' : 'Poll open'}</Text>
             {(row.answers ?? []).map((answer) => (
@@ -957,11 +1076,7 @@ const NativeTimelineRow = ({
       );
     case 'call':
       return (
-        <Box
-          direction="Column"
-          gap="100"
-          style={{ padding: `${config.space.S200} ${config.space.S400}` }}
-        >
+        <Box direction="Column" gap="100" className={htmlCss.MessageRow}>
           <Text size="T300">{row.callKind}</Text>
           {capabilities?.declineCall && (
             <Button size="300" fill="Soft" onClick={runDecline}>
@@ -972,42 +1087,46 @@ const NativeTimelineRow = ({
       );
     case 'date_separator':
       return row.timestampMs && Number.isFinite(row.timestampMs) ? (
-        <Box style={{ padding: `${config.space.S300} ${config.space.S400}` }}>
+        <Box className={htmlCss.MessageRow}>
           <Text size="T300">{new Date(row.timestampMs).toLocaleDateString()}</Text>
         </Box>
       ) : null;
     case 'read_marker':
       return (
-        <Box style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
+        <Box className={htmlCss.MessageRow}>
           <Text size="T300">Read up to here</Text>
         </Box>
       );
     case 'unread_marker':
       return (
-        <Box style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
+        <Box className={htmlCss.MessageRow}>
           <Text size="T300">New messages</Text>
         </Box>
       );
     case 'timeline_start':
       return (
-        <Box style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
+        <Box className={htmlCss.MessageRow}>
           <Text size="T300">Beginning of timeline</Text>
         </Box>
       );
     case 'redacted':
       return (
-        <Box style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
+        <Box className={htmlCss.MessageRow}>
           <Text size="T300">{row.summary ?? 'Message removed'}</Text>
         </Box>
       );
     case 'encrypted_unavailable':
       return (
-        <Box style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
+        <Box className={htmlCss.MessageRow}>
           <Text size="T300">This encrypted message is not available on this device.</Text>
         </Box>
       );
     case 'other':
-      return null;
+      return row.summary ? (
+        <Box className={htmlCss.MessageRow}>
+          <Text size="T300">{row.summary}</Text>
+        </Box>
+      ) : null;
     case 'sticker': {
       return (
         <NativeTimelineRowActionSurface
@@ -1024,16 +1143,22 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
         >
-          <Box
-            direction="Column"
-            gap="100"
-            style={{ padding: `${config.space.S200} ${config.space.S400}` }}
-          >
-            {pinned ? (
-              <Text size="T200" style={{ opacity: 0.7 }}>
-                Pinned
-              </Text>
-            ) : null}
+          <Box direction="Column" gap="100" className={htmlCss.MessageRow}>
+            <Box gap="200" alignItems="Baseline">
+              <Text size="L400">{row.event.senderName}</Text>
+              {originServerTs ? (
+                <Time
+                  ts={originServerTs}
+                  hour24Clock={hour24Clock}
+                  dateFormatString={dateFormatString}
+                />
+              ) : null}
+              {pinned ? (
+                <Text size="T200" style={{ opacity: 0.7 }}>
+                  Pinned
+                </Text>
+              ) : null}
+            </Box>
             <NativeTimelineMedia media={row.media} sticker />
           </Box>
         </NativeTimelineRowActionSurface>
@@ -1041,7 +1166,7 @@ const NativeTimelineRow = ({
     }
     case 'pagination':
       return row.state === 'loading' ? (
-        <Box style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
+        <Box className={htmlCss.MessageRow}>
           <Box justifyContent="Center">
             <Spinner size="200" aria-label="Loading messages" />
           </Box>
@@ -1085,11 +1210,17 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   const timelineState = controller.state;
   const readyState = timelineState.status === 'ready' ? timelineState : undefined;
   const [actionError, setActionError] = useState<string>();
+  const [atLiveBottom, setAtLiveBottom] = useState(true);
   const [replyDraft, setReplyDraft] = useState<NativeComposerReplyDraft | undefined>();
   const roomList = useNativeRoomListSnapshot();
   const sourceEncrypted = roomList.rooms.find((room) => room.roomId === roomId)?.isEncrypted;
   const scrollRef = useRef<HTMLDivElement>(null);
   const paginationInFlightRef = useRef<'backwards' | 'forwards' | undefined>(undefined);
+  const pendingBackwardGrowRef = useRef(false);
+  const userInitiatedScrollRef = useRef(false);
+  const followingLiveRef = useRef(false);
+  const programmaticScrollUntilRef = useRef(0);
+  const lastTotalSizeRef = useRef(0);
   const rows = useMemo(() => readyState?.snapshot.rows ?? [], [readyState?.snapshot.rows]);
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: rows.length,
@@ -1142,11 +1273,22 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   }, [roomId, rows, virtualizer]);
 
   useEffect(() => {
+    userInitiatedScrollRef.current = false;
+    followingLiveRef.current = false;
+    programmaticScrollUntilRef.current = 0;
+    initialPlacementRef.current = undefined;
+    lastTotalSizeRef.current = 0;
+    pendingBackwardGrowRef.current = false;
+    setAtLiveBottom(true);
+  }, [roomId]);
+
+  useEffect(() => {
     if (!readyState) return undefined;
     const scrollEl = scrollRef.current;
     if (!scrollEl) return undefined;
     const paginateAtEdge = () => {
       if (paginationInFlightRef.current) return;
+      if (!userInitiatedScrollRef.current) return;
       const { snapshot } = readyState;
       const distanceFromBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
       const direction =
@@ -1162,6 +1304,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       if (!direction) return;
 
       paginationInFlightRef.current = direction;
+      if (direction === 'backwards') pendingBackwardGrowRef.current = true;
       setActionError(undefined);
       void controller
         .paginate(direction)
@@ -1176,11 +1319,16 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     };
     const onScroll = () => {
       saveViewport();
+      const distanceFromBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
+      const atBottom = distanceFromBottom <= 8;
+      followingLiveRef.current = atBottom;
+      setAtLiveBottom((previous) => (previous === atBottom ? previous : atBottom));
+      if (performance.now() < programmaticScrollUntilRef.current) return;
+      userInitiatedScrollRef.current = true;
       paginateAtEdge();
     };
     scrollEl.addEventListener('scroll', onScroll, { passive: true });
     saveViewport();
-    paginateAtEdge();
     return () => {
       scrollEl.removeEventListener('scroll', onScroll);
       saveViewport();
@@ -1206,21 +1354,43 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     }`;
     const initialPlacement = initialPlacementRef.current !== placementKey;
     const savedViewport = nativeTimelineViewports.get(roomId);
-    const anchor = initialPlacement && selectedAnchor ? selectedAnchor : savedViewport?.anchor;
-    const anchorIndex = anchor ? findAnchorIndex(rows, anchor) : -1;
-    if (selectedPosition.kind === 'live_bottom' || (initialPlacement && savedViewport?.atBottom)) {
-      virtualizer.scrollToIndex(rows.length - 1, { align: 'end', behavior: 'auto' });
-    } else if (anchorIndex >= 0) {
-      virtualizer.scrollToIndex(anchorIndex, { align: 'start', behavior: 'auto' });
-      const offsetPx =
-        initialPlacement && selectedAnchor ? 0 : savedViewport?.anchor?.offsetPx ?? 0;
-      const animationFrame = window.requestAnimationFrame(() => {
-        if (scrollRef.current && offsetPx !== 0) scrollRef.current.scrollTop += offsetPx;
-      });
+    const totalSize = virtualizer.getTotalSize();
+    const previousTotalSize = lastTotalSizeRef.current;
+    lastTotalSizeRef.current = totalSize;
+
+    if (initialPlacement) {
+      const anchor = selectedAnchor ?? savedViewport?.anchor;
+      const anchorIndex = anchor ? findAnchorIndex(rows, anchor) : -1;
+      if (selectedPosition.kind === 'live_bottom' || savedViewport?.atBottom) {
+        followingLiveRef.current = true;
+        programmaticScrollUntilRef.current = performance.now() + 250;
+        virtualizer.scrollToIndex(rows.length - 1, { align: 'end', behavior: 'auto' });
+      } else if (anchorIndex >= 0) {
+        followingLiveRef.current = false;
+        programmaticScrollUntilRef.current = performance.now() + 250;
+        virtualizer.scrollToIndex(anchorIndex, { align: 'start', behavior: 'auto' });
+        const offsetPx = selectedAnchor ? 0 : savedViewport?.anchor?.offsetPx ?? 0;
+        const animationFrame = window.requestAnimationFrame(() => {
+          if (scrollRef.current && offsetPx !== 0) scrollRef.current.scrollTop += offsetPx;
+        });
+        initialPlacementRef.current = placementKey;
+        return () => window.cancelAnimationFrame(animationFrame);
+      }
       initialPlacementRef.current = placementKey;
-      return () => window.cancelAnimationFrame(animationFrame);
+      return undefined;
     }
-    initialPlacementRef.current = placementKey;
+
+    if (followingLiveRef.current) {
+      programmaticScrollUntilRef.current = performance.now() + 250;
+      virtualizer.scrollToIndex(rows.length - 1, { align: 'end', behavior: 'auto' });
+      return undefined;
+    }
+
+    if (pendingBackwardGrowRef.current && previousTotalSize > 0 && totalSize > previousTotalSize) {
+      pendingBackwardGrowRef.current = false;
+      const scrollEl = scrollRef.current;
+      if (scrollEl) scrollEl.scrollTop += totalSize - previousTotalSize;
+    }
     return undefined;
   }, [readyState, roomId, rows, virtualizer]);
 
@@ -1237,12 +1407,41 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     [rows, virtualizer]
   );
 
-  if (timelineState.status === 'unavailable') return null;
+  if (timelineState.status === 'unavailable') {
+    return (
+      <Box
+        grow="Yes"
+        alignItems="Center"
+        justifyContent="Center"
+        style={{ padding: config.space.S400 }}
+      >
+        <Text size="T300">The native timeline is unavailable in this window.</Text>
+      </Box>
+    );
+  }
   if (timelineState.status === 'loading') {
-    return <Text size="T300">Opening native timeline…</Text>;
+    return (
+      <Box
+        grow="Yes"
+        alignItems="Center"
+        justifyContent="Center"
+        style={{ padding: config.space.S400 }}
+      >
+        <Text size="T300">Opening native timeline…</Text>
+      </Box>
+    );
   }
   if (timelineState.status === 'error') {
-    return <Text size="T300">{timelineState.error.message}</Text>;
+    return (
+      <Box
+        grow="Yes"
+        alignItems="Center"
+        justifyContent="Center"
+        style={{ padding: config.space.S400 }}
+      >
+        <Text size="T300">{timelineState.error.message}</Text>
+      </Box>
+    );
   }
 
   if (!readyState) return null;
@@ -1251,6 +1450,23 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     setActionError(undefined);
     void action().catch((error) => {
       setActionError(error instanceof Error ? error.message : 'Native timeline action failed.');
+    });
+  };
+
+  const jumpToLatest = () => {
+    followingLiveRef.current = true;
+    programmaticScrollUntilRef.current = performance.now() + 500;
+    setAtLiveBottom(true);
+    if (rows.length > 0) {
+      virtualizer.scrollToIndex(rows.length - 1, { align: 'end', behavior: 'auto' });
+    }
+    runAction(async () => {
+      await controller.jumpLatest();
+      followingLiveRef.current = true;
+      programmaticScrollUntilRef.current = performance.now() + 500;
+      if (rows.length > 0) {
+        virtualizer.scrollToIndex(rows.length - 1, { align: 'end', behavior: 'auto' });
+      }
     });
   };
 
@@ -1298,6 +1514,15 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
               <Spinner size="200" aria-label="Loading older messages" />
             </Box>
           )}
+          {rows.length === 0 ? (
+            <Box
+              alignItems="Center"
+              justifyContent="Center"
+              style={{ minHeight: '100%', padding: config.space.S400 }}
+            >
+              <Text size="T300">No messages in this view yet.</Text>
+            </Box>
+          ) : null}
           <div style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const row = rows[virtualItem.index];
@@ -1319,6 +1544,10 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
                 >
                   <NativeTimelineRow
                     row={row}
+                    grouped={isGroupedWithPrevious(
+                      virtualItem.index > 0 ? rows[virtualItem.index - 1] : undefined,
+                      row
+                    )}
                     roomId={roomId}
                     pinnedEventIds={snapshot.pinnedEventIds}
                     sourceEncrypted={sourceEncrypted}
@@ -1336,7 +1565,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
             </Box>
           )}
         </Scroll>
-        {snapshot.position.kind !== 'live_bottom' && (
+        {!atLiveBottom && (
           <Box
             style={{ position: 'absolute', right: config.space.S400, bottom: config.space.S300 }}
           >
@@ -1357,7 +1586,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
                   outlined
                   size="300"
                   aria-label="Jump to latest"
-                  onClick={() => runAction(() => controller.jumpLatest())}
+                  onClick={jumpToLatest}
                 >
                   <Icon src={Icons.ChevronBottom} size="300" />
                 </IconButton>

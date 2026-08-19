@@ -4,6 +4,16 @@ import test from 'node:test';
 
 const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8');
 
+test('native timeline rows show timestamps and formatted HTML without the legacy event graph', () => {
+  assert.match(presenter, /rowOriginServerTs/);
+  assert.match(presenter, /<Time\s/);
+  assert.match(presenter, /htmlCss\.FormattedBody/);
+  assert.match(presenter, /htmlCss\.MessageBody/);
+  assert.match(presenter, /NativeTimelineSenderAvatar/);
+  assert.match(presenter, /followingLiveRef/);
+  assert.match(presenter, /sanitizeCustomHtml/);
+});
+
 test('native timeline rows retain hover/focus action access without restoring the legacy owner', () => {
   assert.match(presenter, /NativeTimelineRowActionSurface/);
   assert.match(presenter, /useHover\(\{ onHoverChange: setHovered \}\)/);
@@ -55,6 +65,11 @@ test('native timeline navigation uses contextual controls and edge pagination', 
   assert.match(presenter, /distanceFromBottom <= 96/);
   assert.match(presenter, /aria-label="Jump to latest"/);
   assert.match(presenter, /Icons\.ChevronBottom/);
+  assert.match(presenter, /!atLiveBottom &&/);
+  assert.match(presenter, /const jumpToLatest = \(\) =>/);
+  assert.match(presenter, /followingLiveRef\.current = true/);
+  assert.match(presenter, /onClick=\{jumpToLatest\}/);
+  assert.doesNotMatch(presenter, /snapshot\.position\.kind !== 'live_bottom'/);
   assert.match(presenter, /aria-label="Loading older messages"/);
   assert.match(presenter, /aria-label="Loading newer messages"/);
 

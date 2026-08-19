@@ -9,6 +9,7 @@
 //! stay in the desktop shell.
 
 mod client_config;
+mod crypto_device;
 mod device_name;
 mod discovery;
 mod error;
@@ -22,6 +23,7 @@ mod reset_password;
 mod uia;
 
 pub use client_config::{homeserver_url_for_client_builder, identity_with_discovered_homeserver};
+pub use crypto_device::existing_sqlite_crypto_device_id;
 pub use device_name::{
     host_device_platform, platform_device_display_name, DevicePlatform,
     DEVICE_DISPLAY_NAME_DESKTOP_FALLBACK, DEVICE_DISPLAY_NAME_IOS, DEVICE_DISPLAY_NAME_LINUX,

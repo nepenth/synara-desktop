@@ -43,6 +43,16 @@ pub async fn matrix_login_password(
     let requested_identity = AccountIdentity::new(&user, &homeserver_url)
         .map_err(|_| MatrixAuthCommandError::invalid_input("d0.1-invalid-user-identity"))?;
     let app_data_root = app_data_root(&app)?;
+    let existing_device_id =
+        match existing_login_device_id(&app_data_root, &requested_identity).await {
+            Ok(device_id) => device_id,
+            Err(error) => {
+                if is_recoverable_store_login_diagnostic(&error.diagnostic_id) {
+                    state.arm_store_recovery(requested_identity.clone()).await;
+                }
+                return Err(error);
+            }
+        };
     let client = match build_client(&app_data_root, requested_identity.clone()).await {
         Ok(client) => client,
         Err(error) => {
@@ -55,17 +65,27 @@ pub async fn matrix_login_password(
         }
     };
 
-    let result = login_with_password(
+    let result = match login_with_password(
         &client,
         requested_identity.user_id(),
         &password,
         &LoginOptions {
             request_refresh_token: true,
+            device_id: existing_device_id,
             ..LoginOptions::default()
         },
     )
     .await
-    .map_err(map_auth_error)?;
+    {
+        Ok(result) => result,
+        Err(error) => {
+            let error = map_auth_error(error);
+            if is_recoverable_store_login_diagnostic(&error.diagnostic_id) {
+                state.arm_store_recovery(requested_identity.clone()).await;
+            }
+            return Err(error);
+        }
+    };
 
     let live_identity = AccountIdentity::new(&result.user_id, &result.homeserver_url)
         .map_err(|_| MatrixAuthCommandError::invalid_input("d0.1-login-identity-invalid"))?;
@@ -930,6 +950,38 @@ fn map_store_key_vault_error(error: StoreKeyVaultError) -> MatrixAuthCommandErro
     MatrixAuthCommandError::unavailable(diagnostic_id)
 }
 
+async fn existing_login_device_id(
+    app_data_root: &Path,
+    identity: &AccountIdentity,
+) -> Result<Option<String>, MatrixAuthCommandError> {
+    let store_paths = StorePaths::derive(app_data_root, identity)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed"))?;
+    if !store_paths
+        .state_dir()
+        .join("matrix-sdk-crypto.sqlite3")
+        .is_file()
+    {
+        return Ok(None);
+    }
+    let key_creation_policy = store_paths
+        .key_creation_policy()
+        .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed"))?;
+    let store_key =
+        get_or_migrate_store_key(&KeyringStoreKeyVault::new(), identity, key_creation_policy)
+            .map_err(map_store_key_vault_error)?;
+    let config =
+        ClientBuildConfig::product_default(app_data_root, identity.clone(), Some(store_key))
+            .map_err(|_| {
+                MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed")
+            })?;
+    existing_sqlite_crypto_device_id(
+        config.state_store_path(),
+        config.store_passphrase_hex().as_deref(),
+    )
+    .await
+    .map_err(map_auth_error)
+}
+
 fn map_store_client_build_error(error: ClientBuilderError) -> MatrixAuthCommandError {
     let diagnostic_id = match error.to_factory_error().category {
         crate::matrix::ipc::MatrixIpcErrorCategory::StoreLocked => "p3.2-login-store-locked",
@@ -1490,6 +1542,8 @@ mod tests {
             .and_then(|rest| rest.split("pub async fn ").next())
             .expect("normal login command body");
         assert!(login.contains("arm_store_recovery"));
+        assert!(login.contains("existing_login_device_id"));
+        assert!(login.contains("device_id: existing_device_id"));
         assert!(
             !login.contains("reset_store_for_recovery"),
             "normal login must only arm recovery; it must never archive/reset automatically"
@@ -1626,6 +1680,9 @@ mod tests {
         ));
         assert!(!is_recoverable_store_login_diagnostic(
             "p3.2-login-store-open-failed"
+        ));
+        assert!(!is_recoverable_store_login_diagnostic(
+            "p3.2-login-olm-unavailable"
         ));
         let failed = archive_and_rebuild_store(
             std::path::Path::new("relative-root-is-refused"),

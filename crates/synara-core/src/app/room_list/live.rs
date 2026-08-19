@@ -15,6 +15,7 @@ use matrix_sdk_ui::room_list_service::filters;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
+use crate::app::room_list::counts::{room_unread_presentation, RoomUnreadMembership};
 use crate::app::room_list::last_message::{
     last_message_preview_from_event_json, last_message_preview_from_event_json_str,
     last_message_preview_from_invite,
@@ -136,6 +137,18 @@ async fn project_room(room: &Room) -> RoomSummary {
         Some(mode) => Some(map_notification_mode(mode)),
         None => room.notification_mode().await.map(map_notification_mode),
     };
+    let membership = membership(room.state());
+    let unread = room_unread_presentation(
+        match membership {
+            Membership::Invite => RoomUnreadMembership::Invited,
+            _ => RoomUnreadMembership::Joined,
+        },
+        room.num_unread_messages(),
+        room.num_unread_notifications()
+            .max(counts.notification_count),
+        room.num_unread_mentions().max(counts.highlight_count),
+        room.is_marked_unread(),
+    );
     // Room derefs to `BaseRoom`: `is_favourite`/`is_low_priority` read cached
     // `notable_tags` derived from the room's m.tag account data.
     RoomSummary {
@@ -143,7 +156,7 @@ async fn project_room(room: &Room) -> RoomSummary {
         name: room.cached_display_name().map(|name| name.to_string()),
         canonical_alias: room.canonical_alias().map(|alias| alias.to_string()),
         avatar_url: room.avatar_url().map(|uri| uri.to_string()),
-        membership: membership(room.state()),
+        membership,
         is_direct: room.is_direct().await.unwrap_or(false),
         is_space: room.is_space(),
         is_call: room.is_call(),
@@ -156,8 +169,8 @@ async fn project_room(room: &Room) -> RoomSummary {
             .map(|state| state.is_encrypted())
             .unwrap_or(false),
         join_rule: None,
-        unread_count: bounded_count(counts.notification_count),
-        highlight_count: bounded_count(counts.highlight_count),
+        unread_count: bounded_count(unread.unread_count),
+        highlight_count: bounded_count(room.num_unread_mentions().max(counts.highlight_count)),
         marked_unread: room.is_marked_unread(),
         notification_mode,
         last_activity_ts,
