@@ -6053,6 +6053,7 @@ dependencies = [
  "getrandom 0.3.4",
  "matrix-sdk",
  "matrix-sdk-crypto",
+ "matrix-sdk-sqlite",
  "matrix-sdk-ui",
  "reqwest",
  "ruma",

@@ -52,7 +52,8 @@ pub use product::{
 pub use synara_core::app::auth::{
     complete_password_reset, discover_homeserver, discover_homeserver_and_login_flows,
     homeserver_url_for_client_builder, host_device_platform, identity_with_discovered_homeserver,
-    login_with_password, password_reset_ephemeral_user_id, platform_device_display_name,
+    existing_sqlite_crypto_device_id, login_with_password, password_reset_ephemeral_user_id,
+    platform_device_display_name,
     register_ephemeral_user_id, register_submit, request_password_email_token,
     request_register_email_token, DevicePlatform, DiscoveryResult, DiscoveryTransport,
     LoginMethodKind, LoginOptions, LoginResult, MockDiscoveryTransport, PasswordEmailTokenResult,

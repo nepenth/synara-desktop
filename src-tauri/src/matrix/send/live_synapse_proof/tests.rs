@@ -233,6 +233,7 @@ async fn live_native_attachment_send_against_disposable_synapse_when_configured(
         &LoginOptions {
             device_display_name: Some("V-SEND.1 attachment proof".into()),
             request_refresh_token: false,
+            device_id: None,
         },
     )
     .await
@@ -381,6 +382,7 @@ async fn live_native_poll_send_and_respond_against_disposable_synapse_when_confi
         &LoginOptions {
             device_display_name: Some("V-SEND.3 poll proof".into()),
             request_refresh_token: false,
+            device_id: None,
         },
     )
     .await
@@ -478,6 +480,7 @@ async fn live_native_rich_message_send_against_disposable_synapse_when_configure
         &LoginOptions {
             device_display_name: Some("V-SEND.4 rich-message proof".into()),
             request_refresh_token: false,
+            device_id: None,
         },
     )
     .await
@@ -569,6 +572,7 @@ async fn live_native_thread_send_against_disposable_synapse_when_configured() {
         &LoginOptions {
             device_display_name: Some("V-SEND.5 thread-send proof".into()),
             request_refresh_token: false,
+            device_id: None,
         },
     )
     .await

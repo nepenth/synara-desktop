@@ -200,6 +200,7 @@ async fn build_client(
         &LoginOptions {
             device_display_name: Some(format!("receipt proof {tag}")),
             request_refresh_token: false,
+            device_id: None,
         },
     )
     .await

@@ -270,6 +270,7 @@ async fn live_native_reaction_paths_against_disposable_synapse_when_configured()
         &LoginOptions {
             device_display_name: Some("V-SEND.2 reaction proof".into()),
             request_refresh_token: false,
+            device_id: None,
         },
     )
     .await
