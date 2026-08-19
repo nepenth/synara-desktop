@@ -1007,7 +1007,11 @@ const NativeTimelineRow = ({
         </Box>
       );
     case 'other':
-      return null;
+      return row.summary ? (
+        <Box style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
+          <Text size="T300">{row.summary}</Text>
+        </Box>
+      ) : null;
     case 'sticker': {
       return (
         <NativeTimelineRowActionSurface
@@ -1237,12 +1241,26 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     [rows, virtualizer]
   );
 
-  if (timelineState.status === 'unavailable') return null;
+  if (timelineState.status === 'unavailable') {
+    return (
+      <Box grow="Yes" alignItems="Center" justifyContent="Center" style={{ padding: config.space.S400 }}>
+        <Text size="T300">The native timeline is unavailable in this window.</Text>
+      </Box>
+    );
+  }
   if (timelineState.status === 'loading') {
-    return <Text size="T300">Opening native timeline…</Text>;
+    return (
+      <Box grow="Yes" alignItems="Center" justifyContent="Center" style={{ padding: config.space.S400 }}>
+        <Text size="T300">Opening native timeline…</Text>
+      </Box>
+    );
   }
   if (timelineState.status === 'error') {
-    return <Text size="T300">{timelineState.error.message}</Text>;
+    return (
+      <Box grow="Yes" alignItems="Center" justifyContent="Center" style={{ padding: config.space.S400 }}>
+        <Text size="T300">{timelineState.error.message}</Text>
+      </Box>
+    );
   }
 
   if (!readyState) return null;
@@ -1298,6 +1316,15 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
               <Spinner size="200" aria-label="Loading older messages" />
             </Box>
           )}
+          {rows.length === 0 ? (
+            <Box
+              alignItems="Center"
+              justifyContent="Center"
+              style={{ minHeight: '100%', padding: config.space.S400 }}
+            >
+              <Text size="T300">No messages in this view yet.</Text>
+            </Box>
+          ) : null}
           <div style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const row = rows[virtualItem.index];

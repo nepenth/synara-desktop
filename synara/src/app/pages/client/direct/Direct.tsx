@@ -194,7 +194,7 @@ export function Direct() {
   const virtualizer = useVirtualizer({
     count: sortedDirects.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 38,
+    estimateSize: () => 56,
     overscan: 10,
   });
 

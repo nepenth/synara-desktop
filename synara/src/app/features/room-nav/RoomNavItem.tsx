@@ -226,7 +226,7 @@ type RoomNavItemProps = {
 function RoomNavItemImpl({
   room,
   selected,
-  showAvatar,
+  showAvatar = true,
   direct,
   notificationMode,
   linkPath,
@@ -274,7 +274,7 @@ function RoomNavItemImpl({
       <NavLink to={linkPath}>
         <NavItemContent>
           <Box as="span" grow="Yes" alignItems="Center" gap="200">
-            <Avatar size="200" radii="400">
+            <Avatar size="400" radii="400">
               {showAvatar ? (
                 <RoomAvatar
                   roomId={room.roomId}

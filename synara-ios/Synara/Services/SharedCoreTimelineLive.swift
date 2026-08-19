@@ -120,6 +120,8 @@ final class SharedCoreLivePoller: @unchecked Sendable {
         }
         let core = self.core
         pollTask = Task { [weak self] in
+            var emptyTimelineTicks = 0
+            var emptyRoomTicks = 0
             while Task.isCancelled == false {
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 guard Task.isCancelled == false else {
@@ -139,9 +141,26 @@ final class SharedCoreLivePoller: @unchecked Sendable {
                     : []
                 if updates.isEmpty == false {
                     self?.dispatch(updates)
+                } else if wantsTimeline {
+                    emptyTimelineTicks += 1
+                    if emptyTimelineTicks >= 4 {
+                        emptyTimelineTicks = 0
+                        self?.dispatchSyntheticTimelineWakes()
+                    }
+                } else {
+                    emptyTimelineTicks = 0
                 }
                 if rooms.isEmpty == false {
+                    emptyRoomTicks = 0
                     self?.dispatchRoomList()
+                } else if wantsRooms {
+                    emptyRoomTicks += 1
+                    if emptyRoomTicks >= 4 {
+                        emptyRoomTicks = 0
+                        self?.dispatchRoomList()
+                    }
+                } else {
+                    emptyRoomTicks = 0
                 }
                 if owners.isEmpty == false {
                     self?.dispatchOwners(owners)
@@ -176,6 +195,24 @@ final class SharedCoreLivePoller: @unchecked Sendable {
             for waiter in waiters.values where waiter.roomId == update.roomId {
                 waiter.continuation.yield(update)
             }
+        }
+    }
+
+    private func dispatchSyntheticTimelineWakes() {
+        lock.lock()
+        let waiters = self.waiters
+        lock.unlock()
+        for waiter in waiters.values {
+            waiter.continuation.yield(
+                TimelineViewUpdateDto(
+                    schemaVersion: 1,
+                    sessionGeneration: 0,
+                    streamId: "",
+                    roomId: waiter.roomId,
+                    revision: 0,
+                    opCount: 0
+                )
+            )
         }
     }
 

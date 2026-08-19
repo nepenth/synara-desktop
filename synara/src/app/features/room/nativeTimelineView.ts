@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { listen as listenTauriEvent } from '@tauri-apps/api/event';
 import {
   convertDesktopFileSrc,
   invokeDesktopWithAvailability,
   isSynaraDesktop,
-  listen,
-  type DesktopUnlisten,
 } from '../../utils/desktop';
 import { parseHermesAgentPayload, type HermesAgentPayload } from '../../utils/hermes';
 
@@ -597,7 +596,8 @@ export const useNativeTimelineView = (
     }
 
     let disposed = false;
-    let unlisten: DesktopUnlisten | undefined;
+    let unlisten: (() => void) | undefined;
+    let pollTimer: number | undefined;
     const applyBatch = (batch: NativeTimelineViewDeltaBatch) => {
       if (disposed || batch.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION) return;
       if (!streamIdRef.current) {
@@ -621,15 +621,46 @@ export const useNativeTimelineView = (
       });
     };
 
+    const pollSnapshot = async () => {
+      const streamId = streamIdRef.current;
+      if (!streamId || disposed) return;
+      const result = await invokeDesktopWithAvailability<NativeTimelineViewSnapshot>(
+        'matrix_timeline_snapshot',
+        { streamId }
+      );
+      if (disposed || !result.available || !result.value) return;
+      const snapshot = result.value;
+      if (
+        snapshot.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION ||
+        snapshot.roomId !== nativeRequest.roomId
+      ) {
+        return;
+      }
+      if (!snapshotRef.current) {
+        snapshotRef.current = snapshot;
+        setState({
+          status: 'ready',
+          snapshot,
+          selectedPosition: selectedPositionRef.current ?? snapshot.position,
+        });
+        return;
+      }
+      acceptSnapshot(snapshot);
+    };
+
     const open = async () => {
       setState({ status: 'loading' });
       try {
-        unlisten = await listen<NativeTimelineViewDeltaBatch>(
-          NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
-          ({ payload }) => applyBatch(payload)
-        );
-        if (disposed || !unlisten) {
-          if (!disposed) setState({ status: 'unavailable' });
+        try {
+          unlisten = await listenTauriEvent<NativeTimelineViewDeltaBatch>(
+            NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
+            ({ payload }) => applyBatch(payload)
+          );
+        } catch {
+          unlisten = undefined;
+        }
+        if (disposed) {
+          unlisten?.();
           return;
         }
         const result = await invokeDesktopWithAvailability<NativeTimelineOpenReadback>(
@@ -676,6 +707,11 @@ export const useNativeTimelineView = (
         snapshotRef.current = snapshot;
         selectedPositionRef.current = readback.position;
         setState({ status: 'ready', snapshot, selectedPosition: readback.position });
+        if (!disposed) {
+          pollTimer = window.setInterval(() => {
+            void pollSnapshot();
+          }, unlisten ? 1500 : 750);
+        }
       } catch (error) {
         if (!disposed) {
           setState({
@@ -695,9 +731,10 @@ export const useNativeTimelineView = (
           request: { streamId },
         });
       }
-      void unlisten?.();
+      if (pollTimer !== undefined) window.clearInterval(pollTimer);
+      unlisten?.();
     };
-  }, [nativeRequest]);
+  }, [acceptSnapshot, nativeRequest]);
 
   return { state, paginate, setReadState, jumpLatest };
 };

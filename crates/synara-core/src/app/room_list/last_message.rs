@@ -9,9 +9,10 @@ pub const LAST_MESSAGE_PREVIEW_MAX_CHARS: usize = 160;
 
 /// Collapse whitespace, strip media URIs, and bound the preview.
 pub fn sanitize_last_message_preview(text: &str) -> Option<String> {
-    let mut out = String::with_capacity(text.len().min(LAST_MESSAGE_PREVIEW_MAX_CHARS));
+    let stripped = text.replace("**", "").replace("__", "").replace('`', "");
+    let mut out = String::with_capacity(stripped.len().min(LAST_MESSAGE_PREVIEW_MAX_CHARS));
     let mut previous_space = false;
-    for ch in text.chars() {
+    for ch in stripped.chars() {
         if ch.is_whitespace() {
             if !previous_space && !out.is_empty() {
                 out.push(' ');
@@ -181,6 +182,10 @@ mod tests {
         assert_eq!(
             sanitize_last_message_preview("  hello   world  "),
             Some("hello world".into())
+        );
+        assert_eq!(
+            sanitize_last_message_preview("**origin/main SHA:** dbd520"),
+            Some("origin/main SHA: dbd520".into())
         );
         assert_eq!(sanitize_last_message_preview("   "), None);
         let long = "a".repeat(200);
