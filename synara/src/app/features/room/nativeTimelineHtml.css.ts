@@ -28,11 +28,14 @@ globalStyle(`${FormattedBody} p`, {
 globalStyle(`${FormattedBody} p:last-child`, {
   marginBottom: 0,
 });
-globalStyle(`${FormattedBody} h1, ${FormattedBody} h2, ${FormattedBody} h3, ${FormattedBody} h4, ${FormattedBody} h5, ${FormattedBody} h6`, {
-  margin: `${config.space.S300} 0 ${config.space.S200}`,
-  fontWeight: 600,
-  lineHeight: 1.25,
-});
+globalStyle(
+  `${FormattedBody} h1, ${FormattedBody} h2, ${FormattedBody} h3, ${FormattedBody} h4, ${FormattedBody} h5, ${FormattedBody} h6`,
+  {
+    margin: `${config.space.S300} 0 ${config.space.S200}`,
+    fontWeight: 600,
+    lineHeight: 1.25,
+  }
+);
 globalStyle(
   `${FormattedBody} h1:first-child, ${FormattedBody} h2:first-child, ${FormattedBody} h3:first-child, ${FormattedBody} h4:first-child, ${FormattedBody} h5:first-child, ${FormattedBody} h6:first-child`,
   {

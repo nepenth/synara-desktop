@@ -53,7 +53,6 @@ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { useRoomName } from '../../hooks/useRoomMeta';
 
-
 type RoomNavItemMenuProps = {
   room: EventedRoomReading;
   requestClose: () => void;
@@ -289,7 +288,11 @@ function RoomNavItemImpl({
                 fallbackBackground={avatarTone.background}
                 fallbackColor={avatarTone.color}
                 renderFallback={() => (
-                  <Text as="span" size="T200" style={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                  <Text
+                    as="span"
+                    size="T200"
+                    style={{ textTransform: 'uppercase', fontWeight: 600 }}
+                  >
                     {roomNameInitials(roomName)}
                   </Text>
                 )}

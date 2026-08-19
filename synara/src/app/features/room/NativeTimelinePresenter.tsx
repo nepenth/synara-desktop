@@ -893,11 +893,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
         >
-          <Box
-            direction="Column"
-            gap="100"
-            className={htmlCss.MessageRow}
-          >
+          <Box direction="Column" gap="100" className={htmlCss.MessageRow}>
             <Box gap="300" alignItems="Start">
               <Box direction="Column" alignItems="Center" style={{ width: 36, flexShrink: 0 }}>
                 {grouped ? (
@@ -916,10 +912,7 @@ const NativeTimelineRow = ({
               <Box direction="Column" gap="100" grow="Yes" style={{ minWidth: 0 }}>
                 {grouped ? null : (
                   <Box gap="200" alignItems="Baseline">
-                    <Text
-                      size="T400"
-                      style={{ color: colorMXID(row.senderId), fontWeight: 600 }}
-                    >
+                    <Text size="T400" style={{ color: colorMXID(row.senderId), fontWeight: 600 }}>
                       {displayNameForRow(row)}
                     </Text>
                     {originServerTs ? (
@@ -936,88 +929,98 @@ const NativeTimelineRow = ({
                     ) : null}
                   </Box>
                 )}
-            {row.reply && (
-              <Box
-                as="button"
-                direction="Column"
-                gap="100"
-                onClick={() => onFocusEvent(row.reply!.eventId)}
-                style={{
-                  opacity: 0.8,
-                  borderLeft: '2px solid currentColor',
-                  paddingLeft: config.space.S200,
-                  background: 'transparent',
-                  borderTop: 'none',
-                  borderRight: 'none',
-                  borderBottom: 'none',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  color: 'inherit',
-                }}
-                aria-label={`Jump to replied message ${row.reply.eventId}`}
-              >
-                <Text size="T200">{row.reply.senderName}</Text>
-                <Text size="T200" style={{ whiteSpace: 'pre-wrap' }}>
-                  {row.reply.body}
-                </Text>
-              </Box>
-            )}
-            {agentPayload ? (
-              <ErrorBoundary fallback={<Text size="T300">Agent output unavailable</Text>}>
-                <React.Suspense fallback={<Spinner size="200" aria-label="Loading agent output" />}>
-                  <HermesAgentCard payload={agentPayload} />
-                </React.Suspense>
-              </ErrorBoundary>
-            ) : (
-              <div className={htmlCss.MessageBody}>
-                {row.formattedBody ? (
-                  <div
-                    className={htmlCss.FormattedBody}
-                    // Defense in depth: re-sanitize Matrix HTML before the native presenter renders it.
-                    // eslint-disable-next-line react/no-danger
-                    dangerouslySetInnerHTML={{ __html: sanitizeCustomHtml(row.formattedBody) }}
+                {row.reply && (
+                  <Box
+                    as="button"
+                    direction="Column"
+                    gap="100"
+                    onClick={() => onFocusEvent(row.reply!.eventId)}
                     style={{
-                      fontStyle: isEmote ? 'italic' : undefined,
+                      opacity: 0.8,
+                      borderLeft: '2px solid currentColor',
+                      paddingLeft: config.space.S200,
+                      background: 'transparent',
+                      borderTop: 'none',
+                      borderRight: 'none',
+                      borderBottom: 'none',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: 'inherit',
                     }}
-                  />
-                ) : (
-                  <Text
-                    size="T400"
-                    style={{ whiteSpace: 'pre-wrap', fontStyle: isEmote ? 'italic' : undefined }}
+                    aria-label={`Jump to replied message ${row.reply.eventId}`}
                   >
-                    {isEmote ? `* ${row.body}` : row.body}
-                  </Text>
+                    <Text size="T200">{row.reply.senderName}</Text>
+                    <Text size="T200" style={{ whiteSpace: 'pre-wrap' }}>
+                      {row.reply.body}
+                    </Text>
+                  </Box>
                 )}
-                {row.edited ? (
-                  <Text size="T200" style={{ opacity: 0.7 }}>
-                    Edited
-                  </Text>
-                ) : null}
-              </div>
-            )}
-            {row.thread && threadFocus ? (
-              <Button size="300" fill="Soft" onClick={() => onFocusEvent(threadFocus)}>
-                Thread · {row.thread.replyCount} {row.thread.replyCount === 1 ? 'reply' : 'replies'}
-                {row.thread.latestEventId ? ' · open latest' : ' · open root'}
-              </Button>
-            ) : null}
-            <NativeTimelineMedia media={row.media} messageType={row.messageType} body={row.body} />
-            {row.reactions?.length ? (
-              <Box gap="100" wrap="Wrap">
-                {row.reactions.map((reaction) => (
-                  <Button
-                    key={reaction.key}
-                    size="300"
-                    variant={reaction.own ? 'Primary' : 'Secondary'}
-                    fill="Soft"
-                    disabled={!capabilities?.react}
-                    onClick={() => runReaction(reaction.key)}
-                  >
-                    {reaction.key} {reaction.count}
+                {agentPayload ? (
+                  <ErrorBoundary fallback={<Text size="T300">Agent output unavailable</Text>}>
+                    <React.Suspense
+                      fallback={<Spinner size="200" aria-label="Loading agent output" />}
+                    >
+                      <HermesAgentCard payload={agentPayload} />
+                    </React.Suspense>
+                  </ErrorBoundary>
+                ) : (
+                  <div className={htmlCss.MessageBody}>
+                    {row.formattedBody ? (
+                      <div
+                        className={htmlCss.FormattedBody}
+                        // Defense in depth: re-sanitize Matrix HTML before the native presenter renders it.
+                        // eslint-disable-next-line react/no-danger
+                        dangerouslySetInnerHTML={{ __html: sanitizeCustomHtml(row.formattedBody) }}
+                        style={{
+                          fontStyle: isEmote ? 'italic' : undefined,
+                        }}
+                      />
+                    ) : (
+                      <Text
+                        size="T400"
+                        style={{
+                          whiteSpace: 'pre-wrap',
+                          fontStyle: isEmote ? 'italic' : undefined,
+                        }}
+                      >
+                        {isEmote ? `* ${row.body}` : row.body}
+                      </Text>
+                    )}
+                    {row.edited ? (
+                      <Text size="T200" style={{ opacity: 0.7 }}>
+                        Edited
+                      </Text>
+                    ) : null}
+                  </div>
+                )}
+                {row.thread && threadFocus ? (
+                  <Button size="300" fill="Soft" onClick={() => onFocusEvent(threadFocus)}>
+                    Thread · {row.thread.replyCount}{' '}
+                    {row.thread.replyCount === 1 ? 'reply' : 'replies'}
+                    {row.thread.latestEventId ? ' · open latest' : ' · open root'}
                   </Button>
-                ))}
-              </Box>
-            ) : null}
+                ) : null}
+                <NativeTimelineMedia
+                  media={row.media}
+                  messageType={row.messageType}
+                  body={row.body}
+                />
+                {row.reactions?.length ? (
+                  <Box gap="100" wrap="Wrap">
+                    {row.reactions.map((reaction) => (
+                      <Button
+                        key={reaction.key}
+                        size="300"
+                        variant={reaction.own ? 'Primary' : 'Secondary'}
+                        fill="Soft"
+                        disabled={!capabilities?.react}
+                        onClick={() => runReaction(reaction.key)}
+                      >
+                        {reaction.key} {reaction.count}
+                      </Button>
+                    ))}
+                  </Box>
+                ) : null}
               </Box>
             </Box>
           </Box>
@@ -1046,13 +1049,13 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
         >
-          <Box
-            direction="Column"
-            gap="100"
-            className={htmlCss.MessageRow}
-          >
+          <Box direction="Column" gap="100" className={htmlCss.MessageRow}>
             {originServerTs ? (
-              <Time ts={originServerTs} hour24Clock={hour24Clock} dateFormatString={dateFormatString} />
+              <Time
+                ts={originServerTs}
+                hour24Clock={hour24Clock}
+                dateFormatString={dateFormatString}
+              />
             ) : null}
             <Text size="L400">{row.question}</Text>
             <Text size="T300">{row.closed ? 'Poll closed' : 'Poll open'}</Text>
@@ -1073,11 +1076,7 @@ const NativeTimelineRow = ({
       );
     case 'call':
       return (
-        <Box
-          direction="Column"
-          gap="100"
-          className={htmlCss.MessageRow}
-        >
+        <Box direction="Column" gap="100" className={htmlCss.MessageRow}>
           <Text size="T300">{row.callKind}</Text>
           {capabilities?.declineCall && (
             <Button size="300" fill="Soft" onClick={runDecline}>
@@ -1144,15 +1143,15 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
         >
-          <Box
-            direction="Column"
-            gap="100"
-            className={htmlCss.MessageRow}
-          >
+          <Box direction="Column" gap="100" className={htmlCss.MessageRow}>
             <Box gap="200" alignItems="Baseline">
               <Text size="L400">{row.event.senderName}</Text>
               {originServerTs ? (
-                <Time ts={originServerTs} hour24Clock={hour24Clock} dateFormatString={dateFormatString} />
+                <Time
+                  ts={originServerTs}
+                  hour24Clock={hour24Clock}
+                  dateFormatString={dateFormatString}
+                />
               ) : null}
               {pinned ? (
                 <Text size="T200" style={{ opacity: 0.7 }}>
@@ -1410,21 +1409,36 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
 
   if (timelineState.status === 'unavailable') {
     return (
-      <Box grow="Yes" alignItems="Center" justifyContent="Center" style={{ padding: config.space.S400 }}>
+      <Box
+        grow="Yes"
+        alignItems="Center"
+        justifyContent="Center"
+        style={{ padding: config.space.S400 }}
+      >
         <Text size="T300">The native timeline is unavailable in this window.</Text>
       </Box>
     );
   }
   if (timelineState.status === 'loading') {
     return (
-      <Box grow="Yes" alignItems="Center" justifyContent="Center" style={{ padding: config.space.S400 }}>
+      <Box
+        grow="Yes"
+        alignItems="Center"
+        justifyContent="Center"
+        style={{ padding: config.space.S400 }}
+      >
         <Text size="T300">Opening native timeline…</Text>
       </Box>
     );
   }
   if (timelineState.status === 'error') {
     return (
-      <Box grow="Yes" alignItems="Center" justifyContent="Center" style={{ padding: config.space.S400 }}>
+      <Box
+        grow="Yes"
+        alignItems="Center"
+        justifyContent="Center"
+        style={{ padding: config.space.S400 }}
+      >
         <Text size="T300">{timelineState.error.message}</Text>
       </Box>
     );

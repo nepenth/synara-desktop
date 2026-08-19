@@ -1925,7 +1925,7 @@ fn newest_frontier_in_live<'a>(
         if let Some(index) = live_event_ids.iter().position(|id| id == candidate) {
             if best
                 .as_ref()
-                .map_or(true, |(best_index, _)| index > *best_index)
+                .is_none_or(|(best_index, _)| index > *best_index)
             {
                 best = Some((index, candidate.to_owned()));
             }

@@ -709,9 +709,12 @@ export const useNativeTimelineView = (
         selectedPositionRef.current = readback.position;
         setState({ status: 'ready', snapshot, selectedPosition: readback.position });
         if (!disposed) {
-          pollTimer = window.setInterval(() => {
-            void pollSnapshot();
-          }, unlisten ? 1500 : 750);
+          pollTimer = window.setInterval(
+            () => {
+              void pollSnapshot();
+            },
+            unlisten ? 1500 : 750
+          );
         }
       } catch (error) {
         if (!disposed) {
