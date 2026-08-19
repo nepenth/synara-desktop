@@ -165,6 +165,8 @@ jobs:
     needs: [validate]
     runs-on: ubuntu-latest
     steps:
+      - id: reuse
+        run: node scripts/reuse-proven-quality-gate.mjs
       - run: npx playwright install --with-deps chromium
         working-directory: synara
       - run: |
@@ -192,7 +194,10 @@ jobs:
   exact-tag-ios-quality:
     needs: [validate]
     runs-on: macos-latest
-${iosBuildStep}
+    steps:
+      - id: reuse
+        run: node scripts/reuse-proven-quality-gate.mjs
+${iosBuildStep.replace("    steps:\n", "")}
   quality-gate:
     name: Exact-tag quality gate
     if: always()
@@ -510,6 +515,20 @@ test("rejects missing exact-tag desktop validation commands", () => {
   });
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /must execute cargo test --locked/i);
+});
+
+test("rejects exact-tag jobs that skip reuse of a proven Quality gate", () => {
+  const result = inspect({
+    releaseWorkflow: releaseWorkflow.replaceAll(
+      "      - id: reuse\n        run: node scripts/reuse-proven-quality-gate.mjs\n",
+      ""
+    ),
+  });
+  assert.equal(result.ok, false);
+  assert.match(
+    result.errors.join("\n"),
+    /must reuse a proven Quality gate/i
+  );
 });
 
 test("rejects exact-tag commands hidden in dead control flow", () => {

@@ -211,13 +211,35 @@ function hasSynaraCoreGenerateStep(jobLines) {
   });
 }
 
+const PROVEN_QUALITY_GATE_REUSE_IF = "steps.reuse.outputs.reuse != 'true'";
+
+function allowsProvenQualityGateReuse(step) {
+  const condition = getScalar(step, "if", 8);
+  return condition === undefined || condition === PROVEN_QUALITY_GATE_REUSE_IF;
+}
+
+function hasProvenQualityGateReuseStep(jobLines) {
+  return parseSteps(jobLines ?? []).some((step) => {
+    const runLines = executableLines(getStepRun(step));
+    return (
+      getScalar(step, "id", 8) === "reuse" &&
+      hasUnconditionalCommand(
+        runLines,
+        "node scripts/reuse-proven-quality-gate.mjs"
+      ) &&
+      getScalar(step, "if", 8) === undefined &&
+      getScalar(step, "continue-on-error", 8) === undefined
+    );
+  });
+}
+
 function hasRequiredCommandStep(jobLines, command, workingDirectory) {
   return parseSteps(jobLines ?? []).some((step) => {
     const runLines = executableLines(getStepRun(step));
     return (
       hasUnconditionalCommand(runLines, command) &&
       getScalar(step, "working-directory", 8) === workingDirectory &&
-      getScalar(step, "if", 8) === undefined &&
+      allowsProvenQualityGateReuse(step) &&
       getScalar(step, "continue-on-error", 8) === undefined
     );
   });
@@ -504,6 +526,11 @@ export function inspectQualityGates({
       !sameList(getList(releaseJobs.get(job) ?? [], "needs", 4), ["validate"])
     ) {
       errors.push(`Release workflow ${job} needs must be exactly [validate].`);
+    }
+    if (!hasProvenQualityGateReuseStep(releaseJobs.get(job))) {
+      errors.push(
+        `Release workflow ${job} must reuse a proven Quality gate via scripts/reuse-proven-quality-gate.mjs before rerunning exact-tag work.`
+      );
     }
   }
 

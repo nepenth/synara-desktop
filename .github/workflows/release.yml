@@ -11,6 +11,7 @@ concurrency:
 
 permissions:
   contents: read
+  checks: read
 
 jobs:
   validate:
@@ -67,32 +68,54 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Reuse proven Quality gate when this SHA already passed CI
+        id: reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/reuse-proven-quality-gate.mjs
+
       - name: Setup Node.js
+        if: steps.reuse.outputs.reuse != 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
           package-manager-cache: false
 
       - name: Install Rust 1.93
+        if: steps.reuse.outputs.reuse != 'true'
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
         with:
           toolchain: 1.93
 
+      - name: Cache Rust build artifacts
+        if: steps.reuse.outputs.reuse != 'true'
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        with:
+          workspaces: |
+            . -> target
+            src-tauri -> target
+          shared-key: release-exact-tag-desktop
+
       - name: Install Linux Tauri dependencies
+        if: steps.reuse.outputs.reuse != 'true'
         run: scripts/install-linux-tauri-dependencies.sh
 
       - name: Install desktop dependencies
+        if: steps.reuse.outputs.reuse != 'true'
         run: npm ci
 
       - name: Install runtime dependencies
+        if: steps.reuse.outputs.reuse != 'true'
         run: npm ci
         working-directory: synara
 
       - name: Install Chromium for timeline layout tests
+        if: steps.reuse.outputs.reuse != 'true'
         run: npx playwright install --with-deps chromium
         working-directory: synara
 
       - name: Check repository and release contracts
+        if: steps.reuse.outputs.reuse != 'true'
         run: |
           npm run check:repo-layout
           npm run check:versions
@@ -104,6 +127,7 @@ jobs:
           node --test scripts/__tests__/*.test.mjs
 
       - name: Check and test shared Rust workspace
+        if: steps.reuse.outputs.reuse != 'true'
         run: |
           cargo fmt --all -- --check
           cargo clippy --locked --workspace --all-targets -- -D warnings
@@ -111,6 +135,7 @@ jobs:
           cargo test --locked --workspace
 
       - name: Check and test Rust desktop shell
+        if: steps.reuse.outputs.reuse != 'true'
         run: |
           cargo fmt --check
           cargo clippy --locked --all-targets -- -D warnings
@@ -119,6 +144,7 @@ jobs:
         working-directory: src-tauri
 
       - name: Validate desktop runtime
+        if: steps.reuse.outputs.reuse != 'true'
         run: |
           npm run typecheck
           npm run typecheck:modernization
@@ -141,23 +167,39 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Reuse proven Quality gate when this SHA already passed CI
+        id: reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/reuse-proven-quality-gate.mjs
+
       - name: Install Rust 1.93 and Apple targets
+        if: steps.reuse.outputs.reuse != 'true'
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
         with:
           toolchain: 1.93
           targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,aarch64-apple-darwin
 
+      - name: Cache Apple SynaraCore build
+        if: steps.reuse.outputs.reuse != 'true'
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        with:
+          workspaces: ". -> target/synara-core-apple"
+          shared-key: release-synara-core-apple
+
       - name: Install XcodeGen
+        if: steps.reuse.outputs.reuse != 'true'
         run: brew install xcodegen
 
       - name: Build and run unsigned simulator tests
+        if: steps.reuse.outputs.reuse != 'true'
         run: scripts/ci-build.sh
         working-directory: synara-ios
         env:
           RUN_IOS_TESTS: "1"
 
       - name: Upload exact-tag iOS result bundles
-        if: always()
+        if: always() && steps.reuse.outputs.reuse != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: exact-tag-ios-test-results
@@ -210,6 +252,12 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
         with:
           toolchain: 1.93
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        with:
+          workspaces: src-tauri
+          shared-key: release-linux-deb
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -324,6 +372,12 @@ jobs:
         with:
           toolchain: 1.93
           targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        with:
+          workspaces: src-tauri
+          shared-key: release-macos
 
       - name: Install desktop dependencies
         run: npm ci
@@ -590,6 +644,12 @@ jobs:
         with:
           toolchain: 1.93
           targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,aarch64-apple-darwin
+
+      - name: Cache Apple SynaraCore build
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        with:
+          workspaces: ". -> target/synara-core-apple"
+          shared-key: release-synara-core-apple
 
       - name: Generate SynaraCore Swift bindings and XCFramework
         run: scripts/generate-synara-core-swift.sh

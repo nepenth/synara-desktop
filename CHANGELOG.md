@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Release reuses a proven `Quality gate` for the tagged SHA instead of always
+  rerunning the hour-plus exact-tag desktop and iOS suites before packaging.
+
 ## 2.1.0 - 2026-08-18
 
 - Hardened native credential custody, remote transport policy, bounded media
