@@ -1,0 +1,12 @@
+Synara 2.1.1 focuses on last-read placement, desktop login recovery, and timeline presentation.
+
+What to test:
+- Upgrade from 2.1.0 and confirm your session restores without another login.
+- If a previous login left the app signed out, sign in with the same account and confirm it succeeds without an Olm-unavailable error.
+- Open rooms with overnight unreads and confirm placement is at last-read, not older history.
+- Scroll up to load older messages, then use Jump to latest and confirm it returns to the live tail.
+- Send formatted messages, react, reply, and use threads in encrypted and unencrypted rooms.
+- On desktop, confirm room-list initials and message avatars, names, timestamps, and body cards.
+- Sign out, relaunch, and sign in again.
+
+Please report the room type, action, and approximate time for any sync, rendering, login, or last-read issue. Do not include access tokens or recovery keys.
