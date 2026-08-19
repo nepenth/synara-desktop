@@ -18,8 +18,8 @@ case "$apple_slices" in
     targets=(aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-apple-darwin)
     ;;
   simulator)
-    # PR/CI simulator tests on Apple Silicon only need the arm64 sim slice.
-    targets=(aarch64-apple-ios-sim)
+    # generic iOS Simulator XCFramework still needs a fat sim slice.
+    targets=(aarch64-apple-ios-sim x86_64-apple-ios)
     ;;
   device)
     targets=(aarch64-apple-ios)
@@ -98,17 +98,14 @@ if [[ "$apple_slices" == "all" || "$apple_slices" == "device" ]]; then
   )
 fi
 if [[ "$apple_slices" == "all" || "$apple_slices" == "simulator" ]]; then
-  simulator_library="$cargo_target_dir/aarch64-apple-ios-sim/release/libsynara_core.a"
-  if [[ "$apple_slices" == "all" ]]; then
-    # XCFramework cannot accept two otherwise-identical simulator definitions.
-    # Make the required generic simulator slice explicitly fat so both Xcode
-    # generic simulator architectures link the same generated C module/library.
-    simulator_library="$work_dir/libsynara_core-simulator.a"
-    xcrun lipo -create \
-      "$cargo_target_dir/aarch64-apple-ios-sim/release/libsynara_core.a" \
-      "$cargo_target_dir/x86_64-apple-ios/release/libsynara_core.a" \
-      -output "$simulator_library"
-  fi
+  # XCFramework cannot accept two otherwise-identical simulator definitions.
+  # Make the required generic simulator slice explicitly fat so both Xcode
+  # generic simulator architectures link the same generated C module/library.
+  simulator_library="$work_dir/libsynara_core-simulator.a"
+  xcrun lipo -create \
+    "$cargo_target_dir/aarch64-apple-ios-sim/release/libsynara_core.a" \
+    "$cargo_target_dir/x86_64-apple-ios/release/libsynara_core.a" \
+    -output "$simulator_library"
   create_xcframework+=(
     -library "$simulator_library"
     -headers "$headers_tmp"
