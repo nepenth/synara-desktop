@@ -18,6 +18,7 @@ use matrix_sdk::{
         events::{
             poll::unstable_response::UnstablePollResponseEventContent,
             reaction::ReactionEventContent,
+            receipt::{ReceiptThread, ReceiptType as EventReceiptType},
             relation::Annotation,
             room::message::{
                 MessageFormat, MessageType, Relation, RoomMessageEventContent,
@@ -34,7 +35,7 @@ use matrix_sdk_crypto::types::events::UtdCause;
 use matrix_sdk_ui::timeline::{
     EncryptedMessage, ReactionStatus, Timeline, TimelineBuilder, TimelineEventFocusThreadMode,
     TimelineEventItemId, TimelineFocus, TimelineItem as SdkTimelineItem,
-    TimelineItemContent as SdkTimelineItemContent,
+    TimelineItemContent as SdkTimelineItemContent, TimelineReadReceiptTracking,
 };
 use serde::{Deserialize, Serialize};
 use tokio::{sync::Mutex as AsyncMutex, task::JoinHandle};
@@ -848,6 +849,7 @@ impl NativeTimelineRegistry {
                 .map_err(|_| "d0.5-timeline-encryption-state-unavailable")?
                 .is_encrypted();
             let timeline = TimelineBuilder::new(&room)
+                .track_read_marker_and_receipts(TimelineReadReceiptTracking::AllEvents)
                 .build()
                 .await
                 .map_err(|_| "d0.3-timeline-open-failed")?;
@@ -891,11 +893,24 @@ impl NativeTimelineRegistry {
                 } else {
                     None
                 };
+                // Last-read is the newest of own receipts + `m.fully_read` that
+                // can be ordered without walking history. Unread counts come
+                // from receipts; a stale fully-read marker cannot override them.
+                let unread_plan = if has_unread {
+                    self.open(client, &room_id_string).await?;
+                    self.unread_open_plan(client, &room, &room_id_string).await
+                } else {
+                    UnreadOpenPlan::LiveBottom
+                };
+                let unread_frontier = match &unread_plan {
+                    UnreadOpenPlan::InLive { event_id }
+                    | UnreadOpenPlan::FocusedReceipt { event_id } => Some(event_id.clone()),
+                    UnreadOpenPlan::LiveBottom => None,
+                };
                 let now_ms = unix_time_ms();
                 let selected_position = resolve_normal_open_position(
                     has_unread,
-                    room.fully_read_event_id()
-                        .map(|event_id| event_id.to_string()),
+                    unread_frontier,
                     current_live_tail.as_deref(),
                     now_ms,
                     viewport,
@@ -922,47 +937,44 @@ impl NativeTimelineRegistry {
                     }
                     TimelineViewPosition::Unread {
                         ref anchor_event_id,
+                    } => {
+                        // Element opens the live window and places last-read
+                        // inside it. A focused historical provider is only
+                        // for a receipt that is not yet in that live window.
+                        self.open(client, &room_id_string).await?;
+                        let live_ids = self.live_event_ids(&room_id_string).await;
+                        if live_ids.iter().any(|id| id == anchor_event_id) {
+                            let entry = self
+                                .entries
+                                .get(&room_id_string)
+                                .expect("live timeline inserted by open");
+                            (
+                                entry.timeline.clone(),
+                                selected_position,
+                                live_pagination_state(entry),
+                            )
+                        } else {
+                            self.open_focused_unread(
+                                &room,
+                                &room_id_string,
+                                anchor_event_id,
+                                "v-timeline-normal-anchor-invalid",
+                                "v-timeline-normal-open-failed",
+                            )
+                            .await?
+                        }
                     }
-                    | TimelineViewPosition::Restored {
+                    TimelineViewPosition::Restored {
                         anchor_event_id: Some(ref anchor_event_id),
                     } => {
-                        let event_id = parse_event_id(anchor_event_id)
-                            .map_err(|_| "v-timeline-normal-anchor-invalid")?;
-                        let key = (room_id_string.clone(), event_id.to_string());
-                        if !self.focused_entries.contains_key(&key) {
-                            if self.focused_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
-                                if let Some(oldest_key) =
-                                    self.focused_entries.keys().next().cloned()
-                                {
-                                    self.focused_entries.remove(&oldest_key);
-                                }
-                            }
-                            let timeline = TimelineBuilder::new(&room)
-                                .with_focus(TimelineFocus::Event {
-                                    target: event_id.clone(),
-                                    num_context_events: FOCUSED_CONTEXT_EVENT_COUNT,
-                                    thread_mode: TimelineEventFocusThreadMode::Automatic {
-                                        hide_threaded_events: false,
-                                    },
-                                })
-                                .build()
-                                .await
-                                .map_err(|_| "v-timeline-normal-open-failed")?;
-                            self.focused_entries.insert(key.clone(), Arc::new(timeline));
-                        }
-                        let timeline = self
-                            .focused_entries
-                            .get(&key)
-                            .expect("normal focused timeline present")
-                            .clone();
-                        (
-                            timeline,
-                            selected_position,
-                            TimelinePaginationState {
-                                backward: TimelinePageState::Available,
-                                forward: TimelinePageState::Available,
-                            },
+                        self.open_focused_unread(
+                            &room,
+                            &room_id_string,
+                            anchor_event_id,
+                            "v-timeline-normal-anchor-invalid",
+                            "v-timeline-normal-open-failed",
                         )
+                        .await?
                     }
                     TimelineViewPosition::Focused { .. }
                     | TimelineViewPosition::Restored {
@@ -1041,44 +1053,43 @@ impl NativeTimelineRegistry {
                 if !has_unread {
                     return Err("v-timeline-unread-open-no-unread");
                 }
-                let anchor_event_id = room
-                    .fully_read_event_id()
-                    .ok_or("v-timeline-unread-frontier-unavailable")?;
-                let key = (room_id_string.clone(), anchor_event_id.to_string());
-                if !self.focused_entries.contains_key(&key) {
-                    if self.focused_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
-                        if let Some(oldest_key) = self.focused_entries.keys().next().cloned() {
-                            self.focused_entries.remove(&oldest_key);
-                        }
-                    }
-                    let timeline = TimelineBuilder::new(&room)
-                        .with_focus(TimelineFocus::Event {
-                            target: anchor_event_id.clone(),
-                            num_context_events: FOCUSED_CONTEXT_EVENT_COUNT,
-                            thread_mode: TimelineEventFocusThreadMode::Automatic {
-                                hide_threaded_events: false,
+                self.open(client, &room_id_string).await?;
+                match self.unread_open_plan(client, &room, &room_id_string).await {
+                    UnreadOpenPlan::InLive { event_id } => {
+                        let entry = self
+                            .entries
+                            .get(&room_id_string)
+                            .expect("live timeline inserted by open");
+                        (
+                            entry.timeline.clone(),
+                            TimelineViewPosition::Unread {
+                                anchor_event_id: event_id,
                             },
-                        })
-                        .build()
-                        .await
-                        .map_err(|_| "v-timeline-unread-open-failed")?;
-                    self.focused_entries.insert(key.clone(), Arc::new(timeline));
+                            live_pagination_state(entry),
+                        )
+                    }
+                    UnreadOpenPlan::FocusedReceipt { event_id } => {
+                        self.open_focused_unread(
+                            &room,
+                            &room_id_string,
+                            &event_id,
+                            "v-timeline-unread-frontier-unavailable",
+                            "v-timeline-unread-open-failed",
+                        )
+                        .await?
+                    }
+                    UnreadOpenPlan::LiveBottom => {
+                        let entry = self
+                            .entries
+                            .get(&room_id_string)
+                            .expect("live timeline inserted by open");
+                        (
+                            entry.timeline.clone(),
+                            TimelineViewPosition::LiveBottom,
+                            live_pagination_state(entry),
+                        )
+                    }
                 }
-                let timeline = self
-                    .focused_entries
-                    .get(&key)
-                    .expect("unread frontier timeline present")
-                    .clone();
-                (
-                    timeline,
-                    TimelineViewPosition::Unread {
-                        anchor_event_id: anchor_event_id.to_string(),
-                    },
-                    TimelinePaginationState {
-                        backward: TimelinePageState::Available,
-                        forward: TimelinePageState::Available,
-                    },
-                )
             }
         };
         let own_user_id = client.user_id().map(ToOwned::to_owned);
@@ -1369,6 +1380,90 @@ impl NativeTimelineRegistry {
             item.as_event()
                 .and_then(|event| event.event_id().map(|event_id| event_id.to_string()))
         })
+    }
+
+    async fn live_event_ids(&self, room_id: &str) -> Vec<String> {
+        let Some(entry) = self.entries.get(room_id) else {
+            return Vec::new();
+        };
+        let items = entry.timeline.items().await;
+        items
+            .iter()
+            .filter_map(|item| {
+                item.as_event()
+                    .and_then(|event| event.event_id().map(|event_id| event_id.to_string()))
+            })
+            .collect()
+    }
+
+    async fn unread_open_plan(
+        &self,
+        client: &Client,
+        room: &Room,
+        room_id: &str,
+    ) -> UnreadOpenPlan {
+        let live_ids = self.live_event_ids(room_id).await;
+        let signals = own_read_signals(room, client.user_id()).await;
+        let mut receipts = signals.receipts;
+        if let (Some(entry), Some(user_id)) = (self.entries.get(room_id), client.user_id()) {
+            if let Some(event_id) = entry
+                .timeline
+                .latest_user_read_receipt_timeline_event_id(user_id)
+                .await
+            {
+                let event_id = event_id.to_string();
+                if !receipts.iter().any(|(existing, _)| existing == &event_id) {
+                    receipts.push((event_id, None));
+                }
+            }
+        }
+        plan_unread_open(&live_ids, signals.fully_read.as_deref(), &receipts)
+    }
+
+    async fn open_focused_unread(
+        &mut self,
+        room: &Room,
+        room_id: &str,
+        anchor_event_id: &str,
+        invalid_id: &'static str,
+        open_failed: &'static str,
+    ) -> Result<(Arc<Timeline>, TimelineViewPosition, TimelinePaginationState), &'static str> {
+        let event_id = parse_event_id(anchor_event_id).map_err(|_| invalid_id)?;
+        let key = (room_id.to_owned(), event_id.to_string());
+        if !self.focused_entries.contains_key(&key) {
+            if self.focused_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
+                if let Some(oldest_key) = self.focused_entries.keys().next().cloned() {
+                    self.focused_entries.remove(&oldest_key);
+                }
+            }
+            let timeline = TimelineBuilder::new(room)
+                .with_focus(TimelineFocus::Event {
+                    target: event_id.clone(),
+                    num_context_events: FOCUSED_CONTEXT_EVENT_COUNT,
+                    thread_mode: TimelineEventFocusThreadMode::Automatic {
+                        hide_threaded_events: false,
+                    },
+                })
+                .build()
+                .await
+                .map_err(|_| open_failed)?;
+            self.focused_entries.insert(key.clone(), Arc::new(timeline));
+        }
+        let timeline = self
+            .focused_entries
+            .get(&key)
+            .expect("unread frontier timeline present")
+            .clone();
+        Ok((
+            timeline,
+            TimelineViewPosition::Unread {
+                anchor_event_id: event_id.to_string(),
+            },
+            TimelinePaginationState {
+                backward: TimelinePageState::Available,
+                forward: TimelinePageState::Available,
+            },
+        ))
     }
 
     pub async fn resolve_media(&self, handle_id: &str) -> Option<TimelineMediaSource> {
@@ -1821,6 +1916,113 @@ fn unix_time_ms() -> u64 {
         .unwrap_or(0)
 }
 
+fn newest_frontier_in_live<'a>(
+    live_event_ids: &[String],
+    candidates: impl IntoIterator<Item = &'a str>,
+) -> Option<String> {
+    let mut best: Option<(usize, String)> = None;
+    for candidate in candidates {
+        if let Some(index) = live_event_ids.iter().position(|id| id == candidate) {
+            if best
+                .as_ref()
+                .map_or(true, |(best_index, _)| index > *best_index)
+            {
+                best = Some((index, candidate.to_owned()));
+            }
+        }
+    }
+    best.map(|(_, id)| id)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum UnreadOpenPlan {
+    /// Last-read is already in the live window. Stay live and place there.
+    InLive { event_id: String },
+    /// Last-read is an own receipt outside the live window. Bounded focus.
+    FocusedReceipt { event_id: String },
+    /// Newest frontier cannot be established without walking history.
+    LiveBottom,
+}
+
+struct OwnReadSignals {
+    fully_read: Option<String>,
+    receipts: Vec<(String, Option<u64>)>,
+}
+
+fn newest_receipt_event_id(receipts: &[(String, Option<u64>)]) -> Option<String> {
+    receipts
+        .iter()
+        .max_by(|left, right| match (left.1, right.1) {
+            (Some(left_ts), Some(right_ts)) => left_ts.cmp(&right_ts),
+            (Some(_), None) => std::cmp::Ordering::Greater,
+            (None, Some(_)) => std::cmp::Ordering::Less,
+            (None, None) => std::cmp::Ordering::Equal,
+        })
+        .map(|(event_id, _)| event_id.clone())
+}
+
+fn plan_unread_open(
+    live_event_ids: &[String],
+    fully_read: Option<&str>,
+    receipts: &[(String, Option<u64>)],
+) -> UnreadOpenPlan {
+    let mut live_candidates: Vec<&str> = receipts.iter().map(|(id, _)| id.as_str()).collect();
+    if let Some(event_id) = fully_read {
+        live_candidates.push(event_id);
+    }
+    if let Some(event_id) = newest_frontier_in_live(live_event_ids, live_candidates) {
+        return UnreadOpenPlan::InLive { event_id };
+    }
+    // Unread counts are receipt-based. A receipt we have but have not loaded
+    // into the live window is still last-read; `m.fully_read` outside that
+    // window is not, because it can sit months behind the receipt.
+    if let Some(event_id) = newest_receipt_event_id(receipts) {
+        return UnreadOpenPlan::FocusedReceipt { event_id };
+    }
+    UnreadOpenPlan::LiveBottom
+}
+
+async fn own_read_signals(room: &Room, own_user_id: Option<&UserId>) -> OwnReadSignals {
+    let fully_read = room
+        .fully_read_event_id()
+        .map(|event_id| event_id.to_string());
+    let mut receipts = Vec::new();
+    let Some(user_id) = own_user_id else {
+        return OwnReadSignals {
+            fully_read,
+            receipts,
+        };
+    };
+    for receipt_type in [EventReceiptType::Read, EventReceiptType::ReadPrivate] {
+        if let Ok(Some((event_id, receipt))) = room
+            .load_user_receipt(receipt_type, ReceiptThread::Unthreaded, user_id)
+            .await
+        {
+            let event_id = event_id.to_string();
+            if receipts.iter().any(|(existing, _)| existing == &event_id) {
+                continue;
+            }
+            let ts = receipt.ts.map(|ts| ts.get().into());
+            receipts.push((event_id, ts));
+        }
+    }
+    OwnReadSignals {
+        fully_read,
+        receipts,
+    }
+}
+
+fn live_pagination_state(entry: &LiveTimelineEntry) -> TimelinePaginationState {
+    TimelinePaginationState {
+        backward: if entry.hit_start {
+            TimelinePageState::Exhausted
+        } else {
+            TimelinePageState::Available
+        },
+        forward: TimelinePageState::Available,
+    }
+}
+
 fn should_restore_viewport(
     has_unread: bool,
     now_ms: u64,
@@ -1862,11 +2064,10 @@ fn resolve_normal_open_position(
         return Ok(TimelineViewPosition::LiveBottom);
     }
     if has_unread {
-        // A supported room can be unread without an `m.fully_read` marker, for
-        // example a channel this device has never opened or read. With no
-        // authoritative native frontier there is no unread anchor to place, so
-        // fall back to the live bottom instead of failing the whole room open.
-        // The explicit `Unread` position kind remains strict in `open_at`.
+        // A supported room can be unread without a frontier already present in
+        // the live graph (never-opened channel, or only a stale `m.fully_read`
+        // outside the bounded live window). With no comparable live frontier,
+        // open live instead of focused-opening historical months.
         let anchor_event_id = match fully_read_event_id {
             Some(anchor_event_id) => anchor_event_id,
             None => return Ok(TimelineViewPosition::LiveBottom),
@@ -2680,6 +2881,116 @@ mod tests {
             )
             .unwrap(),
             TimelineViewPosition::LiveBottom
+        );
+    }
+
+    #[test]
+    fn newest_live_frontier_picks_the_latest_candidate_in_the_window() {
+        let live = vec![
+            "$old-fully-read:example.org".into(),
+            "$mid:example.org".into(),
+            "$receipt:example.org".into(),
+            "$live-tip:example.org".into(),
+        ];
+        assert_eq!(
+            newest_frontier_in_live(
+                &live,
+                ["$old-fully-read:example.org", "$receipt:example.org"],
+            )
+            .as_deref(),
+            Some("$receipt:example.org")
+        );
+    }
+
+    #[test]
+    fn newest_live_frontier_ignores_candidates_outside_the_window() {
+        let live = vec!["$recent:example.org".into(), "$tip:example.org".into()];
+        assert_eq!(
+            newest_frontier_in_live(&live, ["$july-fully-read:example.org"]),
+            None
+        );
+        assert_eq!(
+            newest_frontier_in_live(
+                &live,
+                ["$july-fully-read:example.org", "$recent:example.org"],
+            )
+            .as_deref(),
+            Some("$recent:example.org")
+        );
+        assert_eq!(newest_frontier_in_live(&live, [] as [&str; 0]), None);
+    }
+
+    #[test]
+    fn unread_plan_stays_live_when_the_receipt_is_in_the_live_window() {
+        let live = vec![
+            "$july-fully-read:example.org".into(),
+            "$last-night-receipt:example.org".into(),
+            "$overnight:example.org".into(),
+        ];
+        assert_eq!(
+            plan_unread_open(
+                &live,
+                Some("$july-fully-read:example.org"),
+                &[("$last-night-receipt:example.org".into(), Some(2))],
+            ),
+            UnreadOpenPlan::InLive {
+                event_id: "$last-night-receipt:example.org".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn unread_plan_ignores_stale_fully_read_outside_live_when_a_receipt_exists() {
+        let live = vec!["$recent:example.org".into(), "$tip:example.org".into()];
+        assert_eq!(
+            plan_unread_open(
+                &live,
+                Some("$july-fully-read:example.org"),
+                &[("$last-night-receipt:example.org".into(), Some(2))],
+            ),
+            UnreadOpenPlan::FocusedReceipt {
+                event_id: "$last-night-receipt:example.org".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn unread_plan_does_not_focus_a_stale_fully_read_without_a_receipt() {
+        let live = vec!["$recent:example.org".into(), "$tip:example.org".into()];
+        assert_eq!(
+            plan_unread_open(&live, Some("$july-fully-read:example.org"), &[]),
+            UnreadOpenPlan::LiveBottom
+        );
+    }
+
+    #[test]
+    fn unread_plan_picks_the_newer_receipt_by_receipt_timestamp() {
+        assert_eq!(
+            plan_unread_open(
+                &[],
+                Some("$july-fully-read:example.org"),
+                &[
+                    ("$old-public:example.org".into(), Some(1)),
+                    ("$new-private:example.org".into(), Some(9)),
+                ],
+            ),
+            UnreadOpenPlan::FocusedReceipt {
+                event_id: "$new-private:example.org".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn normal_open_falls_back_to_live_when_unread_frontier_is_outside_live_graph() {
+        assert_eq!(
+            resolve_normal_open_position(
+                true,
+                None,
+                None,
+                1_700_000_000_000,
+                &NativeTimelineViewportHint::default(),
+            ),
+            Ok(TimelineViewPosition::LiveBottom)
         );
     }
 

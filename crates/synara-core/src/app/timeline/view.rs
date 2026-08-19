@@ -151,6 +151,10 @@ pub struct TimelineEventRowBase {
     pub event_id: Option<EventId>,
     pub sender_id: UserId,
     pub sender_name: String,
+    /// Optional `mxc://` avatar for the sender. Absent when the profile is
+    /// unresolved; presenters fall back to initials.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_avatar_url: Option<String>,
     pub origin_server_ts: u64,
     pub capabilities: TimelineRowCapabilities,
 }
@@ -163,14 +167,42 @@ pub struct TimelineEventRowBase {
 /// those owners exist. Reactions consume the merged V-SEND.2 commands.
 pub fn project_event_row_base(item_id: &str, event: &EventTimelineItem) -> TimelineEventRowBase {
     let sender_id = event.sender().to_string();
+    let (sender_name, sender_avatar_url) = project_sender_presentation(event);
     TimelineEventRowBase {
         item_id: item_id.to_owned(),
         event_id: event.event_id().map(ToString::to_string),
-        sender_name: sender_id.clone(),
+        sender_name,
         sender_id,
+        sender_avatar_url,
         origin_server_ts: event.timestamp().get().into(),
         capabilities: project_row_action_capabilities(event),
     }
+}
+
+fn project_sender_presentation(event: &EventTimelineItem) -> (String, Option<String>) {
+    let sender_id = event.sender().as_str();
+    match event.sender_profile() {
+        TimelineDetails::Ready(profile) => (
+            profile
+                .display_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .map(str::to_owned)
+                .unwrap_or_else(|| sender_localpart_or_id(sender_id)),
+            profile.avatar_url.as_ref().map(ToString::to_string),
+        ),
+        _ => (sender_localpart_or_id(sender_id), None),
+    }
+}
+
+fn sender_localpart_or_id(sender_id: &str) -> String {
+    sender_id
+        .strip_prefix('@')
+        .and_then(|rest| rest.split_once(':').map(|(local, _)| local))
+        .filter(|local| !local.is_empty())
+        .map(str::to_owned)
+        .unwrap_or_else(|| sender_id.to_owned())
 }
 
 fn project_row_action_capabilities(event: &EventTimelineItem) -> TimelineRowCapabilities {
@@ -1184,6 +1216,7 @@ mod tests {
                 event_id: Some("$poll:example.org".into()),
                 sender_id: "@alice:example.org".into(),
                 sender_name: "@alice:example.org".into(),
+                sender_avatar_url: None,
                 origin_server_ts: 1,
                 capabilities: TimelineRowCapabilities {
                     react: true,
@@ -1229,6 +1262,7 @@ mod tests {
                 event_id: Some("$msg:example.org".into()),
                 sender_id: "@bob:example.org".into(),
                 sender_name: "@bob:example.org".into(),
+                sender_avatar_url: None,
                 origin_server_ts: 1,
                 capabilities: TimelineRowCapabilities {
                     react: true,
@@ -1260,6 +1294,13 @@ mod tests {
         assert!(!json.contains("ciphertext"));
         assert!(!json.contains("access_token"));
         assert!(!json.contains("mxc://"));
+    }
+
+    #[test]
+    fn sender_label_prefers_localpart_over_full_mxid() {
+        assert_eq!(sender_localpart_or_id("@chris:matrix.whyland.com"), "chris");
+        assert_eq!(sender_localpart_or_id("@spectre:example.org"), "spectre");
+        assert_eq!(sender_localpart_or_id("not-an-mxid"), "not-an-mxid");
     }
 
     #[test]

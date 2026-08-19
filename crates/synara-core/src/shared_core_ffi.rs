@@ -11036,6 +11036,7 @@ mod tests {
                 event_id: Some("$evt:example.org".to_owned()),
                 sender_id: "@alice:example.org".to_owned(),
                 sender_name: "@alice:example.org".to_owned(),
+                sender_avatar_url: None,
                 origin_server_ts: 1_700_000_000_000,
                 capabilities: TimelineRowCapabilities {
                     react: true,

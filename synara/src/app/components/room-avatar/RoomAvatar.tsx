@@ -17,9 +17,18 @@ type RoomAvatarProps = {
   roomId: string;
   src?: string;
   alt?: string;
+  fallbackBackground?: string;
+  fallbackColor?: string;
   renderFallback: () => ReactNode;
 };
-export function RoomAvatar({ roomId, src, alt, renderFallback }: RoomAvatarProps) {
+export function RoomAvatar({
+  roomId,
+  src,
+  alt,
+  fallbackBackground,
+  fallbackColor,
+  renderFallback,
+}: RoomAvatarProps) {
   const resolvedSrc = useNativeMatrixMediaSrc(src);
   const [error, setError] = useState(false);
 
@@ -34,7 +43,11 @@ export function RoomAvatar({ roomId, src, alt, renderFallback }: RoomAvatarProps
   if (!resolvedSrc || error) {
     return (
       <AvatarFallback
-        style={{ backgroundColor: colorMXID(roomId ?? ''), color: color.Surface.Container }}
+        style={{
+          backgroundColor: fallbackBackground ?? colorMXID(roomId ?? ''),
+          color: fallbackColor ?? color.Surface.Container,
+          textTransform: 'uppercase',
+        }}
         className={css.RoomAvatar}
       >
         {renderFallback()}

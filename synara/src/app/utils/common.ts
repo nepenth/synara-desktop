@@ -116,6 +116,59 @@ export const nameInitials = (str: string | undefined | null, len = 1): string =>
   return [...str].slice(0, len).join('') || '�';
 };
 
+const ROOM_INITIAL_IGNORED_WORDS = new Set(['the', 'and', 'room', 'channel', 'chat']);
+
+/** Two-letter room initials: "Project - Media Management" → "PM", "Alerts" → "AL". */
+export const roomNameInitials = (str: string | undefined | null): string => {
+  if (!str) return 'S';
+  const tokens = str
+    .replace(/[#_/\-–—]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word.length > 0);
+  const words = tokens.filter((word) => !ROOM_INITIAL_IGNORED_WORDS.has(word.toLowerCase()));
+  const source = words.length > 0 ? words : tokens;
+
+  if (source.length >= 2) {
+    const letters = source
+      .slice(0, 2)
+      .map((word) => [...word].find((char) => /\p{L}/u.test(char)) ?? word[0])
+      .filter(Boolean)
+      .join('');
+    if (letters) return letters.toUpperCase();
+  }
+
+  const word = source[0];
+  if (word && word.length > 1) {
+    const letters = [...word].filter((char) => /\p{L}/u.test(char));
+    const first = letters[0] ?? word[0];
+    const second =
+      letters.slice(1).find((char) => !'AEIOUaeiou'.includes(char)) ?? letters[1] ?? word[1];
+    return `${first}${second}`.toUpperCase();
+  }
+
+  const fallback = [...(word ?? str.trim())].slice(0, 1).join('');
+  return fallback ? fallback.toUpperCase() : 'S';
+};
+
+const ROOM_AVATAR_PALETTE = [
+  { background: '#1e3a5f', color: '#f4f7fb' },
+  { background: '#163a40', color: '#eef6f4' },
+  { background: '#3d2a4d', color: '#f6f1fb' },
+  { background: '#1c3d32', color: '#eef7f2' },
+  { background: '#3b2b22', color: '#f7f1ea' },
+  { background: '#2a3350', color: '#eef1f8' },
+] as const;
+
+export const roomAvatarTone = (roomId: string): { background: string; color: string } => {
+  let hash = 0;
+  for (let i = 0; i < roomId.length; i += 1) {
+    hash = (hash * 31 + roomId.charCodeAt(i)) | 0;
+  }
+  const index = Math.abs(hash) % ROOM_AVATAR_PALETTE.length;
+  return ROOM_AVATAR_PALETTE[index];
+};
+
 export const randomStr = (len = 12): string => {
   let str = '';
   const minCode = 'A'.charCodeAt(0);

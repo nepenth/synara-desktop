@@ -35,6 +35,7 @@ type NativeTimelineEventRowBase = {
   eventId?: string;
   senderId: string;
   senderName: string;
+  senderAvatarUrl?: string;
   originServerTs: number;
   capabilities: NativeTimelineRowCapabilities;
 };

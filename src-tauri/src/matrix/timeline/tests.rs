@@ -1100,6 +1100,7 @@ mod view_pure {
                 event_id: Some("$poll:example.org".into()),
                 sender_id: "@alice:example.org".into(),
                 sender_name: "@alice:example.org".into(),
+                sender_avatar_url: None,
                 origin_server_ts: 1,
                 capabilities: TimelineRowCapabilities {
                     react: true,
@@ -1145,6 +1146,7 @@ mod view_pure {
                 event_id: Some("$msg:example.org".into()),
                 sender_id: "@bob:example.org".into(),
                 sender_name: "@bob:example.org".into(),
+                sender_avatar_url: None,
                 origin_server_ts: 1,
                 capabilities: TimelineRowCapabilities {
                     react: true,
