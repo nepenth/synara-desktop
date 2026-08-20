@@ -369,7 +369,14 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.otherElements["AttachmentOptionsSheet"].waitForExistence(timeout: 5))
         tap(app.buttons["AttachmentOption-Photo or Video"])
 
+        XCTAssertTrue(app.otherElements["ComposerAttachmentDraftList"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.otherElements["ComposerAttachmentDraft-synara-upload.jpg"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["MediaPlaceholder-synara-upload.jpg"].exists)
+        XCTAssertTrue(app.buttons["ComposerSendButton"].waitForExistence(timeout: 5))
+        tap(app.buttons["ComposerSendButton"])
+
         XCTAssertTrue(app.buttons["MediaPlaceholder-synara-upload.jpg"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.otherElements["ComposerAttachmentDraftList"].exists)
     }
 
     func testFileUploadAddsAttachmentPlaceholder() {
