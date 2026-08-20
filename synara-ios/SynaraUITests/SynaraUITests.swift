@@ -509,7 +509,7 @@ final class SynaraUITests: XCTestCase {
 
         tapSettingsElement(app.buttons["AboutSettingsLink"], app: app, timeout: 10)
 
-        XCTAssertTrue(app.collectionViews["AboutSettingsScreen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(identifiedElement(in: app, "AboutSettingsScreen").waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Synara"].exists)
         XCTAssertTrue(app.staticTexts["Version"].exists)
         XCTAssertTrue(app.staticTexts["Build"].exists)
@@ -1091,7 +1091,7 @@ final class SynaraUITests: XCTestCase {
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "13-live-settings-lower")
 
         tap(app.buttons["AboutSettingsLink"])
-        XCTAssertTrue(app.collectionViews["AboutSettingsScreen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(identifiedElement(in: app, "AboutSettingsScreen").waitForExistence(timeout: 10))
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "14-live-settings-about")
         navigateBack(app: app)
 

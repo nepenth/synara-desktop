@@ -5533,7 +5533,9 @@ private struct ComposerAttachmentDraftChip: View {
                         .stroke(SynaraColor.separator.opacity(0.45), lineWidth: 0.5)
                         .allowsHitTesting(false)
                 )
+                .accessibilityElement()
                 .accessibilityLabel(draft.displayName)
+                .accessibilityIdentifier("ComposerAttachmentDraft-\(draft.displayName)")
 
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill")
@@ -5548,7 +5550,6 @@ private struct ComposerAttachmentDraftChip: View {
             .accessibilityIdentifier("ComposerAttachmentDraftRemove-\(draft.displayName)")
         }
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("ComposerAttachmentDraft-\(draft.displayName)")
     }
 
     @ViewBuilder
