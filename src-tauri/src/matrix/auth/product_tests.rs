@@ -1529,6 +1529,22 @@ fn room_leave_command_owns_sdk_leave_without_a_js_fallback() {
 }
 
 #[test]
+fn room_set_favorite_command_owns_sdk_tag_write_without_a_js_fallback() {
+    let product = PRODUCT_SOURCE;
+    let command = product
+        .split("pub async fn matrix_room_set_favorite")
+        .nth(1)
+        .expect("room set-favorite command");
+    let command = command
+        .split("#[tauri::command]")
+        .next()
+        .expect("room set-favorite command body");
+    assert!(command.contains("crate::bridge::room_leave_join::room_set_favorite"));
+    assert!(!command.contains("localStorage"));
+    assert!(!command.contains("setRoomTag"));
+}
+
+#[test]
 fn room_create_builds_sdk_request_and_native_initial_state() {
     let request = build_room_create_request(MatrixRoomCreateRequest {
         name: Some("  Native room  ".into()),

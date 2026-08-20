@@ -324,7 +324,8 @@ final class SharedCoreRoomListService: RoomListServicing {
                         highlightCount: Int($0.highlightCount),
                         markedUnread: $0.markedUnread,
                         lastActivityTs: $0.lastActivityTs,
-                        lastMessagePreview: $0.lastMessagePreview
+                        lastMessagePreview: $0.lastMessagePreview,
+                        isFavorite: $0.isFavorite
                     )
                 },
                 invites: invites.map {
@@ -1185,6 +1186,18 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
     func leaveRoom(roomID: String) async throws {
         do {
             _ = try await SharedCoreRoomLeaveJoin.roomLeave(core: host.core, roomId: roomID)
+        } catch {
+            throw RoomManagementError.failed
+        }
+    }
+
+    func setRoomFavorite(_ favorite: Bool, roomID: String) async throws {
+        do {
+            _ = try await SharedCoreRoomLeaveJoin.roomSetFavorite(
+                core: host.core,
+                roomId: roomID,
+                favorite: favorite
+            )
         } catch {
             throw RoomManagementError.failed
         }

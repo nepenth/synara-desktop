@@ -1032,6 +1032,14 @@ struct MatrixRoomLeaveRequest {
     room_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_room_set_favorite`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomSetFavoriteRequest {
+    room_id: String,
+    favorite: bool,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct MatrixRoomJoinRequest {
@@ -1753,6 +1761,9 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_room_join", matrix_room_join)
         .expect("built-in matrix_room_join must remain in the command census");
+    registry
+        .register("matrix_room_set_favorite", matrix_room_set_favorite)
+        .expect("built-in matrix_room_set_favorite must remain in the command census");
     registry
         .register("matrix_room_invite", matrix_room_invite)
         .expect("built-in matrix_room_invite must remain in the command census");
@@ -3334,12 +3345,30 @@ fn matrix_room_join(state: Arc<CoreState>, request: CommandEnvelope) -> CommandF
     })
 }
 
+fn matrix_room_set_favorite(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomSetFavoriteRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-set-favorite-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-set-favorite-no-session")
+        })?;
+        owner
+            .set_favorite(&payload.room_id, payload.favorite)
+            .await
+            .map_err(room_leave_join_owner_error)?;
+        Ok(serde_json::Value::Null)
+    })
+}
+
 fn room_leave_join_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "v-rooms-room-leave-invalid-room"
         | "v-rooms-room-leave-room-not-found"
         | "v-rooms-room-join-invalid-room"
-        | "v-rooms-room-join-invalid-via-server" => MatrixIpcErrorCategory::SdkInvariant,
+        | "v-rooms-room-join-invalid-via-server"
+        | "v-rooms-room-favorite-invalid-room"
+        | "v-rooms-room-favorite-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
         "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
         _ => MatrixIpcErrorCategory::Unknown,
     };
@@ -5057,6 +5086,7 @@ mod tests {
                 "matrix_room_notes_upsert",
                 "matrix_room_power_level_tags_snapshot",
                 "matrix_room_power_levels_snapshot",
+                "matrix_room_set_favorite",
                 "matrix_room_set_power_level",
                 "matrix_room_set_power_level_tags",
                 "matrix_room_set_power_levels",
@@ -7305,6 +7335,25 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-room-leave-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_set_favorite_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_set_favorite".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org","favorite":true}),
+            })
+            .await
+            .expect_err("room set-favorite without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-set-favorite-no-session")
         );
     }
 

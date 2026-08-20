@@ -20,6 +20,7 @@ enum SharedCoreRoomListRows {
         let markedUnread: Bool
         let lastActivityTs: UInt64?
         let lastMessagePreview: String?
+        let isFavorite: Bool
     }
 
     struct InviteRow {
@@ -64,7 +65,8 @@ enum SharedCoreRoomListRows {
                     parentIds: parentsByID[room.roomId] ?? [],
                     namesByID: namesByID
                 ),
-                avatarURL: room.avatarUrl.flatMap(URL.init(string:))
+                avatarURL: room.avatarUrl.flatMap(URL.init(string:)),
+                isFavorite: room.isFavorite
             )
         }
     }

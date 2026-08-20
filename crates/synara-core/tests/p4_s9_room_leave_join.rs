@@ -60,6 +60,7 @@ fn room_leave_join_surface_exposes_only_the_registered_family() {
     let udl = include_str!("../src/synara_core.udl");
     assert!(udl.contains("room_leave"));
     assert!(udl.contains("room_join("));
+    assert!(udl.contains("room_set_favorite"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
     assert!(!udl.contains("matrix_room_create"));
@@ -74,6 +75,7 @@ fn room_leave_join_surface_exposes_only_the_registered_family() {
         .expect("SharedCore");
     assert!(shared_core.contains("room_leave"));
     assert!(shared_core.contains("room_join("));
+    assert!(shared_core.contains("room_set_favorite"));
     assert!(shared_core.contains("room_directory_search"));
     assert!(shared_core.contains("set_room_name"));
     assert!(!shared_core.contains("command("));
@@ -93,11 +95,16 @@ fn room_leave_join_family_without_session_fails_closed_without_echo() {
     let join = rt
         .block_on(shared.room_join(alias.to_owned(), Some(vec![via.to_owned()])))
         .expect_err("no attached room-membership owner");
+    let favorite = rt
+        .block_on(shared.room_set_favorite(room_id.to_owned(), true))
+        .expect_err("no attached room-favorite owner");
     let leave_text = format!("{leave:?}{leave}");
     let join_text = format!("{join:?}{join}");
+    let favorite_text = format!("{favorite:?}{favorite}");
     assert!(leave_text.contains("p2-room-leave-no-session"));
     assert!(join_text.contains("p2-room-join-no-session"));
-    let text = format!("{leave_text}{join_text}");
+    assert!(favorite_text.contains("p2-room-set-favorite-no-session"));
+    let text = format!("{leave_text}{join_text}{favorite_text}");
     assert!(!text.contains("syt_"));
     assert!(!text.contains("token"));
     assert!(!text.contains(room_id));

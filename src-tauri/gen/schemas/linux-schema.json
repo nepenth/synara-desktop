@@ -809,6 +809,7 @@
         {
           "description": "Enables the matrix_room_set_power_level command without any pre-configured scope.",
           "type": "string",
+          "const": "allow-matrix-room-set-favorite",
           "const": "allow-matrix-room-set-power-level",
           "markdownDescription": "Enables the matrix_room_set_power_level command without any pre-configured scope."
         },
@@ -1787,6 +1788,7 @@
         {
           "description": "Denies the matrix_room_set_power_level command without any pre-configured scope.",
           "type": "string",
+          "const": "deny-matrix-room-set-favorite",
           "const": "deny-matrix-room-set-power-level",
           "markdownDescription": "Denies the matrix_room_set_power_level command without any pre-configured scope."
         },

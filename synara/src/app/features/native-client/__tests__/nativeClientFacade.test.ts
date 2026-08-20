@@ -25,6 +25,7 @@ const roomSnapshot = (
       isDirect: false,
       isSpace: false,
       isCall: false,
+      isFavorite: false,
       isEncrypted: false,
       unreadCount: 0,
       highlightCount: 0,

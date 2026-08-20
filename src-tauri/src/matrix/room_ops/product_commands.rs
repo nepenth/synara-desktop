@@ -51,6 +51,18 @@ pub async fn matrix_room_join(
         .await
 }
 
+/// Persist `m.favourite` through the native Matrix SDK tag write.
+/// Fail-closed: the desktop product must not fake favorites in localStorage.
+#[tauri::command]
+pub async fn matrix_room_set_favorite(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    favorite: bool,
+) -> Result<(), MatrixAuthCommandError> {
+    crate::bridge::room_leave_join::room_set_favorite(core.inner().as_ref(), room_id, favorite)
+        .await
+}
+
 /// V-ROOMS members moderation: invite a user through the live native Matrix SDK.
 /// Fail-closed: desktop moderation must not use the JS SDK membership methods.
 #[tauri::command]

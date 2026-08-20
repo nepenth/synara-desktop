@@ -79,6 +79,8 @@ const tests = [
   'src/app/features/common-settings/general/__tests__/nativeRoomJoinRuleOwner.test.ts',
   'src/app/features/common-settings/general/__tests__/roomPublishSourceGuard.test.ts',
   'src/app/components/__tests__/nativeRoomLeaveOwner.test.ts',
+  'src/app/components/__tests__/nativeRoomFavoriteOwner.test.ts',
+  'src/app/pages/client/home/__tests__/homeRoomList.test.ts',
   'src/app/components/__tests__/nativeRoomJoinOwner.test.ts',
   'src/app/components/__tests__/nativeRoomCreateOwner.test.ts',
   'src/app/components/__tests__/nativeRoomModerationOwner.test.ts',

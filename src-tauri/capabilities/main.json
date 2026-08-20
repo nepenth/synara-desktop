@@ -98,6 +98,7 @@
     "allow-matrix-room-create",
     "allow-matrix-room-leave",
     "allow-matrix-room-join",
+    "allow-matrix-room-set-favorite",
     "allow-matrix-room-invite",
     "allow-matrix-room-kick",
     "allow-matrix-room-ban",

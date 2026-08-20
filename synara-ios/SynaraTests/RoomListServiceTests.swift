@@ -837,6 +837,45 @@ final class RoomListServiceTests: XCTestCase {
         )
     }
 
+    func testFavoritesPartitionSeparatesTaggedRoomsFromRemaining() {
+        let favorite = makeActivityRoom(id: "!fav:matrix.org", name: "Fav", activity: RoomListFixtures.now)
+            .withFavorite(true)
+        let remaining = makeActivityRoom(id: "!room:matrix.org", name: "Room", activity: RoomListFixtures.now)
+        let partition = RoomListFavorites.partition(from: [remaining, favorite])
+
+        XCTAssertEqual(partition.favorites.map(\.id), ["!fav:matrix.org"])
+        XCTAssertEqual(partition.remaining.map(\.id), ["!room:matrix.org"])
+    }
+
+    func testRoomListSortOrdersByNameAndRecentActivity() {
+        let rooms = [
+            makeActivityRoom(id: "!b:matrix.org", name: "Zeta", activity: RoomListFixtures.now.addingTimeInterval(-60)),
+            makeActivityRoom(id: "!a:matrix.org", name: "Alpha", activity: RoomListFixtures.now.addingTimeInterval(-600)),
+        ]
+
+        XCTAssertEqual(
+            RoomListFavorites.sorted(rooms, order: .byName).map(\.id),
+            ["!a:matrix.org", "!b:matrix.org"]
+        )
+        XCTAssertEqual(
+            RoomListFavorites.sorted(rooms, order: .byRecentActivity).map(\.id),
+            ["!b:matrix.org", "!a:matrix.org"]
+        )
+    }
+
+    func testRoomListViewReplacedRecentTwentyFourHourSectionWithFavoritesAndSort() throws {
+        let source = try String(
+            contentsOfFile: "\(Self.repositoryRoot())/synara-ios/Synara/Features/RoomListView.swift",
+            encoding: .utf8
+        )
+        XCTAssertFalse(source.contains("Recent activity (24h)"))
+        XCTAssertFalse(source.contains("RoomListRecentActivity.partition"))
+        XCTAssertTrue(source.contains("Favorites"))
+        XCTAssertTrue(source.contains("RoomListSortOrder"))
+        XCTAssertTrue(source.contains("RoomListSortMenu"))
+        XCTAssertTrue(source.contains("Add to Favorites"))
+    }
+
     func testMonotonicActivityStillExpiresAtDeterministicTwentyFourHourBoundary() {
         let previous = RoomListFixtures.now.addingTimeInterval(-3600)
         let activity = RoomActivityTimestamp.resolve(
@@ -1145,6 +1184,39 @@ final class RoomListServiceTests: XCTestCase {
             kind: .room,
             membership: .joined,
             lastActivityAt: activity
+        )
+    }
+
+    private static func repositoryRoot() -> String {
+        var url = URL(fileURLWithPath: #filePath)
+        while url.pathComponents.count > 1 {
+            url.deleteLastPathComponent()
+            if FileManager.default.fileExists(atPath: url.appendingPathComponent("synara-ios").path) {
+                return url.path
+            }
+        }
+        return url.path
+    }
+}
+
+private extension RoomSummary {
+    func withFavorite(_ isFavorite: Bool) -> RoomSummary {
+        RoomSummary(
+            id: id,
+            name: name,
+            lastMessagePreview: lastMessagePreview,
+            unreadCount: unreadCount,
+            hasHighlight: hasHighlight,
+            kind: kind,
+            membership: membership,
+            lastActivityAt: lastActivityAt,
+            parentSpaces: parentSpaces,
+            avatarURL: avatarURL,
+            hasAgentActivity: hasAgentActivity,
+            latestAgentCard: latestAgentCard,
+            latestAgentCardEventID: latestAgentCardEventID,
+            pendingAgentApprovals: pendingAgentApprovals,
+            isFavorite: isFavorite
         )
     }
 }

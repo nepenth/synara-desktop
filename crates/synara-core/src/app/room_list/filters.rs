@@ -96,3 +96,53 @@ pub fn select_rooms_by_scope(rooms: &[RoomSummary], scope: RoomListScope) -> Vec
         .cloned()
         .collect()
 }
+
+/// Split rooms into favorite-tagged joined rooms and the remaining list.
+///
+/// Favorites are joined rooms with `m.favourite`. Remaining rooms keep their
+/// original relative order (including invites).
+pub fn partition_favorite_rooms(rooms: &[RoomSummary]) -> (Vec<RoomSummary>, Vec<RoomSummary>) {
+    let mut favorites = Vec::new();
+    let mut remaining = Vec::new();
+    for room in rooms {
+        if room_matches_scope(room, RoomListScope::Favorites) {
+            favorites.push(room.clone());
+        } else {
+            remaining.push(room.clone());
+        }
+    }
+    (favorites, remaining)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::room_list::summary::RoomSummaryBuilder;
+
+    #[test]
+    fn favorites_partition_excludes_tagged_rooms_from_remaining() {
+        let rooms = vec![
+            RoomSummaryBuilder::new("!fav:example.org")
+                .name("Fav")
+                .favorite(true)
+                .build()
+                .unwrap(),
+            RoomSummaryBuilder::new("!plain:example.org")
+                .name("Plain")
+                .build()
+                .unwrap(),
+            RoomSummaryBuilder::new("!invite:example.org")
+                .name("Invite")
+                .membership(Membership::Invite)
+                .favorite(true)
+                .build()
+                .unwrap(),
+        ];
+        let (favorites, remaining) = partition_favorite_rooms(&rooms);
+        assert_eq!(favorites.len(), 1);
+        assert_eq!(favorites[0].room_id.as_str(), "!fav:example.org");
+        assert_eq!(remaining.len(), 2);
+        assert_eq!(remaining[0].room_id.as_str(), "!plain:example.org");
+        assert_eq!(remaining[1].room_id.as_str(), "!invite:example.org");
+    }
+}

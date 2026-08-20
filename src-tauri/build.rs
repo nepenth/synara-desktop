@@ -65,6 +65,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_room_create",
     "matrix_room_leave",
     "matrix_room_join",
+    "matrix_room_set_favorite",
     "matrix_room_invite",
     "matrix_room_kick",
     "matrix_room_ban",

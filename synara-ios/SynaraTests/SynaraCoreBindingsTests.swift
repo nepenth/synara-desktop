@@ -794,7 +794,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     highlightCount: 0,
                     markedUnread: false,
                     lastActivityTs: 1_700_000_000_000,
-                    lastMessagePreview: nil
+                    lastMessagePreview: nil,
+                    isFavorite: false
                 ),
                 SharedCoreRoomListRows.RoomRow(
                     roomId: "!space:example.org",
@@ -806,7 +807,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     highlightCount: 0,
                     markedUnread: false,
                     lastActivityTs: 0,
-                    lastMessagePreview: "Hello from Alice"
+                    lastMessagePreview: "Hello from Alice",
+                    isFavorite: true
                 ),
             ],
             invites: [
@@ -829,6 +831,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(rooms.last?.lastMessagePreview, "Hello from Alice")
         XCTAssertEqual(rooms.first?.parentSpaces, [SpaceSummary(id: "!space:example.org", name: "Team")])
         XCTAssertEqual(rooms.first?.membership, .invited)
+        XCTAssertEqual(rooms.first?.isFavorite, false)
+        XCTAssertEqual(rooms.last?.isFavorite, true)
         XCTAssertEqual(rooms.last?.lastActivityAt, .distantPast)
         let publicError = String(describing: rooms)
         for forbidden in ["password", "syt_", "token"] {
@@ -1761,6 +1765,21 @@ final class SynaraCoreBindingsTests: XCTestCase {
         } catch {
             let publicError = String(reflecting: error)
             XCTAssertTrue(publicError.contains("p2-room-join-no-session"))
+            for forbidden in ["syt_", "token", roomId, alias, via] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreRoomLeaveJoin.roomSetFavorite(
+                core: core,
+                roomId: roomId,
+                favorite: true
+            )
+            XCTFail("Fail-closed SharedCore must not favorite a room without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-set-favorite-no-session"))
             for forbidden in ["syt_", "token", roomId, alias, via] {
                 XCTAssertFalse(publicError.contains(forbidden))
             }

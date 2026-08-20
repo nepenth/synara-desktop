@@ -26,6 +26,7 @@ struct RoomSummary: Identifiable, Equatable {
     let latestAgentCard: SynaraAgentCard?
     let latestAgentCardEventID: String?
     let pendingAgentApprovals: [PendingAgentCardRef]
+    let isFavorite: Bool
 
     init(
         id: String,
@@ -41,7 +42,8 @@ struct RoomSummary: Identifiable, Equatable {
         hasAgentActivity: Bool = false,
         latestAgentCard: SynaraAgentCard? = nil,
         latestAgentCardEventID: String? = nil,
-        pendingAgentApprovals: [PendingAgentCardRef] = []
+        pendingAgentApprovals: [PendingAgentCardRef] = [],
+        isFavorite: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -57,6 +59,7 @@ struct RoomSummary: Identifiable, Equatable {
         self.latestAgentCard = latestAgentCard
         self.latestAgentCardEventID = latestAgentCardEventID
         self.pendingAgentApprovals = pendingAgentApprovals
+        self.isFavorite = isFavorite
     }
 
     var isAgentRoom: Bool {
@@ -83,6 +86,67 @@ struct RoomSummary: Identifiable, Equatable {
 struct SpaceSummary: Identifiable, Equatable, Hashable {
     let id: String
     let name: String
+}
+
+enum RoomListSortOrder: String, CaseIterable, Identifiable {
+    case byName
+    case byRecentActivity
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .byName:
+            return "Sort by name"
+        case .byRecentActivity:
+            return "Sort by recent activity"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .byName:
+            return "textformat"
+        case .byRecentActivity:
+            return "clock"
+        }
+    }
+}
+
+enum RoomListFavorites {
+    struct Partition: Equatable {
+        let favorites: [RoomSummary]
+        let remaining: [RoomSummary]
+    }
+
+    static func partition(from rooms: [RoomSummary]) -> Partition {
+        Partition(
+            favorites: rooms.filter(\.isFavorite),
+            remaining: rooms.filter { $0.isFavorite == false }
+        )
+    }
+
+    static func sorted(_ rooms: [RoomSummary], order: RoomListSortOrder) -> [RoomSummary] {
+        rooms.sorted { lhs, rhs in
+            switch order {
+            case .byName:
+                let nameOrder = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+                if nameOrder != .orderedSame {
+                    return nameOrder == .orderedAscending
+                }
+                return lhs.id < rhs.id
+            case .byRecentActivity:
+                if lhs.lastActivityAt != rhs.lastActivityAt {
+                    return lhs.lastActivityAt > rhs.lastActivityAt
+                }
+                let nameOrder = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+                if nameOrder != .orderedSame {
+                    return nameOrder == .orderedAscending
+                }
+                return lhs.id < rhs.id
+            }
+        }
+    }
 }
 
 enum RoomListRecentActivity {

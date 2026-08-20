@@ -18,7 +18,6 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAtom, useAtomValue } from 'jotai';
 import FocusTrap from 'focus-trap-react';
-import { factoryRoomIdByActivity, factoryRoomIdByAtoZ } from '../../../utils/sort';
 import {
   NavButton,
   NavCategory,
@@ -44,7 +43,16 @@ import {
   useHomeSearchSelected,
 } from '../../../hooks/router/useHomeSelected';
 import { useHomeRooms } from './useHomeRooms';
+import {
+  favoriteRoomIdSet,
+  partitionHomeRooms,
+  readHomeRoomSort,
+  sortHomeRoomIds,
+  writeHomeRoomSort,
+  type HomeRoomSort,
+} from './homeRoomList';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
+import { useNativeRoomListSnapshot } from '../../../state/room-list/roomList';
 import { VirtualTile } from '../../../components/virtualizer';
 import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
 import { makeNavCategoryId } from '../../../state/closedNavCategories';
@@ -62,7 +70,6 @@ import {
   getRoomNotificationMode,
   useRoomsNotificationPreferencesContext,
 } from '../../../hooks/useRoomsNotificationPreferences';
-import { useRecentRoomPartition } from '../../../hooks/useRoomActivity';
 
 type HomeMenuProps = {
   requestClose: () => void;
@@ -209,19 +216,36 @@ export function Home() {
   const noRoomToDisplay = rooms.length === 0;
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 
-  const { recentRoomIds, nonRecentRoomIds } = useRecentRoomPartition(mx, rooms);
+  const nativeRoomList = useNativeRoomListSnapshot();
+  const [roomSort, setRoomSort] = useState<HomeRoomSort>(() =>
+    readHomeRoomSort(typeof localStorage === 'undefined' ? undefined : localStorage)
+  );
+  const favoriteIds = useMemo(
+    () => favoriteRoomIdSet(nativeRoomList.rooms),
+    [nativeRoomList.rooms]
+  );
+  const { favoriteRoomIds, remainingRoomIds } = useMemo(
+    () => partitionHomeRooms(rooms, favoriteIds),
+    [rooms, favoriteIds]
+  );
+
+  const sortedFavoriteRoomIds = useMemo(
+    () => sortHomeRoomIds(mx, favoriteRoomIds, roomSort),
+    [mx, favoriteRoomIds, roomSort]
+  );
 
   const mainRoomIds = useMemo(() => {
-    const items = Array.from(nonRecentRoomIds).sort(
-      closedCategories.has(DEFAULT_CATEGORY_ID)
-        ? factoryRoomIdByActivity(mx)
-        : factoryRoomIdByAtoZ(mx)
-    );
+    const items = sortHomeRoomIds(mx, remainingRoomIds, roomSort);
     if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
       return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
     }
     return items;
-  }, [mx, nonRecentRoomIds, closedCategories, roomToUnread, selectedRoomId]);
+  }, [mx, remainingRoomIds, roomSort, closedCategories, roomToUnread, selectedRoomId]);
+
+  const handleRoomSort = (sort: HomeRoomSort) => {
+    setRoomSort(sort);
+    writeHomeRoomSort(typeof localStorage === 'undefined' ? undefined : localStorage, sort);
+  };
 
   const virtualizer = useVirtualizer({
     count: mainRoomIds.length,
@@ -293,12 +317,12 @@ export function Home() {
               </NavItem>
             </NavCategory>
 
-            {recentRoomIds.length > 0 && (
+            {sortedFavoriteRoomIds.length > 0 && (
               <NavCategory>
                 <NavCategoryHeader>
-                  <Text size="B300">Recent (24h)</Text>
+                  <Text size="B300">Favorites</Text>
                 </NavCategoryHeader>
-                {recentRoomIds.map((roomId) => {
+                {sortedFavoriteRoomIds.map((roomId) => {
                   const room = mx.getRoom(roomId);
                   if (!room) return null;
                   const selected = selectedRoomId === roomId;
@@ -321,13 +345,35 @@ export function Home() {
 
             <NavCategory>
               <NavCategoryHeader>
-                <RoomNavCategoryButton
-                  closed={closedCategories.has(DEFAULT_CATEGORY_ID)}
-                  data-category-id={DEFAULT_CATEGORY_ID}
-                  onClick={handleCategoryClick}
-                >
-                  Rooms
-                </RoomNavCategoryButton>
+                <Box grow="Yes" alignItems="Center" gap="100">
+                  <RoomNavCategoryButton
+                    closed={closedCategories.has(DEFAULT_CATEGORY_ID)}
+                    data-category-id={DEFAULT_CATEGORY_ID}
+                    onClick={handleCategoryClick}
+                  >
+                    Rooms
+                  </RoomNavCategoryButton>
+                  <IconButton
+                    variant={roomSort === 'name' ? 'Primary' : 'Background'}
+                    radii="300"
+                    aria-label="Sort rooms by name"
+                    title="Sort rooms by name"
+                    aria-pressed={roomSort === 'name'}
+                    onClick={() => handleRoomSort('name')}
+                  >
+                    <Icon src={Icons.Sort} size="50" />
+                  </IconButton>
+                  <IconButton
+                    variant={roomSort === 'recent' ? 'Primary' : 'Background'}
+                    radii="300"
+                    aria-label="Sort rooms by recent activity"
+                    title="Sort rooms by recent activity"
+                    aria-pressed={roomSort === 'recent'}
+                    onClick={() => handleRoomSort('recent')}
+                  >
+                    <Icon src={Icons.Message} size="50" />
+                  </IconButton>
+                </Box>
               </NavCategoryHeader>
               <div
                 style={{

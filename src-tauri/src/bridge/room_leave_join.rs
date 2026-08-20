@@ -38,6 +38,25 @@ pub(crate) async fn room_join(
     Ok(())
 }
 
+pub(crate) async fn room_set_favorite(
+    core: &Core,
+    room_id: String,
+    favorite: bool,
+) -> Result<(), MatrixAuthCommandError> {
+    core.command(CommandEnvelope {
+        command: "matrix_room_set_favorite".to_owned(),
+        session_generation: READ_ONLY_SESSION_GENERATION,
+        request_id: None,
+        payload: serde_json::json!({
+            "roomId": room_id,
+            "favorite": favorite,
+        }),
+    })
+    .await
+    .map_err(map_room_leave_join_core_error)?;
+    Ok(())
+}
+
 fn map_room_leave_join_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
     match error.category {
         MatrixIpcErrorCategory::Forbidden => MatrixAuthCommandError::new(
@@ -51,12 +70,16 @@ fn map_room_leave_join_core_error(error: MatrixIpcError) -> MatrixAuthCommandErr
                 .as_deref()
                 .unwrap_or("v-rooms-room-leave-invalid-room");
             let (code, message) = match diagnostic {
-                "v-rooms-room-leave-room-not-found" => {
+                "v-rooms-room-leave-room-not-found" | "v-rooms-room-favorite-room-not-found" => {
                     ("NotFound", "The native Matrix room is not available.")
                 }
                 "v-rooms-room-join-invalid-room" | "v-rooms-room-join-invalid-via-server" => (
                     "InvalidRequest",
                     "The native Matrix room join request is invalid.",
+                ),
+                "v-rooms-room-favorite-invalid-room" => (
+                    "InvalidRequest",
+                    "The native Matrix room favorite request is invalid.",
                 ),
                 _ => (
                     "InvalidRequest",
@@ -72,6 +95,8 @@ fn map_room_leave_join_core_error(error: MatrixIpcError) -> MatrixAuthCommandErr
                 .unwrap_or("v-rooms-room-leave-failed");
             let message = if diagnostic.contains("join") {
                 "The native Matrix room could not be joined."
+            } else if diagnostic.contains("favorite") {
+                "The native Matrix room favorite could not be updated."
             } else {
                 "The native Matrix room could not be left."
             };

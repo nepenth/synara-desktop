@@ -549,8 +549,10 @@ const DIRECTORY_SEARCH_OWNER_DESCRIPTION: &str =
 const ROOM_MEMBERSHIP_COMMAND_GENERATION: u64 = 0;
 const ROOM_LEAVE_COMMAND: &str = "matrix_room_leave";
 const ROOM_JOIN_COMMAND: &str = "matrix_room_join";
+const ROOM_SET_FAVORITE_COMMAND: &str = "matrix_room_set_favorite";
 const ROOM_LEAVE_NO_SESSION_CODE: &str = "p2-room-leave-no-session";
 const ROOM_JOIN_NO_SESSION_CODE: &str = "p2-room-join-no-session";
+const ROOM_SET_FAVORITE_NO_SESSION_CODE: &str = "p2-room-set-favorite-no-session";
 const ROOM_MEMBERSHIP_NO_SESSION_DESCRIPTION: &str = "No room-membership session is available.";
 const ROOM_MEMBERSHIP_FAILED_CODE: &str = "p4-s9-12-room-membership-failed";
 const ROOM_MEMBERSHIP_FAILED_DESCRIPTION: &str =
@@ -4465,6 +4467,23 @@ impl SharedCore {
             .await
     }
 
+    pub async fn room_set_favorite(
+        &self,
+        room_id: String,
+        favorite: bool,
+    ) -> Result<RoomMembershipWriteDto, RoomMembershipCommandError> {
+        let payload = room_membership_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "favorite": favorite,
+        }))?;
+        self.room_membership_command(
+            ROOM_SET_FAVORITE_COMMAND,
+            ROOM_SET_FAVORITE_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+    }
+
     pub async fn room_invite(
         &self,
         room_id: String,
@@ -7723,6 +7742,7 @@ fn map_room_membership_core_error(
         Some(code)
             if code.starts_with("v-rooms-room-leave-")
                 || code.starts_with("v-rooms-room-join-")
+                || code.starts_with("v-rooms-room-favorite-")
                 || code == "v-send.r-room-profile-join-rule-requires-session" =>
         {
             room_membership_failed(code, ROOM_MEMBERSHIP_OWNER_DESCRIPTION)

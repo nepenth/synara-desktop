@@ -52,6 +52,9 @@ import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { useRoomName } from '../../hooks/useRoomMeta';
+import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
+import { setRoomFavoriteWithNativeOwner } from '../../components/nativeRoomFavoriteOwner';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 
 type RoomNavItemMenuProps = {
   room: EventedRoomReading;
@@ -63,6 +66,10 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
     const mx = useMatrixClient();
     const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
     const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
+    const nativeRooms = useNativeRoomListSnapshot();
+    const isFavorite =
+      nativeRooms.rooms.find((summary) => summary.roomId === room.roomId)?.isFavorite ??
+      room.isFavorite === true;
     const powerLevels = usePowerLevels(room);
     const creators = useRoomCreators(room);
 
@@ -81,6 +88,15 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
     const handleMarkAsUnread = () => {
       markAsUnread(mx, room.roomId);
       requestClose();
+    };
+
+    const handleToggleFavorite = () => {
+      void setRoomFavoriteWithNativeOwner(
+        room.roomId,
+        !isFavorite,
+        isSynaraDesktop(),
+        invokeDesktopWithAvailability
+      ).finally(() => requestClose());
     };
 
     const handleInvite = () => {
@@ -119,6 +135,16 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
           >
             <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
               {unread ? 'Mark as Read' : 'Mark as Unread'}
+            </Text>
+          </MenuItem>
+          <MenuItem
+            onClick={handleToggleFavorite}
+            size="300"
+            after={<Icon size="100" src={Icons.Pin} filled={isFavorite} />}
+            radii="300"
+          >
+            <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+              {isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
             </Text>
           </MenuItem>
           <RoomNotificationModeSwitcher roomId={room.roomId} value={notificationMode}>

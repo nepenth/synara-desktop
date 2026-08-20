@@ -44,8 +44,8 @@ pub use counts::{
 pub use delta::{RoomListDeltaBatch, RoomListDeltaOp, RoomListSnapshot};
 pub use error::RoomListError;
 pub use filters::{
-    filter_rooms_by_scope, room_matches_scope, select_rooms_by_scope, select_rooms_in_folder,
-    RoomListScope,
+    filter_rooms_by_scope, partition_favorite_rooms, room_matches_scope, select_rooms_by_scope,
+    select_rooms_in_folder, RoomListScope,
 };
 pub use invite_avatars::{InviteAvatarHandles, InviteAvatarSource, MAX_INVITE_AVATAR_HANDLES};
 pub use invites::{

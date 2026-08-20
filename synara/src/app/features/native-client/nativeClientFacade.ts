@@ -323,6 +323,9 @@ const toRoomReading = (
     getVersion: () => '',
     isCallRoom: () => summary().isCall,
     isSpaceRoom: () => summary().isSpace,
+    get isFavorite() {
+      return summary().isFavorite;
+    },
     getTimelineForEvent: () => null,
     hasMembershipState: () => summary().membership === 'join',
     on: roomClient?.on,

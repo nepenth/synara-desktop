@@ -553,6 +553,7 @@ protocol RoomManagementServicing {
     func createDirectMessage(_ request: DirectMessageCreateRequest) async throws -> RoomOperationResult
     func joinRoom(_ request: RoomJoinRequest) async throws -> RoomOperationResult
     func leaveRoom(roomID: String) async throws
+    func setRoomFavorite(_ favorite: Bool, roomID: String) async throws
     func inviteUser(roomID: String, userID: String) async throws
     func searchPublicRooms(query: String) async throws -> [PublicRoomSummary]
     func roomDetails(roomID: String) async -> RoomDetails?
@@ -837,6 +838,11 @@ final class MockRoomManagementService: RoomManagementServicing {
 
     func leaveRoom(roomID: String) async throws {
         leftRoomIDs.append(roomID)
+    }
+
+    func setRoomFavorite(_ favorite: Bool, roomID: String) async throws {
+        _ = favorite
+        _ = roomID
     }
 
     func inviteUser(roomID: String, userID: String) async throws {

@@ -1,11 +1,7 @@
 import SwiftUI
-#if canImport(UIKit)
-import UIKit
-#endif
 
 struct RoomListView: View {
     @Environment(\.appEnvironment) private var environment
-    @Environment(\.scenePhase) private var scenePhase
     @State private var state: RoomListState = .idle
     @State private var membershipError: String?
     @State private var searchQuery: String = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_SEARCH"] ?? ""
@@ -20,9 +16,10 @@ struct RoomListView: View {
     @State private var roomPendingLeave: RoomSummary?
     @State private var isResettingSession = false
     @State private var sessionRecoveryError: String?
-    @State private var recentActivityReferenceDate = ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1"
-        ? RoomListFixtures.now
-        : Date()
+    @State private var selectedSort: RoomListSortOrder = {
+        RoomListSortOrder(rawValue: UserDefaults.standard.string(forKey: "synara.roomListSort") ?? "")
+            ?? .byRecentActivity
+    }()
     @FocusState private var isSearchFocused: Bool
 
     var body: some View {
@@ -33,6 +30,7 @@ struct RoomListView: View {
                     VStack(spacing: SynaraSpacing.medium) {
                         RoomListHeader(
                             title: accountMenuTitle,
+                            selectedSort: $selectedSort,
                             onAccount: { environment.router.present(.accountSwitcher) },
                             onSearch: { presentSearch() },
                             onNewRoom: { isRoomManagementSheetPresented = true }
@@ -88,15 +86,17 @@ struct RoomListView: View {
                 }
             case .loaded(let rooms):
                 let filteredRooms = filteredRooms(from: rooms)
-                let activityPartition = RoomListRecentActivity.partition(
-                    from: filteredRooms,
-                    referenceDate: recentActivityReferenceDate
+                let favoritesPartition = RoomListFavorites.partition(from: filteredRooms)
+                let favoriteRooms = RoomListFavorites.sorted(
+                    favoritesPartition.favorites,
+                    order: selectedSort
                 )
-                let recentRooms = activityPartition.recent
-                let showRecentSection = searchQuery.isEmpty && selectedSpaceID == nil && !recentRooms.isEmpty
-                let nonRecentRooms = showRecentSection ? activityPartition.remaining : filteredRooms
-                let channelRooms = nonRecentRooms.filter { $0.kind == .room }
-                let directRooms = nonRecentRooms.filter { $0.kind == .directMessage }
+                let remainingRooms = RoomListFavorites.sorted(
+                    favoritesPartition.remaining,
+                    order: selectedSort
+                )
+                let channelRooms = remainingRooms.filter { $0.kind == .room }
+                let directRooms = remainingRooms.filter { $0.kind == .directMessage }
                 let spaces = spaces(from: rooms)
                 let spaceUnreadCounts = RoomListSpaceGrouping.unreadCountsBySpaceID(from: rooms)
                 let selectedSpaceTitle = RoomListSpaceGrouping.selectedSpaceName(
@@ -109,6 +109,7 @@ struct RoomListView: View {
                     VStack(spacing: SynaraSpacing.medium) {
                         RoomListHeader(
                             title: accountMenuTitle,
+                            selectedSort: $selectedSort,
                             onAccount: { environment.router.present(.accountSwitcher) },
                             onSearch: { presentSearch() },
                             onNewRoom: { isRoomManagementSheetPresented = true }
@@ -146,13 +147,13 @@ struct RoomListView: View {
                             .listRowInsets(EdgeInsets())
                         }
 
-                        if showRecentSection {
+                        if favoriteRooms.isEmpty == false {
                             Section {
-                                ForEach(recentRooms, id: \.id) { room in
+                                ForEach(favoriteRooms, id: \.id) { room in
                                     roomRow(room)
                                 }
                             } header: {
-                                RoomSectionHeader(title: "Recent activity (24h)", count: recentRooms.count)
+                                RoomSectionHeader(title: "Favorites", count: favoriteRooms.count)
                             }
                         }
 
@@ -302,52 +303,9 @@ struct RoomListView: View {
             loadRoomsTask?.cancel()
             roomUpdatesTask?.cancel()
         }
-        .task(id: nextRecentActivityExpiration) {
-            await waitForNextRecentActivityExpiration()
+        .onChange(of: selectedSort) { sort in
+            UserDefaults.standard.set(sort.rawValue, forKey: "synara.roomListSort")
         }
-        .onChange(of: scenePhase) { phase in
-            if phase == .active {
-                refreshRecentActivityClock()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
-            refreshRecentActivityClock()
-        }
-    }
-
-    private var nextRecentActivityExpiration: Date? {
-        guard case .loaded(let rooms) = state else {
-            return nil
-        }
-        return RoomListRecentActivity.nextExpirationDate(
-            from: rooms,
-            referenceDate: recentActivityReferenceDate
-        )
-    }
-
-    private func waitForNextRecentActivityExpiration() async {
-        guard ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] != "1",
-              scenePhase == .active,
-              let expiration = nextRecentActivityExpiration else {
-            return
-        }
-
-        let delay = max(0, expiration.timeIntervalSinceNow)
-        do {
-            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-        } catch {
-            return
-        }
-        guard Task.isCancelled == false else {
-            return
-        }
-        refreshRecentActivityClock()
-    }
-
-    private func refreshRecentActivityClock() {
-        recentActivityReferenceDate = ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1"
-            ? RoomListFixtures.now
-            : Date()
     }
 
     private func reloadRoomsForRefresh() async {
@@ -561,6 +519,17 @@ struct RoomListView: View {
             .listRowInsets(EdgeInsets(top: 3, leading: SynaraSpacing.large, bottom: 3, trailing: SynaraSpacing.large))
             .listRowBackground(SynaraColor.surface)
             .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                Button {
+                    toggleFavorite(room)
+                } label: {
+                    Label(
+                        room.isFavorite ? "Unfavorite" : "Favorite",
+                        systemImage: room.isFavorite ? "star.slash.fill" : "star.fill"
+                    )
+                }
+                .tint(SynaraColor.secondaryText)
+                .accessibilityIdentifier("FavoriteRoom-\(room.id)")
+
                 if room.unreadCount > 0 {
                     Button {
                         markRoomAsRead(room)
@@ -587,6 +556,16 @@ struct RoomListView: View {
                 }
                 .accessibilityIdentifier("LeaveRoom-\(room.id)")
             }
+            .contextMenu {
+                Button {
+                    toggleFavorite(room)
+                } label: {
+                    Label(
+                        room.isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                        systemImage: room.isFavorite ? "star.slash" : "star"
+                    )
+                }
+            }
         }
     }
 
@@ -595,6 +574,21 @@ struct RoomListView: View {
             _ = await environment.readMarkers.markRoomAsRead(roomID: room.id)
             await MainActor.run {
                 loadRooms(showLoading: false)
+            }
+        }
+    }
+
+    private func toggleFavorite(_ room: RoomSummary) {
+        Task {
+            do {
+                try await environment.roomManagement.setRoomFavorite(!room.isFavorite, roomID: room.id)
+                await MainActor.run {
+                    loadRooms(showLoading: false)
+                }
+            } catch {
+                await MainActor.run {
+                    membershipError = RoomManagementError.failed.localizedDescription
+                }
             }
         }
     }
@@ -700,6 +694,7 @@ private enum RoomListFilter: String, CaseIterable, Identifiable {
 
 private struct RoomListHeader: View {
     let title: String
+    @Binding var selectedSort: RoomListSortOrder
     let onAccount: () -> Void
     let onSearch: () -> Void
     let onNewRoom: () -> Void
@@ -727,6 +722,25 @@ private struct RoomListHeader: View {
             .accessibilityIdentifier("RoomHeaderAccountMenuButton")
 
             Spacer()
+
+            Menu {
+                ForEach(RoomListSortOrder.allCases) { sort in
+                    Button {
+                        selectedSort = sort
+                    } label: {
+                        Label(sort.title, systemImage: sort.systemImage)
+                    }
+                }
+            } label: {
+                Image(systemName: selectedSort.systemImage)
+                    .font(.system(size: 17, weight: .semibold))
+                    .frame(width: 42, height: 42)
+                    .background(SynaraColor.secondaryText.opacity(0.10))
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control))
+            }
+            .accessibilityLabel(selectedSort.title)
+            .accessibilityIdentifier("RoomListSortMenu")
 
             Button(action: onSearch) {
                 Image(systemName: "magnifyingglass")
@@ -1181,6 +1195,13 @@ private struct RoomListRow: View {
                         .foregroundStyle(SynaraColor.primaryText)
                         .lineLimit(1)
 
+                    if room.isFavorite {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(SynaraColor.secondaryText)
+                            .accessibilityLabel("Favorite")
+                    }
+
                     if room.hasHighlight {
                         SynaraStatusChip(title: "Mention", tint: SynaraColor.accent, systemImage: "at")
                     }
@@ -1264,6 +1285,9 @@ private extension RoomSummary {
         }
         if hasHighlight {
             parts.append("highlighted")
+        }
+        if isFavorite {
+            parts.append("favorite")
         }
         return parts.joined(separator: ", ")
     }

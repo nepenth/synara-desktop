@@ -418,6 +418,21 @@ impl NativeRoomJoinRuleOwner {
         room.leave().await.map_err(|_| "v-rooms-room-leave-failed")
     }
 
+    /// Persist `m.favourite` via the SDK tag write (`m.tag` account data).
+    pub async fn set_favorite(&self, room_id: &str, favorite: bool) -> Result<(), &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let room_id = parse_room_favorite_id(room_id)?;
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-rooms-room-favorite-room-not-found")?;
+        room.set_is_favourite(favorite, None)
+            .await
+            .map_err(|_| "v-rooms-room-favorite-failed")
+    }
+
     pub async fn join(
         &self,
         room_id_or_alias: &str,
@@ -1009,6 +1024,32 @@ fn parse_room_leave_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
         .trim()
         .parse()
         .map_err(|_| "v-rooms-room-leave-invalid-room")
+}
+
+fn parse_room_favorite_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
+    room_id
+        .trim()
+        .parse()
+        .map_err(|_| "v-rooms-room-favorite-invalid-room")
+}
+
+#[cfg(test)]
+mod favorite_id_tests {
+    use super::parse_room_favorite_id;
+
+    #[test]
+    fn favorite_room_id_must_be_a_matrix_room_id() {
+        assert_eq!(
+            parse_room_favorite_id("not-a-room").unwrap_err(),
+            "v-rooms-room-favorite-invalid-room"
+        );
+        assert_eq!(
+            parse_room_favorite_id("  !room:example.org  ")
+                .unwrap()
+                .as_str(),
+            "!room:example.org"
+        );
+    }
 }
 
 fn parse_room_join_target(room_id_or_alias: &str) -> Result<OwnedRoomOrAliasId, &'static str> {
