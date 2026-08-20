@@ -238,6 +238,22 @@ const isValidIndex = (index: number, length: number, allowEnd = false): boolean 
   Number.isInteger(index) && index >= 0 && index < length + (allowEnd ? 1 : 0);
 
 /**
+ * A successful `set_read_state` readback can lag a live delta. Equal-or-older
+ * snapshots for the same stream are stale, not a lost stream.
+ */
+export const isNativeTimelineReadbackStale = (
+  current: NativeTimelineViewSnapshot | undefined,
+  next: NativeTimelineViewSnapshot
+): boolean =>
+  Boolean(
+    current &&
+      next.schemaVersion === TIMELINE_VIEW_SCHEMA_VERSION &&
+      next.sessionGeneration === current.sessionGeneration &&
+      next.roomId === current.roomId &&
+      next.revision <= current.revision
+  );
+
+/**
  * Applies one exact native stream update. Invalid operations and revision gaps
  * are rejected rather than guessed at or repaired with a JS timeline fetch.
  * Metadata-only batches (readState / pagination / pinnedEventIds without row
@@ -549,13 +565,28 @@ export const useNativeTimelineView = (
         'matrix_timeline_set_read_state',
         { request: { streamId, action } }
       );
-      if (!result.available || !result.value || !acceptSnapshot(result.value.snapshot)) {
+      if (!result.available || !result.value) {
         setState({
           status: 'error',
           error: new Error('Native timeline read state lost synchronization.'),
         });
         throw new Error('Native timeline read state lost synchronization.');
       }
+      const next = result.value.snapshot;
+      if (isNativeTimelineReadbackStale(snapshotRef.current, next)) {
+        return;
+      }
+      if (acceptSnapshot(next)) {
+        return;
+      }
+      if (isNativeTimelineReadbackStale(snapshotRef.current, next)) {
+        return;
+      }
+      setState({
+        status: 'error',
+        error: new Error('Native timeline read state lost synchronization.'),
+      });
+      throw new Error('Native timeline read state lost synchronization.');
     },
     [acceptSnapshot]
   );

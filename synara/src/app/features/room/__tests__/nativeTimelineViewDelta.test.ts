@@ -6,6 +6,7 @@ import {
   applyNativeTimelineViewDelta,
   filterNativeForwardTargets,
   isNativeTimelineEventPinned,
+  isNativeTimelineReadbackStale,
   nativeThreadFocusEventId,
   nativeTimelineCommandError,
   needsNativeForwardEncryptionConfirm,
@@ -166,4 +167,34 @@ test('timeline open is not aborted when event listen is unavailable', () => {
   assert.match(source, /matrix_timeline_open/);
   assert.match(source, /matrix_timeline_snapshot/);
   assert.doesNotMatch(source, /if \(disposed \|\| !unlisten\)/);
+});
+
+test('equal-or-older readbacks are stale for the same stream, not a lost stream', () => {
+  const current = baseSnapshot();
+  assert.equal(isNativeTimelineReadbackStale(current, { ...current, revision: 2 }), true);
+  assert.equal(isNativeTimelineReadbackStale(current, { ...current, revision: 3 }), true);
+  assert.equal(isNativeTimelineReadbackStale(current, { ...current, revision: 4 }), false);
+  assert.equal(
+    isNativeTimelineReadbackStale(current, {
+      ...current,
+      roomId: '!other:example.org',
+      revision: 2,
+    }),
+    false
+  );
+  assert.equal(isNativeTimelineReadbackStale(undefined, current), false);
+});
+
+test('setReadState keeps the current snapshot when a successful mark_read readback is stale', () => {
+  const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
+  const setReadState = source
+    .split('const setReadState = useCallback(')[1]
+    ?.split('const jumpLatest = useCallback')[0];
+  assert.ok(setReadState);
+  assert.match(setReadState, /isNativeTimelineReadbackStale\(snapshotRef\.current, next\)/);
+  assert.match(setReadState, /if \(acceptSnapshot\(next\)\) \{\s*return;/);
+  assert.doesNotMatch(
+    setReadState,
+    /if \(!result\.available \|\| !result\.value \|\| !acceptSnapshot\(result\.value\.snapshot\)\)/
+  );
 });
