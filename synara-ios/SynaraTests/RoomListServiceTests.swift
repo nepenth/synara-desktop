@@ -805,12 +805,9 @@ final class RoomListServiceTests: XCTestCase {
             contentsOfFile: "\(root)/synara-ios/Synara/Services/RoomListService.swift",
             encoding: .utf8
         )
-        let tests = try String(contentsOfFile: #filePath, encoding: .utf8)
         XCTAssertFalse(view.contains("Recent activity (24h)"))
         XCTAssertFalse(service.contains("enum RoomListRecentActivity"))
         XCTAssertFalse(service.contains("TimeInterval = 86400"))
-        XCTAssertFalse(tests.contains("RoomListRecentActivity.partition"))
-        XCTAssertFalse(tests.contains("TimeInterval = 86400"))
         XCTAssertTrue(view.contains("Favorites"))
         XCTAssertTrue(view.contains("RoomListSortMenu"))
         XCTAssertTrue(view.contains("Add to Favorites"))
